@@ -1,0 +1,92 @@
+name: Create SkyrimNet_Sexlab Package
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+
+jobs:
+  validate_and_publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Choco install xmlstarlet
+        uses: crazy-max/ghaction-chocolatey@v3
+        with:
+          args: install xmlstarlet
+
+            
+      - name: Download release archive
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: 'Mutagen-Modding/Spriggit'
+          latest: true
+          zipBall: true
+          fileName: 'SpriggitCLI.zip'
+          out-file-path: './downloads'
+      
+      - name: Extract archive
+        run: unzip ./downloads/SpriggitCLI.zip -d ./SpriggitCLI
+
+      # Extract version from the tag
+      - name: Extract version from tag
+        id: version_extraction
+        run: |
+          if ($env:GITHUB_REF -match '\d+\.\d+\.\d+.*') {
+            $versionTag = $matches[0]
+            Add-Content -Path $env:GITHUB_ENV -Value "VERSION_TAG=$versionTag"
+          } else {
+            Write-Error "No valid version found in GITHUB_REF: $env:GITHUB_REF"
+          }
+        shell: pwsh    
+
+      - name: Show TAG Version
+        run: | 
+          Write-Host "VERSION_TAG=$env:VERSION_TAG"
+        shell: pwsh
+      
+      - name: Run Spriggit main deserialization
+        run: ./deserialize.bat
+        shell: cmd
+ 
+      - name: Get current FOMOD version
+        id: fomod_version
+        run: | 
+          $fomodVersionTag = xml sel -t -m '//Version' -v . ./fomod/info.xml
+          Add-Content -Path $env:GITHUB_ENV -Value "FOMOD_VERSION=$fomodVersionTag"
+        shell: pwsh              
+
+      - name: Show FOMOD Version
+        run: | 
+          Write-Host "FOMOD_VERSION=$env:FOMOD_VERSION"
+        shell: pwsh
+           
+      - name: Update FOMOD XML with version        
+        run: | 
+          if ($env:FOMOD_VERSION -ne $env:VERSION_TAG) 
+          {
+            xml ed --inplace -u '//Version' -v "$env:VERSION_TAG" ./dist/fomod/info.xml
+            type ./dist/fomod/info.xml
+          } else {
+            Write-Host "FOMOD version is already up to date."
+          }
+        shell: pwsh
+           
+      # Archive dist directory
+      - name: Archive dist directory
+        run: |          
+          cd ./dist ; tar --format zip -cf ..\downloads\SkyrimNet_Sexlab.zip *
+
+      # Upload artifact
+      - name: Upload artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run:
+          gh release upload ${{github.event.release.tag_name}} ./downloads/SkyrimNet_Sexlab.zip

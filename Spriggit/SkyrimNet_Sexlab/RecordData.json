@@ -1,0 +1,29 @@
+{
+  "SpriggitSource": {
+    "PackageName": "Spriggit.Json.Skyrim",
+    "Version": "0.38.6"
+  },
+  "ModKey": "SkyrimNet_Sexlab.esp",
+  "GameRelease": "SkyrimSE",
+  "ModHeader": {
+    "Flags": [
+      "Small"
+    ],
+    "Author": "DEFAULT",
+    "MasterReferences": [
+      {
+        "Master": "Skyrim.esm",
+        "FileSize": 0
+      },
+      {
+        "Master": "SexLab.esm",
+        "FileSize": 0
+      },
+      {
+        "Master": "SkyrimNet.esp",
+        "FileSize": 0
+      }
+    ],
+    "INTV": 1
+  }
+}

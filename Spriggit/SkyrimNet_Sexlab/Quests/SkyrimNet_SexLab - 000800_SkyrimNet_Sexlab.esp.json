@@ -1,0 +1,72 @@
+{
+  "FormKey": "000800:SkyrimNet_Sexlab.esp",
+  "EditorID": "SkyrimNet_SexLab",
+  "VirtualMachineAdapter": {
+    "Scripts": [
+      {
+        "Name": "SkyrimNet_SexLab_Main",
+        "Properties": [
+          {
+            "MutagenObjectType": "ScriptIntProperty",
+            "Name": "creature_description_map"
+          }
+        ]
+      },
+      {
+        "Name": "SkyrimNet_SexLab_MCM",
+        "Properties": [
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "main",
+            "Object": "000800:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptStringProperty",
+            "Name": "ModName",
+            "Data": "SkyrimNet SexLab"
+          }
+        ]
+      }
+    ],
+    "FileName": "",
+    "Aliases": [
+      {
+        "Property": {
+          "Name": "",
+          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Alias": 0
+        },
+        "Scripts": [
+          {
+            "Name": "SkyrimNet_SexLab_PlayerRef",
+            "Properties": [
+              {
+                "MutagenObjectType": "ScriptObjectProperty",
+                "Name": "main",
+                "Object": "000800:SkyrimNet_Sexlab.esp"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "Name": {
+    "TargetLanguage": "English",
+    "Value": "SkyrimNet SexLab"
+  },
+  "Flags": [
+    "StartGameEnabled",
+    "0x10",
+    "RunOnce"
+  ],
+  "NextAliasID": 1,
+  "Aliases": [
+    {
+      "Name": "PlayerRef",
+      "Flags": [],
+      "ForcedReference": "000014:Skyrim.esm",
+      "VoiceTypes": "Null"
+    }
+  ]
+}

@@ -1,8 +1,10 @@
 <fomod>
-  <!-- this file is generated from fomod-source/info.xml -->
   <Name>SkyrimNet_SexLab</Name>
   <Version>0.16.1</Version>
-  <Id></Id>
   <Author>Good Provider</Author>
-  <Description/>
+  <Website>https://www.nexusmods.com/skyrimspecialedition/mods/xxx</Website> 
+	<Description>Adds SexLab Support to SkyrimNet</Description> 
+	<Groups>
+		<element>Immersion</element>
+	</Groups> 
 </fomod>
