@@ -51,9 +51,43 @@ jobs:
         run: | 
           Write-Host "VERSION_TAG=$env:VERSION_TAG"
         shell: pwsh
-      
-      - name: Run Spriggit main deserialization
-        run: ./deserialize.bat
+
+      - name: Ensure dist directory exists
+        run: |          
+          New-Item -ItemType Directory -Force -Path dist
+        shell: pwsh
+
+      - name: Copy files to dist
+        run: |          
+          # Copy fomod directory if it exists
+          if (Test-Path "fomod") {
+            Copy-Item -Path "fomod" -Destination "dist\fomod" -Recurse -Force
+          }
+
+          # Copy Scripts directory if it exists
+          if (Test-Path "Scripts") {
+            Copy-Item -Path "Scripts" -Destination "dist\Scripts" -Recurse -Force
+          }
+
+          # Copy SKSE directory if it exists
+          if (Test-Path "SKSE") {
+            Copy-Item -Path "SKSE" -Destination "dist\SKSE" -Recurse -Force
+          }
+          
+          # Copy seq directory if it exists
+          if (Test-Path "seq") {
+            Copy-Item -Path "seq" -Destination "dist\seq" -Recurse -Force
+          }
+          
+          # Copy SkyrimNet_SexLab directory if it exists
+          if (Test-Path "SkyrimNet_SexLab") {
+            Copy-Item -Path "SkyrimNet_SexLab" -Destination "dist\SkyrimNet_SexLab" -Recurse -Force
+          }
+        shell: pwsh
+
+      - name: Convert Spriggit to plugin (deserialize)
+        run: |
+          .\SpriggitCLI\Spriggit.CLI.exe convert-to-plugin -i "Spriggit\SkyrimNet_Sexlab" -o "dist\SkyrimNet_Sexlab.esp" 
         shell: cmd
  
       - name: Get current FOMOD version
