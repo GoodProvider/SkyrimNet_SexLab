@@ -370,15 +370,14 @@ int[] Function GetNoOrgasmExpected(sslThreadController thread)
     Trace("GetNoOrgasmExpected","tags:"+animation.GetRawTags())
 
     while 0 <= i 
-        String name = actors[i].GetDisplayName()
-        bool is_futa = actorLib.GetTrans(actors[i])
-        bool is_creature = actorLib.IsCreature(actors[i])
         ; -1 - no gender 
         ;  0 - Male (also the default values if the actor is not existing)
         ;  1 - Female
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         bool has_penis = gender != 1 || actorLib.TreatAsMale(actors[i]) 
         bool has_pussy = gender == 1 || actorLib.TreatAsFemale(actors[i]) 
+
+        String name = actors[i].GetDisplayName()
         Trace("GetNoOrgasmExpected",name+" gender:"+gender+" treatMale:"+actorLib.TreatAsMale(actors[i])+" treatFemale:"+actorLib.TreatAsFemale(actors[i]))
 
         String reason = ""
