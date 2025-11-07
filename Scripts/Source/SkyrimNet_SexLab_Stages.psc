@@ -391,7 +391,6 @@ int[] Function GetNoOrgasmExpected(sslThreadController thread)
             no_orgasm_expected[i] = 0
             reason = "animation has tag 69 or masturbation"
         else
-            no_orgasm_expected[i] = 1
             if i == 0 
                 if has_pussy && (Animation.HasTag("Vaginal") || Animation.HasTag("Cunnilingus") || Animation.HasTag("Lesbian") || Animation.HasTag("Fingering") || Animation.HasTag("Dildo"))
                     no_orgasm_expected[i] = 0 
