@@ -405,11 +405,11 @@ int[] Function GetNoOrgasmExpected(sslThreadController thread)
             else 
                 if has_penis && (Animation.HasTag("Vaginal") || Animation.HasTag("Boobjob") || Animation.HasTag("Blowjob") || Animation.HasTag("Handjob") || Animation.HasTag("Footjob") || Animation.HasTag("Oral") || Animation.HasTag("Anal"))
                     no_orgasm_expected[i] = 0
-                    reason = "position 1+ with penius and tags: vagianl, boobjob, blowjob, handjob, footjob, oral, or anal"
+                    reason = "position 1+ with penis and tags: vagianl, boobjob, blowjob, handjob, footjob, oral, or anal"
 
                 else
                     no_orgasm_expected[i] = 1
-                    reason = "position 1+ without penius+tag(vagianl, boobjob, blowjob, handjob, footjob, oral, anal)"
+                    reason = "position 1+ without penis+tag(vagianl, boobjob, blowjob, handjob, footjob, oral, anal)"
                 endif 
             endif 
         endIf
