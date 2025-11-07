@@ -411,9 +411,6 @@ int[] Function GetNoOrgasmExpected(sslThreadController thread)
                 else
                     no_orgasm_expected[i] = 1
                     reason = "position 1+ without penius+tag(vagianl, boobjob, blowjob, handjob, footjob, oral, anal)"
-
-                    bool boobjob = Animation.HasTag("Boobjob")
-                    Trace("GetNoOrgasmExpected","has boobjob:"+boobjob)
                 endif 
             endif 
         endIf
