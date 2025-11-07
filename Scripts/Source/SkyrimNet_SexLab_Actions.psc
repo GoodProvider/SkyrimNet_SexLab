@@ -134,7 +134,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
 
     ; Cuddle check 
     if MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp") 
-        Faction cuddle_faction = Game.GetFormFromFile(0x801, "SkyrimNet_Cuddle.esp") as Faction
+        Faction cuddle_faction = Game.GetFormFromFile(0x802, "SkyrimNet_Cuddle.esp") as Faction
         if cuddle_faction == None 
             Trace("BodyAnimation_Tag","SkyrimNet_Cuddle_Main is None")
             return false

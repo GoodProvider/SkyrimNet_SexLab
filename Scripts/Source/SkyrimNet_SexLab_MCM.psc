@@ -325,7 +325,7 @@ State NarrationCoolOff
     Event OnSliderOpenST()
         SetSliderDialogStartValue(main.direct_narration_cool_off)
         SetSliderDialogDefaultValue(5)
-        SetSliderDialogRange(0.5, 20)
+        SetSliderDialogRange(1, 100)
         SetSliderDialogInterval(0.5)
     EndEvent
     Event OnSliderAcceptST(float value) 
@@ -400,27 +400,41 @@ endEvent
 ; --------------------------------------------
 
 Event OnKeyDown(int key_code)
+    Trace("OnKeyDown","key_code:"+key_code)
     if UI.IsTextInputEnabled()
         return 
     endif 
 
     if sex_edit_key == key_code
+
         ; Both players need to be in the crosshair to have SkyrimNet load them into the cache
         ; so the parseJsonActor works
         Actor target = Game.GetCurrentCrosshairRef() as Actor 
         Actor player = Game.GetPlayer() 
+        Trace("OnKeyDown","player:"+player.GetDisplayName())
         bool player_having_sex = main.sexlab.IsActorActive(player)
+
+        bool name = "None"
+        if target != None 
+            name = target.GetDisplayName()
+        endif 
+        Trace("OnKeyDown","key_code:"+key_code+" player_having_sex:"+player_having_sex+" target:"+name)
+
         if player_having_sex || target != None 
+            Trace("OnKeyDown","target in crosshair:"+name)
             ;---------------------------------
             ; The original 
             if player_having_sex || main.sexlab.IsActorActive(target)
                 if player_having_sex 
                     target = player 
                 endif 
+                Trace("OnKeyDown","getThread:"+target.GetDisplayName())
                 sslThreadController thread = main.GetThread(target)
                 
                 if thread != None 
                     stages.EditDescriptions(thread) 
+                else 
+                    Trace("OnKeyDown","having sex but no thread found for:"+target.GetDisplayName())
                 endif 
             elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
 

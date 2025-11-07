@@ -3,7 +3,7 @@
         "description": "{{sl.actors.1}} kneels behind {{sl.actors.0}} and gives oral sex. {{sl.actors.0}} stands and covers mouth.",
         "Version": "2.0"
     },
-    "no_orgasm": [
+    "no_orgasm_expected": [
         0,
         1
     ]

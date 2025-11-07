@@ -19,7 +19,7 @@
         "description": "{{sl.actors.0}} arms wrapped around {{sl.actors.1}} and kissing {{sl.actors.1}}. {{sl.actors.0}} strokes {{sl.actors.0}}'s head.",
         "version": "2.0"
     },
-    "no_orgasm": [
+    "no_orgasm_expected": [
         1,
         1
     ]

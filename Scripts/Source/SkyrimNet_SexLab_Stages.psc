@@ -27,7 +27,7 @@ String Button_Acttept = "Accept"
 String Button_Rewrite = "Rewrite"
 String Button_Retry = "Retry"
 String Button_Never_Show_Again = "Never Show Again"
-String Button_Orgasm_Denied = "Orgasm Denial"
+String Button_No_orgasm = "No Orgasm"
 String Button_Stop_Tracking = "Stop Tracking"
 String Button_Start_Tracking = "Start Tracking"
 String Button_Go_Back = "Go Back"
@@ -37,16 +37,29 @@ String storage_key = "skyrimnet_sexlab_stages_anim_info"
 
 int anim_info_cache = 0
 
-Function Trace(String msg, Bool notification=False) global
+;; DD Belt keyword
+bool devices_found = false 
+Keyword Property zad_DeviousBelt Auto
+
+Function Trace(String func, String msg, Bool notification=False) global
     if notification
         Debug.Notification(msg)
     endif 
-    msg = "[SkyrimNet_SexLab.Stages] "+msg
+    msg = "[SkyrimNet_SexLab_Stages."+func+"] "+msg
     Debug.Trace(msg)
 EndFunction
 
 Function Setup()
     String temp = "sl" ; attempt to set the caplitiization of sl 
+
+    if MiscUtil.FileExists("Data/Devious Devices - Integration.esm")
+        devices_found = true
+        zadLibs zlib =Game.GetFormFromFile(0x00F624, "Devious Devices - Integration.esm") as zadlibs
+        zad_DeviousBelt = zlib.zad_DeviousBelt
+    else 
+        devices_found = false
+    endif 
+
 
     desc_input = ""
     animations_folder = "Data/SkyrimNet_SexLab/animations"
@@ -71,7 +84,7 @@ EndFunction
 String Function GetStageDescription(sslThreadController thread) global
     SkyrimNet_SexLab_Stages stages = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stages
     if thread == None 
-        Trace("GetStageDescription: thread is None", true)
+        Trace("GetStageDescription","thread is None", true)
         return ""
     endif 
     int stage = thread.stage
@@ -110,10 +123,13 @@ String Function Description_Add_Actors(String version, Actor[] actors, String de
     elseif version == VERSION_2_0
         String actors_json = SkyrimNet_SexLab_Main.ActorsToJson(actors)
         result = SkyrimNetApi.ParseString(desc, "sl", "{\"actors\":"+actors_json+"}")
+        if result == ""
+            Trace("Description_Add_actors","cound't parse v"+version+" actors:"+actors.length+" desc:"+desc)
+        endif 
     else 
-        Trace("Description_Add_Actors: Unknown version "+version, true)
+        Trace("Description_Add_Actors","Unknown version "+version, true)
+        return ""
     endif 
-    Trace("Description_Add_Actors: version "+version+" actors:"+actors.length+" desc:"+desc+" -> "+result)
     return result
 EndFunction 
 ; ------------------------------------
@@ -152,23 +168,23 @@ Function EditDescriptions(sslThreadController thread)
 
     sslBaseAnimation anim = thread.animation
     String fname = GetFilename(thread)
-    Trace("EditDescriptions thread: "+fname,true)
+    Trace("EditDescriptions","thread: "+fname)
 
     String[] buttons = new String[7]
     int desc_prev = 0 
     int desc_edit = 1 
-    int desc_next = 2 
-    int orgasm_edit = 3 
+    int no_orgasm_expected_edit = 2
+    int desc_next = 3 
     int tracking = 4 
     int style_edit = 5
     int done = 6
-    buttons[desc_prev] = "Previous"
-    buttons[desc_edit] = "Desc. Edit"
-    buttons[desc_next] = "Next"
-    buttons[orgasm_edit] = "Orgasm Denal"
-    buttons[tracking] = "Start Tracking" 
-    buttons[style_edit] = "Style"
-    buttons[done] = "Done"
+    buttons[desc_prev] = "previous"
+    buttons[desc_edit] = "edit desc"
+    buttons[no_orgasm_expected_edit] = "edit expect orgasm"
+    buttons[desc_next] = "next"
+    buttons[tracking] = "start tracking" 
+    buttons[style_edit] = "style"
+    buttons[done] = "done"
 
     int button = desc_prev
 
@@ -210,6 +226,11 @@ Function EditDescriptions(sslThreadController thread)
             String source_stage = source +" "+thread.stage+"/"+thread.animation.StageCount() 
             msg = "["+source_stage+"] "+desc
         endif 
+
+        String no_orgasm_expected_desc = GetNoOrgasmExpectedDescription(thread)
+        if no_orgasm_expected_desc != ""
+            msg += "\n"+no_orgasm_expected_desc
+        endif
         msg += "\nstyle:"+main.Thread_Narration(thread,"are") 
         button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
@@ -223,8 +244,8 @@ Function EditDescriptions(sslThreadController thread)
             endif 
         elseif button == desc_edit  
             EditorDescription(thread)
-        elseif button == orgasm_edit 
-            SetOrgasmDenied(thread)
+        elseif button == no_orgasm_expected_edit 
+            SetNoOrgasmExpected(thread)
         elseif button == tracking 
             ToggleThreadTracking(thread.tid)
         elseif button == style_edit 
@@ -237,16 +258,16 @@ EndFunction
 ; Editor Functions 
 ; ------------------------------------
 string Function GetPlayerInput() global
-    Trace("GetPlayerInput","GetPlayerInput called")
+    Trace("GetPlayerInput","called")
     UIExtensions.OpenMenu("UITextEntryMenu")
     ; Don't do this if we're in VR
     if SkyrimNetApi.IsRunningVR()
-        Trace("SkyrimNetInternal","GetPlayerInput: Skipping input in VR")
+        Trace("GetPlayerInput","Skipping input in VR")
         Debug.Notification("Text input is disabled in VR")
         return ""
     endif
     string messageText = UIExtensions.GetMenuResultString("UITextEntryMenu")
-    Trace("GetPlayerInput","GetPlayerInput returned: " + messageText)
+    Trace("GetPlayerInput","returned: " + messageText)
     return messageText
 EndFunction
 
@@ -308,7 +329,7 @@ Function EditorDescription(sslThreadController thread)
 EndFunction
 
 String Function BuildExample(Actor[] actors) 
-    String example = "{{sl.actors.1}} is having sex {{sl.actors.0}}."
+    String example = "{{sl.actors.1}} is having sex with {{sl.actors.0}}."
     if actors.length == 1
         example = "{{sl.actors.0}} is masturbating."
     elseif actors.length > 3
@@ -321,58 +342,122 @@ EndFunction
 
 
 ; ------------------------------------
-; Orgasm Denied Functions
+; No Orgasm Functions
 ; ------------------------------------
-int[] Function GetOrgasmDenied(sslThreadController thread) 
+int[] Function GetNoOrgasmExpected(sslThreadController thread) 
     String fname = GetFilename(thread)
     Actor[] actors = thread.Positions
+
     int anim_info = GetAnim_Info(thread)
-    if anim_info == 0
-        return Utility.CreateIntArray(actors.length, 0)
-    endif 
-    int id = 0 
-    if JMap.hasKey(anim_info, "orgasm_denied")
-        id = JMap.getObj(anim_info, "orgasm_denied")
-    endif 
-
-    int count = 0 
-    if id != 0 
-        count = Jarray.count(id)
-    endif 
-    if count == actors.length
-        return JArray.asIntArray(id)
-    endif 
-
-    int num_actors = actors.length
-    int id_new = JArray.objectWithSize(num_actors)
-    int i = 0
-    while i < num_actors 
-        int value = 0
-        if i < count
-            value = JArray.getInt(id, i)
+    if anim_info != 0
+        if JMap.hasKey(anim_info, "no_orgasm_expected")
+            int id = JMap.getObj(anim_info, "no_orgasm_expected")
+            if id != 0 
+                int count = Jarray.count(id)
+                if count == actors.length
+                    Trace("GetNoOrgasmExpected","found no_orgasm_expected in "+fname+":"+JArray.asIntArray(id))
+                    return JArray.asIntArray(id)
+                endif 
+            endif 
         endif 
-        JArray.setInt(id_new, i, value)
-        i += 1 
-    endwhile 
+    endif 
 
-    JMap.setObj(anim_info, "orgasm_denied", id_new)
-    return JArray.asIntArray(id_new)
+    SkyrimNet_SexLab_Main main = (self as Quest) as SkyrimNet_SexLab_Main
+    sslActorLibrary actorLib = (main.SexLab as Quest) as sslActorLibrary
+    int[] no_orgasm_expected = Utility.CreateIntArray(actors.length, 0)
+    int i = actors.length - 1
+    sslBaseAnimation Animation = thread.animation
+    Trace("GetNoOrgasmExpected","tags:"+animation.GetRawTags())
+
+    while 0 <= i 
+        String name = actors[i].GetDisplayName()
+        bool is_futa = actorLib.GetTrans(actors[i])
+        bool is_creature = actorLib.IsCreature(actors[i])
+        ; -1 - no gender 
+        ;  0 - Male (also the default values if the actor is not existing)
+        ;  1 - Female
+        int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
+        bool has_penis = gender != 1 || actorLib.TreatAsMale(actors[i]) 
+        bool has_pussy = gender == 1 || actorLib.TreatAsFemale(actors[i]) 
+        Trace("GetNoOrgasmExpected",name+" gender:"+gender+" treatMale:"+actorLib.TreatAsMale(actors[i])+" treatFemale:"+actorLib.TreatAsFemale(actors[i]))
+
+        String reason = ""
+        if devices_found && actors[i].WornHasKeyword(zad_DeviousBelt)
+            no_orgasm_expected[i] = 1
+            reason = "has DD belt"
+        elseif Animation.HasTag("Estrus")
+            no_orgasm_expected[i] = 0
+            reason = "animation has tag estrus"
+        elseif Animation.HasTag("69") || Animation.HasTag("Masturbation")
+            no_orgasm_expected[i] = 0
+            reason = "animation has tag 69 or masturbation"
+        else
+            no_orgasm_expected[i] = 1
+            if i == 0 
+                if has_pussy && (Animation.HasTag("Vaginal") || Animation.HasTag("Cunnilingus") || Animation.HasTag("Lesbian") || Animation.HasTag("Fingering") || Animation.HasTag("Dildo"))
+                    no_orgasm_expected[i] = 0 
+                    reason = "position 0 with pussy and tag: vaginal, cunnilingus, lesbian, fingering, or dildo"
+                elseif Animation.hasTag("Anal") || Animation.HasTag("Fisting")
+                    no_orgasm_expected[i] = 0 
+                    reason = "position 0 with tags: anal or fisting)"
+                else
+                    no_orgasm_expected[i] = 1
+                    reason = "position 0 with out: pussy+tag(vagianl, cunnilingus, lesbian, fingering, dildo) or (anal, fisting)"
+                endif 
+            else 
+                if has_penis && (Animation.HasTag("Vaginal") || Animation.HasTag("Boobjob") || Animation.HasTag("Blowjob") || Animation.HasTag("Handjob") || Animation.HasTag("Footjob") || Animation.HasTag("Oral") || Animation.HasTag("Anal"))
+                    no_orgasm_expected[i] = 0
+                    reason = "position 1+ with penius and tags: vagianl, boobjob, blowjob, handjob, footjob, oral, or anal"
+
+                else
+                    no_orgasm_expected[i] = 1
+                    reason = "position 1+ without penius+tag(vagianl, boobjob, blowjob, handjob, footjob, oral, anal)"
+
+                    bool boobjob = Animation.HasTag("Boobjob")
+                    Trace("GetNoOrgasmExpected","has boobjob:"+boobjob)
+                endif 
+            endif 
+        endIf
+
+        bool orgasm_expected = no_orgasm_expected[i] != 1 
+        Trace("GetNoOrgasmExpected",i+" "+name+" pussy:"+has_pussy+" penis:"+has_penis+" orgasm_expected:"+orgasm_expected+" reasoning:"+reason)
+        i -= 1
+    endwhile
+    Trace("GetNoOrgasmExpected","no_orgasm_expected: "+no_orgasm_expected)
+    return no_orgasm_expected
 EndFunction
 
-Function SetOrgasmDenied(sslThreadController thread)
+string Function GetNoOrgasmExpectedDescription(sslThreadController thread)
+    int[] no_orgasm_expected = GetNoOrgasmExpected(thread)
+    Actor[] actors = thread.Positions
+    String msg = ""
+    int i = 0 
+    while i < actors.length
+        if no_orgasm_expected[i] == 1
+            if msg != ""
+                msg += " "
+            endif 
+            msg += actors[i].GetDisplayName()+" doesn't expect an orgasm."
+        endif 
+        i += 1
+    endwhile
+    return msg
+EndFunction
+
+Function SetNoOrgasmExpected(sslThreadController thread)
     Actor[] actors = thread.Positions
     int num_actors = actors.length
     int anim_info = GetAnim_Info(thread)
-    int orgasm_denied_id = JMap.getObj(anim_info, "orgasm_denied")
-    int count = Jarray.count(orgasm_denied_id)
+    int no_orgasm_expected_id = JMap.getObj(anim_info, "no_orgasm_expected")
+    int count = Jarray.count(no_orgasm_expected_id)
 
-    int[] orgasm_denied = Utility.CreateIntArray(num_actors, 0)
+    int[] no_orgasm_expected = Utility.CreateIntArray(num_actors, 0)
     int i = num_actors - 1
     while 0 <= i 
         if i < count
-            orgasm_denied[i] = JArray.getInt(orgasm_denied_id, i)
+            no_orgasm_expected[i] = JArray.getInt(no_orgasm_expected_id, i)
         else
-            orgasm_denied[i] = 0
+            no_orgasm_expected[i] = 0
         endif 
         i -= 1
     endwhile
@@ -387,15 +472,14 @@ Function SetOrgasmDenied(sslThreadController thread)
     bool changed  = false
     while button != go_back && button != done 
         i = 0 
-        String msg = "Change if an actor is denied orgasm\n"
+        String msg = "Change if an actor expects an orgasm\n"
         while i < actors.length
             String name = actors[i].GetDisplayName()
-            if orgasm_denied[i] == 1
-                msg += "\n"+name+" is denied orgasm."
-                buttons[i+1] = "Allow "+ name
+            if no_orgasm_expected[i] == 1
+                msg += "\n"+name+" doesn't expect an orgasm."
+                buttons[i+1] = "Set "+ name+" expects to orgasm."
             else
-                msg += "\n"+name+" is allowed orgasm."
-                buttons[i+1] = "Deny "+ actors[i].GetDisplayName()
+                buttons[i+1] = "Set "+ name+" doesn't expect to orgasm."
             endif 
             i += 1
         endwhile
@@ -404,16 +488,16 @@ Function SetOrgasmDenied(sslThreadController thread)
         if go_back < button && button < done
             changed = true
             i = button - 1
-            if orgasm_denied[i] == 1
-                orgasm_denied[i] = 0
+            if no_orgasm_expected[i] == 1
+                no_orgasm_expected[i] = 0
             else
-                orgasm_denied[i] = 1    
+                no_orgasm_expected[i] = 1    
             endif
         endif
     endwhile
 
     if changed 
-        UpdateAnimInfo(thread, "orgasm_denied", VERSION_2_0, orgasm_denied)
+        UpdateAnimInfo(thread, "no_orgasm_expected", VERSION_2_0, no_orgasm_expected)
     endif 
 
     if button == done
@@ -428,23 +512,40 @@ EndFunction
 ; Helper functions
 ; ------------------------------------
 
-bool[] Function HasDescriptionOrgasmDenied(sslThreadController thread)
+String Function GetSummary(sslThreadController thread)
     int anim_info = GetAnim_Info(thread)
-    bool[] desc_denied = Utility.CreateBoolArray(2, false)
-    if anim_info == 0 
-        return desc_denied
-    endif 
-    String stage_id = "stage "+thread.stage
-    desc_denied[0] = JMap.hasKey(anim_info, stage_id)
-    int orgasm_denied = JMap.getObj(anim_info, "orgasm_denied")
-    int i = JArray.count(orgasm_denied) - 1
-    while 0 <= i && !desc_denied[1]
-        if JArray.getInt(orgasm_denied, i) == 1
-            desc_denied[1] = true 
+    String summary = ""
+    if anim_info != 0
+
+        String stage_id = "stage "+thread.stage
+        int desc_info = JMap.getObj(anim_info, stage_id)
+        if desc_info != 0 
+            summary += "animation has a description"
         endif 
-        i -= 1
-    endwhile
-    return desc_denied
+        Actor[] actors = thread.Positions
+        if JMap.hasKey(anim_info, "no_orgasm_expected")
+            int no_orgasm_expected = JMap.getObj(anim_info, "no_orgasm_expected")
+            int i = JArray.count(no_orgasm_expected) - 1
+            String names = ""
+            while 0 <= i
+                if JArray.getInt(no_orgasm_expected, i) == 1
+                    if names != ""
+                        names += ", "
+                    endif 
+                    names += actors[i].GetDisplayName()
+                endif 
+                i -= 1
+            endwhile
+            if names != ""
+                if summary != ""
+                    summary += "\n"
+                endif
+                summary += "no orgasm for "+names
+            endif 
+        endif 
+        summary = thread.stage+"/"+thread.animation.StageCount()+" "+summary
+    endif 
+    return summary
 EndFunction
 
 
@@ -463,7 +564,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
             endif 
         endif 
             
-        ; This will hold a map between the Stage nad the descriptions 
+        ; This will hold a map between the Stage and the descriptions 
         if anim_info_cached
             int anim_info = JMap.getObj(anim_info_cache, anim.name) 
             if anim_info != 0 
@@ -473,7 +574,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
         endif 
     endif 
 
-    ; This will hold a map between the Stage nad the descriptions 
+    ; This will hold a map between the Stage and the descriptions 
     int anim_info = JMap.object() 
     JMap.setStr(anim_info, "name", anim.name)
 
@@ -499,9 +600,9 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
                 String[] keys = JMap.allKeysPArray(info)
                 int k = keys.length - 1
                 while 0 <= k
-                    if keys[k] == "orgasm_denied"
-                        int orgasm_denied = JMap.getObj(info, "orgasm_denied")
-                        JMap.setObj(anim_info, "orgasm_denied", orgasm_denied)
+                    if keys[k] == "no_orgasm_expected"
+                        int no_orgasm_expected = JMap.getObj(info, "no_orgasm_expected")
+                        JMap.setObj(anim_info, "no_orgasm_expected", no_orgasm_expected)
                     else
                         int desc_info = JMap.getObj(info, keys[k])
                         JMap.setStr(desc_info, "source", folders[i])
@@ -512,44 +613,36 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
                     k -= 1
                 endwhile 
             else 
-                Trace("Parse error for '"+fn+"'",true)
+                Trace("GetAnimInfo","Parse error for '"+fn+"'",true)
             endif 
         endif
         i -= 1
     endwhile 
-    if !JMap.hasKey(anim_info, "orgasm_denied")
-        int orgasm_denied = JArray.objectWithSize(thread.Positions.length) 
-        int j = thread.Positions.length - 1 
-        while 0 <= j 
-            JArray.setInt(orgasm_denied, j, 0)
-            j -= 1
-        endwhile
-        JMap.setObj(anim_info, "orgasm_denied", orgasm_denied)
-    else 
-        int orgasm_denied = JMap.getObj(anim_info, "orgasm_denied")
+    if JMap.hasKey(anim_info, "no_orgasm_expected")
+        int no_orgasm_expected = JMap.getObj(anim_info, "no_orgasm_expected")
         int count = thread.Positions.length
-        int count_old = Jarray.count(orgasm_denied)
+        int count_old = Jarray.count(no_orgasm_expected)
         if count_old != count
-            int new_orgasm_denied = JArray.objectWithSize(count)
+            int new_no_orgasm_expected = JArray.objectWithSize(count)
             int j = count - 1 
             while 0 <= j
                 if j < count_old
-                    JArray.setInt(new_orgasm_denied, j, JArray.getInt(orgasm_denied, j))
+                    JArray.setInt(new_no_orgasm_expected, j, JArray.getInt(no_orgasm_expected, j))
                 else
-                    JArray.setInt(new_orgasm_denied, j, 0)
+                    JArray.setInt(new_no_orgasm_expected, j, 0)
                 endif
                 j += 1
             endwhile 
-            JMap.setObj(anim_info, "orgasm_denied", new_orgasm_denied)
+            JMap.setObj(anim_info, "no_orgasm_expected", new_no_orgasm_expected)
         endif
     endif
 
     ; setAnimCache(thread, anim_info) 
-    JValue.writeToFile(anim_info, animations_folder+"/anim_info.json")
+    ; JValue.writeToFile(anim_info, animations_folder+"/anim_info.json")
     return anim_info
 EndFunction 
 
-Function UpdateAnimInfo(sslThreadController thread, String field, String version, int[] orgasm_denied)
+Function UpdateAnimInfo(sslThreadController thread, String field, String version, int[] no_orgasm_expected)
     String fname = GetFilename(thread)
     String path = local_folder+"/"+fname
     int anim_info = 0
@@ -565,16 +658,16 @@ Function UpdateAnimInfo(sslThreadController thread, String field, String version
         JMap.setStr(stage_info,"description",desc_input)
         JMap.setObj(anim_info, stage_id, stage_info)
     else 
-        int orgasm_denied_id = JArray.objectWithSize(orgasm_denied.length)
-        int i = orgasm_denied.length - 1
+        int no_orgasm_expected_id = JArray.objectWithSize(no_orgasm_expected.length)
+        int i = no_orgasm_expected.length - 1
         while 0 <= i 
-            JArray.setInt(orgasm_denied_id, i, orgasm_denied[i])
+            JArray.setInt(no_orgasm_expected_id, i, no_orgasm_expected[i])
             i -= 1
         endwhile
-        JMap.setObj(anim_info, "orgasm_denied", orgasm_denied_id)
+        JMap.setObj(anim_info, "no_orgasm_expected", no_orgasm_expected_id)
     endif 
 
-    Trace("saving "+fname,true)
+    Trace("UpdateAnimInfo","saving "+fname,true)
     JValue.writeToFile(anim_info, path)
     JValue.writeToFile(anim_info, animations_folder+"/last.json")
 EndFunction 

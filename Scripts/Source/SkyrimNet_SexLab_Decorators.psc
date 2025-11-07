@@ -173,13 +173,13 @@ String Function Get_Threads(Actor speaker) global
                 distance = speaker.GetDistance(actors[0])
                 los = speaker.HasLOS(actors[0]) 
             endif 
-            bool[] denied = stages.HasDescriptionOrgasmDenied(threads[i])
+            int[] no_orgasm = stages.GetNoOrgasmExpected(threads[i])
             int j = actors.Length - 1
             while 0 <= j 
                 if actors[j] == speaker 
                     distance = 0
                     los = true 
-                    if !denied[j]
+                    if no_orgasm[j] != 1
                         speaker_having_sex = true
                     endif 
                 endif 
