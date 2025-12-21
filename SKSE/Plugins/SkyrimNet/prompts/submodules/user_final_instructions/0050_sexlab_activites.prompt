@@ -35,6 +35,7 @@
                          {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
                     {% endif %}
                {% endif %} 
+               distance: {{distance}} can_see_desc: {{can_see_desc}} can_notice_level: {{can_notice_level}}
                {% if can_notice_level > 0 %}
                     {%- if thread.stage_description_has %} 
                          - On {{ thread.location}}, {{thread.style}}. {{ thread.stage_description }} {% 
@@ -117,8 +118,8 @@
                     for name, enjoyment in thread.enjoyments %} {%-
                          if enjoyment < 25 %} {%- 
                          else if enjoyment < 50 -%} {{name}}'s body feels pleasure. {%- 
-                         else if enjoyment < 95 -%} {{name}}'s body feels great pleasure and building orgasm. {%-
-                         else -%}                   {{name}}'s body feels great pleasure and is just about to cum. {%-
+                         else if enjoyment < 95 -%} {{name}}'s body feels great pleasure. {%-
+                         else -%}                   {{name}}'s body feels highest pleasure. {%-
                          endif -%} 
                     {%- endfor -%} {% 
                     if can_hear_desc != "" %} {{sexlab.speaker_name}} {{can_hear_desc}} {% endif %} {% 
@@ -127,7 +128,7 @@
                          {% set max_notice_level = can_notice_level %}
                     {% endif %}
                {% else %} 
-                    - {{sexlab.speaker_name}} can not see or hear what is happening between {{thread.names}}.
+                    - {{sexlab.speaker_name}} can not see or hear what is happening between {{thread.actors_names}}.
                {% endif %}
           {%- endfor %}
           {% if sexlab.speaker_having_sex -%}

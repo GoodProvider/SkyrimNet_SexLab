@@ -1,6 +1,6 @@
 {
-    "orgasm_denied": [
-        1,
-        0
+    "orgasm_expected": [
+        0,
+        1
     ]
 }

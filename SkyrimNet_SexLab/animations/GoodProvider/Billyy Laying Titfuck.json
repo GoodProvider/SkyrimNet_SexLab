@@ -1,8 +1,4 @@
 {
-    "orgasm_denied": [
-        1,
-        0
-    ],
     "stage 1": {
         "description": "{{sl.actors.1}} and {{sl.actors.0}} face each other on knees. {{sl.actors.1}} and {{sl.actors.0}} kissing. ",
         "version": "2.0"
@@ -14,5 +10,9 @@
     "stage 4": {
         "description": "{{sl.actors.0}} lays on back with knees raised. {{sl.actors.1}} sits on {{sl.actors.0}} fucking between {{sl.actors.0}}'s breasts.",
         "version": "2.0"
-    }
+    },
+    "orgasm_expected": [
+        0,
+        1
+    ]
 }

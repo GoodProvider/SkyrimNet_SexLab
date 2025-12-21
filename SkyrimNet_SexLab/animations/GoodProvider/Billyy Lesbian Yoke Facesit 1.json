@@ -1,8 +1,4 @@
 {
-    "orgasm_denied": [
-        1,
-        0
-    ],
     "Stage 1": {
         "description": "sitting on the mouth and getting oral from a yoke bound",
         "version": "1.0"
@@ -10,5 +6,9 @@
     "Stage 5": {
         "description": "legs twitching, arms on head, kneeling over mouth,  and orgasming into oral from a yoke bound",
         "version": "1.0"
-    }
+    },
+    "orgasm_expected": [
+        0,
+        1
+    ]
 }

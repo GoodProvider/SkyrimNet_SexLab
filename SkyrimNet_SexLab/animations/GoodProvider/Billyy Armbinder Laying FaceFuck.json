@@ -11,8 +11,8 @@
         "description": "{{sl.actors.1}} stands on hands and feet over {{sl.actors.0}}'s mouth and fucks down into it. {{sl.actors.0}} lays on back, arms locked in armbinder behind back, and knees in the air. ",
         "version": "2.0"
     },
-    "orgasm_denied": [
-        1,
-        0
+    "orgasm_expected": [
+        0,
+        1
     ]
 }

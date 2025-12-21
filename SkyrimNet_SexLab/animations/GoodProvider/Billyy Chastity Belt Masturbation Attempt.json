@@ -1,7 +1,4 @@
 {
-    "orgasm_denied": [
-        1
-    ],
     "Stage 1": {
         "description": "is standing, attempting and failing to access thier genitals or ass. Pressing thier hand against the front of the chastity belt.",
         "version": "1.0"
@@ -25,5 +22,8 @@
     "Stage 6": {
         "description": "is standing, exhausted, frustrated, legs trembling, and holding thier head. ",
         "version": "1.0"
-    }
+    },
+    "orgasm_expected": [
+        0
+    ]
 }

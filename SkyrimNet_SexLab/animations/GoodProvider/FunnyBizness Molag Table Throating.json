@@ -1,8 +1,4 @@
 {
-    "orgasm_denied": [
-        1,
-        0
-    ],
     "stage 1": {
         "description": "{{sl.actors.1}} hands on the table and fucks {{sl.actors.0}}'s throat. {{sl.actors.0}} lays on their back on the table, with thier head haning off the end.",
         "version": "2.0"
@@ -18,5 +14,9 @@
     "stage 5": {
         "description": "{{sl.actors.1}} holds {{sl.actors.0}} by the throat and balls deep in {{sl.actors.0}}'s mouth. {{sl.actors.0}} lays on thier back on the table, head hanging of the end, struggling to breath, exhausted, and no longer moving.",
         "version": "2.0"
-    }
+    },
+    "orgasm_expected": [
+        0,
+        1
+    ]
 }

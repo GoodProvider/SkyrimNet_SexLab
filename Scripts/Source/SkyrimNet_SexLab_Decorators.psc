@@ -148,13 +148,31 @@ String Function Get_Threads(Actor speaker) global
 
             threads_str += ",\"style\":\""+main.Thread_Narration(threads[i], "are")+"\""
 
+            Actor[] actors = threads[i].Positions
+            int[] strapon_filter = Utility.CreateIntArray(actors.Length, 0)
+            int[] futa_filter = Utility.CreateIntArray(actors.Length, 0)
+            int j = actors.Length - 1
+            while 0 <= j
+                Trace("Get_Threads", i+" "+j+" "+actors[j].GetDisplayName())
+                if threads[i].IsUsingStrapon(actors[j])
+                    strapon_filter[j] = 1 
+                endif 
+                if actorLib.GetTrans(actors[i]) == 0 
+                    futa_filter[j] = 1 
+                endif 
+                j -= 1
+            endwhile
+
             String names_array = GetNamesArray(threads[i])
             threads_str += ",\"names\":"+names_array+""
+            String actors_names = SkyrimNet_SexLab_Utilities.JoinActors(actors)
+            threads_str += ",\"actors_names\":\""+actors_names+"\""
+            Trace("Get_Threads", "actors:"+actors+" actors_names:"+actors_names)
 
-            String strapon_names = GetNames(threads[i])
+            String strapon_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, strapon_filter) ; GetNames(threads[i])
             threads_str += ",\"strapon_names\":\""+strapon_names+"\""
 
-            String futa_names = GetNames(threads[i], actorLib)
+            String futa_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, futa_filter) ; GetNames(threads[i])
             threads_str += ", \"futa_names\":\""+futa_names+"\""
 
             String creature_names = GetCreatures(threads[i])
@@ -166,20 +184,19 @@ String Function Get_Threads(Actor speaker) global
             String enjoyments = GetEnjoyments(threads[i])
             threads_str += ", \"enjoyments\":"+enjoyments
             
-            Actor[] actors = threads[i].Positions
             Float distance = 0 
             bool los = True
             if speaker != actors[0]
                 distance = speaker.GetDistance(actors[0])
                 los = speaker.HasLOS(actors[0]) 
             endif 
-            bool[] denied = stages.HasDescriptionOrgasmDenied(threads[i])
-            int j = actors.Length - 1
+            int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
+            j = actors.Length - 1
             while 0 <= j 
                 if actors[j] == speaker 
                     distance = 0
                     los = true 
-                    if !denied[j]
+                    if orgasm_expected[j] == 1 
                         speaker_having_sex = true
                     endif 
                 endif 

@@ -7,10 +7,6 @@
         "description": "{{sl.actors.0}} kneels on the ground getting a spanking from {{sl.actors.1}}.",
         "version": "2.0"
     },
-    "orgasm_denied": [
-        1,
-        1
-    ],
     "Stage 1": {
         "description": "{{sl.actors.0}} is bent over {{sl.actors.1}}'s knee, {{sl.actors.1}}'s hand on {{sl.actors.0}}'s back, and {{sl.actors.0}} bites {{sl.actors.0}}'s finger.  Only sexual contact is {{sl.actors.1}} gently caressing {{sl.actors.0}}'s ass. ",
         "version": "2.0"
@@ -22,5 +18,9 @@
     "Stage 4": {
         "description": "{{sl.actors.0}} is bent over {{sl.actors.1}}'s knee, {{sl.actors.1}}'s hand on {{sl.actors.0}}'s back, ass in the air, and caressing thier own ass. ",
         "version": "2.0"
-    }
+    },
+    "orgasm_expected": [
+        0,
+        0
+    ]
 }

@@ -1,8 +1,4 @@
 {
-    "orgasm_denied": [
-        1,
-        0
-    ],
     "Stage 1": {
         "description": "{{sl.actors.1}} sits on the floor with {{sl.actors.0}} between thier legs given oral sex.  {{sl.actors.0}} hogtied on thier stomach with arms bound in a armbinder behind thier back.",
         "version": "2.0"
@@ -10,5 +6,9 @@
     "Stage 2": {
         "description": "{{sl.actors.1}} kneeling with a hand guiding {{sl.actors.0}} as they give oral sex. {{sl.actors.0}} hogtied on thier stomach with arms bound in a armbinder behind thier back.",
         "version": "2.0"
-    }
+    },
+    "orgasm_expected": [
+        0,
+        1
+    ]
 }
