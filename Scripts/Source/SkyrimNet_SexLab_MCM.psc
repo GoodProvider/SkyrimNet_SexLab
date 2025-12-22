@@ -324,9 +324,9 @@ EndState
 State NarrationCoolOff
     Event OnSliderOpenST()
         SetSliderDialogStartValue(main.direct_narration_cool_off)
-        SetSliderDialogDefaultValue(5)
-        SetSliderDialogRange(0.5, 20)
-        SetSliderDialogInterval(0.5)
+        SetSliderDialogDefaultValue(20)
+        SetSliderDialogRange(1, 100)
+        SetSliderDialogInterval(1)
     EndEvent
     Event OnSliderAcceptST(float value) 
         main.direct_narration_cool_off = value 

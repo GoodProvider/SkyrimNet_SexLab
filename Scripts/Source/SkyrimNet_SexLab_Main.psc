@@ -1147,8 +1147,7 @@ sslBaseAnimation[] Function AnimsDialog(SexLabFramework sexlab, Actor[] actors, 
             JValue.release(groups)
             return anims 
         else
-            Trace("AnimsDialog","No animations found for: "+tags_str)
-            Debug.Notification("No animations found for: "+tags_str)
+            Trace("AnimsDialog","No animations found for: "+tags_str, true)
         endif 
     endwhile 
     JValue.release(groups)

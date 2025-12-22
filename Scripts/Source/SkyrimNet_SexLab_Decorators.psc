@@ -101,7 +101,9 @@ String Function Get_Threads(Actor speaker) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     SkyrimNet_SexLab_Stages stages = (main as Quest) as SkyrimNet_SexLab_Stages
 
-    Trace("Get_Threads", main.counter+" "+speaker.GetDisplayName())
+    int counter = main.counter
+    main.counter += 1
+    Trace("Get_Threads", "counter:"+counter+" speaker:"+speaker.GetDisplayName())
 
     if main == None
         Trace("Get_Threads","main is None")
@@ -135,6 +137,9 @@ String Function Get_Threads(Actor speaker) global
             states[i] = s
         endif
 
+        if threads[i].animation != "None"
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" "+s+" "+threads[i].Animation.name)
+        endif 
         if s == "animating" || s == "prepare"
             if threads_str != ""
                 threads_str += ", "
@@ -153,7 +158,7 @@ String Function Get_Threads(Actor speaker) global
             int[] futa_filter = Utility.CreateIntArray(actors.Length, 0)
             int j = actors.Length - 1
             while 0 <= j
-                Trace("Get_Threads", i+" "+j+" "+actors[j].GetDisplayName())
+                Trace("Get_Threads", "counter:"+counter+" thread:"+i+" "+j+" "+actors[j].GetDisplayName())
                 if threads[i].IsUsingStrapon(actors[j])
                     strapon_filter[j] = 1 
                 endif 
@@ -167,16 +172,21 @@ String Function Get_Threads(Actor speaker) global
             threads_str += ",\"names\":"+names_array+""
             String actors_names = SkyrimNet_SexLab_Utilities.JoinActors(actors)
             threads_str += ",\"actors_names\":\""+actors_names+"\""
-            Trace("Get_Threads", "actors:"+actors+" actors_names:"+actors_names)
+
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" names_array "+names_array)
 
             String strapon_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, strapon_filter) ; GetNames(threads[i])
             threads_str += ",\"strapon_names\":\""+strapon_names+"\""
 
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" names_array "+strapon_names)
+
             String futa_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, futa_filter) ; GetNames(threads[i])
             threads_str += ", \"futa_names\":\""+futa_names+"\""
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" names_array "+futa_names)
 
             String creature_names = GetCreatures(threads[i])
             threads_str += ", \"creature_names\":\""+creature_names+"\""
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" creature_names "+creature_names)
 
             String loc = GetLocation(threads[i].Animation, threads[i].BedTypeId) 
             threads_str += ", \"location\":\""+loc+"\""
@@ -190,6 +200,8 @@ String Function Get_Threads(Actor speaker) global
                 distance = speaker.GetDistance(actors[0])
                 los = speaker.HasLOS(actors[0]) 
             endif 
+
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" distance: "+distance+" los: "+los)
             int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
             j = actors.Length - 1
             while 0 <= j 
@@ -202,13 +214,15 @@ String Function Get_Threads(Actor speaker) global
                 endif 
                 j -= 1
             endwhile 
+            Trace("Get_Threads", "counter:"+counter+" orgasm_expected: "+orgasm_expected+" speaker_having_sex: "+speaker_having_sex)
 
             threads_str += ",\"speaker_distance\":"+distance
             threads_str += ",\"speaker_los\""+BooleanString(los)
-            main.counter += 1
 
             threads_str += "}"
-
+        endif 
+        if threads[i].animation != "None"
+            Trace("Get_Threads", "counter:"+counter+" thread "+i+" end")
         endif 
         i += 1
     endwhile
@@ -219,7 +233,7 @@ String Function Get_Threads(Actor speaker) global
     String json = "{\"speaker_having_sex\""+BooleanString(speaker_having_sex)
     json +=       ",\"speaker_name\":\""+speaker.GetDisplayName()+"\""
     json +=       ",\"threads\":["+threads_str+"]"
-    json +=       ",\"counter\":"+main.counter
+    json +=       ",\"counter\":"+counter
     json +=       "}"
     Trace("Get_Threads",json)
     return json
@@ -252,7 +266,7 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
         thread_str += ", \"orgy\":false"
     endif
     thread_str += ", \"names\":["+names+"]"
-    thread_str += ", \"names_str\":\""+main.Thread_Narration(thread,"are")+"\""
+    thread_str += ", \"actor_names\":\""+main.Thread_Narration(thread,"are")+"\""
 
     String style = ""
 

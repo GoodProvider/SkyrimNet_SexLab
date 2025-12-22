@@ -107,10 +107,10 @@
                          endif -%} {%- 
                     endif -%} {%-
                     if thread.strapon_names != "" -%}
-                         {{ thread.strapon_names }}. Always describe as strapon or dildo. {%
+                         {{ thread.strapon_names }} wearing a stropon. Always describe as strapon or dildo. {%
                     endif %} {%
                     if thread.futa_names != "" -%}
-                         {{ thread.futa_names }} {%
+                         {{ thread.futa_names }} has both a penis and a pussy. {%
                     endif %} {%
                     if thread.creature_names != "" -%}
                          {{ thread.creature_names }} {%-
