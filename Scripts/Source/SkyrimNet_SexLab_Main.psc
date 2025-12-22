@@ -674,25 +674,24 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
     int[] orgasm_expected = stages.GetOrgasmExpected(thread)
     bool someone_ejaculated = False 
     int i = actors.length - 1
+    String narration = "" 
     while 0 <= i && someone_ejaculated == False 
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
         if has_penis && orgasm_expected[i] == 1
+            narration += actors[i].GetDisplayName()+" orgasmed. "
             someone_ejaculated = True
         endif 
-        Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+" someone_ejaculated: "+someone_ejaculated)
+        Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+" someone_ejaculated: "+someone_ejaculated+" narration: "+narration)
         i -= 1
     endwhile
 
     ; Generate cum message 
-    String narration = "" 
     i = actors.length - 1
     while 0 <= i 
-        String name = actors[i].GetDisplayName()
-        narration = name+" orgasmed. "
         if someone_ejaculated
-            narration += AddCum(thread, i, actors[i], name)
+            narration += AddCum(thread, i, actors[i], actors[i].GetDisplayName())
         endif 
         Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+" narration: "+narration)
         i -= 1 
