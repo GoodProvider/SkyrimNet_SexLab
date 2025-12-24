@@ -253,9 +253,9 @@ Function EditDescriptions(sslThreadController thread)
                 thread.GoToStage(thread.stage + 1)
             endif 
         elseif button == desc_edit  
-            EditorDescription(thread)
+            EditorDescription(main, thread)
         elseif button == orgasm_edit 
-            SetOrgasmExpected(thread)
+            SetOrgasmExpected(main, thread)
         elseif button == tracking 
             ToggleThreadTracking(thread.tid)
         elseif button == style_edit 
@@ -281,7 +281,7 @@ string Function GetPlayerInput() global
     return messageText
 EndFunction
 
-Function EditorDescription(sslThreadController thread)
+Function EditorDescription(SkyrimNet_SexLab_Main main, sslThreadController thread)
     int thread_id = thread.tid
     Actor[] actors = thread.Positions
     String stage_id = "stage "+thread.stage
@@ -300,17 +300,18 @@ Function EditorDescription(sslThreadController thread)
             buttons[accept] = "Accept"
             buttons[rewrite] = "Rewrite" 
             buttons[cancel] = "Cancel"
-            String full = "tags:"+SkyrimNet_SexLab_Decorators.GetTagsString(thread.animation)+"\n\n"
-            full += thread.stage+"/"+thread.animation.StageCount() + \
+            String full = thread.animation.name+"\n" \
+                +"tags:"+SkyrimNet_SexLab_Decorators.GetTagsString(thread.animation)+"\n\n" \
+                + thread.stage+"/"+thread.animation.StageCount() + \
                    " On {the floor/a bed}, "+desc 
 
             int button = SkyMessage.ShowArray(full, buttons, getIndex = true) as int  
 
             if button == accept 
                 StartThreadTracking(thread.tid)
-                UpdateAnimInfo(thread, "stage", version, new int[1] )
+                UpdateAnimInfo(main, thread, "stage", version, new int[1] )
             elseif button == rewrite
-                EditorDescription(thread)
+                EditorDescription(main, thread)
             endif 
         else
             String msg = "Your description wasn't parsed correctly.\n"
@@ -331,7 +332,7 @@ Function EditorDescription(sslThreadController thread)
             int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
             if button == retry
-                EditorDescription(thread)
+                EditorDescription(main, thread)
             endif 
         endif 
     endif 
@@ -442,7 +443,7 @@ int[] Function GetOrgasmExpected(sslThreadController thread)
     return orgasm_expected
 EndFunction
 
-Function SetOrgasmExpected(sslThreadController thread)
+Function SetOrgasmExpected(SkyrimNet_SexLab_Main main, sslThreadController thread)
     Actor[] actors = thread.Positions
     int num_actors = actors.length
     int anim_info = GetAnim_Info(thread)
@@ -496,13 +497,13 @@ Function SetOrgasmExpected(sslThreadController thread)
     endwhile
 
     if changed 
-        UpdateAnimInfo(thread, "orgasm_expected", VERSION_2_0, orgasm_expected)
+        UpdateAnimInfo(main, thread, "orgasm_expected", VERSION_2_0, orgasm_expected)
     endif 
 
     if button == done
         return
     elseif button == go_back
-        EditorDescription(thread) 
+        EditorDescription(main, thread) 
         return 
     endif 
 EndFunction
@@ -600,7 +601,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
     return anim_info
 EndFunction 
 
-Function UpdateAnimInfo(sslThreadController thread, String field, String version, int[] orgasm_expected)
+Function UpdateAnimInfo(SkyrimNet_SexLab_Main main, sslThreadController thread, String field, String version, int[] orgasm_expected)
     String fname = GetFilename(thread)
     String path = local_folder+"/"+fname
     int anim_info = 0
@@ -628,6 +629,7 @@ Function UpdateAnimInfo(sslThreadController thread, String field, String version
     Trace("saving "+fname,true)
     JValue.writeToFile(anim_info, path)
     JValue.writeToFile(anim_info, animations_folder+"/last.json")
+    SkyrimNet_SexLab_Decorators.Save_Threads(main.SexLab)
 EndFunction 
 
 Function SetAnimCache(sslThreadController thread, int anim_info)

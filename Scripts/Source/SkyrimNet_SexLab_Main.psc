@@ -495,6 +495,9 @@ Event StageStart(int ThreadID, bool HasPlayer)
         target = actors[1]
     endif 
 
+    ; Store a copy of the threads for use by SkyrimNet when the 
+    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
+
 
     ; Send a DN if its a start and includes a player
     ; if not player send DN if allowedb by cool off 
@@ -503,7 +506,13 @@ Event StageStart(int ThreadID, bool HasPlayer)
         active_sex = true
         thread_started[ThreadID] = True
         ;AllowedDenniedOnlyIncrease(actors, thread, "start") 
-        StartStop_DirectNarration(thread,"start", HasPlayer)
+        ; Create the Initial Narration 
+        String desc = GetStageDescription(thread)
+        if desc != ""
+            DirectNarration(desc, actors[0], target)
+        else 
+            StartStop_DirectNarration(thread,"start", HasPlayer)
+        endif
     else 
         DirectNarration_Optional(event_type, "", actors[0], target)
     endif 

@@ -97,6 +97,29 @@ String Function BooleanString(bool b) global
     endif
 EndFunction 
 
+String Function Save_Threads(SexLabFramework SexLab) global 
+
+    Actor akActor = None 
+    sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
+    sslThreadController[] threads = ThreadSlots.Threads
+    int i = threads.length - 1
+    while 0 <= i && akActor == None 
+        String s = (threads[i] as sslThreadModel).GetState()
+        if s == "animating" || s == "prepare"
+            akActor = threads[i].Positions[0]
+        endif 
+        i -= 1
+    endwhile
+
+    if akActor == None 
+        akActor = Game.GetPlayer()
+    endif
+
+    String threads_json = SkyrimNet_SexLab_Decorators.Get_Threads(akActor)
+    Miscutil.WriteToFile("Data/SKSE/Plugins/SkyrimNet_SexLab/threads.json", threads_json, append=False)
+    return threads_json
+EndFunction
+
 String Function Get_Threads(Actor speaker) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     SkyrimNet_SexLab_Stages stages = (main as Quest) as SkyrimNet_SexLab_Stages
@@ -156,7 +179,9 @@ String Function Get_Threads(Actor speaker) global
             Actor[] actors = threads[i].Positions
             int[] strapon_filter = Utility.CreateIntArray(actors.Length, 0)
             int[] futa_filter = Utility.CreateIntArray(actors.Length, 0)
+            int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
             int j = actors.Length - 1
+            String orgasm_expected_array = "" 
             while 0 <= j
                 ;Trace("Get_Threads", "counter:"+counter+" thread:"+i+" "+j+" "+actors[j].GetDisplayName())
                 if threads[i].IsUsingStrapon(actors[j])
@@ -164,6 +189,12 @@ String Function Get_Threads(Actor speaker) global
                 endif 
                 if actorLib.GetTrans(actors[i]) == 0 
                     futa_filter[j] = 1 
+                endif 
+                if orgasm_expected[j] == 1 
+                    if orgasm_expected_array != ""
+                        orgasm_expected_array += ", "
+                    endif 
+                    orgasm_expected_array += "\""+actors[j].GetDisplayName()+"\""
                 endif 
                 j -= 1
             endwhile
@@ -188,6 +219,8 @@ String Function Get_Threads(Actor speaker) global
             threads_str += ", \"creature_names\":\""+creature_names+"\""
             ;Trace("Get_Threads", "counter:"+counter+" thread "+i+" creature_names "+creature_names)
 
+            threads_str += ", \"orgasm_expected_array\":["+orgasm_expected_array+"]"
+
             String loc = GetLocation(threads[i].Animation, threads[i].BedTypeId) 
             threads_str += ", \"location\":\""+loc+"\""
 
@@ -202,19 +235,18 @@ String Function Get_Threads(Actor speaker) global
             endif 
 
             ;Trace("Get_Threads", "counter:"+counter+" thread "+i+" distance: "+distance+" los: "+los)
-            int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
             j = actors.Length - 1
             while 0 <= j 
                 if actors[j] == speaker 
                     distance = 0
                     los = true 
-                    if orgasm_expected[j] == 1 
-                        speaker_having_sex = true
-                    endif 
                 endif 
                 j -= 1
             endwhile 
             ;Trace("Get_Threads", "counter:"+counter+" orgasm_expected: "+orgasm_expected+" speaker_having_sex: "+speaker_having_sex)
+
+            String orgasm_expected_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, orgasm_expected) ;
+            threads_str += ",\"orgasm_expected_names\":\""+orgasm_expected_names+"\""
 
             threads_str += ",\"speaker_distance\":"+distance
             threads_str += ",\"speaker_los\""+BooleanString(los)
@@ -227,14 +259,9 @@ String Function Get_Threads(Actor speaker) global
         i += 1
     endwhile
 
-    ; Store just the threads, used when the game is paused 
-    ; ------------------------
-    String json = "{\"threads\":["+threads_str+"]}"
-    Miscutil.WriteToFile("Data/SkyrimNet_SexLab/threads.json", json)
-
     ; Speaker Information 
     ; ------------------------
-    json = "{\"speaker_having_sex\""+BooleanString(speaker_having_sex)
+    String json = "{\"speaker_having_sex\""+BooleanString(speaker_having_sex)
     json +=       ",\"speaker_name\":\""+speaker.GetDisplayName()+"\""
     json +=       ",\"threads\":["+threads_str+"]"
     json +=       ",\"counter\":"+counter
@@ -269,7 +296,6 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
     else 
         thread_str += ", \"orgy\":false"
     endif
-    thread_str += ", \"names\":["+names+"]"
     thread_str += ", \"actor_names\":\""+main.Thread_Narration(thread,"are")+"\""
 
     String style = ""

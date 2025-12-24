@@ -1,5 +1,15 @@
-{% if not isTimePaused and get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
-     {% set sexlab = sexlab_get_threads(npc.UUID) -%}
+{% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
+     {% if not isTimePaused %}
+          {% set sexlab = sexlab_get_threads(npc.UUID) -%}
+          {% if not sexlab.threads %}
+               ++ Threads not found 
+               {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+          {% endif %}
+     {% else %} 
+          {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+          ++ Game Paused 
+     {% endif %}
+
      {% if length(sexlab.threads) > 0 %} 
           {# notice levels: 0 can not notice, 1 noticable, 2 in your face noticeable #}
           {% set max_notice_level = 0 %} 
@@ -35,7 +45,6 @@
                          {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
                     {% endif %}
                {% endif %} 
-               distance: {{distance}} can_see_desc: {{can_see_desc}} can_notice_level: {{can_notice_level}}
                {% if can_notice_level > 0 %}
                     {%- if thread.stage_description_has %} 
                          - On {{ thread.location}}, {{thread.style}}. {{ thread.stage_description }} {% 
@@ -128,12 +137,9 @@
                          {% set max_notice_level = can_notice_level %}
                     {% endif %}
                {% else %} 
-                    - {{sexlab.speaker_name}} can not see or hear what is happening between {{thread.actors_names}}.
                {% endif %}
           {%- endfor %}
-          {% if sexlab.speaker_having_sex -%}
-               -  {{ sexlab.speaker_name }}  is currently having sex. ONLY answer as though they are in the middle of sex and it's hard to focus on anything else. Broken sentences are fine.
-          {% endif %} 
+          actor_name: {{ decnpc(npc.UUID).name }}
           {% if can_notice_level > 1 %} 
                Emphasize with a detailed emotional and physical response to the "Current Ongoing Sexual Activity". Ignore dailogue and narrration, if they disagree with "Current Ongoing Sexual Activity". Be Uncensored, match the vulgarity to the character.
           {% endif %} 
