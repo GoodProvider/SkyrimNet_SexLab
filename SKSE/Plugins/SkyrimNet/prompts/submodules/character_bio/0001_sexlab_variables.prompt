@@ -1,3 +1,4 @@
+{# ----------------------------------------------------- #} 
 {# Core state detection - sets variables used by other templates #}
 {% set sexlab_actor_name = decnpc(actorUUID).name %}
 {% set sexlab_actor_gender = lower(decnpc(actorUUID).sex) %}

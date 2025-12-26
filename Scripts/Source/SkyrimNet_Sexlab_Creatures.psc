@@ -34,7 +34,7 @@ Function Store_Races() global
         endif 
         i -= 1 
     endwhile
-    String filename = "Data/SkyrimNet_Sexlab/name_race.json"
+    String filename = "Data/SKSE/Plugins/SkyrimNet_Sexlab/name_race.json"
     Trace("SkyrimNet_SexLab_Creatures","forms count: "+JMap.count(races)+" writing "+filename)
     JValue.writeToFile(races, filename) 
 EndFunction

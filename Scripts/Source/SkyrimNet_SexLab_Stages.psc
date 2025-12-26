@@ -7,7 +7,7 @@ Bool Property hide_help = false Auto
 
 Actor player = None 
 
-String Property animations_folder = "Data/SkyrimNet_SexLab/animations" Auto
+String Property animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations" Auto
 String Property local_folder =      "" Auto
 
 String VERSION_1_0 = "1.0"
@@ -49,7 +49,7 @@ Function Setup()
     String temp = "sl" ; attempt to set the caplitiization of sl 
 
     desc_input = ""
-    animations_folder = "Data/SkyrimNet_SexLab/animations"
+    animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations"
     local_folder =      animations_folder+"/_local_"
     if player == None 
         player = Game.GetPlayer()
@@ -308,7 +308,7 @@ Function EditorDescription(sslThreadController thread)
 EndFunction
 
 String Function BuildExample(Actor[] actors) 
-    String example = "{{sl.actors.1}} is having sex {{sl.actors.0}}."
+    String example = "{{sl.actors.1}} is having sex with {{sl.actors.0}}."
     if actors.length == 1
         example = "{{sl.actors.0}} is masturbating."
     elseif actors.length > 3

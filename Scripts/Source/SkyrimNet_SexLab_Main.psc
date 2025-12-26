@@ -256,16 +256,16 @@ Function Setup()
     endif 
 
     if group_info == 0
-        group_info = JValue.readFromFile("Data/SkyrimNet_Sexlab/group_tags.json")
+        group_info = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
         JValue.retain(group_info)
     else
-        int group_info_new = JValue.readFromFile("Data/SkyrimNet_Sexlab/group_tags.json")
+        int group_info_new = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
         Jvalue.releaseAndRetain(group_info, group_info_new)
         group_info = group_info_new
     endif
 
     if race_to_description <= 0 
-        race_to_description = JValue.readFromFile("Data/SkyrimNet_Sexlab/creatures.json")
+        race_to_description = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/creatures.json")
         JValue.retain(race_to_description)
     endif 
 
@@ -382,6 +382,10 @@ Function SetThreadStyle(int thread_id, int style)
     thread_style[thread_id] = style 
 EndFunction
 
+Int Function GetThreadStyle(int thread_id)
+    return thread_style[thread_id]
+EndFunction
+
 ;----------------------------------------------------------------------------------------------------
 bool Function Tag_SexAnimation(Actor akActor) 
     if akActor == None 
@@ -456,6 +460,14 @@ event AnimationStart(int ThreadID, bool HasPlayer)
         endwhile 
     endif 
 
+    sslActorLibrary actorLib = (SexLab as Quest) as sslActorLibrary
+    String desc = Get_Thread_Description(thread, actorLib)
+    Actor target = None 
+    if actors.length > 2 && actors[0] != actors[1]
+        target = actors[1]
+    endif
+    active_sex = true
+    DirectNarration(desc, actors[0], target)
     thread_started[thread.tid] = False 
 endEvent
         
@@ -486,6 +498,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
     if SexLab == None
         return  
     endif
+    sslActorLibrary actorLib = (SexLab as Quest) as sslActorLibrary
 
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
@@ -495,17 +508,22 @@ Event StageStart(int ThreadID, bool HasPlayer)
         target = actors[1]
     endif 
 
+    ; Set up the thread's description
+    ;DirectNarration(desc, actors[0], target)
+
+    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 
     ; Send a DN if its a start and includes a player
     ; if not player send DN if allowedb by cool off 
     String event_type = "sexlab_event"
     if !thread_started[ThreadID]
-        active_sex = true
-        thread_started[ThreadID] = True
+        thread_started[ThreadID] = True 
         AllowedDeniedOnlyIncrease(actors, thread, "start") 
-        StartStop_DirectNarration(thread,"start", HasPlayer)
+        ;StartStop_DirectNarration(thread,"start", HasPlayer)
+        ;DirectNarration(desc, actors[0], target)
     else 
-        DirectNarration_Optional(event_type, "", actors[0], target)
+        String desc = Get_Thread_Description(thread, actorLib)
+        DirectNarration_Optional(event_type, desc, actors[0], target)
     endif 
 
     AllowedDeniedOnlyIncrease(thread.positions, thread, "stage") 
@@ -519,17 +537,17 @@ Event StageStart(int ThreadID, bool HasPlayer)
     ; If this thread is being tracked print the thread's status 
     if stages.IsThreadTracking(ThreadID)
         bool[] desc_denied = stages.HasDescriptionOrgasmDenied(thread)
-        String desc = "" 
+        String msg = "" 
         if desc_denied[0]
-            desc = "has description"
+            msg = "has description"
         endif
         if desc_denied[1]
-            if desc != ""
-                desc += " and "
+            if msg != ""
+                msg += " and "
             endif 
-            desc += "orgasm denied"        
+            msg += "orgasm denied"        
         endif
-        Debug.Notification("stage "+thread.stage+" of "+ thread.animation.StageCount()+" "+desc)
+        Debug.Notification("stage "+thread.stage+" of "+ thread.animation.StageCount()+" "+msg)
     endif 
 
     ; DOM Slaves have thier own orasm system 

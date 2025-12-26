@@ -97,6 +97,29 @@ String Function BooleanString(bool b) global
     endif
 EndFunction 
 
+String Function Save_Threads(SexLabFramework SexLab) global 
+
+    Actor akActor = None 
+    sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
+    sslThreadController[] threads = ThreadSlots.Threads
+    int i = threads.length - 1
+    while 0 <= i && akActor == None 
+        String s = (threads[i] as sslThreadModel).GetState()
+        if s == "animating" || s == "prepare"
+            akActor = threads[i].Positions[0]
+        endif 
+        i -= 1
+    endwhile
+
+    if akActor == None 
+        akActor = Game.GetPlayer()
+    endif
+
+    String threads_json = SkyrimNet_SexLab_Decorators.Get_Threads(akActor)
+    Miscutil.WriteToFile("Data/SKSE/Plugins/SkyrimNet_SexLab/threads.json", threads_json, append=False)
+    return threads_json
+EndFunction
+
 String Function Get_Threads(Actor speaker) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     SkyrimNet_SexLab_Stages stages = (main as Quest) as SkyrimNet_SexLab_Stages
@@ -111,7 +134,6 @@ String Function Get_Threads(Actor speaker) global
     Quest q = Game.GetFormFromFile(0xD62, "SexLab.esm")  as Quest 
     sslActorLibrary actorLib = q as sslActorLibrary
     sslCreatureAnimationSlots creatureLib = q as sslCreatureAnimationSlots
-
 
     sslThreadSlots ThreadSlots = Game.GetFormFromFile(0xD62, "SexLab.esm") as sslThreadSlots
     if ThreadSlots == None
@@ -128,70 +150,56 @@ String Function Get_Threads(Actor speaker) global
     int i = 0
     String threads_str = ""
     bool speaker_having_sex = false 
-    String[] states = new String[15]
     while i < threads.length
         String s = (threads[i] as sslThreadModel).GetState()
-        if i < states.Length
-            states[i] = s
-        endif
-
         if s == "animating" || s == "prepare"
             if threads_str != ""
                 threads_str += ", "
             endif 
-            String stage_desc = GetStageDescription(threads[i])
-            if stage_desc != ""
-                threads_str += "{\"stage_description_has\":true,\"stage_description\":\""+stage_desc+"\""
-            else 
-                threads_str += Thread_Json(threads[i], actorLib) 
-            endif 
+            String desc = Get_Thread_Description(threads[i], actorLib)
 
-            threads_str += ",\"style\":\""+main.Thread_Narration(threads[i], "are")+"\""
-
-            String names_array = GetNamesArray(threads[i])
-            threads_str += ",\"names\":"+names_array+""
-
-            String strapon_names = GetNames(threads[i])
-            threads_str += ",\"strapon_names\":\""+strapon_names+"\""
-
-            String futa_names = GetNames(threads[i], actorLib)
-            threads_str += ", \"futa_names\":\""+futa_names+"\""
-
-            String creature_names = GetCreatures(threads[i])
-            threads_str += ", \"creature_names\":\""+creature_names+"\""
-
-            String loc = GetLocation(threads[i].Animation, threads[i].BedTypeId) 
-            threads_str += ", \"location\":\""+loc+"\""
-
+            Trace("Get_Threads","description: "+desc)
+            threads_str += "{\"description\":\""+desc+"\""
             String enjoyments = GetEnjoyments(threads[i])
             threads_str += ", \"enjoyments\":"+enjoyments
             
             Actor[] actors = threads[i].Positions
-            Float distance = 0 
-            bool los = True
-            if speaker != actors[0]
-                distance = speaker.GetDistance(actors[0])
-                los = speaker.HasLOS(actors[0]) 
-            endif 
+            String[] names = Utility.CreateStringArray(actors.Length)
+            Float distance = -1 
+            bool los = False 
             bool[] denied = stages.HasDescriptionOrgasmDenied(threads[i])
             int j = actors.Length - 1
+            String names_array = ""
             while 0 <= j 
+                if names_array != ""
+                    names_array += ", "
+                endif
+                String name = actors[j].GetDisplayName()
+                names[j] = name
+                names_array += "\""+name+"\""
                 if actors[j] == speaker 
                     distance = 0
-                    los = true 
+                    los = True 
                     if !denied[j]
-                        speaker_having_sex = true
+                        speaker_having_sex = True
                     endif 
                 endif 
                 j -= 1
             endwhile 
+            if distance == -1 
+                distance = speaker.GetDistance(actors[0])
+                los = speaker.HasLOS(actors[0]) 
+            endif 
 
+            String[] nouns = Utility.CreateStringArray(0)
+            String names_string = SkyrimNetAPI.JoinStrings(names, nouns)
+            threads_str += ",\"names\":["+names_array+"]"
+            threads_str += ",\"names_string\":\""+names_string+"\""
             threads_str += ",\"speaker_distance\":"+distance
             threads_str += ",\"speaker_los\""+BooleanString(los)
             main.counter += 1
 
             threads_str += "}"
-
         endif 
         i += 1
     endwhile
@@ -208,6 +216,182 @@ String Function Get_Threads(Actor speaker) global
     return json
 EndFunction 
 
+String Function Get_Thread_Description(sslThreadController thread, sslActorLibrary actorLib) global
+
+    ; ----------------------------------------------------------------
+    ; Style 
+    ; ----------------------------------------------------------------
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    int style = main.GetThreadStyle(thread.tid)
+    String style_ly_str = "" 
+    if style == main.STYLE_GENTLY
+        style_ly_str = "gently " 
+    elseif style == main.STYLE_FORCEFULLY
+        style_ly_str = "forcefully " 
+    endif
+    String style_full_str = "" 
+    if style == main.STYLE_GENTLY
+        style_full_str = "gentle " 
+    elseif style == main.STYLE_FORCEFULLY
+        style_full_str = "forceful "
+    endif
+
+    ; ----------------------------------------------------------------
+    ; Check for rape 
+    ; ----------------------------------------------------------------
+    Actor[] actors = thread.Positions
+    int i = 0
+    int num_victims = 0
+    int num_actors = actors.Length
+    String[] names = Utility.CreateStringArray(actors.Length)
+    while i < num_actors
+        names[i] = actors[i].GetDisplayName()
+        if thread.IsVictim(actors[i])
+            num_victims += 1
+        endif
+        i += 1
+    endwhile 
+    String[] nouns_empty = Utility.CreateStringArray(0)
+
+    String msg = "" 
+    if num_victims > 0 
+        int num_aggressors = actors.Length - num_victims
+        String[] victums = Utility.CreateStringArray(num_victims)
+        String[] aggs = Utility.CreateStringArray(num_aggressors)
+        i = 0
+        int v_i = 0 
+        int a_i = 0 
+        while i < num_actors
+            if thread.IsVictim(actors[i])
+                victums[v_i] = names[i]
+                v_i += 1 
+            else    
+                aggs[a_i] = names[i]
+                a_i += 1 
+            endif
+            i += 1
+        endwhile 
+        String[] nouns = new String[2] 
+        nouns[0] = style_ly_str+" raping"
+        nouns[1] = style_ly_str+" raping"
+        msg = SkyrimNetAPI.JoinStrings(aggs, nouns)+" "+SkyrimNetAPI.JoinStrings(victums, nouns_empty)+"."
+    endif 
+
+    ; ----------------------------------------------------------------
+    ; Return description if it already has one. 
+    ; ----------------------------------------------------------------
+    String desc = GetStageDescription(thread)
+    if desc != "" 
+        if msg == "" && style != main.STYLE_NORMALLY
+            Trace("Thread_Description","description: names: "+names)
+            String[] nouns = new String[2] 
+            nouns[0] = style_ly_str+" having a sexual experience."
+            nouns[1] = style_ly_str+" having a sexual experience."
+            msg = SkyrimNetAPI.JoinStrings(names, nouns)
+        endif 
+        msg += desc
+    else 
+        ; ----------------------------------------------------------------
+        ; Positions 
+        ; ----------------------------------------------------------------
+        sslBaseAnimation anim = thread.Animation
+
+        if anim.HasTag("standing")
+            msg += " While standing, "
+        elseif anim.HasTag("kneeling")
+            msg += " While kneeling, "
+        elseif anim.HasTag("sitting")
+            msg += " While sitting, "
+        elseif anim.HasTag("cowgirl")
+            msg += " While in the cowgirl position, "
+        elseif anim.HasTag("69")
+            msg += " While in the 69 position, "
+        elseif anim.HasTag("missionary")
+            msg += " While in the missionary position, "
+        elseif anim.HasTag("doggy")
+            msg += " While in the doggy position, "
+        endif 
+
+        ; ----------------------------------------------------------------
+        ; Check if rape or orgy
+        ; ----------------------------------------------------------------
+        if actors.length == 1 
+            msg += names[0]+" is "+style_ly_str+"masturbating"
+            if anim.HasTag("dildo")
+                msg += " with a dildo"
+            endif 
+        else 
+            if num_victims == 0 && actors.length > 2
+                msg = SkyrimNetAPI.JoinStrings(names, nouns_empty)+" having an orgy. "
+            endif 
+            
+            ; ----------------------------------------------------------------
+            ; Add action 
+            ; ----------------------------------------------------------------
+
+            if anim.HasTag("Anal") || anim.HasTag("assjob")
+                msg += names[1]+" is "+style_ly_str+"fucking "+names[0]+"'s ass"
+            elseif anim.HasTag("Boobjob")
+                msg += names[1]+" is getting a "+style_full_str+"boobjob from "+names[0]  
+            elseif anim.HasTag("Thighjob")
+                msg += names[1]+" is getting a "+style_full_str+"thighjob from "+names[0]
+            elseif anim.HasTag("Fisting")
+                msg += names[1]+" is "+style_ly_str+"fisting "+names[0]
+            elseif anim.HasTag("Oral") || anim.HasTag("blowjob") || anim.HasTag("cunnilingus")
+                msg += names[1]+" is getting "+style_full_str+"oral sex from "+names[0]   
+            elseif anim.HasTag("Fingering")
+                msg += names[1]+" is "+style_ly_str+"fingering "+names[0]
+            elseif anim.HasTag("Footjob")
+                msg += names[1]+" is getting a "+style_full_str+"footjob from "+names[0]
+            elseif anim.HasTag("Handjob")
+                msg += names[1]+" is getting a "+style_full_str+"handjob from "+names[0]
+            elseif anim.HasTag("Dildo")
+                msg += names[1]+" is "+style_ly_str+"fucking "+names[0]+" with with a dildo"
+            elseif anim.HasTag("Vaginal")
+                msg += names[1]+" is "+style_ly_str+"fucking "+names[0]+"'s pussy"
+            elseif anim.HasTag("Kissing")
+                msg += names[1]+" is "+style_ly_str+"kissing "+names[0]
+            elseif anim.HasTag("Headpat")
+                msg += names[1]+" is "+style_ly_str+"patting "+names[0]+"'s head"
+            elseif anim.HasTag("Hugging")
+                msg += names[1]+" is "+style_ly_str+"hugging "+names[0]
+            elseif anim.HasTag("Spanking")
+                msg += names[1]+" is "+style_ly_str+"spanking "+names[0]
+            endif 
+        endif
+
+        ; ----------------------------------------------------------------
+        ; Location
+        ; ----------------------------------------------------------------
+        String loc = GetLocation(anim, thread.BedTypeId)
+        if loc != "" 
+            msg += " on "+loc
+        endif
+        msg += ". "
+
+        ; ----------------------------------------------------------------
+        ; Add Bondage 
+        ; ----------------------------------------------------------------
+        String name = thread.Positions[0].GetDisplayName()
+        if anim.HasTag("armbinder")
+            msg += name+"'s arms are bound in an armbinder."
+        elseif anim.HasTag("cuffs") || anim.HasTag("cuffed")
+            msg += name+"'s arms are cuffed."
+        elseif anim.HasTag("yoke")
+            msg += name+"'s arms are bound in a yoke."
+        elseif anim.HasTag("hogtied")
+            msg += name+" is hogtied."
+        elseif anim.HasTag("chastiy") || anim.HasTag("chastiybelt")
+            msg += name+" is wearing a chastity belt."
+        endif 
+    endif 
+
+    msg += " "+GetNames(thread) ; Strapon Names 
+    msg += " "+GetNames(thread, actorLib) ; Futa Names 
+    msg += " "+GetCreatures(thread) ; Creature Names
+
+    return msg
+EndFunction
 
 String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib) global
 

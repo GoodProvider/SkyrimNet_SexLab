@@ -31,7 +31,7 @@ Function RegisterActions() global
             "SkyrimNet_SexLab_Actions", "MastrubationStart_IsEligible",  \
             "SkyrimNet_SexLab_Actions", "MastrubationStart_Execute",  \
             "", "PAPYRUS", 1, \
-            "{\"type\":\"masturbation\", \"rape\":{true|false}}",\
+            "{\"type\":\"masturbation\", \"rape\":\"{true|false}\"}",\
             "", "BodyAnimation")
 
     ; ------------------------
