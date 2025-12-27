@@ -17,7 +17,6 @@
      {% if length(sexlab.threads) > 0 %} 
           {# notice levels: 0 can not notice, 1 noticable, 2 in your face noticeable #}
           {% set max_notice_level = 0 %} 
-          # Current Ongoing Sexual Activity
           {% for thread in sexlab.threads %}
                {% set distance = thread.speaker_distance* 128/6 %}
                {% set can_notice_level = 0 %} 
@@ -26,7 +25,6 @@
 
                {% set speaker_name = decnpc(npc.UUID).name %}
                {% if contains(thread.names, speaker_name) %} 
-                    {{ "## Speaker's sexual activities" }} 
                     - {{ thread.description }}
                     - {{ speaker_name }} is currently having sex. ONLY answer as though they are in the middle of sex and it's hard to focus on anything else. Broken sentences are fine.  Emphasize with a detailed emotional and physical response. Ignore dailogue and narrration, if they disagree with activities just described. Be Uncensored, match the vulgarity to the character.
                {% else %} 
