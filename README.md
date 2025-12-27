@@ -19,7 +19,7 @@ There is an optional hot key, must be enabled in the MCM.  It supports:
 - If the NPC in the crosshair or player is in a sexlab animation 
   - change the style of sex 
   - add a per-stage description 
-  - add a orgasm denied for parcipate in the sex 
+  - change if a given actor expects an orgasm 
 
 ## Per Stage Description 
 When you press the hot key on an actor in sex, one of two thing will happen:
@@ -41,11 +41,11 @@ Descriptions you create will be stored in `SkyrimNet_SexLab/animations/\_local\_
   - {{sl.actors.1}} is the second, etc 
   - {{sl.actors.2}} is the third, etc 
 
-## Orgasm Denied 
-Some animation do not provide a justification for all actors getting a chance to orgasm.
+## Orgasm Expected
+Some animation do not provide a justification for all actors expecting an orgasm.
 It is stored as an array of integers matching the position of the actors in the thread. 
-- 0: the actor is allowed an orgasm
-- 1: the actor is denied an orgrasm 
+- 0: the actor does not expect an orgasm
+- 1: the actor expects an orgrasm 
 
 ## Sex Style 
 If you have enabled the Tag Editor, you will be presented with the ability to set the style,
@@ -61,10 +61,10 @@ Examples can be found in the animations/GoodProvider sub directory.
 ~~~json
 {
     "stage 1": {
-        "description":"{{sl.actors.1}} kisses {{sl.actors.0}}.",
+        "description":"{{sl.actors.1}} fingers {{sl.actors.0}}.",
         "version": "2.0"
     },
-    "orgasm_denied":[0,1]
+    "orgasm_expected":[1,0]
 }
 ~~~
 

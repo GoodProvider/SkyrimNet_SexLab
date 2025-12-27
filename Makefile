@@ -3,8 +3,8 @@ NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
 
-ANIM_SRC= C:\Skyrim\dev\overwrite\SkyrimNet_SexLab\animations\_local_
-ANIM_DST= SkyrimNet_SexLab\animations\GoodProvider
+ANIM_SRC= C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet_SexLab\animations\_local_
+ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
 
 merge:
 	python3 ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}

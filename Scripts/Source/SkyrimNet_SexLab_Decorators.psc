@@ -158,7 +158,6 @@ String Function Get_Threads(Actor speaker) global
             endif 
             String desc = Get_Thread_Description(threads[i], actorLib)
 
-            Trace("Get_Threads","description: "+desc)
             threads_str += "{\"description\":\""+desc+"\""
             String enjoyments = GetEnjoyments(threads[i])
             threads_str += ", \"enjoyments\":"+enjoyments
@@ -167,22 +166,29 @@ String Function Get_Threads(Actor speaker) global
             String[] names = Utility.CreateStringArray(actors.Length)
             Float distance = -1 
             bool los = False 
-            bool[] denied = stages.HasDescriptionOrgasmDenied(threads[i])
+            int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
             int j = actors.Length - 1
             String names_array = ""
+            String orgasm_expected_array = ""
             while 0 <= j 
+                String name = actors[j].GetDisplayName()
+                names[j] = name
+
                 if names_array != ""
                     names_array += ", "
                 endif
-                String name = actors[j].GetDisplayName()
-                names[j] = name
                 names_array += "\""+name+"\""
+
+                if orgasm_expected[j] == 1
+                    if orgasm_expected_array != ""
+                        orgasm_expected_array += ", "
+                    endif
+                    orgasm_expected_array += "\""+name+"\""
+                endif
+
                 if actors[j] == speaker 
                     distance = 0
                     los = True 
-                    if !denied[j]
-                        speaker_having_sex = True
-                    endif 
                 endif 
                 j -= 1
             endwhile 
@@ -194,6 +200,7 @@ String Function Get_Threads(Actor speaker) global
             String[] nouns = Utility.CreateStringArray(0)
             String names_string = SkyrimNetAPI.JoinStrings(names, nouns)
             threads_str += ",\"names\":["+names_array+"]"
+            threads_str += ",\"orgasm_expected\":["+orgasm_expected_array+"]"
             threads_str += ",\"names_string\":\""+names_string+"\""
             threads_str += ",\"speaker_distance\":"+distance
             threads_str += ",\"speaker_los\""+BooleanString(los)
