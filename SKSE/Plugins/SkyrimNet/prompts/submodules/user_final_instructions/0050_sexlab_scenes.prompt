@@ -5,9 +5,9 @@
 {#      else call the decatotion                         #} 
 {# ----------------------------------------------------- #} 
 {% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
-     {% set speaker_name = decnpc(npc.UUID).name %}
+     {% set speaker = npc %}
      {% if not isTimePaused %}
-          {% set sexlab = sexlab_get_threads(npc.UUID) -%}
+          {% set sexlab = sexlab_get_threads(speaker.UUID) -%}
           {% if not sexlab.threads %}
                {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
           {% endif %}
@@ -15,20 +15,22 @@
           {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
      {% endif %}
      {% if length(sexlab.threads) > 0 %} 
-          {# notice levels: 0 can not notice, 1 noticable, 2 in your face noticeable #}
-          {% set max_notice_level = 0 %} 
           {% for thread in sexlab.threads %}
-               {% set distance = thread.speaker_distance* 128/6 %}
-               {% set can_notice_level = 0 %} 
-               {% set can_see_desc = "" %} 
-               {% set can_hear_desc = "" %} 
+               {% set distance = distance_between(speaker.name, thread.names.1) %}
+               {% set has_los = has_line_of_sight(speaker.name, thread.names.0) %}
+               {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}}
+               {{speaker.name}} to {{thread.names.0}} distance: {{thread.speaker_distance}} has_los: {{thread.speaker_los}}
 
-               {% set speaker_name = decnpc(npc.UUID).name %}
-               {% if contains(thread.names, speaker_name) %} 
+               {% if contains(thread.names, speaker.name) %} 
                     - {{ thread.description }}
-                    - {{ speaker_name }} is currently having sex. ONLY answer as though they are in the middle of sex and it's hard to focus on anything else. Broken sentences are fine.  Emphasize with a detailed emotional and physical response. Ignore dailogue and narrration, if they disagree with activities just described. Be Uncensored, match the vulgarity to the character.
-               {% else %} 
-                    {% if thread.speaker_los %} 
+                    - {{ speaker.name }} is currently having sex. ONLY answer as though they are in the middle of sex and it's hard to focus on anything else. Broken sentences are fine.  Emphasize with a detailed emotional and physical response. Ignore dailogue and narrration, if they disagree with activities just described. Be Uncensored, match the vulgarity to the character. If {{ speaker.name }} is giving oral sex, they can not speak just mumble around the genitale. 
+                {% else %} 
+                    {% set can_notice_level = 0 %} 
+                    {% set can_see_desc = "" %} 
+                    {% set can_hear_desc = "" %} 
+                    distance: {{ distance}} 
+
+                    {% if has_line_of_sight(speaker.name, thread.names.0) %} 
                          {% if distance > 36 %}
                               {% set can_notice_level = 0 %}
                          {% else if distance > 12 %} 
@@ -56,12 +58,15 @@
                     {% endif %} 
                     {% if can_notice_level > 0 %}
                          - On {{ thread.location}}, {{thread.style}}. {{ thread.description }} {% 
-                         if can_hear_desc != "" %} {{speaker_name}} {{can_hear_desc}} {% endif %} {% 
-                         if can_see_desc != "" %} {{speaker_name}} {{can_see_desc }} {% endif %} 
+                         if can_hear_desc != "" %} {{speaker.name}} {{can_hear_desc}} {% endif %} {% 
+                         if can_see_desc != "" %} {{speaker.name}} {{can_see_desc }} {% endif %} 
                     {% else %} 
-                         - {{speaker_name}} can not see or hear what is happening with {{thread.names_string}}.
+                         - {{speaker.name}} can not see or hear what is happening with {{thread.names_string}}.
                     {% endif %}
                {% endif %}
           {%- endfor %}
+          {% if length(activeOstimThreads) > 1 %}
+               Note: Multiple intimate scenes are occurring simultaneously. The dialogue should acknowledge this complex situation appropriately.
+          {% endif %}
      {% endif %}
 {% endif %}

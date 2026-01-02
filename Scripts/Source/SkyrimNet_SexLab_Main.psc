@@ -5,6 +5,7 @@ import UIExtensions
 import SkyrimNet_SexLab_Decorators
 import SkyrimNet_SexLab_Actions
 import SkyrimNet_SexLab_Stages
+import SkyrimNet_SexLab_Utilities
 import StorageUtil
 
 ; ---------------------------------------------------
@@ -404,6 +405,33 @@ sslThreadController Function GetThread(Actor akActor)
     if SexLab != None && thread_id != -1 
         thread = SexLab.GetController(thread_id)
     endif 
+    
+    if thread == None 
+        Trace("GetThread","Failed to find thread for actor "+akActor.GetDisplayName())
+       sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
+        if ThreadSlots == None
+            Trace("Get_Threads","ThreadSlots is None",true)
+            return None
+        endif
+
+        sslThreadController[] threads = ThreadSlots.Threads
+        int i = threads.length - 1
+        while 0 <= i && thread == None
+            Actor[] actors = threads[i].Positions
+            int j = actors.length - 1
+            while 0 <= j && thread == None
+                if actors[j] == akActor
+                    thread = threads[i]
+                endif 
+                j -= 1
+            endwhile 
+            i -= 1
+        endwhile
+        if thread != None
+            Trace("GetThread","Failed to find thread for actor "+akActor.GetDisplayName()+" then found/storing "+thread.tid+" by searching all threads")
+            StorageUtil.SetIntValue(akActor, actor_thread_id, thread.tid)
+        endif 
+    endif 
     return thread 
 EndFunction
 
@@ -432,6 +460,7 @@ Function RegisterSexlabEvents()
 EndFunction 
 
 event AnimationStart(int ThreadID, bool HasPlayer)
+    Trace("AnimationStart","ThreadID:"+ThreadID+" HasPlayer:"+HasPlayer,True)
     if SexLab == None
         return  
     endif
@@ -594,6 +623,8 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
     else
         narration += " stops having sex."
     endif 
+
+    bool orgasm_denied = false
     Actor target = None
     if config.SeparateOrgasms
         String after = "" 
@@ -608,6 +639,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
                 if orgasm_expected.length > j && orgasm_expected[j] == 1
                     after += actors[j].GetDisplayName()+" was denied an orgasm. "
                     target = actors[j]
+                    orgasm_denied = true
                 endif
             elseif num_orgasms < 2
                 after += actors[j].GetDisplayName()+"'s body glows in post orgasm. "
@@ -633,10 +665,10 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
         endif 
     endif 
     
-    if HasPlayer
+    if orgasm_denied
         DirectNarration(narration, actors[0], target)
     else
-        DirectNarration_Optional("sexlab_end", narration, target)
+        RegisterEvent("sexlab_end", narration, target)
     endif 
     thread_started[ThreadID] = False 
 
@@ -704,8 +736,8 @@ endEvent
 ; This function is not called when SLSO.esp is installed, as it has its own orgasm handling
 ; ----------------------------------------------------------------------------------------------------
 Event Orgasm_Combined(int ThreadID, bool HasPlayer)
-    Trace("Orgasm_COmbined","ThreadID:"+threadID+" HasPlayer:"+HasPlayer)
     if SexLab == None
+        Trace("Orgasm_Combined","SexLab is None")
         return  
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
@@ -718,15 +750,38 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
     bool someone_ejaculated = False 
     int i = actors.length - 1
     String narration = "" 
-    while 0 <= i && someone_ejaculated == False 
+    Trace("Orgasm_Combined","ThreadID:"+threadID+" HasPlayer:"+HasPlayer+" orgasm_expected:"+orgasm_expected)
+    while 0 <= i
+        String name = actors[i].GetDisplayName()
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if has_penis && orgasm_expected[i] == 1
-            narration += actors[i].GetDisplayName()+" orgasmed. "
-            someone_ejaculated = True
+        if IsDOMSlave(actors[i])
+            if orgasm_expected[i] == 1
+                int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
+                if num_orgasms > 0 
+                    if has_penis
+                        someone_ejaculated = True 
+                    endif 
+                else 
+                    DOM_Actor slave = GetDOMSlave("Orgasm_Combined", actors[i])
+                    if slave != None 
+                        if slave.mind.is_aroused_for > 0
+                            narration += name+" was denied an orgasm. "
+                        endif 
+                    endif 
+                endif 
+            endif 
+            Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
+        else
+            if orgasm_expected[i] == 1
+                narration += name+" orgasmed. "
+                if has_penis
+                    someone_ejaculated = True
+                endif
+            endif 
         endif 
-        Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+" someone_ejaculated: "+someone_ejaculated+" narration: "+narration)
+        Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | narration: "+narration)
         i -= 1
     endwhile
 
@@ -736,11 +791,15 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         if someone_ejaculated
             narration += AddCum(thread, i, actors[i], actors[i].GetDisplayName())
         endif 
-        Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+" narration: "+narration)
+        Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+"| adding cum | narration: "+narration)
         i -= 1 
     endwhile 
 
-    SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_orgasm", narration, actors[0], None)
+    if HasPlayer
+        DirectNarration(narration, actors[0], None)
+    else
+        DirectNarration_Optional("sexlab_orgasm", narration, actors[0], None)
+    endif
 EndEvent 
 
 ; Used for SLSO.esp orgasm handling
@@ -756,10 +815,16 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms)
-    Trace("Orgasm_Individual","akActor:"+akActor.GetDisplayName()+" FullEnjoyment:"+FullEnjoyment+" num_orgasms:"+num_orgasms)
+    if IsDomSlave(akActor)
+        return
+    endif 
 
-    String msg = akActor.GetDisplayName()+" orgasmed."
+    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms)
+    Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, akActor.GetDisplayName()+" orgasmed.")
+EndEvent
+
+Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orgasms, String msg)
+    Trace("Orgasm_Individual_Helper","akActor:"+akActor.GetDisplayName()+" FullEnjoyment:"+FullEnjoyment+" num_orgasms:"+num_orgasms)
 
     int gender = sexlab.GetGender(akActor) 
     bool male = gender == 0 || gender == 2
@@ -791,7 +856,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
     else    
         DirectNarration_Optional("sexlab_orgasm", msg, akActor, cum_catcher)
     endif 
-EndEvent 
+EndFunction
 
 ;----------------------------------------------------
 ; Add Cum
@@ -854,6 +919,27 @@ String Function AddCum(sslThreadController thread, int position, Actor akActor, 
     endif 
     return "" 
 EndFunction  
+
+; Increases the 
+Bool Function IsDOMSlave(Actor akActor)
+    if dom_main_found
+        return SkyrimNet_DOM_Utils.IsDOMSlave(akActor)
+    endif 
+    return False 
+EndFunction
+
+DOM_Actor Function GetDOMSlave(String func, Actor akActor, String file = "SkyrimNet_SexLab_Main")
+    if dom_main_found
+        return SkyrimNet_DOM_Utils.GetSlave(file, func, akActor)
+    endif 
+    return None
+EndFunction
+
+Function DOMSlave_Orgasmed(Actor akActor, String msg)
+    Trace("DomSlave_Orgasmed",akActor.GetDisplayName())
+    int num_orgasms = StorageUtil.GetIntValue(akActor,actor_num_orgasms_key, 0)
+    Orgasm_Individual_Helper(akActor, 100, num_orgasms+1, msg)
+EndFunction
 
 ;----------------------------------------------------
 ; Parses the tags
@@ -1220,64 +1306,4 @@ String Function GroupDialog(int group_tags, String group)  global
         button = "-continue-"
     endif 
     return button
-EndFunction
-
-Function DirectNarration(String msg, Actor source=None, Actor target=None)
-    SkyrimNetApi.DirectNarration(msg, source, target)
-    ;SkyrimNetApi.RegisterEvent("sexlab_event", msg, source, target)
-    if source != None 
-        msg += " source:"+source.GetDisplayName()
-    endif 
-    if target != None 
-        msg += " target:"+target.GetDisplayName()
-    endif
-    Trace("DirectNarration", msg)
-EndFunction
-
-Function DirectNarration_Optional(String event_type, String msg, Actor source=None, Actor target=None, bool optional=False)
-    float unit_meter = 0.01465
-    float distance = (unit_meter*direct_narration_max_distance) + 1 
-    if source != None 
-        Actor player = Game.GetPlayer()
-        if player == source 
-            distance = 0 
-        else
-            distance = unit_meter*player.GetDistance(source) 
-        endif 
-    endif 
-
-    String type = "" 
-    int last_audio = SkyrimNetAPI.GetTimeSinceLastAudioEnded()/1000 ; in seconds
-    if last_audio >= direct_narration_cool_off && distance <= direct_narration_max_distance
-        SkyrimNetApi.DirectNarration(msg, source, target)
-        ;SkyrimNetApi.RegisterEvent(event_type, msg, source, target)
-        type = "direct"
-    else 
-        if !optional && msg != ""
-            SkyrimNetApi.RegisterEvent(event_type, msg, source, target)
-            type = "event"
-        else 
-            type = "skipped"
-        endif 
-    endif 
-
-    if source != None 
-        msg += " source:"+source.GetDisplayName()
-    endif 
-    if target != None 
-        msg += " target:"+target.GetDisplayName()
-    endif
-    Trace("DirectNarration","last_audio_secs:"+last_audio+">="+direct_narration_cool_off+" distance:"+distance+"<"+direct_narration_max_distance+" type:"+type+" msg:"+msg)
-EndFunction
-
-Function RegisterEvent(String event_name, String msg, Actor source=None, Actor target=None)
-    SkyrimNetApi.RegisterEvent(event_name, msg, source, target)
-    if source != None 
-        msg += " source:"+source.GetDisplayName()
-    endif 
-    if target != None 
-        msg += " target:"+target.GetDisplayName()
-    endif
-    Trace("DirectNarration", msg)
-    Trace("RegisterEvent", "event_name:"+event_name+" msg:"+msg)
 EndFunction

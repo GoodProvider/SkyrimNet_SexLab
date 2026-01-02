@@ -79,6 +79,7 @@ String Function Is_Nudity(Actor akActor) global
         Form pelvis_primary = akActor.GetEquippedArmorInSlot(52)
         Form pelvis_seconday = akActor.GetEquippedArmorInSlot(49)
 
+
         if body == None 
             topless = true 
         endif 
@@ -669,7 +670,7 @@ String Function GetEnjoyments(sslThreadController controller) global
         if str != "" 
             str += ", "
         endif 
-        int enjoyment 
+        int enjoyment = 0
         sslActorAlias actorAlias = controller.ActorAlias(actors[i]) 
         if MiscUtil.FileExists("Data/SLSO.esp")
             enjoyment = actorAlias.GetFullEnjoyment() 

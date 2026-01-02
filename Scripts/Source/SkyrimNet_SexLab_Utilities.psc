@@ -127,6 +127,9 @@ EndFunction
 ; ------------------------------------------------------------
 
 Function DirectNarration(String msg, Actor source=None, Actor target=None) global
+
+    msg = CheckDuplicate("DirectNarration", source, msg)
+
     SkyrimNetApi.DirectNarration(msg, source, target)
     ;SkyrimNetApi.RegisterEvent("sexlab_event", msg, source, target)
     if source != None 
@@ -139,6 +142,8 @@ Function DirectNarration(String msg, Actor source=None, Actor target=None) globa
 EndFunction
 
 Function DirectNarration_Optional(String event_type, String msg, Actor source=None, Actor target=None, bool optional=False) global
+    msg = CheckDuplicate("DirectNarration_Optional", source, msg)
+
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
 
     float unit_meter = 0.01465
@@ -178,6 +183,7 @@ EndFunction
 
 Function RegisterEvent(String event_name, String msg, Actor source=None, Actor target=None) global
     if msg != "" 
+        msg = CheckDuplicate("RegisterEvent", source, msg)
 
         SkyrimNetApi.RegisterEvent(event_name, msg, source, target)
 
@@ -190,4 +196,20 @@ Function RegisterEvent(String event_name, String msg, Actor source=None, Actor t
         endif
         Trace("RegisterEvent", "event_name:"+event_name+" msg:"+msg)
     endif 
+EndFunction
+
+String Function CheckDuplicate(String func, Actor source, String msg) global
+    if msg == ""
+        return msg
+    endif 
+    String storage_key = "sexlab_narration_last_msg"
+    String old = StorageUtil.GetStringValue(source, storage_key, "")
+    Bool old_equals_new = old == msg
+    if old == msg
+        Trace(func+".CheckDuplicate", "changing duplicate `"+msg+"' to ''")
+        return "" 
+    else 
+        StorageUtil.SetStringValue(source, storage_key, msg)
+        return msg
+    endif
 EndFunction

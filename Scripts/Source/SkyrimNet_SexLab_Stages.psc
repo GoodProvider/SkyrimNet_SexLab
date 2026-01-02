@@ -222,7 +222,7 @@ Function EditDescriptions(sslThreadController thread)
                 source = "from "+desc_stage+" stage"
             endif 
             String source_stage = source +" "+thread.stage+"/"+thread.animation.StageCount() 
-            msg = "["+source_stage+"] "+desc
+            msg += "["+source_stage+"] "+desc
         endif 
         msg += "\nstyle:"+main.Thread_Narration(thread,"are") 
         int[] orgasm_filter = GetOrgasmExpected(thread)

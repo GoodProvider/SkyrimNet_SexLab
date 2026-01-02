@@ -1,6 +1,7 @@
 Scriptname SkyrimNet_SexLab_MCM extends SKI_ConfigBase
 
 import SkyrimNet_SexLab_Actions
+import SkyrimNet_SexLab_Utilities
 
 int rape_toggle
 GlobalVariable Property sexlab_public_sex_accepted Auto
@@ -280,6 +281,7 @@ EndState
 
 State SexEditKeySet
     Event OnKeyMapChangeST(int keyCode, string conflictControl, string conflictName)
+        Trace("SexEditKeySet","keyCode: "+keyCode+" conflictControl: "+conflictControl+" conflictName: "+conflictName)
         bool continue = True
         if conflictControl != "" 
             String msg = None 
@@ -403,313 +405,319 @@ Event OnKeyDown(int key_code)
     if UI.IsTextInputEnabled()
         return 
     endif 
+    Trace("OnKeyDown","key_code: "+key_code+" ?= "+sex_edit_key)
 
     if sex_edit_key == key_code
         ; Both players need to be in the crosshair to have SkyrimNet load them into the cache
         ; so the parseJsonActor works
         Actor target = Game.GetCurrentCrosshairRef() as Actor 
         Actor player = Game.GetPlayer() 
-        bool player_having_sex = main.sexlab.IsActorActive(player)
-        if player_having_sex || target != None 
-            ;---------------------------------
-            ; The original 
-            if player_having_sex || main.sexlab.IsActorActive(target)
-                if player_having_sex 
-                    target = player 
-                endif 
-                sslThreadController thread = main.GetThread(target)
-                
-                if thread != None 
-                    stages.EditDescriptions(thread) 
-                endif 
-            elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
-
-                DOM_Actor slave = None 
-                if d_api != None && (d_api as DOM_API).IsDOMSlave(target) 
-                    slave = (d_api as DOM_API).GetDOMActor(target) 
-                endif 
-
-                ;if slave != None && dom_main != None 
-                    ;dom_main.SelectPlayerAction(target, slave) 
-                    ;return 
-                ;endif 
-
-                bool target_is_undressed = false 
-                if slave != None 
-                    Trace("OnKeyDown","slave.is_naked:"+slave.is_naked+" should_be_naked:"+slave.mind.should_be_naked)
-                    target_is_undressed = slave.is_naked
-			        ;DOM_Mind sl_mind = slave.mind
-			        ;if sl_mind != None
-				        ;if sl_mind.should_be_naked ; && sl_alias.is_naked
-                            ;target_is_undressed = True 
-                        ;endif 
-                    ;endif 
-                else 
-                    target_is_undressed = main.HasStrippedItems(target)
-                endif 
-                String clothing_string = "undress"
-                if target_is_undressed 
-                    clothing_string = "dress"
-                endif 
-                int masturbate = 0
-                int sex = 1
-                int raped_by = 2
-                int rapes = 3
-                int clothing = 4
-                int cancel = 5
-
-                int cuddle = -2 
-                int bondage = -2
-                int dom_debug = -2 
-                if main.cuddle_found 
-                    cuddle = cancel
-                    cancel += 1
-                endif 
-                if group_devices != None 
-                    bondage = cancel
-                    cancel += 1 
-                endif  
-                if dom_main != None && dom_debug_toggle
-                    dom_debug = cancel
-                    cancel += 1 
-                endif  
-                String[] buttons = Utility.CreateStringArray(cancel+1)
-
-                buttons[masturbate] = "masturbate"
-                buttons[sex] = "have sex with player"
-                buttons[raped_by] = "raped by player"
-                buttons[rapes] = "rapes the player"
-                buttons[clothing] = clothing_string
-                if cuddle != -2 
-                    buttons[cuddle] = "cuddle"
-                endif
-                if bondage != -2 
-                    buttons[bondage] = "bondage"
-                endif 
-                if dom_debug != -2 
-                    buttons[dom_debug] = "dom Debug"
-                endif 
-                buttons[cancel] = "cancel"
-
-                Trace("OnKeyDown","buttons:" +buttons)
-
-                String msg = "Should "+target.getDisplayName()+":"
-                if slave != None 
-                    msg += "\nDOM slave's mind can not refuse these actions."
-                endif 
-                int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
-
-                if button == masturbate
-                    SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"type\":\"masturbation\"}")
-                elseif button == sex
-                    SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":false, \"target\":\""+player.GetDisplayName()+"\", \"target_is_player\":true}")
-                elseif button == rapes
-                    SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":true, \"target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":true, \"target_is_player\":true}")
-                elseif button == raped_by
-                    SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":true, \"Target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":false, \"target_is_player\":true}")
-                elseif button == clothing
-
-                    ;--------------------------------------------------
-                    ; How would they like it appear? 
-                    buttons = new String[4] 
-                    buttons[main.STYLE_FORCEFULLY] = "Forcefully by player "
-                    buttons[main.STYLE_NORMALLY] = "By player"
-                    buttons[main.STYLE_GENTLY] = "Gently by player"
-                    buttons[main.STYLE_SILENTLY] = "( Silently )"
-
-                    msg = "How is "+target.getDisplayName()+" to be "+clothing_string+"ed?"
-                    button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int 
-                    if button != main.STYLE_SILENTLY
-                        String style = " "
-                        if button == main.STYLE_GENTLY 
-                            style = " gently "
-                        elseif button == main.STYLE_FORCEFULLY 
-                            style = " forcefully "
-                        endif 
-                        msg = player.GetDisplayName()+style+clothing_string+"es "+target.GetDisplayName()+"."
-                        main.DirectNarration(msg, player, target) 
-                    endif 
-
-                    ;--------------------------------------------------
-                    ; Now do the action 
-                    if slave != None 
-                        if target_is_undressed 
-                            Trace("OnKeyDown","DOM slave"+target.GetDisplayName()+" dressing", true)
-                            slave.UnsetShouldBeNaked(player)
-                            slave.Anim_DressUp(true)
-                        else 
-                            Trace("OnKeyDown","DOM slave"+target.GetDisplayName()+" undressing", true)
-                            slave.Interact_UndressNoChoice(player, false) 
-                        endif 
-                    else 
-                        if target_is_undressed
-                            SkyrimNet_SexLab_Actions.Dress_Execute(target, "", "")
-                        else
-                            SkyrimNet_SexLab_Actions.Undress_Execute(target, "", "")
-                        endif
-                    endif 
-
-                elseif button == cuddle 
-                    SkyrimNet_Cuddle_API.OpenMenu(player, target) 
-                elseif button == bondage 
-                    group_devices.UpdateDevices(target) 
-                elseif button == dom_debug
-                    dom_main.DebugMenuOpen(target) 
-                endif 
-                return 
-            endif 
-            return 
+        if target == None && main.sexlab.IsActorActive(player)
+            target = player
         endif 
-
-        ; If not, then we allow them to start a sex animation with nearby actors
-        Debug.Notification("No target in crosshair, looking for sexable nearby actors")
-        Trace("OnKeyDown","No target in crosshair, looking for nearby actors")
-        ;float time_last = Utility.GetCurrentRealTime()
-        Actor[] actors_all = MiscUtil.ScanCellActors(player, 1000)
-
-        bool[] valid = PapyrusUtil.BoolArray(actors_all.length)
-
-        if actors_all.length < 2
-            actors_all = MiscUtil.ScanCellActors(player, 2000)
-            if actors_all.length == 0
-                Trace("OnKeyDown","No eligible actors found in the area.")
-                return
-            endif 
-        endif 
-
-        int i = actors_all.length - 1 
-        int num_actors = 0 
-
-        while 0 <= i 
-            if SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
-                valid[i] = True
-                num_actors += 1
+        bool target_not_none = target != None
+        Trace("OnKeyDown","target_not_none: "+target_not_none)
+        if target != None && main.sexlab.IsActorActive(target)
+            Trace("OnKeyDown","target: "+target.getDisplayName()+" in active sex")
+            sslThreadController thread = main.GetThread(target)
+            Trace("OnKeyDown", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
+            if thread != None 
+                stages.EditDescriptions(thread) 
             else 
-                valid[i] = False
+                Trace("OnKeyDown","failed to find thread for target:"+target.GetDisplayName())
             endif 
-            i -= 1
-        endwhile 
-
-
-        if num_actors < 2
-            Trace("OnKeyDown","Not enough eligible actors found in the area.")
-            return
-        endif
-        Trace("OnKeyDown","Found "+actors.length+" actors in the area.")
-
-        Actor[] actors = PapyrusUtil.ActorArray(num_actors)
-        String[] names = Utility.CreateStringArray(num_actors)
-        int[] indexes = Utility.CreateIntArray(num_actors)
-        i = actors_all.length - 1
-        int j = 0 
-        while 0 <= i
-            if valid[i]
-                actors[j] = actors_all[i]
-                names[j] = actors[j].GetDisplayName()
-                j += 1
-            endif 
-            i -= 1
-        endwhile 
-
-        int[] selected = new int[5]
-
-        String cancel = "<cancel>"
-        String type = "sex>"
-
-        int next = 0 
-        bool building_list = true 
-        int index = 1
-        uilistmenu listMenu = uiextensions.GetMenu("UIListMenu") AS uilistmenu
-        ; I couldn't compare directly to the strings button in some case
-        ; so fell back on next and index :(
-        bool finished = false
-        while finished == false
-            listMenu.ResetMenu()
-
-            i = 0 
-            String start = "start | "
-            if next > 0
-                while i < next 
-                    if i > 0 
-                        start += "+"
-                    endif 
-                    start += names[selected[i]]
-                    i += 1
-                endwhile 
-            else 
-                start = "select actors to: "
-            endif 
-            listMenu.AddEntryItem(start)
-            listmenu.AddEntryItem(type)
-
-            i = 0
-            while i < num_actors
-                bool found = false 
-                j = 0 
-                while j < next && !found 
-                    if selected[j] == i
-                        found = True
-                    else 
-                        j += 1
-                    endif 
-                endwhile
-                String front = "  "
-                if found
-                    front = "- "
-                    indexes[i] = j
-                elseif next < selected.length
-                    front = "+ "
-                    indexes[i] = -1
-                endif
-                listMenu.AddEntryItem(front+names[i])
-                i += 1
-            endwhile 
-
-            listMenu.AddEntryItem(cancel)
-
-            listMenu.OpenMenu()
-            index = listMenu.GetResultInt()
-            if index <= 0 
-                if 0 < next 
-                    finished = True 
-                endif 
-            elseif index == 1 
-                type = SexRapeSelection()
-            elseif index < num_actors + 2
-                index -= 2
-                if indexes[index] == -1 
-                    selected[next] = index
-                    next += 1
-                else
-                    j = indexes[index]
-                    while j < next - 1 
-                        selected[j] = selected[j+1]
-                        j += 1
-                    endwhile
-                    next -= 1
-                endif
-                if next > 0
-                    Trace("OnKeyDown","after next:"+next+" selected[index]:"+selected[next - 1])
-                endif 
-            else 
-                return 
-            endif 
-        endwhile
-
-        Actor[] group = PapyrusUtil.ActorArray(next)
-        i = 0 
-        while i < next 
-            group[i] = actors[selected[i]]
-            i += 1 
-        endwhile 
-
-        if type == "cuddle>"
-            ;SkyrimNet_Cuddle.StageStart(
+        elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
+            Target_Menu_Selection(target, player)
         else 
-            StartSex(group, type == "rape>")
+            MutliTarget_Menu_Selection(player)
         endif 
     endif 
 EndEvent 
+
+Function Target_Menu_Selection(Actor target, Actor player)
+    DOM_Actor slave = None 
+    if d_api != None && (d_api as DOM_API).IsDOMSlave(target) 
+        slave = (d_api as DOM_API).GetDOMActor(target) 
+    endif 
+
+    ;if slave != None && dom_main != None 
+        ;dom_main.SelectPlayerAction(target, slave) 
+        ;return 
+    ;endif 
+
+    bool target_is_undressed = false 
+    if slave != None 
+        Trace("OnKeyDown","slave.is_naked:"+slave.is_naked+" should_be_naked:"+slave.mind.should_be_naked)
+        target_is_undressed = slave.is_naked
+        ;DOM_Mind sl_mind = slave.mind
+        ;if sl_mind != None
+            ;if sl_mind.should_be_naked ; && sl_alias.is_naked
+                ;target_is_undressed = True 
+            ;endif 
+        ;endif 
+    else 
+        target_is_undressed = main.HasStrippedItems(target)
+    endif 
+    String clothing_string = "undress"
+    if target_is_undressed 
+        clothing_string = "dress"
+    endif 
+    int masturbate = 0
+    int sex = 1
+    int raped_by = 2
+    int rapes = 3
+    int clothing = 4
+    int cancel = 5
+
+    int cuddle = -2 
+    int bondage = -2
+    int dom_debug = -2 
+    if main.cuddle_found 
+        cuddle = cancel
+        cancel += 1
+    endif 
+    if group_devices != None 
+        bondage = cancel
+        cancel += 1 
+    endif  
+    if dom_main != None && dom_debug_toggle
+        dom_debug = cancel
+        cancel += 1 
+    endif  
+    String[] buttons = Utility.CreateStringArray(cancel+1)
+
+    buttons[masturbate] = "masturbate"
+    buttons[sex] = "have sex with player"
+    buttons[raped_by] = "raped by player"
+    buttons[rapes] = "rapes the player"
+    buttons[clothing] = clothing_string
+    if cuddle != -2 
+        buttons[cuddle] = "cuddle"
+    endif
+    if bondage != -2 
+        buttons[bondage] = "bondage"
+    endif 
+    if dom_debug != -2 
+        buttons[dom_debug] = "dom Debug"
+    endif 
+    buttons[cancel] = "cancel"
+
+    Trace("OnKeyDown","buttons:" +buttons)
+
+    String msg = "Should "+target.getDisplayName()+":"
+    if slave != None 
+        msg += "\nDOM slave's mind can not refuse these actions."
+    endif 
+    int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
+
+    if button == masturbate
+        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"type\":\"masturbation\"}")
+    elseif button == sex
+        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":false, \"target\":\""+player.GetDisplayName()+"\", \"target_is_player\":true}")
+    elseif button == rapes
+        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":true, \"target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":true, \"target_is_player\":true}")
+    elseif button == raped_by
+        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":true, \"Target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":false, \"target_is_player\":true}")
+    elseif button == clothing
+
+        ;--------------------------------------------------
+        ; How would they like it appear? 
+        buttons = new String[4] 
+        buttons[main.STYLE_FORCEFULLY] = "Forcefully by player "
+        buttons[main.STYLE_NORMALLY] = "By player"
+        buttons[main.STYLE_GENTLY] = "Gently by player"
+        buttons[main.STYLE_SILENTLY] = "( Silently )"
+
+        msg = "How is "+target.getDisplayName()+" to be "+clothing_string+"ed?"
+        button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int 
+        if button != main.STYLE_SILENTLY
+            String style = " "
+            if button == main.STYLE_GENTLY 
+                style = " gently "
+            elseif button == main.STYLE_FORCEFULLY 
+                style = " forcefully "
+            endif 
+            msg = player.GetDisplayName()+style+clothing_string+"es "+target.GetDisplayName()+"."
+            DirectNarration(msg, player, target) 
+        endif 
+
+        ;--------------------------------------------------
+        ; Now do the action 
+        if slave != None 
+            if target_is_undressed 
+                Trace("OnKeyDown","DOM slave"+target.GetDisplayName()+" dressing", true)
+                slave.UnsetShouldBeNaked(player)
+                slave.Anim_DressUp(true)
+            else 
+                Trace("OnKeyDown","DOM slave"+target.GetDisplayName()+" undressing", true)
+                slave.Interact_UndressNoChoice(player, false) 
+            endif 
+        else 
+            if target_is_undressed
+                SkyrimNet_SexLab_Actions.Dress_Execute(target, "", "")
+            else
+                SkyrimNet_SexLab_Actions.Undress_Execute(target, "", "")
+            endif
+        endif 
+
+    elseif button == cuddle 
+        SkyrimNet_Cuddle_API.OpenMenu(player, target) 
+    elseif button == bondage 
+        group_devices.UpdateDevices(target) 
+    elseif button == dom_debug
+        dom_main.DebugMenuOpen(target) 
+    endif 
+EndFunction
+
+Function MutliTarget_Menu_Selection(Actor player)
+    ; If not, then we allow them to start a sex animation with nearby actors
+    Debug.Notification("No target in crosshair, looking for sexable nearby actors")
+    Trace("OnKeyDown","No target in crosshair, looking for nearby actors")
+    ;float time_last = Utility.GetCurrentRealTime()
+    Actor[] actors_all = MiscUtil.ScanCellActors(player, 1000)
+
+    bool[] valid = PapyrusUtil.BoolArray(actors_all.length)
+
+    if actors_all.length < 2
+        actors_all = MiscUtil.ScanCellActors(player, 2000)
+        if actors_all.length == 0
+            Trace("OnKeyDown","No eligible actors found in the area.")
+            return
+        endif 
+    endif 
+
+    int i = actors_all.length - 1 
+    int num_actors = 0 
+
+    while 0 <= i 
+        if SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
+            valid[i] = True
+            num_actors += 1
+        else 
+            valid[i] = False
+        endif 
+        i -= 1
+    endwhile 
+
+
+    if num_actors < 2
+        Trace("OnKeyDown","Not enough eligible actors found in the area.")
+        return
+    endif
+    Trace("OnKeyDown","Found "+actors.length+" actors in the area.")
+
+    Actor[] actors = PapyrusUtil.ActorArray(num_actors)
+    String[] names = Utility.CreateStringArray(num_actors)
+    int[] indexes = Utility.CreateIntArray(num_actors)
+    i = actors_all.length - 1
+    int j = 0 
+    while 0 <= i
+        if valid[i]
+            actors[j] = actors_all[i]
+            names[j] = actors[j].GetDisplayName()
+            j += 1
+        endif 
+        i -= 1
+    endwhile 
+
+    int[] selected = new int[5]
+
+    String cancel = "<cancel>"
+    String type = "sex>"
+
+    int next = 0 
+    bool building_list = true 
+    int index = 1
+    uilistmenu listMenu = uiextensions.GetMenu("UIListMenu") AS uilistmenu
+    ; I couldn't compare directly to the strings button in some case
+    ; so fell back on next and index :(
+    bool finished = false
+    while finished == false
+        listMenu.ResetMenu()
+
+        i = 0 
+        String start = "start | "
+        if next > 0
+            while i < next 
+                if i > 0 
+                    start += "+"
+                endif 
+                start += names[selected[i]]
+                i += 1
+            endwhile 
+        else 
+            start = "select actors to: "
+        endif 
+        listMenu.AddEntryItem(start)
+        listmenu.AddEntryItem(type)
+
+        i = 0
+        while i < num_actors
+            bool found = false 
+            j = 0 
+            while j < next && !found 
+                if selected[j] == i
+                    found = True
+                else 
+                    j += 1
+                endif 
+            endwhile
+            String front = "  "
+            if found
+                front = "- "
+                indexes[i] = j
+            elseif next < selected.length
+                front = "+ "
+                indexes[i] = -1
+            endif
+            listMenu.AddEntryItem(front+names[i])
+            i += 1
+        endwhile 
+
+        listMenu.AddEntryItem(cancel)
+
+        listMenu.OpenMenu()
+        index = listMenu.GetResultInt()
+        if index <= 0 
+            if 0 < next 
+                finished = True 
+            endif 
+        elseif index == 1 
+            type = SexRapeSelection()
+        elseif index < num_actors + 2
+            index -= 2
+            if indexes[index] == -1 
+                selected[next] = index
+                next += 1
+            else
+                j = indexes[index]
+                while j < next - 1 
+                    selected[j] = selected[j+1]
+                    j += 1
+                endwhile
+                next -= 1
+            endif
+            if next > 0
+                Trace("OnKeyDown","after next:"+next+" selected[index]:"+selected[next - 1])
+            endif 
+        else 
+            return 
+        endif 
+    endwhile
+
+    Actor[] group = PapyrusUtil.ActorArray(next)
+    i = 0 
+    while i < next 
+        group[i] = actors[selected[i]]
+        i += 1 
+    endwhile 
+
+    if type == "cuddle>"
+        ;SkyrimNet_Cuddle.StageStart(
+    else 
+        StartSex(group, type == "rape>")
+    endif 
+EndFunction
 
 Function StartSex(Actor[] actors, bool is_rape) 
     Trace("StartSex","num_actors:"+actors.length+" is_rape:"+is_rape)
