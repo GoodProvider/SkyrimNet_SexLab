@@ -8,6 +8,8 @@ ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
 
 merge:
 	python3 ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}
+	git add ${ANIM_DST}/*
+	git commit ${ANIM_DST}
 
 update: 
 	updateSpriggit.bat 

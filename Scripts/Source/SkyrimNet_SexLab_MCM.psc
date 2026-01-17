@@ -386,7 +386,6 @@ Event OnOptionMenuOpen(int menu_id)
     SetMenuDialogDefaultIndex(0)
 endEvent
 
-
 event OnOptionMenuAccept(int menu_id, int index)
     if menu_id == ostimnet_player_menu
         main.sexlab_ostim_player_index = index
@@ -435,9 +434,9 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    DOM_Actor slave = None 
     if d_api != None && (d_api as DOM_API).IsDOMSlave(target) 
-        slave = (d_api as DOM_API).GetDOMActor(target) 
+        SkyrimNet_DOM_Menu.Target_Menu_Selection(target,player)
+        return 
     endif 
 
     ;if slave != None && dom_main != None 
@@ -446,18 +445,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     ;endif 
 
     bool target_is_undressed = false 
-    if slave != None 
-        Trace("OnKeyDown","slave.is_naked:"+slave.is_naked+" should_be_naked:"+slave.mind.should_be_naked)
-        target_is_undressed = slave.is_naked
-        ;DOM_Mind sl_mind = slave.mind
-        ;if sl_mind != None
-            ;if sl_mind.should_be_naked ; && sl_alias.is_naked
-                ;target_is_undressed = True 
-            ;endif 
-        ;endif 
-    else 
-        target_is_undressed = main.HasStrippedItems(target)
-    endif 
+    target_is_undressed = main.HasStrippedItems(target)
     String clothing_string = "undress"
     if target_is_undressed 
         clothing_string = "dress"
@@ -505,9 +493,6 @@ Function Target_Menu_Selection(Actor target, Actor player)
     Trace("OnKeyDown","buttons:" +buttons)
 
     String msg = "Should "+target.getDisplayName()+":"
-    if slave != None 
-        msg += "\nDOM slave's mind can not refuse these actions."
-    endif 
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
     if button == masturbate
@@ -543,29 +528,16 @@ Function Target_Menu_Selection(Actor target, Actor player)
 
         ;--------------------------------------------------
         ; Now do the action 
-        if slave != None 
-            if target_is_undressed 
-                Trace("OnKeyDown","DOM slave"+target.GetDisplayName()+" dressing", true)
-                slave.UnsetShouldBeNaked(player)
-                slave.Anim_DressUp(true)
-            else 
-                Trace("OnKeyDown","DOM slave"+target.GetDisplayName()+" undressing", true)
-                slave.Interact_UndressNoChoice(player, false) 
-            endif 
-        else 
-            if target_is_undressed
-                SkyrimNet_SexLab_Actions.Dress_Execute(target, "", "")
-            else
-                SkyrimNet_SexLab_Actions.Undress_Execute(target, "", "")
-            endif
+        if target_is_undressed
+            SkyrimNet_SexLab_Actions.Dress_Execute(target, "", "")
+        else
+            SkyrimNet_SexLab_Actions.Undress_Execute(target, "", "")
         endif 
 
     elseif button == cuddle 
         SkyrimNet_Cuddle_API.OpenMenu(player, target) 
     elseif button == bondage 
         group_devices.UpdateDevices(target) 
-    elseif button == dom_debug
-        dom_main.DebugMenuOpen(target) 
     endif 
 EndFunction
 

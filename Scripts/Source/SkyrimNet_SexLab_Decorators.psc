@@ -170,6 +170,7 @@ String Function Get_Threads(Actor speaker) global
             int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
             int j = actors.Length - 1
             String names_array = ""
+            String victims_array = ""
             String orgasm_expected_array = ""
             while 0 <= j 
                 String name = actors[j].GetDisplayName()
@@ -180,6 +181,13 @@ String Function Get_Threads(Actor speaker) global
                 endif
                 names_array += "\""+name+"\""
 
+                if threads[i].IsVictim(actors[j])
+                    if victims_array != ""
+                        victims_array += ", "
+                    endif
+                    victims_array += "\""+name+"\""
+                endif 
+                
                 if orgasm_expected[j] == 1
                     if orgasm_expected_array != ""
                         orgasm_expected_array += ", "
@@ -201,10 +209,13 @@ String Function Get_Threads(Actor speaker) global
             String[] nouns = Utility.CreateStringArray(0)
             String names_string = SkyrimNetAPI.JoinStrings(names, nouns)
             threads_str += ",\"names\":["+names_array+"]"
+            threads_str += ",\"victims\":["+victims_array+"]"
             threads_str += ",\"orgasm_expected\":["+orgasm_expected_array+"]"
             threads_str += ",\"names_string\":\""+names_string+"\""
             threads_str += ",\"speaker_distance\":"+distance
             threads_str += ",\"speaker_los\""+BooleanString(los)
+            threads_str += ",\"location\":\""+GetLocation(threads[i])+"\""
+            threads_str += ",\"style\":\""+main.GetThreadStyleString(threads[i].tid)+"\""
             main.counter += 1
 
             threads_str += "}"
@@ -371,7 +382,7 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
         ; ----------------------------------------------------------------
         ; Location
         ; ----------------------------------------------------------------
-        String loc = GetLocation(anim, thread.BedTypeId)
+        String loc = GetLocation(thread)
         if loc != "" 
             msg += " on "+loc
         endif
@@ -492,7 +503,8 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
     return thread_str
 EndFunction
 
-String Function GetLocation(sslBaseAnimation anim, int bed) global
+String Function GetLocation(sslThreadController thread) global
+
     String loc = "the floor"
     if  bed == 1
         loc = "a bedroll "
@@ -502,6 +514,7 @@ String Function GetLocation(sslBaseAnimation anim, int bed) global
         loc = "a double bed "
     endif 
 
+    int bed = thread.BedTypeId
     String[] on_furniture = new String[21]
     on_furniture[0] = "Table"
     on_furniture[1] = "LowTable"
@@ -526,6 +539,7 @@ String Function GetLocation(sslBaseAnimation anim, int bed) global
     on_furniture[20] = "Stockade"
     ; Add more if needed
 
+    sslBaseAnimation anim = thread.Animation
     int i = 0
     bool found = false
     while i < on_furniture.Length && !found

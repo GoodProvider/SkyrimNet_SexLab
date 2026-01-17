@@ -20,18 +20,18 @@ Function RegisterActions() global
     ; ------------------------
     ; This also has a undress/dress action
     SkyrimNetApi.RegisterAction("SexLab_SexStart", \
-            "Start having consensual {style} with {target}.", \
+            " Starts having consensual {style} {type} sex with {target}.", \
             "SkyrimNet_SexLab_Actions", "SexStart_IsEligible",  \
             "SkyrimNet_SexLab_Actions", "SexStart_Execute",  \
             "", "PAPYRUS", 1, \
-            "{\"target\": \"Actor\", \"style\":\"fucking|sex|making love\", \"type\":\""+type+"\", \"rape\":false, \"target_victim\":false}",\
+            "{\"target\": \"Actor\", \"style\":\"forceful|normal|gentle\", \"type\":\""+type+"\", \"rape\":false, \"target_victim\":false}",\
             "", "BodyAnimation")
     SkyrimNetApi.RegisterAction("SexLab_MasturbationStart", \
-            "Start masturbating.",\
+            "Start {style} masturbating.",\
             "SkyrimNet_SexLab_Actions", "MastrubationStart_IsEligible",  \
             "SkyrimNet_SexLab_Actions", "MastrubationStart_Execute",  \
             "", "PAPYRUS", 1, \
-            "{\"type\":\"masturbation\", \"rape\":\"{true|false}\"}",\
+            "{\"type\":\"masturbation\",  \"style\":\"forceful|normal|gentle\", \"rape\":\"{true|false}\"}",\
             "", "BodyAnimation")
 
     ; ------------------------
@@ -63,17 +63,17 @@ Function RapeRegistration(bool rape_allowed) global
         
         String type = GetTypesStrings()
         SkyrimNetApi.RegisterAction("SexLab_RapeStart", \
-                "Start to sexually assualt {target}.",\
+                "Start to {style} {type} sexually assualt {target}.",\
                 "SkyrimNet_SexLab_Actions", "SexStart_IsEligible",  \
                 "SkyrimNet_SexLab_Actions", "SexStart_Execute",  \
                 "", "PAPYRUS", 1, \
-                "{\"target\": \"Actor\", \"type\":\""+type+"\", \"rape\":true, \"target_victim\":true}","","BodyAnimation")
+                "{\"target\": \"Actor\",  \"style\":\"forceful|normal|gentle\", \"type\":\""+type+"\", \"rape\":true, \"target_victim\":true}","","BodyAnimation")
         SkyrimNetApi.RegisterAction("SexLab_RapedByStart", \
-                "Start being sexually assulted by {target}.",\
+                "Start being {style} {type} sexually assulted by {target}.",\
                 "SkyrimNet_SexLab_Actions", "SexStart_IsEligible",  \
                 "SkyrimNet_SexLab_Actions", "SexStart_Execute",  \
                 "", "PAPYRUS", 1, \
-                "{\"target\": \"Actor\", \"type\":\""+type+"\", \"rape\":true, \"target_victim\":false}","","BodyAnimation")
+                "{\"target\": \"Actor\",  \"style\":\"forceful|normal|gentle\", \"type\":\""+type+"\", \"rape\":true, \"target_victim\":false}","","BodyAnimation")
     else 
         Trace("RapeRegistration","Unresgistering SexLab_RapeStart and SexLab_RapedByStart actions")
         SkyrimNetApi.UnregisterAction("SexLab_RapeStart")
@@ -217,7 +217,8 @@ Function MastrubationStart_Execute(Actor akActor, string contextJson, string par
         return
     endif
     Actor player = Game.GetPlayer()
-    SexStart_Attempt(main, akActor, None, player, false, false, "mastrubation", main.STYLE_NORMALLY) 
+    int style = GetStyle(main, paramsJson)
+    SexStart_Attempt(main, akActor, None, player, false, false, "mastrubation", style) 
 EndFunction
 
 Function SexStart_Execute(Actor akActor, string contextJson, string paramsJson) global
@@ -259,15 +260,7 @@ Function SexStart_Execute(Actor akActor, string contextJson, string paramsJson) 
     Bool target_is_victim = SkyrimNetApi.GetJsonBool(paramsJson, "target_is_victim", true)
     bool rape = SkyrimNetApi.GetJsonBool(paramsJson, "rape", false)
 
-    String style_str = SkyrimNetApi.GetJsonString(paramsJson, "style","sex")
-
-    int style = main.STYLE_NORMALLY
-    if style_str == "making love" 
-        style = main.STYLE_GENTLY 
-    elseif style_str == "fucking"
-        style = main.STYLE_FORCEFULLY
-    endif  
-
+    int style = GetStyle(main, paramsJson)
     SexStart_Attempt(main, akActor, akTarget, player, rape, target_is_victim, type, style) 
 EndFunction 
 
@@ -321,7 +314,6 @@ Function SexStart_Attempt(SkyrimNet_SexLab_Main main, Actor akActor, Actor akTar
             sslBaseAnimation[] anims =  main.sexLab.GetAnimationsByTags(num_actors, type, tagSupress, true)
             if anims.length > 0
                 thread.SetAnimations(anims)
-                thread.addTag(type)
             else
                 Trace("SexStart_Exectue","No kissing animation found")
                 return 
@@ -335,7 +327,7 @@ Function SexStart_Attempt(SkyrimNet_SexLab_Main main, Actor akActor, Actor akTar
                 actors[1] = domActor
             endif
 
-            sslBaseAnimation[] anims = main.AnimsDialog(main.sexlab, actors, "")
+            sslBaseAnimation[] anims = main.AnimsDialog(main.sexlab, actors, type)
             if anims.length > 0 && anims[0] != None  
                 thread.SetAnimations(anims)
             endif 
@@ -365,6 +357,17 @@ Function SexStart_Attempt(SkyrimNet_SexLab_Main main, Actor akActor, Actor akTar
 
     main.SetThreadStyle(thread.tid, style) 
     thread.StartThread() 
+EndFunction
+
+int Function GetStyle(SkyrimNet_SexLab_Main main , String paramsJson) global
+    String style_str = SkyrimNetApi.GetJsonString(paramsJson, "style","normal")
+    int style = main.STYLE_NORMALLY
+    if style_str == "gentle" 
+        style = main.STYLE_GENTLY 
+    elseif style_str == "forceful"
+        style = main.STYLE_FORCEFULLY
+    endif  
+    return style 
 EndFunction
 
 

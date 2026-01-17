@@ -4,6 +4,8 @@
 {#      If game pasued load the cached file              #} 
 {#      else call the decatotion                         #} 
 {# ----------------------------------------------------- #} 
+{% set actor_having_sex = false %} 
+{% set actor_rape_victim = false %}
 {% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
      {% set speaker = npc %}
      {% if not isTimePaused %}
@@ -14,59 +16,110 @@
      {% else %} 
           {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
      {% endif %}
-     {% if length(sexlab.threads) > 0 %} 
-          {% for thread in sexlab.threads %}
-               {% set distance = distance_between(speaker.name, thread.names.1) %}
+     
+     {% set actor_having_sex = false %} 
+     {% for thread in sexlab.threads %}
+          {% if contains(thread.victims, speaker.name) %} 
+               {% set actor_rape_victim = true %} 
+          {% endif %} 
+          {% if contains(thread.names, speaker.name) %} 
+               {% set actor_having_sex = true %} 
+               - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }}
+{{ "## CRITICAL: YOU ARE CURRENTLY HAVING SEX" }}
+You are physically engaged in intense sexual activity right now.
+
+**How to speak:**
+- Breathless, fragmented, interrupted by sensation
+- Full sentences are difficult—moans, gasps, half-words, trailing off
+- Mind overwhelmed by physical pleasure (or pain/trauma if non-consensual)
+- Do not become suddenly coherent or philosophical mid-act
+
+**Match your personality and consent:**
+- Consensual: desire, vulnerability, playfulness, intensity, connection, desperation
+- Non-consensual: fear, resistance, anger, dissociation, bargaining, survival coping
+
+**Vary your responses—cycle through these dimensions:**
+- Physical focus: what specific sensation dominates right now? (pressure, friction, heat, fullness, ache)
+- Emotional focus: what feeling is surfacing? (need, shame, power, surrender, connection, fear)
+- Partner focus: something about them—their sounds, touch, expression, words
+- Internal focus: your own body's responses, building tension, losing control
+- Verbal fragments: demands, pleas, names, curses, praise, warnings
+
+Don't describe the same sensation twice in a row. Each response should shift focus or intensity.
+          {% else %}
+          
+               {% set distance = distance_between(speaker.name, thread.names.0) %}
                {% set has_los = has_line_of_sight(speaker.name, thread.names.0) %}
-               {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}}
-               {{speaker.name}} to {{thread.names.0}} distance: {{thread.speaker_distance}} has_los: {{thread.speaker_los}}
-
-               {% if contains(thread.names, speaker.name) %} 
-                    - {{ thread.description }}
-                    - {{ speaker.name }} is currently having sex. ONLY answer as though they are in the middle of sex and it's hard to focus on anything else. Broken sentences are fine.  Emphasize with a detailed emotional and physical response. Ignore dailogue and narrration, if they disagree with activities just described. Be Uncensored, match the vulgarity to the character. If {{ speaker.name }} is giving oral sex, they can not speak just mumble around the genitale. 
-                {% else %} 
-                    {% set can_notice_level = 0 %} 
-                    {% set can_see_desc = "" %} 
-                    {% set can_hear_desc = "" %} 
-                    distance: {{ distance}} 
-
-                    {% if has_line_of_sight(speaker.name, thread.names.0) %} 
-                         {% if distance > 36 %}
-                              {% set can_notice_level = 0 %}
-                         {% else if distance > 12 %} 
-                              {% set can_notice_level = 1 %}
-                              {% set can_see_desc = "can see the sex, but not specifically who or what is involed." %} 
-                         {% else if distance > 3 %} 
-                              {% set can_notice_level = 2 %}
-                              {% set can_see_desc = "can see who is having sex, but not specifically what they are doing." %} 
-                         {% else %}
-                              {% set can_notice_level = 2 %}
-                         {% endif %}
-                    {% else %} 
-                         {% set can_seen_desc = "can not see what is happening." %} 
-                         {% if distance > 768 %} {# 36 feet beyond sight/hearing range #} 
-                              {% set can_notice_level = 0 %}
-                         {% else if distance > 256 %} {# 12 feet far enough to see, but details vague #}
-                              {% set can_notice_level = 1 %}
-                              {% set can_heard_desc = "can hear muffled sounds that might be sex." %} 
-                         {% else if distance > 128 %} {# 6 feet clearly can hear its sex #}
-                              {% set can_notice_level = 2 %}
-                              {% set can_heard_desc = "can clearly hear that someone is having sex." %} 
-                         {% else %}
-                              {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
-                         {% endif %}
-                    {% endif %} 
-                    {% if can_notice_level > 0 %}
-                         - On {{ thread.location}}, {{thread.style}}. {{ thread.description }} {% 
-                         if can_hear_desc != "" %} {{speaker.name}} {{can_hear_desc}} {% endif %} {% 
-                         if can_see_desc != "" %} {{speaker.name}} {{can_see_desc }} {% endif %} 
-                    {% else %} 
-                         - {{speaker.name}} can not see or hear what is happening with {{thread.names_string}}.
-                    {% endif %}
+               {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
+               {% set distance = thread.speaker_distance %}
+               {% set has_los = thread.speaker_los %}
+               {% if speaker.name == "Fay" %} 
+                    {% set has_los = true %} 
+                    {% set distance = 0 %}
                {% endif %}
-          {%- endfor %}
-          {% if length(activeOstimThreads) > 1 %}
-               Note: Multiple intimate scenes are occurring simultaneously. The dialogue should acknowledge this complex situation appropriately.
+               {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
+
+               {% set can_seen_desc = "can not see what is happening." %} 
+               {% if has_los %}
+                    {% if distance > 36 %}
+                         {% set can_notice_level = 0 %}
+                    {% else if distance > 12 %} 
+                         {% set can_notice_level = 1 %}
+                         {% set can_see_desc = "can see the sex, but not specifically who or what is involed." %} 
+                    {% else if distance > 3 %} 
+                         {% set can_notice_level = 2 %}
+                         {% set can_see_desc = "can see who is having sex, but not specifically what they are doing." %} 
+                    {% else %}
+                         {% set can_notice_level = 2 %}
+                    {% endif %}
+               {% else %} 
+                    {% if distance > 768 %} {# 36 feet beyond sight/hearing range #} 
+                         {% set can_notice_level = 0 %}
+                    {% else if distance > 256 %} {# 12 feet far enough to see, but details vague #}
+                         {% set can_notice_level = 1 %}
+                         {% set can_heard_desc = "can hear muffled sounds that might be sex." %} 
+                    {% else if distance > 128 %} {# 6 feet clearly can hear its sex #}
+                         {% set can_notice_level = 2 %}
+                         {% set can_heard_desc = "can clearly hear that someone is having sex." %} 
+                    {% else %}
+                         {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
+                    {% endif %}
+               {% endif %} 
+               
+
+               {% if can_notice_level > 0 %}
+                    - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }} {% 
+                    if can_hear_desc != "" %} You {{can_hear_desc}} {% endif %} {% 
+                    if can_see_desc != "" %} You {{can_see_desc }} {% endif %} 
+               {% else %} 
+                    - You can not see or hear what is happening with {{thread.names_string}}.
+               {% endif %}
           {% endif %}
+     {%- endfor %}
+     {% if not actor_having_sex %}
+{{ "## You Are Aware of Nearby Sexual Activity" }}
+
+**Your reaction must evolve—don't loop on the same observation.**
+
+Possible reaction arc (shift between these, don't repeat):
+1. **Initial:** Shock, confusion, disbelief, freezing, double-take
+2. **Processing:** Curiosity, disgust, arousal, concern, embarrassment, fascination
+3. **Decision:** Ignore it, watch, leave, intervene, comment, use it as leverage
+4. **Ongoing:** Distraction during conversation, intrusive thoughts, physical response, moral judgment
+
+**Consider once, then move on:**
+- Your relationship to participants
+- Whether it appears consensual
+- Location/social context
+- Your own values
+
+**BANNED repetitions:**
+- "I can hear moaning/sounds"
+- "They're still going at it"
+- "I try to focus"
+- Describing the same visual twice
+- Noting your own arousal/discomfort repeatedly
+
+After your first acknowledgment, either act on it, dismiss it, or let it color your responses subtly—don't keep narrating that it's happening.
      {% endif %}
 {% endif %}

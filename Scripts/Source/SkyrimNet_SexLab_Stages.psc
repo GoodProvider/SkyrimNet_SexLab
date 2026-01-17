@@ -121,11 +121,12 @@ String Function Description_Add_Actors(String version, Actor[] actors, String de
         else
             result = actors[1].GetDisplayName()+" "+desc+" "+actors[0].GetDisplayName()+"."
         endif 
-    elseif version == VERSION_2_0
+    else
+        if version != VERSION_2_0
+            Trace("Description_Add_Actors","Unknown version "+version)
+        endif 
         String actors_json = SkyrimNet_SexLab_Main.ActorsToJson(actors)
         result = SkyrimNetApi.ParseString(desc, "sl", "{\"actors\":"+actors_json+"}")
-    else 
-        Trace("Description_Add_Actors","Unknown version "+version, true)
     endif 
     Trace("Description_Add_Actors","version "+version+" actors:"+actors.length+" desc:"+desc+" -> "+result)
     return result

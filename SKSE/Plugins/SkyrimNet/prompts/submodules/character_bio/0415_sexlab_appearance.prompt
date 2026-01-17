@@ -1,0 +1,54 @@
+{# Physical appearance based on clothing and arousal state #}
+{% if not is_plugin_loaded("SkyrimNetUDNG.esp") and (render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "dialogue_target") %}
+  {{ "## --- Sex Lab ---" }}
+  {% if clothing_state == "minimal" or clothing_state == "nude" %}
+    {% if show_internal %}
+      {{ "### Physical Appearance" }}
+
+    {% endif %} 
+    {% if clothing_state == "minimal" %}
+      {% if actor_gender == "male" %}
+    - {{ actor_name }} wears minimal clothing that leaves most of his muscular physique exposed.
+      {% else %}
+    - {{ actor_name }} wears revealing clothing that displays her body, with strategically placed fabric offering little coverage.
+      {% endif %}
+    {% else %}
+      {% if actor_gender == "male" %}
+    - {{ actor_name }} is completely nude, his body fully exposed.
+      {% else %}
+    - {{ actor_name }} is completely nude, her body fully exposed.
+      {% endif %}
+    {% endif %}
+    {% if show_internal %}
+      {# Internal perspective includes arousal details #}
+      {% if arousal_state == "moderately_aroused" %}
+        {% if actor_gender == "male" %}
+    - {{actor_name}}'s breathing has deepened slightly. His genitals show signs of early arousal, with his cock beginning to stiffen.
+        {% else %}
+    - {{actor_name}}'s breathing has deepened slightly. Her nipples have hardened visibly, and subtle moisture has begun to form between her thighs.
+        {% endif %}
+      {% else if arousal_state == "highly_aroused" %}
+        {% if actor_gender == "male" %}
+    - {{actor_name}}'s breathing is heavy and muscles tense. His cock is fully erect, visibly throbbing, with pre-ejaculate leaking from the tip.
+        {% else %}
+    - {{actor_name}}'s breathing comes in short gasps. Her nipples are fully erect, skin flushed, and arousal fluid runs visibly down her inner thighs.
+        {% endif %}
+      {% endif %}
+    {% else if show_external_only %}
+      {# External perspective shows only observable signs #}
+      {% if arousal_state == "moderately_aroused" %}
+        {% if actor_gender == "male" %}
+    - His breathing appears slightly elevated, and a light flush colors his skin.
+        {% else %}
+    - Her nipples are visibly erect beneath or without covering, and her skin shows a subtle flush.
+        {% endif %}
+      {% else if arousal_state == "highly_aroused" %}
+        {% if actor_gender == "male" %}
+    - His breathing is noticeably heavy, skin flushed. If unclothed, his erection is plainly visible.
+        {% else %}
+    - Her breathing is rapid and shallow. Her nipples are prominently erect, skin deeply flushed, and her thighs press together periodically.
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endif %} 

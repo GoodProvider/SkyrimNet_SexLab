@@ -101,6 +101,7 @@ int skynet_tag_sex_lock = 0
 
 String Property storage_items_key = "skyrimnet_sexlab_storage_items" Auto
 String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" Auto
+String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated" Auto
 
 SkyrimNet_SexLab_Stages Property stages Auto
 SexLabFramework Property sexlab Auto 
@@ -144,8 +145,6 @@ int Property race_to_description Auto
 ;Function ReleaseActorLock(Actor akActor) 
 ;EndFunction
 ;int function YesNoSexDialog(String type, Bool rape, Actor domActor, Actor subActor, Actor player)
-;EndFunction
-;sslBaseAnimation[] Function AnimsDialog(SexLabFramework sexlab, Actor[] actors, String tag)
 ;EndFunction
 ;Function SetThreadStyle(int thread_id, int style) 
 ;EndFunction
@@ -379,12 +378,39 @@ Function ReleaseActorLock(Actor akActor)
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------
+;Function SetThreadEjaculated(Actor akActor, int cum_added) 
+    ;int value = 0 
+    ;if ejaculated
+        ;value = 1
+    ;endif 
+    ;StorageUtil.SetIntValue(thread, storage_thread_ejaculated, value)
+;EndFunction 
+
+;bool Function GetThreadEjaculated(sslThreadController thread) 
+    ;1 == StorageUtil.GetIntValue(thread, storage_thread_ejaculated, 0)
+;EndFunction 
+
+;----------------------------------------------------------------------------------------------------
 Function SetThreadStyle(int thread_id, int style) 
     thread_style[thread_id] = style 
 EndFunction
 
 Int Function GetThreadStyle(int thread_id)
     return thread_style[thread_id]
+EndFunction
+
+String Function GetThreadStyleString(int thread_id)
+    int style = thread_style[thread_id]
+    if style == STYLE_FORCEFULLY
+        return "forcefully"
+    elseif style == STYLE_NORMALLY
+        return "normally"
+    elseif style == STYLE_GENTLY
+        return "gently"
+    elseif style == STYLE_SILENTLY
+        return "silently"
+    endif 
+    return "normally"
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------
@@ -460,16 +486,18 @@ Function RegisterSexlabEvents()
 EndFunction 
 
 event AnimationStart(int ThreadID, bool HasPlayer)
-    Trace("AnimationStart","ThreadID:"+ThreadID+" HasPlayer:"+HasPlayer,True)
+    Trace("AnimationStart","ThreadID:"+ThreadID+" HasPlayer:"+HasPlayer)
     if SexLab == None
         return  
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
 
+    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
     if (HasPlayer && sex_edit_tags_player) || (!HasPlayer && sex_edit_tags_nonplayer)
         SexStyleDialog(thread) 
     endif 
+    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 
     int i = actors.length - 1
     while 0 <= i 
@@ -666,7 +694,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
     endif 
     
     if orgasm_denied
-        DirectNarration(narration, actors[0], target)
+        DirectNarration_Optional(narration, actors[0], target)
     else
         RegisterEvent("sexlab_end", narration, target)
     endif 
@@ -819,12 +847,13 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         return
     endif 
 
-    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms)
     Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, akActor.GetDisplayName()+" orgasmed.")
 EndEvent
 
-Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orgasms, String msg)
+Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orgasms, String msg, bool require_narration = false)
     Trace("Orgasm_Individual_Helper","akActor:"+akActor.GetDisplayName()+" FullEnjoyment:"+FullEnjoyment+" num_orgasms:"+num_orgasms)
+
+    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms)
 
     int gender = sexlab.GetGender(akActor) 
     bool male = gender == 0 || gender == 2
@@ -851,7 +880,7 @@ Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orga
     bool has_thread = thread != None
     Trace("Orgasm_Individual","has_player:"+has_player+" male:"+male+" cum_catcher:"+cum_catcher_name+" msg:"+msg)
 
-    if has_player
+    if has_player || require_narration
         DirectNarration(msg, akActor, cum_catcher)
     else    
         DirectNarration_Optional("sexlab_orgasm", msg, akActor, cum_catcher)
@@ -938,7 +967,7 @@ EndFunction
 Function DOMSlave_Orgasmed(Actor akActor, String msg)
     Trace("DomSlave_Orgasmed",akActor.GetDisplayName())
     int num_orgasms = StorageUtil.GetIntValue(akActor,actor_num_orgasms_key, 0)
-    Orgasm_Individual_Helper(akActor, 100, num_orgasms+1, msg)
+    Orgasm_Individual_Helper(akActor, 100, num_orgasms+1, msg, true)
 EndFunction
 
 ;----------------------------------------------------
