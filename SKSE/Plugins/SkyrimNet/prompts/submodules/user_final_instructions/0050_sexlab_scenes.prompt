@@ -7,7 +7,6 @@
 {% set actor_having_sex = false %} 
 {% set actor_rape_victim = false %}
 {% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
-     {% set speaker = npc %}
      {% if not isTimePaused %}
           {% set sexlab = sexlab_get_threads(speaker.UUID) -%}
           {% if not sexlab.threads %}
@@ -19,14 +18,17 @@
      
      {% set actor_having_sex = false %} 
      {% for thread in sexlab.threads %}
-          {% if contains(thread.victims, speaker.name) %} 
+          {% if contains(thread.victims, npc.name) %} 
                {% set actor_rape_victim = true %} 
           {% endif %} 
-          {% if contains(thread.names, speaker.name) %} 
+          {% if contains(thread.names, npc.name) %} 
                {% set actor_having_sex = true %} 
                - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }}
 {{ "## CRITICAL: YOU ARE CURRENTLY HAVING SEX" }}
 You are physically engaged in intense sexual activity right now.
+
+**Speak limitations:**
+- If the speaker has a cock in their mouth, they can not speak only mumble. 
 
 **How to speak:**
 - Breathless, fragmented, interrupted by sensation

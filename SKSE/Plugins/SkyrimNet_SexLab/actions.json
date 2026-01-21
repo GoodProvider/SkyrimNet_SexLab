@@ -1,0 +1,22 @@
+[
+    {
+        "name": "SexLab_Sex_Start",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Sex_Start_IsEligible",
+        "execute": "Sex_Start",
+        "priority": 10,
+        "tags": "BodyAnimation",
+        "description": "{{render_template(\"helpers/sexlab_action_sex_start\")}}",
+        "parameters": "{\"partner_0\":\"Primary participant (empty for mastrubation)\", \"partner_1\":\"Optional Second participant\", \"partner_2\":\"Optional third participant\", \"partner_3\":\"Optional Fourth participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal\"}"
+    },
+    {
+        "name": "SexLab_Rape_Start",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Sex_Start_IsEligible",
+        "execute": "Sex_Start",
+        "priority": 10,
+        "tags": "BodyAnimation",
+        "description": "{{render_template(\"helpers/sexlab_action_rape_start\")}}",
+        "parameters": "{\"partner_0\":\"Primary participant (empty for mastrubation)\", \"partner_1\":\"Optional Second participant\", \"partner_2\":\"Optional third participant\", \"partner_3\":\"Optional Fourth participant\", \"victim_0\":\"Optional Victim participant\", \"victim_1\":\"Optional second Victim participant\", \"victim_2\":\"Optional Fourth Victim participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal\"}"
+    }
+]

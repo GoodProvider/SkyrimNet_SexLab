@@ -1,0 +1,11 @@
+{% set speaker = decnpc(npc.UUID) -%}
+{% set nearby_npcs = append(get_nearby_npc_list(npc.UUID), player) -%}
+{% set partners = [] -%}
+{% for partner in nearby_npcs -%}
+    {% set actor = decnpc(partner.UUID) -%}
+    {% if not actor.isChild and actor.UUID != speaker.UUID and not is_in_faction(actor.UUID, "SexLabAnimatingFaction") -%}
+        {% set partners = append(partners, actor.name) -%}
+    {% endif -%}
+{% endfor -%}
+{% set partners_joined = join(partners, ", ") -%}
+Start, or continue, a nonconsensual sexual activity. Possible participates: {{partners_joined}}.
