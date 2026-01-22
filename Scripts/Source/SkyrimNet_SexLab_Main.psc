@@ -528,29 +528,6 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     thread_started[thread.tid] = False 
 endEvent
         
-Function StartStop_DirectNarration(sslThreadController thread, String status, Bool HasPlayer)
-    Actor[] actors = thread.Positions
-    String narration = Thread_Narration(thread, status)
-    Actor target = None
-    if actors.length >= 2 && actors[0] != actors[1]
-        target = actors[1]
-    endif 
-    ;String name = "None"
-    ;if target != None
-        ;name = target.GetDisplayName()
-    ;endif
-    ;Trace("StartStop_DirectNarration","status:"+status+" narration:"+narration+" actors.length:"+actors.length+" target:"+name)
-    if status == "start"
-        if HasPlayer
-            DirectNarration(narration, actors[0], target)
-        else
-            DirectNarration_Optional("sexlab_event", narration, actors[0], target)
-        endif
-    else
-        RegisterEvent("sexlab_event", narration, actors[0], target)
-    endif 
-EndFunction
-
 Event StageStart(int ThreadID, bool HasPlayer)
     if SexLab == None
         return  
@@ -565,25 +542,8 @@ Event StageStart(int ThreadID, bool HasPlayer)
         target = actors[1]
     endif 
 
-    ; Set up the thread's description
-    ;DirectNarration(desc, actors[0], target)
-
     SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 
-    ; Send a DN if its a start and includes a player
-    ; if not player send DN if allowedb by cool off 
-    String event_type = "sexlab_event"
-    if !thread_started[ThreadID]
-        thread_started[ThreadID] = True 
-        ;AllowedDeniedOnlyIncrease(actors, thread, "start") 
-        ;StartStop_DirectNarration(thread,"start", HasPlayer)
-        ;DirectNarration(desc, actors[0], target)
-    else 
-        String desc = Get_Thread_Description(thread, actorLib)
-        DirectNarration_Optional(event_type, desc, actors[0], target)
-    endif 
-
-    ;AllowedDeniedOnlyIncrease(thread.positions, thread, "stage") 
 
     Actor sender = actors[0] 
     Actor reciever = None 
@@ -607,20 +567,10 @@ Event StageStart(int ThreadID, bool HasPlayer)
         Debug.Notification("stage "+thread.stage+" of "+ thread.animation.StageCount()+" "+msg)
     endif 
 
-    ; DOM Slaves have thier own orasm system 
-    ; if dom_main != None 
-        ; int k = actors.length - 1
-        ; while 0 <= k 
-            ; DOM_Actor slave = SkyrimNet_DOM_Utils.GetSlave("SkyrimNet_SexLab_Main","Start_Sex",actors[k],true,true)
-            ; Debug.Notification("slave:"+slave)
-            ; if (dom_main as SkyrimNet_DOM_Main).IsDomSlave(actors[k]) 
-                ; Debug.Notification(actors[k].GetDisplayName()+" denied")
-            ; else
-                ; Debug.Notification(actors[k].GetDisplayName()+" allowed")
-            ; endif 
-            ; k -= 1 
-        ; endwhile
-    ; endif 
+    ; Send a DN if its a start and includes a player
+    ; if not player send DN if allowedb by cool off 
+    String event_type = "sexlab_event"
+    DirectNarration_Optional(event_type, "continue scene with "+actors[0].GetDisplayName(), actors[0], target)
 EndEvent
 
 
@@ -693,11 +643,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
         endif 
     endif 
     
-    if orgasm_denied
-        DirectNarration_Optional(narration, actors[0], target)
-    else
-        RegisterEvent("sexlab_end", narration, target)
-    endif 
+    RegisterEvent("sexlab_end", narration, target)
     thread_started[ThreadID] = False 
 
     sslThreadSlots ThreadSlots = Game.GetFormFromFile(0xD62, "SexLab.esm") as sslThreadSlots
