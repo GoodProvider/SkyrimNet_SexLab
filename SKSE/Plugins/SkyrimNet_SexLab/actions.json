@@ -7,7 +7,7 @@
         "priority": 10,
         "tags": "BodyAnimation",
         "description": "{{render_template(\"helpers/sexlab_action_sex_start\")}}",
-        "parameters": "{\"partner_0\":\"Primary participant (empty for mastrubation)\", \"partner_1\":\"Optional Second participant\", \"partner_2\":\"Optional third participant\", \"partner_3\":\"Optional Fourth participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal\"}"
+        "parameters": "{\"participant_0\":\"Optional first additional participant\", \"participant_1\":\"Optional Second additional participant\", \"participant_2\":\"Optional third additional participant\", \"participant_3\":\"Optional Fourth additional participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
     },
     {
         "name": "SexLab_Rape_Start",
@@ -17,6 +17,6 @@
         "priority": 10,
         "tags": "BodyAnimation",
         "description": "{{render_template(\"helpers/sexlab_action_rape_start\")}}",
-        "parameters": "{\"partner_0\":\"Primary participant (empty for mastrubation)\", \"partner_1\":\"Optional Second participant\", \"partner_2\":\"Optional third participant\", \"partner_3\":\"Optional Fourth participant\", \"victim_0\":\"Optional Victim participant\", \"victim_1\":\"Optional second Victim participant\", \"victim_2\":\"Optional Fourth Victim participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal\"}"
+        "parameters": "{\"participant_0\":\"Primary participant (empty for mastrubation)\", \"participant_1\":\"Optional Second participant\", \"participant_2\":\"Optional third participant\", \"participant_3\":\"Optional Fourth participant\", \"victim_0\":\"Optional Victim participant\", \"victim_1\":\"Optional second Victim participant\", \"victim_2\":\"Optional Fourth Victim participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
     }
 ]

@@ -1235,8 +1235,13 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
     int count_max = 10
     int next = 0
     if tag != ""
-        tags[next] = tag
-        next += 1
+        sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(actors.length, tag, "", true)
+        if anims.length > 0
+            tags[0] = tag
+            next += 1
+        else 
+            Trace("AnimsDialog", "No animations found, dropping initial tag: "+tag)
+        endif 
     endif 
 
     ; the order of the groups 
@@ -1273,6 +1278,7 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
             ; Use the current set of tags 
             String use_tags = names + " tags: "+tags_str
             listMenu.AddEntryItem(use_tags)
+            listMenu.AddEntryItem("<start>")
 
             ; Remove one tag 
             if 0 < next 
@@ -1299,7 +1305,10 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
                 button = GroupDialog(group_tags, button)
             endif 
 
-            if button == "<cancel>"
+            if button == "<start>"
+                finished = true
+            elseif button == "<cancel>"
+                JValue.release(groups)
                 return empty
             elseif button == "<remove"
                 next -= 1

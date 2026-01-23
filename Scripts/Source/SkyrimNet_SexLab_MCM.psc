@@ -496,7 +496,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
     if button == masturbate
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"type\":\"masturbation\"}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{}")
     elseif button == sex
         SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"participant_0\":\""+player.GetDisplayName()+"\"}")
     elseif button == rapes

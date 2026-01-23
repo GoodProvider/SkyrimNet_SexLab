@@ -251,37 +251,12 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
     if main == None
         return False
     endif
-    String type = SkyrimNetApi.GetJsonString(paramsJson, "type","")
+    String tag = SkyrimNetApi.GetJsonString(paramsJson, "type","")
     if !BodyAnimation_IsEligible(akActor, "", "") 
         return  False
     endif 
 
-    if False 
-        Actor akTarget = None
-        if type != "mastrubate"
-            Actor player = Game.GetPlayer()
-            if type != "masturbation" && type != "masturbate"
-                akTarget = SkyrimNetApi.GetJsonActor(paramsJson, "target", None)
-                if akTarget == None 
-                    if SkyrimNetApi.GetJsonBool(paramsJson, "target_is_player", false)
-                        akTarget = player
-                    else 
-                        Bool name = SkyrimNetApi.GetJsonString(paramsJson, "target", "")
-                        Trace("Sex_Start", "Target is None, Target's string is \""+name+"\", and not target_is_player set")
-                        return  False
-                    endif 
-                    Trace("Sex_Start", "Target is None, using player")
-                endif 
-                if !BodyAnimation_IsEligible(akTarget, "", "") 
-                    Trace("Sex_Start", "BodyAnimation's tag not eligible")
-                    return  False
-                endif 
-            endif 
-            if akActor == akTarget
-                akTarget = None
-            endif 
-        endif 
-    endif 
+    Actor akTarget = SkyrimNetApi.GetJsonActor(paramsJson, "target", None)
 
     ;-------------------------------
 
@@ -289,28 +264,45 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
     int num_parts = 0 
     int num_victs = 0 
     Actor[] parts = new Actor[5]
+    parts[0] = akActor 
+    num_parts += 1 
+    if akTarget != None && akTarget != akActor
+        parts[1] = akTarget 
+        num_parts += 1
+    endif
+    
     Actor[] victs = new Actor[5]
-    if type != "mastrubation" && type != "mastrubate"
-        int i = 0
-        while i < 5
-            String param = "partner_"+i
-            Actor partner = SkyrimNetAPI.GetJsonActor(paramsJson, param, None) 
-            String name = "None"
-            if partner != None 
-                name = partner.GetDisplayName() 
-            endif 
-            Trace("Sex_Start",param+" is actor "+name)
-            if partner != None 
-                if partner != akActor
-                    parts[num_parts] = partner
-                    num_parts += 1
+    int i = 0
+    while i < 5
+        String param = "participant_"+i
+        Actor participant = SkyrimNetAPI.GetJsonActor(paramsJson, param, None) 
+        if participant != None 
+            int j = 0 
+            Bool found = False
+            while j < num_parts && !found
+                if parts[j] == participant 
+                    found = True 
                 endif 
-            elseif i == 0 
-                name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
-                Trace("Sex_Start",param+" is None. name: "+name)
-                if name == player.GetDisplayName() 
-                    parts[num_parts] = player
-                    num_parts += 1 
+                j += 1
+            endwhile
+            if !found
+                String name = "None"
+                if participant != None 
+                    name = participant.GetDisplayName() 
+                endif 
+                Trace("Sex_Start",param+" is actor "+name)
+                if participant != None 
+                    if participant != akActor
+                        parts[num_parts] = participant
+                        num_parts += 1
+                    endif 
+                elseif i == 0 
+                    name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
+                    Trace("Sex_Start",param+" is None. name: "+name)
+                    if name == player.GetDisplayName() 
+                        parts[num_parts] = player
+                        num_parts += 1 
+                    endif 
                 endif 
             endif 
             Actor victim = SkyrimNetAPI.GetJsonActor(paramsJson, "victim_"+i, None) 
@@ -318,56 +310,60 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
                 victs[num_victs] = victim 
                 num_victs += 1 
             endif 
-            i += 1 
-        endwhile 
-    endif 
-    int style = GetStyle(main, paramsJson)
-
-    ;-------------------------------
-    Actor[] victims = PapyrusUtil.ActorArray(num_victs) 
-    int i = num_victs - 1 
-    while 0 <= i
-        victims[i] = victs[i]
-        i -= 1 
-    endwhile 
-
-    ;-------------------------------
-
-    int start = 1
-;    if akTarget != None 
-;        start += 1 
-;    endif 
-    Actor[] actors = PapyrusUtil.ActorArray(num_parts+start) 
-
-    Bool has_player = akActor == Player
-    actors[0] = akActor 
-;    if akTarget != None 
-;        actors[1] = akTarget 
-;        if akTarget == player 
-;            has_player = True 
-;        endif 
-;    endif 
-    i = 0
-    while i < num_parts 
-        actors[start+i] = parts[i]
-        if parts[i] == player 
-            has_player = True 
         endif 
         i += 1 
     endwhile 
+    int style = GetStyle(main, paramsJson)
+
+    ;-------------------------------
+    Bool has_player = False
+    Actor[] actors = PapyrusUtil.ActorArray(num_parts) 
+    i = 0
+    while i < num_parts
+        actors[i] = parts[i]
+        if actors[i] == player
+            has_player = True   
+        endif
+        i += 1 
+    endwhile 
+    if num_parts == 1
+        int gender = main.sexlab.GetGender(actors[i]) 
+        bool has_penis = (gender != 1 && gender != 3)
+        tag = "F" 
+        if has_penis 
+            tag = "M"
+        endif 
+    endif 
+
+    ;-------------------------------
+    Actor[] victims = PapyrusUtil.ActorArray(num_victs) 
+    i = 0
+    while i < num_victs
+        victims[i] = victs[i]
+        i += 1 
+    endwhile 
+
+    ;-------------------------------
+    ; Animations
+    ;-------------------------------
 
     if !main.LockActors(actors) 
         return False
     endif 
-    Trace("Sex_Start","actors.length: "+actors.length+" victims: "+victims.length+" type:"+type+" has_player: "+has_player) 
-    sslBaseAnimation[] anims =  GetAnims(main, actors, victims, player, type, has_player) 
-    if anims[0] == None
+    Trace("Sex_Start","actors.length: "+actors.length+" victims: "+victims.length+" tag:"+tag+" has_player: "+has_player) 
+    sslBaseAnimation[] anims =  GetAnims(main, actors, victims, player, tag, has_player) 
+    if anims.length > 0 && anims[0] == None
         main.UnlockActors(actors) 
         return False
     endif 
+    sslThreadModel thread = main.sexlab.NewThread()
+    if anims.length > 0 
+        thread.SetAnimations(anims) 
+    endif 
+
+    ;-------------------------------
 
     bool failure = false 
-    sslThreadModel thread = main.sexlab.NewThread()
     if thread == None
         Trace("Sex_Start","Failed to create thread")
         failure = true 
@@ -389,9 +385,6 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
         i -= 1 
     endwhile  
 
-    if anims.length > 0 
-        thread.SetAnimations(anims) 
-    endif 
 
     main.SetThreadStyle(thread.tid, style) 
     thread.StartThread() 
@@ -426,9 +419,6 @@ sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, Actor[] actors,
         String tagSupress = ""
         String tags = type 
         anims =  main.sexLab.GetAnimationsByTags(actors.length, tags, tagSupress, true)
-    endif 
-    if anims[0] == None 
-        anims =  main.sexLab.GetAnimationsByTags(actors.length, "", "", true)
     endif 
 
     return anims 
