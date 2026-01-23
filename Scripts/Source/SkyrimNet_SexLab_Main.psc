@@ -132,31 +132,6 @@ bool ostimnet_found = false
 ; Race to speech 
 int Property race_to_description Auto
 
-;String Function ActorsToJson(Actor[] actors) global
-;EndFunction
-;String Function Thread_Narration(sslThreadController thread, String status)
-;EndFunction
-;int Function SexStyleDialog(sslThreadController thread)
-;EndFunction
-;Bool Function IsActorLocked(Actor akActor) 
-;EndFunction
-;bool Function SetActorLock(Actor akActor) 
-;EndFunction
-;Function ReleaseActorLock(Actor akActor) 
-;EndFunction
-;int function YesNoSexDialog(String type, Bool rape, Actor domActor, Actor subActor, Actor player)
-;EndFunction
-;Function SetThreadStyle(int thread_id, int style) 
-;EndFunction
-;Function StoreStrippedItems(Actor akActor, Form[] forms)
-;EndFunction 
-;Form[] Function UnStoreStrippedItems(Actor akActor)
-;EndFunction
-;Bool Function HasStrippedItems(Actor akActor)
-;EndFunction
-;Function OstimNet_Reset() 
-;EndFunction
-
 int Property counter Auto 
 
 Event OnInit()
@@ -342,6 +317,32 @@ EndFunction
 ;----------------------------------------------------------------------------------------------------
 ; Actor Lock
 ;----------------------------------------------------------------------------------------------------
+
+bool Function LockActors(Actor[] actors) 
+    int i = actors.length - 1 
+    while 0 <= i && SetActorLock(actors[i]) 
+        i -= 1 
+    endwhile 
+
+    if i > -1 
+        int j = i 
+        int count = actors.length - 1 
+        while j < count 
+            ReleaseActorLock(actors[j]) 
+            j += 1 
+        endwhile 
+        return False 
+    endif 
+    return True 
+EndFunction 
+
+bool Function UnLockActors(Actor[] actors) 
+    int i = actors.length - 1 
+    while 0 <= i 
+        ReleaseActorLock(actors[i]) 
+        i -= 1 
+    endwhile 
+EndFunction 
 
 Bool Function IsActorLocked(Actor akActor) 
     bool locked = False
@@ -580,7 +581,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
         ;DirectNarration(desc, actors[0], target)
     else 
         String desc = Get_Thread_Description(thread, actorLib)
-        DirectNarration_Optional(event_type, desc, actors[0], target)
+        ContinueScene(actors[0], target, True)
     endif 
 
     ;AllowedDeniedOnlyIncrease(thread.positions, thread, "stage") 
@@ -880,11 +881,12 @@ Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orga
     bool has_thread = thread != None
     Trace("Orgasm_Individual","has_player:"+has_player+" male:"+male+" cum_catcher:"+cum_catcher_name+" msg:"+msg)
 
-    if has_player || require_narration
-        DirectNarration(msg, akActor, cum_catcher)
-    else    
-        DirectNarration_Optional("sexlab_orgasm", msg, akActor, cum_catcher)
-    endif 
+    DirectNarration(msg, akActor, cum_catcher)
+;    if has_player || require_narration
+;        DirectNarration(msg, akActor, cum_catcher)
+;    else    
+;        DirectNarration_Optional("sexlab_orgasm", msg, akActor, cum_catcher)
+;    endif 
 EndFunction
 
 ;----------------------------------------------------
@@ -1096,11 +1098,7 @@ EndFunction
 ; 2 Yes, but no tag editor 
 ; 3 No (silent), refused, but don't tell the LLM 
 ; 4 NO, tell the LLM 
-int function YesNoSexDialog(String type, Bool rape, Actor domActor, Actor subActor, Actor player)
-
-    if subActor != player && (domActor == None || domActor != player)
-        return BUTTON_YES
-    endif  
+int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, String type)
 
     String[] buttons = new String[4]
     buttons[BUTTON_YES] = "Yes "
@@ -1108,42 +1106,57 @@ int function YesNoSexDialog(String type, Bool rape, Actor domActor, Actor subAct
     buttons[BUTTON_NO_SILENT] = "No (Silent)"
     buttons[BUTTON_NO] = "No "
 
-    String player_name = domActor.GetDisplayName()
-    String npc_name = subActor.GetDisplayName()
+    String player_name = player.GetDisplayName()
 
-    if subActor == player
-        String temp = npc_name 
-        npc_name = player_name 
-        player_name = npc_name 
-    endif
-    String question = ""
-    if rape
-        if domActor == player
-            question = "Would like to rape "+npc_name+"?"
-        else
-            question = "Would like to be raped by "+npc_name+"?"
+    String names = "" 
+    int i = 0
+    int count = actors.length 
+    while i < count 
+        if actors[i] != player
+            if count > 2
+                if names != ""
+                    names += ", "
+                endif 
+            endif 
+            names += actors[i].GetDisplayName() 
         endif 
-    elseif type == "kissing"
-        question = "Would like to kissing "+npc_name+"?"
-    else
-        question = "Would like to have sex "+npc_name+"?"
-    endif 
+        i += 1 
+    endwhile 
+
+    String question = "Would you like to have sex with "+names+"?"
+    Trace("YesNoSexDialog","question: "+question)
+;    if rape
+;        if domActor == player
+;            question = "Would like to rape "+npc_name+"?"
+;        else
+;            question = "Would like to be raped by "+npc_name+"?"
+;        endif 
+;    elseif type == "kissing"
+;        question = "Would like to kissing "+npc_name+"?"
+;    else
+;        question = "Would like to have sex "+npc_name+"?"
+;    endif 
     
     int button = SkyMessage.ShowArray(question, buttons, getIndex = true) as int  
     if button == BUTTON_NO || button == BUTTON_NO_SILENT
         if button == BUTTON_NO 
-            if !rape
-                String msg = "*"+player_name+" refuses "+npc_name+"'s sex request*"
-                DirectNarration_Optional("sex refuses", msg, domActor, subActor)
-            elseif domActor == player 
-                String msg = "*"+player_name+" refuses to rape "+npc_name+".*"
-                DirectNarration_Optional("rape refuses", msg, domActor, subActor)
-            else
-                String msg = "*"+player_name+" refuses "+npc_name+"'s rape attempt.*"
-                DirectNarration_Optional("rape refuses", msg, subActor, domActor)
-            endif
-        endif
+            String msg = player_name+" refuses have sex with "+names
+            DirectNarration_Optional("sex refuses", msg, player, actors[0])
+        endif 
     endif 
+;                DirectNarration_Optional("rape refuses", msg, subActor, domActor)
+;            if !rape
+;                String msg = "*"+player_name+" refuses "+npc_name+"'s sex request*"
+;                DirectNarration_Optional("sex refuses", msg, domActor, subActor)
+;            elseif domActor == player 
+;                String msg = "*"+player_name+" refuses to rape "+npc_name+".*"
+;                DirectNarration_Optional("rape refuses", msg, domActor, subActor)
+;            else
+;                String msg = "*"+player_name+" refuses "+npc_name+"'s rape attempt.*"
+;                DirectNarration_Optional("rape refuses", msg, subActor, domActor)
+;            endif
+        ;endif
+    ;endif 
     return button 
 EndFunction
 
@@ -1188,7 +1201,8 @@ EndFunction
 ;        thread.SetAnimations(anims)
 ;   endif 
 ;
-sslBaseAnimation[] Function AnimsDialog(SexLabFramework sexlab, Actor[] actors, String tag)
+sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actors, String tag)
+    Trace("GetAnimsDialog","actor.lengths: "+actors.length+" tag:"+tag)
 
     Actor player = Game.GetPlayer() 
 
@@ -1221,8 +1235,13 @@ sslBaseAnimation[] Function AnimsDialog(SexLabFramework sexlab, Actor[] actors, 
     int count_max = 10
     int next = 0
     if tag != ""
-        tags[next] = tag
-        next += 1
+        sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(actors.length, tag, "", true)
+        if anims.length > 0
+            tags[0] = tag
+            next += 1
+        else 
+            Trace("AnimsDialog", "No animations found, dropping initial tag: "+tag)
+        endif 
     endif 
 
     ; the order of the groups 
@@ -1259,6 +1278,7 @@ sslBaseAnimation[] Function AnimsDialog(SexLabFramework sexlab, Actor[] actors, 
             ; Use the current set of tags 
             String use_tags = names + " tags: "+tags_str
             listMenu.AddEntryItem(use_tags)
+            listMenu.AddEntryItem("<start>")
 
             ; Remove one tag 
             if 0 < next 
@@ -1285,7 +1305,10 @@ sslBaseAnimation[] Function AnimsDialog(SexLabFramework sexlab, Actor[] actors, 
                 button = GroupDialog(group_tags, button)
             endif 
 
-            if button == "<cancel>"
+            if button == "<start>"
+                finished = true
+            elseif button == "<cancel>"
+                JValue.release(groups)
                 return empty
             elseif button == "<remove"
                 next -= 1
