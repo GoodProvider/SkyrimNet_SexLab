@@ -496,13 +496,13 @@ Function Target_Menu_Selection(Actor target, Actor player)
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
     if button == masturbate
-        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"type\":\"masturbation\"}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{}")
     elseif button == sex
-        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":false, \"target\":\""+player.GetDisplayName()+"\", \"target_is_player\":true}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"participant_0\":\""+player.GetDisplayName()+"\"}")
     elseif button == rapes
-        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":true, \"target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":true, \"target_is_player\":true}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"rape\":true, \"target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":true, \"target_is_player\":true}")
     elseif button == raped_by
-        SkyrimNet_SexLab_Actions.SexStart_Execute(target, "", "{\"rape\":true, \"Target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":false, \"target_is_player\":true}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"rape\":true, \"Target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":false, \"target_is_player\":true}")
     elseif button == clothing
 
         ;--------------------------------------------------
@@ -743,7 +743,7 @@ Function StartSex(Actor[] actors, bool is_rape)
         thread.SetVictim(actors[0])
     endif 
 
-    sslBaseAnimation[] anims = main.AnimsDialog(sexlab, actors, "")
+    sslBaseAnimation[] anims = main.GetAnimsDialog(sexlab, actors, "")
     if anims.length > 0 && anims[0] != None  
         thread.SetAnimations(anims)
     endif 

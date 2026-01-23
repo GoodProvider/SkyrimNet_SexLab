@@ -1,4 +1,4 @@
-VERSION=0.24.0
+VERSION=0.25.1
 NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
@@ -21,7 +21,6 @@ release:
 	if exist '${RELEASE_file}' rm /Q /S '${RELEASE_FILE}'
 	7z -r a '${RELEASE_FILE}' fomod \
 	    Scripts \
-		README.md \
 		SkyrimNet_SexLab.esp \
 		fomod/info.json \
 		SKSE/Plugins/SkyrimNet_SexLab/info.json \

@@ -25,7 +25,11 @@ String Function JoinActorsFiltered(Actor[] actors, int[] filter,  String Noun = 
     String[] strings = Utility.CreateStringArray(actors.length) 
     int i = actors.length - 1 
     while 0 <= i 
-        strings[i] = actors[i].GetDisplayName() 
+        if actors[i] == None 
+            strings[i] = "None"
+        else
+            strings[i] = actors[i].GetDisplayName() 
+        endif 
         i -= 1 
     endwhile 
     ;Trace("JoinActorsFiltered",strings)
@@ -126,23 +130,22 @@ EndFunction
 ; Narration Wrappers 
 ; ------------------------------------------------------------
 
-Function DirectNarration(String msg, Actor source=None, Actor target=None) global
-
-    msg = CheckDuplicate("DirectNarration", source, msg)
-
-    SkyrimNetApi.DirectNarration(msg, source, target)
-    ;SkyrimNetApi.RegisterEvent("sexlab_event", msg, source, target)
-    if source != None 
-        msg += " source:"+source.GetDisplayName()
-    endif 
-    if target != None 
-        msg += " target:"+target.GetDisplayName()
+Function ContinueScene(Actor source=None, Actor target=None, bool optional=False) global 
+    String msg = ""
+    If source != None 
+        if target != None 
+            msg = "continue scene that includes "+source.GetDisplayName()+" and "+target.GetDisplayName()
+        else
+            msg = "continue scene that includes "+source.GetDisplayName()
+        endif 
+    else 
+            msg = "continue scene"
     endif
-    Trace("DirectNarration", msg)
-EndFunction
+    DirectNarration_Optional("continue scene", msg, source, target, optional)
+EndFunction 
 
 Function DirectNarration_Optional(String event_type, String msg, Actor source=None, Actor target=None, bool optional=False) global
-    msg = CheckDuplicate("DirectNarration_Optional", source, msg)
+;    msg = CheckDuplicate("DirectNarration_Optional", source, msg)
 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
 
@@ -178,8 +181,24 @@ Function DirectNarration_Optional(String event_type, String msg, Actor source=No
     if target != None 
         msg += " target:"+target.GetDisplayName()
     endif
-    Trace("DirectNarration","last_audio_secs:"+last_audio+">="+main.direct_narration_cool_off+" distance:"+distance+"<"+main.direct_narration_max_distance+" type:"+type+" msg:"+msg)
+    Trace("DirectNarration_Optional","type:"+type+" last_audio_secs:"+last_audio+">?"+main.direct_narration_cool_off+" distance:"+distance+"<?"+main.direct_narration_max_distance+" msg:"+msg)
 EndFunction
+
+Function DirectNarration(String msg, Actor source=None, Actor target=None) global
+
+    msg = CheckDuplicate("DirectNarration", source, msg)
+
+    SkyrimNetApi.DirectNarration(msg, source, target)
+    ;SkyrimNetApi.RegisterEvent("sexlab_event", msg, source, target)
+    if source != None 
+        msg += " source:"+source.GetDisplayName()
+    endif 
+    if target != None 
+        msg += " target:"+target.GetDisplayName()
+    endif
+    Trace("DirectNarration", msg)
+EndFunction
+
 
 Function RegisterEvent(String event_name, String msg, Actor source=None, Actor target=None) global
     if msg != "" 

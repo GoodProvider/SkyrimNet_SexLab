@@ -1,0 +1,22 @@
+[
+    {
+        "name": "SexLab_Sex_Start",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Sex_Start_IsEligible",
+        "execute": "Sex_Start",
+        "priority": 10,
+        "tags": "BodyAnimation",
+        "description": "{{render_template(\"helpers/sexlab_action_sex_start\")}}",
+        "parameters": "{\"participant_0\":\"Optional first additional participant\", \"participant_1\":\"Optional Second additional participant\", \"participant_2\":\"Optional third additional participant\", \"participant_3\":\"Optional Fourth additional participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+    },
+    {
+        "name": "SexLab_Rape_Start",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Sex_Start_IsEligible",
+        "execute": "Sex_Start",
+        "priority": 10,
+        "tags": "BodyAnimation",
+        "description": "{{render_template(\"helpers/sexlab_action_rape_start\")}}",
+        "parameters": "{\"participant_0\":\"Primary participant (empty for mastrubation)\", \"participant_1\":\"Optional Second participant\", \"participant_2\":\"Optional third participant\", \"participant_3\":\"Optional Fourth participant\", \"victim_0\":\"Optional Victim participant\", \"victim_1\":\"Optional second Victim participant\", \"victim_2\":\"Optional Fourth Victim participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+    }
+]
