@@ -18,5 +18,26 @@
         "tags": "BodyAnimation",
         "description": "{{render_template(\"helpers/sexlab_action_rape_start\")}}",
         "parameters": "{\"assailant_0\":\"Non-Optional Primary assailant\", \"assailant_1\":\"Optional second assailant\", \"assailant_2\":\"Optional third assailant\", \"victim_0\":\"non-optional primary Victim\", \"victim_1\":\"Optional second Victim\", \"victim_2\":\"Optional third Victim\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+    },
+    {
+        "name": "SexLab_Dress",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Dress_IsEligible",
+        "execute": "Dress_Execute",
+        "priority": 1,
+        "tags": "",
+        "description": "Start to dress in clothing.",
+        "parameters": "{}"
+    },
+    {
+        "name": "SexLab_Undress",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Undress_IsEligible",
+        "execute": "Undress_Execute",
+        "priority": 5,
+        "tags": "",
+        "description": "Start to undress clothing.",
+        "parameters": "{}"
     }
+]
 ]
