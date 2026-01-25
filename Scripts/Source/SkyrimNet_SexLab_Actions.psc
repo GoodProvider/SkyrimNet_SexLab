@@ -264,53 +264,58 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
     int num_parts = 0 
     int num_victs = 0 
     Actor[] parts = new Actor[5]
-    parts[0] = akActor 
-    num_parts += 1 
-    if akTarget != None && akTarget != akActor
-        parts[1] = akTarget 
-        num_parts += 1
-    endif
+    ;parts[0] = akActor 
+    ;num_parts += 1 
+    ;if akTarget != None && akTarget != akActor
+    ;    parts[1] = akTarget 
+    ;    num_parts += 1
+    ;endif
     
     Actor[] victs = new Actor[5]
+    String[] parameters = new String[3] 
+    parameters[0] = "participant"
+    parameters[1] = "victim"
+    parameters[2] = "assailant"     
     int i = 0
     while i < 5
-        String param = "participant_"+i
-        Actor participant = SkyrimNetAPI.GetJsonActor(paramsJson, param, None) 
-        if participant != None 
-            int j = 0 
-            Bool found = False
-            while j < num_parts && !found
-                if parts[j] == participant 
-                    found = True 
-                endif 
-                j += 1
-            endwhile
-            if !found
-                String name = "None"
-                if participant != None 
-                    name = participant.GetDisplayName() 
-                endif 
-                Trace("Sex_Start",param+" is actor "+name)
-                if participant != None 
-                    if participant != akActor
+        int k = 0
+        while k < 3
+            String param = parameters[k]+"_"+i
+            Actor participant = SkyrimNetAPI.GetJsonActor(paramsJson, param, None) 
+            if participant != None 
+                int j = 0 
+                Bool found = False
+                while j < num_parts && !found
+                    if parts[j] == participant 
+                        found = True 
+                    endif 
+                    j += 1
+                endwhile
+                if !found
+                    String name = "None"
+                    if participant != None 
+                        name = participant.GetDisplayName() 
+                        Trace("Sex_Start",param+" is actor "+name)
                         parts[num_parts] = participant
                         num_parts += 1
+                        if parameters[k] == "victim"
+                            victs[num_victs] = participant 
+                            num_victs += 1 
+                        endif 
+                    elseif i == 0 
+                        name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
+                        Trace("Sex_Start",param+" is None. name: "+name)
+                        if name == player.GetDisplayName() 
+                            parts[num_parts] = player
+                            num_parts += 1 
+                        endif 
                     endif 
-                elseif i == 0 
-                    name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
-                    Trace("Sex_Start",param+" is None. name: "+name)
-                    if name == player.GetDisplayName() 
-                        parts[num_parts] = player
-                        num_parts += 1 
-                    endif 
+                else 
+                    Trace("Sex_Start",param+" is duplicate actor "+participant.GetDisplayName())
                 endif 
             endif 
-            Actor victim = SkyrimNetAPI.GetJsonActor(paramsJson, "victim_"+i, None) 
-            if victim != None 
-                victs[num_victs] = victim 
-                num_victs += 1 
-            endif 
-        endif 
+            k += 1
+        endwhile
         i += 1 
     endwhile 
     int style = GetStyle(main, paramsJson)

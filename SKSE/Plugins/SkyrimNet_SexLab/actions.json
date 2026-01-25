@@ -17,6 +17,6 @@
         "priority": 10,
         "tags": "BodyAnimation",
         "description": "{{render_template(\"helpers/sexlab_action_rape_start\")}}",
-        "parameters": "{\"participant_0\":\"Primary participant (empty for mastrubation)\", \"participant_1\":\"Optional Second participant\", \"participant_2\":\"Optional third participant\", \"participant_3\":\"Optional Fourth participant\", \"victim_0\":\"Optional Victim participant\", \"victim_1\":\"Optional second Victim participant\", \"victim_2\":\"Optional Fourth Victim participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+        "parameters": "{\"assailant_0\":\"Non-Optional Primary assailant\", \"assailant_1\":\"Optional second assailant\", \"assailant_2\":\"Optional third assailant\", \"victim_0\":\"non-optional primary Victim\", \"victim_1\":\"Optional second Victim\", \"victim_2\":\"Optional third Victim\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
     }
 ]

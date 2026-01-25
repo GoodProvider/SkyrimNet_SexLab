@@ -8,4 +8,4 @@
     {% endif -%}
 {% endfor -%}
 {% set participates_joined = join(participates, ", ") -%}
-{{speaker.name}} starts, or continues, a {type} sexual activity. Optional additional participates: {{participates_joined}}.
+{{speaker.name}} starts, or continues, a {type} consensual sexual activity. Optional additional participates: {{participates_joined}}.
