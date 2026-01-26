@@ -35,7 +35,7 @@ Descriptions you create will be stored in `SkyrimNet_SexLab/animations/\_local\_
 - descriptions will be used in the order the directories are read, with \_local\_ loaded last.
 
 - We now support inja format for stage descriptions:
-  - There will be an array of actors.  If there is a victum, it is normally the first character.
+  - There will be an array of actors.  If there is a victim, it is normally the first character.
   - If you aren't sure.  Type just the actors needs so you can see which is which.
   - {{sl.actors.0}} is the first actor 
   - {{sl.actors.1}} is the second, etc 

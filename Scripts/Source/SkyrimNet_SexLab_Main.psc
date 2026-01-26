@@ -209,7 +209,7 @@ Function Setup()
     SkyrimNet_SexLab_MCM mcm = (self as Quest) as SkyrimNet_SexLab_MCM
     mcm.Setup() 
 
-    ; Directy Narration 
+    ; Direct Narration 
     if direct_narration_cool_off == 0 
         direct_narration_cool_off = 20 
         direct_narration_max_distance = 15
@@ -573,7 +573,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
     SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 
     ; Send a DN if its a start and includes a player
-    ; if not player send DN if allowedb by cool off 
+    ; if not player send DN if allowed by cool off 
     String event_type = "sexlab_event"
     if !thread_started[ThreadID]
         thread_started[ThreadID] = True 
@@ -588,9 +588,9 @@ Event StageStart(int ThreadID, bool HasPlayer)
     ;AllowedDeniedOnlyIncrease(thread.positions, thread, "stage") 
 
     Actor sender = actors[0] 
-    Actor reciever = None 
+    Actor receiver = None 
     if actors.length > 1 
-        reciever = actors[1] 
+        receiver = actors[1] 
     endif 
 
     ; If this thread is being tracked print the thread's status 
@@ -609,7 +609,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
         Debug.Notification("stage "+thread.stage+" of "+ thread.animation.StageCount()+" "+msg)
     endif 
 
-    ; DOM Slaves have thier own orasm system 
+    ; DOM Slaves have their own orgasm system 
     ; if dom_main != None 
         ; int k = actors.length - 1
         ; while 0 <= k 
@@ -1090,10 +1090,10 @@ String Function ActorsToJson(Actor[] actors) global
 EndFunction 
 
 ;----------------------------------------------------
-; Yes No dialogue chooice for the player 
+; Yes No dialogue choice for the player 
 ;----------------------------------------------------
 
-; Allows the user to choose to accept the sex act choosen by the LLM 
+; Allows the user to choose to accept the sex act chosen by the LLM 
 ; The value will between 
 ; 1 Yes with the editor 
 ; 2 Yes, but no tag editor 
@@ -1271,7 +1271,7 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
     count = JArray.count(groups)
 
     JValue.retain(groups)
-    uilistmenu listMenu = uiextensions.GetMenu("UIListMenu") AS uilistmenu
+    uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     while True
         bool finished = false
         String tags_str= ""
@@ -1313,7 +1313,7 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
             listMenu.AddEntryItem("<cancel>")
 
             listMenu.OpenMenu()
-            String button =  listmenu.GetResultString()
+            String button =  listMenu.GetResultString()
             if JMap.hasKey(group_tags, button)
                 button = GroupDialog(group_tags, button)
             endif 
@@ -1345,7 +1345,7 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
     return empty
 EndFunction
 
-Function ListAddTags(uilistmenu listMenu, int group_tags, String group) global
+Function ListAddTags(uilistMenu listMenu, int group_tags, String group) global
     int tags = JMap.getObj(group_tags, group, 0)
     if tags != 0 
         int i = 0
@@ -1361,12 +1361,12 @@ Function ListAddTags(uilistmenu listMenu, int group_tags, String group) global
 EndFunction
 
 String Function GroupDialog(int group_tags, String group)  global
-    uilistmenu listMenu = uiextensions.GetMenu("UIListMenu") AS uilistmenu
+    uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     listMenu.ResetMenu()
     listMenu.AddEntryItem("<back")
     ListAddTags(listMenu, group_tags, group) 
     listMenu.OpenMenu()
-    String button =  listmenu.GetResultString()
+    String button =  listMenu.GetResultString()
     if button == "<back"
         button = "-continue-"
     endif 

@@ -8,4 +8,4 @@
     {% endif -%}
 {% endfor -%}
 {% set participates_joined = join(participates, ", " ) -%}
-Start, or continue, a sexual assault. Available victims: {{participates_joined}}. Avialable assailants: {{participates_joined}}.
+Start, or continue, a sexual assault. Available victims: {{participates_joined}}. Available assailants: {{participates_joined}}.

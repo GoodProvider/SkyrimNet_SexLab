@@ -12,8 +12,8 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 ; ------------------------------------------------------------
-; Combines Actors or Strings into natual lanuage list 
-; will make a natrual sentence with comma and 'and' 
+; Combines Actors or Strings into natural language list 
+; will make a natural sentence with comma and 'and' 
 ; filter is an int[] array 0 - false and 1 - true
 ; ------------------------------------------------------------
 String Function JoinActors(ACtor[] actors, String noun = "") global 

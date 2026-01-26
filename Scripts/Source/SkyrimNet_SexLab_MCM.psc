@@ -126,12 +126,12 @@ Function PageOptions()
     AddHeaderOption("")
     AddToggleOptionST("HotKeyToggle","Enable the Start Sex / Edit Stage hot key",hot_key_toggle)
     AddKeyMapOptionST("SexEditKeySet", "Start Sex / Edit Stage Description", sex_edit_key)
-    AddToggleOptionST("SexEdithelpToggle","Hide Edit Stage Discription Help",stages.hide_help)
+    AddToggleOptionST("SexEdithelpToggle","Hide Edit Stage Description Help",stages.hide_help)
     AddTextOption("","")
     
     AddHeaderOption("Direction Narration Blocking")
     AddHeaderOption("")
-    AddSliderOptionST("NarrationCoolOff", "Narration coolown", main.direct_narration_cool_off)
+    AddSliderOptionST("NarrationCoolOff", "Narration cooldown", main.direct_narration_cool_off)
     AddSliderOptionST("NarrationMaxDistance", "Narration max distance", main.direct_narration_max_distance)
 
     if dom_main != None 
@@ -336,7 +336,7 @@ State NarrationCoolOff
         ForcePageReset()
     EndEvent
     Event OnHighlightST()
-        SetInfoText("Mininum number of seconds since laster audio ended before next optional Direct Narration.\n")
+        SetInfoText("Minimum number of seconds since last audio ended before next optional Direct Narration.\n")
     EndEvent
 EndState
 State NarrationMaxDistance
@@ -600,7 +600,7 @@ Function MutliTarget_Menu_Selection(Actor player)
     int next = 0 
     bool building_list = true 
     int index = 1
-    uilistmenu listMenu = uiextensions.GetMenu("UIListMenu") AS uilistmenu
+    uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     ; I couldn't compare directly to the strings button in some case
     ; so fell back on next and index :(
     bool finished = false
@@ -621,7 +621,7 @@ Function MutliTarget_Menu_Selection(Actor player)
             start = "select actors to: "
         endif 
         listMenu.AddEntryItem(start)
-        listmenu.AddEntryItem(type)
+        listMenu.AddEntryItem(type)
 
         i = 0
         while i < num_actors
@@ -752,7 +752,7 @@ Function StartSex(Actor[] actors, bool is_rape)
 EndFunction 
 
 String Function SexRapeSelection()
-    uilistmenu listMenu = uiextensions.GetMenu("UIListMenu") AS uilistmenu
+    uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     listMenu.ResetMenu()
     listMenu.AddEntryItem("sex")
     listMenu.AddEntryItem("rape")

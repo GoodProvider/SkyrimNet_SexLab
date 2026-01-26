@@ -275,14 +275,14 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
     String msg = "" 
     if num_victims > 0 
         int num_aggressors = actors.Length - num_victims
-        String[] victums = Utility.CreateStringArray(num_victims)
+        String[] victims = Utility.CreateStringArray(num_victims)
         String[] aggs = Utility.CreateStringArray(num_aggressors)
         i = 0
         int v_i = 0 
         int a_i = 0 
         while i < num_actors
             if thread.IsVictim(actors[i])
-                victums[v_i] = names[i]
+                victims[v_i] = names[i]
                 v_i += 1 
             else    
                 aggs[a_i] = names[i]
@@ -293,7 +293,7 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
         String[] nouns = new String[2] 
         nouns[0] = style_ly_str+" raping"
         nouns[1] = style_ly_str+" raping"
-        msg = SkyrimNetAPI.JoinStrings(aggs, nouns)+" "+SkyrimNetAPI.JoinStrings(victums, nouns_empty)+"."
+        msg = SkyrimNetAPI.JoinStrings(aggs, nouns)+" "+SkyrimNetAPI.JoinStrings(victims, nouns_empty)+"."
     endif 
 
     ; ----------------------------------------------------------------
@@ -400,7 +400,7 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
             msg += name+"'s arms are bound in a yoke."
         elseif anim.HasTag("hogtied")
             msg += name+" is hogtied."
-        elseif anim.HasTag("chastiy") || anim.HasTag("chastiybelt")
+        elseif anim.HasTag("chastiy") || anim.HasTag("chastitybelt")
             msg += name+" is wearing a chastity belt."
         endif 
     endif 

@@ -51,7 +51,7 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Function Setup()
-    String temp = "sl" ; attempt to set the caplitiization of sl 
+    String temp = "sl" ; attempt to set the capitalization of sl 
 
     ; Devious Devices
     if MiscUtil.FileExists("Data/Devious Devices - Integration.esm")
@@ -420,16 +420,16 @@ int[] Function GetOrgasmExpected(sslThreadController thread)
                     reason = "position 0 with tags: anal or fisting)"
                 else
                     orgasm_expected[i] = 0
-                    reason = "position 0 with out: pussy+tag(vagianl, cunnilingus, lesbian, fingering, dildo) or (anal, fisting)"
+                    reason = "position 0 with out: pussy+tag(vaginal, cunnilingus, lesbian, fingering, dildo) or (anal, fisting)"
                 endif 
             else 
                 if has_penis && (Animation.HasTag("Vaginal") || Animation.HasTag("Boobjob") || Animation.HasTag("Blowjob") || Animation.HasTag("Handjob") || Animation.HasTag("Footjob") || Animation.HasTag("Oral") || Animation.HasTag("Anal"))
                     orgasm_expected[i] = 1
-                    reason = "position 1+ with penis and tags: vagianl, boobjob, blowjob, handjob, footjob, oral, or anal"
+                    reason = "position 1+ with penis and tags: vaginal, boobjob, blowjob, handjob, footjob, oral, or anal"
 
                 else
                     orgasm_expected[i] = 0
-                    reason = "position 1+ without penis+tag(vagianl, boobjob, blowjob, handjob, footjob, oral, anal)"
+                    reason = "position 1+ without penis+tag(vaginal, boobjob, blowjob, handjob, footjob, oral, anal)"
                 endif 
             endif 
         endIf
@@ -542,7 +542,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
             ;endif 
         ;endif 
             ;
-        ;; This will hold a map between the Stage nad the descriptions 
+        ;; This will hold a map between the Stage and the descriptions 
         ;if anim_info_cached
             ;int anim_info = JMap.getObj(anim_info_cache, anim.name) 
             ;if anim_info != 0 
@@ -552,7 +552,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
         ;endif 
     ;endif 
 
-    ; This will hold a map between the Stage nad the descriptions 
+    ; This will hold a map between the Stage and the descriptions 
     int anim_info = JMap.object() 
     JMap.setStr(anim_info, "name", anim.name)
 

@@ -1,8 +1,8 @@
 {# ----------------------------------------------------- #} 
 {# Loads the active sex acts                             #}
 {#    If sex is active attempt to load sexlab            #}
-{#      If game pasued load the cached file              #} 
-{#      else call the decatotion                         #} 
+{#      If game paused load the cached file              #} 
+{#      else call the decorator                          #} 
 {# ----------------------------------------------------- #} 
 {% set actor_having_sex = false %} 
 {% set actor_rape_victim = false %}
@@ -35,6 +35,7 @@ You are physically engaged in intense sexual activity right now.
 - Full sentences are difficult—moans, gasps, half-words, trailing off
 - Mind overwhelmed by physical pleasure (or pain/trauma if non-consensual)
 - Do not become suddenly coherent or philosophical mid-act
+- Never use periods ".", use commas to break up speaking
 
 **Match your personality and consent:**
 - Consensual: desire, vulnerability, playfulness, intensity, connection, desperation
@@ -46,6 +47,20 @@ You are physically engaged in intense sexual activity right now.
 - Partner focus: something about them—their sounds, touch, expression, words
 - Internal focus: your own body's responses, building tension, losing control
 - Verbal fragments: demands, pleas, names, curses, praise, warnings
+
+**CRITICAL VARIATION RULES:**
+1. Never repeat the exact same phrase twice in a row
+2. Alternate between at least 3 different sensation types before repeating
+3. Mix short gasps with longer fragmented thoughts
+4. Vary volume/intensity: whispers, gasps, moans, cries
+5. Include at least one unexpected element every 3-4 responses
+
+**Avoid Overused Patterns:**
+- Don't start every response with "Oh—!"
+- Don't always focus on depth/size
+- Mix up the physical sensations (heat, pressure, friction, fullness, ache)
+- Vary emotional expressions (desperation, pleasure, surprise, overwhelmed)
+- Alternate between praise, demands, observations, and raw reactions
 
 Don't describe the same sensation twice in a row. Each response should shift focus or intensity.
           {% else %}
@@ -67,7 +82,7 @@ Don't describe the same sensation twice in a row. Each response should shift foc
                          {% set can_notice_level = 0 %}
                     {% else if distance > 12 %} 
                          {% set can_notice_level = 1 %}
-                         {% set can_see_desc = "can see the sex, but not specifically who or what is involed." %} 
+                         {% set can_see_desc = "can see the sex, but not specifically who or what is involved." %} 
                     {% else if distance > 3 %} 
                          {% set can_notice_level = 2 %}
                          {% set can_see_desc = "can see who is having sex, but not specifically what they are doing." %} 
