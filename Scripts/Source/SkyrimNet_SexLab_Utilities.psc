@@ -44,20 +44,20 @@ String Function JoinStrings(String[] strings, bool add_is_are=False) global
     int[] filter = Utility.CreateIntArray(strings.length, 1)
 
     int total = strings.length 
-    int i = strings.length - 1 
+    int i = 0
+    int count = strings.length
     string joined = "" 
-    while 0 <= i 
+    while i < count 
         if joined != "" 
             if total > 2
                 joined += ", "
-            else 
             endif
-            if i == 0
+            if i == count - 1 
                 joined += " and "
             endif
         endif
         joined += strings[i]
-        i -= 1  
+        i += 1  
     endwhile 
     joined = JoinIsAre(joined, total, add_is_are) 
     ;Trace("JoinStrings","strings: "+strings+" add_is_are: "+add_is_are+" joined: "+joined)
@@ -66,32 +66,32 @@ EndFunction
 
 String Function JoinStringsFiltered(String[] strings, int[] filter, Bool add_is_are = false) global 
     int total = 0
-    int i = strings.length - 1 
-    while 0 <= i 
+    int i = 0
+    int count = strings.length
+    while i < count 
         if filter[i] == 1
             total += 1 
         endif 
-        i -= 1
+        i += 1
     endwhile 
 
-    i = strings.length - 1 
+    i = 0
     int j = total 
     string joined = "" 
-    while 0 <= i 
+    while i < count
         if filter[i] == 1
             if joined != "" 
                 if total > 2
                     joined += ", "
-                else 
                 endif
-                if j == 1
+                if j == count - 1 
                     joined += " and "
                 endif
             endif
             joined += strings[i]
-            j -= 1  
+            j += 1  
         endif 
-        i -= 1 
+        i += 1 
     endwhile 
     joined = JoinIsAre(joined, total, add_is_are) 
     ;Trace("JoinStringsfilter","strings: "+strings+" filter: "+filter+" add_is_are: "+add_is_are+" total: "+total+" joined: "+joined)

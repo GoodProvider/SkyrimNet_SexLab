@@ -500,9 +500,9 @@ Function Target_Menu_Selection(Actor target, Actor player)
     elseif button == sex
         SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"participant_0\":\""+player.GetDisplayName()+"\"}")
     elseif button == rapes
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"rape\":true, \"target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":true, \"target_is_player\":true}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"assailant_0\":\""+target.GetDisplayName()+"\",\"victim_0\":\""+player.GetDisplayName()+"\"}")
     elseif button == raped_by
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"rape\":true, \"Target\":\""+player.GetDisplayName()+"\", \"target_is_victim\":false, \"target_is_player\":true}")
+        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"assailant_0\":\""+player.GetDisplayName()+"\",\"victim_0\":\""+target.GetDisplayName()+"\"}")
     elseif button == clothing
 
         ;--------------------------------------------------

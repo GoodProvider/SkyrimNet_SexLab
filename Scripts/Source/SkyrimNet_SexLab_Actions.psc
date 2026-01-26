@@ -304,10 +304,14 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
                         endif 
                     elseif i == 0 
                         name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
-                        Trace("Sex_Start",param+" is None. name: "+name)
                         if name == player.GetDisplayName() 
                             parts[num_parts] = player
                             num_parts += 1 
+                            Trace("Sex_Start",param+" is None. name: "+name+ " matched player")
+                        elseif name == akActor.GetDisplayName() 
+                            parts[num_parts] = akActor
+                            num_parts += 1 
+                            Trace("Sex_Start",param+" is None. name: "+name+ " matched akActor")
                         endif 
                     endif 
                 else 
@@ -318,6 +322,14 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
         endwhile
         i += 1 
     endwhile 
+    if num_parts == 0 
+        parts[num_parts] = akActor
+        num_parts += 1
+    elseif num_parts == 1 && parts[0] != akActor
+        parts[1] = parts[0]
+        parts[0] = akActor
+        num_parts += 1  
+    endif 
     int style = GetStyle(main, paramsJson)
 
     ;-------------------------------
@@ -332,7 +344,7 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
         i += 1 
     endwhile 
     if num_parts == 1
-        int gender = main.sexlab.GetGender(actors[i]) 
+        int gender = main.sexlab.GetGender(actors[0]) 
         bool has_penis = (gender != 1 && gender != 3)
         tag = "F" 
         if has_penis 
@@ -355,7 +367,6 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
     if !main.LockActors(actors) 
         return False
     endif 
-    Trace("Sex_Start","actors.length: "+actors.length+" victims: "+victims.length+" tag:"+tag+" has_player: "+has_player) 
     sslBaseAnimation[] anims =  GetAnims(main, actors, victims, player, tag, has_player) 
     if anims.length > 0 && anims[0] == None
         main.UnlockActors(actors) 
@@ -368,20 +379,21 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
 
     ;-------------------------------
 
-    bool failure = false 
     if thread == None
         Trace("Sex_Start","Failed to create thread")
-        failure = true 
+        main.UnlockActors(actors)
+        return False 
     endif
     
-    i = actors.length - 1 
-    while 0 <= i && !failure 
-        if !failure && thread.addActor(actors[i]) < 0   
+    i = 0 
+    int count = actors.length 
+    while i < count 
+        if thread.addActor(actors[i]) < 0   
             Trace("Sex_Start","Starting sex couldn't add " + actors[i].GetDisplayName())
             main.UnLockActors(actors) 
             return False
         endif  
-        i -= 1 
+        i += 1 
     endwhile 
 
     i = num_victs - 1 
@@ -390,40 +402,42 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
         i -= 1 
     endwhile  
 
-
     main.SetThreadStyle(thread.tid, style) 
+    Trace("Sex_Start",\
+         " actors: \""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+"\""\
+        +" victims: \""+SkyrimNet_SexLab_Utilities.JoinActors(victims)+"\""\
+        +" tag:"+tag\
+        +" style:"+style\
+        +" has_player: "+has_player\
+        +" anims.length: "+anims.length) 
     thread.StartThread() 
     return True 
 EndFunction
 
-sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, Actor[] actors, Actor[] victims, Actor player, String type, Bool has_player) global
+sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, Actor[] actors, Actor[] victims, Actor player, String tag, Bool has_player) global
     String names = SkyrimNet_SexLab_Utilities.JoinActors(actors) 
     String victim_names = SkyrimNet_SexLab_Utilities.JoinActors(victims) 
-    Trace("GetAnims", "actors: "+names+" victims: "+victim_names+" type:"+type+" has_player: "+has_player)
+    Trace("GetAnims", "actors: "+names+" victims: "+victim_names+" tag:"+tag+" has_player: "+has_player)
     sslBaseAnimation[] anims = new sslBaseAnimation[1] 
     anims[0] = None 
-    int button = main.BUTTON_YES_RANDOM
+    int button = main.BUTTON_YES
     if has_player
-        button = main.YesNoSexDialog(actors, victims, player, type)
+        button = main.YesNoSexDialog(actors, victims, player, tag)
         if button == main.BUTTON_NO || button == main.BUTTON_NO_SILENT
             Trace("GetAnims_CheckLock","User declined")
             return anims 
         endif 
-    elseif main.sex_edit_tags_nonplayer
-        button = main.BUTTON_YES
     endif  
 
     if button != main.BUTTON_YES_RANDOM
-        if type == "kissing"
-            String tagSupress = "oral,vaginal,anal,spanking,masturbate,handjob,footjob,masturbation,breastfeeding,fingering"
-            anims =  main.sexLab.GetAnimationsByTags(actors.length, type, tagSupress, true)
-        else
-            anims = main.GetAnimsDialog(main.sexlab, actors, type)
+        if (main.sex_edit_tags_player && has_player) || (main.sex_edit_tags_nonplayer && !has_player)
+            anims = main.GetAnimsDialog(main.sexlab, actors, tag)
         endif 
-    elseif type != ""
+        Trace("GetAnims", "has_player: "+has_player+" player edit: "+main.sex_edit_tags_player\
+            +" nonplayer edit: "+main.sex_edit_tags_nonplayer+" anims.length: "+anims.length)
+    elseif tag != ""
         String tagSupress = ""
-        String tags = type 
-        anims =  main.sexLab.GetAnimationsByTags(actors.length, tags, tagSupress, true)
+        anims =  main.sexLab.GetAnimationsByTags(actors.length, tag, tagSupress, true)
     endif 
 
     return anims 

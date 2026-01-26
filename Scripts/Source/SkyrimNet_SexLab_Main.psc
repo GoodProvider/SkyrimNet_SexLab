@@ -102,6 +102,7 @@ int skynet_tag_sex_lock = 0
 String Property storage_items_key = "skyrimnet_sexlab_storage_items" Auto
 String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" Auto
 String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated" Auto
+String Property storage_should_naked = "skyrimnet_sexlab_should_be_naked" Auto
 
 SkyrimNet_SexLab_Stages Property stages Auto
 SexLabFramework Property sexlab Auto 
@@ -278,27 +279,27 @@ Function StoreStrippedItems(Actor akActor, Form[] forms)
         i += 1
     endwhile
 
-    i = nude_refs.Length - 1
-    while 0 <= i 
-        if nude_refs[i].GetActorReference() == None 
-            nude_refs[i].ForceRefTo(akActor) 
-            i = -1
-        endif 
-        i -= 1 
-    endwhile 
+    ;i = nude_refs.Length - 1
+    ;while 0 <= i 
+    ;    if nude_refs[i].GetActorReference() == None 
+    ;        nude_refs[i].ForceRefTo(akActor) 
+    ;        i = -1
+    ;    endif 
+    ;    i -= 1 
+    ;endwhile 
 EndFunction 
 
 Form[] Function UnStoreStrippedItems(Actor akActor)
     Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" attempting to undress")
-    int i = nude_refs.length - 1
-    while 0 <= i 
-        if nude_refs[i].GetActorReference() == akActor 
-            nude_refs[i].Clear() 
-            Utility.Wait(1.00)
-            i = -1
-        endif 
-        i -= 1 
-    endwhile 
+;    int i = nude_refs.length - 1
+;    while 0 <= i 
+;        if nude_refs[i].GetActorReference() == akActor 
+;            nude_refs[i].Clear() 
+;            Utility.Wait(1.00)
+;            i = -1
+;        endif 
+;        i -= 1 
+;    endwhile 
     if !HasStrippedItems(akActor)
         return None
     endif
@@ -804,7 +805,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
             Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
         else
             if orgasm_expected[i] == 1
-                narration += name+" orgasmed. "
+                narration += name+" orgasmes. "
                 if has_penis
                     someone_ejaculated = True
                 endif
@@ -946,7 +947,7 @@ String Function AddCum(sslThreadController thread, int position, Actor akActor, 
     endif 
 
     if places != ""
-        return name+"'s "+places+" is dripping with warm sticky cum. "
+        return name+"'s "+places+" are dripping with warm sticky cum. "
     endif 
     return "" 
 EndFunction  
@@ -1099,6 +1100,7 @@ EndFunction
 ; 3 No (silent), refused, but don't tell the LLM 
 ; 4 NO, tell the LLM 
 int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, String type)
+    Trace("YesNoSexDialog","actors.length: "+actors.length+" victims.length: "+victims.length+" player:"+player.GetDisplayName()+" type:"+type)
 
     String[] buttons = new String[4]
     buttons[BUTTON_YES] = "Yes "
@@ -1108,55 +1110,66 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
 
     String player_name = player.GetDisplayName()
 
-    String names = "" 
-    int i = 0
-    int count = actors.length 
-    while i < count 
-        if actors[i] != player
-            if count > 2
-                if names != ""
-                    names += ", "
-                endif 
-            endif 
-            names += actors[i].GetDisplayName() 
-        endif 
-        i += 1 
-    endwhile 
 
-    String question = "Would you like to have sex with "+names+"?"
+    String question = ""
+    String rejection = ""
+
+    if victims.length == 0
+        int[] actors_filter = Utility.CreateIntArray(actors.length, 1)
+        int i = actors.length - 1 
+        while 0 <= i
+            if actors[i] == player
+                actors_filter[i] = 0
+            endif 
+            i -= 1
+        endwhile
+        Trace("YesNoSexDialog","names: "+SkyrimNet_SexLab_Utilities.JoinActors(actors)+" actors_filter: "+actors_filter)
+        String names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, actors_filter)
+        question = "Would you like to have sex with "+names+"?"
+        rejection = player_name+" refuses to have sex with "+names+"."
+    else
+        int i = victims.length - 1 
+        Bool player_is_victim = False
+        while 0 <= i && !player_is_victim
+            if victims[i] == player
+                player_is_victim = True 
+            endif 
+            i -= 1
+        endwhile 
+
+        if player_is_victim
+            int[] assailants_filter = Utility.CreateIntArray(actors.length, 1)
+            i = actors.length - 1 
+            while 0 <= i
+                int j = victims.length - 1 
+                bool victim_found = False
+                while 0 <= j && !victim_found
+                    if actors[i] == victims[j]
+                        assailants_filter[i] = 0
+                        victim_found = True
+                    endif 
+                    j -= 1
+                endwhile
+                i -= 1 
+            endwhile 
+
+            String names_assailant = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, assailants_filter)
+            question = "Would you like to be raped by "+names_assailant+"?"
+            rejection = player_name+" refuses to be raped "+names_assailant+"."
+        else 
+            String names_victims = SkyrimNet_SexLab_Utilities.JoinActors(victims)
+            question = "Would you like to rape "+names_victims+"?"
+            rejection = player_name+" refuses to rape "+names_victims+"."
+        endif 
+    endif 
     Trace("YesNoSexDialog","question: "+question)
-;    if rape
-;        if domActor == player
-;            question = "Would like to rape "+npc_name+"?"
-;        else
-;            question = "Would like to be raped by "+npc_name+"?"
-;        endif 
-;    elseif type == "kissing"
-;        question = "Would like to kissing "+npc_name+"?"
-;    else
-;        question = "Would like to have sex "+npc_name+"?"
-;    endif 
     
     int button = SkyMessage.ShowArray(question, buttons, getIndex = true) as int  
     if button == BUTTON_NO || button == BUTTON_NO_SILENT
         if button == BUTTON_NO 
-            String msg = player_name+" refuses have sex with "+names
-            DirectNarration_Optional("sex refuses", msg, player, actors[0])
+            DirectNarration_Optional("sex refuses", rejection, player, actors[0])
         endif 
     endif 
-;                DirectNarration_Optional("rape refuses", msg, subActor, domActor)
-;            if !rape
-;                String msg = "*"+player_name+" refuses "+npc_name+"'s sex request*"
-;                DirectNarration_Optional("sex refuses", msg, domActor, subActor)
-;            elseif domActor == player 
-;                String msg = "*"+player_name+" refuses to rape "+npc_name+".*"
-;                DirectNarration_Optional("rape refuses", msg, domActor, subActor)
-;            else
-;                String msg = "*"+player_name+" refuses "+npc_name+"'s rape attempt.*"
-;                DirectNarration_Optional("rape refuses", msg, subActor, domActor)
-;            endif
-        ;endif
-    ;endif 
     return button 
 EndFunction
 
