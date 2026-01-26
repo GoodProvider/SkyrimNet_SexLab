@@ -214,7 +214,7 @@ EndState
 State RapeAllowedToggle
     Event OnSelectST()
         main.rape_allowed = !main.rape_allowed
-        Skyrimnet_sexlab_Actions.RapeRegistration(main.rape_allowed)
+        Skyrimnet_sexlab_Actions.RegisterActions(True)
         SetToggleOptionValueST(main.rape_allowed)
     EndEvent
     Event OnHighlightST()

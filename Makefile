@@ -1,4 +1,4 @@
-VERSION=0.25.1
+VERSION=0.26.0
 NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip

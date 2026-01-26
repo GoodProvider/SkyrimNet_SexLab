@@ -26,7 +26,7 @@
         "execute": "Dress_Execute",
         "priority": 1,
         "tags": "",
-        "description": "Start to dress in clothing.",
+        "description": "Put back on previously removed armor and clothing. Use when getting dressed, putting clothes back on, or re-equipping gear.",
         "parameters": "{}"
     },
     {
@@ -36,8 +36,7 @@
         "execute": "Undress_Execute",
         "priority": 5,
         "tags": "",
-        "description": "Start to undress clothing.",
+        "description": "Remove all equipped armor and clothing. Use when undressing completely, stripping down, or taking off all your gear.",
         "parameters": "{}"
     }
-]
 ]

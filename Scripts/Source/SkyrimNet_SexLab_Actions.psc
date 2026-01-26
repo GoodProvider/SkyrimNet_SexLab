@@ -11,7 +11,7 @@ EndFunction
 ;----------------------------------------------------------------------------------------------------
 ; Actions
 ;----------------------------------------------------------------------------------------------------
-Function RegisterActions() global
+Function RegisterActions(Bool rape_only=False) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     String actions_fname = "Data/SKSE/Plugins/SkyrimNet_SexLab/actions.json"
     Trace("RegisterActions","loading "+actions_fname)
@@ -25,7 +25,9 @@ Function RegisterActions() global
         Trace("RigsterActions", "i: "+i+" a: "+a)
          if a > 0
             String name = JMap.getStr(a, "name")
-            if name != "SexLab_Rape_Start" || main.rape_allowed
+            if rape_only && name == "SexLab_Rape_Start" && !main.rape_allowed
+                SkyrimNetApi.UnregisterAction(name)
+            elseif (!rape_only && name != "SexLab_Rape_Start") || main.rape_allowed
                 Trace("RegisterActions",\
                     i+" name: "+JMap.getStr(a, "name")\
                     +" description: "+JMap.getStr(a, "description")\
@@ -51,11 +53,7 @@ Function RegisterActions() global
     endwhile 
 
     ; ------------------------
-    RapeRegistration(main.rape_allowed)
-
-    ; ------------------------
     SkyrimNetApi.RegisterTag("BodyAnimation", "SkyrimNet_SexLab_Actions","BodyAnimation_IsEligible")
-
 EndFunction
 
 String Function GetTypesStrings() global 
