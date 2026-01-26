@@ -51,69 +51,11 @@ Function RegisterActions() global
     endwhile 
 
     ; ------------------------
-    ; This also has a undress/dress action
-    if False 
-        SkyrimNetApi.RegisterAction("SexLab_SexStart", \
-                " Starts having consensual {style} {type} sex with {target}.", \
-                "SkyrimNet_SexLab_Actions", "Sex_Start_IsEligible",  \
-                "SkyrimNet_SexLab_Actions", "SexStart_Execute",  \
-                "", "PAPYRUS", 1, \
-                "{\"target\": \"Actor\", \"style\":\"forceful|normal|gentle\", \"type\":\""+type+"\", \"rape\":false, \"target_victim\":false}",\
-                "", "BodyAnimation")
-        SkyrimNetApi.RegisterAction("SexLab_MasturbationStart", \
-                "Start {style} masturbating.",\
-                "SkyrimNet_SexLab_Actions", "MastrubationStart_IsEligible",  \
-                "SkyrimNet_SexLab_Actions", "MastrubationStart_Execute",  \
-                "", "PAPYRUS", 1, \
-                "{\"type\":\"masturbation\",  \"style\":\"forceful|normal|gentle\", \"rape\":\"{true|false}\"}",\
-                "", "BodyAnimation")
-    endif 
-
-    ; ------------------------
-    SkyrimNetApi.RegisterAction("SexLab_Dress", \
-            "Start to dress in clothing.",\
-            "SkyrimNet_SexLab_Actions", "Dress_IsEligible",  \
-            "SkyrimNet_SexLab_Actions", "Dress_Execute",  \
-            "", "PAPYRUS", 1, \
-            "")
-    SkyrimNetApi.RegisterAction("SexLab_Undress", \
-            "Start to undress clothing.",\
-            "SkyrimNet_SexLab_Actions", "Undress_IsEligible",  \
-            "SkyrimNet_SexLab_Actions", "Undress_Execute",  \
-            "", "PAPYRUS", 5, \
-            "")
-
-    ; ------------------------
     RapeRegistration(main.rape_allowed)
 
     ; ------------------------
     SkyrimNetApi.RegisterTag("BodyAnimation", "SkyrimNet_SexLab_Actions","BodyAnimation_IsEligible")
 
-EndFunction
-
-
-Function RapeRegistration(bool rape_allowed) global
-    if rape_allowed && False 
-        Trace("RapeRegistration","Resgistering SexLab_RapeStart and SexLab_RapedByStart actions")
-        
-        String type = GetTypesStrings()
-        SkyrimNetApi.RegisterAction("SexLab_RapeStart", \
-                "Start to {style} {type} sexually assualt {target}.",\
-                "SkyrimNet_SexLab_Actions", "Sex_Start_IsEligible",  \
-                "SkyrimNet_SexLab_Actions", "Sex_Start_Execute",  \
-                "", "PAPYRUS", 1, \
-                "{\"target\": \"Actor\",  \"style\":\"forceful|normal|gentle\", \"type\":\""+type+"\", \"rape\":true, \"target_victim\":true}","","BodyAnimation")
-        SkyrimNetApi.RegisterAction("SexLab_RapedByStart", \
-                "Start being {style} {type} sexually assulted by {target}.",\
-                "SkyrimNet_SexLab_Actions", "Sex_Start_IsEligible",  \
-                "SkyrimNet_SexLab_Actions", "Sex_Start_Execute",  \
-                "", "PAPYRUS", 1, \
-                "{\"target\": \"Actor\",  \"style\":\"forceful|normal|gentle\", \"type\":\""+type+"\", \"rape\":true, \"target_victim\":false}","","BodyAnimation")
-    else 
-        Trace("RapeRegistration","Unresgistering SexLab_RapeStart and SexLab_RapedByStart actions")
-        SkyrimNetApi.UnregisterAction("SexLab_RapeStart")
-        SkyrimNetApi.UnregisterAction("SexLab_RapedByStart")
-    endif 
 EndFunction
 
 String Function GetTypesStrings() global 
