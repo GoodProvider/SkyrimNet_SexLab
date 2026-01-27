@@ -291,15 +291,15 @@ EndFunction
 
 Form[] Function UnStoreStrippedItems(Actor akActor)
     Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" attempting to undress")
-;    int i = nude_refs.length - 1
-;    while 0 <= i 
-;        if nude_refs[i].GetActorReference() == akActor 
-;            nude_refs[i].Clear() 
-;            Utility.Wait(1.00)
-;            i = -1
-;        endif 
-;        i -= 1 
-;    endwhile 
+    int i = nude_refs.length - 1
+    while 0 <= i 
+        if nude_refs[i].GetActorReference() == akActor 
+            nude_refs[i].Clear() 
+            Utility.Wait(1.00)
+            i = -1
+        endif 
+        i -= 1 
+    endwhile 
     if !HasStrippedItems(akActor)
         return None
     endif
