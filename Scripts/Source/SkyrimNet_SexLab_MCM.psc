@@ -40,7 +40,6 @@ String page_options = "options"
 String page_actors = "actors debug (can be slow)"
 
 ; OstimNet found 
-bool ostimnet_found = False
 String[] sexlab_ostim_options 
 
 int Property sexlab_ostim_player_menu Auto  ; menu id 
@@ -78,12 +77,6 @@ Function Setup()
         dom_main = None 
     endif 
 
-    if MiscUtil.FileExists("Data/TT_OstimNet.esp")
-        Trace("SetUp","found TT_OstimNet.esp")
-        ostimnet_found = True
-    else 
-        ostimnet_found = False  
-    endif
 EndFunction 
 
 
@@ -145,7 +138,7 @@ Function PageOptions()
         RegisterForKey(sex_edit_key)
     endif 
 
-    if ostimnet_found
+    if main.ostimnet_found
         Trace("PageOptions"," index: "+main.sexlab_ostim_player_index+" label: "+sexlab_ostim_options[main.sexlab_ostim_player_index])
         AddHeaderOption("OstimNet Integration")
         AddHeaderOption("")
@@ -404,8 +397,6 @@ Event OnKeyDown(int key_code)
     if UI.IsTextInputEnabled()
         return 
     endif 
-    Trace("OnKeyDown","key_code: "+key_code+" ?= "+sex_edit_key)
-
     if sex_edit_key == key_code
         ; Both players need to be in the crosshair to have SkyrimNet load them into the cache
         ; so the parseJsonActor works
@@ -416,17 +407,19 @@ Event OnKeyDown(int key_code)
         endif 
         bool target_not_none = target != None
         Trace("OnKeyDown","target_not_none: "+target_not_none)
-        if target != None && main.sexlab.IsActorActive(target)
-            Trace("OnKeyDown","target: "+target.getDisplayName()+" in active sex")
-            sslThreadController thread = main.GetThread(target)
-            Trace("OnKeyDown", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
-            if thread != None 
-                stages.EditDescriptions(thread) 
-            else 
-                Trace("OnKeyDown","failed to find thread for target:"+target.GetDisplayName())
+        if target != None 
+            if main.sexlab.IsActorActive(target)
+                Trace("OnKeyDown","target: "+target.getDisplayName()+" in active sex")
+                sslThreadController thread = main.GetThread(target)
+                Trace("OnKeyDown", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
+                if thread != None 
+                    stages.EditDescriptions(thread) 
+                else 
+                    Trace("OnKeyDown","failed to find thread for target:"+target.GetDisplayName())
+                endif 
+            elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
+                Target_Menu_Selection(target, player)
             endif 
-        elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
-            Target_Menu_Selection(target, player)
         else 
             MutliTarget_Menu_Selection(player)
         endif 
@@ -546,7 +539,21 @@ Function MutliTarget_Menu_Selection(Actor player)
     Debug.Notification("No target in crosshair, looking for sexable nearby actors")
     Trace("OnKeyDown","No target in crosshair, looking for nearby actors")
     ;float time_last = Utility.GetCurrentRealTime()
-    Actor[] actors_all = MiscUtil.ScanCellActors(player, 1000)
+    int[] ranges = new int[4]
+    ranges[0] = 500 
+    ranges[1] = 1000
+    ranges[2] = 1500
+    ranges[3] = 2000
+
+    Actor[] actors_all = MiscUtil.ScanCellActors(player, ranges[0])
+    int num_actors = actors_all.length 
+    int i = 0 
+    while num_actors < 2 && i < ranges.length 
+        actors_all = MiscUtil.ScanCellActors(player, ranges[i])
+        num_actors = actors.length
+        Trace("OnKeyDown","scan range:"+ranges[i]+" found:"+num_actors)
+        i += 1
+    endwhile 
 
     bool[] valid = PapyrusUtil.BoolArray(actors_all.length)
 
@@ -558,8 +565,8 @@ Function MutliTarget_Menu_Selection(Actor player)
         endif 
     endif 
 
-    int i = actors_all.length - 1 
-    int num_actors = 0 
+    i = actors_all.length - 1 
+    num_actors = 0 
 
     while 0 <= i 
         if SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
@@ -570,7 +577,6 @@ Function MutliTarget_Menu_Selection(Actor player)
         endif 
         i -= 1
     endwhile 
-
 
     if num_actors < 2
         Trace("OnKeyDown","Not enough eligible actors found in the area.")
@@ -683,73 +689,33 @@ Function MutliTarget_Menu_Selection(Actor player)
         group[i] = actors[selected[i]]
         i += 1 
     endwhile 
+    Trace("MultiTarget_Menu_Selection","type:"+type+" next:"+next+" group:"+SkyrimNet_SexLab_Utilities.JoinActors(group))
 
     if type == "cuddle>"
         ;SkyrimNet_Cuddle.StageStart(
     else 
-        StartSex(group, type == "rape>")
+
+        String victim_string = "" 
+        if type == "rape>" 
+            victim_string = ",\"victim_0\":\""+group[0].GetDisplayName()+"\""
+        endif
+        if next == 1
+            SkyrimNet_SexLab_Actions.Sex_Start(group[0], "", "") 
+        elseif next == 2
+            SkyrimNet_SexLab_Actions.Sex_Start(group[0], "", "{\"target\":\""+group[1].GetDisplayName()+"\" "+victim_string+"}") 
+        else 
+            String participants = ""
+            i = 2 
+            while i < next 
+                j = i - 2
+                participants += ", \"participant_"+j+"\":\""+group[i].GetDisplayName()+"\""
+                i += 1
+            endwhile
+
+            SkyrimNet_SexLab_Actions.Sex_Start(group[0], "", "{\"target\":\""+group[1].GetDisplayName()+"\" "+victim_string+participants+"}") 
+        endif 
     endif 
 EndFunction
-
-Function StartSex(Actor[] actors, bool is_rape) 
-    Trace("StartSex","num_actors:"+actors.length+" is_rape:"+is_rape)
-    SexLabFramework SexLab = Game.GetFormFromFile(0xD62, "SexLab.esm") as SexLabFramework
-    if SexLab == None
-        Trace("StartSex","SexLab is None")
-        return
-    endif
-
-    ; Lock the actors 
-    int num_actors = actors.length 
-    int i = 0
-    bool cancel = false
-    while !cancel && i < num_actors 
-        if !main.SetActorLock(actors[i])
-            cancel = true
-        endif 
-        main.SetActorLock(actors[i])
-        i += 1
-    endwhile
-
-    sslThreadModel thread = None 
-    if !cancel
-        thread = sexlab.NewThread()
-        if thread == None
-            Trace("StartSex","Failed to create thread")
-            cancel = true
-        endif
-    endif 
-
-    i = 0
-    while !cancel && i < num_actors 
-        if thread.addActor(actors[i]) < 0   
-            Trace("StartSex","Starting sex couldn't add "+i+" "+actors[i].GetDisplayName())
-            cancel = true 
-        endif  
-        i += 1
-    endwhile
-
-
-    if cancel
-        i = 0 
-        while i <= num_actors 
-            main.ReleaseActorLock(actors[i])
-            i += 1 
-        endwhile 
-        return
-    endif
-
-    if is_rape
-        thread.SetVictim(actors[0])
-    endif 
-
-    sslBaseAnimation[] anims = main.GetAnimsDialog(sexlab, actors, "")
-    if anims.length > 0 && anims[0] != None  
-        thread.SetAnimations(anims)
-    endif 
-
-    thread.StartThread() 
-EndFunction 
 
 String Function SexRapeSelection()
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu

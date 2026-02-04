@@ -83,8 +83,10 @@ String Function JoinStringsFiltered(String[] strings, int[] filter, Bool add_is_
             if joined != "" 
                 if total > 2
                     joined += ", "
-                endif
-                if j == count - 1 
+                    if j == count - 1 
+                        joined += "and "
+                    endif
+                else
                     joined += " and "
                 endif
             endif
@@ -130,18 +132,18 @@ EndFunction
 ; Narration Wrappers 
 ; ------------------------------------------------------------
 
-Function ContinueScene(Actor source=None, Actor target=None, bool optional=False) global 
+Function ContinueActivity(Actor source=None, Actor target=None, bool optional=False) global 
     String msg = ""
     If source != None 
         if target != None 
-            msg = "continue scene that includes "+source.GetDisplayName()+" and "+target.GetDisplayName()
+            msg = "continue activity that includes "+source.GetDisplayName()+" and "+target.GetDisplayName()
         else
-            msg = "continue scene that includes "+source.GetDisplayName()
+            msg = "continue activity that includes "+source.GetDisplayName()
         endif 
     else 
-            msg = "continue scene"
+            msg = "continue activity"
     endif
-    DirectNarration_Optional("continue scene", msg, source, target, optional)
+    DirectNarration_Optional("continue activity", msg, source, target, optional)
 EndFunction 
 
 Function DirectNarration_Optional(String event_type, String msg, Actor source=None, Actor target=None, bool optional=False) global

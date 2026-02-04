@@ -1,5 +1,15 @@
 [
     {
+        "name": "SexLab_Mastrubation_Start",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Sex_Start_IsEligible",
+        "execute": "Sex_Start",
+        "priority": 10,
+        "tags": "BodyAnimation",
+        "description": "{{render_template(\"helpers/sexlab_action_mastrubation_start\")}}",
+        "parameters": "{\"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+    },
+    {
         "name": "SexLab_Sex_Start",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Sex_Start_IsEligible",
@@ -7,17 +17,27 @@
         "priority": 10,
         "tags": "BodyAnimation",
         "description": "{{render_template(\"helpers/sexlab_action_sex_start\")}}",
-        "parameters": "{\"participant_0\":\"Optional first additional participant\", \"participant_1\":\"Optional Second additional participant\", \"participant_2\":\"Optional third additional participant\", \"participant_3\":\"Optional Fourth additional participant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+        "parameters": "{\"Target\":\"Actor\",\"participate_0\":\"Optional first participate\", \"participate_1\":\"Optional Second additional participate\", \"participate_2\":\"Optional third additional participate\", \"participate_3\":\"Optional Fourth additional participate\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
     },
     {
-        "name": "SexLab_Rape_Start",
+        "name": "SexLab_Raped_By_Target_Start",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Sex_Start_IsEligible",
         "execute": "Sex_Start",
         "priority": 10,
         "tags": "BodyAnimation",
-        "description": "{{render_template(\"helpers/sexlab_action_rape_start\")}}",
-        "parameters": "{\"assailant_0\":\"Non-Optional Primary assailant\", \"assailant_1\":\"Optional second assailant\", \"assailant_2\":\"Optional third assailant\", \"victim_0\":\"non-optional primary Victim\", \"victim_1\":\"Optional second Victim\", \"victim_2\":\"Optional third Victim\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|masturbation|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+        "description": "{{render_template(\"helpers/sexlab_action_raped_by_target_start\")}}",
+        "parameters": "{\"Target\":\"Actor\", \"assailant_0\":\"Optional Second Additional Assailant\", \"assailant_1\":\"Optional Third Additional Assailant\", \"assailant_2\":\"Optional Fourth Additional Assailant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\", \"target_is_victim\":\"false\"}"
+    },
+    {
+        "name": "SexLab_Rape_Target_Start",
+        "scriptFileName": "SkyrimNet_SexLab_Actions",
+        "isEligible": "Sex_Start_IsEligible",
+        "execute": "Sex_Start",
+        "priority": 10,
+        "tags": "BodyAnimation",
+        "description": "{{render_template(\"helpers/sexlab_action_rape_target_start\")}}",
+        "parameters": "{\"Target\":\"Actor\", \"assailant_0\":\"Optional Second Additional Assailant\", \"assailant_1\":\"Optional Third Additional Assailant\", \"assailant_2\":\"Optional Fourth Additional Assailant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\", \"target_is_victim\":\"true\"}"
     },
     {
         "name": "SexLab_Dress",
@@ -26,7 +46,7 @@
         "execute": "Dress_Execute",
         "priority": 1,
         "tags": "",
-        "description": "Put back on previously removed armor and clothing. Use when getting dressed, putting clothes back on, or re-equipping gear.",
+        "description": "Dress with previously removed armor and clothing.",
         "parameters": "{}"
     },
     {
@@ -36,7 +56,7 @@
         "execute": "Undress_Execute",
         "priority": 5,
         "tags": "",
-        "description": "Remove all equipped armor and clothing. Use when undressing completely, stripping down, or taking off all your gear.",
+        "description": "Undress equipped armor and clothing. Use when getting undressed or stripping clothing.",
         "parameters": "{}"
     }
 ]

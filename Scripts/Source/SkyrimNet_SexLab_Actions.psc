@@ -78,7 +78,15 @@ EndFunction
 ; -------------------------------------------------
 
 bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string paramsJson) global
-;    float time_last = Utility.GetCurrentRealTime()
+    float start = Utility.GetCurrentRealTime()
+    if akActor == None 
+        Trace("BodyAnimation_IsEligible","akActor is None")
+        return false
+    endif
+
+    String name = akActor.GetDisplayName()
+    float current = Utility.GetCurrentRealTime() - start 
+    Trace("BodyAnimation_IsEligible",current+" "+name+" contextJson: "+contextJson+" paramsJson: "+paramsJson)
     if akActor.IsDead() || akActor.IsInCombat() 
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is dead or in combat")
         return false 
@@ -91,16 +99,21 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
 
     ; SexLab check
     SkyrimNet_SexLab_Main sexlab_main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    
 
     ;time = Utility.GetCurrentRealTime()
     ;delta = time- time_last
     ;time_last = time
     ;Trace("BodyAnimation_tag","after GetFrom :"+delta)
 
-    if sexlab_main.IsActorLocked(akActor) || sexlab_main.sexLab.IsActorActive(akActor) 
-        Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is locked or SexLab animation")
+    if sexlab_main.IsActorLocked(akActor)
+        Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is locked")
         return false 
     endif
+
+    if sexlab_main.sexLab.IsActorActive(akActor) 
+        Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" SexLab animation")
+    endif 
 
     ;time = Utility.GetCurrentRealTime()
     ;delta = time- time_last
@@ -108,7 +121,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
     ;Trace("BodyAnimation_tag","locked :"+delta)
 
     ; Cuddle check 
-    if MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp") 
+    if sexlab_main.cuddle_found
         Faction cuddle_faction = Game.GetFormFromFile(0x801, "SkyrimNet_Cuddle.esp") as Faction
         if cuddle_faction == None 
             Trace("BodyAnimation_Tag","SkyrimNet_Cuddle_Main is None")
@@ -127,7 +140,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
     ;Trace("BodyAnimation_tag","cuddle :"+delta)
 
     ; Ostim check 
-    if MiscUtil.FileExists("Data/OStim.esp") && OActor.IsInOStim(akActor)
+    if sexlab_main.ostimnet_found && OActor.IsInOStim(akActor)
         return false 
     endif 
 
@@ -136,7 +149,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
     ;time_last = time
     ;Trace("BodyAnimation_tag","ostim :"+delta)
 
-    Trace("BodyAnimation_Tag", akActor.GetDisplayName()+" is eligible for sex")
+    Trace("BodyAnimation_Tag", name+" is eligible for sex")
     return True
 EndFunction
 
@@ -173,15 +186,15 @@ Bool Function Sex_Start_Helper_IsEligible(Actor akActor, string contextJson, str
         return false
     endif 
     if main.sexlab_ostim_player_index == 1 && !masturbation
-        Trace("SexStart_IsEligible", akActor.GetDisplayName()+" sexlab_sexstart is disabled")
+        Trace("Sex_Start_IsEligible", akActor.GetDisplayName()+" sexlab_sexstart is disabled")
         return false 
     endif 
     if !main.sexLab.IsValidActor(akActor)
-        Trace("SexStart_IsEligible",akActor.GetDisplayName()+" can't have sex")
+        Trace("Sex_Start_IsEligible",akActor.GetDisplayName()+" can't have sex")
         return False
     endif
 
-    Trace("SexStart_IsEligible", akActor.GetDisplayName()+" is eligible for sex")
+    Trace("Sex_Start_IsEligible", akActor.GetDisplayName()+" is eligible for sex")
     return True
 EndFunction
 
@@ -202,16 +215,31 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
 
     Actor player = Game.GetPlayer() 
     int num_parts = 0 
-    int num_victs = 0 
     Actor[] parts = new Actor[5]
-    ;parts[0] = akActor 
-    ;num_parts += 1 
-    ;if akTarget != None && akTarget != akActor
-    ;    parts[1] = akTarget 
-    ;    num_parts += 1
-    ;endif
+    parts[num_parts] = akActor 
+    num_parts += 1 
+    if akTarget != None && akTarget != akActor
+        parts[num_parts] = akTarget 
+        num_parts += 1
+    endif
+
+    String target_name = "None"
+    if akTarget != None 
+        target_name = akTarget.GetDisplayName() 
+    endif
+    Trace("Sex_Start","target: "+target_name+" parts:"+SkyrimNet_SexLab_Utilities.JoinActors(parts))
     
+    int num_victs = 0 
     Actor[] victs = new Actor[5]
+    String target_is_victim = SkyrimNetApi.GetJsonString(paramsJson, "target_is_victim","")
+    if target_is_victim == "true"
+        victs[0] = akTarget
+        num_victs += 1
+    elseif target_is_victim == "false"        
+        victs[0] = akActor
+        num_victs += 1
+    endif 
+
     String[] parameters = new String[3] 
     parameters[0] = "participant"
     parameters[1] = "victim"
@@ -232,44 +260,45 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
                     j += 1
                 endwhile
                 if !found
-                    String name = "None"
-                    if participant != None 
-                        name = participant.GetDisplayName() 
-                        Trace("Sex_Start",param+" is actor "+name)
-                        parts[num_parts] = participant
-                        num_parts += 1
-                        if parameters[k] == "victim"
-                            victs[num_victs] = participant 
-                            num_victs += 1 
-                        endif 
-                    elseif i == 0 
-                        name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
-                        if name == player.GetDisplayName() 
-                            parts[num_parts] = player
-                            num_parts += 1 
-                            Trace("Sex_Start",param+" is None. name: "+name+ " matched player")
-                        elseif name == akActor.GetDisplayName() 
-                            parts[num_parts] = akActor
-                            num_parts += 1 
-                            Trace("Sex_Start",param+" is None. name: "+name+ " matched akActor")
-                        endif 
-                    endif 
+                    String name = participant.GetDisplayName() 
+                    Trace("Sex_Start",param+" is actor "+name)
+                    parts[num_parts] = participant
+                    num_parts += 1
+                    ;elseif i == 0 
+                    ;    name = SkyrimNetAPI.GetJsonString(paramsJson, param, "") 
+                    ;    if name == player.GetDisplayName() 
+                    ;        parts[num_parts] = player
+                    ;        num_parts += 1 
+                    ;        Trace("Sex_Start",param+" is None. name: "+name+ " matched player")
+                    ;    elseif name == akActor.GetDisplayName() 
+                    ;        parts[num_parts] = akActor
+                    ;        num_parts += 1 
+                    ;        Trace("Sex_Start",param+" is None. name: "+name+ " matched akActor")
+                    ;    endif 
+                    ;endif 
                 else 
                     Trace("Sex_Start",param+" is duplicate actor "+participant.GetDisplayName())
+                endif 
+
+                if parameters[k] == "victim"
+                    j = 0 
+                    found = False
+                    while j < num_victs && !found
+                        if victs[j] == participant 
+                            found = True 
+                        endif 
+                        j += 1
+                    endwhile
+                    if !found
+                        victs[num_victs] = participant 
+                        num_victs += 1 
+                    endif 
                 endif 
             endif 
             k += 1
         endwhile
         i += 1 
     endwhile 
-    if num_parts == 0 
-        parts[num_parts] = akActor
-        num_parts += 1
-    elseif num_parts == 1 && parts[0] != akActor
-        parts[1] = parts[0]
-        parts[0] = akActor
-        num_parts += 1  
-    endif 
     int style = GetStyle(main, paramsJson)
 
     ;-------------------------------
@@ -300,6 +329,18 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
         i += 1 
     endwhile 
 
+    if num_victs > 0 && num_parts && actors[0] != victims[0]
+        int j = 1 
+        while j < num_parts && actors[0] != victims[0] 
+            if actors[j] == victims[0]
+                Actor temp = actors[0]
+                actors[0] = actors[j]
+                actors[j] = temp
+            endif 
+            j += 1
+        endwhile
+    endif 
+
     ;-------------------------------
     ; Animations
     ;-------------------------------
@@ -309,6 +350,7 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
     endif 
     sslBaseAnimation[] anims =  GetAnims(main, actors, victims, player, tag, has_player) 
     if anims.length > 0 && anims[0] == None
+        Trace("Sex_Start","Failed to get animations")
         main.UnlockActors(actors) 
         return False
     endif 
@@ -370,8 +412,13 @@ sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, Actor[] actors,
     endif  
 
     if button != main.BUTTON_YES_RANDOM
+        String type = "sex"
+        if victims.length > 0 
+            type = "rape"
+        endif 
+
         if (main.sex_edit_tags_player && has_player) || (main.sex_edit_tags_nonplayer && !has_player)
-            anims = main.GetAnimsDialog(main.sexlab, actors, tag)
+            anims = main.GetAnimsDialog(main.sexlab, actors, type, tag)
         endif 
         Trace("GetAnims", "has_player: "+has_player+" player edit: "+main.sex_edit_tags_player\
             +" nonplayer edit: "+main.sex_edit_tags_nonplayer+" anims.length: "+anims.length)

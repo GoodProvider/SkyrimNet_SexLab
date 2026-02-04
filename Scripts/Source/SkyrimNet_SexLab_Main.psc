@@ -37,6 +37,9 @@ EndProperty
 GlobalVariable Property skyrimnet_sexlab_ostim_player Auto
 int Property sexlab_ostim_player_index
     int Function Get()
+        if ostimnet_found_internal
+            return 0
+        endif 
         return skyrimnet_sexlab_ostim_player.GetValueInt()
     EndFunction 
     Function Set(int value)
@@ -53,6 +56,9 @@ EndProperty
 GlobalVariable Property skyrimnet_sexlab_ostim_nonplayer Auto
 int Property sexlab_ostim_nonplayer_index
     int Function Get()
+        if ostimnet_found_internal
+            return 0
+        endif 
         return skyrimnet_sexlab_ostim_nonplayer.GetValueInt()
     EndFunction 
     Function Set(int value)
@@ -113,10 +119,6 @@ SexLabFramework Property sexlab Auto
 bool Property dom_main_found Auto
 Quest Property dom_main Auto 
 
-; -----------------------------
-; Cuddle found 
-; -----------------------------
-bool Property cuddle_found Auto
 
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
 string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
@@ -128,7 +130,28 @@ float Property direct_narration_max_distance Auto
 float Property direct_narration_max_distance_default Auto 
 
 ; OstimNet 
-bool ostimnet_found = false 
+bool ostimnet_found_internal = false 
+bool Property ostimnet_found 
+    bool Function Get()
+        return ostimnet_found_internal
+    EndFunction 
+    Function Set(bool value)
+        ostimnet_found_internal = value
+    EndFunction 
+EndProperty
+
+; -----------------------------
+; Cuddle found 
+; -----------------------------
+bool cuddle_found_internal = false 
+bool Property cuddle_found 
+    bool Function Get()
+        return cuddle_found_internal
+    EndFunction 
+    Function Set(bool value)
+        cuddle_found_internal = value
+    EndFunction 
+EndProperty
 
 ; Race to speech 
 int Property race_to_description Auto
@@ -148,11 +171,11 @@ Function Setup()
         
     ; Setup the enable if found 
     if MiscUtil.FileExists("Data/TT_OStimNet.esp")
-        ostimnet_found = true 
+        ostimnet_found_internal = true 
     else 
-        ostimnet_found = false 
+        ostimnet_found_internal = false 
     endif 
-    Trace("Setup","OstimNet found "+ostimnet_found)
+    Trace("Setup","OstimNet found "+ostimnet_found_internal)
     OstimNet_Reset() 
 
     thread_started = new bool[32]
@@ -186,11 +209,7 @@ Function Setup()
     endif 
 
     ; SkyrimNet Cuddle 
-    if MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp")
-        cuddle_found = True
-    else 
-        cuddle_found = False
-    endif 
+    cuddle_found_internal = MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp")
 
     ; Set up the Buttons 
     BUTTON_YES = 0 
@@ -252,7 +271,7 @@ EndFunction
 
 
 Function OstimNet_Reset() 
-    if ostimnet_found
+    if ostimnet_found_internal
         if sexlab_ostim_player_index == 1 
             Trace("OstimNet_Reset","enabling StartNewSex")
             TTON_JData.SetStartNewSexEnable(1)
@@ -582,7 +601,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
         ;DirectNarration(desc, actors[0], target)
     else 
         String desc = Get_Thread_Description(thread, actorLib)
-        ContinueScene(actors[0], target, True)
+        ContinueActivity(actors[0], target, True)
     endif 
 
     ;AllowedDeniedOnlyIncrease(thread.positions, thread, "stage") 
@@ -1123,43 +1142,52 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
             endif 
             i -= 1
         endwhile
-        Trace("YesNoSexDialog","names: "+SkyrimNet_SexLab_Utilities.JoinActors(actors)+" actors_filter: "+actors_filter)
         String names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, actors_filter)
+        Trace("YesNoSexDialog","type:sex names: "+names)
         question = "Would you like to have sex with "+names+"?"
         rejection = player_name+" refuses to have sex with "+names+"."
     else
+        int[] victim_filter = Utility.CreateIntArray(actors.length, 1)
         int i = victims.length - 1 
         Bool player_is_victim = False
-        while 0 <= i && !player_is_victim
+        while 0 <= i
             if victims[i] == player
+                victim_filter[i] = 0
                 player_is_victim = True 
             endif 
             i -= 1
         endwhile 
 
-        if player_is_victim
-            int[] assailants_filter = Utility.CreateIntArray(actors.length, 1)
-            i = actors.length - 1 
-            while 0 <= i
+        int[] assailant_filter = Utility.CreateIntArray(actors.length, 1)
+        i = actors.length - 1 
+        while 0 <= i
+            if actors[i] == player
+                assailant_filter[i] = 0
+            else    
                 int j = victims.length - 1 
-                bool victim_found = False
-                while 0 <= j && !victim_found
+                while 0 <= j && assailant_filter[i] == 1
                     if actors[i] == victims[j]
-                        assailants_filter[i] = 0
-                        victim_found = True
+                        assailant_filter[i] = 0
                     endif 
                     j -= 1
                 endwhile
-                i -= 1 
-            endwhile 
+            endif 
+            i -= 1 
+        endwhile 
 
-            String names_assailant = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, assailants_filter)
-            question = "Would you like to be raped by "+names_assailant+"?"
-            rejection = player_name+" refuses to be raped "+names_assailant+"."
+        Trace("YesNoSexDialog","type:rape names: "+SkyrimNet_SexLab_Utilities.JoinActors(actors)+" victim_filter: "+victim_filter+" assailant_filter: "+assailant_filter)
+        String assailant_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, assailant_filter)
+        if player_is_victim
+            question = "Would you like to be raped by "+assailant_names+"?"
+            rejection = player_name+" refuses to be raped "+assailant_names+"."
         else 
-            String names_victims = SkyrimNet_SexLab_Utilities.JoinActors(victims)
-            question = "Would you like to rape "+names_victims+"?"
-            rejection = player_name+" refuses to rape "+names_victims+"."
+            String victim_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(victims, victim_filter)
+            question = "Would you like to rape "+victim_names
+            if assailant_names != "" 
+                question += " with "+assailant_names
+            endif 
+            question += "?"
+            rejection = player_name+" refuses to rape "+victim_names+"."
         endif 
     endif 
     Trace("YesNoSexDialog","question: "+question)
@@ -1214,26 +1242,19 @@ EndFunction
 ;        thread.SetAnimations(anims)
 ;   endif 
 ;
-sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actors, String tag)
-    Trace("GetAnimsDialog","actor.lengths: "+actors.length+" tag:"+tag)
+sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actors, String type, String tag)
+    String names = SkyrimNet_SexLab_Utilities.JoinActors(actors)
+    Trace("GetAnimsDialog","names: "+names+" tag:"+tag)
 
     Actor player = Game.GetPlayer() 
-
-    int i = 0
-    int count = actors.Length
-    String names = ""
+    int i = actors.Length - 1 
     bool includes_player = False 
-    while i < count
+    while 0 <= i && !includes_player
         if actors[i] == player 
             includes_player = True 
         endif 
-        if names != ""
-            names += "+" 
-        endif
-        names += actors[i].GetDisplayName()
-        i += 1 
+        i -= 1 
     endwhile
-    names += " | "
 
     ; Check if enabled by MCM 
     sslBaseAnimation[] empty = new sslBaseAnimation[1]
@@ -1268,10 +1289,11 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
     if groups == 0
         groups = JMap.allKeys(group_tags)
     endif 
-    count = JArray.count(groups)
+    int count = JArray.count(groups)
 
     JValue.retain(groups)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
+    String start_label = "<start "+type+">"
     while True
         bool finished = false
         String tags_str= ""
@@ -1289,9 +1311,10 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
                 i += 1
             endwhile 
             ; Use the current set of tags 
-            String use_tags = names + " tags: "+tags_str
-            listMenu.AddEntryItem(use_tags)
-            listMenu.AddEntryItem("<start>")
+            String tags_label = "tags:"+tags_str
+            listMenu.AddEntryItem(names)
+            listMenu.AddEntryItem(tags_label)
+            listMenu.AddEntryItem(start_label)
 
             ; Remove one tag 
             if 0 < next 
@@ -1318,16 +1341,14 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
                 button = GroupDialog(group_tags, button)
             endif 
 
-            if button == "<start>"
+            if button == start_label
                 finished = true
             elseif button == "<cancel>"
                 JValue.release(groups)
                 return empty
             elseif button == "<remove"
                 next -= 1
-            elseif button == use_tags
-                finished = true
-            elseif button != "-continue-"
+            elseif button != "-continue-" && button != names && button != tags_label
                 tags[next] = button 
                 next += 1
             endif 

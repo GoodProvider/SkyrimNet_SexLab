@@ -38,11 +38,12 @@ Descriptions you create will be stored in `SkyrimNet_SexLab/animations/\_local\_
   - There will be an array of actors.  If there is a victim, it is normally the first character.
   - If you aren't sure.  Type just the actors needs so you can see which is which.
   - {{sl.actors.0}} is the first actor 
-  - {{sl.actors.1}} is the second, etc 
-  - {{sl.actors.2}} is the third, etc 
+  - {{sl.actors.1}} is the second
+  - {{sl.actors.2}} is the third
+  - etc 
 
 ## Orgasm Expected
-Some animation do not provide a justification for all actors expecting an orgasm.
+Some animation do not provide a justification for all actors to expect an orgasm.
 It is stored as an array of integers matching the position of the actors in the thread. 
 - 0: the actor does not expect an orgasm
 - 1: the actor expects an orgrasm 

@@ -1,4 +1,4 @@
-VERSION=0.26.0
+VERSION=0.26.2
 NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
@@ -23,11 +23,7 @@ release:
 	    Scripts \
 		SkyrimNet_SexLab.esp \
 		fomod/info.json \
-		SKSE/Plugins/SkyrimNet_SexLab/info.json \
-		SKSE/Plugins/SkyrimNet_SexLab/group_tags.json \
-		SKSE/Plugins/SkyrimNet_SexLab/race_to_speech.json \
-		SKSE/Plugins/SkyrimNet_SexLab/animations \
-		SKSE/Plugins/SkyrimNet
+		SKSE
 
 group_tags:
 	python3 ./python_scripts/group-tags.py animations > SkyrimNet_SexLab/group_tags.json
