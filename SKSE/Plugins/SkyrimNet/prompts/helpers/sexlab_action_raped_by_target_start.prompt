@@ -1,0 +1,11 @@
+{% set speaker = decnpc(npc.UUID) -%}
+{% set nearby_npcs = append(get_nearby_npc_list(npc.UUID), player) -%}
+{% set participates = [] -%}
+{% for participate in nearby_npcs -%}
+    {% set actor = decnpc(participate.UUID) -%}
+    {% if not actor.isChild and actor.UUID != speaker.UUID and not is_in_faction(actor.UUID, "SexLabAnimatingFaction") -%}
+        {% set participates = append(participates, actor.name) -%}
+    {% endif -%}
+{% endfor -%}
+{% set participates_joined = join(participates, ", " ) -%}
+Start getting {style} {type} sexually assaulted by {Target}. Available additional assailants are {{participates_joined}}.
