@@ -1,6 +1,6 @@
 [
     {
-        "name": "SexLab_Mastrubation_Start",
+        "name": "Start_Mastrubation",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Sex_Start_IsEligible",
         "execute": "Sex_Start",
@@ -10,17 +10,17 @@
         "parameters": "{\"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
     },
     {
-        "name": "SexLab_Sex_Start",
+        "name": "Start_Sex_With_Target",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Sex_Start_IsEligible",
         "execute": "Sex_Start",
         "priority": 10,
         "tags": "BodyAnimation",
         "description": "{{render_template(\"helpers/sexlab_action_sex_start\")}}",
-        "parameters": "{\"Target\":\"Actor\",\"participate_0\":\"Optional first participate\", \"participate_1\":\"Optional Second additional participate\", \"participate_2\":\"Optional third additional participate\", \"participate_3\":\"Optional Fourth additional participate\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\"}"
+        "parameters": "{\"Target\":\"Actor\",\"participate_0\":\"Optional first participate\", \"participate_1\":\"Optional Second additional participate\", \"participate_2\":\"Optional third additional participate\", \"participate_3\":\"Optional Fourth additional participate\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\", \"target_is_dominate\":\"false|true\"}"
     },
     {
-        "name": "SexLab_Raped_By_Target_Start",
+        "name": "Start_Getting_Raped_By_Target",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Sex_Start_IsEligible",
         "execute": "Sex_Start",
@@ -30,7 +30,7 @@
         "parameters": "{\"Target\":\"Actor\", \"assailant_0\":\"Optional Second Additional Assailant\", \"assailant_1\":\"Optional Third Additional Assailant\", \"assailant_2\":\"Optional Fourth Additional Assailant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\", \"target_is_victim\":\"false\"}"
     },
     {
-        "name": "SexLab_Rape_Target_Start",
+        "name": "Start_Raping_Target",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Sex_Start_IsEligible",
         "execute": "Sex_Start",
@@ -40,7 +40,7 @@
         "parameters": "{\"Target\":\"Actor\", \"assailant_0\":\"Optional Second Additional Assailant\", \"assailant_1\":\"Optional Third Additional Assailant\", \"assailant_2\":\"Optional Fourth Additional Assailant\", \"style\":\"forceful|normal|gentle\", \"type\":\"vaginal|oral|anal|blowjob|handjob|cunnilingus|fingering|dildo|footjob|boobjob|fisting|thighjob\", \"target_is_victim\":\"true\"}"
     },
     {
-        "name": "SexLab_Dress",
+        "name": "Start_Dressing",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Dress_IsEligible",
         "execute": "Dress_Execute",
@@ -50,7 +50,7 @@
         "parameters": "{}"
     },
     {
-        "name": "SexLab_Undress",
+        "name": "Start_Undressing",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
         "isEligible": "Undress_IsEligible",
         "execute": "Undress_Execute",

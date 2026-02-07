@@ -185,7 +185,7 @@ Bool Function Sex_Start_Helper_IsEligible(Actor akActor, string contextJson, str
     if main.sexLab == None || main == None 
         return false
     endif 
-    if main.sexlab_ostim_player_index == 1 && !masturbation
+    if main.sexlab_ostim_player == 1 && !masturbation
         Trace("Sex_Start_IsEligible", akActor.GetDisplayName()+" sexlab_sexstart is disabled")
         return false 
     endif 
@@ -211,6 +211,12 @@ Bool Function Sex_Start(Actor akActor, string contextJson, string paramsJson) gl
 
     Actor akTarget = SkyrimNetApi.GetJsonActor(paramsJson, "target", None)
 
+    Bool target_is_dominate = SkyrimNetApi.GetJsonBool(paramsJson, "target_is_dominate",false)
+    if target_is_dominate && akTarget != None 
+        Actor temp = akActor 
+        akActor = akTarget 
+        akTarget = temp
+    endif
     ;-------------------------------
 
     Actor player = Game.GetPlayer() 

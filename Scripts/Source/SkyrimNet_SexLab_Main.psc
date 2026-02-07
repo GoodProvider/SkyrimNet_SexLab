@@ -35,16 +35,15 @@ EndProperty
 ; 1 - Ostim
 ; 2 - Choose per animation
 GlobalVariable Property skyrimnet_sexlab_ostim_player Auto
-int Property sexlab_ostim_player_index
+int Property sexlab_ostim_player
     int Function Get()
-        if ostimnet_found_internal
+        if !ostimnet_found_internal
             return 0
         endif 
         return skyrimnet_sexlab_ostim_player.GetValueInt()
     EndFunction 
     Function Set(int value)
         skyrimnet_sexlab_ostim_player.SetValue(value)
-        OstimNet_Reset() 
     EndFunction 
 EndProperty
 
@@ -56,14 +55,13 @@ EndProperty
 GlobalVariable Property skyrimnet_sexlab_ostim_nonplayer Auto
 int Property sexlab_ostim_nonplayer_index
     int Function Get()
-        if ostimnet_found_internal
+        if !ostimnet_found_internal
             return 0
         endif 
         return skyrimnet_sexlab_ostim_nonplayer.GetValueInt()
     EndFunction 
     Function Set(int value)
         skyrimnet_sexlab_ostim_nonplayer.SetValue(value)
-        OstimNet_Reset() 
     EndFunction 
 EndProperty
 
@@ -171,12 +169,13 @@ Function Setup()
         
     ; Setup the enable if found 
     if MiscUtil.FileExists("Data/TT_OStimNet.esp")
-        ostimnet_found_internal = true 
+        ostimnet_found = true 
     else 
-        ostimnet_found_internal = false 
+        ostimnet_found = false 
+        sexlab_ostim_player = 0
+        sexlab_ostim_nonplayer_index = 0
     endif 
-    Trace("Setup","OstimNet found "+ostimnet_found_internal)
-    OstimNet_Reset() 
+    Trace("Setup","OstimNet found "+ostimnet_found)
 
     thread_started = new bool[32]
     if thread_style.length == 0 
@@ -269,18 +268,6 @@ Function Setup()
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
 EndFunction
 
-
-Function OstimNet_Reset() 
-    if ostimnet_found_internal
-        if sexlab_ostim_player_index == 1 
-            Trace("OstimNet_Reset","enabling StartNewSex")
-            TTON_JData.SetStartNewSexEnable(1)
-        else 
-            Trace("OstimNet_Reset","disabling StartNewSex")
-            TTON_JData.SetStartNewSexEnable(0)
-        endif 
-    endif 
-EndFunction 
 
 ;----------------------------------------------------------------------------------------------------
 ; Stripped Items Storage

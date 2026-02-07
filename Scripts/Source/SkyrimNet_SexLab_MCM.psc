@@ -127,23 +127,23 @@ Function PageOptions()
     AddSliderOptionST("NarrationCoolOff", "Narration cooldown", main.direct_narration_cool_off)
     AddSliderOptionST("NarrationMaxDistance", "Narration max distance", main.direct_narration_max_distance)
 
-    if dom_main != None 
-        AddHeaderOption("                              ")
-        AddHeaderOption("Debug")
-        AddHeaderOption("")
-        AddToggleOptionST("DomDebugToggle","Enable DOM debugs",dom_debug_toggle)
-    Endif 
+    ;if dom_main != None 
+        ;AddHeaderOption("                              ")
+        ;AddHeaderOption("Debug")
+        ;AddHeaderOption("")
+        ;AddToggleOptionST("DomDebugToggle","Enable DOM debugs",dom_debug_toggle)
+    ;Endif 
 
     if hot_key_toggle 
         RegisterForKey(sex_edit_key)
     endif 
 
     if main.ostimnet_found
-        Trace("PageOptions"," index: "+main.sexlab_ostim_player_index+" label: "+sexlab_ostim_options[main.sexlab_ostim_player_index])
+        Trace("PageOptions"," index: "+main.sexlab_ostim_player+" label: "+sexlab_ostim_options[main.sexlab_ostim_player])
         AddHeaderOption("OstimNet Integration")
         AddHeaderOption("")
-        ostimnet_player_menu = AddMenuOption("sex framework:", sexlab_ostim_options[main.sexlab_ostim_player_index])
-        ; ostimnet_nonplayer_menu = AddMenuOption("sex without player:", sexlab_ostim_options[main.sexlab_ostim_player_index])
+        ostimnet_player_menu = AddMenuOption("sex framework:", sexlab_ostim_options[main.sexlab_ostim_player])
+        ; ostimnet_nonplayer_menu = AddMenuOption("sex without player:", sexlab_ostim_options[main.sexlab_ostim_player])
     endif 
 EndFunction 
 
@@ -369,10 +369,10 @@ EndState
 ; https://www.nexusmods.com/skyrimspecialedition/articles/925
 ;-----------------------------------------------------------------
 Event OnOptionMenuOpen(int menu_id)
-    Trace("OnOptionMenuOpen","options: "+sexlab_ostim_options)
+    Trace("OnOptionMenuOpen","menu_id: "+menu_id+" options: "+sexlab_ostim_options)
     SetMenuDialogOptions(sexlab_ostim_options)
     if menu_id == ostimnet_player_menu
-        SetMenuDialogStartIndex(main.sexlab_ostim_player_index)
+        SetMenuDialogStartIndex(main.sexlab_ostim_player)
     elseif menu_id == ostimnet_nonplayer_menu
         SetMenuDialogStartIndex(main.sexlab_ostim_nonplayer_index)
     endif
@@ -381,11 +381,11 @@ endEvent
 
 event OnOptionMenuAccept(int menu_id, int index)
     if menu_id == ostimnet_player_menu
-        main.sexlab_ostim_player_index = index
+        main.sexlab_ostim_player = index
     else 
         main.sexlab_ostim_nonplayer_index = index
     endif 
-    Trace("OnOptionMenuAccept"," index: "+main.sexlab_ostim_player_index+" label: "+sexlab_ostim_options[main.sexlab_ostim_player_index])
+    Trace("OnOptionMenuAccept"," menu_id: "+menu_id+" ostimnet_player_menu: "+ostimnet_player_menu+" index: "+index+" sexlab_ostim_player: "+main.sexlab_ostim_player+" label: "+sexlab_ostim_options[main.sexlab_ostim_player])
     SetMenuOptionValue(menu_id, sexlab_ostim_options[index])
 endEvent
 
