@@ -695,24 +695,24 @@ Function MutliTarget_Menu_Selection(Actor player)
         ;SkyrimNet_Cuddle.StageStart(
     else 
 
-        String victim_string = "" 
-        if type == "rape>" 
-            victim_string = ",\"victim_0\":\""+group[0].GetDisplayName()+"\""
-        endif
         if next == 1
-            SkyrimNet_SexLab_Actions.Sex_Start(group[0], "", "") 
-        elseif next == 2
-            SkyrimNet_SexLab_Actions.Sex_Start(group[0], "", "{\"target\":\""+group[1].GetDisplayName()+"\" "+victim_string+"}") 
+            SkyrimNet_SexLab_Actions.Sex_Start_Helper(group[0], "", "", "None") 
         else 
-            String participants = ""
+            String json = "{\"target\":\""+group[1].GetDisplayName()+"\""
             i = 2 
             while i < next 
                 j = i - 2
-                participants += ", \"participant_"+j+"\":\""+group[i].GetDisplayName()+"\""
+                json += ", \"participate_"+j+"\":\""+group[i].GetDisplayName()+"\""
                 i += 1
             endwhile
+            json += "}"
 
-            SkyrimNet_SexLab_Actions.Sex_Start(group[0], "", "{\"target\":\""+group[1].GetDisplayName()+"\" "+victim_string+participants+"}") 
+            String rape_victim = "None" 
+            if type == "rape>"
+                rape_victim = "Speaker"
+            endif   
+
+            SkyrimNet_SexLab_Actions.Sex_Start_Helper(group[0], "", json, rape_victim) 
         endif 
     endif 
 EndFunction
