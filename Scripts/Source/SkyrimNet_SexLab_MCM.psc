@@ -238,7 +238,7 @@ State SexEditTagsPlayer
         SetToggleOptionValueST(main.sex_edit_tags_player)
     EndEvent
     Event OnHighlightST()
-        SetInfoText("Selects which framework to use.")
+        SetInfoText("Opens a tag editor for sex which includes the player.")
     EndEvent
 EndState
 
@@ -248,7 +248,7 @@ State SexEditTagsNonPlayer
         SetToggleOptionValueST(main.sex_edit_tags_nonplayer)
     EndEvent
     Event OnHighlightST()
-        SetInfoText("Opens a tag editor when sex includes the player.")
+        SetInfoText("Opens a tag editor for sex not including player.")
     EndEvent
 EndState
 
@@ -489,13 +489,13 @@ Function Target_Menu_Selection(Actor target, Actor player)
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
     if button == masturbate
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{}")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{}", "None")
     elseif button == sex
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"participant_0\":\""+player.GetDisplayName()+"\"}")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "None")
     elseif button == rapes
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"assailant_0\":\""+target.GetDisplayName()+"\",\"victim_0\":\""+player.GetDisplayName()+"\"}")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Target")
     elseif button == raped_by
-        SkyrimNet_SexLab_Actions.Sex_Start(target, "", "{\"assailant_0\":\""+player.GetDisplayName()+"\",\"victim_0\":\""+target.GetDisplayName()+"\"}")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Speaker")
     elseif button == clothing
 
         ;--------------------------------------------------

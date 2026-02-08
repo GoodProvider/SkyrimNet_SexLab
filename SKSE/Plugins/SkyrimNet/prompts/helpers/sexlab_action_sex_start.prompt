@@ -8,4 +8,4 @@
     {% endif -%}
 {% endfor -%}
 {% set participates_joined = join(participates, ", ") -%}
-Start a consensual {style} {type} SEX with {Target}. Optional additional participates: {{participates_joined}}.
+Start a consensual {style} {type} SEX with {Target}. {{decnpc(npc.UUID).name}} is in the {dynamic} position. Optional additional participates: {{participates_joined}}.

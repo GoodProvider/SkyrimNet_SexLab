@@ -343,7 +343,7 @@ bool Function LockActors(Actor[] actors)
     return True 
 EndFunction 
 
-bool Function UnLockActors(Actor[] actors) 
+Function UnLockActors(Actor[] actors) 
     int i = actors.length - 1 
     while 0 <= i 
         ReleaseActorLock(actors[i]) 
