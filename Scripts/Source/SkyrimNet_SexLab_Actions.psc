@@ -22,7 +22,7 @@ Function RegisterActions(Bool rape_only=False) global
     int i = 0 
     while i < count 
         int a = JArray.getObj(actions, i) 
-        Trace("RigsterActions", "i: "+i+" a: "+a)
+        Trace("RegisterActions", "i: "+i+" a: "+a)
          if a > 0
             String name = JMap.getStr(a, "name")
             if rape_only && name == "SexLab_Rape_Start" && !main.rape_allowed
