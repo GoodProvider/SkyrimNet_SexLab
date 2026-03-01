@@ -47,6 +47,42 @@ int Property sexlab_ostim_player
     EndFunction 
 EndProperty
 
+; Hides the dialogue historic instructions from the prompt
+; 0 - false
+; 1 - true
+; 2 - Choose per animation
+GlobalVariable Property skyrimnet_sexlab_hide_dialogue_historic_instructions Auto
+bool Property hide_dialogue_historic_instructions
+    bool Function Get()
+        return skyrimnet_sexlab_hide_dialogue_historic_instructions.GetValueInt() == 1
+    EndFunction 
+    Function Set(bool value)
+        if value
+            skyrimnet_sexlab_hide_dialogue_historic_instructions.SetValue(1.0)
+        else
+            skyrimnet_sexlab_hide_dialogue_historic_instructions.SetValue(0.0)
+        endif
+    EndFunction 
+EndProperty
+
+; Hides the hermaphrodite from prompt 
+; 0 - false
+; 1 - true
+; 2 - Choose per animation
+GlobalVariable Property skyrimnet_sexlab_hide_hermaphrodites Auto
+bool Property hide_hermaphrodites
+    bool Function Get()
+        return skyrimnet_sexlab_hide_hermaphrodites.GetValueInt() == 1
+    EndFunction 
+    Function Set(bool value)
+        if value
+            skyrimnet_sexlab_hide_hermaphrodites.SetValue(1.0)
+        else
+            skyrimnet_sexlab_hide_hermaphrodites.SetValue(0.0)
+        endif
+    EndFunction 
+EndProperty
+
 ; ----- Not currently supported ------
 ; Sexlab or Ostim animation without player
 ; 0 - Sexlab
@@ -114,9 +150,18 @@ SexLabFramework Property sexlab Auto
 ; -----------------------------
 ; DOM found 
 ; -----------------------------
-bool Property dom_main_found Auto
-Quest Property dom_main Auto 
-
+bool dom_found_internal = false
+bool Function dom_found()
+    return dom_found_internal
+EndFunction
+DOM_API d_api_internal = None 
+DOM_API Function dom_api()
+    return d_api_internal
+EndFunction 
+DOM_SexLab d_sexlab_internal = None 
+DOM_SexLab Function dom_sexlab()
+    return d_sexlab_internal
+EndFunction
 
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
 string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
@@ -199,13 +244,19 @@ Function Setup()
 
 
     ; SkyrimNet DOM 
-    if MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
-        dom_main = Game.GetFormFromFile(0x800, "SkyrimNet_DOM.esp") as Quest
-        dom_main_found = True
+    if MiscUtil.FileExists("Data/DiaryOfMine.esp")
+        dom_found_internal = True
+        Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
+        if DOM01 != None 
+            d_api_internal = DOM01 as DOM_API
+            d_sexlab_internal = DOM01 as DOM_SexLab
+        endif
     else 
-        dom_main = None 
-        dom_main_found = False
+        dom_found_internal = False
+        d_api_internal = None 
+        d_sexlab_internal = None
     endif 
+    Trace("Setup","DiaryOfMine (DOM) found: "+dom_found_internal+"  d_api: "+d_api_internal+" d_sexlab: "+d_sexlab_internal)
 
     ; SkyrimNet Cuddle 
     cuddle_found_internal = MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp")
@@ -264,7 +315,7 @@ Function Setup()
     endif 
 
     RegisterSexlabEvents()
-    SkyrimNet_SexLab_Actions.RegisterActions()
+    SkyrimNet_SexLab_Actions.RegisterActions(self)
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
 EndFunction
 
@@ -633,7 +684,6 @@ EndEvent
 
 
 event AnimationEnd(int ThreadID, bool HasPlayer)
-    Trace("AnimationEnd","ThreadID:"+ThreadID+" HasPlayer:"+HasPlayer)
     ; String desc = stages.GetStageDescription(SexLab.GetController(ThreadID))
     ; if desc != ""
         ; Actor[] actors = SexLab.GetController(ThreadID).Positions
@@ -642,6 +692,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
     ; endif 
 
     sslThreadController thread = SexLab.GetController(ThreadID)
+    Trace("AnimationEnd","ThreadID:"+ThreadID+" HasPlayer:"+HasPlayer+" thread.state:"+thread.GetState())
     
     ; Handle Separate Orgasms
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
@@ -701,6 +752,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
         endif 
     endif 
     
+    Trace("AnimationEnd","orgasm_denied:"+orgasm_denied+" target:"+target+" narration:"+narration)
     if orgasm_denied
         DirectNarration_Optional(narration, actors[0], target)
     else
@@ -811,7 +863,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
             Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
         else
             if orgasm_expected[i] == 1
-                narration += name+" orgasmes. "
+                narration += name+" is orgasming. "
                 if has_penis
                     someone_ejaculated = True
                 endif
@@ -831,11 +883,12 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         i -= 1 
     endwhile 
 
-    if HasPlayer
-        DirectNarration(narration, actors[0], None)
-    else
-        DirectNarration_Optional("sexlab_orgasm", narration, actors[0], None)
-    endif
+    DirectNarration(narration, actors[0], None)
+    ;if HasPlayer
+        ;DirectNarration(narration, actors[0], None)
+    ;else
+        ;DirectNarration_Optional("sexlab_orgasm", narration, actors[0], None)
+    ;endif
 EndEvent 
 
 ; Used for SLSO.esp orgasm handling
@@ -855,7 +908,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         return
     endif 
 
-    Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, akActor.GetDisplayName()+" orgasmed.")
+    Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, akActor.GetDisplayName()+" is orgasming.")
 EndEvent
 
 Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orgasms, String msg, bool require_narration = false)
@@ -960,14 +1013,14 @@ EndFunction
 
 ; Increases the 
 Bool Function IsDOMSlave(Actor akActor)
-    if dom_main_found
+    if dom_found_internal
         return SkyrimNet_DOM_Utils.IsDOMSlave(akActor)
     endif 
     return False 
 EndFunction
 
 DOM_Actor Function GetDOMSlave(String func, Actor akActor, String file = "SkyrimNet_SexLab_Main")
-    if dom_main_found
+    if dom_found_internal
         return SkyrimNet_DOM_Utils.GetSlave(file, func, akActor)
     endif 
     return None

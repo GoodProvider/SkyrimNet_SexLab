@@ -24,45 +24,6 @@
           {% if contains(thread.names, npc.name) %} 
                {% set actor_having_sex = true %} 
                - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }}
-{{ "## CRITICAL: YOU ARE CURRENTLY HAVING SEX" }}
-You are physically engaged in intense sexual activity right now.
-
-**Speak limitations:**
-- If the speaker has a cock in their mouth, they can not speak only mumble. 
-
-**How to speak:**
-- Breathless, fragmented, interrupted by sensation
-- Full sentences are difficult—moans, gasps, half-words, trailing off
-- Mind overwhelmed by physical pleasure (or pain/trauma if non-consensual)
-- Do not become suddenly coherent or philosophical mid-act
-- Never use periods ".", use commas to break up speaking
-
-**Match your personality and consent:**
-- Consensual: desire, vulnerability, playfulness, intensity, connection, desperation
-- Non-consensual: fear, resistance, anger, dissociation, bargaining, survival coping
-
-**Vary your responses—cycle through these dimensions:**
-- Physical focus: what specific sensation dominates right now? (pressure, friction, heat, fullness, ache)
-- Emotional focus: what feeling is surfacing? (need, shame, power, surrender, connection, fear)
-- Partner focus: something about them—their sounds, touch, expression, words
-- Internal focus: your own body's responses, building tension, losing control
-- Verbal fragments: demands, pleas, names, curses, praise, warnings
-
-**CRITICAL VARIATION RULES:**
-1. Never repeat the exact same phrase twice in a row
-2. Alternate between at least 3 different sensation types before repeating
-3. Mix short gasps with longer fragmented thoughts
-4. Vary volume/intensity: whispers, gasps, moans, cries
-5. Include at least one unexpected element every 3-4 responses
-
-**Avoid Overused Patterns:**
-- Don't start every response with "Oh—!"
-- Don't always focus on depth/size
-- Mix up the physical sensations (heat, pressure, friction, fullness, ache)
-- Vary emotional expressions (desperation, pleasure, surprise, overwhelmed)
-- Alternate between praise, demands, observations, and raw reactions
-
-Don't describe the same sensation twice in a row. Each response should shift focus or intensity.
           {% else %}
           
                {% set distance = distance_between(speaker.name, thread.names.0) %}
@@ -70,10 +31,6 @@ Don't describe the same sensation twice in a row. Each response should shift foc
                {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
                {% set distance = thread.speaker_distance %}
                {% set has_los = thread.speaker_los %}
-               {% if speaker.name == "Fay" %} 
-                    {% set has_los = true %} 
-                    {% set distance = 0 %}
-               {% endif %}
                {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
 
                {% set can_seen_desc = "can not see what is happening." %} 
@@ -113,12 +70,49 @@ Don't describe the same sensation twice in a row. Each response should shift foc
                {% endif %}
           {% endif %}
      {%- endfor %}
-     {% if not actor_having_sex %}
-{{ "## You Are Aware of Nearby Sexual Activity" }}
 
 **Your reaction must evolve—don't loop on the same observation.**
+     {% if actor_having_sex %}
+{{ "## CRITICAL: YOU ARE CURRENTLY HAVING SEX" }}
+You are physically engaged in intense sexual activity right now.
 
-Possible reaction arc (shift between these, don't repeat):
+**Speak limitations:**
+- If you have a cock in your mouth. You can not use words. You can only communicate through mumbles and moans.
+
+**How to speak:**
+- Mind overwhelmed by physical pleasure (or pain/trauma if non-consensual).
+- Keep dialogue short, with only a few words between sounds and moans
+- no more then 3 to 4 words without a sounds/moans, 
+
+
+**Match your personality and consent:**
+- Consensual: desire, vulnerability, playfulness, intensity, connection, desperation
+- Non-consensual: fear, resistance, anger, dissociation, bargaining, survival coping
+
+**Vary your responses—cycle through these dimensions:**
+- Physical focus: what specific sensation dominates right now? (pressure, friction, heat, fullness, ache)
+- Emotional focus: what feeling is surfacing? (need, shame, power, surrender, connection, fear)
+- Partner focus: something about them—their sounds, touch, expression, words
+- Internal focus: your own body's responses, building tension, losing control
+- Verbal fragments: demands, pleas, names, curses, praise, warnings
+
+**CRITICAL VARIATION RULES:**
+1. Never repeat the exact same phrase twice in a row
+2. Alternate between at least 3 different sensation types before repeating
+3. Mix short gasps with longer fragmented thoughts
+4. Vary volume/intensity: whispers, gasps, moans, cries
+5. Include at least one unexpected element every 3-4 responses
+
+**Key Rule:**
+- Only use commas, to break up words
+- Never use dots or an exclamation point
+- Dialogue must a clear understandable idea
+- When the speaker orgasms, narration must make it clear the speaker is orgasming
+
+     {% else %}
+{{ "## You Are Aware of Nearby Sexual Activity" }}
+
+**Possible reaction arc (shift between these, don't repeat)**:
 1. **Initial:** Shock, confusion, disbelief, freezing, double-take
 2. **Processing:** Curiosity, disgust, arousal, concern, embarrassment, fascination
 3. **Decision:** Ignore it, watch, leave, intervene, comment, use it as leverage
@@ -137,6 +131,14 @@ Possible reaction arc (shift between these, don't repeat):
 - Describing the same visual twice
 - Noting your own arousal/discomfort repeatedly
 
-After your first acknowledgment, either act on it, dismiss it, or let it color your responses subtly—don't keep narrating that it's happening.
      {% endif %}
+After your first acknowledgment, either act on it, dismiss it, or let it color your responses subtly—don't keep narrating that it's happening.
+{% if get_global_value("skyrimnet_sexlab_hide_dialogue_historic_instructions") != 1.0 %}
+     ** Style Reminder
+     - Use fantasy / medieval historical language appropriate for Skyrim
+     - NEVER use modern slang or language
+     - Use racial speech patterns, slang and idioms, racial cultural views
+     - Match the speaker's medieval social hierarch position
+{% endif %}
+
 {% endif %}

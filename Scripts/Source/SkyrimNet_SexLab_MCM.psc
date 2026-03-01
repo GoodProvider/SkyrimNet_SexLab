@@ -82,9 +82,9 @@ EndFunction
 
 Event OnConfigOpen()
 
-    Pages = new String[2]
+    Pages = new String[1]
     pages[0] = page_options
-    pages[1] = page_actors
+    ;pages[1] = page_actors
 
 EndEvent
 
@@ -107,20 +107,30 @@ Function PageOptions()
 
     SetCursorFillMode(LEFT_TO_RIGHT)
     SetCursorPosition(0)
-    
-    AddHeaderOption("Options")
-    AddHeaderOption("")
-    AddToggleOptionST("RapeAllowedToggle","Add rape actions (must toggle/save/reload)",main.rape_allowed)
+    AddHeaderOption("Prompt Options")
+    SetCursorPosition(2)
+
+    AddToggleOptionST("HideDialogueHistoricInstructionsToggle","Hide dialogue historic instructions",main.hide_dialogue_historic_instructions)
+    AddToggleOptionST("HideHermaphroditesToggle","Hide hermaphrodite from prompt",main.hide_hermaphrodites)
     AddToggleOptionST("PublicSexAcceptedToggle","Public sex accepted",sexlab_public_sex_accepted.GetValue() == 1.0)
+    
+    SetCursorPosition(6)
+    AddHeaderOption("Rape Options")
+    SetCursorPosition(8)
+    AddToggleOptionST("RapeAllowedToggle","Add rape actions (must toggle/save/reload)",main.rape_allowed)
+
+    SetCursorPosition(10)
+    AddHeaderOption("Tag Edit")
+    SetCursorPosition(12)
     AddToggleOptionST("SexEditTagsPlayer","Show Tags_Editor for player sex",main.sex_edit_tags_player)
     AddToggleOptionST("SexEditTagsNonPlayer","Show Tags_Editor for nonplayer sex",main.sex_edit_tags_nonplayer)
 
     AddHeaderOption("Sex Description Editor")
-    AddHeaderOption("")
+    SetCursorPosition(16)
     AddToggleOptionST("HotKeyToggle","Enable the Start Sex / Edit Stage hot key",hot_key_toggle)
     AddKeyMapOptionST("SexEditKeySet", "Start Sex / Edit Stage Description", sex_edit_key)
-    AddToggleOptionST("SexEdithelpToggle","Hide Edit Stage Description Help",stages.hide_help)
-    AddTextOption("","")
+;    AddToggleOptionST("SexEdithelpToggle","Hide Edit Stage Description Help",stages.hide_help)
+;    AddTextOption("","")
     
     AddHeaderOption("Direction Narration Blocking")
     AddHeaderOption("")
@@ -201,19 +211,8 @@ State ActorInfo
 EndState
 
 ;-----------------------------------------------------------------
-; Set Toggles 
+; Prompt Toggles 
 ;-----------------------------------------------------------------
-
-State RapeAllowedToggle
-    Event OnSelectST()
-        main.rape_allowed = !main.rape_allowed
-        Skyrimnet_sexlab_Actions.RegisterActions(True)
-        SetToggleOptionValueST(main.rape_allowed)
-    EndEvent
-    Event OnHighlightST()
-        SetInfoText("Adds/Removes the NPC rape Actions. Request you save and reload.")
-    EndEvent
-EndState
 State PublicSexAcceptedToggle
     Event OnSelectST()
         Bool public_bool = False
@@ -229,6 +228,56 @@ State PublicSexAcceptedToggle
     EndEvent
     Event OnHighlightST()
         SetInfoText("Makes public sex a socially accepted activity..")
+    EndEvent
+EndState
+
+State HideDialogueHistoricInstructionsToggle 
+    Event OnSelectST()
+        Bool public_bool = False
+        if main.hide_dialogue_historic_instructions
+            public_bool = False
+            main.hide_dialogue_historic_instructions= false
+        else
+            public_bool = True
+            main.hide_dialogue_historic_instructions= true
+        endif 
+        SetToggleOptionValueST(public_bool)
+        Trace("HideDialogueHistoricInstructionsToggle","hide_dialogue_historic_instructions: "+main.hide_dialogue_historic_instructions)
+    EndEvent
+    Event OnHighlightST()
+        SetInfoText("Hides the dialogue Skyrim/Fantasy instructions from the prompt.")
+    EndEvent
+EndState
+
+State HideHermaphroditesToggle 
+    Event OnSelectST()
+        Bool public_bool = False
+        if main.hide_hermaphrodites
+            public_bool = False
+            main.hide_hermaphrodites = false
+        else
+            public_bool = True
+            main.hide_hermaphrodites = true
+        endif 
+        SetToggleOptionValueST(public_bool)
+        Trace("HideHermaphroditesToggle","hide_hermaphrodites: "+main.hide_hermaphrodites)
+    EndEvent
+    Event OnHighlightST()
+        SetInfoText("Hides the hermaphrodite labels the prompt.")
+    EndEvent
+EndState
+
+;-----------------------------------------------------------------
+; Set Toggles 
+;-----------------------------------------------------------------
+State RapeAllowedToggle
+    Event OnSelectST()
+        main.rape_allowed = !main.rape_allowed
+        Skyrimnet_sexlab_Actions.RegisterActions(main, True)
+        SetToggleOptionValueST(main.rape_allowed)
+    EndEvent
+    Event OnHighlightST()
+        SetInfoText("Adds/Removes the NPC rape Actions. Request you save and reload.")
     EndEvent
 EndState
 
@@ -489,13 +538,13 @@ Function Target_Menu_Selection(Actor target, Actor player)
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
     if button == masturbate
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{}", "None")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{}", "None", "")
     elseif button == sex
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "None")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "None", "")
     elseif button == rapes
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Target")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Target", "")
     elseif button == raped_by
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Speaker")
+        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Speaker", "")
     elseif button == clothing
 
         ;--------------------------------------------------
@@ -536,37 +585,57 @@ EndFunction
 
 Function MutliTarget_Menu_Selection(Actor player)
     ; If not, then we allow them to start a sex animation with nearby actors
-    Debug.Notification("No target in crosshair, looking for sexable nearby actors")
-    Trace("OnKeyDown","No target in crosshair, looking for nearby actors")
+    String msg = "No target in crosshair, looking for nearby sexable actors"
+    Debug.Notification(msg)
+    Trace("MultiTarget_Menu_Selection",msg)
     ;float time_last = Utility.GetCurrentRealTime()
-    int[] ranges = new int[4]
-    ranges[0] = 500 
-    ranges[1] = 1000
-    ranges[2] = 1500
-    ranges[3] = 2000
+    int[] ranges = new int[5]
+    ranges[0] = 100 
+    ranges[1] = 200 
+    ranges[2] = 400
+    ranges[3] = 800
+    ranges[4] = 1600
 
-    Actor[] actors_all = MiscUtil.ScanCellActors(player, ranges[0])
-    int num_actors = actors_all.length 
-    int i = 0 
-    while num_actors < 2 && i < ranges.length 
-        actors_all = MiscUtil.ScanCellActors(player, ranges[i])
-        num_actors = actors.length
-        Trace("OnKeyDown","scan range:"+ranges[i]+" found:"+num_actors)
+    uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
+    int i = 0
+    while i < ranges.length
+        listMenu.AddEntryItem(ranges[i]+" units")
         i += 1
-    endwhile 
+    endwhile
+    listMenu.AddEntryItem("<cancel>")
+    listMenu.OpenMenu()
+    int index = listMenu.GetResultInt() 
+    if index < 0 || index > ranges.length - 1
+        Trace("MultiTarget_Menu_Selection","cancelled range selection")
+        return
+    endif
 
-    bool[] valid = PapyrusUtil.BoolArray(actors_all.length)
+    ; -----------------------------------------
+    Trace("MultiTarget_Menu_Selection","selected index:"+index+" range:"+ranges[index])
+    int scan_range = ranges[index]
+
+    int range = 0 
+    int scaler = 0
+    Actor[] actors_all = new Actor[1]
+    while actors_all.length < 2 && scaler <= 5
+        range = scan_range + 100*scaler
+        actors_all = MiscUtil.ScanCellActors(player, range)
+        Trace("MultiTarget_Menu_Selection","scaler:"+scaler+" scan range:"+range+" found:"+actors_all.length)
+        scaler += 1 
+    endwhile 
+    Trace("MultiTarget_Menu_Selection"," scan range:"+range+" found:"+actors_all.length)
 
     if actors_all.length < 2
         actors_all = MiscUtil.ScanCellActors(player, 2000)
         if actors_all.length == 0
-            Trace("OnKeyDown","No eligible actors found in the area.")
+            Trace("MultiTarget_Menu_Selection","No eligible actors found in the area.")
             return
         endif 
     endif 
 
-    i = actors_all.length - 1 
-    num_actors = 0 
+    bool[] valid = PapyrusUtil.BoolArray(actors_all.length)
+    int num_actors = 0 
+    i = actors_all.length - 1
 
     while 0 <= i 
         if SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
@@ -575,14 +644,15 @@ Function MutliTarget_Menu_Selection(Actor player)
         else 
             valid[i] = False
         endif 
+        Trace("MultiTarget_Menu_Selection","i:"+i+" "+actors_all[i].GetDisplayName()+" valid:"+valid[i])
         i -= 1
     endwhile 
 
     if num_actors < 2
-        Trace("OnKeyDown","Not enough eligible actors found in the area.")
+        Trace("MultiTarget_Menu_Selection","Not enough eligible actors found in the area.")
         return
     endif
-    Trace("OnKeyDown","Found "+actors.length+" actors in the area.")
+    Trace("MultiTarget_Menu_Selection","Found "+num_actors+" valid actors.")
 
     Actor[] actors = PapyrusUtil.ActorArray(num_actors)
     String[] names = Utility.CreateStringArray(num_actors)
@@ -605,8 +675,8 @@ Function MutliTarget_Menu_Selection(Actor player)
 
     int next = 0 
     bool building_list = true 
-    int index = 1
-    uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
+    index = 1
+    listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     ; I couldn't compare directly to the strings button in some case
     ; so fell back on next and index :(
     bool finished = false
@@ -676,7 +746,7 @@ Function MutliTarget_Menu_Selection(Actor player)
                 next -= 1
             endif
             if next > 0
-                Trace("OnKeyDown","after next:"+next+" selected[index]:"+selected[next - 1])
+                Trace("MultiTarget_Menu_Selection","after next:"+next+" selected[index]:"+selected[next - 1])
             endif 
         else 
             return 

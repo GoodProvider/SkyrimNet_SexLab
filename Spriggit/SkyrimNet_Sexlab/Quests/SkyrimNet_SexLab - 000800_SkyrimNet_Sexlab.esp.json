@@ -114,6 +114,16 @@
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "stages",
             "Object": "000800:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "skyrimnet_sexlab_hide_dialogue_historic_instructions",
+            "Object": "000805:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "skyrimnet_sexlab_hide_hermaphrodites",
+            "Object": "000806:SkyrimNet_Sexlab.esp"
           }
         ]
       }

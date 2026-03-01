@@ -406,7 +406,9 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
     endif 
 
     msg += " "+GetNames(thread) ; Strapon Names 
-    msg += " "+GetNames(thread, actorLib) ; Futa Names 
+    if !main.hide_hermaphrodites
+        msg += " "+GetNames(thread, actorLib) ; Futa Names 
+    endif 
     msg += " "+GetCreatures(thread) ; Creature Names
 
     return msg

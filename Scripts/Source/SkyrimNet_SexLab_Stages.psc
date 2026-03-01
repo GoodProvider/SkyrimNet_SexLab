@@ -436,7 +436,7 @@ int[] Function GetOrgasmExpected(sslThreadController thread)
 
         String name = actors[i].GetDisplayName()
         bool expected = orgasm_expected[i] == 1 
-        Trace("GetOrgasmExpected","    "+i+" "+name+" pussy:"+has_pussy+" penis:"+has_penis+" orgasm_expected:"+expected+" reasoning:"+reason)
+        ; Trace("GetOrgasmExpected","    "+i+" "+name+" pussy:"+has_pussy+" penis:"+has_penis+" orgasm_expected:"+expected+" reasoning:"+reason)
         i -= 1
     endwhile
     Trace("GetOrgasmExpected","    orgasm_expected: "+orgasm_expected)

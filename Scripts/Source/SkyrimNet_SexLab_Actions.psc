@@ -11,10 +11,11 @@ EndFunction
 ;----------------------------------------------------------------------------------------------------
 ; Actions
 ;----------------------------------------------------------------------------------------------------
-Function RegisterActions(Bool rape_only=False) global
-    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+Function RegisterActions(SkyrimNet_SexLab_Main main, Bool rape_only=False) global
     String actions_fname = "Data/SKSE/Plugins/SkyrimNet_SexLab/actions.json"
     Trace("RegisterActions","loading "+actions_fname)
+
+    ;Trace("RegisterActions","DiaryOfMine (DOM) found: "+main.dom_found()+"  d_api: "+main.dom_api()+" d_sexlab: "+main.dom_sexlab())
 
     String type = GetTypesStrings()
     int actions = JValue.readFromFile(actions_fname) 
@@ -22,14 +23,13 @@ Function RegisterActions(Bool rape_only=False) global
     int i = 0 
     while i < count 
         int a = JArray.getObj(actions, i) 
-        Trace("RigsterActions", "i: "+i+" a: "+a)
          if a > 0
             String name = JMap.getStr(a, "name")
             if rape_only && name == "SexLab_Rape_Start" && !main.rape_allowed
                 SkyrimNetApi.UnregisterAction(name)
             elseif (!rape_only && name != "SexLab_Rape_Start") || main.rape_allowed
                 Trace("RegisterActions",\
-                    i+" name: "+JMap.getStr(a, "name")\
+                    "i: "+i+" name: "+JMap.getStr(a, "name")\
                     +" description: "+JMap.getStr(a, "description")\
                     +" scriptFileName: "+JMap.getStr(a, "scriptFileName")\ 
                     +" execute: "+JMap.getStr(a, "execute")\
@@ -203,15 +203,15 @@ EndFunction
 ;--------------------------------------------------
 
 sslThreadModel Function Sex_Start(Actor akActor, string contextJson, string paramsJson) global
-    return Sex_Start_Helper(akActor, contextJson, paramsJson, "None")
+    return Sex_Start_Helper(akActor, contextJson, paramsJson, "None", "")
 EndFunction
 
 sslThreadModel Function Raping_Target_Start(Actor akActor, string contextJson, string paramsJson) global
-    return Sex_Start_Helper(akActor, contextJson, paramsJson, "Target")
+    return Sex_Start_Helper(akActor, contextJson, paramsJson, "Target", "")
 EndFunction
 
 sslThreadModel Function Raping_Speaker_Start(Actor akActor, string contextJson, string paramsJson) global
-    return Sex_Start_Helper(akActor, contextJson, paramsJson, "Speaker")
+    return Sex_Start_Helper(akActor, contextJson, paramsJson, "Speaker", "")
 EndFunction
 
 sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, string paramsJson, String rape_victim, String hook="") global
@@ -228,11 +228,29 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
     ;-------------------------------
 
     Actor player = Game.GetPlayer() 
-    Actor target = SkyrimNetApi.GetJsonActor(paramsJson, "target", player)
+    Actor target = SkyrimNetApi.GetJsonActor(paramsJson, "target", None)
 
     String target_name = "None"
+    int num_victims = 0 
+    if target != None 
+        ;-------------------------------
+        if rape_victim == "Target" || rape_victim == "Speaker"
+            num_victims = 1 
+        endif 
+    endif 
+    Actor[] victims = PapyrusUtil.ActorArray(num_victims) 
+
     if target != None 
         String dynamic = SkyrimNetApi.GetJsonString(paramsJson, "dynamic", "submissive")
+        if victims.length > 0
+            if rape_victim == "Target"
+                victims[0] = target
+                dynamic = "dominate"
+            elseif rape_victim == "Speaker"        
+                victims[0] = akActor
+            endif 
+        endif 
+
         if dynamic == "dominate"
             Actor temp = akActor 
             akActor = target 
@@ -241,7 +259,7 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
         target_name = target.GetDisplayName() 
     endif
     String speaker_name = akActor.GetDisplayName()
-    Trace("Sex_Start","speaker: "+speaker_name+" target: "+target_name+" parts:"+SkyrimNet_SexLab_Utilities.JoinActors(parts))
+    Trace("Sex_Start_Helper","speaker: "+speaker_name+" target: "+target_name+" parts:"+SkyrimNet_SexLab_Utilities.JoinActors(parts))
 
     int num_parts = 0 
     Actor[] parts = new Actor[5]
@@ -268,11 +286,11 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
             endwhile
             if !found
                 String name = participant.GetDisplayName() 
-                Trace("Sex_Start",param+" is actor "+name)
+                Trace("Sex_Start_Helper",param+" is actor "+name)
                 parts[num_parts] = participant
                 num_parts += 1
             else 
-                Trace("Sex_Start",param+" is duplicate actor "+participant.GetDisplayName())
+                Trace("Sex_Start_Helper",param+" is duplicate actor "+participant.GetDisplayName())
             endif 
         endif 
         i += 1
@@ -287,6 +305,19 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
         if actors[i] == player
             has_player = True   
         endif
+
+        if main.dom_found()
+            Trace("Sex_Start_Helper","SkyrimNet_Dom found main.d_api:"+main.dom_api()+" main.d_sexlab:"+main.dom_sexlab())
+            if main.dom_api().IsDOMSlave(actors[i])
+                Trace("Sex_Start_Helper",actors[i].GetDisplayName()+" is a DOM Actor, setting animating faction and calling OnSexStartNPC")
+                main.dom_sexlab().SetAnimatingFaction(actors[i])
+                if i == 0
+                    main.dom_api().GetDomActor(actors[i]).OnSexStartNPC(target, true, victims.length > 0) 
+                else
+                    main.dom_api().GetDomActor(actors[i]).OnSexStartNPC(target, true, false) 
+                endif 
+            endif 
+        endif 
         i += 1 
     endwhile 
     if num_parts == 1
@@ -301,17 +332,6 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
     ;-------------------------------
     int style = GetStyle(main, paramsJson, has_player)
 
-    ;-------------------------------
-    int num_victims = 0 
-    if rape_victim == "Target" || rape_victim == "Speaker"
-        num_victims = 1 
-    endif 
-    Actor[] victims = PapyrusUtil.ActorArray(num_victims) 
-    if rape_victim == "Target"
-        victims[0] = target
-    elseif rape_victim == "Speaker"        
-        victims[0] = akActor
-    endif 
 
     ;-------------------------------
     ; Animations
@@ -322,7 +342,7 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
     endif 
     sslBaseAnimation[] anims =  GetAnims(main, actors, victims, player, tag, has_player) 
     if anims.length > 0 && anims[0] == None
-        Trace("Sex_Start","Failed to get animations actors: "+SkyrimNet_SexLab_Utilities.JoinActors(actors))
+        Trace("Sex_Start_Helper","Failed to get animations actors: "+SkyrimNet_SexLab_Utilities.JoinActors(actors))
         main.UnlockActors(actors) 
         return None
     endif 
@@ -334,7 +354,7 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
     ;-------------------------------
 
     if thread == None
-        Trace("Sex_Start","Failed to create thread")
+        Trace("Sex_Start_Helper","Failed to create thread")
         main.UnlockActors(actors)
         return None 
     endif
@@ -343,7 +363,7 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
     int count = actors.length 
     while i < count 
         if thread.addActor(actors[i]) < 0   
-            Trace("Sex_Start","Starting sex couldn't add " + actors[i].GetDisplayName())
+            Trace("Sex_Start_Helper","Starting sex couldn't add " + actors[i].GetDisplayName())
             main.UnLockActors(actors) 
             return None
         endif  
@@ -357,7 +377,7 @@ sslThreadModel Function Sex_Start_Helper(Actor akActor, string contextJson, stri
     endwhile  
 
     main.SetThreadStyle(thread.tid, style) 
-    Trace("Sex_Start",\
+    Trace("Sex_Start_Helper",\
          " actors: \""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+"\""\
         +" victims: \""+SkyrimNet_SexLab_Utilities.JoinActors(victims)+"\""\
         +" tag:"+tag\
@@ -401,7 +421,7 @@ sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, Actor[] actors,
         endif 
         Trace("GetAnims", "has_player: "+has_player+" player edit: "+main.sex_edit_tags_player\
             +" nonplayer edit: "+main.sex_edit_tags_nonplayer+" anims.length: "+anims.length)
-    elseif tag != ""
+    else
         String tagSupress = ""
         anims =  main.sexLab.GetAnimationsByTags(actors.length, tag, tagSupress, true)
     endif 
@@ -435,7 +455,7 @@ Bool Function Undress_IsEligible(Actor akActor, string contextJson, string param
         return false
     endif 
 
-    if main.dom_main_found
+    if main.dom_found()
         if SkyrimNet_DOM_Utils.GetSlave("SkryimNet_SexLab_Actions", "SexTaget_IsEligible", akActor,false,false) != None
             Trace("Undress_IsEligible",akActor.GetDisplayName()+"'s is controlled by SkyrimNet_DOM so ineligible")
             return False
@@ -469,7 +489,7 @@ Bool Function Dress_IsEligible(Actor akActor, string contextJson, string paramsJ
         return false
     endif 
 
-    if main.dom_main_found
+    if main.dom_found()
         if SkyrimNet_DOM_Utils.GetSlave("SkryimNet_SexLab_Actions", "SexTaget_IsEligible", akActor,false,false) != None
             Trace("Dress_IsEligible",akActor.GetDisplayName()+"'s is controlled by SkyrimNet_DOM so ineligible")
             return False
