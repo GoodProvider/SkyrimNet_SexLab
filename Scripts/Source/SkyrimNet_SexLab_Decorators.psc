@@ -663,9 +663,9 @@ String Function GetNames(sslThreadController thread, sslActorLibrary actorLib = 
     if names != "" 
         if actorLib != None 
             if num_actors == 1
-                names += " is a hermaphrodite."
+                names += " has a cock and pussy."
             else 
-                names += " are hermaphrodites."
+                names += " have a cock and pussy."
             endif
         else 
             if num_actors == 1

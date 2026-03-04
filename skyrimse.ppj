@@ -24,9 +24,9 @@
         <Import>@ModsFolder\Papyrus MessageBox - SKSE NG\Scripts\Source</Import>
 
 
-        <Import>@ModsFolder\SkyrimNet_DDUDNG\Scripts\Source</Import>
-        <Import>@ModsFolder\SkyrimNet_DDUDNG\PAPYRUS\SRC_DD</Import>
-        <Import>@ModsFolder\SkyrimNet_DDUDNG\PAPYRUS\SRC_SLA</Import>
+        <Import>@ModsFolder\SkyrimNet_UDNG\Scripts\Source</Import>
+        <Import>.\PapyrusSourcesDD\SRC_DD</Import>
+        <Import>.\PapyrusSourcesDD\SRC_SLA</Import>
 
         <Import>@ModsFolder\JContainers\scripts\source</Import>
 
@@ -43,6 +43,7 @@
         <Import>.\Headers\SLO Aroused NG</Import>
         <Import>.\Headers\OstimNet</Import>
         <Import>.\Headers\OStim</Import>
+        <Import>.\Headers\Devious Devices</Import>
         
         <Import>@ModsFolder\SkyrimNet DOM\scripts\Source</Import>
         <Import>@ModsFolder\SkyrimNet DOM\Headers\Ostim</Import>

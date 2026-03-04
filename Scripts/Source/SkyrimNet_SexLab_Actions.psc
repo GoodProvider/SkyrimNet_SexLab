@@ -15,7 +15,34 @@ Function RegisterActions(SkyrimNet_SexLab_Main main, Bool rape_only=False) globa
     String actions_fname = "Data/SKSE/Plugins/SkyrimNet_SexLab/actions.json"
     Trace("RegisterActions","loading "+actions_fname)
 
-    ;Trace("RegisterActions","DiaryOfMine (DOM) found: "+main.dom_found()+"  d_api: "+main.dom_api()+" d_sexlab: "+main.dom_sexlab())
+
+    if True 
+        Trace("RegisterActions","SexStart")
+        SkyrimNetApi.RegisterSubCategory( \
+            "SexStart", \
+            "Start consensual sex with one or more actors.", \
+            "SkyrimNet_SexLab_Actions", "Sex_Start_IsEligible", \
+            "", \
+            1, "", "SexLab_StartSex" \
+        )
+        SkyrimNetApi.RegisterAction( \
+            "Start_Sex", "Start sex with {target}.", \
+            "SkyrimNet_SexLab_Actions", "Sex_Start_IsEligible", \
+            "SkyrimNet_SexLab_Actions", "Sex_Start", \
+            "", "PAPYRUS_NESTED_ACTION", \
+            1,  "{\"Target\":\"Actor\"}", "SexLab_StartSex", "BodyAnimation" \
+        )
+        SkyrimNetApi.RegisterAction( \
+            "Start_Anal_Sex", "Start {dynamic} {style} oral sex with {target}.", \
+            "SkyrimNet_SexLab_Actions", "Sex_Start_IsEligible", \
+            "SkyrimNet_SexLab_Actions", "Sex_Start", \
+            "", "PAPYRUS_NESTED_ACTION", \
+            1,  "{\"Target\":\"Actor\",\"style\":\"forceful|normal|gentle\", \"type\":\"oral\", \"dynamic\":\"submissive|dominate\"}", \
+            "SexLab_StartSex", "BodyAnimation" \
+        )
+        return
+    endif 
+
 
     String type = GetTypesStrings()
     int actions = JValue.readFromFile(actions_fname) 
@@ -119,20 +146,6 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
     ;delta = time- time_last
     ;time_last = time
     ;Trace("BodyAnimation_tag","locked :"+delta)
-
-    ; Cuddle check 
-    if sexlab_main.cuddle_found
-        Faction cuddle_faction = Game.GetFormFromFile(0x801, "SkyrimNet_Cuddle.esp") as Faction
-        if cuddle_faction == None 
-            Trace("BodyAnimation_Tag","SkyrimNet_Cuddle_Main is None")
-            return false
-        endif
-        int rank = akActor.GetFactionRank(cuddle_faction) 
-        if rank > 0 
-            Trace("BodyAnimation_IsEligible",akActor.GetDisplayName()+" has a cuddle rank of "+rank)
-            return false
-        endif
-    endif 
 
     ;time = Utility.GetCurrentRealTime()
     ;delta = time- time_last

@@ -165,7 +165,6 @@ EndFunction
 
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
 string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
-; Stores if SLSO.esp is found
 
 ; Controls when Direction Narration occur 
 float Property direct_narration_cool_off Auto 
@@ -724,7 +723,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
             int num_orgasms = StorageUtil.GetIntValue(actors[j],actor_num_orgasms_key, 0)
             if num_orgasms < 1
                 if orgasm_expected.length > j && orgasm_expected[j] == 1
-                    after += actors[j].GetDisplayName()+" was denied an orgasm. "
+                    after += actors[j].GetDisplayName()+" failed to orgasm. "
                     target = actors[j]
                     orgasm_denied = true
                 endif
@@ -821,13 +820,19 @@ endEvent
 
 ; ----------------------------------------------------------------------------------------------------
 ; Orgasm Event Functions 
-; This function is not called when SLSO.esp is installed, as it has its own orgasm handling
+; This function is not called when flag SLSO, as it has its own orgasm handling
 ; ----------------------------------------------------------------------------------------------------
 Event Orgasm_Combined(int ThreadID, bool HasPlayer)
     if SexLab == None
         Trace("Orgasm_Combined","SexLab is None")
         return  
     endif
+
+    ; Ignore if separate orgasms is on, as it has its own handling
+    sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
+    if config.SeparateOrgasms 
+        return 
+    endif 
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
 
@@ -883,6 +888,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         i -= 1 
     endwhile 
 
+    SkyrimNetApi.PurgeDialogue()
     DirectNarration(narration, actors[0], None)
     ;if HasPlayer
         ;DirectNarration(narration, actors[0], None)
@@ -908,7 +914,11 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         return
     endif 
 
-    Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, akActor.GetDisplayName()+" is orgasming.")
+    String msg = akActor.GetDisplayName()+" orgasmed for the "+num_orgasms+" time."
+    if num_orgasms > 1
+        msg += " Growing stronger each time."
+    endif 
+    Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, msg)
 EndEvent
 
 Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orgasms, String msg, bool require_narration = false)
@@ -941,6 +951,7 @@ Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orga
     bool has_thread = thread != None
     Trace("Orgasm_Individual","has_player:"+has_player+" male:"+male+" cum_catcher:"+cum_catcher_name+" msg:"+msg)
 
+    SkyrimNetApi.PurgeDialogue()
     DirectNarration(msg, akActor, cum_catcher)
 ;    if has_player || require_narration
 ;        DirectNarration(msg, akActor, cum_catcher)
@@ -1006,7 +1017,7 @@ String Function AddCum(sslThreadController thread, int position, Actor akActor, 
     endif 
 
     if places != ""
-        return name+"'s "+places+" are dripping with warm sticky cum. "
+        return name+"'s "+places+" is dripping with warm sticky cum. "
     endif 
     return "" 
 EndFunction  

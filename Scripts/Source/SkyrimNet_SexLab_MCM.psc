@@ -762,9 +762,13 @@ Function MutliTarget_Menu_Selection(Actor player)
     Trace("MultiTarget_Menu_Selection","type:"+type+" next:"+next+" group:"+SkyrimNet_SexLab_Utilities.JoinActors(group))
 
     if type == "cuddle>"
-        ;SkyrimNet_Cuddle.StageStart(
+        if next < 2
+            Trace("MultiTarget_Menu_Selection","Not enough actors selected for cuddling.")
+            Debug.Notification("Select at least 2 actors to cuddle.")
+            return
+        endif
+        SkyrimNet_Cuddle_API.StartCuddling(group[0], group[1])
     else 
-
         if next == 1
             SkyrimNet_SexLab_Actions.Sex_Start_Helper(group[0], "", "", "None") 
         else 

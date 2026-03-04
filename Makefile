@@ -1,4 +1,4 @@
-VERSION=0.26.2
+VERSION=0.26.5
 NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
@@ -14,6 +14,10 @@ merge:
 update: 
 	updateSpriggit.bat 
 	serialize.bat 
+
+dd: 
+	cd headers
+	git clone https://github.com/IHateMyKite/PapyrusSourcesDD
 
 release: 
 	python3 ./python_scripts/fomod-info.py -v ${VERSION} -n '${NAME}' -o fomod/info.xml fomod-source/info.xml

@@ -187,8 +187,7 @@ Function DirectNarration_Optional(String event_type, String msg, Actor source=No
 EndFunction
 
 Function DirectNarration(String msg, Actor source=None, Actor target=None) global
-
-    msg = CheckDuplicate("DirectNarration", source, msg)
+    ; msg = CheckDuplicate("DirectNarration", source, msg)
 
     SkyrimNetApi.DirectNarration(msg, source, target)
     ;SkyrimNetApi.RegisterEvent("sexlab_event", msg, source, target)
