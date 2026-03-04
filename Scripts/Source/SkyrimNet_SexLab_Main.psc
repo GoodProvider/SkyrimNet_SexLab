@@ -550,8 +550,8 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
+    Debug.Notification("Thread status:"+ (thread as sslThreadModel).GetState())
 
-    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
     if (HasPlayer && sex_edit_tags_player) || (!HasPlayer && sex_edit_tags_nonplayer)
         SexStyleDialog(thread) 
     endif 
@@ -582,9 +582,116 @@ event AnimationStart(int ThreadID, bool HasPlayer)
         target = actors[1]
     endif
     active_sex = true
+
+    String bleeding_msg = First_Sex_Blood(actors, thread)
+    if bleeding_msg != ""
+        desc = desc + " "+bleeding_msg
+    endif 
     DirectNarration(desc, actors[0], target)
     thread_started[thread.tid] = False 
 endEvent
+
+String Function First_Sex_Blood(Actor[] actors, sslThreadController thread) 
+    String msg = "" 
+    String[] types = new String[8]
+    types[0] = "VaginalCount"
+    types[1] = "AnalCount"
+    types[2] = "OralCount"
+
+    sslBaseAnimation anim = thread.Animation
+    int i = actors.length - 1
+    while 0 <= i 
+        int j = types.length - 1 
+        while 0 <= j
+            int count = Sexlab.GetActorStatInt(actors[i], types[j])
+            if count == 0 
+                if types[j] == "VaginalCount" && anim.HasTag("Vaginal")
+                    int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
+                    if gender == 1 
+                        msg += actors[i].GetDisplayName()+" was a virgin. Her pussy is bleeding. "
+                    endif
+                elseif i == 0 && types[j] == "AnalCount" && anim.HasTag("Anal")
+                    msg += actors[i].GetDisplayName()+" has never had anal sex. Their ass is bleeding. "
+                endif 
+            endif 
+            j -= 1
+        endwhile 
+        i -= 1
+    endwhile
+    return msg 
+EndFunction 
+
+String Function First_Time(Actor[] actors, sslThreadController thread) 
+    String msg = "" 
+    if actors.length == 1 && SexLab.GetActorStatInt(actors[0], "Masturbation") == 0
+        msg = actors[0].GetDisplayName()+" is masturbating for the first time. "
+    endif 
+    int i = actors.length - 1
+    String[] types = new String[8]
+    types[1] = "Females"
+    types[2] = "Creatures"
+    types[3] = "Aggressor"
+    types[4] = "Victim"
+    types[5] = "VaginalCount"
+    types[6] = "AnalCount"
+    types[7] = "OralCount"
+
+    Keyword ActorTypeCreature = Game.GetFormFromFile(0x13795, "Skyrim.esm") as Keyword
+
+    sslBaseAnimation anim = thread.Animation
+    while 0 <= i 
+        int j = types.length - 1 
+        while 0 <= j
+            int count = Sexlab.GetActorStatInt(actors[i], types[j])
+            Debug.Notification(actors[i].GetDisplayName()+" "+types[j]+": "+count)
+            if count == 0 
+                if False && (types[j] == "Males" || types[j] == "Females" || types[j] == "Creatures")
+                    int k = actors.length - 1 
+                    bool male_found = false
+                    bool female_found = false 
+                    bool creature_found = false
+                    while 0 <= k 
+                        if k != i
+                            int gender = actors[k].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
+                            if gender == 1 
+                                female_found = true
+                            else 
+                                male_found = true
+                            endif
+                            if actors[k].HasKeyword(ActorTypeCreature)
+                                creature_found = true
+                            endif 
+                        endif
+                        k -= 1
+                    endwhile 
+                    if types[j] == "Males" && !male_found
+                        msg += actors[i].GetDisplayName()+" has never had sex with a male before."
+                    endif 
+                    if types[j] == "Females" && !female_found
+                        msg += actors[i].GetDisplayName()+" has never had sex with a female before."
+                    endif 
+                    if types[j] == "Creatures" && !creature_found
+                        msg += actors[i].GetDisplayName()+" has never had sex with a creature before."
+                    endif 
+                elseif types[j] == "Aggressor" && thread.IsAggressor(actors[i])
+                    msg += actors[i].GetDisplayName()+" is raping for the first time."
+                elseif types[j] == "Victim" && thread.IsVictim(actors[i])
+                    msg += actors[i].GetDisplayName()+" is being raped for the first time."
+                elseif types[j] == "VaginalCount" && anim.HasTag("Vaginal")
+                    msg += actors[i].GetDisplayName()+" has never had vaginal sex before."
+                elseif types[j] == "AnalCount" && anim.HasTag("Anal")
+                    msg += actors[i].GetDisplayName()+" has never had anal sex before."
+                elseif types[j] == "OralCount" && anim.HasTag("Oral")
+                    msg += actors[i].GetDisplayName()+" has never had oral sex before."
+                endif 
+            endif 
+            j -= 1
+        endwhile 
+        i -= 1
+    endwhile
+    Debug.Notification(msg)
+    return msg 
+EndFunction 
         
 Function StartStop_DirectNarration(sslThreadController thread, String status, Bool HasPlayer)
     Actor[] actors = thread.Positions
@@ -888,7 +995,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         i -= 1 
     endwhile 
 
-    SkyrimNetApi.PurgeDialogue()
+    SkyrimNetApi.PurgeDialogue(True)
     DirectNarration(narration, actors[0], None)
     ;if HasPlayer
         ;DirectNarration(narration, actors[0], None)
@@ -951,7 +1058,7 @@ Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orga
     bool has_thread = thread != None
     Trace("Orgasm_Individual","has_player:"+has_player+" male:"+male+" cum_catcher:"+cum_catcher_name+" msg:"+msg)
 
-    SkyrimNetApi.PurgeDialogue()
+    SkyrimNetApi.PurgeDialogue(True)
     DirectNarration(msg, akActor, cum_catcher)
 ;    if has_player || require_narration
 ;        DirectNarration(msg, akActor, cum_catcher)

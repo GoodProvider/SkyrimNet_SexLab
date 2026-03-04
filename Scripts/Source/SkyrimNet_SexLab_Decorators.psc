@@ -507,6 +507,8 @@ EndFunction
 
 String Function GetLocation(sslThreadController thread) global
 
+    int bed = thread.BedTypeId
+
     String loc = "the floor"
     if  bed == 1
         loc = "a bedroll "
@@ -516,7 +518,6 @@ String Function GetLocation(sslThreadController thread) global
         loc = "a double bed "
     endif 
 
-    int bed = thread.BedTypeId
     String[] on_furniture = new String[21]
     on_furniture[0] = "Table"
     on_furniture[1] = "LowTable"
