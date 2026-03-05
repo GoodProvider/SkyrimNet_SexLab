@@ -550,7 +550,6 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
-    Debug.Notification("Thread status:"+ (thread as sslThreadModel).GetState())
 
     if (HasPlayer && sex_edit_tags_player) || (!HasPlayer && sex_edit_tags_nonplayer)
         SexStyleDialog(thread) 
