@@ -494,7 +494,7 @@ Function Undress_Execute(Actor akActor, string contextJson, string paramsJson) g
     Trace("Undress_Execute", akActor.GetDisplayName())
     Form[] forms = main.sexlab.StripActor(akActor, akActor, false, false) 
     main.StoreStrippedItems(akActor, forms)
-    SkyrimNet_SexLab_Utilities.RegisterEvent(akActor.GetDisplayName()+" finishes undressing.", akActor, None)
+    SkyrimNet_SexLab_Utilities.RegisterEvent("Undress", akActor.GetDisplayName()+" finishes undressing.", akActor, None)
 EndFunction
 
 Bool Function Dress_IsEligible(Actor akActor, string contextJson, string paramsJson) global
@@ -536,7 +536,7 @@ Function Dress_Execute(Actor akActor, string contextJson, string paramsJson) glo
     if forms.length > 0
         Trace("Dress_Execute",akActor.GetDisplayName()+" unstripping "+forms)
         main.sexlab.UnStripActor(akActor, forms, false) 
-        SkyrimNet_SexLab_Utilities.RegisterEvent(akActor.GetDisplayName()+" finishes dressing.", akActor, None)
+        SkyrimNet_SexLab_Utilities.RegisterEvent("Dress", akActor.GetDisplayName()+" finishes dressing.", akActor, None)
     else 
         Trace("Dress_Execute",akActor.GetDisplayName()+" has no stripped items")
     endif 
