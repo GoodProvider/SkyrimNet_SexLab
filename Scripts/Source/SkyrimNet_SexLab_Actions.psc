@@ -15,6 +15,8 @@ Function RegisterActions(SkyrimNet_SexLab_Main main, Bool rape_only=False) globa
     String actions_fname = "Data/SKSE/Plugins/SkyrimNet_SexLab/actions.json"
     Trace("RegisterActions","loading "+actions_fname)
 
+    Trace("Setup","DiaryOfMine (DOM) found: "+main.dom_found()+"  d_api: "+main.dom_api()+" d_sexlab: "+main.dom_sexlab())
+
 
     if False
         Trace("RegisterActions","SexStart")
@@ -189,7 +191,12 @@ Bool Function Sex_Start_IsEligible(Actor akActor, string contextJson, string par
     return Sex_Start_Helper_IsEligible(akActor, contextJson, paramsJson, false)
 EndFunction
 
-Bool Function MastrubationStart_IsEligible(Actor akActor, string contextJson, string paramsJson) global
+Bool Function Mastrubation_Start_IsEligible(Actor akActor, string contextJson, string paramsJson) global
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    if main.IsDomSlave(akActor)
+        Trace("Mastrubation_Start_IsEligible", akActor.GetDisplayName()+" is a DOM slave so ineligible for sexlab masturbation")
+        return False
+    endif
     return Sex_Start_Helper_IsEligible(akActor, contextJson, paramsJson, true)
 EndFunction
 

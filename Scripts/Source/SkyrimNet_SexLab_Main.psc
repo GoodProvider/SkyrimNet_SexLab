@@ -163,6 +163,23 @@ DOM_SexLab Function dom_sexlab()
     return d_sexlab_internal
 EndFunction
 
+Function CheckForDOM()
+ ; SkyrimNet DOM 
+    if MiscUtil.FileExists("Data/DiaryOfMine.esm")
+        dom_found_internal = True
+        Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
+        if DOM01 != None 
+            d_api_internal = DOM01 as DOM_API
+            d_sexlab_internal = DOM01 as DOM_SexLab
+        endif
+    else 
+        dom_found_internal = False
+        d_api_internal = None 
+        d_sexlab_internal = None
+    endif 
+    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found_internal+"  d_api: "+d_api_internal+" d_sexlab: "+d_sexlab_internal)
+EndFunction
+
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
 string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
 
@@ -243,19 +260,7 @@ Function Setup()
 
 
     ; SkyrimNet DOM 
-    if MiscUtil.FileExists("Data/DiaryOfMine.esp")
-        dom_found_internal = True
-        Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
-        if DOM01 != None 
-            d_api_internal = DOM01 as DOM_API
-            d_sexlab_internal = DOM01 as DOM_SexLab
-        endif
-    else 
-        dom_found_internal = False
-        d_api_internal = None 
-        d_sexlab_internal = None
-    endif 
-    Trace("Setup","DiaryOfMine (DOM) found: "+dom_found_internal+"  d_api: "+d_api_internal+" d_sexlab: "+d_sexlab_internal)
+    CheckForDOM()
 
     ; SkyrimNet Cuddle 
     cuddle_found_internal = MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp")
@@ -1130,7 +1135,9 @@ EndFunction
 
 ; Increases the 
 Bool Function IsDOMSlave(Actor akActor)
+    Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "| dom_found_internal:"+dom_found_internal)
     if dom_found_internal
+        Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "slave:"+SkyrimNet_DOM_Utils.IsDOMSlave(akActor))
         return SkyrimNet_DOM_Utils.IsDOMSlave(akActor)
     endif 
     return False 

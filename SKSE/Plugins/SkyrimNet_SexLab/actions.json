@@ -2,7 +2,7 @@
     {
         "name": "Start_Mastrubation",
         "scriptFileName": "SkyrimNet_SexLab_Actions",
-        "isEligible": "Sex_Start_IsEligible",
+        "isEligible": "Mastrubation_Start_IsEligible",
         "execute": "Sex_Start",
         "priority": 10,
         "tags": "BodyAnimation",
