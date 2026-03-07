@@ -595,29 +595,37 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     thread_started[thread.tid] = False 
 endEvent
 
+; This isn't working right now, not sure why :( 
 String Function First_Sex_Blood(Actor[] actors, sslThreadController thread) 
     String msg = "" 
-    String[] types = new String[8]
+    String[] types = new String[2]
+    types[0] = "Vaginal"
+    types[1] = "Anal"
     types[0] = "VaginalCount"
     types[1] = "AnalCount"
-    types[2] = "OralCount"
 
+    sslActorStats Stats = (Sexlab as Quest) as sslActorStats
     sslBaseAnimation anim = thread.Animation
     int i = actors.length - 1
     while 0 <= i 
         int j = types.length - 1 
         while 0 <= j
-            int count = Sexlab.GetActorStatInt(actors[i], types[j])
+            int count = Stats.GetSkill(actors[i], types[j])
             if count == 0 
                 if types[j] == "VaginalCount" && anim.HasTag("Vaginal")
                     int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
+                    msg += actors[i].GetDisplayName()+" was a virgin."
                     if gender == 1 
-                        msg += actors[i].GetDisplayName()+" was a virgin. Her pussy is bleeding. "
+                        msg += " Her pussy is bleeding. "
                     endif
-                elseif i == 0 && types[j] == "AnalCount" && anim.HasTag("Anal")
-                    msg += actors[i].GetDisplayName()+" has never had anal sex. Their ass is bleeding. "
+                elseif types[j] == "AnalCount" && anim.HasTag("Anal")
+                    msg += actors[i].GetDisplayName()+" has never had anal sex. "
+                    if i == 0 
+                        msg += " Their ass is bleeding. "
+                    endif
                 endif 
             endif 
+            ;Trace("First_Sex_Blood","actor:"+actors[i].GetDisplayName()+" type:"+types[j]+" count:"+count+" msg:"+msg)
             j -= 1
         endwhile 
         i -= 1

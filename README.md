@@ -2,6 +2,12 @@
 
 Adds SkyrimNet support to SexLab.
 
+## Help
+- My NPCs don't want to have casual sex!
+   - **People normally don't want to have sex where others can see them**: 
+        - SkyrimNet has a set of nearby NPCs, the code doesn't currently 
+   there are nearby_npcs and is most english writing people don't have casual sex with other people are near. This you can fix by switching to whisper mod, the new Text input even shows you who is nearby. Second make sure that specify in your world settings file the social normals where casual sex witll happen. Note that in the middle ages, sex outside of marriage was a crime.
+
 # Actions 
 - NPC will be able to start sex
   - ability to set a style of sex: forceful, normal, or gentle 
@@ -83,6 +89,8 @@ The following and depedancies:
 - [SkyUI SE](https://www.nexusmods.com/skyrimspecialedition/mods/12604)
   [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561)
    - [UIExtensions_UITextEntryMenu_with_VR_support](https://github.com/mrowrpurr/UIExtensions_UITextEntryMenu_with_VR_support) (VR users)
+- [Primsa UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
+    - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - SkyrimNet (Beta7 or later)
    - You must have narration enabled
 - SkryimNet_SexLab (this mod) 
