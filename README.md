@@ -2,11 +2,15 @@
 
 Adds SkyrimNet support to SexLab.
 
-## Help
+## F.A.Q.
 - My NPCs don't want to have casual sex!
    - **People normally don't want to have sex where others can see them**: 
-        - SkyrimNet has a set of nearby NPCs, the code doesn't currently 
-   there are nearby_npcs and is most english writing people don't have casual sex with other people are near. This you can fix by switching to whisper mod, the new Text input even shows you who is nearby. Second make sure that specify in your world settings file the social normals where casual sex witll happen. Note that in the middle ages, sex outside of marriage was a crime.
+        - Use whipser mode to reduce the number of people watching 
+            - SkyrimNet allows people to see/hear through walls/floors
+    - **Check your social world settings to match the kind of sex you want** 
+- My NPCs keep having too much sex! 
+    - **Change [arousal prompts](https://github.com/GoodProvider/SkyrimNet_SexLab/blob/main/SKSE/Plugins/SkyrimNet/prompts/submodules/character_bio/0005_sexlab_variables.prompt#L12) to make your actors less horny**
+    - **Check your social world settings to match the kind of sex you want** 
 
 # Actions 
 - NPC will be able to start sex
