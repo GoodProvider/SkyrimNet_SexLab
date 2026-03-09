@@ -702,7 +702,7 @@ Function MutliTarget_Menu_Selection(Actor player)
         listMenu.AddEntryItem(type)
 
         i = 0
-        while i < num_actors
+        while 0 <= i && i < num_actors
             bool found = false 
             j = 0 
             while j < next && !found 
@@ -733,7 +733,11 @@ Function MutliTarget_Menu_Selection(Actor player)
                 finished = True 
             endif 
         elseif index == 1 
-            type = SexRapeSelection()
+            if type == "sex>"
+                type = "rape>"
+            Else
+                type = "sex>"
+            endif 
         elseif index < num_actors + 2
             index -= 2
             if indexes[index] == -1 
