@@ -8,6 +8,7 @@ GlobalVariable Property sexlab_public_sex_accepted Auto
 
 SkyrimNet_SexLab_Main Property main Auto  
 SkyrimNet_SexLab_Stages Property stages Auto 
+SkyrimNet_SexLab_Actions Property actions Auto 
 
 bool hot_key_toggle = False 
 int sex_edit_key = 40 ; 26
@@ -46,6 +47,8 @@ int Property sexlab_ostim_player_menu Auto  ; menu id
 int Property sexlab_ostim_nonplayer_menu Auto  ; menu id 
 
 Function Setup() 
+    actions = (main as Quest) as SkyrimNet_SexLab_Actions
+
      if sexlab_ostim_options.length == 0
         sexlab_ostim_options = new String[2]
         sexlab_ostim_options[0] = "SexLab"
@@ -273,7 +276,6 @@ EndState
 State RapeAllowedToggle
     Event OnSelectST()
         main.rape_allowed = !main.rape_allowed
-        Skyrimnet_sexlab_Actions.RegisterActions(main, True)
         SetToggleOptionValueST(main.rape_allowed)
     EndEvent
     Event OnHighlightST()
@@ -538,13 +540,13 @@ Function Target_Menu_Selection(Actor target, Actor player)
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
     if button == masturbate
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{}", "None", "")
+        actions.Masturbation_Start(target, "normal", "")
     elseif button == sex
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "None", "")
+        actions.Sex_Start(target, player, "normal", "", target)
     elseif button == rapes
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Target", "")
+        actions.Rape_Start(target, player, "normal", "", target)
     elseif button == raped_by
-        SkyrimNet_SexLab_Actions.Sex_Start_Helper(target, "", "{\"target\":\""+player.GetDisplayName()+"\"}", "Speaker", "")
+        actions.Rape_Start(target, player, "normal", "", player)
     elseif button == clothing
 
         ;--------------------------------------------------
@@ -571,9 +573,9 @@ Function Target_Menu_Selection(Actor target, Actor player)
         ;--------------------------------------------------
         ; Now do the action 
         if target_is_undressed
-            SkyrimNet_SexLab_Actions.Dress_Execute(target, "", "")
+            actions.Outfit_Execute(target,"undress","")
         else
-            SkyrimNet_SexLab_Actions.Undress_Execute(target, "", "")
+            actions.Outfit_Execute(target,"dress","")
         endif 
 
     elseif button == cuddle 
@@ -770,7 +772,7 @@ Function MutliTarget_Menu_Selection(Actor player)
         SkyrimNet_Cuddle_API.StartCuddling(group[0], group[1])
     else 
         if next == 1
-            SkyrimNet_SexLab_Actions.Sex_Start_Helper(group[0], "", "", "None") 
+            actions.Masturbation_Start(group[0], "normal", "")
         else 
             String json = "{\"target\":\""+group[1].GetDisplayName()+"\""
             i = 2 
@@ -783,10 +785,13 @@ Function MutliTarget_Menu_Selection(Actor player)
 
             String rape_victim = "None" 
             if type == "rape>"
-                rape_victim = "Speaker"
+                Actor[] victims = new Actor[1]
+                victims[0] = group[0]
+                actions.Sex_Start_Helper(group, victims, "normal", "")
+            else 
+                Actor[] victims = PapyrusUtil.ActorArray(0) 
+                actions.Sex_Start_Helper(group, victims, "normal", "")
             endif   
-
-            SkyrimNet_SexLab_Actions.Sex_Start_Helper(group[0], "", json, rape_victim) 
         endif 
     endif 
 EndFunction

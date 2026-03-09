@@ -105,7 +105,7 @@ You are physically engaged in intense sexual activity right now.
 ** Final Rule ** 
 - Do not include periods or dots in dialogue!
 - Each dialogue must be a different idea
-- The final response can include only 2 sentences. One descriptive and one optional spoken.
+- The final response can include only 2 sentences. One descriptive and one optional short spoken sentence.
 
      {% else %}
 {{ "## You Are Aware of Nearby Sexual Activity" }}

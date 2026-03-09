@@ -259,7 +259,7 @@ Function EditDescriptions(sslThreadController thread)
         elseif button == tracking 
             ToggleThreadTracking(thread.tid)
         elseif button == style_edit 
-            main.SexStyleDialog(thread) 
+            main.SexStyleDialog(thread.tid,  thread.GetVictim() != None) 
         endif 
     endwhile 
 EndFunction 

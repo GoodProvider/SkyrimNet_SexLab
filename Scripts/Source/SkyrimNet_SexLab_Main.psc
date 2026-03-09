@@ -115,6 +115,7 @@ int Property STYLE_FORCEFULLY = 0 Auto
 int Property STYLE_NORMALLY = 1 Auto 
 int Property STYLE_GENTLY = 2 Auto 
 int Property STYLE_SILENTLY = 3 Auto 
+String style_string_current = "" ; Used by Anims Dialogue, to return the Style
 int[] thread_style
 bool[] thread_started
 
@@ -319,7 +320,7 @@ Function Setup()
     endif 
 
     RegisterSexlabEvents()
-    SkyrimNet_SexLab_Actions.RegisterActions(self)
+    ((self as Quest) as SkyrimNet_SexLab_Actions).Setup()
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
 EndFunction
 
@@ -556,9 +557,18 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
 
-    if (HasPlayer && sex_edit_tags_player) || (!HasPlayer && sex_edit_tags_nonplayer)
-        SexStyleDialog(thread) 
+    sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(actors.length, "whip", "", true)
+    Trace("AnimationStart","Found "+anims.length+" whip animations for "+actors.length+" actors")
+    if anims.length > 0 
+        Trace("AnimationStart","Found whip animation, applying to thread "+ThreadID)
+        thread.ClearAnimations()
+        thread.SetAnimations(anims)
+        sslBaseAnimation[] before = thread.GetAnimations()
+        thread.SetStartingAnimation(anims[0])
+        sslBaseAnimation[] after = thread.GetAnimations()
+        Trace("AnimationStart","Thread "+ThreadID+" anims:"+anims.length +" before: "+before.length+" after: "+after.length)
     endif 
+
     SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 
     int i = actors.length - 1
@@ -1377,32 +1387,34 @@ EndFunction
 ; 0 forcefully 
 ; 1 normally 
 ; 2 gently 
-int Function SexStyleDialog(sslThreadController thread)
+int Function SexStyleDialog(int thread_id, bool rape)
     String[] buttons = new String[3] 
 
-    sslBaseAnimation anim = thread.Animation
-    Actor[] actors = thread.Positions
-    int k = actors.length - 1
-    bool rape = False
-    while 0 <= k && !rape
-        if thread.IsVictim(actors[k])
-            rape = True 
-        endif 
-        k -= 1
-    endwhile
+;    Actor[] actors = thread.Positions
+;    int k = actors.length - 1
+;    bool rape = False
+;    while 0 <= k && !rape
+;        if thread.IsVictim(actors[k])
+;            rape = True 
+;        endif 
+;        k -= 1
+;    endwhile
 
     if !rape
         buttons[STYLE_FORCEFULLY] = "Forcefully Fuck"
         buttons[STYLE_NORMALLY] = "Have Sex"
         buttons[STYLE_GENTLY] = "Gently make love"
-    else 
+    else
         buttons[STYLE_FORCEFULLY] = "Violently Raping"
         buttons[STYLE_NORMALLY] = "Raping"
         buttons[STYLE_GENTLY] = "Gently Raping"
     endif 
-    String msg = Thread_Narration(thread, "are")+"\nChange style to:"
-    int style = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int 
-    thread_style[thread.tid] = style 
+    ;String msg = Thread_Narration(thread as sslThreadController, "are")+"\nChange style to:"
+    int style = SkyMessage.ShowArray("Change style to:", buttons, getIndex = true) as int 
+    if style < STYLE_FORCEFULLY || style > STYLE_GENTLY
+        style = STYLE_NORMALLY
+    endif 
+    thread_style[thread_id] = style 
     return style
 EndFunction
 
@@ -1414,7 +1426,7 @@ EndFunction
 ;        thread.SetAnimations(anims)
 ;   endif 
 ;
-sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actors, String type, String tag)
+sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors, String type, String tag)
     String names = SkyrimNet_SexLab_Utilities.JoinActors(actors)
     Trace("GetAnimsDialog","names: "+names+" tag:"+tag)
 
@@ -1435,6 +1447,12 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
     if (includes_player && !sex_edit_tags_player) || (!includes_player && !sex_edit_tags_nonplayer)
         return empty 
     endif 
+
+    ; Style to strings 
+    String[] style_strings = new String[3]
+    style_strings[STYLE_FORCEFULLY] = "style:forcefully>"
+    style_strings[STYLE_NORMALLY] = "style:normally>"  
+    style_strings[STYLE_GENTLY] = "style:gently>"
 
     ; Current set of tags
     String[] tags = new String[10]
@@ -1466,9 +1484,11 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
     JValue.retain(groups)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     String start_label = "<start "+type+">"
+    bool rape = type == "rape"
     while True
         bool finished = false
         String tags_str= ""
+        String style_str = style_strings[thread_style[thread.tid]]
         while next < count_max && !finished
             listMenu.ResetMenu()
 
@@ -1485,6 +1505,7 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
             ; Use the current set of tags 
             String tags_label = "tags:"+tags_str
             listMenu.AddEntryItem(names)
+            listMenu.AddEntryItem(style_str)
             listMenu.AddEntryItem(tags_label)
             listMenu.AddEntryItem(start_label)
 
@@ -1513,8 +1534,11 @@ sslBaseAnimation[] Function GetAnimsDialog(SexLabFramework sexlab, Actor[] actor
                 button = GroupDialog(group_tags, button)
             endif 
 
-            if button == start_label
+            if button == start_label 
                 finished = true
+            elseif button == style_str
+                int style = SexStyleDialog(thread.tid, rape)
+                style_str = style_strings[style]
             elseif button == "<cancel>"
                 JValue.release(groups)
                 return empty
