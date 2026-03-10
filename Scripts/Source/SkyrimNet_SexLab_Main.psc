@@ -609,8 +609,8 @@ endEvent
 String Function First_Sex_Blood(Actor[] actors, sslThreadController thread) 
     String msg = "" 
     String[] types = new String[2]
-    types[0] = "Vaginal"
-    types[1] = "Anal"
+    types[0] = "Female"
+    types[1] = "Male"
     types[0] = "VaginalCount"
     types[1] = "AnalCount"
 
@@ -812,6 +812,10 @@ EndEvent
 
 
 event AnimationEnd(int ThreadID, bool HasPlayer)
+    AnimationEndFunction(ThreadID, HasPlayer) 
+EndEvent 
+
+Function AnimationEndFunction(int ThreadID, bool HasPlayer) 
     ; String desc = stages.GetStageDescription(SexLab.GetController(ThreadID))
     ; if desc != ""
         ; Actor[] actors = SexLab.GetController(ThreadID).Positions
@@ -911,8 +915,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
     endif
 
     thread_style[thread.tid] = STYLE_NORMALLY
-
-endEvent
+EndFunction 
 
 ; Function AllowedDeniedOnlyIncrease(Actor[] actors, sslThreadController thread, String status)
     ; if !MiscUtil.FileExists("Data/SexLabAroused.esm") 

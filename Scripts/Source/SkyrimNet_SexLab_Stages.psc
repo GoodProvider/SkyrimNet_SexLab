@@ -3,6 +3,8 @@ Scriptname SkyrimNet_SexLab_Stages extends Quest
 import SkyrimNet_SexLab_Main
 import StorageUtil
 
+SkyrimNet_SexLab_Actions actions = None 
+
 Bool Property hide_help = false Auto
 
 Actor player = None 
@@ -51,6 +53,7 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Function Setup()
+    actions = (self as Quest) As SkyrimNet_SexLab_Actions 
     String temp = "sl" ; attempt to set the capitalization of sl 
 
     ; Devious Devices
@@ -169,17 +172,19 @@ Function EditDescriptions(sslThreadController thread)
     String fname = GetFilename(thread)
     Trace("EditDescriptions","fname: "+fname)
 
-    String[] buttons = new String[7]
+    String[] buttons = new String[8]
     int desc_prev = 0 
     int desc_edit = 1 
     int desc_next = 2 
-    int orgasm_edit = 3 
-    int tracking = 4 
-    int style_edit = 5
-    int done = 6
+    int stop = 3
+    int orgasm_edit = 4 
+    int tracking = 5 
+    int style_edit = 6
+    int done = 7
     buttons[desc_prev] = "Previous"
     buttons[desc_edit] = "Desc. Edit"
     buttons[desc_next] = "Next"
+    buttons[stop] = "Stop"
     buttons[orgasm_edit] = "Orgasm Expected"
     buttons[tracking] = "Start Tracking" 
     buttons[style_edit] = "Style"
@@ -254,6 +259,9 @@ Function EditDescriptions(sslThreadController thread)
             endif 
         elseif button == desc_edit  
             EditorDescription(main, thread)
+        elseif button == stop 
+            actions.Sex_Stop(actors[0])
+            return
         elseif button == orgasm_edit 
             SetOrgasmExpected(main, thread)
         elseif button == tracking 

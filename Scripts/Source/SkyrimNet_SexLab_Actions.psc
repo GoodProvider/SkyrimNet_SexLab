@@ -268,6 +268,22 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
     return thread 
 EndFunction
 
+;--------------------------------------
+; Stop Function 
+;--------------------------------------
+
+Function Sex_Stop(Actor akActor) 
+    Direc
+    sslThreadController thread = main.GetThread(akActor) 
+    main.AnimationEndFunction(thread.tid,true,true) 
+    sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
+    thread_slots.StopThread(thread) 
+EndFunction 
+
+;--------------------------------------
+; Functions 
+;--------------------------------------
+
 sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, sslThreadModel thread, Actor[] actors, Actor[] victims, Actor player, String tag, Bool has_player) global
     String names = SkyrimNet_SexLab_Utilities.JoinActors(actors) 
     String victim_names = SkyrimNet_SexLab_Utilities.JoinActors(victims) 
