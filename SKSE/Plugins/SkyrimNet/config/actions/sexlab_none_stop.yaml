@@ -1,0 +1,18 @@
+name: Sex_Stop
+description: "Stop Consensual sex."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: Sex_Stop
+defaultPriority: 7
+parameterMapping:
+  - type: speaker
+    name: consenting speaker
+    description: Speaker Actor parameter (triggering entity)
+eligibilityRules:
+  - conditions:
+      - decoratorName: is_in_faction
+        arguments:
+          - currentActor
+          - SexLabAnimatingFaction
+        comparisonOperator: ==
+        expectedValue: true
