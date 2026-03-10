@@ -126,6 +126,9 @@
             "Object": "000806:SkyrimNet_Sexlab.esp"
           }
         ]
+      },
+      {
+        "Name": "SkyrimNet_SexLab_Actions"
       }
     ],
     "FileName": "",
