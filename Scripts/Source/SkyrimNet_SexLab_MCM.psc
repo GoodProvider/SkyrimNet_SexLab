@@ -496,8 +496,8 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif 
     int masturbate = 0
     int sex = 1
-    int raped_by = 2
-    int rapes = 3
+    int raped_by_player = 2
+    int rapes_player = 3
     int clothing = 4
     int cancel = 5
 
@@ -520,8 +520,8 @@ Function Target_Menu_Selection(Actor target, Actor player)
 
     buttons[masturbate] = "masturbate"
     buttons[sex] = "have sex with player"
-    buttons[raped_by] = "raped by player"
-    buttons[rapes] = "rapes the player"
+    buttons[raped_by_player] = "raped by player"
+    buttons[rapes_player] = "rapes the player"
     buttons[clothing] = clothing_string
     if cuddle != -2 
         buttons[cuddle] = "cuddle"
@@ -542,11 +542,11 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if button == masturbate
         actions.Masturbation_Start(target, "normal", "")
     elseif button == sex
-        actions.Sex_Start(target, player, "normal", "", target)
-    elseif button == rapes
-        actions.Rape_Start(target, player, "normal", "", target)
-    elseif button == raped_by
+        actions.Sex_Start(target, player, "normal", "", "getting")
+    elseif button == rapes_player
         actions.Rape_Start(target, player, "normal", "", player)
+    elseif button == raped_by_player
+        actions.Rape_Start(target, player, "normal", "", target)
     elseif button == clothing
 
         ;--------------------------------------------------

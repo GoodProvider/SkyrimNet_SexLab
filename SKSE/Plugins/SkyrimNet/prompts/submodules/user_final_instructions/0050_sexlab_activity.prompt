@@ -6,16 +6,16 @@
 {# ----------------------------------------------------- #} 
 {% set actor_having_sex = false %} 
 {% set actor_rape_victim = false %}
-{% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
-     {% if not isTimePaused %}
-          {% set sexlab = sexlab_get_threads(speaker.UUID) -%}
-          {% if not sexlab.threads %}
-               {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
-          {% endif %}
-     {% else %} 
+{% if not isTimePaused %}
+     {% set sexlab = sexlab_get_threads(speaker.UUID) -%}
+     {% if not sexlab.threads %}
           {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
      {% endif %}
-     
+{% else %} 
+     {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+{% endif %}
+
+{% if length(sexlab.threads) > 0 %} 
      {% set actor_having_sex = false %} 
      {% for thread in sexlab.threads %}
           {% if contains(thread.victims, npc.name) %} 
@@ -103,7 +103,7 @@ You are physically engaged in intense sexual activity right now.
    - dailogue must be present tense. "-ing."
 
 ** Final Rule ** 
-- Do not include periods or dots in dialogue!
+- Do not include periods, dots, or dashes "—" in dialogue!
 - Each dialogue must be a different idea
 - The final response can include only 2 sentences. One descriptive and one optional short spoken sentence.
 

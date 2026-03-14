@@ -8,6 +8,8 @@ import SkyrimNet_SexLab_Stages
 import SkyrimNet_SexLab_Utilities
 import StorageUtil
 
+Faction Property SkyrimNet_SexLab_Faction_Victim Auto
+
 ; ---------------------------------------------------
 ; Globals 
 ; ---------------------------------------------------
@@ -146,6 +148,7 @@ String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated"
 String Property storage_should_naked = "skyrimnet_sexlab_should_be_naked" Auto
 
 SkyrimNet_SexLab_Stages Property stages Auto
+SkyrimNet_SexLab_Stats Property stats Auto 
 SexLabFramework Property sexlab Auto 
 
 ; -----------------------------
@@ -228,6 +231,20 @@ EndEvent
 
 Function Setup()
     Trace("SetUp","")
+
+    ; Setup related Scripts 
+    stages = (self as Quest) as SkyrimNet_SexLab_Stages 
+    stages.Setup() 
+
+    stats = (self as Quest) as SkyrimNet_SexLab_Stats 
+    stats.Setup()
+
+    skyrimnet_sexlab_active_sex = Game.GetformFromFile(0x802, "SkyrimNet_SexLab.esp") as GlobalVariable
+    active_sex = false
+
+    SkyrimNet_SexLab_MCM mcm = (self as Quest) as SkyrimNet_SexLab_MCM
+    mcm.Setup() 
+
         
     ; Setup the enable if found 
     if MiscUtil.FileExists("Data/TT_OStimNet.esp")
@@ -272,16 +289,6 @@ Function Setup()
     BUTTON_NO_SILENT = 2 
     BUTTON_NO = 3
 
-    ; Setup related Scripts 
-    if stages == None
-        stages = (self as Quest) as SkyrimNet_SexLab_Stages
-    endif 
-    stages.Setup() 
-    skyrimnet_sexlab_active_sex = Game.GetformFromFile(0x802, "SkyrimNet_SexLab.esp") as GlobalVariable
-    active_sex = false
-
-    SkyrimNet_SexLab_MCM mcm = (self as Quest) as SkyrimNet_SexLab_MCM
-    mcm.Setup() 
 
     ; Direct Narration 
     if direct_narration_cool_off == 0 
@@ -554,20 +561,22 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     if SexLab == None
         return  
     endif
+
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
 
-    sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(actors.length, "whip", "", true)
-    Trace("AnimationStart","Found "+anims.length+" whip animations for "+actors.length+" actors")
-    if anims.length > 0 
-        Trace("AnimationStart","Found whip animation, applying to thread "+ThreadID)
-        thread.ClearAnimations()
-        thread.SetAnimations(anims)
-        sslBaseAnimation[] before = thread.GetAnimations()
-        thread.SetStartingAnimation(anims[0])
-        sslBaseAnimation[] after = thread.GetAnimations()
-        Trace("AnimationStart","Thread "+ThreadID+" anims:"+anims.length +" before: "+before.length+" after: "+after.length)
-    endif 
+    ; This didn't work. it reset the animes, some of the time, but could also give you random results
+    ;sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(actors.length, "whip", "", true)
+    ;Trace("AnimationStart","Found "+anims.length+" whip animations for "+actors.length+" actors")
+    ;if anims.length > 0 
+        ;Trace("AnimationStart","Found whip animation, applying to thread "+ThreadID)
+        ;thread.ClearAnimations()
+        ;thread.SetAnimations(anims)
+        ;sslBaseAnimation[] before = thread.GetAnimations()
+        ;thread.SetStartingAnimation(anims[0])
+        ;sslBaseAnimation[] after = thread.GetAnimations()
+        ;Trace("AnimationStart","Thread "+ThreadID+" anims:"+anims.length +" before: "+before.length+" after: "+after.length)
+    ;endif 
 
     SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 
@@ -578,165 +587,40 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     endwhile 
 
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
-    if config.SeparateOrgasms
-        actors = thread.Positions
-        int j = actors.length - 1 
-        while 0 <= j 
+    actors = thread.Positions
+    Actor[] victims = thread.victims
+    int j = actors.length - 1 
+    while 0 <= j 
+        bool is_victim = False
+        i = victims.length - 1
+        while 0 <= i && !is_victim
+            if actors[j] == victims[i] 
+                is_victim = True 
+            endif 
+            i -= 1 
+        endwhile  
+        if is_victim
+            actors[j].AddtoFaction(SkyrimNet_SexLab_Faction_Victim)
+        else 
+            actors[j].RemoveFromFaction(SkyrimNet_SexLab_Faction_Victim)
+        endif 
+
+        Trace("AnimationStart",actors[j].GetDisplayName()+" is_victim:"+is_victim+" in victim faction "+actors[j].IsInFaction(SkyrimNet_SexLab_Faction_Victim))
+        if config.SeparateOrgasms
             Trace("AnimationStart","actor:"+actors[j].GetDisplayName()+" reset num orgasm and storing thread_id")
             StorageUtil.SetIntValue(actors[j], actor_num_orgasms_key, 0)
             StorageUtil.SetIntValue(actors[j], actor_thread_id, ThreadID)
-            j -= 1 
-        endwhile 
-    endif 
+        endif 
+        j -= 1 
+    endwhile 
 
-    sslActorLibrary actorLib = (SexLab as Quest) as sslActorLibrary
-    String desc = Get_Thread_Description(thread, actorLib)
-    Actor target = None 
-    if actors.length > 2 && actors[0] != actors[1]
-        target = actors[1]
-    endif
     active_sex = true
 
-    String bleeding_msg = First_Sex_Blood(actors, thread)
-    if bleeding_msg != ""
-        desc = desc + " "+bleeding_msg
-    endif 
-    DirectNarration(desc, actors[0], target)
+    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
     thread_started[thread.tid] = False 
 endEvent
 
-; This isn't working right now, not sure why :( 
-String Function First_Sex_Blood(Actor[] actors, sslThreadController thread) 
-    String msg = "" 
-    String[] types = new String[2]
-    types[0] = "Female"
-    types[1] = "Male"
-    types[0] = "VaginalCount"
-    types[1] = "AnalCount"
 
-    sslActorStats Stats = (Sexlab as Quest) as sslActorStats
-    sslBaseAnimation anim = thread.Animation
-    int i = actors.length - 1
-    while 0 <= i 
-        int j = types.length - 1 
-        while 0 <= j
-            int count = Stats.GetSkill(actors[i], types[j])
-            if count == 0 
-                if types[j] == "VaginalCount" && anim.HasTag("Vaginal")
-                    int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
-                    msg += actors[i].GetDisplayName()+" was a virgin."
-                    if gender == 1 
-                        msg += " Her pussy is bleeding. "
-                    endif
-                elseif types[j] == "AnalCount" && anim.HasTag("Anal")
-                    msg += actors[i].GetDisplayName()+" has never had anal sex. "
-                    if i == 0 
-                        msg += " Their ass is bleeding. "
-                    endif
-                endif 
-            endif 
-            ;Trace("First_Sex_Blood","actor:"+actors[i].GetDisplayName()+" type:"+types[j]+" count:"+count+" msg:"+msg)
-            j -= 1
-        endwhile 
-        i -= 1
-    endwhile
-    return msg 
-EndFunction 
-
-String Function First_Time(Actor[] actors, sslThreadController thread) 
-    String msg = "" 
-    if actors.length == 1 && SexLab.GetActorStatInt(actors[0], "Masturbation") == 0
-        msg = actors[0].GetDisplayName()+" is masturbating for the first time. "
-    endif 
-    int i = actors.length - 1
-    String[] types = new String[8]
-    types[1] = "Females"
-    types[2] = "Creatures"
-    types[3] = "Aggressor"
-    types[4] = "Victim"
-    types[5] = "VaginalCount"
-    types[6] = "AnalCount"
-    types[7] = "OralCount"
-
-    Keyword ActorTypeCreature = Game.GetFormFromFile(0x13795, "Skyrim.esm") as Keyword
-
-    sslBaseAnimation anim = thread.Animation
-    while 0 <= i 
-        int j = types.length - 1 
-        while 0 <= j
-            int count = Sexlab.GetActorStatInt(actors[i], types[j])
-            Debug.Notification(actors[i].GetDisplayName()+" "+types[j]+": "+count)
-            if count == 0 
-                if False && (types[j] == "Males" || types[j] == "Females" || types[j] == "Creatures")
-                    int k = actors.length - 1 
-                    bool male_found = false
-                    bool female_found = false 
-                    bool creature_found = false
-                    while 0 <= k 
-                        if k != i
-                            int gender = actors[k].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
-                            if gender == 1 
-                                female_found = true
-                            else 
-                                male_found = true
-                            endif
-                            if actors[k].HasKeyword(ActorTypeCreature)
-                                creature_found = true
-                            endif 
-                        endif
-                        k -= 1
-                    endwhile 
-                    if types[j] == "Males" && !male_found
-                        msg += actors[i].GetDisplayName()+" has never had sex with a male before."
-                    endif 
-                    if types[j] == "Females" && !female_found
-                        msg += actors[i].GetDisplayName()+" has never had sex with a female before."
-                    endif 
-                    if types[j] == "Creatures" && !creature_found
-                        msg += actors[i].GetDisplayName()+" has never had sex with a creature before."
-                    endif 
-                elseif types[j] == "Aggressor" && thread.IsAggressor(actors[i])
-                    msg += actors[i].GetDisplayName()+" is raping for the first time."
-                elseif types[j] == "Victim" && thread.IsVictim(actors[i])
-                    msg += actors[i].GetDisplayName()+" is being raped for the first time."
-                elseif types[j] == "VaginalCount" && anim.HasTag("Vaginal")
-                    msg += actors[i].GetDisplayName()+" has never had vaginal sex before."
-                elseif types[j] == "AnalCount" && anim.HasTag("Anal")
-                    msg += actors[i].GetDisplayName()+" has never had anal sex before."
-                elseif types[j] == "OralCount" && anim.HasTag("Oral")
-                    msg += actors[i].GetDisplayName()+" has never had oral sex before."
-                endif 
-            endif 
-            j -= 1
-        endwhile 
-        i -= 1
-    endwhile
-    Debug.Notification(msg)
-    return msg 
-EndFunction 
-        
-Function StartStop_DirectNarration(sslThreadController thread, String status, Bool HasPlayer)
-    Actor[] actors = thread.Positions
-    String narration = Thread_Narration(thread, status)
-    Actor target = None
-    if actors.length >= 2 && actors[0] != actors[1]
-        target = actors[1]
-    endif 
-    ;String name = "None"
-    ;if target != None
-        ;name = target.GetDisplayName()
-    ;endif
-    ;Trace("StartStop_DirectNarration","status:"+status+" narration:"+narration+" actors.length:"+actors.length+" target:"+name)
-    if status == "start"
-        if HasPlayer
-            DirectNarration(narration, actors[0], target)
-        else
-            DirectNarration_Optional("sexlab_event", narration, actors[0], target)
-        endif
-    else
-        RegisterEvent("sexlab_event", narration, actors[0], target)
-    endif 
-EndFunction
 
 Event StageStart(int ThreadID, bool HasPlayer)
     if SexLab == None
@@ -762,9 +646,14 @@ Event StageStart(int ThreadID, bool HasPlayer)
     String event_type = "sexlab_event"
     if !thread_started[ThreadID]
         thread_started[ThreadID] = True 
+
+        String desc = Get_Thread_Description(thread, actorLib)
+        String first_sex = stats.First_Sex(actors, thread)
+        if first_sex != ""
+            desc = desc + " "+first_sex
+        endif 
+        DirectNarration(desc, actors[0], target)
         ;AllowedDeniedOnlyIncrease(actors, thread, "start") 
-        ;StartStop_DirectNarration(thread,"start", HasPlayer)
-        ;DirectNarration(desc, actors[0], target)
     else 
         String desc = Get_Thread_Description(thread, actorLib)
         ContinueActivity(actors[0], target, True)
@@ -812,10 +701,10 @@ EndEvent
 
 
 event AnimationEnd(int ThreadID, bool HasPlayer)
-    AnimationEndFunction(ThreadID, HasPlayer) 
+    AnimationEndFunction(ThreadID, HasPlayer, None) 
 EndEvent 
 
-Function AnimationEndFunction(int ThreadID, bool HasPlayer) 
+Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder) 
     ; String desc = stages.GetStageDescription(SexLab.GetController(ThreadID))
     ; if desc != ""
         ; Actor[] actors = SexLab.GetController(ThreadID).Positions
@@ -834,9 +723,30 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer)
     int i = actors.length - 1
     while 0 <= i 
         names[i] = actors[i].GetDisplayName()
+        actors[i].RemoveFromFaction(SkyrimNet_SexLab_Faction_Victim)
         i -= 1
     endwhile
-    String narration = SkyrimNetAPI.JoinStrings(names, nouns)
+
+    String narration = ""
+    bool has_tentacles = False 
+
+    if  thread.Animation.HasTag("tentacles")
+        has_tentacles = True 
+        narration = "The tentacles orgasm flooding cum both inside and outside. "
+    endif
+    if actorEnder != None 
+        if actors.length < 2
+            narration = actorEnder.GetDisplayName()+" has choosen to stop having sex. "
+        else 
+            Actor partner = actors[0]
+            if partner == actorEnder 
+                partner = actors[1]
+            endif 
+            narration = actorEnder.GetDisplayName()+" tells "+partner.GetDisplayName()+" to stop having sex. "
+        endif 
+    endif 
+
+    narration += SkyrimNetAPI.JoinStrings(names, nouns)
     if actors.length > 2
         narration += " stop having sex."
     else
@@ -884,8 +794,9 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer)
         endif 
     endif 
     
-    Trace("AnimationEnd","orgasm_denied:"+orgasm_denied+" target:"+target+" narration:"+narration)
-    if orgasm_denied
+    if actorEnder != None || has_tentacles
+        DirectNarration(narration, actors[0], target)
+    elseif orgasm_denied
         DirectNarration_Optional(narration, actors[0], target)
     else
         RegisterEvent("sexlab_end", narration, target)
@@ -1046,9 +957,11 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         return
     endif 
 
-    String msg = akActor.GetDisplayName()+" orgasmed for the "+num_orgasms+" time."
-    if num_orgasms > 1
-        msg += " Growing stronger each time."
+    String msg = ""
+    if num_orgasms == 1
+        msg += akActor.GetDisplayName()+" orgasmed."
+    else
+        msg += akActor.GetDisplayName()+" orgasmed again."
     endif 
     Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, msg)
 EndEvent
@@ -1186,78 +1099,68 @@ String Function Thread_Narration(sslThreadController thread, String status)
     ; Get our list of actors that were in this animation thread.
     Actor[] actors = thread.Positions
 
-    if actors.length == 1 
-        if status == "start"
-            return actors[0].GetDisplayName()+" starts masturbating."
+    int num_victims = 0
+    int k = actors.length - 1
+    while 0 <= k 
+        if thread.IsVictim(actors[k])
+            num_victims += 1   
+        endif 
+        k -= 1
+    endwhile
+
+    if num_victims == 0
+        String actors_str = ActorsToString(actors)
+        int style = thread_style[thread.tid] 
+        String style_str = "having a sexual experience." 
+        if style == STYLE_FORCEFULLY 
+            style_str = "having a forcefully sexual experience."
+        elseif style == STYLE_GENTLY
+            style_str = "having a gently making love experience."
+        endif 
+
+        if status == "start" 
+            return actors_str+" start "+style_str
         elseif status == "are"
-            return actors[0].GetDisplayName()+" is masturbating."
-        else
-            return actors[0].GetDisplayName()+" stops masturbating."
+            return actors_str+" are "+style_str
+        else 
+            return actors_str+" stop "+style_str 
         endif 
     else
-        int num_victims = 0
-        int k = actors.length - 1
+        Actor[] victims = PapyrusUtil.ActorArray(num_victims)
+        Actor[] aggressors = PapyrusUtil.ActorArray(actors.length - num_victims)
+        int v = 0
+        int a = 0 
+        k = actors.length - 1
         while 0 <= k 
             if thread.IsVictim(actors[k])
-                num_victims += 1   
+                victims[v] = actors[k]
+                v += 1
+            else 
+                aggressors[a] = actors[k]
+                a += 1
             endif 
             k -= 1
         endwhile
+        String victims_str = ActorsToString(victims)
+        String aggressors_str = ActorsToString(aggressors)
 
-        if num_victims == 0
-            String actors_str = ActorsToString(actors)
-            int style = thread_style[thread.tid] 
-            String style_str = "having a sexual experience." 
-            if style == STYLE_FORCEFULLY 
-                style_str = "having a forcefully sexual experience."
-            elseif style == STYLE_GENTLY
-                style_str = "having a gently making love experience."
-            endif 
-
-            if status == "start" 
-                return actors_str+" start "+style_str
-            elseif status == "are"
-                return actors_str+" are "+style_str
-            else 
-                return actors_str+" stop "+style_str 
-            endif 
-        else
-            Actor[] victims = PapyrusUtil.ActorArray(num_victims)
-            Actor[] aggressors = PapyrusUtil.ActorArray(actors.length - num_victims)
-            int v = 0
-            int a = 0 
-            k = actors.length - 1
-            while 0 <= k 
-                if thread.IsVictim(actors[k])
-                    victims[v] = actors[k]
-                    v += 1
-                else 
-                    aggressors[a] = actors[k]
-                    a += 1
-                endif 
-                k -= 1
-            endwhile
-            String victims_str = ActorsToString(victims)
-            String aggressors_str = ActorsToString(aggressors)
-
-            int style = thread_style[thread.tid] 
-            String style_str = "" 
-            if style == STYLE_FORCEFULLY 
-                style_str = "forcefully "
-            elseif style == STYLE_GENTLY
-                style_str = "gently "
-            endif 
-
-            if status == "start"
-                return aggressors_str+" starts "+style_str+"raping "+victims_str+"."
-            elseif status == "are"
-                return aggressors_str+" is "+style_str+"raping "+victims_str+"."
-            else 
-                return aggressors_str+" stops "+style_str+"raping "+victims_str+"."   
-            endif 
+        int style = thread_style[thread.tid] 
+        String style_str = "" 
+        if style == STYLE_FORCEFULLY 
+            style_str = "forcefully "
+        elseif style == STYLE_GENTLY
+            style_str = "gently "
         endif 
 
-    endif
+        if status == "start"
+            return aggressors_str+" starts "+style_str+"raping "+victims_str+"."
+        elseif status == "are"
+            return aggressors_str+" is "+style_str+"raping "+victims_str+"."
+        else 
+            return aggressors_str+" stops "+style_str+"raping "+victims_str+"."   
+        endif 
+        return ""
+    endif 
 EndFunction 
 String Function ActorsToString(Actor[] actors) global
     String names = ""
@@ -1412,7 +1315,6 @@ int Function SexStyleDialog(int thread_id, bool rape)
         buttons[STYLE_NORMALLY] = "Raping"
         buttons[STYLE_GENTLY] = "Gently Raping"
     endif 
-    ;String msg = Thread_Narration(thread as sslThreadController, "are")+"\nChange style to:"
     int style = SkyMessage.ShowArray("Change style to:", buttons, getIndex = true) as int 
     if style < STYLE_FORCEFULLY || style > STYLE_GENTLY
         style = STYLE_NORMALLY

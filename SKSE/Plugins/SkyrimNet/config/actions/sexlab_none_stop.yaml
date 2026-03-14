@@ -16,3 +16,9 @@ eligibilityRules:
           - SexLabAnimatingFaction
         comparisonOperator: ==
         expectedValue: true
+      - decoratorName: is_in_faction
+        arguments:
+          - currentActor
+          - SkyrimNet_SexLab_Faction_Victim
+        comparisonOperator: ==
+        expectedValue: false

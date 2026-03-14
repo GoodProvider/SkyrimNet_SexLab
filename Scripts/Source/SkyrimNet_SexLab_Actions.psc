@@ -83,11 +83,11 @@ EndFunction
 ; Sex Start Functions 
 ;--------------------------------------------------
 
-sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, string tag, Actor bottom)
-    Trace("Sex_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" type: "+tag+" bottom: "+bottom.GetDisplayName())
+sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, string direction, string tag)
+    Trace("Sex_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" direction: "+direction+" type: "+tag)
     Actor[] actors = new Actor[2]
-    String dynamic = ""
-    if target == bottom
+
+    if (tag == "oral|handjob|thighjob|fisting|footjob" && direction == "getting") || direction == "giving"
         actors[0] = Target
         actors[1] = Speaker
     else
@@ -96,6 +96,23 @@ sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, str
     endif
 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
+    return Sex_Start_helper(actors, victims, style, tag) 
+EndFunction
+
+sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, string tag, Actor victim)
+    Trace("Rape_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" type: "+tag+" victim: "+victim.GetDisplayName())
+    Actor[] actors = new Actor[2]
+    if Target == victim
+        actors[0] = Target
+        actors[1] = Speaker
+    else
+        actors[1] = Target
+        actors[0] = Speaker
+    endif
+
+    Actor[] victims = PapyrusUtil.ActorArray(1) 
+    victims[0] = actors[0]
+
     return Sex_Start_helper(actors, victims, style, tag) 
 EndFunction
 
@@ -131,22 +148,6 @@ sslThreadModel Function Orgy_Start(Actor Speaker, Actor paraticipate, string sty
     return Sex_Start_helper(actors, victims, style, tag) 
 EndFunction
 
-sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, string tag, Actor victim)
-    Trace("Rape_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" type: "+tag+" victim: "+victim.GetDisplayName())
-    Actor[] actors = new Actor[2]
-    if Target == victim
-        actors[0] = Target
-        actors[1] = Speaker
-    else
-        actors[1] = Target
-        actors[0] = Speaker
-    endif
-
-    Actor[] victims = PapyrusUtil.ActorArray(1) 
-    victims[0] = actors[0]
-
-    return Sex_Start_helper(actors, victims, style, tag) 
-EndFunction
 
 sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String tag)
     Trace("Masturbation_Start",Speaker.GetDisplayName()+" style: "+style+" tag: "+tag)
@@ -204,13 +205,11 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
 
     sslThreadModel thread = main.sexlab.NewThread()
 
-    ; Add Victims 
-    ; Trace("Sex_Start_Helper","Adding victims")
-    i = victims.length - 1
-    while 0 <= i 
-        thread.SetVictim(victims[i])
-        i -= 1 
-    endwhile  
+    if thread == None
+        Trace("Sex_Start_Helper","Failed to create thread")
+        main.UnlockActors(actors)
+        return None 
+    endif
 
     ; Set the style 
     int style_int = main.STYLE_NORMALLY
@@ -232,14 +231,7 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
         thread.SetAnimations(anims) 
     endif 
     ;-------------------------------
-
-    if thread == None
-        Trace("Sex_Start_Helper","Failed to create thread")
-        main.UnlockActors(actors)
-        return None 
-    endif
-    
-    Trace("Sex_Start_Helper","Thread created, adding actors")
+    Trace("Sex_Start_Helper","adding actors")
     i = 0 
     int count = actors.length 
     while i < count 
@@ -252,6 +244,12 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
     endwhile 
 
 
+    ; Add Victims 
+    i = victims.length - 1
+    while 0 <= i 
+        thread.SetVictim(victims[i])
+        i -= 1 
+    endwhile  
 
     Trace("Sex_Start_Helper",\
          " actors: \""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+"\""\
@@ -273,11 +271,11 @@ EndFunction
 ;--------------------------------------
 
 Function Sex_Stop(Actor akActor) 
-    Direc
     sslThreadController thread = main.GetThread(akActor) 
-    main.AnimationEndFunction(thread.tid,true,true) 
+    main.AnimationEndFunction(thread.tid,true, akActor) 
     sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
     thread_slots.StopThread(thread) 
+
 EndFunction 
 
 ;--------------------------------------
@@ -320,20 +318,6 @@ sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, sslThreadModel 
 
     return anims 
 EndFunction 
-
-int Function GetStyle(SkyrimNet_SexLab_Main main , String paramsJson, bool has_player) global
-    if (main.sex_edit_tags_player && has_player) || (main.sex_edit_tags_nonplayer && !has_player)
-        String style_str = SkyrimNetApi.GetJsonString(paramsJson, "style","normal")
-        int style = main.STYLE_NORMALLY
-        if style_str == "gentle" 
-            style = main.STYLE_GENTLY 
-        elseif style_str == "forceful"
-            style = main.STYLE_FORCEFULLY
-        endif  
-        return style 
-    endif 
-    return main.STYLE_NORMALLY
-EndFunction
 
 ; -------------------------------------------------
 ; Dress and Undress

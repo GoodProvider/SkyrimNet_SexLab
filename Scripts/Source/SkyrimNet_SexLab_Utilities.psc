@@ -76,14 +76,14 @@ String Function JoinStringsFiltered(String[] strings, int[] filter, Bool add_is_
     endwhile 
 
     i = 0
-    int j = total 
+    int j = 0
     string joined = "" 
     while i < count
         if filter[i] == 1
-            if joined != "" 
+            if j > 0
                 if total > 2
                     joined += ", "
-                    if j == count - 1 
+                    if j == total - 1 
                         joined += "and "
                     endif
                 else

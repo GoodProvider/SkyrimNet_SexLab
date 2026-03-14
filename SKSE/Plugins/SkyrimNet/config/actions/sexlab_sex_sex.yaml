@@ -1,6 +1,6 @@
 customCategory: sexlab_sex
 name: Sex_Start
-description: "Consensual [style] [type] sex."
+description: "Consensual [style] [direction] [type] sex."
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Sex_Start
@@ -15,12 +15,12 @@ parameterMapping:
   - type: dynamic
     name: style
     description: forceful|normal|gentle
+  - type: dynamic 
+    name: direction 
+    description: giving|getting
   - type: dynamic
     name: type
     description: oral|vaginal|anal|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjob
-  - type: dynamic
-    name: bottom
-    description: Target or Speaker who is bottom sexually.
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value

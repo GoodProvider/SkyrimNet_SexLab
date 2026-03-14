@@ -13,6 +13,9 @@ parameterMapping:
     name: target
     description: sexual partner
   - type: dynamic
+    name: direction
+    description: giving|getting
+  - type: dynamic
     name: style
     description: forceful|normal|gentle
   - type: dynamic

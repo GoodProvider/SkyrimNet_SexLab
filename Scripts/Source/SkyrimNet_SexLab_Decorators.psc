@@ -18,7 +18,8 @@ EndFunction
 Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("sexlab_get_threads", "SkyrimNet_SexLab_Decorators", "Get_Threads")
     SkyrimNetApi.RegisterDecorator("sexlab_get_player_los_distance", "SkyrimNet_SexLab_Decorators", "Player_LOS_Distance")
-    SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
+    ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
+    SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
     Trace("SkyrimNet_SexLab_Decorators","RegisterDecorattors called")
 EndFunction
 
@@ -61,6 +62,41 @@ EndFunction
 ;
 ; slot: 19 NoBody
 ; slot: 
+
+String Function Speaker_Info(Actor speaker) global 
+    SkyrimNet_SexLab_Stats stats = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stats
+    String[] groups = new String[3] 
+    groups[0] = "experiences"
+    groups[1] = "races"
+    groups[2] = "partners"
+
+    String stats_string = "" 
+    int i = 2
+    while 0 <= i 
+        if stats_string != "" 
+            stats_string += ","
+        endif 
+        String[] names = stats.ListFirstTime(speaker,groups[i]) 
+        int j = names.length - 1 
+        String ns = "" 
+        while 0 <= j 
+            if ns != "" 
+                ns += ","
+            endif 
+            int freq = stats.GetFirstTime(speaker,groups[i],names[j])
+            ns += "{\"name\":\""+names[j]+"\",\"frequency\":"+freq+"}"
+            j -= 1 
+        endwhile 
+        stats_string += "\"sex_"+groups[i]+"\":["+ns+"]"
+        i -= 1 
+    endwhile 
+
+
+    String json = "{\"stats\":{"+stats_string+"}}"
+    Trace("Speaker_Info",json)
+    return json 
+EndFunction
+
 
 String Function Player_LOS_Distance(Actor akActor) global 
     Actor player = Game.GetPlayer() 
