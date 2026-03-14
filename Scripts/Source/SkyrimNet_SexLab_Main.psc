@@ -1391,6 +1391,7 @@ sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors
     String start_label = "<start "+type+">"
     bool rape = type == "rape"
     while True
+        String order_str ="change order>"
         bool finished = false
         String tags_str= ""
         String style_str = style_strings[thread_style[thread.tid]]
@@ -1410,6 +1411,9 @@ sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors
             ; Use the current set of tags 
             String tags_label = "tags:"+tags_str
             listMenu.AddEntryItem(names)
+            if actors.length > 1 
+                listMenu.AddEntryItem(order_str)
+            endif 
             listMenu.AddEntryItem(style_str)
             listMenu.AddEntryItem(tags_label)
             listMenu.AddEntryItem(start_label)
@@ -1444,6 +1448,17 @@ sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors
             elseif button == style_str
                 int style = SexStyleDialog(thread.tid, rape)
                 style_str = style_strings[style]
+            elseif button == order_str 
+                if actors.length > 1 
+                    Actor temp = actors[0]
+                    i = 0 
+                    while i < actors.length - 1 
+                        actors[i] = actors[i+1] 
+                        i += 1 
+                    endwhile 
+                    actors[i] = temp 
+                    names = SkyrimNet_SexLab_Utilities.JoinActors(actors)
+                endif 
             elseif button == "<cancel>"
                 JValue.release(groups)
                 return empty

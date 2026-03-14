@@ -1,0 +1,23 @@
+{% if (render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "book") %}
+    {% if not isTimePaused %}
+        {{"## Number of itime had a Sexual Experiences " }}
+        {{ sexlab_speaker }} 
+        {% if length(sexlab_speaker.stats.sex_experiences) == 0 %} 
+            - {{actor_name}} is a virgin.
+        {% else %} 
+            {% for experience in sexlab_speaker.stats.sex_experiences %}  
+                   - {{experience.name}}: {{experience.frequency}} 
+            {% endfor %} 
+            {{"## Number of times had sex with Race " }}
+            {% for race in sexlab_speaker.stats.sex_Races %}  
+                   - {{race.name}}: {{race.frequency}} 
+            {% endfor %} 
+            {{"## Number of times had sex with a Person " }}
+            {% for actor in sexlab_speaker.stats.sex_partners %}  
+                   - {{actor.name}}: {{actor.frequency}} 
+            {% endfor %} 
+        {% endif %} 
+    {% else %} 
+       ----- Time Paused -----
+    {% endif %} 
+{% endif %} 
