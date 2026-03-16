@@ -1,7 +1,6 @@
 {% if (render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "book") %}
     {% if not isTimePaused %}
         {{"## Number of itime had a Sexual Experiences " }}
-        {{ sexlab_speaker }} 
         {% if length(sexlab_speaker.stats.sex_experiences) == 0 %} 
             - {{actor_name}} is a virgin.
         {% else %} 
@@ -18,6 +17,5 @@
             {% endfor %} 
         {% endif %} 
     {% else %} 
-       ----- Time Paused -----
     {% endif %} 
 {% endif %} 

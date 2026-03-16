@@ -2,6 +2,7 @@ Scriptname SkyrimNet_SexLab_Decorators
 
 import SkyrimNet_SexLab_Main
 import SkyrimNet_SexLab_Stages
+import PO3_SKSEFunctions
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Decorators."+func+"] "+msg
@@ -20,6 +21,7 @@ Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("sexlab_get_player_los_distance", "SkyrimNet_SexLab_Decorators", "Player_LOS_Distance")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
+    SkyrimNetApi.RegisterDecorator("sexlab_outfit_options", "SkyrimNet_SexLab_Decorators", "Outfit_Options")
     Trace("SkyrimNet_SexLab_Decorators","RegisterDecorattors called")
 EndFunction
 
@@ -62,6 +64,21 @@ EndFunction
 ;
 ; slot: 19 NoBody
 ; slot: 
+String Function Outfit_Options(Actor speaker) global 
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    if main.HasStrippedItems(speaker)
+        return "{\"option\":\"dress\"}"
+    else
+        ; Minimal Dress
+        if speaker.WornHasKeyword(Keyword.GetKeyword("EroticArmor")) || speaker.WornHasKeyword(Keyword.GetKeyword("sla_ArmorSpendex")) || speaker.WornHasKeyword(Keyword.GetKeyword("sla_ArmorHalfNakedBikini")) || speaker.WornHasKeyword(Keyword.GetKeyword("sla_ArmorHalfNaked"))
+            return "{\"option\":\"undress\"}"
+        ; Fully Dressed
+        elseif speaker.WornHasKeyword(Keyword.GetKeyword("ArmorCuirass")) || speaker.WornHasKeyword(Keyword.GetKeyword("ClothingBody")) || speaker.HasSpell(PO3_SKSEFunctions.GetFormFromEditorID("REQ_Conjuration3_Bound_Armor") as Spell)
+            return "{\"option\":\"undress\"}"
+        endif
+    endif 
+    return "{\"option\":\"\"}"
+EndFunction
 
 String Function Speaker_Info(Actor speaker) global 
     SkyrimNet_SexLab_Stats stats = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stats

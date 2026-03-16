@@ -370,7 +370,7 @@ Form[] Function UnStoreStrippedItems(Actor akActor)
         i -= 1 
     endwhile 
     if !HasStrippedItems(akActor)
-        return None
+        return Utility.CreateFormArray(0)
     endif
     Form[] forms = StorageUtil.FormListToArray(akActor, storage_items_key)
     StorageUtil.FormListClear(akActor, storage_items_key)

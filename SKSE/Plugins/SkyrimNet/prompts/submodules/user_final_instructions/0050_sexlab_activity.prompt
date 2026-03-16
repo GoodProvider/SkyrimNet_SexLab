@@ -4,15 +4,31 @@
 {#      If game paused load the cached file              #} 
 {#      else call the decorator                          #} 
 {# ----------------------------------------------------- #} 
+
+ {#  set numItems = papyrus_util("FormListCount", npc.UUID, "skyrimnet_sexlab_storage_items", 0) #}
+ {% set numItems = length(papyrus_util("getformlist", npc.UUID, "skyrimnet_sexlab_storage_items", 0)) %}
+ num items: '{{numItems}}' 
+ 
+ {%if length(papyrus_util("getformlist", npc.UUID, "skyrimnet_sexlab_storage_items", 0)) == 0 %} 
+ {% set option = "undress" %}
+ {% else %} 
+ {% set option = "dress" %} 
+ {% endif %}
+ {{option}}
+ 
 {% set actor_having_sex = false %} 
 {% set actor_rape_victim = false %}
-{% if not isTimePaused %}
-     {% set sexlab = sexlab_get_threads(speaker.UUID) -%}
-     {% if not sexlab.threads %}
+{% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
+     {% if not isTimePaused %}
+          {% set sexlab = sexlab_get_threads(npc.UUID) -%}
+          {% if not sexlab.threads %}
+               {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+          {% endif %}
+     {% else %} 
           {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
      {% endif %}
 {% else %} 
-     {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+     {% set sexlab.threads = [] %} 
 {% endif %}
 
 {% if length(sexlab.threads) > 0 %} 
@@ -26,8 +42,8 @@
                - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }}
           {% else %}
           
-               {% set distance = distance_between(speaker.name, thread.names.0) %}
-               {% set has_los = has_line_of_sight(speaker.name, thread.names.0) %}
+               {% set distance = distance_between(npc.name, thread.names.0) %}
+               {% set has_los = has_line_of_sight(npc.name, thread.names.0) %}
                {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
                {% set distance = thread.speaker_distance %}
                {% set has_los = thread.speaker_los %}
@@ -56,6 +72,7 @@
                          {% set can_notice_level = 2 %}
                          {% set can_heard_desc = "can clearly hear that someone is having sex." %} 
                     {% else %}
+                         {% set can_notice_level = 2 %}
                          {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
                     {% endif %}
                {% endif %} 
@@ -105,7 +122,6 @@ You are physically engaged in intense sexual activity right now.
 ** Final Rule ** 
 - Do not include periods, dots, or dashes "—" in dialogue!
 - Each dialogue must be a different idea
-- The final response can include only 2 sentences. One descriptive and one optional short spoken sentence.
 
      {% else %}
 {{ "## You Are Aware of Nearby Sexual Activity" }}
@@ -137,6 +153,8 @@ After your first acknowledgment, either act on it, dismiss it, or let it color y
      - NEVER use modern slang or language
      - Use racial speech patterns, slang and idioms, racial cultural views
      - Match the speaker's medieval social hierarch position
+     - The final response can include only 2 sentences. One descriptive and one optional **short** spoken sentence.
+ 
 {% endif %}
 
 {% endif %}

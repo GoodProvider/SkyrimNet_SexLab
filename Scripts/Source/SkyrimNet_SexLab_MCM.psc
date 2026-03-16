@@ -11,7 +11,7 @@ SkyrimNet_SexLab_Stages Property stages Auto
 SkyrimNet_SexLab_Actions Property actions Auto 
 
 bool hot_key_toggle = False 
-int sex_edit_key = 40 ; 26
+int sex_edit_key = 43 ; 26
 
 bool dom_debug_toggle = False 
 int dom_debug_key = 41
@@ -542,11 +542,11 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if button == masturbate
         actions.Masturbation_Start(target, "normal", "")
     elseif button == sex
-        actions.Sex_Start(target, player, "normal", "", "getting")
+        actions.Sex_Start(target, player, "normal", "", "")
     elseif button == rapes_player
-        actions.Rape_Start(target, player, "normal", "", player)
+        actions.Rape_Start(target, player, "normal", "", "", player)
     elseif button == raped_by_player
-        actions.Rape_Start(target, player, "normal", "", target)
+        actions.Rape_Start(target, player, "normal", "", "", target)
     elseif button == clothing
 
         ;--------------------------------------------------
@@ -557,26 +557,21 @@ Function Target_Menu_Selection(Actor target, Actor player)
         buttons[main.STYLE_GENTLY] = "Gently by player"
         buttons[main.STYLE_SILENTLY] = "( Silently )"
 
-        msg = "How is "+target.getDisplayName()+" to be "+clothing_string+"ed?"
         button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int 
-        if button != main.STYLE_SILENTLY
-            String style = " "
-            if button == main.STYLE_GENTLY 
-                style = " gently "
-            elseif button == main.STYLE_FORCEFULLY 
-                style = " forcefully "
-            endif 
-            msg = player.GetDisplayName()+style+clothing_string+"es "+target.GetDisplayName()+"."
-            DirectNarration(msg, player, target) 
+        String style = "normally"
+        String narration = "direct"
+        if button == main.STYLE_SILENTLY
+            narration = "none"
+        elseif button == main.STYLE_GENTLY 
+            style = "gently"
+        elseif button == main.STYLE_FORCEFULLY 
+            style = "forcefully"
         endif 
 
         ;--------------------------------------------------
         ; Now do the action 
-        if target_is_undressed
-            actions.Outfit_Execute(target,"undress","")
-        else
-            actions.Outfit_Execute(target,"dress","")
-        endif 
+        Trace("Target_Menu_Selection","style:"+style+" clothing_string:"+clothing_string)
+        actions.Change_Outfit(player,target,style,clothing_string,narration)
 
     elseif button == cuddle 
         SkyrimNet_Cuddle_API.OpenMenu(player, target) 
@@ -791,10 +786,10 @@ Function MutliTarget_Menu_Selection(Actor player)
             if type == "rape>"
                 Actor[] victims = new Actor[1]
                 victims[0] = group[0]
-                actions.Sex_Start_Helper(group, victims, "normal", "")
+                actions.Sex_Start_Helper(group, victims, "normal", "", "")
             else 
                 Actor[] victims = PapyrusUtil.ActorArray(0) 
-                actions.Sex_Start_Helper(group, victims, "normal", "")
+                actions.Sex_Start_Helper(group, victims, "normal", "", "")
             endif   
         endif 
     endif 

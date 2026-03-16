@@ -1,6 +1,8 @@
 Scriptname SkyrimNet_SexLab_Actions extends Quest
 SkyrimNet_SexLab_Main Property main Auto 
 
+import SkyrimNet_SexLab_Utilities
+
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Actions."+func+"] "+msg
     Debug.Trace(msg) 
@@ -86,38 +88,31 @@ EndFunction
 sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, string direction, string tag)
     Trace("Sex_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" direction: "+direction+" type: "+tag)
     Actor[] actors = new Actor[2]
-
-    if (tag == "oral|handjob|thighjob|fisting|footjob" && direction == "getting") || direction == "giving"
-        actors[0] = Target
-        actors[1] = Speaker
-    else
-        actors[0] = Speaker
-        actors[1] = Target
-    endif
-
+    actors[0] = Speaker
+    actors[1] = Target
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    return Sex_Start_helper(actors, victims, style, tag) 
+    Trace("Sex_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
+    return Sex_Start_helper(actors, victims, style, direction, tag) 
 EndFunction
 
-sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, string tag, Actor victim)
+sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, String direction, string tag, Actor victim)
     Trace("Rape_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" type: "+tag+" victim: "+victim.GetDisplayName())
     Actor[] actors = new Actor[2]
-    if Target == victim
-        actors[0] = Target
-        actors[1] = Speaker
-    else
-        actors[1] = Target
-        actors[0] = Speaker
-    endif
+    actors[0] = Target
+    actors[1] = Speaker
 
     Actor[] victims = PapyrusUtil.ActorArray(1) 
     victims[0] = actors[0]
 
-    return Sex_Start_helper(actors, victims, style, tag) 
+    Trace("Rape_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" victim:"+victim.GetDisplayName()+" style: "+style+" direction:"+direction+" type: "+tag)
+    return Sex_Start_helper(actors, victims, style, direction, tag) 
 EndFunction
 
-sslThreadModel Function Orgy_Start(Actor Speaker, Actor paraticipate, string style, string tag, String dynamic)
+sslThreadModel Function Orgy_Start(Actor Speaker, Actor Target, Actor participate, string style, String direction, string tag)
     Actor[] possible = new Actor[3]
+    possible[0] = speaker
+    possible[1] = target
+    possible[2] = participate 
 
     int num_actors = 1 
     int i = 0 
@@ -138,14 +133,9 @@ sslThreadModel Function Orgy_Start(Actor Speaker, Actor paraticipate, string sty
         i -= 1 
     endwhile 
 
-    Trace("Sex_Start",Speaker.GetDisplayName()+" + "+SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" type: "+tag+" dynamic: "+dynamic)
-    if dynamic == "dominate"
-        actors[0] = actors[1]
-        actors[1] = Speaker
-    endif
-
+    Trace("Orgy_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    return Sex_Start_helper(actors, victims, style, tag) 
+    return Sex_Start_helper(actors, victims, style, direction, tag) 
 EndFunction
 
 
@@ -154,27 +144,43 @@ sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String t
     int gender = main.sexlab.GetGender(Speaker)
     bool has_penis = (gender != 1 && gender != 3)
 
-    if tag != ""
-        tag += ","
-    endif 
-    if has_penis 
-        tag = "M"
-    else 
-        tag = "F"
-    endif 
     Actor[] actors = new Actor[1] 
     actors[0] = speaker
 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    return Sex_Start_helper(actors, victims, style, tag) 
+    return Sex_Start_helper(actors, victims, style, "", tag) 
 EndFunction
 
-sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String style, String tag, String hook="")
+sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String style, String direction, String tag, String hook="")
+    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style:"+style+" direction:"+direction+" tag:"+tag)
     if !main.LockActors(actors) 
         return None
     endif 
 
-    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style:"+style+" type:"+tag)
+    if direction == "fucking a" || direction == "getting"
+        Actor temp = actors[0] 
+        actors[0] = actors[1]
+        actors[1] = temp 
+    endif 
+    if tag == "pussy" 
+        tag = "vaginal" 
+    elseif tag == "ass" 
+        tag = "anal"
+    endif 
+
+    ; Handle 
+    if actors.length == 1
+        if tag != ""
+            tag += ","
+        endif 
+        int gender = main.sexlab.GetGender(actors[0])
+        bool has_penis = (gender != 1 && gender != 3)
+        if has_penis 
+            tag = "M"
+        else 
+            tag = "F"
+        endif 
+    endif 
 
     Actor player = Game.GetPlayer() 
     Bool has_player = False
@@ -322,22 +328,51 @@ EndFunction
 ; -------------------------------------------------
 ; Dress and Undress
 ; -------------------------------------------------
-Function Outfit_Execute(Actor akActor, String how, String outfit_type)
-    Trace("Outfit_Execute",akActor.GetDisplayName()+" how: "+how+" type: "+outfit_type)
+Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how, String Narration)
+    Trace("Change_Outfit",Stripper.GetDisplayName()+" stripper "+Stripped.GetDisplayName()+" style:"+style+" how: "+how+" narration:"+narration)
+    SkyrimNet_SexLab_Main main_local = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
 
+    Actor listener = Stripped 
+    if listener == Stripper 
+        listener = None 
+    endif 
+
+
+    bool success = True
     if how == "dress"
-        Trace("Undress_Execute","Dressing "+akActor.GetDisplayName())
-        Form[] forms = main.UnStoreStrippedItems(akActor)
+        Form[] forms = main_local.UnStoreStrippedItems(Stripped)
         if forms.length > 0
-            Trace("Undress_Execute",akActor.GetDisplayName()+" unstripping "+forms)
-            main.sexlab.UnStripActor(akActor, forms, false) 
-            SkyrimNet_SexLab_Utilities.RegisterEvent("Dress", akActor.GetDisplayName()+" finishes dressing.", akActor, None)
+            main_local.sexlab.UnStripActor(Stripped, forms, false) 
         else 
-            Trace("Undress_Execute",akActor.GetDisplayName()+" has no stripped items")
+            success = False 
+            Trace("Change_Outfit",Stripped.GetDisplayName()+" has no stripped items")
         endif 
     else 
-        Form[] forms = main.sexlab.StripActor(akActor, akActor, false, false) 
-        main.StoreStrippedItems(akActor, forms)
-        SkyrimNet_SexLab_Utilities.RegisterEvent("Undress", akActor.GetDisplayName()+" finishes undressing.", akActor, None)
+        ;/* StripActor
+        * * Strips an actor using SexLab's strip settings as chosen by the user from the SexLab MCM
+        * * 
+        * * @param: Actor ActorRef - The actor whose equipment shall be unequipped.
+        * * @param: Actor VictimRef [OPTIONAL] - If ActorRef matches VictimRef victim strip settings are used. If VictimRef is set but doesn't match, aggressor settings are used.
+        * * @param: bool DoAnimate [OPTIONAL true by default] - Whether or not to play the actor stripping animations during the strip
+        * * @param: bool LeadIn [OPTIONAL false by default] - If TRUE and VictimRef == none, Foreplay strip settings will be used.
+        * * @return: Form[] - An array of all equipment stripped from ActorRef
+        */;
+        Actor victim = None 
+        Bool do_animate = True
+        if stripper != stripped
+            victim = stripped 
+            do_animate = False
+        endif 
+        Form[] forms = main_local.sexlab.StripActor(stripped, victim, do_animate, false) 
+        main_local.StoreStrippedItems(Stripped, forms)
     endif
+
+    if success
+        String msg = Stripper.GetDisplayName()+" "+style+" "+how+"es "+Stripped.GetDisplayName()+"."
+        if narration == "direct"
+            DirectNarration(msg, stripper, listener) 
+        elseif narration == "silent"
+            RegisterEvent(how,msg, stripper, listener) 
+        endif 
+    endif 
 EndFunction

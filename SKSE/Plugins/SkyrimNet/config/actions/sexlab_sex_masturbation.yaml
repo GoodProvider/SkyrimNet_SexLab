@@ -14,7 +14,7 @@ parameterMapping:
     description: forceful|normal|gentle
   - type: dynamic
     name: type
-    description: oral|vaginal|anal|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjo
+    description: masturbation
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value
