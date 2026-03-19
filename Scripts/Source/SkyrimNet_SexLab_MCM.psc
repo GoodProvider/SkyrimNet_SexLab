@@ -542,6 +542,19 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if button == masturbate
         actions.Masturbation_Start(target, "normal", "")
     elseif button == sex
+        ;String[] bs = new String[4] 
+        ;bs[0] = "fucking a"
+        ;bs[1] = "fucked in"
+        ;bs[2] = "giving"
+        ;bs[3] = "getting"
+        ;String direction = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
+        ;bs[0] = "ass"
+        ;bs[1] = "pussy"
+        ;bs[2] = "oral"
+        ;bs[3] = "blowjob"
+        ;String type = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
+
+        ;Debug.Notification(direction+" "+type)
         actions.Sex_Start(target, player, "normal", "", "")
     elseif button == rapes_player
         actions.Rape_Start(target, player, "normal", "", "", player)

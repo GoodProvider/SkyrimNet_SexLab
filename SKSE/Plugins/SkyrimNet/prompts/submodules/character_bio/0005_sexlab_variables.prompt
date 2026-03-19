@@ -57,10 +57,10 @@
       {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
   {% endif %}
   {% for thread in sexlab.threads %}
-        {% if contains(thread.victims, actor_name) %} 
+        {% if contains(thread.victims, decnpc(actorUUID).name) %} 
             {% set actor_rape_victim = true %} 
       {% endif %} 
-      {% if contains(thread.names, acror_name) %} 
+      {% if contains(thread.names, decnpc(actorUUID).name) %} 
             {% set actor_having_sex = true %} 
       {% endif %}
   {% endfor %}

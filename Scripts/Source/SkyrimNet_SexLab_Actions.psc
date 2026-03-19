@@ -157,31 +157,38 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
         return None
     endif 
 
-    if direction == "fucking a" || direction == "getting"
-        Actor temp = actors[0] 
-        actors[0] = actors[1]
-        actors[1] = temp 
-    endif 
-    if tag == "pussy" 
-        tag = "vaginal" 
-    elseif tag == "ass" 
-        tag = "anal"
-    endif 
 
-    ; Handle 
+    ; ------------------------------------------
+    ; Set up directions and tags 
+    ; ------------------------------------------
     if actors.length == 1
         if tag != ""
             tag += ","
-        endif 
+        endif
         int gender = main.sexlab.GetGender(actors[0])
+
         bool has_penis = (gender != 1 && gender != 3)
         if has_penis 
             tag = "M"
         else 
             tag = "F"
         endif 
+    else
+        if direction == "fucking a" || direction == "getting"
+            Actor temp = actors[0] 
+            actors[0] = actors[1]
+            actors[1] = temp 
+        endif 
+        if tag == "pussy" 
+            tag = "vaginal" 
+        elseif tag == "ass" 
+            tag = "anal"
+        endif 
     endif 
 
+    ; ------------------------------------------
+    ; Set up directions and tags 
+    ; ------------------------------------------
     Actor player = Game.GetPlayer() 
     Bool has_player = False
     String names = ""
@@ -190,12 +197,6 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
         if actors[i] == player
             has_player = True
         endif 
-        ;if !BodyAnimation_IsEligible(actors[i], "", "")
-            ;if names != ""
-                ;names += ", "
-            ;endif 
-            ;names += actors[i].GetDisplayName()
-        ;endif
         i -= 1
     endwhile 
     
@@ -207,7 +208,6 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
     ;-------------------------------
     ; Animations
     ;-------------------------------
-    Trace("Sex_Start_Helper","Lock successful, getting animations")
 
     sslThreadModel thread = main.sexlab.NewThread()
 
@@ -229,10 +229,10 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
     ; Get the animations 
     sslBaseAnimation[] anims =  GetAnims(main, thread, actors, victims, player, tag, has_player) 
     if anims.length > 0 && anims[0] == None
-        Trace("Sex_Start_Helper","Failed to get animations actors: "+SkyrimNet_SexLab_Utilities.JoinActors(actors))
         main.UnlockActors(actors) 
         return None
     endif 
+
     if anims.length > 0 
         thread.SetAnimations(anims) 
     endif 
@@ -268,6 +268,9 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
     if hook != "" 
         thread.SetHook(hook)
     endif 
+
+    ; If gender is male and giving oral, treat as woman so they can stay in the giving location
+    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(thread.positions))
     thread.StartThread() 
     return thread 
 EndFunction
