@@ -124,11 +124,19 @@
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "skyrimnet_sexlab_hide_hermaphrodites",
             "Object": "000806:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "SkyrimNet_SexLab_Faction_Victim",
+            "Object": "000807:SkyrimNet_Sexlab.esp"
           }
         ]
       },
       {
         "Name": "SkyrimNet_SexLab_Actions"
+      },
+      {
+        "Name": "SkyrimNet_SexLab_Stats"
       }
     ],
     "FileName": "",
