@@ -1,0 +1,6 @@
+ {%if length(papyrus_util("getformlist", npc.UUID, "skyrimnet_sexlab_storage_items", 0)) == 0 %} 
+ {% set option = "undress" %}
+ {% else %} 
+ {% set option = "dress" %} 
+ {% endif -%}
+ [style] {{option}} by [Target]
