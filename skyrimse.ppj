@@ -45,9 +45,9 @@
         <Import>.\Headers\OStim</Import>
         <Import>.\Headers\Devious Devices</Import>
         
-        <Import>@ModsFolder\SkyrimNet DOM\scripts\Source</Import>
-        <Import>@ModsFolder\SkyrimNet DOM\Headers\Ostim</Import>
-        <Import>@ModsFolder\SkyrimNet DOM\Headers\DOM</Import>
+        <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
+        <Import>@ModsFolder\SkyrimNet_DOM\Headers\Ostim</Import>
+        <Import>@ModsFolder\SkyrimNet_DOM\Headers\DOM</Import>
         <!--
         <Import>.\Headers\PAH Diary of Mine</Import>
         <Import>@ModsFolder\Fores New Idles in Skyrim SE - FNIS SE\scripts\source</Import>

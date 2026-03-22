@@ -4,18 +4,18 @@ questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Change_Outfit
 parameterMapping:
-  - type: dynamic
-    name: target
-    description: Object Actor (maybe Speaker)
   - type: speaker
     name: akActor
     description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: target
+    description: Stripped Actor (can be speaker)
   - type: dynamic
     name: style
     description: forcefully|normally|gently
   - type: dynamic
     name: verb
-    description: dress|undress
+    description: "dresses|undresses"
   - type: static
     name: narration
     value: silent
@@ -38,6 +38,53 @@ eligibilityRules:
   - conditions:
       - decoratorName: "is_in_faction"
         arguments: ["currentActor", "OStimExcitementFaction"]
+        comparisonOperator: "=="
+        expectedValue: false
+    logicalOperator: "AND"
+    required: true
+  - conditions:
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousArmCuffs"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousArmbinder"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousArmbinderElbow"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousStraitJacket"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousCuffsFront"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousYoke"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousYokeBB"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousGlobes"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousElbowTie"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousHarness"]
+        comparisonOperator: "=="
+        expectedValue: false
+      - decoratorName: "worn_has_keyword"
+        arguments: ["currentActor", "zad_DeviousBondageMittens"]
         comparisonOperator: "=="
         expectedValue: false
     logicalOperator: "AND"

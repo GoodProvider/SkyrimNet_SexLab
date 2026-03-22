@@ -32,12 +32,6 @@ eligibilityRules:
           - currentActor
         comparisonOperator: ==
         expectedValue: false
-      - decoratorName: has_magic_effect
-        arguments:
-          - currentActor
-          - TTON_DeclineStartNewSexEffect
-        comparisonOperator: ==
-        expectedValue: false
       - decoratorName: decnpc
         arguments:
           - currentActor

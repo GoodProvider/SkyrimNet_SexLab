@@ -246,7 +246,7 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
             main.UnLockActors(actors) 
             return None
         endif  
-        i += 1 
+        ;thread.SetNoStripping(actors[i])
     endwhile 
 
 
@@ -335,22 +335,16 @@ Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how,
     Trace("Change_Outfit",Stripper.GetDisplayName()+" stripper "+Stripped.GetDisplayName()+" style:"+style+" how: "+how+" narration:"+narration)
     SkyrimNet_SexLab_Main main_local = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
 
-    Actor listener = Stripped 
-    if listener == Stripper 
-        listener = None 
-    endif 
-
-
-    bool success = True
-    if how == "dress"
+    bool success = False
+    if how == "dresses"
         Form[] forms = main_local.UnStoreStrippedItems(Stripped)
         if forms.length > 0
-            main_local.sexlab.UnStripActor(Stripped, forms, false) 
-        else 
-            success = False 
+            main_local.sexlab.UnStripActor(Stripped, forms, false)
+            success = True
+        else
             Trace("Change_Outfit",Stripped.GetDisplayName()+" has no stripped items")
-        endif 
-    else 
+        endif
+    else
         ;/* StripActor
         * * Strips an actor using SexLab's strip settings as chosen by the user from the SexLab MCM
         * * 
@@ -371,6 +365,11 @@ Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how,
     endif
 
     if success
+        Actor listener = Stripped 
+        if listener == Stripper 
+            listener = None 
+        endif 
+
         String msg = Stripper.GetDisplayName()+" "+style+" "+how+"es "+Stripped.GetDisplayName()+"."
         if narration == "direct"
             DirectNarration(msg, stripper, listener) 

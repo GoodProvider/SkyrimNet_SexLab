@@ -66,18 +66,25 @@ EndFunction
 ; slot: 
 String Function Outfit_Options(Actor speaker) global 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    if main.HasStrippedItems(speaker)
-        return "{\"option\":\"dress\"}"
-    else
-        ; Minimal Dress
-        if speaker.WornHasKeyword(Keyword.GetKeyword("EroticArmor")) || speaker.WornHasKeyword(Keyword.GetKeyword("sla_ArmorSpendex")) || speaker.WornHasKeyword(Keyword.GetKeyword("sla_ArmorHalfNakedBikini")) || speaker.WornHasKeyword(Keyword.GetKeyword("sla_ArmorHalfNaked"))
-            return "{\"option\":\"undress\"}"
-        ; Fully Dressed
-        elseif speaker.WornHasKeyword(Keyword.GetKeyword("ArmorCuirass")) || speaker.WornHasKeyword(Keyword.GetKeyword("ClothingBody")) || speaker.HasSpell(PO3_SKSEFunctions.GetFormFromEditorID("REQ_Conjuration3_Bound_Armor") as Spell)
-            return "{\"option\":\"undress\"}"
+
+    ; check if they  items stored
+    ; Walk through all worn armor/clothing and collect strippable items
+    int strippable_count = 0
+    int slot = 31
+    while slot >= 0
+        Form item = speaker.GetWornForm(Armor.GetMaskForSlot(slot + 30))
+        if item != None && main.sexlab.IsStrippable(item)
+            strippable_count += 1
         endif
+        slot -= 1
+    endwhile
+
+    String option = "dresses"
+    if strippable_count > 0
+        main.UnStoreStrippedItems(speaker)
+        option = "undresses"
     endif 
-    return "{\"option\":\"\"}"
+    return "{\"option\":\""+option+"\"}"
 EndFunction
 
 String Function Speaker_Info(Actor speaker) global 

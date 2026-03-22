@@ -116,6 +116,7 @@ Function PageOptions()
     AddToggleOptionST("HideDialogueHistoricInstructionsToggle","Hide dialogue historic instructions",main.hide_dialogue_historic_instructions)
     AddToggleOptionST("HideHermaphroditesToggle","Hide hermaphrodite from prompt",main.hide_hermaphrodites)
     AddToggleOptionST("PublicSexAcceptedToggle","Public sex accepted",sexlab_public_sex_accepted.GetValue() == 1.0)
+    AddToggleOptionST("VirginBloodEnabled","Enable virgin blood message.",main.virgin_blood_enabled)
     
     SetCursorPosition(6)
     AddHeaderOption("Rape Options")
@@ -134,7 +135,9 @@ Function PageOptions()
     AddKeyMapOptionST("SexEditKeySet", "Start Sex / Edit Stage Description", sex_edit_key)
 ;    AddToggleOptionST("SexEdithelpToggle","Hide Edit Stage Description Help",stages.hide_help)
 ;    AddTextOption("","")
+
     
+    SetCursorPosition(18)
     AddHeaderOption("Direction Narration Blocking")
     AddHeaderOption("")
     AddSliderOptionST("NarrationCoolOff", "Narration cooldown", main.direct_narration_cool_off)
@@ -300,6 +303,16 @@ State SexEditTagsNonPlayer
     EndEvent
     Event OnHighlightST()
         SetInfoText("Opens a tag editor for sex not including player.")
+    EndEvent
+EndState
+
+State VirginBloodEnabled
+    Event OnSelectST()
+        main.virgin_blood_enabled = !main.virgin_blood_enabled
+        SetToggleOptionValueST(main.virgin_blood_enabled)
+    EndEvent
+    Event OnHighlightST()
+        SetInfoText("Add virgin blood to the first time pussy or anal sex.")
     EndEvent
 EndState
 
@@ -584,7 +597,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         ;--------------------------------------------------
         ; Now do the action 
         Trace("Target_Menu_Selection","style:"+style+" clothing_string:"+clothing_string)
-        actions.Change_Outfit(player,target,style,clothing_string,narration)
+        actions.Change_Outfit(target, player, style, clothing_string+"es", narration)
 
     elseif button == cuddle 
         SkyrimNet_Cuddle_API.OpenMenu(player, target) 

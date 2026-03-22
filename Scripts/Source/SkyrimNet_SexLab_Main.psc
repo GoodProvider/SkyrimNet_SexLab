@@ -152,6 +152,11 @@ SkyrimNet_SexLab_Stats Property stats Auto
 SexLabFramework Property sexlab Auto 
 
 ; -----------------------------
+; enable virgin blood
+; -----------------------------
+Bool Property virgin_blood_enabled = True Auto
+
+; -----------------------------
 ; DOM found 
 ; -----------------------------
 bool dom_found_internal = false

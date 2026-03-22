@@ -22,6 +22,7 @@ String[] messages
 
 String storage_first_time = "sexlab_first_time"
 
+SkyrimNet_SexLab_Main main = None 
 
 Function Trace(String func, String msg, Bool notification=False) global
 
@@ -33,6 +34,9 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Function Setup() 
+
+    main = (self as Quest) as SkyrimNet_SexLab_Main 
+
     types = Utility.CreateStringArray(stats_size)
     types[stats_any] = "sex"
     types[stats_masturbating] = "mastrubating"
@@ -95,7 +99,6 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
 
         int next = stats_next_start
         bool rape = False 
-        int k = actors.length - 1 
 
         if anim.HasTag("tentacle") || anim.HasTag("tentacles")
             matched[next] = True
@@ -105,6 +108,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
             next += 1 
         endif 
 
+        int k = actors.length - 1 
         while 0 <= k 
             if k != i
                 int gender = actors[k].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
@@ -125,20 +129,18 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
                 gs[1] = "partners"
                 int j = 0 
                 while j < 2 
-                    int count = IncreaseFirstTime(actors[k], gs[j], names[j])
-                    if count == 1 
-                        if next < stats_size
-                            groups[next] = gs[j]
-                            types[next] = names[j]
-                            if j == 0 
-                                messages[next] = "sex with a "+names[j]
-                            else
-                                messages[next] = "sex with "+names[j]
-                            endif 
-
-                            matched[next] = True 
-                            next += 1 
+                    int count = IncreaseFirstTime(actors[i], gs[j], names[j])
+                    if count == 1 && next < stats_size
+                        groups[next] = gs[j]
+                        types[next] = names[j]
+                        if j == 0 
+                            messages[next] = "sex with a "+names[j]
+                        else
+                            messages[next] = "sex with "+names[j]
                         endif 
+
+                        matched[next] = True 
+                        next += 1 
                         ; msg += name+"'s first time having sex with a "+race_name+". "
                     endif 
                     j += 1 
@@ -180,11 +182,13 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
                 int count = IncreaseFirstTime(actors[i],groups[type], types[type]) 
                 if count == 1 
                     int gender = actors[i].GetLeveledActorBase().GetSex()
-                    if type == stats_vaginal_getting && gender == 1 
-                        bleeding += name+"'s pussy is bleeding."
-                    endif 
-                    if type == stats_anal_getting
-                        bleeding += name+"'s ass is bleeding."
+                    if main.virgin_blood_enabled
+                        if type == stats_vaginal_getting && gender == 1 
+                            bleeding += name+"'s pussy is bleeding."
+                        endif 
+                        if type == stats_anal_getting
+                            bleeding += name+"'s ass is bleeding."
+                        endif 
                     endif 
                     at_least_one = True 
                     first_filter[type] = 1
