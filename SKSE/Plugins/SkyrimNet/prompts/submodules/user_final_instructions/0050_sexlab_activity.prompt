@@ -5,18 +5,8 @@
 {#      else call the decorator                          #} 
 {# ----------------------------------------------------- #} 
 
- {#  set numItems = papyrus_util("FormListCount", npc.UUID, "skyrimnet_sexlab_storage_items", 0) #}
- {% set numItems = length(papyrus_util("getformlist", npc.UUID, "skyrimnet_sexlab_storage_items", 0)) %}
- num items: '{{numItems}}' 
- 
- {%if length(papyrus_util("getformlist", npc.UUID, "skyrimnet_sexlab_storage_items", 0)) == 0 %} 
- {% set option = "undress" %}
- {% else %} 
- {% set option = "dress" %} 
- {% endif %}
- {{option}}
- 
 {% set actor_having_sex = false %} 
+{% set actor_kissing_only = false %} 
 {% set actor_rape_victim = false %}
 {% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
      {% if not isTimePaused %}
@@ -38,17 +28,14 @@
                {% set actor_rape_victim = true %} 
           {% endif %} 
           {% if contains(thread.names, npc.name) %} 
-               {% set actor_having_sex = true %} 
+               {% if thread.kissing_only %} 
+                    {% set actor_kissing_only = true %} 
+               {% else %} 
+                    {% set actor_having_sex = true %} 
+               {% endif %} 
                - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }}
           {% else %}
           
-               {% set distance = distance_between(npc.name, thread.names.0) %}
-               {% set has_los = has_line_of_sight(npc.name, thread.names.0) %}
-               {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
-               {% set distance = thread.speaker_distance %}
-               {% set has_los = thread.speaker_los %}
-               {# {{speaker.name}} to {{thread.names.0}} distance: {{distance}} has_los: {{has_los}} #}
-
                {% set can_seen_desc = "can not see what is happening." %} 
                {% if has_los %}
                     {% if distance > 36 %}
@@ -123,7 +110,7 @@ You are physically engaged in intense sexual activity right now.
 - Do not include periods, dots, or dashes "—" in dialogue!
 - Each dialogue must be a different idea
 
-     {% else %}
+     {% else if not actor_kissing_only %} 
 {{ "## You Are Aware of Nearby Sexual Activity" }}
 
 **Possible reaction arc (shift between these, don't repeat)**:
@@ -144,6 +131,7 @@ You are physically engaged in intense sexual activity right now.
 - "I try to focus"
 - Describing the same visual twice
 - Noting your own arousal/discomfort repeatedly
+
 
      {% endif %}
 After your first acknowledgment, either act on it, dismiss it, or let it color your responses subtly—don't keep narrating that it's happening.

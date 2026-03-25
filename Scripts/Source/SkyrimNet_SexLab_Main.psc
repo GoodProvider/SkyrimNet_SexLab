@@ -121,6 +121,14 @@ String style_string_current = "" ; Used by Anims Dialogue, to return the Style
 int[] thread_style
 bool[] thread_started
 
+bool[] thread_kissing_only 
+bool Function GetKissingOnly(int id) 
+    return thread_kissing_only[id]
+EndFunction 
+Function SetKissingOnly(int id, bool value ) 
+    thread_kissing_only[id] = value 
+EndFunction 
+
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Main."+func+"] "+msg
@@ -241,8 +249,8 @@ Function Setup()
     stages = (self as Quest) as SkyrimNet_SexLab_Stages 
     stages.Setup() 
 
-    stats = (self as Quest) as SkyrimNet_SexLab_Stats 
-    stats.Setup()
+    ;stats = (self as Quest) as SkyrimNet_SexLab_Stats 
+    ;stats.Setup()
 
     skyrimnet_sexlab_active_sex = Game.GetformFromFile(0x802, "SkyrimNet_SexLab.esp") as GlobalVariable
     active_sex = false
@@ -261,14 +269,17 @@ Function Setup()
     endif 
     Trace("Setup","OstimNet found "+ostimnet_found)
 
-    thread_started = new bool[32]
+    ;thread_started = new bool[32]
+    thread_kissing_only = new bool[32]
     if thread_style.length == 0 
         thread_style = new int[32] 
         thread_started = new bool[32]
+        thread_kissing_only = new bool[32]
         int j = thread_style.length - 1 
         while 0 <= j 
             thread_style[j] = STYLE_NORMALLY
             thread_started[j] = false 
+            thread_kissing_only[j] = false 
             j -= 1 
         endwhile 
     endif 
@@ -653,10 +664,11 @@ Event StageStart(int ThreadID, bool HasPlayer)
         thread_started[ThreadID] = True 
 
         String desc = Get_Thread_Description(thread, actorLib)
-        String first_sex = stats.First_Sex(actors, thread)
-        if first_sex != ""
-            desc = desc + " "+first_sex
-        endif 
+        ; commenting out stats for now 
+        ;String first_sex = stats.First_Sex(actors, thread)
+        ;if first_sex != ""
+            ;desc = desc + " "+first_sex
+        ;endif 
         DirectNarration(desc, actors[0], target)
         ;AllowedDeniedOnlyIncrease(actors, thread, "start") 
     else 
@@ -798,7 +810,11 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
             target = None
         endif 
     endif 
-    
+
+    if GetKissingOnly(thread.tid) 
+        narration = actors[0].GetDisplayName()+" and "+actors[1].GetDisplayName()+" stop kissing."
+        orgasm_denied = False 
+    endif 
     if actorEnder != None || has_tentacles
         DirectNarration(narration, actors[0], target)
     elseif orgasm_denied
@@ -831,6 +847,7 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
     endif
 
     thread_style[thread.tid] = STYLE_NORMALLY
+    thread_kissing_only[thread.tid] = false 
 EndFunction 
 
 ; Function AllowedDeniedOnlyIncrease(Actor[] actors, sslThreadController thread, String status)
@@ -876,12 +893,16 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         return  
     endif
 
+    sslThreadController thread = SexLab.GetController(ThreadID)
+    if GetKissingOnly(thread.tid)
+        return 
+    endif 
+
     ; Ignore if separate orgasms is on, as it has its own handling
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
     if config.SeparateOrgasms 
         return 
     endif 
-    sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
 
     ;Quest q = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as Quest
@@ -961,6 +982,12 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
     if IsDomSlave(akActor)
         return
     endif 
+
+    sslThreadController thread = GetThread(akActor) 
+    if GetKissingOnly(thread.tid) 
+        return 
+    endif 
+
 
     String msg = ""
     if num_orgasms == 1
@@ -1211,14 +1238,25 @@ EndFunction
 ; 2 Yes, but no tag editor 
 ; 3 No (silent), refused, but don't tell the LLM 
 ; 4 NO, tell the LLM 
-int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, String type)
-    Trace("YesNoSexDialog","actors.length: "+actors.length+" victims.length: "+victims.length+" player:"+player.GetDisplayName()+" type:"+type)
+int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, String tag)
+    Trace("YesNoSexDialog","actors.length: "+actors.length+" victims.length: "+victims.length+" player:"+player.GetDisplayName()+" tag:"+tag)
+
+    int yes = 0 
+    int no_silent = 1
+    int no = 2 
 
     String[] buttons = new String[4]
-    buttons[BUTTON_YES] = "Yes "
-    buttons[BUTTON_YES_RANDOM] = "Yes (Random)"
-    buttons[BUTTON_NO_SILENT] = "No (Silent)"
-    buttons[BUTTON_NO] = "No "
+    if tag == "kissing_only"
+        buttons = new String[3] 
+        buttons[yes] = "Yes"
+        buttons[no_silent] = "No (Silent)"
+        buttons[no] = "No (Silent)"
+    else 
+        buttons[BUTTON_YES] = "Yes "
+        buttons[BUTTON_YES_RANDOM] = "Yes (Random)"
+        buttons[BUTTON_NO_SILENT] = "No (Silent)"
+        buttons[BUTTON_NO] = "No "
+    endif 
 
     String player_name = player.GetDisplayName()
 
@@ -1236,9 +1274,15 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
             i -= 1
         endwhile
         String names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, actors_filter)
-        Trace("YesNoSexDialog","type:sex names: "+names)
-        question = "Would you like to have sex with "+names+"?"
-        rejection = player_name+" refuses to have sex with "+names+"."
+        if tag == "kissing_only"
+            Trace("YesNoSexDialog","tag:sex names: "+names)
+            question = "Would you like to kiss "+names+"?"
+            rejection = player_name+" refuses to kiss with "+names+"."
+        else 
+            Trace("YesNoSexDialog","tag:sex names: "+names)
+            question = "Would you like to have sex with "+names+"?"
+            rejection = player_name+" refuses to have sex with "+names+"."
+        endif 
     else
         int[] victim_filter = Utility.CreateIntArray(actors.length, 1)
         int i = victims.length - 1 
@@ -1268,7 +1312,7 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
             i -= 1 
         endwhile 
 
-        Trace("YesNoSexDialog","type:rape names: "+SkyrimNet_SexLab_Utilities.JoinActors(actors)+" victim_filter: "+victim_filter+" assailant_filter: "+assailant_filter)
+        Trace("YesNoSexDialog","tag:rape names: "+SkyrimNet_SexLab_Utilities.JoinActors(actors)+" victim_filter: "+victim_filter+" assailant_filter: "+assailant_filter)
         String assailant_names = SkyrimNet_SexLab_Utilities.JoinActorsFiltered(actors, assailant_filter)
         if player_is_victim
             question = "Would you like to be raped by "+assailant_names+"?"
@@ -1283,12 +1327,21 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
             rejection = player_name+" refuses to rape "+victim_names+"."
         endif 
     endif 
-    Trace("YesNoSexDialog","question: "+question)
     
     int button = SkyMessage.ShowArray(question, buttons, getIndex = true) as int  
+    if tag == "kissing_only" 
+        if button == yes 
+            button = BUTTON_YES
+        elseif button == no_silent 
+            button = BUTTON_NO_SILENT
+        else
+            button = BUTTON_NO 
+        endif 
+    endif 
+    Trace("YesNoSexDialog","question: "+question+" button:"+button)
     if button == BUTTON_NO || button == BUTTON_NO_SILENT
         if button == BUTTON_NO 
-            DirectNarration_Optional("sex refuses", rejection, player, actors[0])
+            DirectNarration_Optional(tag+" refuses", rejection, player, actors[0])
         endif 
     endif 
     return button 
@@ -1393,8 +1446,8 @@ sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors
 
     JValue.retain(groups)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
-    String start_label = "<start "+type+">"
-    bool rape = type == "rape"
+    String start_label = "<start "+tag+">"
+    bool rape = tag == "rape"
     while True
         String order_str ="change order>"
         bool finished = false

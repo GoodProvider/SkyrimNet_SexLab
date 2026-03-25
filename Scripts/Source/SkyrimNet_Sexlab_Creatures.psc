@@ -21,7 +21,7 @@ Function Store_Races() global
     Form[] forms = PO3_SKSEFunctions.GetAllFormsInMod(asModName = creaturesum_esp, aiFormtype = actorBaseType)
     int i = forms.length - 1 
     int races = JMap.object()
-    while 0 < i 
+    while 0 <= i
         ActorBase base = forms[i] as ActorBase
         Race r = base.GetRace() 
         String race_name = r.GetName() 

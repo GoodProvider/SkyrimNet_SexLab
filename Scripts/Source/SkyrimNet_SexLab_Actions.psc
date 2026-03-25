@@ -41,7 +41,9 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
 
     ; SexLab check
     SkyrimNet_SexLab_Main sexlab_main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    
+    if sexlab_main == None
+        return false
+    endif
 
     ;time = Utility.GetCurrentRealTime()
     ;delta = time- time_last
@@ -114,24 +116,25 @@ sslThreadModel Function Orgy_Start(Actor Speaker, Actor Target, Actor participat
     possible[1] = target
     possible[2] = participate 
 
-    int num_actors = 1 
-    int i = 0 
-    while 0 <= i 
-        if possible[i] != None 
-            num_actors += 1 
-        endif 
-        i -= 1 
-    endwhile 
-    Actor[] actors = PapyrusUtil.ActorArray(num_actors+1) 
+    int num_actors = 1
+    int i = possible.length - 1
+    while 0 <= i
+        if possible[i] != None
+            num_actors += 1
+        endif
+        i -= 1
+    endwhile
+    Actor[] actors = PapyrusUtil.ActorArray(num_actors+1)
     actors[0] = Speaker
-    int k = 1 
-    i = 0 
-    while 0 <= i 
-        if possible[i] != None 
+    int k = 1
+    i = possible.length - 1
+    while 0 <= i
+        if possible[i] != None
             actors[k] = possible[i]
-        endif 
-        i -= 1 
-    endwhile 
+            k += 1
+        endif
+        i -= 1
+    endwhile
 
     Trace("Orgy_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
     Actor[] victims = PapyrusUtil.ActorArray(0) 
@@ -174,20 +177,26 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
             tag = "F"
         endif 
     else
-        if direction == "fucking a" || direction == "getting"
+        if  (tag == "oral" || tag == "handjob" || tag == "boobjob" || tag == "thighjob" || tag == "footjob") && direction == "getting"
             Actor temp = actors[0] 
             actors[0] = actors[1]
             actors[1] = temp 
-        endif 
-        if tag == "pussy" 
-            tag = "vaginal" 
-        elseif tag == "ass" 
-            tag = "anal"
+        else 
+            if direction == "fucking a"
+                Actor temp = actors[0] 
+                actors[0] = actors[1]
+                actors[1] = temp 
+            endif 
+            if tag == "pussy" 
+                tag = "vaginal" 
+            elseif tag == "ass" 
+                tag = "anal"
+            endif 
         endif 
     endif 
 
     ; ------------------------------------------
-    ; Set up directions and tags 
+    ; Find player 
     ; ------------------------------------------
     Actor player = Game.GetPlayer() 
     Bool has_player = False
@@ -219,9 +228,9 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
 
     ; Set the style 
     int style_int = main.STYLE_NORMALLY
-    if style == "gentle"
+    if style == "gentle" || style == "gently"
         style_int = main.STYLE_GENTLY   
-    elseif style == "forceful"
+    elseif style == "forceful" || style == "forcefully"
         style_int = main.STYLE_FORCEFULLY
     endif
     main.SetThreadStyle(thread.tid, style_int) 
@@ -235,7 +244,13 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
 
     if anims.length > 0 
         thread.SetAnimations(anims) 
+    elseif tag == "kissing_only"
+        Debug.Notification("No animations found for kissing")
+        main.UnlockActors(actors)
+        return None 
     endif 
+
+
     ;-------------------------------
     Trace("Sex_Start_Helper","adding actors")
     i = 0 
@@ -246,9 +261,18 @@ sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String
             main.UnLockActors(actors) 
             return None
         endif  
-        ;thread.SetNoStripping(actors[i])
+        if tag == "kissing_only"
+            thread.SetNoStripping(actors[i])
+            thread.DisableOrgasm(actors[i], true) 
+        endif 
+        i += 1 
     endwhile 
 
+    if tag == "kissing_only"
+        main.SetKissingOnly(thread.tid, True ) 
+    else
+        main.SetKissingOnly(thread.tid, False ) 
+    endif 
 
     ; Add Victims 
     i = victims.length - 1
@@ -284,8 +308,11 @@ Function Sex_Stop(Actor akActor)
     main.AnimationEndFunction(thread.tid,true, akActor) 
     sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
     thread_slots.StopThread(thread) 
-
 EndFunction 
+
+;--------------------------------------
+; Kissing Function 
+;--------------------------------------
 
 ;--------------------------------------
 ; Functions 
@@ -307,19 +334,24 @@ sslBaseAnimation[] Function GetAnims(SkyrimNet_SexLab_Main main, sslThreadModel 
     endif  
 
     if button != main.BUTTON_YES_RANDOM
-        String type = "sex"
-        if victims.length > 0 
-            type = "rape"
-        endif 
-
-        if (main.sex_edit_tags_player && has_player) || (main.sex_edit_tags_nonplayer && !has_player)
-            Trace("GetAnims", "Opening anim edit dialog")
-            anims = main.GetAnimsDialog(thread, actors, type, tag)
+        if tag == "kissing_only"
+            String tag_filter =" oral,vaginal,anal,masturbation,handjob,boobjob,thighjob,fisting,dildo,fingering,footjob"
+            anims = main.sexLab.GetAnimationsByTags(actors.length, "kissing", tag_filter, true)
         else 
-            anims = main.sexLab.GetAnimationsByTags(actors.length, tag, "", true)
+            String type = "sex"
+            if victims.length > 0 
+                type = "rape"
+            endif 
+
+            if (main.sex_edit_tags_player && has_player) || (main.sex_edit_tags_nonplayer && !has_player)
+                Trace("GetAnims", "Opening anim edit dialog")
+                anims = main.GetAnimsDialog(thread, actors, type, tag)
+            else 
+                anims = main.sexLab.GetAnimationsByTags(actors.length, tag, "", true)
+            endif 
+            Trace("GetAnims", "has_player: "+has_player+" player edit: "+main.sex_edit_tags_player\
+                +" nonplayer edit: "+main.sex_edit_tags_nonplayer+" anims.length: "+anims.length)
         endif 
-        Trace("GetAnims", "has_player: "+has_player+" player edit: "+main.sex_edit_tags_player\
-            +" nonplayer edit: "+main.sex_edit_tags_nonplayer+" anims.length: "+anims.length)
     else
         String tagSupress = ""
         anims =  main.sexLab.GetAnimationsByTags(actors.length, tag, tagSupress, true)

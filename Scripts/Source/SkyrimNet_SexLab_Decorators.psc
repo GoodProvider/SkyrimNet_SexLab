@@ -2,6 +2,7 @@ Scriptname SkyrimNet_SexLab_Decorators
 
 import SkyrimNet_SexLab_Main
 import SkyrimNet_SexLab_Stages
+import SkyrimNet_SexLab_Utilities
 import PO3_SKSEFunctions
 
 Function Trace(String func, String msg, Bool notification=False) global
@@ -268,6 +269,10 @@ String Function Get_Threads(Actor speaker) global
 
             String[] nouns = Utility.CreateStringArray(0)
             String names_string = SkyrimNetAPI.JoinStrings(names, nouns)
+            bool kissing_only = main.GetKissingOnly(threads[i].tid)
+            String[] tags = threads[i].animation.gettags() 
+            Trace("Get_Threads","kissing_only:"+kissing_only+" tags:"+tags)
+
             threads_str += ",\"names\":["+names_array+"]"
             threads_str += ",\"victims\":["+victims_array+"]"
             threads_str += ",\"orgasm_expected\":["+orgasm_expected_array+"]"
@@ -276,6 +281,8 @@ String Function Get_Threads(Actor speaker) global
             threads_str += ",\"speaker_los\""+BooleanString(los)
             threads_str += ",\"location\":\""+GetLocation(threads[i])+"\""
             threads_str += ",\"style\":\""+main.GetThreadStyleString(threads[i].tid)+"\""
+            threads_str += ",\"kissing_only\""+BooleanString(kissing_only)
+
             main.counter += 1
 
             threads_str += "}"
@@ -360,15 +367,22 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
     ; Return description if it already has one. 
     ; ----------------------------------------------------------------
     String desc = GetStageDescription(thread)
+    bool kissing_only = main.GetKissingOnly(thread.tid) 
     if desc != "" 
         if msg == "" && style != main.STYLE_NORMALLY
-            Trace("Thread_Description","description: names: "+names)
-            String[] nouns = new String[2] 
-            nouns[0] = style_ly_str+" having a sexual experience."
-            nouns[1] = style_ly_str+" having a sexual experience."
-            msg = SkyrimNetAPI.JoinStrings(names, nouns)
+            if kissing_only
+                msg += SkyrimNetAPI.JoinStrings(names, nouns_empty)+" are "+style_ly_str+", "
+            else
+                Trace("Thread_Description","description: names: "+names)
+                String[] nouns = new String[2] 
+                nouns[0] = style_ly_str+" having a sexual experience."
+                nouns[1] = style_ly_str+" having a sexual experience."
+                msg = SkyrimNetAPI.JoinStrings(names, nouns)
+            endif 
         endif 
         msg += desc
+    elseif kissing_only 
+        msg = names[0]+" are "+style_ly_str+" kissing "+names[1]+"."
     else 
         ; ----------------------------------------------------------------
         ; Positions 

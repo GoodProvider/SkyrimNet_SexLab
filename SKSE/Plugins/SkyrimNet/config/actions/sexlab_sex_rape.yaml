@@ -1,5 +1,5 @@
 customCategory: sexlab_sex
-name: Rape_Start
+name: Sexual_Assault
 description: "[style] [type] sexual assalt on [victim]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
@@ -52,12 +52,6 @@ eligibilityRules:
       - decoratorName: is_in_combat
         arguments:
           - currentActor
-        comparisonOperator: ==
-        expectedValue: false
-      - decoratorName: has_magic_effect
-        arguments:
-          - currentActor
-          - TTON_DeclineStartNewSexEffect
         comparisonOperator: ==
         expectedValue: false
       - decoratorName: decnpc

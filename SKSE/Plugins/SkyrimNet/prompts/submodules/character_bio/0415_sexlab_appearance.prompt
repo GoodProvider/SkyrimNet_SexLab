@@ -1,6 +1,5 @@
 {# Physical appearance based on clothing and arousal state #}
 {% if not is_plugin_loaded("SkyrimNetUDNG.esp") and (render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "dialogue_target") %}
-  {{ "## --- Sex Lab ---" }}
   {% if clothing_state == "minimal" or clothing_state == "nude" %}
     {% if show_internal %}
       {{ "### Physical Appearance" }}

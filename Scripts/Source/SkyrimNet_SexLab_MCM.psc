@@ -194,8 +194,8 @@ Function PageActors()
         Float minute_scaler = 24*60
         Float time = JFormMap.getFlt(main.actorLock, forms[i])
         info += "locked: "+(time*minute_scaler)+"/"+(main.actorLocktimeout*minute_scaler)
-        i += 1
-    endwhile 
+        i -= 1
+    endwhile
 
     ; Print out the combined list 
     forms = JFormMap.allKeysPArray(actor_infos) 
@@ -475,12 +475,12 @@ Event OnKeyDown(int key_code)
             if main.sexlab.IsActorActive(target)
                 Trace("OnKeyDown","target: "+target.getDisplayName()+" in active sex")
                 sslThreadController thread = main.GetThread(target)
-                Trace("OnKeyDown", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
-                if thread != None 
-                    stages.EditDescriptions(thread) 
-                else 
+                if thread != None
+                    Trace("OnKeyDown", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
+                    stages.EditDescriptions(thread)
+                else
                     Trace("OnKeyDown","failed to find thread for target:"+target.GetDisplayName())
-                endif 
+                endif
             elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
                 Target_Menu_Selection(target, player)
             endif 
@@ -508,11 +508,12 @@ Function Target_Menu_Selection(Actor target, Actor player)
         clothing_string = "dress"
     endif 
     int masturbate = 0
-    int sex = 1
-    int raped_by_player = 2
-    int rapes_player = 3
-    int clothing = 4
-    int cancel = 5
+    int kissing = 1
+    int sex = 2
+    int raped_by_player = 3
+    int rapes_player = 4
+    int clothing = 5
+    int cancel = 6
 
     int cuddle = -2 
     int bondage = -2
@@ -532,7 +533,8 @@ Function Target_Menu_Selection(Actor target, Actor player)
     String[] buttons = Utility.CreateStringArray(cancel+1)
 
     buttons[masturbate] = "masturbate"
-    buttons[sex] = "have sex with player"
+    buttons[kissing] = "kiss with player"
+    buttons[sex] = "sex with player"
     buttons[raped_by_player] = "raped by player"
     buttons[rapes_player] = "rapes the player"
     buttons[clothing] = clothing_string
@@ -554,6 +556,8 @@ Function Target_Menu_Selection(Actor target, Actor player)
 
     if button == masturbate
         actions.Masturbation_Start(target, "normal", "")
+    elseif button == kissing
+        actions.Sex_Start(target, player, "normal", "", "kissing_only")
     elseif button == sex
         ;String[] bs = new String[4] 
         ;bs[0] = "fucking a"

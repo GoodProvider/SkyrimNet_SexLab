@@ -4,14 +4,13 @@
 {% set actor_having_sex = false %} {% set actor_rape_victim = false %}
 {% if (render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "book" or render_mode == "equipment") %}
 
-    {% set sexlab_speaker.stats = {} %} 
-
+    {#% set sexlab_speaker.stats = {} %#} 
     {#######################################################}
     {# Gets the speaker's stats                            #}
     {#######################################################}
-    {% if not isTimePaused %}
-      {% set sexlab_speaker = sexlab_speaker_info(npc.UUID) %}
-    {% endif %} 
+    {#% if not isTimePaused %#}
+      {#% set sexlab_speaker = sexlab_speaker_info(npc.UUID) %#}
+    {#% endif %#} 
 
   {% if not is_plugin_loaded("SkyrimNetUDNG.esp") %}
     {% set show_internal = (render_mode == "full" or render_mode == "thoughts" or render_mode == "thought" or render_mode == "transform" or render_mode == "book" or render_mode == "equipment") %}

@@ -1,20 +1,19 @@
 Scriptname SkyrimNet_SexLab_Stats extends Quest 
 
 int stats_any = 0 
-int stats_masturbating = 1
-int stats_vaginal_giving = 2
-int stats_vaginal_getting = 3
-int stats_oral_giving = 4 
-int stats_oral_getting = 5
-int stats_anal_giving = 6
-int stats_anal_getting = 7 
-int stats_orgy = 8
-int stats_male = 9
-int stats_female = 10
-int stats_creature = 11
-int stats_raped = 12
-int stats_raping = 13
-int stats_next_start = 14
+int stats_vaginal_giving = 1
+int stats_vaginal_getting = 2
+int stats_oral_giving = 3 
+int stats_oral_getting = 4
+int stats_anal_giving = 5
+int stats_anal_getting = 6 
+int stats_orgy = 7
+int stats_male = 8
+int stats_female = 9
+int stats_creature = 10
+int stats_raped = 11
+int stats_raping = 12
+int stats_next_start = 13
 int stats_size = 22
 
 String[] types
@@ -39,7 +38,6 @@ Function Setup()
 
     types = Utility.CreateStringArray(stats_size)
     types[stats_any] = "sex"
-    types[stats_masturbating] = "mastrubating"
     types[stats_vaginal_giving] = "fucking pussy"
     types[stats_vaginal_getting] = "fucked in pussy"
     types[stats_oral_giving] = "fucking mouth"
@@ -158,8 +156,8 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
         endwhile 
 
         matched[stats_any] = True
-        if actors.length == 1 && !anim.HasTag("tentacles")
-            matched[stats_masturbating] = True
+        if actors.length == 1
+            ; ignore masturbating
         else
             matched[stats_vaginal_giving] = vaginal_matched && i > 0
             matched[stats_vaginal_getting] = vaginal_matched && i == 0
@@ -233,7 +231,28 @@ int Function GetFirstTime(Actor akActor, String group, String name)
     return value 
 EndFunction 
 
+Function SetDefaults(Actor akActor) 
+    String storage_key = storage_first_time+"_default_set"
+    int value = StorageUtil.GetIntValue(akActor, storage_key, 0)
+    if value == 1
+        return 
+    endif 
+
+    SkyrimNetApi.SendCustomPromptToLLM("helpers/sexlab_default_sex_life", "meta", "", \
+        self, "SkyrimNet_SexLab_Stats", "SetDefaults_CallBack")
+    Trace("SetDefaults",akActor.GetDisplayName())
+EndFunction 
+
+Function SetDefaults_CallBack(String response, int success)
+    if !success
+        return 
+    endif 
+    Trace("SetDefaults_CallBack",response)
+Endfunction 
+
 String[] Function ListFirstTime(Actor akActor, String group) 
+    ; will set the character's defaults 
+
     String[] keys = new String[1]
     if group == "experiences"
         int num_stats = 0 
