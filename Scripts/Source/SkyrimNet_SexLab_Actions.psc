@@ -1,7 +1,12 @@
 Scriptname SkyrimNet_SexLab_Actions extends Quest
 SkyrimNet_SexLab_Main Property main Auto 
+SkyrimNet_SexLab_AnimationHandler Property anim_handler Auto 
 
 import SkyrimNet_SexLab_Utilities
+
+Idle Property pa_HugA Auto  ; IDLE:000F4699
+
+Quest Property ostimnet_actions Auto 
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Actions."+func+"] "+msg
@@ -13,6 +18,10 @@ EndFunction
 
 Function Setup()
     main = (self as Quest) as SkyrimNet_SexLab_Main
+    anim_handler = (Self as Quest) as SkyrimNet_SexLab_AnimationHandler
+    if MiscUtil.FileExists("Data/TT_OStimNet.esp")
+        ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as TTON_ACtions
+    endif 
 EndFunction 
 
 ; -------------------------------------------------
@@ -152,6 +161,32 @@ sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String t
 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
     return Sex_Start_helper(actors, victims, style, "", tag) 
+EndFunction
+
+sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag) 
+    Trace("Affection_start"," speaker:"+speaker.getDisplayName() +" target:"+target.GetDisplayName()+" style:"+style+" tag:"+tag)
+    if main.sexlab_ostim_affection 
+        Trace("Affection_Start","ostimnet_actions")
+        (ostimnet_actions as TTON_Actions).StartAffectionSceneExecute(speaker, target, tag)
+        return None 
+    endif 
+
+    tag = "kiss"
+    if tag == "hug" 
+        Speaker.playIdleWithTarget(pa_HugA, target) 
+        return None 
+    ; Couldn't make these look nice 
+    ;elseif tag == "kiss"
+    ;
+    ;   anim_handler.PlayByName_SpeakerTarget(Speaker,Target, "kiss")
+    ;    return None 
+    endif 
+
+    Actor[] actors = new Actor[2] 
+    actors[0] = Speaker 
+    actors[1] = Target 
+    Actor[] victims = PapyrusUtil.ActorArray(0) 
+    return Sex_Start_Helper(actors, victims, style, "giving", "kissing_only") 
 EndFunction
 
 sslThreadModel Function Sex_Start_Helper(Actor[] actors, Actor[] victims, String style, String direction, String tag, String hook="")

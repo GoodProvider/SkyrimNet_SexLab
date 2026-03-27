@@ -67,6 +67,8 @@ bool Property hide_dialogue_historic_instructions
     EndFunction 
 EndProperty
 
+int Property sexlab_ostim_affection = 0 Auto 
+
 ; Hides the hermaphrodite from prompt 
 ; 0 - false
 ; 1 - true

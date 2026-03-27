@@ -1,0 +1,18 @@
+{
+    "directories":{
+        "Leito":"SLAL Animations by Leito v1.6/meshes/actors/character/animations/AnimationsByLeito"
+    },
+    "kiss": {
+        "name":"kiss",
+        "directory":"Leito",
+		"animations": [
+            [ "Leito_Kissing_A1_S1", "Leito_Kissing_A1_S2", "Leito_Kissing_A1_S3" ],
+            [ "Leito_Kissing_A2_S1", "Leito_Kissing_A2_S2", "Leito_Kissing_A2_S3" ]
+        ],
+		"angles": [
+            [ 0.0, 0.0, 0.0 ],
+            [ 180.0, 180.0, 180.0 ]
+        ],
+		"timers":  [ 2.0, 2.0, 2.0 ]
+    }
+}

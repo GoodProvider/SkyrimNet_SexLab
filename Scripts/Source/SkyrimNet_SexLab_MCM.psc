@@ -28,6 +28,7 @@ SkyrimNet_DOM_Main dom_main = None
 ; OstimNet Support 
 int ostimnet_player_menu = -1
 int ostimnet_nonplayer_menu = -1
+int ostimnet_affection_menu = -1
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_MCM."+func+"] "+msg
@@ -159,6 +160,7 @@ Function PageOptions()
         AddHeaderOption("OstimNet Integration")
         AddHeaderOption("")
         ostimnet_player_menu = AddMenuOption("sex framework:", sexlab_ostim_options[main.sexlab_ostim_player])
+        ostimnet_affection_menu = AddMenuOption("hug framework:", sexlab_ostim_options[main.sexlab_ostim_affection])
         ; ostimnet_nonplayer_menu = AddMenuOption("sex without player:", sexlab_ostim_options[main.sexlab_ostim_player])
     endif 
 EndFunction 
@@ -437,8 +439,8 @@ Event OnOptionMenuOpen(int menu_id)
     SetMenuDialogOptions(sexlab_ostim_options)
     if menu_id == ostimnet_player_menu
         SetMenuDialogStartIndex(main.sexlab_ostim_player)
-    elseif menu_id == ostimnet_nonplayer_menu
-        SetMenuDialogStartIndex(main.sexlab_ostim_nonplayer_index)
+    elseif menu_id == ostimnet_affection_menu
+        SetMenuDialogStartIndex(main.sexlab_ostim_affection)
     endif
     SetMenuDialogDefaultIndex(0)
 endEvent
@@ -446,10 +448,11 @@ endEvent
 event OnOptionMenuAccept(int menu_id, int index)
     if menu_id == ostimnet_player_menu
         main.sexlab_ostim_player = index
-    else 
-        main.sexlab_ostim_nonplayer_index = index
+    elseif menu_id == ostimnet_affection_menu 
+        main.sexlab_ostim_affection = index
     endif 
-    Trace("OnOptionMenuAccept"," menu_id: "+menu_id+" ostimnet_player_menu: "+ostimnet_player_menu+" index: "+index+" sexlab_ostim_player: "+main.sexlab_ostim_player+" label: "+sexlab_ostim_options[main.sexlab_ostim_player])
+    Trace("OnOptionMenuAccept"," menu_id: "+menu_id+" sexlab_ostim_player: "+main.sexlab_ostim_player+" label: "+sexlab_ostim_options[main.sexlab_ostim_player]\
+        +" sexlab_ostim_affection: "+main.sexlab_ostim_affection+" label: "+sexlab_ostim_options[main.sexlab_ostim_affection])
     SetMenuOptionValue(menu_id, sexlab_ostim_options[index])
 endEvent
 
@@ -557,7 +560,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if button == masturbate
         actions.Masturbation_Start(target, "normal", "")
     elseif button == kissing
-        actions.Sex_Start(target, player, "normal", "", "kissing_only")
+        actions.Affection_Start(target, player, "normal", "kissing")
     elseif button == sex
         ;String[] bs = new String[4] 
         ;bs[0] = "fucking a"
