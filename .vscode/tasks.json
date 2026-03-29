@@ -17,7 +17,7 @@
         {
             "label": "CMake: Configure (Debug)",
             "type": "shell",
-            "command": "cmake --preset debug",
+            "command": "git submodule update --init --recursive && cmake --preset debug",
             "options": {
                 "cwd": "${workspaceFolder}/SKSE_Source"
             },
@@ -38,7 +38,7 @@
         {
             "label": "CMake: Configure (Release)",
             "type": "shell",
-            "command": "cmake --preset release",
+            "command": "git submodule update --init --recursive && cmake --preset release",
             "options": {
                 "cwd": "${workspaceFolder}/SKSE_Source"
             },
@@ -63,6 +63,7 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             },
+            "dependsOn": "CMake: Build SKSE (Debug)",
             "problemMatcher": []
         },
         {
