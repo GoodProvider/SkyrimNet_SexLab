@@ -15,7 +15,11 @@ for fname in os.listdir(args.src):
     path = f"{args.src}/{fname}"
     with open(path) as fin:
         print ("loading",fname)
-        fname_info[fname] = json.load(fin) 
+        try:
+            fname_info[fname] = json.load(fin)
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Failed to parse {path}: {e}", file=sys.stderr)
+            sys.exit(1)
     if fname_info[fname]:
         os.remove(path) 
 
@@ -23,9 +27,13 @@ for fname,info in fname_info.items():
     path = f"{args.dst}/{fname}"
     merged = " " 
     if os.path.exists(path): 
-        with open(path) as fin: 
+        with open(path) as fin:
             print ("loading",fname)
-            old = json.load(fin) 
+            try:
+                old = json.load(fin)
+            except json.JSONDecodeError as e:
+                print(f"ERROR: Failed to parse destination {path}: {e}", file=sys.stderr)
+                sys.exit(1)
             for key,value in old.items(): 
                 if key not in info: 
                     merged = "M" 

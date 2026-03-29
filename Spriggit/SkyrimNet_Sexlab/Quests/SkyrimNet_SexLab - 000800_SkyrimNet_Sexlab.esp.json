@@ -133,10 +133,20 @@
         ]
       },
       {
-        "Name": "SkyrimNet_SexLab_Actions"
+        "Name": "SkyrimNet_SexLab_Actions",
+        "Properties": [
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "pa_HugA",
+            "Object": "0F4699:Skyrim.esm"
+          }
+        ]
       },
       {
         "Name": "SkyrimNet_SexLab_Stats"
+      },
+      {
+        "Name": "SkyrimNet_SexLab_AnimationHandler"
       }
     ],
     "FileName": "",

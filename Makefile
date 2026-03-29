@@ -7,7 +7,7 @@ ANIM_SRC= C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet_SexLab\animations\_loca
 ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
 
 merge:
-	python3 ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}
+	uv run ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}
 	git add ${ANIM_DST}/*
 	git commit ${ANIM_DST}
 
