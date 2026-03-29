@@ -93,7 +93,7 @@ The following and depedancies:
 - [SkyUI SE](https://www.nexusmods.com/skyrimspecialedition/mods/12604)
   [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561)
    - [UIExtensions_UITextEntryMenu_with_VR_support](https://github.com/mrowrpurr/UIExtensions_UITextEntryMenu_with_VR_support) (VR users)
-- [Primsa UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
+- [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
     - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - SkyrimNet (Beta7 or later)
    - You must have narration enabled

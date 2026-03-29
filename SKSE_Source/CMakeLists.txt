@@ -28,7 +28,7 @@ elseif(DEFINED SKYRIM_MODS_FOLDER AND IS_DIRECTORY "${SKYRIM_MODS_FOLDER}")
     set(OUTPUT_FOLDER "${SKYRIM_MODS_FOLDER}/${MOD_FOLDER_NAME}")
 endif()
 
-set(CommonLibPath "extern/CommonLibSSE-NG")
+set(CommonLibPath "lib/CommonLibSSE-NG")
 set(CommonLibName "CommonLibSSE")
 
 set(BUILD_TESTS       OFF CACHE BOOL "" FORCE)
