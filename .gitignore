@@ -10,3 +10,6 @@ SKSE/Plugins/SkyrimNet/prompts/submodules/user_final_instructions/0049_sexlab_ac
 main.py 
 SexLab
 PapyrusSourcesDD
+SKSE_Source/build 
+SKSE_Source/extern
+SKSE/Plugins/SkyrimNet_Sexlab.dll
