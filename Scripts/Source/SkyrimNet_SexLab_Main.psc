@@ -167,6 +167,12 @@ SexLabFramework Property sexlab Auto
 Bool Property virgin_blood_enabled = True Auto
 
 ; -----------------------------
+; Time since last dirrect narration
+; needed, sine there appears to be a race condition on when things hit the audio queue
+; -----------------------------
+
+
+; -----------------------------
 ; DOM found 
 ; -----------------------------
 bool dom_found_internal = false
@@ -206,6 +212,7 @@ string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
 float Property direct_narration_cool_off Auto 
 float Property direct_narration_max_distance Auto 
 float Property direct_narration_max_distance_default Auto 
+float Property direct_narration_last_time Auto 
 
 ; OstimNet 
 bool ostimnet_found_internal = false 
@@ -314,6 +321,7 @@ Function Setup()
         direct_narration_max_distance = 15
         direct_narration_max_distance_default = 15
     endif 
+    direct_narration_last_time = 0 
 
     if actorLock == 0 
         actorLock = JFormMap.object() 
@@ -322,7 +330,7 @@ Function Setup()
     elseif JFormMap.count(actorLock) > 0
         Form[] forms = JFormMap.allKeysPArray(actorLock)
         if forms != None 
-            int i = forms.Length
+            int i = forms.Length - 1  
             while i >= 0
                 ReleaseActorLock(forms[i] as Actor)
                 i -= 1
@@ -335,7 +343,7 @@ Function Setup()
         JValue.retain(group_info)
     else
         int group_info_new = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
-        Jvalue.releaseAndRetain(group_info, group_info_new)
+        JValue.releaseAndRetain(group_info, group_info_new)
         group_info = group_info_new
     endif
 
@@ -673,8 +681,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
         ;endif 
         DirectNarration(desc, actors[0], target)
         ;AllowedDeniedOnlyIncrease(actors, thread, "start") 
-    else 
-        String desc = Get_Thread_Description(thread, actorLib)
+    elseif thread.stage != thread.animation.StageCount()
         ContinueActivity(actors[0], target, True)
     endif 
 
@@ -1252,7 +1259,7 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
         buttons = new String[3] 
         buttons[yes] = "Yes"
         buttons[no_silent] = "No (Silent)"
-        buttons[no] = "No (Silent)"
+        buttons[no] = "No"
     else 
         buttons[BUTTON_YES] = "Yes "
         buttons[BUTTON_YES_RANDOM] = "Yes (Random)"
@@ -1448,8 +1455,8 @@ sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors
 
     JValue.retain(groups)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
-    String start_label = "<start "+tag+">"
-    bool rape = tag == "rape"
+    String start_label = "<start "+type+">"
+    bool rape = type == "rape"
     while True
         String order_str ="change order>"
         bool finished = false

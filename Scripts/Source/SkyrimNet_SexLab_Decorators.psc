@@ -138,13 +138,13 @@ String Function Is_Nudity(Actor akActor) global
     if akActor != None 
         Form body = akActor.GetEquippedArmorInSlot(32)
         Form pelvis_primary = akActor.GetEquippedArmorInSlot(52)
-        Form pelvis_seconday = akActor.GetEquippedArmorInSlot(49)
+        Form pelvis_secondary = akActor.GetEquippedArmorInSlot(49)
 
 
         if body == None 
             topless = true 
         endif 
-        if pelvis_primary == None && pelvis_seconday == None
+        if pelvis_primary == None && pelvis_secondary == None
             bottomless = true 
         endif
     endif 
@@ -263,7 +263,7 @@ String Function Get_Threads(Actor speaker) global
                 j -= 1
             endwhile 
             if distance == -1 
-                distance = speaker.GetDistance(actors[0])
+                distance = speaker.GetDistance(actors[0]) ; thread.positions is always at least one actor
                 los = speaker.HasLOS(actors[0]) 
             endif 
 

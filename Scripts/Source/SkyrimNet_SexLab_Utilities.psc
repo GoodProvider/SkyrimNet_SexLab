@@ -3,12 +3,87 @@ Scriptname SkyrimNet_SexLab_Utilities
 ; ------------------------------------------------------------
 ; Trace for Utilities
 ; ------------------------------------------------------------
+
 Function Trace(String func, String msg, Bool notification=False) global
+
+    ;msg = GetTimeStamp()+" [SkyrimNet_SexLab_Utilities."+func+"] "+msg
     msg = "[SkyrimNet_SexLab_Utilities."+func+"] "+msg
     Debug.Trace(msg)
     if notification
         Debug.Notification(msg)
     endif 
+EndFunction
+String Function GetTimestamp() global
+    int ts = Utility.GetCurrentRealTime() as int
+
+    int s    = ts % 60
+    int m    = (ts / 60) % 60
+    int h    = (ts / 3600) % 24
+    int days = ts / 86400
+
+    ; Walk years from epoch (1970-01-01)
+    int year = 1970
+    bool yearDone = false
+    while !yearDone
+        int diy = 365
+        if (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0))
+            diy = 366
+        endif
+        if days >= diy
+            days -= diy
+            year += 1
+        else
+            yearDone = true
+        endif
+    endwhile
+
+    ; Walk months
+    int month = 1
+    bool monDone = false
+    while !monDone
+        int dim = 31
+        if month == 4 || month == 6 || month == 9 || month == 11
+            dim = 30
+        elseif month == 2
+            if (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0))
+                dim = 29
+            else
+                dim = 28
+            endif
+        endif
+        if days >= dim
+            days -= dim
+            month += 1
+        else
+            monDone = true
+        endif
+    endwhile
+    int day = days + 1
+
+    ; Zero-pad each component
+    String yy = year as String
+    String mo = month as String
+    if month < 10
+        mo = "0" + mo
+    endif
+    String dd = day as String
+    if day < 10
+        dd = "0" + dd
+    endif
+    String hh = h as String
+    if h < 10
+        hh = "0" + hh
+    endif
+    String mn = m as String
+    if m < 10
+        mn = "0" + mn
+    endif
+    String ss = s as String
+    if s < 10
+        ss = "0" + ss
+    endif
+
+    return yy + ":" + mo + ":" + dd + " " + hh + ":" + mn + ":" + ss
 EndFunction
 
 ; ------------------------------------------------------------
@@ -163,9 +238,13 @@ Function DirectNarration_Optional(String event_type, String msg, Actor source=No
     endif 
 
     String type = "" 
+    int queue_size = SkyrimNetAPI.GetSpeechQueueSize()
     int last_audio = SkyrimNetAPI.GetTimeSinceLastAudioEnded()/1000 ; in seconds
-    if last_audio >= main.direct_narration_cool_off && distance <= main.direct_narration_max_distance
+    float time_current = Utility.GetCurrentRealTime() 
+    float time_delta = time_current - main.direct_narration_last_time 
+    if time_delta > main.direct_narration_cool_off && queue_size == 0 && (last_audio >= main.direct_narration_cool_off && distance <= main.direct_narration_max_distance)
         SkyrimNetApi.DirectNarration(msg, source, target)
+        main.direct_narration_last_time = time_current
         ;SkyrimNetApi.RegisterEvent(event_type, msg, source, target)
         type = "direct"
     else 
@@ -183,13 +262,15 @@ Function DirectNarration_Optional(String event_type, String msg, Actor source=No
     if target != None 
         msg += " target:"+target.GetDisplayName()
     endif
-    Trace("DirectNarration_Optional","type:"+type+" last_audio_secs:"+last_audio+">?"+main.direct_narration_cool_off+" distance:"+distance+"<?"+main.direct_narration_max_distance+" msg:"+msg)
+    Trace("DirectNarration_Optional","type:"+type+" narration_delta:"+time_delta+" queue_size:"+queue_size+" last_audio_secs:"+last_audio+">?"+main.direct_narration_cool_off+" distance:"+distance+"<?"+main.direct_narration_max_distance+" msg:"+msg)
 EndFunction
 
 Function DirectNarration(String msg, Actor source=None, Actor target=None) global
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     ; msg = CheckDuplicate("DirectNarration", source, msg)
 
     SkyrimNetApi.DirectNarration(msg, source, target)
+    main.direct_narration_last_time = Utility.GetCurrentRealTime() 
     ;SkyrimNetApi.RegisterEvent("sexlab_event", msg, source, target)
     if source != None 
         msg += " source:"+source.GetDisplayName()

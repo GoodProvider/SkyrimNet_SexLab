@@ -109,7 +109,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
         int k = actors.length - 1 
         while 0 <= k 
             if k != i
-                int gender = actors[k].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
+                int gender = actors[k].GetLeveledActorBase().GetSex() 
                 if gender == 1 
                     matched[stats_female] = True 
                 else 
@@ -200,11 +200,12 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
         String first_string = ""
         if at_least_one
             String m = ""
-            if first_filter[stats_any] == 1  && False 
-                m = name+"'s first time having sex. "
-            else
-                m = name+"'s first time "+SkyrimNet_SexLab_Utilities.JoinStringsFiltered(messages,first_filter)+". "
-            endif 
+            ;if first_filter[stats_any] == 1  && False 
+                ;m = name+"'s first time having sex. "
+            ;else
+                ;m = name+"'s first time "+SkyrimNet_SexLab_Utilities.JoinStringsFiltered(messages,first_filter)+". "
+            ;endif 
+            m = name+"'s first time "+SkyrimNet_SexLab_Utilities.JoinStringsFiltered(messages,first_filter)+". "
             first_string += m 
         endif 
         first_string += bleeding 

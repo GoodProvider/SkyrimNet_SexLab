@@ -132,7 +132,6 @@ You are physically engaged in intense sexual activity right now.
 - Describing the same visual twice
 - Noting your own arousal/discomfort repeatedly
 
-
      {% endif %}
 After your first acknowledgment, either act on it, dismiss it, or let it color your responses subtly—don't keep narrating that it's happening.
 {% if get_global_value("skyrimnet_sexlab_hide_dialogue_historic_instructions") != 1.0 %}
@@ -141,8 +140,9 @@ After your first acknowledgment, either act on it, dismiss it, or let it color y
      - NEVER use modern slang or language
      - Use racial speech patterns, slang and idioms, racial cultural views
      - Match the speaker's medieval social hierarch position
-     - The final response can include only 2 sentences. One descriptive and one optional **short** spoken sentence.
- 
 {% endif %}
 
+** Reminder
+- The final response can include only 2 sentences. One descriptive and one optional **short** spoken sentence.
+- If the spoken sentence has nothing new to say, remove it and add sounds to the description.
 {% endif %}

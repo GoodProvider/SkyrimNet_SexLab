@@ -30,6 +30,8 @@ int ostimnet_player_menu = -1
 int ostimnet_nonplayer_menu = -1
 int ostimnet_affection_menu = -1
 
+Quest Property ostimnet_actions Auto 
+
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_MCM."+func+"] "+msg
     Debug.Trace(msg) 
@@ -49,13 +51,16 @@ int Property sexlab_ostim_nonplayer_menu Auto  ; menu id
 
 Function Setup() 
     actions = (main as Quest) as SkyrimNet_SexLab_Actions
+    if MiscUtil.FileExists("Data/TT_OStimNet.esp")
+        ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as Quest
+    endif 
 
-     if sexlab_ostim_options.length == 0
-        sexlab_ostim_options = new String[2]
-        sexlab_ostim_options[0] = "SexLab"
-        sexlab_ostim_options[1] = "Ostim" 
-       ; sexlab_ostim_options[2] = "Choose each time"
-     endif 
+    if sexlab_ostim_options.length == 0
+       sexlab_ostim_options = new String[2]
+       sexlab_ostim_options[0] = "SexLab"
+       sexlab_ostim_options[1] = "Ostim" 
+      ; sexlab_ostim_options[2] = "Choose each time"
+    endif 
 
     ; -------------------------------
     ; Checks for Devious Support mod 
@@ -160,7 +165,7 @@ Function PageOptions()
         AddHeaderOption("OstimNet Integration")
         AddHeaderOption("")
         ostimnet_player_menu = AddMenuOption("sex framework:", sexlab_ostim_options[main.sexlab_ostim_player])
-        ostimnet_affection_menu = AddMenuOption("hug framework:", sexlab_ostim_options[main.sexlab_ostim_affection])
+        ; ostimnet_affection_menu = AddMenuOption("hug framework:", sexlab_ostim_options[main.sexlab_ostim_affection])
         ; ostimnet_nonplayer_menu = AddMenuOption("sex without player:", sexlab_ostim_options[main.sexlab_ostim_player])
     endif 
 EndFunction 
@@ -510,13 +515,14 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if target_is_undressed 
         clothing_string = "dress"
     endif 
-    int masturbate = 0
-    int kissing = 1
-    int sex = 2
-    int raped_by_player = 3
-    int rapes_player = 4
-    int clothing = 5
-    int cancel = 6
+    int sexlab_ostim = 0
+    int masturbate = 1
+    int affection = 2
+    int sex = 3
+    int raped_by_player = 4
+    int rapes_player = 5
+    int clothing = 6
+    int cancel = 7
 
     int cuddle = -2 
     int bondage = -2
@@ -535,11 +541,12 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif  
     String[] buttons = Utility.CreateStringArray(cancel+1)
 
+    buttons[sexlab_ostim] = sexlab_ostim_options[main.sexlab_ostim_player]
     buttons[masturbate] = "masturbate"
-    buttons[kissing] = "kiss with player"
-    buttons[sex] = "sex with player"
-    buttons[raped_by_player] = "raped by player"
-    buttons[rapes_player] = "rapes the player"
+    buttons[affection] = "affection"
+    buttons[sex] = "sex"
+    buttons[raped_by_player] = "player rapes"
+    buttons[rapes_player] = "rapes player"
     buttons[clothing] = clothing_string
     if cuddle != -2 
         buttons[cuddle] = "cuddle"
@@ -552,34 +559,57 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif 
     buttons[cancel] = "cancel"
 
-    Trace("OnKeyDown","buttons:" +buttons)
-
     String msg = "Should "+target.getDisplayName()+":"
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
+    if button >= 0 && button <= cancel
+        Trace("OnKeyDown","button:" +buttons[button])
+    endif 
     if button == masturbate
-        actions.Masturbation_Start(target, "normal", "")
-    elseif button == kissing
-        actions.Affection_Start(target, player, "normal", "kissing")
+        if main.sexlab_ostim_player == 0
+            actions.Masturbation_Start(target, "normal", "")
+        else 
+            (ostimnet_actions as TTON_Actions).StartSexActionExecute(target, None, None, None, None, "", "")
+        endif 
+    elseif button == sexlab_ostim 
+        if main.sexlab_ostim_player == 0
+            main.sexlab_ostim_player = 1 
+        else
+            main.sexlab_ostim_player = 0 
+        endif 
+        Target_Menu_Selection(Target, Player) 
+    elseif button == affection
+        Trace("OnKeyDown","affection!")
+        if main.sexlab_ostim_player == 0
+            String[] bs = new String[2] 
+            bs[0] = "hugging"
+            bs[1] = "kissing"
+            String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
+            actions.Affection_Start(player, target, "normal", tag)
+        else 
+            String[] bs = new String[3] 
+            bs[0] = "hugging"
+            bs[1] = "kissing"
+            bs[2] = "cuddling"
+            String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
+            (ostimnet_actions as TTON_Actions).StartAffectionSceneExecute(target, player, tag)
+        endif 
     elseif button == sex
-        ;String[] bs = new String[4] 
-        ;bs[0] = "fucking a"
-        ;bs[1] = "fucked in"
-        ;bs[2] = "giving"
-        ;bs[3] = "getting"
-        ;String direction = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-        ;bs[0] = "ass"
-        ;bs[1] = "pussy"
-        ;bs[2] = "oral"
-        ;bs[3] = "blowjob"
-        ;String type = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
+        if main.sexlab_ostim_player == 0
+            actions.Sex_Start(player, target, "normal", "", "")
+        else 
+            String[] bs = new String[3] 
+            bs[0] = "vaginalsex"
+            bs[1] = "blowjob"
+            bs[2] = "analsex"
+            String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
+            (ostimnet_actions as TTON_Actions).StartSexActionExecute(target, player, None, None, None, tag, "")
+        endif 
 
-        ;Debug.Notification(direction+" "+type)
-        actions.Sex_Start(target, player, "normal", "", "")
     elseif button == rapes_player
         actions.Rape_Start(target, player, "normal", "", "", player)
     elseif button == raped_by_player
-        actions.Rape_Start(target, player, "normal", "", "", target)
+        actions.Rape_Start(player, target, "normal", "", "", target)
     elseif button == clothing
 
         ;--------------------------------------------------
@@ -819,10 +849,10 @@ Function MutliTarget_Menu_Selection(Actor player)
             if type == "rape>"
                 Actor[] victims = new Actor[1]
                 victims[0] = group[0]
-                actions.Sex_Start_Helper(group, victims, "normal", "", "")
+                actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
             else 
                 Actor[] victims = PapyrusUtil.ActorArray(0) 
-                actions.Sex_Start_Helper(group, victims, "normal", "", "")
+                actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
             endif   
         endif 
     endif 
