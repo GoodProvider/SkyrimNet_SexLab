@@ -3,20 +3,38 @@
 #include <spdlog/spdlog.h>
 
 #include "PCH.h"
+#include "web-ui.h"
+#include "Papyrus_WebUI.h"
+#include "WebUI_Log.h"
 
 using namespace SKSE;
 
-namespace { 
+namespace {
 
 SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     SKSE::Init(skse);
 
-    // Once all plugins and mods are loaded, then the ~ console is ready and can
-    // be printed to
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message *message) {
-        if (message->type == SKSE::MessagingInterface::kDataLoaded)
-            RE::ConsoleLog::GetSingleton()->Print("Hello, world!");
+        if (message->type == SKSE::MessagingInterface::kDataLoaded) {
+            RE::ConsoleLog::GetSingleton()->Print("SkyrimNet_SexLab: SKSE listening!");
+            InitWebUI();
+        } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
+                   message->type == SKSE::MessagingInterface::kNewGame) {
+            WebUI_SetGameReady();
+        }
     });
+
+    webui_log::info("SkyrimNet_SexLab: Trying to load WebUI plugin...");
+    // Register Papyrus functions
+    if (auto papyrus = SKSE::GetPapyrusInterface()) {
+        if (!papyrus->Register(PapyrusBindings_WebUI::Register_WebUI_Functions)) {
+            webui_log::error("Failed to register WebUI Papyrus functions");
+        } else {
+            webui_log::info("WebUI Papyrus functions registered");
+        }
+    } else {
+        webui_log::info("Failed to get Papyrus interface.");
+    }
 
     return true;
 }

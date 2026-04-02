@@ -19,11 +19,11 @@ int dom_debug_key = 41
 bool clear_JSON = False
 
 ; Devious Device Support 
-skyrimnet_UDNG_Groups group_devices = None
+Quest group_devices = None
 
 ; DOM Support 
 Quest d_api = None 
-SkyrimNet_DOM_Main dom_main = None 
+Quest dom_main = None 
 
 ; OstimNet Support 
 int ostimnet_player_menu = -1
@@ -66,7 +66,7 @@ Function Setup()
     ; Checks for Devious Support mod 
     if MiscUtil.FileExists("Data/SkyrimNetUDNG.esp")
         Trace("SetUp","found SkyrimNetUDNG.esp")
-        group_devices = Game.GetFormFromFile(0x800, "SkyrimNetUDNG.esp") as skyrimnet_UDNG_Groups
+        group_devices = Game.GetFormFromFile(0x800, "SkyrimNetUDNG.esp") as Quest
     else 
         group_devices = None 
     endif
@@ -81,7 +81,7 @@ Function Setup()
     endif 
     if MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
         Trace("SetUp","found SkyrimNet_DOM.esp")
-        dom_main = Game.GetFormFromFile(0x800, "SkyrimNet_DOM.esp") as SkyrimNet_DOM_Main
+        dom_main = Game.GetFormFromFile(0x800, "SkyrimNet_DOM.esp") as Quest
     else 
         dom_main = None 
     endif 
@@ -466,6 +466,7 @@ endEvent
 ; --------------------------------------------
 
 Event OnKeyDown(int key_code)
+    return 
     if UI.IsTextInputEnabled()
         return 
     endif 
@@ -490,7 +491,6 @@ Event OnKeyDown(int key_code)
                     Trace("OnKeyDown","failed to find thread for target:"+target.GetDisplayName())
                 endif
             elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
-                Target_Menu_Selection(target, player)
             endif 
         else 
             MutliTarget_Menu_Selection(player)
@@ -499,6 +499,7 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
+    
     if d_api != None && (d_api as DOM_API).IsDOMSlave(target) 
         SkyrimNet_DOM_Menu.Target_Menu_Selection(target,player)
         return 
@@ -585,7 +586,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[0] = "hugging"
             bs[1] = "kissing"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            actions.Affection_Start(player, target, "normal", tag)
+            actions.Affection_Start(player, target, "normal", tag, "")
         else 
             String[] bs = new String[3] 
             bs[0] = "hugging"
@@ -639,7 +640,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     elseif button == cuddle 
         SkyrimNet_Cuddle_API.OpenMenu(player, target) 
     elseif button == bondage 
-        group_devices.UpdateDevices(target) 
+        (group_devices as skyrimnet_UDNG_Groups).UpdateDevices(target) 
     endif 
 EndFunction
 
@@ -849,10 +850,10 @@ Function MutliTarget_Menu_Selection(Actor player)
             if type == "rape>"
                 Actor[] victims = new Actor[1]
                 victims[0] = group[0]
-                actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
+                actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "", "")
             else 
                 Actor[] victims = PapyrusUtil.ActorArray(0) 
-                actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
+                actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "", "")
             endif   
         endif 
     endif 

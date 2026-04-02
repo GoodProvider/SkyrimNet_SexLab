@@ -22,6 +22,22 @@ Function Setup()
     if MiscUtil.FileExists("Data/TT_OStimNet.esp")
         ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as TTON_Actions
     endif 
+
+    ; Load animation_functions from JSON 
+    int names = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_SexLab/animation_function_names.json")
+    int i = JArray.count(names) - 1
+    while 0 <= i
+        String name = JArray.GetStr(names, i)
+        Trace("Setup","Registering function "+i+" "+name)
+        SkyrimNetApi.RegisterAction("Temp", \
+            "Temp", \
+            "SkyrimNet_SexLab_Actions", "SexStart_IsEligible",  \
+            "SkyrimNet_SexLab_Actions", name,  \
+            "", "PAPYRUS", 1, \
+            "", "BodyAnimation")
+        i -= 1
+    endwhile
+    SkyrimNetApi.UnregisterAction("Temp")
 EndFunction 
 
 ; -------------------------------------------------
@@ -96,14 +112,14 @@ EndFunction
 ; Sex Start Functions 
 ;--------------------------------------------------
 
-sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, string direction, string tag)
+sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, string direction, string tag) 
     Trace("Sex_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" direction: "+direction+" type: "+tag)
     Actor[] actors = new Actor[2]
     actors[0] = Speaker
     actors[1] = Target
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    Trace("Sex_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
-    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
+    Trace("Sex_Start",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
+    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag, "") 
 EndFunction
 
 sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, String direction, string tag, Actor victim)
@@ -115,8 +131,8 @@ sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, St
     Actor[] victims = PapyrusUtil.ActorArray(1) 
     victims[0] = actors[0]
 
-    Trace("Rape_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" victim:"+victim.GetDisplayName()+" style: "+style+" direction:"+direction+" type: "+tag)
-    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
+    Trace("Rape_Start",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" victim:"+victim.GetDisplayName()+" style: "+style+" direction:"+direction+" type: "+tag)
+    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag, "") 
 EndFunction
 
 sslThreadModel Function Orgy_Start(Actor Speaker, Actor Target, Actor participate, string style, String direction, string tag)
@@ -145,9 +161,9 @@ sslThreadModel Function Orgy_Start(Actor Speaker, Actor Target, Actor participat
         i -= 1
     endwhile
 
-    Trace("Orgy_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
+    Trace("Orgy_Start",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
+    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag, "") 
 EndFunction
 
 
@@ -160,10 +176,10 @@ sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String t
     actors[0] = speaker
 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    return Sex_Start_helper(Speaker, actors, victims, style, "", tag) 
+    return Sex_Start_helper(Speaker, actors, victims, style, "", tag, "") 
 EndFunction
 
-sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag, bool narration = False) 
+sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag, bool narration = False)
     Trace("Affection_start"," speaker:"+speaker.getDisplayName() +" target:"+target.GetDisplayName()+" style:"+style+" tag:"+tag)
     ;if main.sexlab_ostim_affection 
         ;Trace("Affection_Start","ostimnet_actions")
@@ -188,11 +204,13 @@ sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String styl
     actors[0] = Speaker 
     actors[1] = Target 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    return Sex_Start_Helper(Speaker, actors, victims, style, "giving", "kissing_only") 
+    String tag_include = "kissing_only"
+    String tag_exclude =" oral,vaginal,anal,masturbation,handjob,boobjob,thighjob,fisting,dildo,fingering,footjob"
+    return Sex_Start_Helper(Speaker, actors, victims, style, "giving", tag_include, tag_exclude)
 EndFunction
 
-sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] victims, String style, String direction, String tag, String hook="")
-    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style:"+style+" direction:"+direction+" tag:"+tag)
+sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] victims, String style, String direction, String tag_include, String tag_exclude, String hook="")
+    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style:"+style+" direction:"+direction+" tag_include:"+tag_include+" exclude:"+tag_exclude+" hook:"+hook)
     if !main.LockActors(actors) 
         return None
     endif 
@@ -201,19 +219,19 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     ; Set up directions and tags 
     ; ------------------------------------------
     if actors.length == 1
-        if tag != ""
-            tag += ","
+        if tag_include != ""
+            tag_include += ","
         endif
         int gender = main.sexlab.GetGender(actors[0])
 
         bool has_penis = (gender != 1 && gender != 3)
         if has_penis 
-            tag = "M"
+            tag_include = "M"
         else 
-            tag = "F"
+            tag_include = "F"
         endif 
     else
-        if  (tag == "oral" || tag == "handjob" || tag == "boobjob" || tag == "thighjob" || tag == "footjob") && direction == "getting"
+        if  (tag_include == "oral" || tag_include == "handjob" || tag_include == "boobjob" || tag_include == "thighjob" || tag_include == "footjob") && direction == "getting"
             Actor temp = actors[0] 
             actors[0] = actors[1]
             actors[1] = temp 
@@ -223,10 +241,10 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
                 actors[0] = actors[1]
                 actors[1] = temp 
             endif 
-            if tag == "pussy" 
-                tag = "vaginal" 
-            elseif tag == "ass" 
-                tag = "anal"
+            if tag_include == "pussy" 
+                tag_include = "vaginal" 
+            elseif tag_include == "ass" 
+                tag_include = "anal"
             endif 
         endif 
     endif 
@@ -272,15 +290,17 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     main.SetThreadStyle(thread.tid, style_int) 
     
     ; Get the animations 
-    sslBaseAnimation[] anims =  GetAnims(main, thread, actors, victims, player, tag, has_player) 
-    if anims.length > 0 && anims[0] == None
-        main.UnlockActors(actors) 
-        return None
-    endif 
+    ;sslBaseAnimation[] anims =  GetAnims(main, thread, actors, victims, player, tag, has_player) 
+    ;if anims.length > 0 && anims[0] == None
+        ;main.UnlockActors(actors) 
+        ;return None
+    ;endif 
+    sslBaseAnimation[] anims =  main.sexLab.GetAnimationsByTags(actors.length, tag_include, tag_exclude, true)
+
 
     if anims.length > 0 
         thread.SetAnimations(anims) 
-    elseif tag == "kissing_only"
+    elseif tag_include == "kissing_only"
         Debug.Notification("No animations found for kissing")
         main.UnlockActors(actors)
         return None 
@@ -303,14 +323,14 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
             main.UnLockActors(actors) 
             return None
         endif  
-        if tag == "kissing_only"
+        if tag_include == "kissing_only"
             thread.SetNoStripping(actors[i])
             thread.DisableOrgasm(actors[i], true) 
         endif 
         i += 1 
     endwhile 
 
-    if tag == "kissing_only"
+    if tag_include == "kissing_only"
         main.SetKissingOnly(thread.tid, True ) 
     else
         main.SetKissingOnly(thread.tid, False ) 
@@ -326,7 +346,7 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     Trace("Sex_Start_Helper",\
          " actors: \""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+"\""\
         +" victims: \""+SkyrimNet_SexLab_Utilities.JoinActors(victims)+"\""\
-        +" tag:"+tag\
+        +" tag_include:"+tag_include\
         +" style:"+style\
         +" has_player: "+has_player\
         +" anims.length: "+anims.length) 
@@ -339,7 +359,7 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(thread.positions))
     if actors.length > 1 
         String msg = "" 
-        if tag == "kissing_only"
+        if tag_include == "kissing_only"
             msg = speaker.GetDisplayName()+" starts activities with "+JoinActorsFiltered(actors,speaker_filter)+"."
         else 
             msg = speaker.GetDisplayName()+" starts sexual activites with "+JoinActorsFiltered(actors,speaker_filter)+"."

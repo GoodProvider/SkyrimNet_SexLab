@@ -3,7 +3,7 @@
     "PackageName": "Spriggit.Json.Skyrim",
     "Version": "0.38.6"
   },
-  "ModKey": "SkyrimNet_Sexlab.esp",
+  "ModKey": "SkyrimNet_SexLab.esp",
   "GameRelease": "SkyrimSE",
   "ModHeader": {
     "Flags": [

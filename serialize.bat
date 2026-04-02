@@ -28,7 +28,7 @@ if not exist "SpriggitCLI\" (
 )
 
 rem --- Cleaned command line below ---
-"SpriggitCLI\Spriggit.CLI.exe" convert-from-plugin --InputPath "SkyrimNet_Sexlab.esp" --OutputPath "Spriggit\SkyrimNet_Sexlab" --GameRelease SkyrimSE -p Spriggit.Json -v 0.38.6
+"SpriggitCLI\Spriggit.CLI.exe" convert-from-plugin --InputPath "SkyrimNet_SexLab.esp" --OutputPath "Spriggit\SkyrimNet_SexLab" --GameRelease SkyrimSE -p Spriggit.Json -v 0.38.6
 
 :EOF
 pause

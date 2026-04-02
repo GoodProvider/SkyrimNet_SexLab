@@ -179,30 +179,30 @@ bool dom_found_internal = false
 bool Function dom_found()
     return dom_found_internal
 EndFunction
-DOM_API d_api_internal = None 
-DOM_API Function dom_api()
-    return d_api_internal
-EndFunction 
-DOM_SexLab d_sexlab_internal = None 
-DOM_SexLab Function dom_sexlab()
-    return d_sexlab_internal
-EndFunction
+;Quest d_api_internal = None 
+;Quest Function dom_api()
+    ;return d_api_internal
+;EndFunction 
+;Quest d_sexlab_internal = None 
+;Quest Function dom_sexlab()
+    ;return d_sexlab_internal
+;EndFunction
 
 Function CheckForDOM()
  ; SkyrimNet DOM 
     if MiscUtil.FileExists("Data/DiaryOfMine.esm")
         dom_found_internal = True
-        Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
-        if DOM01 != None 
-            d_api_internal = DOM01 as DOM_API
-            d_sexlab_internal = DOM01 as DOM_SexLab
-        endif
+        ;Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
+        ;if DOM01 != None 
+            ;d_api_internal = DOM01
+            ;d_sexlab_internal = DOM01
+        ;endif
     else 
         dom_found_internal = False
-        d_api_internal = None 
-        d_sexlab_internal = None
+        ;d_api_internal = None 
+        ;d_sexlab_internal = None
     endif 
-    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found_internal+"  d_api: "+d_api_internal+" d_sexlab: "+d_sexlab_internal)
+    ;Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found_internal+"  d_api: "+d_api_internal+" d_sexlab: "+d_sexlab_internal)
 EndFunction
 
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
@@ -339,16 +339,16 @@ Function Setup()
     endif 
 
     if group_info == 0
-        group_info = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
+        group_info = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_SexLab/group_tags.json")
         JValue.retain(group_info)
     else
-        int group_info_new = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
+        int group_info_new = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_SexLab/group_tags.json")
         JValue.releaseAndRetain(group_info, group_info_new)
         group_info = group_info_new
     endif
 
     if race_to_description <= 0 
-        race_to_description = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/creatures.json")
+        race_to_description = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_SexLab/creatures.json")
         JValue.retain(race_to_description)
     endif 
 

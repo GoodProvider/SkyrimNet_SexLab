@@ -1,4 +1,4 @@
-VERSION=0.26.5
+VERSION=0.28.4
 NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
@@ -27,7 +27,9 @@ release:
 	    Scripts \
 		SkyrimNet_SexLab.esp \
 		fomod/info.json \
-		SKSE
+		SKSE \
+		PrismaUI/views/SkyrimNet_SexLab \
+		SKSE_Source
 
 group_tags:
 	python3 ./python_scripts/group-tags.py animations > SkyrimNet_SexLab/group_tags.json

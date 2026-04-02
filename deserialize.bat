@@ -11,4 +11,4 @@ xcopy  SkyrimNet_SexLab dist\SkyrimNet_SexLab\ /S /I
 
 
 
-SpriggitCLI\Spriggit.CLI.exe convert-to-plugin -i "Spriggit\SkyrimNet_Sexlab" -o "dist\SkyrimNet_Sexlab.esp" 
+SpriggitCLI\Spriggit.CLI.exe convert-to-plugin -i "Spriggit\SkyrimNet_SexLab" -o "dist\SkyrimNet_SexLab.esp" 

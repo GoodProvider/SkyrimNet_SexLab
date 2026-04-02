@@ -1,5 +1,5 @@
-name: Kiss_Start
-description: "non-sexual [type] affection"
+name: Affection_Start
+description: "start non-sexual [type] affection"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Affection_Start
@@ -17,6 +17,9 @@ parameterMapping:
   - type: dynamic
     name: type
     description: kissing|hugging|cuddling
+  - type: static
+    name: narration
+    value: false
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value

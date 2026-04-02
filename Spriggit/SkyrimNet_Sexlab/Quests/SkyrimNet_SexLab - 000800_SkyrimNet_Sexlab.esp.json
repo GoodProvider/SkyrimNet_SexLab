@@ -1,5 +1,5 @@
 {
-  "FormKey": "000800:SkyrimNet_Sexlab.esp",
+  "FormKey": "000800:SkyrimNet_SexLab.esp",
   "EditorID": "SkyrimNet_SexLab",
   "VirtualMachineAdapter": {
     "Scripts": [
@@ -12,12 +12,12 @@
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "stages",
-            "Object": "000800:SkyrimNet_Sexlab.esp"
+            "Object": "000800:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "main",
-            "Object": "000800:SkyrimNet_Sexlab.esp"
+            "Object": "000800:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptStringProperty",
@@ -27,7 +27,7 @@
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "sexlab_public_sex_accepted",
-            "Object": "000801:SkyrimNet_Sexlab.esp"
+            "Object": "000801:SkyrimNet_SexLab.esp"
           }
         ]
       },
@@ -37,12 +37,12 @@
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "skyrimnet_sexlab_ostim_player",
-            "Object": "000803:SkyrimNet_Sexlab.esp"
+            "Object": "000803:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "skyrimnet_sexlab_ostim_nonplayer",
-            "Object": "000804:SkyrimNet_Sexlab.esp"
+            "Object": "000804:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectListProperty",
@@ -50,52 +50,52 @@
             "Objects": [
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 1
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 2
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 3
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 4
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 5
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 6
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 7
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 8
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 9
               },
               {
                 "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
+                "Object": "000800:SkyrimNet_SexLab.esp",
                 "Alias": 10
               }
             ]
@@ -108,27 +108,27 @@
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "SkyrimNet_SexLab_Active_Sex",
-            "Object": "000802:SkyrimNet_Sexlab.esp"
+            "Object": "000802:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "stages",
-            "Object": "000800:SkyrimNet_Sexlab.esp"
+            "Object": "000800:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "skyrimnet_sexlab_hide_dialogue_historic_instructions",
-            "Object": "000805:SkyrimNet_Sexlab.esp"
+            "Object": "000805:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "skyrimnet_sexlab_hide_hermaphrodites",
-            "Object": "000806:SkyrimNet_Sexlab.esp"
+            "Object": "000806:SkyrimNet_SexLab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "SkyrimNet_SexLab_Faction_Victim",
-            "Object": "000807:SkyrimNet_Sexlab.esp"
+            "Object": "000807:SkyrimNet_SexLab.esp"
           }
         ]
       },
@@ -154,7 +154,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 0
         },
         "Scripts": [
@@ -164,7 +164,7 @@
               {
                 "MutagenObjectType": "ScriptObjectProperty",
                 "Name": "main",
-                "Object": "000800:SkyrimNet_Sexlab.esp"
+                "Object": "000800:SkyrimNet_SexLab.esp"
               }
             ]
           },
@@ -176,7 +176,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 1
         },
         "Scripts": [
@@ -188,7 +188,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 2
         },
         "Scripts": [
@@ -200,7 +200,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 3
         },
         "Scripts": [
@@ -212,7 +212,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 4
         },
         "Scripts": [
@@ -224,7 +224,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 5
         },
         "Scripts": [
@@ -236,7 +236,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 6
         },
         "Scripts": [
@@ -248,7 +248,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 7
         },
         "Scripts": [
@@ -260,7 +260,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 8
         },
         "Scripts": [
@@ -272,7 +272,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 9
         },
         "Scripts": [
@@ -284,7 +284,7 @@
       {
         "Property": {
           "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
+          "Object": "000800:SkyrimNet_SexLab.esp",
           "Alias": 10
         },
         "Scripts": [

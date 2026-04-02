@@ -1,4 +1,4 @@
-name: Create SkyrimNet_Sexlab Package
+name: Create SkyrimNet_SexLab Package
 
 on:
   workflow_dispatch:
@@ -87,7 +87,7 @@ jobs:
 
       - name: Convert Spriggit to plugin (deserialize)
         run: |
-          .\SpriggitCLI\Spriggit.CLI.exe convert-to-plugin -i "Spriggit\SkyrimNet_Sexlab" -o "dist\SkyrimNet_Sexlab.esp" 
+          .\SpriggitCLI\Spriggit.CLI.exe convert-to-plugin -i "Spriggit\SkyrimNet_SexLab" -o "dist\SkyrimNet_SexLab.esp" 
         shell: cmd
  
       - name: Get current FOMOD version
@@ -116,11 +116,11 @@ jobs:
       # Archive dist directory
       - name: Archive dist directory
         run: |          
-          cd ./dist ; tar --format zip -cf ..\downloads\SkyrimNet_Sexlab.zip *
+          cd ./dist ; tar --format zip -cf ..\downloads\SkyrimNet_SexLab.zip *
 
       # Upload artifact
       - name: Upload artifact
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run:
-          gh release upload ${{github.event.release.tag_name}} ./downloads/SkyrimNet_Sexlab.zip
+          gh release upload ${{github.event.release.tag_name}} ./downloads/SkyrimNet_SexLab.zip
