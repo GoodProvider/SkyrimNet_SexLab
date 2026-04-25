@@ -6,6 +6,19 @@ RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
 ANIM_SRC= C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet_SexLab\animations\_local_
 ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
 
+swap_headers:
+	if exist swapped_source ( \
+		rmdir /S /Q Scripts && \
+		mkdir Scripts && \
+		move swapped_source Scripts\Source && \
+		c:\Users\bhuff\.vscode\extensions\joelday.papyrus-lang-vscode-2024.578.1412\pyro\pyro.exe --input-path skyrimse.ppj --game-path C:\Skyrim\dev\skyrim \
+	) else ( \
+		move Scripts\Source swapped_source && \
+		mkdir Scripts\Source && \
+		uv run python_scripts/headers_strip_psc.py --source swapped_source --destination Scripts\Source \
+	)
+
+
 merge:
 	uv run ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}
 	git add ${ANIM_DST}/*
