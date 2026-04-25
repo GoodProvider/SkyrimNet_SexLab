@@ -713,7 +713,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
     ; if dom_main != None 
         ; int k = actors.length - 1
         ; while 0 <= k 
-            ; DOM_Actor slave = SkyrimNet_DOM_Utils.GetSlave("SkyrimNet_SexLab_Main","Start_Sex",actors[k],true,true)
+            ; DOM_Actor slave = SkyrimNet_DOM_Utilities.GetSlave("SkyrimNet_SexLab_Main","Start_Sex",actors[k],true,true)
             ; Debug.Notification("slave:"+slave)
             ; if (dom_main as SkyrimNet_DOM_Main).IsDomSlave(actors[k]) 
                 ; Debug.Notification(actors[k].GetDisplayName()+" denied")
@@ -1112,23 +1112,21 @@ EndFunction
 Bool Function IsDOMSlave(Actor akActor)
     Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "| dom_found_internal:"+dom_found_internal)
     if dom_found_internal
-        Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "slave:"+SkyrimNet_DOM_Utils.IsDOMSlave(akActor))
-        return SkyrimNet_DOM_Utils.IsDOMSlave(akActor)
+        Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "slave:"+SkyrimNet_DOM_Utilities.IsDOMSlave(akActor))
+        return SkyrimNet_DOM_Utilities.IsDOMSlave(akActor)
     endif 
     return False 
 EndFunction
 
 DOM_Actor Function GetDOMSlave(String func, Actor akActor, String file = "SkyrimNet_SexLab_Main")
     if dom_found_internal
-        return SkyrimNet_DOM_Utils.GetSlave(file, func, akActor)
+        return SkyrimNet_DOM_Utilities.GetSlave(file, func, akActor)
     endif 
     return None
 EndFunction
 
-Function DOMSlave_Orgasmed(Actor akActor, String msg)
-    Trace("DomSlave_Orgasmed",akActor.GetDisplayName())
-    int num_orgasms = StorageUtil.GetIntValue(akActor,actor_num_orgasms_key, 0)
-    Orgasm_Individual_Helper(akActor, 100, num_orgasms+1, msg, true)
+int Function GetNumberOfOrgasms(Actor akActor)
+    return StorageUtil.GetIntValue(akActor, actor_num_orgasms_key, 0)
 EndFunction
 
 ;----------------------------------------------------
