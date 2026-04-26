@@ -7,27 +7,22 @@
         "Name": "SkyrimNet_SexLab_Stages"
       },
       {
-        "Name": "SkyrimNet_SexLab_MCM",
+        "Name": "SkyrimNet_SexLab_Actions",
         "Properties": [
           {
             "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "stages",
+            "Name": "anim_handler",
             "Object": "000800:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "pa_HugA",
+            "Object": "0F4699:Skyrim.esm"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "main",
             "Object": "000800:SkyrimNet_Sexlab.esp"
-          },
-          {
-            "MutagenObjectType": "ScriptStringProperty",
-            "Name": "ModName",
-            "Data": "SkyrimNet SexLab"
-          },
-          {
-            "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "sexlab_public_sex_accepted",
-            "Object": "000801:SkyrimNet_Sexlab.esp"
           }
         ]
       },
@@ -36,69 +31,13 @@
         "Properties": [
           {
             "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "skyrimnet_sexlab_ostim_player",
-            "Object": "000803:SkyrimNet_Sexlab.esp"
+            "Name": "Stats",
+            "Object": "000800:SkyrimNet_Sexlab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "skyrimnet_sexlab_ostim_nonplayer",
-            "Object": "000804:SkyrimNet_Sexlab.esp"
-          },
-          {
-            "MutagenObjectType": "ScriptObjectListProperty",
-            "Name": "nude_refs",
-            "Objects": [
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 1
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 2
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 3
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 4
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 5
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 6
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 7
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 8
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 9
-              },
-              {
-                "Name": "",
-                "Object": "000800:SkyrimNet_Sexlab.esp",
-                "Alias": 10
-              }
-            ]
+            "Name": "SkyrimNet_SexLab_Faction_Victim",
+            "Object": "000807:SkyrimNet_Sexlab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
@@ -114,11 +53,16 @@
             "MutagenObjectType": "ScriptObjectProperty",
             "Name": "stages",
             "Object": "000800:SkyrimNet_Sexlab.esp"
-          },
+          }
+        ]
+      },
+      {
+        "Name": "SkyrimNet_SexLab_MCM",
+        "Properties": [
           {
             "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "skyrimnet_sexlab_hide_dialogue_historic_instructions",
-            "Object": "000805:SkyrimNet_Sexlab.esp"
+            "Name": "sexlab_public_sex_accepted",
+            "Object": "000801:SkyrimNet_Sexlab.esp"
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
@@ -127,26 +71,48 @@
           },
           {
             "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "SkyrimNet_SexLab_Faction_Victim",
-            "Object": "000807:SkyrimNet_Sexlab.esp"
+            "Name": "main",
+            "Object": "000800:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "skyrimnet_sexlab_ostim_player",
+            "Object": "000804:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptStringProperty",
+            "Name": "ModName",
+            "Data": "SkyrimNet SexLab"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "stages",
+            "Object": "000800:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "actions",
+            "Object": "000800:SkyrimNet_Sexlab.esp"
           }
         ]
       },
       {
-        "Name": "SkyrimNet_SexLab_Actions",
+        "Name": "SkyrimNet_SexLab_AnimationHandler",
         "Properties": [
           {
             "MutagenObjectType": "ScriptObjectProperty",
-            "Name": "pa_HugA",
-            "Object": "0F4699:Skyrim.esm"
+            "Name": "main",
+            "Object": "000800:SkyrimNet_Sexlab.esp"
+          },
+          {
+            "MutagenObjectType": "ScriptObjectProperty",
+            "Name": "DoNothing",
+            "Object": "0654E2:Skyrim.esm"
           }
         ]
       },
       {
         "Name": "SkyrimNet_SexLab_Stats"
-      },
-      {
-        "Name": "SkyrimNet_SexLab_AnimationHandler"
       }
     ],
     "FileName": "",
@@ -172,126 +138,6 @@
             "Name": "SKI_PlayerLoadGameAlias"
           }
         ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 1
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 2
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 3
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 4
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 5
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 6
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 7
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 8
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 9
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
-      },
-      {
-        "Property": {
-          "Name": "",
-          "Object": "000800:SkyrimNet_Sexlab.esp",
-          "Alias": 10
-        },
-        "Scripts": [
-          {
-            "Name": "SkyrimNet_SexLab_NudeRef"
-          }
-        ]
       }
     ]
   },
@@ -310,86 +156,6 @@
       "Name": "PlayerRef",
       "Flags": [],
       "ForcedReference": "000014:Skyrim.esm",
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 1,
-      "Name": "NudeRef 00",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 2,
-      "Name": "NudeRef 01",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 3,
-      "Name": "NudeRef 02",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 4,
-      "Name": "NudeRef 03",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 5,
-      "Name": "NudeRef 04",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 6,
-      "Name": "NudeRef 05",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 7,
-      "Name": "NudeRef 06",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 8,
-      "Name": "NudeRef 07",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 9,
-      "Name": "NudeRef 08",
-      "Flags": [
-        "Optional"
-      ],
-      "VoiceTypes": "Null"
-    },
-    {
-      "ID": 10,
-      "Name": "NudeRef 09",
-      "Flags": [
-        "Optional"
-      ],
       "VoiceTypes": "Null"
     }
   ]

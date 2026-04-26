@@ -18,97 +18,8 @@ Faction Property SkyrimNet_SexLab_Faction_Victim Auto
 ; 0 - no active sexlab animations 
 ; 1 - one or more active sexlab animations
 GlobalVariable Property skyrimnet_sexlab_active_sex Auto
-Bool Property active_sex 
-    Bool Function Get()
-        return skyrimnet_sexlab_active_sex.GetValueInt() == 1
-    EndFunction 
-    Function Set(Bool value)
-        if value
-            skyrimnet_sexlab_active_sex.SetValue(1.0)
-        else
-            skyrimnet_sexlab_active_sex.SetValue(0.0)
-        endif
-    EndFunction 
-EndProperty
-
-; ----- Does all animations -----
-; Sexlab or Ostim animation with player
-; 0 - Sexlab
-; 1 - Ostim
-; 2 - Choose per animation
-GlobalVariable Property skyrimnet_sexlab_ostim_player Auto
-int Property sexlab_ostim_player
-    int Function Get()
-        if !ostimnet_found_internal
-            return 0
-        endif 
-        return skyrimnet_sexlab_ostim_player.GetValueInt()
-    EndFunction 
-    Function Set(int value)
-        skyrimnet_sexlab_ostim_player.SetValue(value)
-    EndFunction 
-EndProperty
-
-; Hides the dialogue historic instructions from the prompt
-; 0 - false
-; 1 - true
-; 2 - Choose per animation
-GlobalVariable Property skyrimnet_sexlab_hide_dialogue_historic_instructions Auto
-bool Property hide_dialogue_historic_instructions
-    bool Function Get()
-        return skyrimnet_sexlab_hide_dialogue_historic_instructions.GetValueInt() == 1
-    EndFunction 
-    Function Set(bool value)
-        if value
-            skyrimnet_sexlab_hide_dialogue_historic_instructions.SetValue(1.0)
-        else
-            skyrimnet_sexlab_hide_dialogue_historic_instructions.SetValue(0.0)
-        endif
-    EndFunction 
-EndProperty
-
-int Property sexlab_ostim_affection = 0 Auto 
-
-; Hides the hermaphrodite from prompt 
-; 0 - false
-; 1 - true
-; 2 - Choose per animation
-GlobalVariable Property skyrimnet_sexlab_hide_hermaphrodites Auto
-bool Property hide_hermaphrodites
-    bool Function Get()
-        return skyrimnet_sexlab_hide_hermaphrodites.GetValueInt() == 1
-    EndFunction 
-    Function Set(bool value)
-        if value
-            skyrimnet_sexlab_hide_hermaphrodites.SetValue(1.0)
-        else
-            skyrimnet_sexlab_hide_hermaphrodites.SetValue(0.0)
-        endif
-    EndFunction 
-EndProperty
-
-; ----- Not currently supported ------
-; Sexlab or Ostim animation without player
-; 0 - Sexlab
-; 1 - Ostim
-; 2 - Choose per animation
-GlobalVariable Property skyrimnet_sexlab_ostim_nonplayer Auto
-int Property sexlab_ostim_nonplayer_index
-    int Function Get()
-        if !ostimnet_found_internal
-            return 0
-        endif 
-        return skyrimnet_sexlab_ostim_nonplayer.GetValueInt()
-    EndFunction 
-    Function Set(int value)
-        skyrimnet_sexlab_ostim_nonplayer.SetValue(value)
-    EndFunction 
-EndProperty
 
 ; ---------------------------------------------------
-
-ReferenceAlias[] Property nude_refs Auto
-
 
 int Property BUTTON_YES = 0 Auto        ; 0
 int Property BUTTON_YES_RANDOM = 1 Auto ; 1
@@ -171,7 +82,6 @@ Bool Property virgin_blood_enabled = True Auto
 ; needed, sine there appears to be a race condition on when things hit the audio queue
 ; -----------------------------
 
-
 ; -----------------------------
 ; DOM found 
 ; -----------------------------
@@ -179,30 +89,12 @@ bool dom_found_internal = false
 bool Function dom_found()
     return dom_found_internal
 EndFunction
-DOM_API d_api_internal = None 
-DOM_API Function dom_api()
-    return d_api_internal
-EndFunction 
-DOM_SexLab d_sexlab_internal = None 
-DOM_SexLab Function dom_sexlab()
-    return d_sexlab_internal
-EndFunction
 
 Function CheckForDOM()
- ; SkyrimNet DOM 
     if MiscUtil.FileExists("Data/DiaryOfMine.esm")
         dom_found_internal = True
-        Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
-        if DOM01 != None 
-            d_api_internal = DOM01 as DOM_API
-            d_sexlab_internal = DOM01 as DOM_SexLab
-        endif
-    else 
-        dom_found_internal = False
-        d_api_internal = None 
-        d_sexlab_internal = None
     endif 
-    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found_internal+"  d_api: "+d_api_internal+" d_sexlab: "+d_sexlab_internal)
+    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found_internal)
 EndFunction
 
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
@@ -214,29 +106,7 @@ float Property direct_narration_max_distance Auto
 float Property direct_narration_max_distance_default Auto 
 float Property direct_narration_last_time Auto 
 
-; OstimNet 
-bool ostimnet_found_internal = false 
-bool Property ostimnet_found 
-    bool Function Get()
-        return ostimnet_found_internal
-    EndFunction 
-    Function Set(bool value)
-        ostimnet_found_internal = value
-    EndFunction 
-EndProperty
-
-; -----------------------------
-; Cuddle found 
-; -----------------------------
-bool cuddle_found_internal = false 
-bool Property cuddle_found 
-    bool Function Get()
-        return cuddle_found_internal
-    EndFunction 
-    Function Set(bool value)
-        cuddle_found_internal = value
-    EndFunction 
-EndProperty
+bool Property ostimnet_found = false Auto 
 
 ; Race to speech 
 int Property race_to_description Auto
@@ -254,27 +124,10 @@ EndEvent
 Function Setup()
     Trace("SetUp","")
 
-    ; Setup related Scripts 
-    stages = (self as Quest) as SkyrimNet_SexLab_Stages 
-    stages.Setup() 
-
-    ;stats = (self as Quest) as SkyrimNet_SexLab_Stats 
-    ;stats.Setup()
-
-    skyrimnet_sexlab_active_sex = Game.GetformFromFile(0x802, "SkyrimNet_SexLab.esp") as GlobalVariable
-    active_sex = false
-
-    SkyrimNet_SexLab_MCM mcm = (self as Quest) as SkyrimNet_SexLab_MCM
-    mcm.Setup() 
-
-        
-    ; Setup the enable if found 
     if MiscUtil.FileExists("Data/TT_OStimNet.esp")
         ostimnet_found = true 
     else 
         ostimnet_found = false 
-        sexlab_ostim_player = 0
-        sexlab_ostim_nonplayer_index = 0
     endif 
     Trace("Setup","OstimNet found "+ostimnet_found)
 
@@ -299,21 +152,15 @@ Function Setup()
             +"SkyrimNet_SexLab will not work.")
         return 
     endif 
-    SexLab = Game.GetFormFromFile(0xD62, "SexLab.esm") as SexLabFramework
-
 
     ; SkyrimNet DOM 
     CheckForDOM()
-
-    ; SkyrimNet Cuddle 
-    cuddle_found_internal = MiscUtil.FileExists("Data/SkyrimNet_Cuddle.esp")
 
     ; Set up the Buttons 
     BUTTON_YES = 0 
     BUTTON_YES_RANDOM = 1
     BUTTON_NO_SILENT = 2 
     BUTTON_NO = 3
-
 
     ; Direct Narration 
     if direct_narration_cool_off == 0 
@@ -353,7 +200,6 @@ Function Setup()
     endif 
 
     RegisterSexlabEvents()
-    ((self as Quest) as SkyrimNet_SexLab_Actions).Setup()
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
 EndFunction
 
@@ -373,28 +219,10 @@ Function StoreStrippedItems(Actor akActor, Form[] forms)
         StorageUtil.FormListAdd(akActor, storage_items_key, forms[i])
         i += 1
     endwhile
-
-    ;i = nude_refs.Length - 1
-    ;while 0 <= i 
-    ;    if nude_refs[i].GetActorReference() == None 
-    ;        nude_refs[i].ForceRefTo(akActor) 
-    ;        i = -1
-    ;    endif 
-    ;    i -= 1 
-    ;endwhile 
 EndFunction 
 
 Form[] Function UnStoreStrippedItems(Actor akActor)
     Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" attempting to undress")
-    int i = nude_refs.length - 1
-    while 0 <= i 
-        if nude_refs[i].GetActorReference() == akActor 
-            nude_refs[i].Clear() 
-            Utility.Wait(1.00)
-            i = -1
-        endif 
-        i -= 1 
-    endwhile 
     if !HasStrippedItems(akActor)
         return Utility.CreateFormArray(0)
     endif
@@ -640,7 +468,7 @@ event AnimationStart(int ThreadID, bool HasPlayer)
         j -= 1 
     endwhile 
 
-    active_sex = true
+    skyrimnet_sexlab_active_sex.SetValue(1.0)
 
     SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
     thread_started[thread.tid] = False 
@@ -708,21 +536,6 @@ Event StageStart(int ThreadID, bool HasPlayer)
         endif
         Debug.Notification("stage "+thread.stage+" of "+ thread.animation.StageCount()+" "+msg)
     endif 
-
-    ; DOM Slaves have their own orgasm system 
-    ; if dom_main != None 
-        ; int k = actors.length - 1
-        ; while 0 <= k 
-            ; DOM_Actor slave = SkyrimNet_DOM_Utilities.GetSlave("SkyrimNet_SexLab_Main","Start_Sex",actors[k],true,true)
-            ; Debug.Notification("slave:"+slave)
-            ; if (dom_main as SkyrimNet_DOM_Main).IsDomSlave(actors[k]) 
-                ; Debug.Notification(actors[k].GetDisplayName()+" denied")
-            ; else
-                ; Debug.Notification(actors[k].GetDisplayName()+" allowed")
-            ; endif 
-            ; k -= 1 
-        ; endwhile
-    ; endif 
 EndEvent
 
 
@@ -850,9 +663,9 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
         i -= 1
     endwhile
     if found
-        active_sex = true
+        skyrimnet_sexlab_active_sex.SetValue(1.0)
     else 
-        active_sex = false
+        skyrimnet_sexlab_active_sex.SetValue(0.0)
     endif
 
     thread_style[thread.tid] = STYLE_NORMALLY
@@ -927,7 +740,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if IsDOMSlave(actors[i])
+        if dom_found() && SkyrimNet_SexLab_DOM.IsDOMSlave(actors[i])
             if orgasm_expected[i] == 1
                 int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 if num_orgasms > 0 
@@ -935,7 +748,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
                         someone_ejaculated = True 
                     endif 
                 else 
-                    DOM_Actor slave = GetDOMSlave("Orgasm_Combined", actors[i])
+                    DOM_Actor slave = SkyrimNet_SexLab_DOM.GetDOMSlave("SkyrimNet_SexLab_Main", "Orgasm_Combined", actors[i]) as Dom_Actor
                     if slave != None 
                         if slave.mind.is_aroused_for > 0
                             narration += name+" was denied an orgasm. "
@@ -968,11 +781,6 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
 
     SkyrimNetApi.PurgeDialogue(True)
     DirectNarration(narration, actors[0], None)
-    ;if HasPlayer
-        ;DirectNarration(narration, actors[0], None)
-    ;else
-        ;DirectNarration_Optional("sexlab_orgasm", narration, actors[0], None)
-    ;endif
 EndEvent 
 
 ; Used for SLSO.esp orgasm handling
@@ -988,7 +796,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    if IsDomSlave(akActor)
+    if SkyrimNet_SexLab_DOM.IsDOMSlave(akActor)
         return
     endif 
 
@@ -1039,11 +847,6 @@ Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orga
 
     SkyrimNetApi.PurgeDialogue(True)
     DirectNarration(msg, akActor, cum_catcher)
-;    if has_player || require_narration
-;        DirectNarration(msg, akActor, cum_catcher)
-;    else    
-;        DirectNarration_Optional("sexlab_orgasm", msg, akActor, cum_catcher)
-;    endif 
 EndFunction
 
 ;----------------------------------------------------
@@ -1107,23 +910,6 @@ String Function AddCum(sslThreadController thread, int position, Actor akActor, 
     endif 
     return "" 
 EndFunction  
-
-; Increases the 
-Bool Function IsDOMSlave(Actor akActor)
-    Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "| dom_found_internal:"+dom_found_internal)
-    if dom_found_internal
-        Trace("IsDOMSlave","akActor:"+akActor.GetDisplayName()+ "slave:"+SkyrimNet_DOM_Utilities.IsDOMSlave(akActor))
-        return SkyrimNet_DOM_Utilities.IsDOMSlave(akActor)
-    endif 
-    return False 
-EndFunction
-
-DOM_Actor Function GetDOMSlave(String func, Actor akActor, String file = "SkyrimNet_SexLab_Main")
-    if dom_found_internal
-        return SkyrimNet_DOM_Utilities.GetSlave(file, func, akActor)
-    endif 
-    return None
-EndFunction
 
 int Function GetNumberOfOrgasms(Actor akActor)
     return StorageUtil.GetIntValue(akActor, actor_num_orgasms_key, 0)

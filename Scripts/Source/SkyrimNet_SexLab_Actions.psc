@@ -6,8 +6,6 @@ import SkyrimNet_SexLab_Utilities
 
 Idle Property pa_HugA Auto  ; IDLE:000F4699
 
-Quest Property ostimnet_actions Auto 
-
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Actions."+func+"] "+msg
     Debug.Trace(msg) 
@@ -15,14 +13,6 @@ Function Trace(String func, String msg, Bool notification=False) global
         Debug.Notification(msg)
     endif 
 EndFunction
-
-Function Setup()
-    main = (self as Quest) as SkyrimNet_SexLab_Main
-    anim_handler = (Self as Quest) as SkyrimNet_SexLab_AnimationHandler
-    if MiscUtil.FileExists("Data/TT_OStimNet.esp")
-        ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as TTON_Actions
-    endif 
-EndFunction 
 
 ; -------------------------------------------------
 ; Tag 
@@ -165,13 +155,6 @@ EndFunction
 
 sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag, bool narration = False) 
     Trace("Affection_start"," speaker:"+speaker.getDisplayName() +" target:"+target.GetDisplayName()+" style:"+style+" tag:"+tag)
-    ;if main.sexlab_ostim_affection 
-        ;Trace("Affection_Start","ostimnet_actions")
-        ;main.sexlab_ostim_player = 1
-        ;(ostimnet_actions as TTON_Actions).StartAffectionSceneExecute(speaker, target, tag)
-        ;main.sexlab_ostim_player = 0
-        ;return None 
-    ;endif 
 
     if tag == "hugging" 
         target.playIdleWithTarget(pa_HugA, speaker) 

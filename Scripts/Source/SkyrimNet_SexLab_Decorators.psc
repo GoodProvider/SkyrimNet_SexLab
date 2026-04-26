@@ -206,7 +206,7 @@ String Function Get_Threads(Actor speaker) global
     sslThreadController[] threads = ThreadSlots.Threads
 
     if threads.length == 0 
-        main.active_sex = False 
+        main.skyrimnet_sexlab_active_sex.SetValue(0.0)
     endif 
 
     int i = 0
@@ -480,7 +480,10 @@ String Function Get_Thread_Description(sslThreadController thread, sslActorLibra
     endif 
 
     msg += " "+GetNames(thread) ; Strapon Names 
-    if !main.hide_hermaphrodites
+
+    ; Label hermpahrodites or not depending on user preference.
+    GlobalVariable skyrimnet_sexlab_hide_hermaphrodites = Game.GetFormFromFile(0x806, "SkyrimNet_SexLab.esp") as GlobalVariable
+    if skyrimnet_sexlab_hide_hermaphrodites.GetValueInt() != 1.0
         msg += " "+GetNames(thread, actorLib) ; Futa Names 
     endif 
     msg += " "+GetCreatures(thread) ; Creature Names

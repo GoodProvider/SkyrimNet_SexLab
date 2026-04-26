@@ -15,7 +15,8 @@ swap_headers:
 	) else ( \
 		move Scripts\Source swapped_source && \
 		mkdir Scripts\Source && \
-		uv run python_scripts/headers_strip_psc.py --source swapped_source --destination Scripts\Source \
+		uv run python_scripts/headers_strip_psc.py --source swapped_source --destination Scripts\Source && \
+		c:\Users\bhuff\.vscode\extensions\joelday.papyrus-lang-vscode-2024.578.1412\pyro\pyro.exe --input-path skyrimse.ppj --game-path C:\Skyrim\dev\skyrim \
 	)
 
 
