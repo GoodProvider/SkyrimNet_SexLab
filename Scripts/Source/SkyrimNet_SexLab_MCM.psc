@@ -51,8 +51,10 @@ String[] sexlab_ostim_options
 
 int Property sexlab_ostim_player_menu Auto  ; menu id 
 
-Function Setup() 
+Function Setup(SkyrimNet_SexLab_Main _main) 
+    main = _main
     actions = (main as Quest) as SkyrimNet_SexLab_Actions
+
     if MiscUtil.FileExists("Data/TT_OStimNet.esp")
         ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as Quest
     endif 
@@ -383,7 +385,7 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    if main.dom_found() && SkyrimNet_SexLab_DOM.IsDomSlave(target) 
+    if main.dom_found && SkyrimNet_SexLab_DOM.IsDomSlave(target) 
         SkyrimNet_DOM_Menu.Target_Menu_Selection(target,player)
         return 
     endif 
@@ -497,7 +499,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         ;--------------------------------------------------
         ; Now do the action 
         Trace("Target_Menu_Selection","style:"+style+" clothing_string:"+clothing_string)
-        actions.Change_Outfit(target, player, style, clothing_string+"es", narration)
+        actions.Change_Outfit(player, target, style, clothing_string+"es", narration)
 
     elseif button == bondage 
         group_devices.UpdateDevices(target) 

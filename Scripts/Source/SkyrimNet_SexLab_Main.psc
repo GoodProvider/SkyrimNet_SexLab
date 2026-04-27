@@ -85,16 +85,15 @@ Bool Property virgin_blood_enabled = True Auto
 ; -----------------------------
 ; DOM found 
 ; -----------------------------
-bool dom_found_internal = false
-bool Function dom_found()
-    return dom_found_internal
-EndFunction
+bool Property dom_found = false Auto 
 
 Function CheckForDOM()
     if MiscUtil.FileExists("Data/DiaryOfMine.esm")
-        dom_found_internal = True
+        dom_found = true
+    else
+        dom_found = false
     endif 
-    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found_internal)
+    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found)
 EndFunction
 
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
@@ -201,6 +200,7 @@ Function Setup()
 
     RegisterSexlabEvents()
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
+    ((self as Quest) as SkyrimNet_SexLab_MCM).Setup(self)
 EndFunction
 
 
@@ -740,7 +740,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if dom_found() && SkyrimNet_SexLab_DOM.IsDOMSlave(actors[i])
+        if dom_found && SkyrimNet_SexLab_DOM.IsDOMSlave(actors[i])
             if orgasm_expected[i] == 1
                 int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 if num_orgasms > 0 

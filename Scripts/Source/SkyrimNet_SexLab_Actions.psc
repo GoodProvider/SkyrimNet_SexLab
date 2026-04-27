@@ -1,6 +1,7 @@
 Scriptname SkyrimNet_SexLab_Actions extends Quest
 SkyrimNet_SexLab_Main Property main Auto 
 SkyrimNet_SexLab_AnimationHandler Property anim_handler Auto 
+SexLabFramework Property sexlab Auto 
 
 import SkyrimNet_SexLab_Utilities
 
@@ -158,7 +159,9 @@ sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String styl
 
     if tag == "hugging" 
         target.playIdleWithTarget(pa_HugA, speaker) 
-        DirectNarration(speaker.GetDisplayName()+" hugs "+target.GetDisplayName()+".", speaker, target)
+        if speaker != Game.GetPlayer() 
+            DirectNarration(speaker.GetDisplayName()+" hugs "+target.GetDisplayName()+".", speaker, target)
+        endif 
         return None 
     ; Couldn't make these look nice 
     ;elseif tag == "kiss"
@@ -399,13 +402,12 @@ EndFunction
 ; -------------------------------------------------
 Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how, String Narration)
     Trace("Change_Outfit",Stripper.GetDisplayName()+" stripper "+Stripped.GetDisplayName()+" style:"+style+" how: "+how+" narration:"+narration)
-    SkyrimNet_SexLab_Main main_local = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
 
     bool success = False
     if how == "dresses"
-        Form[] forms = main_local.UnStoreStrippedItems(Stripped)
+        Form[] forms = main.UnStoreStrippedItems(Stripped)
         if forms.length > 0
-            main_local.sexlab.UnStripActor(Stripped, forms, false)
+            sexlab.UnStripActor(Stripped, forms, false)
             success = True
         else
             Trace("Change_Outfit",Stripped.GetDisplayName()+" has no stripped items")
@@ -426,8 +428,8 @@ Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how,
             victim = stripped 
             do_animate = False
         endif 
-        Form[] forms = main_local.sexlab.StripActor(stripped, victim, do_animate, false) 
-        main_local.StoreStrippedItems(Stripped, forms)
+        Form[] forms = sexlab.StripActor(stripped, victim, do_animate, false) 
+        main.StoreStrippedItems(Stripped, forms)
     endif
 
     if success
