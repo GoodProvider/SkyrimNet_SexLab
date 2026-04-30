@@ -1,7 +1,12 @@
 Scriptname SkyrimNet_SexLab_MCM extends SKI_ConfigBase
 
-import SkyrimNet_SexLab_Actions
 import SkyrimNet_SexLab_Utilities
+
+SkyrimNet_SexLab_Main Property main Auto  
+SkyrimNet_SexLab_Stages Property stages Auto 
+SkyrimNet_SexLab_Actions Property actions Auto 
+SkyrimNet_SexLab_Ostimnet_Handler Property ostimnet_handler = None Auto 
+SkyrimNet_SexLab_DOM_Handler Property dom_handler = None Auto 
 
 int rape_toggle
 GlobalVariable Property sexlab_public_sex_accepted Auto
@@ -16,9 +21,12 @@ GlobalVariable Property skyrimnet_sexlab_ostim_player Auto
 ; 1 - true
 GlobalVariable Property skyrimnet_sexlab_hide_hermaphrodites Auto
 
-SkyrimNet_SexLab_Main Property main Auto  
-SkyrimNet_SexLab_Stages Property stages Auto 
-SkyrimNet_SexLab_Actions Property actions Auto 
+; ------------------------
+; Pages 
+; ------------------------
+
+String page_options = "options"
+String page_actors = "undressed Actors"
 
 bool hot_key_toggle = False 
 int sex_edit_key = 43 ; 26
@@ -33,7 +41,9 @@ int ostimnet_player_menu = -1
 int ostimnet_nonplayer_menu = -1
 int ostimnet_affection_menu = -1
 
-Quest Property ostimnet_actions Auto 
+String[] sexlab_ostim_options 
+int Property sexlab_ostim_player_menu Auto  ; menu id 
+
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_MCM."+func+"] "+msg
@@ -43,21 +53,10 @@ Function Trace(String func, String msg, Bool notification=False) global
     endif 
 EndFunction
 
-String page_options = "options"
-String page_actors = "actors debug (can be slow)"
-
-; OstimNet found 
-String[] sexlab_ostim_options 
-
-int Property sexlab_ostim_player_menu Auto  ; menu id 
-
 Function Setup(SkyrimNet_SexLab_Main _main) 
     main = _main
     actions = (main as Quest) as SkyrimNet_SexLab_Actions
 
-    if MiscUtil.FileExists("Data/TT_OStimNet.esp")
-        ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as Quest
-    endif 
 
     if sexlab_ostim_options.length == 0
        sexlab_ostim_options = new String[2]
@@ -79,8 +78,9 @@ EndFunction
 
 Event OnConfigOpen()
 
-    Pages = new String[1]
+    Pages = new String[2]
     pages[0] = page_options
+    pages[1] = page_actors
 
 EndEvent
 
@@ -89,7 +89,11 @@ EndEvent
 ;-----------------------------------------------------------------
 
 Event OnPageReset(string page)
-   PageOptions() 
+    if page == page_actors
+        PageActors()
+    else
+        PageOptions()
+    endif 
 EndEvent 
 
 Function PageOptions() 
@@ -135,7 +139,7 @@ Function PageOptions()
         RegisterForKey(sex_edit_key)
     endif 
 
-    if main.ostimnet_found
+    if ostimnet_handler.found
         int value = skyrimnet_sexlab_ostim_player.GetValueInt()
         String label = sexlab_ostim_options[value]
         Trace("PageOptions"," index: "+value+" label: "+label) 
@@ -144,6 +148,24 @@ Function PageOptions()
         ostimnet_player_menu = AddMenuOption("sex framework:", label)
     endif 
 EndFunction 
+
+Function PageActors() 
+    AddHeaderOption("Undressed Actors")
+    AddHeaderOption("")
+
+    int count = StorageUtil.FormListCount(None, main.storage_items_key)
+    int i = 0
+    while i < count
+        Actor akActor = StorageUtil.FormListGet(None, main.storage_items_key, i) as Actor
+        if akActor != None
+            int num_items = StorageUtil.FormListCount(akActor, main.storage_items_key)
+            if num_items > 0
+                AddTextOption(akActor.GetDisplayName(), num_items+" items")
+            endif
+        endif
+        i += 1
+    Endwhile
+EndFunction
 
 ;-----------------------------------------------------------------
 ; Prompt Toggles 
@@ -375,7 +397,7 @@ Event OnKeyDown(int key_code)
                 else
                     Trace("OnKeyDown","failed to find thread for target:"+target.GetDisplayName())
                 endif
-            elseif SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
+            elseif actions.BodyAnimation_IsEligible(target, "", "") && main.sexlab.IsValidActor(target)
                 Target_Menu_Selection(target, player)
             endif 
         else 
@@ -385,8 +407,8 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    if main.dom_found && SkyrimNet_SexLab_DOM.IsDomSlave(target) 
-        SkyrimNet_DOM_Menu.Target_Menu_Selection(target,player)
+    if dom_handler.found && dom_handler.IsDomSlave(target) 
+        dom_handler.Target_Menu_Selection(target,player)
         return 
     endif 
 
@@ -434,7 +456,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
             actions.Masturbation_Start(target, "normal", "")
         else 
-            (ostimnet_actions as TTON_Actions).StartSexActionExecute(target, None, None, None, None, "", "")
+            ostimnet_handler.StartSexActionExecute(target, None, None, None, None, "", "")
         endif 
     elseif button == sexlab_ostim 
         if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
@@ -457,7 +479,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "kissing"
             bs[2] = "cuddling"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            (ostimnet_actions as TTON_Actions).StartAffectionSceneExecute(target, player, tag)
+            ostimnet_handler.StartAffectionSceneExecute(target, player, tag)
         endif 
     elseif button == sex
         if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
@@ -468,7 +490,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "blowjob"
             bs[2] = "analsex"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            (ostimnet_actions as TTON_Actions).StartSexActionExecute(target, player, None, None, None, tag, "")
+            ostimnet_handler.StartSexActionExecute(target, player, None, None, None, tag, "")
         endif 
 
     elseif button == rapes_player
@@ -561,7 +583,7 @@ Function MutliTarget_Menu_Selection(Actor player)
     i = actors_all.length - 1
 
     while 0 <= i 
-        if SkyrimNet_SexLab_Actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
+        if actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
             valid[i] = True
             num_actors += 1
         else 

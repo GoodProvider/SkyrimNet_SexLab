@@ -1,6 +1,7 @@
 Scriptname SkyrimNet_SexLab_Actions extends Quest
 SkyrimNet_SexLab_Main Property main Auto 
-SkyrimNet_SexLab_AnimationHandler Property anim_handler Auto 
+;SkyrimNet_SexLab_Animation_Handler Property anim_handler Auto 
+SkyrimNet_SexLab_OstimNet_Handler Property ostimnet_handler Auto
 SexLabFramework Property sexlab Auto 
 
 import SkyrimNet_SexLab_Utilities
@@ -19,7 +20,7 @@ EndFunction
 ; Tag 
 ; -------------------------------------------------
 
-bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string paramsJson) global
+bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string paramsJson)
     float start = Utility.GetCurrentRealTime()
     if akActor == None 
         Trace("BodyAnimation_IsEligible","akActor is None")
@@ -34,21 +35,11 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
         return false 
     endif 
 
-    ;float time = Utility.GetCurrentRealTime()
-    ;float delta = time- time_last
-    ;time_last = time
-    ;Trace("BodyAnimation_tag","after isdead:"+delta)
-
     ; SexLab check
     SkyrimNet_SexLab_Main sexlab_main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     if sexlab_main == None
         return false
     endif
-
-    ;time = Utility.GetCurrentRealTime()
-    ;delta = time- time_last
-    ;time_last = time
-    ;Trace("BodyAnimation_tag","after GetFrom :"+delta)
 
     if sexlab_main.IsActorLocked(akActor)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is locked")
@@ -57,28 +48,13 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
 
     if sexlab_main.sexLab.IsActorActive(akActor) 
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" SexLab animation")
-    endif 
-
-    ;time = Utility.GetCurrentRealTime()
-    ;delta = time- time_last
-    ;time_last = time
-    ;Trace("BodyAnimation_tag","locked :"+delta)
-
-    ;time = Utility.GetCurrentRealTime()
-    ;delta = time- time_last
-    ;time_last = time
-    ;Trace("BodyAnimation_tag","cuddle :"+delta)
-
-    ; Ostim check 
-    if sexlab_main.ostimnet_found && OActor.IsInOStim(akActor)
         return false 
     endif 
 
-    ;time = Utility.GetCurrentRealTime()
-    ;delta = time- time_last
-    ;time_last = time
-    ;Trace("BodyAnimation_tag","ostim :"+delta)
-
+    if akActor.IsInFaction(ostimnet_handler.OStimActorCountFaction)
+        Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" OStim animation")
+        return false 
+    endif
     Trace("BodyAnimation_Tag", name+" is eligible for sex")
     return True
 EndFunction

@@ -1,4 +1,4 @@
-Scriptname SkyrimNet_SexLab_AnimationHandler extends Quest
+Scriptname SkyrimNet_SexLab_Animation_Handler extends Quest
 
 import JValue
 import JMap

@@ -1,10 +1,16 @@
-VERSION=0.26.5
+VERSION=0.28.4
 NAM0=SkyrimNet_SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
 
 ANIM_SRC= C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet_SexLab\animations\_local_
 ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
+
+
+merge:
+	uv run ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}
+	git add ${ANIM_DST}/*
+	git commit ${ANIM_DST}
 
 swap_headers:
 	if exist swapped_source ( \
@@ -19,11 +25,6 @@ swap_headers:
 		c:\Users\bhuff\.vscode\extensions\joelday.papyrus-lang-vscode-2024.578.1412\pyro\pyro.exe --input-path skyrimse.ppj --game-path C:\Skyrim\dev\skyrim \
 	)
 
-
-merge:
-	uv run ./python_scripts/merge_animations.py -s ${ANIM_SRC} -d ${ANIM_DST}
-	git add ${ANIM_DST}/*
-	git commit ${ANIM_DST}
 
 update: 
 	updateSpriggit.bat 

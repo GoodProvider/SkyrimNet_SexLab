@@ -8,6 +8,13 @@ import SkyrimNet_SexLab_Stages
 import SkyrimNet_SexLab_Utilities
 import StorageUtil
 
+SkyrimNet_SexLab_Stages Property stages Auto
+SkyrimNet_SexLab_Stats Property stats Auto 
+SkyrimNet_SexLab_DOM_Handler Property dom_handler Auto
+SkyrimNet_SexLab_OstimNet_Handler Property ostimnet_handler Auto
+
+SexLabFramework Property sexlab Auto 
+
 Faction Property SkyrimNet_SexLab_Faction_Victim Auto
 
 ; ---------------------------------------------------
@@ -66,11 +73,7 @@ int skynet_tag_sex_lock = 0
 String Property storage_items_key = "skyrimnet_sexlab_storage_items" Auto
 String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" Auto
 String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated" Auto
-String Property storage_should_naked = "skyrimnet_sexlab_should_be_naked" Auto
 
-SkyrimNet_SexLab_Stages Property stages Auto
-SkyrimNet_SexLab_Stats Property stats Auto 
-SexLabFramework Property sexlab Auto 
 
 ; -----------------------------
 ; enable virgin blood
@@ -82,20 +85,9 @@ Bool Property virgin_blood_enabled = True Auto
 ; needed, sine there appears to be a race condition on when things hit the audio queue
 ; -----------------------------
 
-; -----------------------------
-; DOM found 
-; -----------------------------
-bool Property dom_found = false Auto 
-
-Function CheckForDOM()
-    if MiscUtil.FileExists("Data/DiaryOfMine.esm")
-        dom_found = true
-    else
-        dom_found = false
-    endif 
-    Trace("CheckForDOM","DiaryOfMine (DOM) found: "+dom_found)
-EndFunction
-
+; ---------------------------
+; Storage Keys 
+; ---------------------------
 string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
 string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
 
@@ -104,8 +96,6 @@ float Property direct_narration_cool_off Auto
 float Property direct_narration_max_distance Auto 
 float Property direct_narration_max_distance_default Auto 
 float Property direct_narration_last_time Auto 
-
-bool Property ostimnet_found = false Auto 
 
 ; Race to speech 
 int Property race_to_description Auto
@@ -122,13 +112,6 @@ EndEvent
 
 Function Setup()
     Trace("SetUp","")
-
-    if MiscUtil.FileExists("Data/TT_OStimNet.esp")
-        ostimnet_found = true 
-    else 
-        ostimnet_found = false 
-    endif 
-    Trace("Setup","OstimNet found "+ostimnet_found)
 
     ;thread_started = new bool[32]
     thread_kissing_only = new bool[32]
@@ -151,9 +134,6 @@ Function Setup()
             +"SkyrimNet_SexLab will not work.")
         return 
     endif 
-
-    ; SkyrimNet DOM 
-    CheckForDOM()
 
     ; Set up the Buttons 
     BUTTON_YES = 0 
@@ -198,10 +178,13 @@ Function Setup()
         JValue.retain(race_to_description)
     endif 
 
+    dom_handler.setup() 
+    ostimnet_handler.setup() 
     RegisterSexlabEvents()
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
     ((self as Quest) as SkyrimNet_SexLab_MCM).Setup(self)
 EndFunction
+
 
 
 ;----------------------------------------------------------------------------------------------------
@@ -740,7 +723,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if dom_found && SkyrimNet_SexLab_DOM.IsDOMSlave(actors[i])
+        if dom_handler.found && dom_handler.IsDOMSlave(actors[i])
             if orgasm_expected[i] == 1
                 int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 if num_orgasms > 0 
@@ -748,12 +731,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
                         someone_ejaculated = True 
                     endif 
                 else 
-                    DOM_Actor slave = SkyrimNet_SexLab_DOM.GetDOMSlave("SkyrimNet_SexLab_Main", "Orgasm_Combined", actors[i]) as Dom_Actor
-                    if slave != None 
-                        if slave.mind.is_aroused_for > 0
-                            narration += name+" was denied an orgasm. "
-                        endif 
-                    endif 
+                    narration += dom_handler.HandleOrgasmDenied(actors[i])
                 endif 
             endif 
             Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
@@ -796,7 +774,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    if SkyrimNet_SexLab_DOM.IsDOMSlave(akActor)
+    if dom_handler.IsDOMSlave(akActor)
         return
     endif 
 
