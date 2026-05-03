@@ -67,25 +67,12 @@ EndFunction
 ; slot: 
 String Function Outfit_Options(Actor speaker) global 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-
-    ; check if they  items stored
-    ; Walk through all worn armor/clothing and collect strippable items
-    int strippable_count = 0
-    int slot = 31
-    while slot >= 0
-        Form item = speaker.GetWornForm(Armor.GetMaskForSlot(slot + 30))
-        if item != None && main.sexlab.IsStrippable(item)
-            strippable_count += 1
-        endif
-        slot -= 1
-    endwhile
-
-    String option = "dresses"
-    if strippable_count > 0
-        main.UnStoreStrippedItems(speaker)
-        option = "undresses"
+    String options = "undresses"
+    if main.HasStrippedItems(speaker)
+        options = "dresses"
     endif 
-    return "{\"option\":\""+option+"\"}"
+    Trace("Outfit_Options",speaker.GetDisplayName()+" has stripped items")
+    return "{\"option\":\""+options+"\"}"
 EndFunction
 
 String Function Speaker_Info(Actor speaker) global 

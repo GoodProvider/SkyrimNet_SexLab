@@ -1,5 +1,5 @@
-name: change_outfit
-description: "{{render_template(\"helpers/sexlab_none_change_outfit\")}} target's outfit"
+name: change_outfit_target
+description: "[style] [verb] Target's outfit"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Change_Outfit
@@ -15,10 +15,10 @@ parameterMapping:
     description: forcefully|normally|gently
   - type: dynamic
     name: verb
-    description: "dresses|undresses"
+    description: "put on|take off"
   - type: static
     name: narration
-    value: silent
+    value: false
 enabled: true
 eligibilityRules:
   - conditions:

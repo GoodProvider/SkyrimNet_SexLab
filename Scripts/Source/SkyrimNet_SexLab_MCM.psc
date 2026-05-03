@@ -5,8 +5,6 @@ import SkyrimNet_SexLab_Utilities
 SkyrimNet_SexLab_Main Property main Auto  
 SkyrimNet_SexLab_Stages Property stages Auto 
 SkyrimNet_SexLab_Actions Property actions Auto 
-SkyrimNet_SexLab_Ostimnet_Handler Property ostimnet_handler = None Auto 
-SkyrimNet_SexLab_DOM_Handler Property dom_handler = None Auto 
 
 int rape_toggle
 GlobalVariable Property sexlab_public_sex_accepted Auto
@@ -32,9 +30,6 @@ bool hot_key_toggle = False
 int sex_edit_key = 43 ; 26
 
 bool clear_JSON = False
-
-; Devious Device Support 
-skyrimnet_UDNG_Groups group_devices = None
 
 ; OstimNet Support 
 int ostimnet_player_menu = -1
@@ -64,14 +59,7 @@ Function Setup(SkyrimNet_SexLab_Main _main)
        sexlab_ostim_options[1] = "Ostim" 
     endif 
 
-    ; -------------------------------
-    ; Checks for Devious Support mod 
-    if MiscUtil.FileExists("Data/SkyrimNetUDNG.esp")
-        Trace("SetUp","found SkyrimNetUDNG.esp")
-        group_devices = Game.GetFormFromFile(0x800, "SkyrimNetUDNG.esp") as skyrimnet_UDNG_Groups
-    else 
-        group_devices = None 
-    endif
+
 
 EndFunction 
 
@@ -139,7 +127,7 @@ Function PageOptions()
         RegisterForKey(sex_edit_key)
     endif 
 
-    if ostimnet_handler.found
+    if main.ostimnet_handler != None 
         int value = skyrimnet_sexlab_ostim_player.GetValueInt()
         String label = sexlab_ostim_options[value]
         Trace("PageOptions"," index: "+value+" label: "+label) 
@@ -407,8 +395,8 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    if dom_handler.found && dom_handler.IsDomSlave(target) 
-        dom_handler.Target_Menu_Selection(target,player)
+    if main.dom_handler != None && main.dom_handler.IsDomSlave(target) 
+        main.dom_handler.Target_Menu_Selection(target,player)
         return 
     endif 
 
@@ -428,7 +416,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     int cancel = 7
 
     int bondage = -2
-    if group_devices != None 
+    if main.udng_handler != None
         bondage = cancel
         cancel += 1 
     endif  
@@ -453,10 +441,10 @@ Function Target_Menu_Selection(Actor target, Actor player)
         Trace("OnKeyDown","button:" +buttons[button])
     endif 
     if button == masturbate
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
+        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0 || main.ostimnet_handler == None
             actions.Masturbation_Start(target, "normal", "")
         else 
-            ostimnet_handler.StartSexActionExecute(target, None, None, None, None, "", "")
+            main.ostimnet_handler.StartSexActionExecute(target, None, None, None, None, "", "")
         endif 
     elseif button == sexlab_ostim 
         if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
@@ -467,7 +455,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         Target_Menu_Selection(Target, Player) 
     elseif button == affection
         Trace("OnKeyDown","affection!")
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
+        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0 || main.ostimnet_handler == None    
             String[] bs = new String[2] 
             bs[0] = "hugging"
             bs[1] = "kissing"
@@ -479,10 +467,10 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "kissing"
             bs[2] = "cuddling"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            ostimnet_handler.StartAffectionSceneExecute(target, player, tag)
+            main.ostimnet_handler.StartAffectionSceneExecute(target, player, tag)
         endif 
     elseif button == sex
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
+        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0 || main.ostimnet_handler == None
             actions.Sex_Start(player, target, "normal", "", "")
         else 
             String[] bs = new String[3] 
@@ -490,7 +478,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "blowjob"
             bs[2] = "analsex"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            ostimnet_handler.StartSexActionExecute(target, player, None, None, None, tag, "")
+            main.ostimnet_handler.StartSexActionExecute(target, player, None, None, None, tag, "")
         endif 
 
     elseif button == rapes_player
@@ -498,6 +486,12 @@ Function Target_Menu_Selection(Actor target, Actor player)
     elseif button == raped_by_player
         actions.Rape_Start(player, target, "normal", "", "", target)
     elseif button == clothing
+
+        if clothing_string == "undress"
+            clothing_string = "take off"
+        Else
+            clothing_string = "put on"
+        endif 
 
         ;--------------------------------------------------
         ; How would they like it appear? 
@@ -524,7 +518,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         actions.Change_Outfit(player, target, style, clothing_string+"es", narration)
 
     elseif button == bondage 
-        group_devices.UpdateDevices(target) 
+        main.udng_handler.UpdateDevices(target)
     endif 
 EndFunction
 

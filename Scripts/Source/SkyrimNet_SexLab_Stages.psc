@@ -57,10 +57,13 @@ Function Setup()
     String temp = "sl" ; attempt to set the capitalization of sl 
 
     ; Devious Devices
-    if MiscUtil.FileExists("Data/Devious Devices - Integration.esm")
+    if MiscUtil.FileExists("Data/Devious Devices - Assets.esm")
         devices_found = true
-        zadLibs zlib =Game.GetFormFromFile(0x00F624, "Devious Devices - Integration.esm") as zadlibs
-        zad_DeviousBelt = zlib.zad_DeviousBelt
+        zad_DeviousBelt = Game.GetFormFromFile(0x00F624, "Devious Devices -Assets.esm") as Keyword
+        if zad_DeviousBelt == None 
+            Trace("Setup","Devious Devices found but zad_DeviousBelt is None")
+            devices_found = false
+        endif
     else 
         devices_found = false
     endif 

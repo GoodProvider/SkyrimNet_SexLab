@@ -38,6 +38,7 @@
 {# speaker having sex #} 
 {% set actor_having_sex = false %} 
 {% set sexlab.threads = [] %}
+{% set sexlab.undressed_clothing = [] %} 
 {% if get_global_value("skyrimnet_sexlab_active_sex") == 1.0 %}
   {% if not isTimePaused %}
       {% set sexlab = sexlab_get_threads(actorUUID) -%}

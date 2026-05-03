@@ -1,9 +1,8 @@
 Scriptname SkyrimNet_SexLab_DOM_Handler extends Quest 
 
 bool Property found = False Auto
-Quest Property d_api_internal  = None Auto
-Quest Property d_sexlab_internal = None Auto
-Quest property skyrimnet_dom_api = None Auto
+Quest Property d_api = None Auto
+Quest Property d_sexlab = None Auto
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_DOM_Handler."+func+"] "+msg
@@ -13,18 +12,24 @@ Function Trace(String func, String msg, Bool notification=False) global
     endif 
 EndFunction
 
+Quest Function CheckRequirements() Global
+    if  MiscUtil.FileExists("Data/DiaryOfMine.esm") && MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
+        return  Game.GetFormFromFile(0xE03, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_DOM_Handler
+ 
+    endif 
+    return None 
+EndFunction
+
 Function Setup()
-    Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
-    Quest dom_utilities = Game.GetFormFromFile(0x800, "SkyrimNet_DOM.esp") AS Quest 
-    if DOM01 != None && skyrimnet_dom_api != None
+    if MiscUtil.FileExists("Data/DiaryOfMine.esm") && MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
+        Quest DOM01 = Game.GetFormFromFile(0x00000D61, "DiaryOfMine.esm") AS Quest 
         found = True
-        d_api_internal = DOM01
-        d_sexlab_internal = DOM01
-    else
-        found = False 
-        d_api_internal = None
-        d_sexlab_internal = None
-        skyrimnet_dom_api = None
+        d_api = DOM01
+        d_sexlab = DOM01
+    Else
+        found = False
+        d_api = None
+        d_sexlab = None
     endif 
     Trace("CheckForDOM","DiaryOfMine (DOM) && SkyrimNet_DOM found: "+found)
 EndFunction
@@ -47,13 +52,14 @@ ReferenceAlias Function GetDOMSlave(String file, String func, Actor akActor)
 EndFunction
 
 String Function HandleOrgasmDenied(Actor akActor)
-    ;DOM_Actor slave = SkyrimNet_SexLab_DOM.GetDOMSlave("SkyrimNet_SexLab_Main", "Orgasm_Combined", actors[i]) as Dom_Actor
+    ;DOM_Actor slave = SkyrimNet_DOM_API.GetSlave("SkyrimNet_SexLab_Main", "Orgasm_Combined", akActor) as Dom_Actor
+;
     ;if slave != None 
-    ;    if slave.mind.is_aroused_for > 0
-    ;        return name+" was denied an orgasm. "
-    ;    endif 
+        ;if slave.mind.is_aroused_for > 0
+            ;return akActor.GetDisplayName()+" was denied an orgasm. "
+        ;endif 
     ;endif 
-    return ""
+    ;return ""
 EndFunction
 
 Function DOMSlave_Orgasmed(Actor akActor, String msg)

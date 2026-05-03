@@ -19,7 +19,7 @@ parameterMapping:
     description: kissing|hugging
   - type: static
     name: narration
-    value: false
+    value: silent
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value

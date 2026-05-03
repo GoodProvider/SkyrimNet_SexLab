@@ -1,7 +1,5 @@
 Scriptname SkyrimNet_SexLab_Actions extends Quest
 SkyrimNet_SexLab_Main Property main Auto 
-;SkyrimNet_SexLab_Animation_Handler Property anim_handler Auto 
-SkyrimNet_SexLab_OstimNet_Handler Property ostimnet_handler Auto
 SexLabFramework Property sexlab Auto 
 
 import SkyrimNet_SexLab_Utilities
@@ -36,22 +34,22 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
     endif 
 
     ; SexLab check
-    SkyrimNet_SexLab_Main sexlab_main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    if sexlab_main == None
+    SkyrimNet_SexLab_Main main_local = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    if main_local == None
         return false
     endif
 
-    if sexlab_main.IsActorLocked(akActor)
+    if main_local.IsActorLocked(akActor)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is locked")
         return false 
     endif
 
-    if sexlab_main.sexLab.IsActorActive(akActor) 
+    if main_local.sexLab.IsActorActive(akActor) 
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" SexLab animation")
         return false 
     endif 
 
-    if akActor.IsInFaction(ostimnet_handler.OStimActorCountFaction)
+    if akActor.IsInFaction(main_local.ostimnet_handler.OStimActorCountFaction)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" OStim animation")
         return false 
     endif
@@ -375,12 +373,13 @@ EndFunction
 
 ; -------------------------------------------------
 ; Dress and Undress
+; Narration: direct, silent, none (notification or event)
 ; -------------------------------------------------
 Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how, String Narration)
     Trace("Change_Outfit",Stripper.GetDisplayName()+" stripper "+Stripped.GetDisplayName()+" style:"+style+" how: "+how+" narration:"+narration)
 
     bool success = False
-    if how == "dresses"
+    if how == "put on"
         Form[] forms = main.UnStoreStrippedItems(Stripped)
         if forms.length > 0
             sexlab.UnStripActor(Stripped, forms, false)

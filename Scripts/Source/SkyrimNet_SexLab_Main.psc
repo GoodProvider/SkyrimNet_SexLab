@@ -10,8 +10,13 @@ import StorageUtil
 
 SkyrimNet_SexLab_Stages Property stages Auto
 SkyrimNet_SexLab_Stats Property stats Auto 
+
+; ---------------------------
+; Optional Mods Found 
+; ---------------------------
 SkyrimNet_SexLab_DOM_Handler Property dom_handler Auto
 SkyrimNet_SexLab_OstimNet_Handler Property ostimnet_handler Auto
+SkyrimNet_SexLab_UDNG_Handler Property udng_handler Auto
 
 SexLabFramework Property sexlab Auto 
 
@@ -178,14 +183,35 @@ Function Setup()
         JValue.retain(race_to_description)
     endif 
 
-    dom_handler.setup() 
-    ostimnet_handler.setup() 
     RegisterSexlabEvents()
+
+    ; --------------------------------
+    ; Decorators
+    ; --------------------------------
+
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
     ((self as Quest) as SkyrimNet_SexLab_MCM).Setup(self)
 EndFunction
 
 
+; --------------------------------
+; Optional Mod Support
+; --------------------------------
+Function SetupOptionalModSupport()
+    dom_handler = SkyrimNet_SexLab_DOM_Handler.CheckRequirements() as  SkyrimNet_SexLab_DOM_Handler
+    if dom_handler != None 
+        dom_handler.SetUp()
+    endif 
+
+    ostimnet_handler = SkyrimNet_SexLab_OstimNet_Handler.CheckRequirements() as SkyrimNet_SexLab_OstimNet_Handler
+    if ostimnet_handler != None 
+        ostimnet_handler.SetUp()
+    endif
+    udng_handler = SkyrimNet_SexLab_UDNG_Handler.CheckRequirements() as SkyrimNet_SexLab_UDNG_Handler
+    if udng_handler != None 
+        udng_handler.Setup()
+    endif 
+EndFunction
 
 ;----------------------------------------------------------------------------------------------------
 ; Stripped Items Storage
@@ -205,12 +231,13 @@ Function StoreStrippedItems(Actor akActor, Form[] forms)
 EndFunction 
 
 Form[] Function UnStoreStrippedItems(Actor akActor)
-    Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" attempting to undress")
     if !HasStrippedItems(akActor)
+        Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" attempting to get stripped items: found none")
         return Utility.CreateFormArray(0)
     endif
     Form[] forms = StorageUtil.FormListToArray(akActor, storage_items_key)
     StorageUtil.FormListClear(akActor, storage_items_key)
+    Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" removed stored items: "+forms.Length)
     return forms
 EndFunction
 
@@ -723,7 +750,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if dom_handler.found && dom_handler.IsDOMSlave(actors[i])
+        if dom_handler != None && dom_handler.IsDOMSlave(actors[i])
             if orgasm_expected[i] == 1
                 int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 if num_orgasms > 0 
@@ -774,7 +801,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    if dom_handler.IsDOMSlave(akActor)
+    if dom_handler != None && dom_handler.IsDOMSlave(akActor)
         return
     endif 
 
