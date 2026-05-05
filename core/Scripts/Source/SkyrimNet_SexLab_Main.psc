@@ -14,9 +14,9 @@ SkyrimNet_SexLab_Stats Property stats Auto
 ; ---------------------------
 ; Optional Mods Found 
 ; ---------------------------
-SkyrimNet_SexLab_DOM_Handler Property dom_handler Auto
-SkyrimNet_SexLab_OstimNet_Handler Property ostimnet_handler Auto
-SkyrimNet_SexLab_UDNG_Handler Property udng_handler Auto
+SkyrimNet_SexLab_Handler_DOM Property handler_dom Auto
+SkyrimNet_SexLab_Handler_OstimNet Property handler_ostimnet Auto
+SkyrimNet_SexLab_Handler_UDNG Property handler_udng Auto
 
 SexLabFramework Property sexlab Auto 
 
@@ -198,19 +198,20 @@ EndFunction
 ; Optional Mod Support
 ; --------------------------------
 Function SetupOptionalModSupport()
-    dom_handler = SkyrimNet_SexLab_DOM_Handler.CheckRequirements() as  SkyrimNet_SexLab_DOM_Handler
-    if dom_handler != None 
-        dom_handler.SetUp()
+    handler_dom = SkyrimNet_SexLab_Handler_DOM.CheckRequirements() as  SkyrimNet_SexLab_Handler_DOM
+    if handler_dom != None 
+        handler_dom.SetUp()
     endif 
 
-    ostimnet_handler = SkyrimNet_SexLab_OstimNet_Handler.CheckRequirements() as SkyrimNet_SexLab_OstimNet_Handler
-    if ostimnet_handler != None 
-        ostimnet_handler.SetUp()
+    handler_ostimnet = SkyrimNet_SexLab_Handler_OstimNet.CheckRequirements() as SkyrimNet_SexLab_Handler_OstimNet
+    if handler_ostimnet != None 
+        handler_ostimnet.SetUp()
     endif
-    udng_handler = SkyrimNet_SexLab_UDNG_Handler.CheckRequirements() as SkyrimNet_SexLab_UDNG_Handler
-    if udng_handler != None 
-        udng_handler.Setup()
+    handler_udng = SkyrimNet_SexLab_Handler_UDNG.CheckRequirements() as SkyrimNet_SexLab_Handler_UDNG
+    if handler_udng != None 
+        handler_udng.Setup()
     endif 
+    Trace("SetupOptionalModSupport","DOM Handler: "+(handler_dom != None)+" OstimNet Handler: "+(handler_ostimnet != None)+" UDNG Handler: "+(handler_udng != None))
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------
@@ -750,7 +751,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if dom_handler != None && dom_handler.IsDOMSlave(actors[i])
+        if handler_dom != None && handler_dom.IsDOMSlave(actors[i])
             if orgasm_expected[i] == 1
                 int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 if num_orgasms > 0 
@@ -758,7 +759,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
                         someone_ejaculated = True 
                     endif 
                 else 
-                    narration += dom_handler.HandleOrgasmDenied(actors[i])
+                    narration += handler_dom.HandleOrgasmDenied(actors[i])
                 endif 
             endif 
             Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
@@ -801,7 +802,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    if dom_handler != None && dom_handler.IsDOMSlave(akActor)
+    if handler_dom != None && handler_dom.IsDOMSlave(akActor)
         return
     endif 
 

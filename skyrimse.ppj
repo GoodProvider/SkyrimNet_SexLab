@@ -14,9 +14,13 @@
         <Variable Name="ModsFolder" Value="C:\Skyrim\dev\mods" />
     </Variables>
     <Imports>
-        <Import>.\Scripts\Source</Import>
-        <Import>.\Scripts\Source</Import>
+        <Import>Scripts\Source</Import>
+        <Import>Scripts\Source</Import>
         <Import>.\Headers</Import>
+        <Import>.\Headers\OstimNet</Import>
+        <Import>.\Headers\SkyrimNet_DOM</Import>
+            <Import>.\Headers\PAH Diary of Mine</Import>
+
         <Import>@ModsFolder\SKSE64\Scripts\Source</Import>
         <Import>@ModsFolder\SkyrimNet\Source\Scripts</Import>
         <Import>@ModsFolder\powerofthree's Tweaks\Source\Scripts</Import>
@@ -40,9 +44,6 @@
 
         <Import>@ModsFolder\SexLab Separate Orgasm\Scripts\Source</Import>
         <Import>@ModsFolder\SexLabFrameworkAE_v166b\scripts\Source</Import>
-        <Import>.\Headers\OstimNet</Import>
-        <Import>.\Headers\SkyrimNet_DOM</Import>
-            <Import>.\Headers\PAH Diary of Mine</Import>
         <!--
         <Import>.\Headers\SLO Aroused NG</Import>
         <Import>.\Headers\OStim</Import>
@@ -67,6 +68,6 @@
         <Import>C:\Skyrim\dev\skyrim\Data\Source\Scripts</Import>
     </Imports>
     <Folders>
-        <Folder>.\Scripts\Source</Folder>
+        <Folder>Scripts\Source</Folder>
     </Folders>
 </PapyrusProject>

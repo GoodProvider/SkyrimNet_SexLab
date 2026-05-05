@@ -49,7 +49,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
         return false 
     endif 
 
-    if akActor.IsInFaction(main_local.ostimnet_handler.OStimActorCountFaction)
+    if akActor.IsInFaction(main_local.handler_ostimnet.OStimActorCountFaction)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" OStim animation")
         return false 
     endif

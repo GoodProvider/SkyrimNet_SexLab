@@ -1,11 +1,11 @@
-Scriptname SkyrimNet_SexLab_DOM_Handler extends Quest 
+Scriptname SkyrimNet_SexLab_Handler_DOM extends Quest 
 
 bool Property found = False Auto
 Quest Property d_api = None Auto
 Quest Property d_sexlab = None Auto
 
 Function Trace(String func, String msg, Bool notification=False) global
-    msg = "[SkyrimNet_SexLab_DOM_Handler."+func+"] "+msg
+    msg = "[SkyrimNet_SexLab_Handler_DOM."+func+"] "+msg
     Debug.Trace(msg) 
     if notification
         Debug.Notification(msg)
@@ -13,9 +13,8 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Quest Function CheckRequirements() Global
-    if  MiscUtil.FileExists("Data/DiaryOfMine.esm") && MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
-        return  Game.GetFormFromFile(0xE03, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_DOM_Handler
- 
+    if  MiscUtil.FileExists("Data/SkyrimNet_SexLab_Handler_DOM.esp") &&MiscUtil.FileExists("Data/DiaryOfMine.esm") && MiscUtil.FileExists("Data/SkyrimNet_DOM.esp") 
+        return Game.GetFormFromFile(0x800, "SkyrimNet_SexLab_Handler_DOM.esp") as SkyrimNet_SexLab_Handler_DOM
     endif 
     return None 
 EndFunction

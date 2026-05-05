@@ -1,11 +1,11 @@
-ScriptName SkyrimNet_SexLab_OstimNet_Handler extends Quest 
+ScriptName SkyrimNet_SexLab_Handler_OstimNet extends Quest 
 
 Bool Property found = False Auto
 Quest Property ostimnet_actions = None Auto
 Faction Property OStimActorCountFaction Auto
 
 Function Trace(String func, String msg, Bool notification=False) global
-    msg = "[SkyrimNet_SexLab_OstimNet_Handler."+func+"] "+msg
+    msg = "[SkyrimNet_SexLab_Handler_OstimNet."+func+"] "+msg
     Debug.Trace(msg) 
     if notification
         Debug.Notification(msg)
@@ -14,14 +14,14 @@ EndFunction
 
 
 Quest Function CheckRequirements() Global
-    if MiscUtil.FileExists("Data/OStim.esp") && MiscUtil.FileExists("Data/TT_OStimNet.esp")
-        return  Game.GetFormFromFile(0x8A0, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_OstimNet_Handler
+    if MiscUtil.FileExists("Data/SkyrimNet_SexLab_Handler_OstimNet.esp") && MiscUtil.FileExists("Data/OStim.esp") && MiscUtil.FileExists("Data/TT_OStimNet.esp")
+        return Game.GetFormFromFile(0x800, "SkyrimNet_SexLab_Handler_OstimNet.esp") as SkyrimNet_SexLab_Handler_OstimNet
     endif 
     return None 
 EndFunction
 
 bool Function Setup() 
-    if MiscUtil.FileExists("Data/OStim.esp") && MiscUtil.FileExists("Data/TT_OStimNet.esp")
+    if MiscUtil.FileExists("Data/SkyrimNet_SexLab_Handler_OstimNet.esp") && MiscUtil.FileExists("Data/OStim.esp") && MiscUtil.FileExists("Data/TT_OStimNet.esp")
         found = True 
         ostimnet_actions = Game.GetFormFromFile(0x800, "TT_OStimNet.esp") as Quest
         OStimActorCountFaction = Game.GetFormFromFile(0x801, "TT_OStimNet.esp") as Faction
