@@ -42,12 +42,6 @@ eligibilityRules:
           - OStimActorCountFaction
         comparisonOperator: ==
         expectedValue: false
-      - decoratorName: is_in_faction
-        arguments:
-          - currentActor
-          - ChildFaction
-        comparisonOperator: ==
-        expectedValue: false
       - decoratorName: is_in_combat
         arguments:
           - currentActor

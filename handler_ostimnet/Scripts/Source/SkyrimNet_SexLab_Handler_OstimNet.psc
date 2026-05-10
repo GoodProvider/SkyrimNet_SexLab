@@ -20,7 +20,7 @@ Function Setup()
         Trace("Setup","main.ostimnet_found set to true")
     else 
         main.ostimnet_found = false
-        Trace("Setup","main.ostimnet_found set to false | main: " + main_none + " ostimnet_actions: " + ostimnet_none)
+        Trace("Setup","main.ostimnet_found set to false |- main: " + main_none + " ostimnet_actions: " + ostimnet_none)
     endif 
 EndFunction
 

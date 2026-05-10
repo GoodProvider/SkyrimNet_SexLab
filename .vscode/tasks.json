@@ -74,6 +74,12 @@
             "presentation": { "reveal": "always" }
         },
         {
+            "label": "distribute: PEX to UDNG",
+            "type": "shell",
+            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_udng/Scripts core/Scripts",
+            "presentation": { "reveal": "always" }
+        },
+        {
             "label": "distribute: PEX to Core",
             "type": "shell",
             "command": "uv run python_scripts/copy-pex.py --source Scripts --destination core/Scripts",
@@ -129,6 +135,20 @@
                 "distribute: PEX to OstimNet",
                 "copy: SkyrimNet_SexLab.esp to Core",
                 "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet"
+            ]
+        },
+        {
+            "label": "Build: UDNG",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "prep: Clean Workspace",
+				"prep: Create Script Folders",
+                "prep: Copy Core",
+                "prep: Overlay UDNG",
+                "pyro: Compile",
+                "distribute: PEX to UDNG",
+                "copy: SkyrimNet_SexLab.esp to Core",
+                "copy: SkyrimNet_SexLab_Handler_UDNG.esp to Handler_UDNG"
             ]
         },
         {
