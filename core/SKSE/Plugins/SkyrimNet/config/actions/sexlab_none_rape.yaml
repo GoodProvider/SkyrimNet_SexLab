@@ -1,6 +1,6 @@
 name: Rape_Start
 description: "[style] [type] sexual assalt on [victim]"
-questEditorId: SkyrimNet_SexLab
+questEditorId: SkyrimNet_SexLab_Actions
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Rape_Start
 defaultPriority: 7

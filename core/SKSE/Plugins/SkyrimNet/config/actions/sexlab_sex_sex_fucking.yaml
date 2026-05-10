@@ -1,7 +1,7 @@
 customCategory: sexlab_sex
 name: Sex_Start_Fucking
 description: "Consensual [style] [direction] [type]"
-questEditorId: SkyrimNet_SexLab
+questEditorId: SkyrimNet_SexLab_Actions
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Sex_Start
 defaultPriority: 7

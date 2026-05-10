@@ -13,6 +13,17 @@ GlobalVariable Property sexlab_public_sex_accepted Auto
 ; sexlab = 0
 ; ostimnet = 1
 GlobalVariable Property skyrimnet_sexlab_ostim_player Auto
+int Property sexlab_ostim_player
+    int Function Get()
+        ;if !main.ostimnet_found
+        ;    return 0
+        ;endif 
+        return skyrimnet_sexlab_ostim_player.GetValueInt()
+    EndFunction 
+    Function Set(int value)
+        skyrimnet_sexlab_ostim_player.SetValue(value)
+    EndFunction 
+EndProperty
 
 ; Hides the hermaphrodite from prompt 
 ; 0 - false
@@ -50,8 +61,6 @@ EndFunction
 
 Function Setup(SkyrimNet_SexLab_Main _main) 
     main = _main
-    actions = (main as Quest) as SkyrimNet_SexLab_Actions
-
 
     if sexlab_ostim_options.length == 0
        sexlab_ostim_options = new String[2]
@@ -94,7 +103,7 @@ Function PageOptions()
     AddHeaderOption("Prompt Options")
     SetCursorPosition(2)
 
-    AddToggleOptionST("HideHermaphroditesToggle","Hide hermaphrodite from prompt",skyrimNet_sexlab_hide_hermaphrodites.GetValueInt() == 1.0)
+    AddToggleOptionST("HideHermaphroditesToggle","Hide hermaphrodite from prompt",skyrimNet_sexlab_hide_hermaphrodites.GetValue() == 1.0)
     AddToggleOptionST("PublicSexAcceptedToggle","Public sex accepted",sexlab_public_sex_accepted.GetValue() == 1.0)
     AddToggleOptionST("VirginBloodEnabled","Enable virgin blood message.",main.virgin_blood_enabled)
     
@@ -127,8 +136,8 @@ Function PageOptions()
         RegisterForKey(sex_edit_key)
     endif 
 
-    if main.handler_ostimnet != None 
-        int value = skyrimnet_sexlab_ostim_player.GetValueInt()
+    if main.ostimnet_found 
+        int value = sexlab_ostim_player
         String label = sexlab_ostim_options[value]
         Trace("PageOptions"," index: "+value+" label: "+label) 
         AddHeaderOption("OstimNet Integration")
@@ -179,7 +188,7 @@ EndState
 State HideHermaphroditesToggle 
     Event OnSelectST()
         Bool public_bool = False
-        if skyrimnet_sexlab_hide_hermaphrodites.GetValueInt() == 1.0
+        if skyrimnet_sexlab_hide_hermaphrodites.GetValue() == 1.0
             public_bool = False
             skyrimnet_sexlab_hide_hermaphrodites.SetValue(0.0)
         else
@@ -187,7 +196,7 @@ State HideHermaphroditesToggle
             skyrimnet_sexlab_hide_hermaphrodites.SetValue(1.0)
         endif 
         SetToggleOptionValueST(public_bool)
-        Trace("HideHermaphroditesToggle","hide_hermaphrodites: "+skyrimnet_sexlab_hide_hermaphrodites.GetValueInt() == 1.0)
+        Trace("HideHermaphroditesToggle","hide_hermaphrodites: "+skyrimnet_sexlab_hide_hermaphrodites.GetValue() == 1.0)
     EndEvent
     Event OnHighlightST()
         SetInfoText("Hides the hermaphrodite labels the prompt.")
@@ -343,14 +352,14 @@ Event OnOptionMenuOpen(int menu_id)
     Trace("OnOptionMenuOpen","menu_id: "+menu_id+" options: "+sexlab_ostim_options)
     SetMenuDialogOptions(sexlab_ostim_options)
     if menu_id == ostimnet_player_menu
-        SetMenuDialogStartIndex(skyrimnet_sexlab_ostim_player.GetValueInt())
+        SetMenuDialogStartIndex(sexlab_ostim_player)
     endif
     SetMenuDialogDefaultIndex(0)
 endEvent
 
 event OnOptionMenuAccept(int menu_id, int index)
     if menu_id == ostimnet_player_menu
-        skyrimnet_sexlab_ostim_player.SetValueInt(index)
+        sexlab_ostim_player = index 
         String label = sexlab_ostim_options[index]
         Trace("OnOptionMenuAccept"," menu_id: "+menu_id+" sexlab_ostim_player: "+index+" label: "+label)
         SetMenuOptionValue(menu_id, label)
@@ -362,6 +371,13 @@ endEvent
 ; --------------------------------------------
 
 Event OnKeyDown(int key_code)
+;    int before = sexlab_ostim_player
+;    if sexlab_ostim_player == 0
+;        sexlab_ostim_player = 1
+;    else
+;        sexlab_ostim_player = 0
+;    endif
+;    Debug.Notification("OnKeyDown: sexlab_ostim_player: "+sexlab_ostim_player+" was: "+before)
     if UI.IsTextInputEnabled()
         return 
     endif 
@@ -392,11 +408,12 @@ Event OnKeyDown(int key_code)
             MutliTarget_Menu_Selection(player)
         endif 
     endif 
+
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    if main.handler_dom != None && main.handler_dom.IsDomSlave(target) 
-        main.handler_dom.Target_Menu_Selection(target,player)
+    if main.dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(target) 
+        SkyrimNet_SexLab_Handler_DOM.Target_Menu_Selection(target,player)
         return 
     endif 
 
@@ -406,30 +423,38 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if target_is_undressed 
         clothing_string = "dress"
     endif 
-    int sexlab_ostim = 0
-    int masturbate = 1
-    int affection = 2
-    int sex = 3
-    int raped_by_player = 4
-    int rapes_player = 5
-    int clothing = 6
-    int cancel = 7
+    int cancel = 0 
+    int sexlab_ostim = -1
+    if main.ostimnet_found 
+        sexlab_ostim = cancel
+        cancel += 1
+    endif 
 
-    int bondage = -2
-    if main.handler_udng != None
+    int masturbate = cancel
+    int affection = cancel+1
+    int sex = cancel+2
+    int raped_by_player = cancel+3
+    int rapes_player = cancel+4
+    int clothing = cancel+5
+    cancel += 6 
+
+    int bondage = -1
+    if main.udng_found
         bondage = cancel
         cancel += 1 
     endif  
     String[] buttons = Utility.CreateStringArray(cancel+1)
 
-    buttons[sexlab_ostim] = sexlab_ostim_options[skyrimnet_sexlab_ostim_player.GetValueInt()]
+    if sexlab_ostim != -1
+        buttons[sexlab_ostim] = sexlab_ostim_options[sexlab_ostim_player]
+    endif 
     buttons[masturbate] = "masturbate"
     buttons[affection] = "affection"
     buttons[sex] = "sex"
     buttons[raped_by_player] = "player rapes"
     buttons[rapes_player] = "rapes player"
     buttons[clothing] = clothing_string
-    if bondage != -2 
+    if bondage != -1 
         buttons[bondage] = "bondage"
     endif 
     buttons[cancel] = "cancel"
@@ -441,36 +466,40 @@ Function Target_Menu_Selection(Actor target, Actor player)
         Trace("OnKeyDown","button:" +buttons[button])
     endif 
     if button == masturbate
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0 || main.handler_ostimnet == None
+        if sexlab_ostim_player == 0 || !main.ostimnet_found
             actions.Masturbation_Start(target, "normal", "")
         else 
-            main.handler_ostimnet.StartSexActionExecute(target, None, None, None, None, "", "")
+            SkyrimNet_SexLab_Handler_OstimNet.StartSexActionExecute(target, None, None, None, None, "", "")
         endif 
     elseif button == sexlab_ostim 
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0
-            skyrimnet_sexlab_ostim_player.SetValueInt(1)
+        String choice = ""
+        if sexlab_ostim_player == 0
+            sexlab_ostim_player = 1
+            choice = "Ostim"
         else
-            skyrimnet_sexlab_ostim_player.SetValueInt(0)
+            sexlab_ostim_player = 0
+            choice = "SexLab"
         endif 
-        Target_Menu_Selection(Target, Player) 
+        Debug.Notification("Switched to "+choice)
     elseif button == affection
         Trace("OnKeyDown","affection!")
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0 || main.handler_ostimnet == None    
+        if sexlab_ostim_player == 0.0 || !main.ostimnet_found    
             String[] bs = new String[2] 
             bs[0] = "hugging"
             bs[1] = "kissing"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            actions.Affection_Start(player, target, "normal", tag)
+            actions.Affection_Start(player, target, "normal", tag, "direct")
         else 
             String[] bs = new String[3] 
             bs[0] = "hugging"
             bs[1] = "kissing"
             bs[2] = "cuddling"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            main.handler_ostimnet.StartAffectionSceneExecute(target, player, tag)
+            SkyrimNet_SexLab_Handler_OstimNet.StartAffectionSceneExecute(player, target, tag)
         endif 
     elseif button == sex
-        if skyrimnet_sexlab_ostim_player.GetValueInt() == 0 || main.handler_ostimnet == None
+
+        if sexlab_ostim_player  == 0.0 || !main.ostimnet_found
             actions.Sex_Start(player, target, "normal", "", "")
         else 
             String[] bs = new String[3] 
@@ -478,7 +507,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "blowjob"
             bs[2] = "analsex"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            main.handler_ostimnet.StartSexActionExecute(target, player, None, None, None, tag, "")
+            SkyrimNet_SexLab_Handler_OstimNet.StartSexActionExecute(player, target, None, None, None, tag, "")
         endif 
 
     elseif button == rapes_player
@@ -518,7 +547,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         actions.Change_Outfit(player, target, style, clothing_string+"es", narration)
 
     elseif button == bondage 
-        main.handler_udng.UpdateDevices(target)
+        SkyrimNet_SexLab_Handler_UDNG.UpdateDevices(target)
     endif 
 EndFunction
 

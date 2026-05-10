@@ -3,7 +3,6 @@ Scriptname SkyrimNet_SexLab_Main extends Quest
 import JContainers
 import UIExtensions
 import SkyrimNet_SexLab_Decorators
-import SkyrimNet_SexLab_Actions
 import SkyrimNet_SexLab_Stages
 import SkyrimNet_SexLab_Utilities
 import StorageUtil
@@ -14,9 +13,9 @@ SkyrimNet_SexLab_Stats Property stats Auto
 ; ---------------------------
 ; Optional Mods Found 
 ; ---------------------------
-SkyrimNet_SexLab_Handler_DOM Property handler_dom Auto
-SkyrimNet_SexLab_Handler_OstimNet Property handler_ostimnet Auto
-SkyrimNet_SexLab_Handler_UDNG Property handler_udng Auto
+Bool Property ostimnet_found = False Auto
+Bool Property dom_found = False Auto
+Bool Property udng_found = False Auto
 
 SexLabFramework Property sexlab Auto 
 
@@ -30,6 +29,21 @@ Faction Property SkyrimNet_SexLab_Faction_Victim Auto
 ; 0 - no active sexlab animations 
 ; 1 - one or more active sexlab animations
 GlobalVariable Property skyrimnet_sexlab_active_sex Auto
+bool Property active_sex
+    bool Function Get()
+        if skyrimnet_sexlab_active_sex.GetValue() == 1
+            return true
+        endif
+        return false 
+    EndFunction 
+    Function Set(bool value)
+        if value
+            skyrimnet_sexlab_active_sex.SetValue(1)
+        else
+            skyrimnet_sexlab_active_sex.SetValue(0)
+        endif
+    EndFunction 
+EndProperty
 
 ; ---------------------------------------------------
 
@@ -107,14 +121,6 @@ int Property race_to_description Auto
 
 int Property counter Auto 
 
-Event OnInit()
-    Trace("OnInit","")
-    rape_allowed = true
-
-    ; Register for all SexLab events using the framework's RegisterForAllEvents function
-    Setup() 
-EndEvent
-
 Function Setup()
     Trace("SetUp","")
 
@@ -183,36 +189,18 @@ Function Setup()
         JValue.retain(race_to_description)
     endif 
 
+    ; --------------------------------
+    ; Register SexLab Events
+    ; --------------------------------
     RegisterSexlabEvents()
 
     ; --------------------------------
     ; Decorators
     ; --------------------------------
-
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
     ((self as Quest) as SkyrimNet_SexLab_MCM).Setup(self)
 EndFunction
 
-
-; --------------------------------
-; Optional Mod Support
-; --------------------------------
-Function SetupOptionalModSupport()
-    handler_dom = SkyrimNet_SexLab_Handler_DOM.CheckRequirements() as  SkyrimNet_SexLab_Handler_DOM
-    if handler_dom != None 
-        handler_dom.SetUp()
-    endif 
-
-    handler_ostimnet = SkyrimNet_SexLab_Handler_OstimNet.CheckRequirements() as SkyrimNet_SexLab_Handler_OstimNet
-    if handler_ostimnet != None 
-        handler_ostimnet.SetUp()
-    endif
-    handler_udng = SkyrimNet_SexLab_Handler_UDNG.CheckRequirements() as SkyrimNet_SexLab_Handler_UDNG
-    if handler_udng != None 
-        handler_udng.Setup()
-    endif 
-    Trace("SetupOptionalModSupport","DOM Handler: "+(handler_dom != None)+" OstimNet Handler: "+(handler_ostimnet != None)+" UDNG Handler: "+(handler_udng != None))
-EndFunction
 
 ;----------------------------------------------------------------------------------------------------
 ; Stripped Items Storage
@@ -479,7 +467,7 @@ event AnimationStart(int ThreadID, bool HasPlayer)
         j -= 1 
     endwhile 
 
-    skyrimnet_sexlab_active_sex.SetValue(1.0)
+    active_sex = true
 
     SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
     thread_started[thread.tid] = False 
@@ -674,9 +662,9 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
         i -= 1
     endwhile
     if found
-        skyrimnet_sexlab_active_sex.SetValue(1.0)
+        active_sex = true
     else 
-        skyrimnet_sexlab_active_sex.SetValue(0.0)
+        active_sex = false
     endif
 
     thread_style[thread.tid] = STYLE_NORMALLY
@@ -751,7 +739,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if handler_dom != None && handler_dom.IsDOMSlave(actors[i])
+        if dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(actors[i])
             if orgasm_expected[i] == 1
                 int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 if num_orgasms > 0 
@@ -759,7 +747,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
                         someone_ejaculated = True 
                     endif 
                 else 
-                    narration += handler_dom.HandleOrgasmDenied(actors[i])
+                    narration += SkyrimNet_SexLab_Handler_DOM.HandleOrgasmDenied(actors[i])
                 endif 
             endif 
             Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
@@ -802,7 +790,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    if handler_dom != None && handler_dom.IsDOMSlave(akActor)
+    if dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(akActor)
         return
     endif 
 
@@ -1287,9 +1275,6 @@ sslBaseAnimation[] Function GetAnimsDialog(sslThreadModel thread, Actor[] actors
                 listMenu.AddEntryItem(group)
                 i += 1
             endwhile
-
-            ; add the actions 
-            ;ListAddTags(listMenu, group_tags, "actions>") 
 
             ; just give up
             listMenu.AddEntryItem("<cancel>")

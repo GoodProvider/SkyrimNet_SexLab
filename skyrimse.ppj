@@ -18,6 +18,7 @@
         <Import>Scripts\Source</Import>
         <Import>.\Headers</Import>
         <Import>.\Headers\OstimNet</Import>
+        <Import>.\Headers\Ostim</Import>
         <Import>.\Headers\SkyrimNet_DOM</Import>
             <Import>.\Headers\PAH Diary of Mine</Import>
 

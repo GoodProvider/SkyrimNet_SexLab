@@ -1,6 +1,6 @@
 name: Affection_Show
 description: "show affection with [type]"
-questEditorId: SkyrimNet_SexLab
+questEditorId: SkyrimNet_SexLab_Actions
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Affection_Start
 defaultPriority: 7

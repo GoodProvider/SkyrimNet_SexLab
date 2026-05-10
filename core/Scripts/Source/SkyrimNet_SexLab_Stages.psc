@@ -3,8 +3,6 @@ Scriptname SkyrimNet_SexLab_Stages extends Quest
 import SkyrimNet_SexLab_Main
 import StorageUtil
 
-SkyrimNet_SexLab_Actions actions = None 
-
 Bool Property hide_help = false Auto
 
 Actor player = None 
@@ -35,6 +33,8 @@ String Button_Start_Tracking = "Start Tracking"
 String Button_Go_Back = "Go Back"
 String Button_Done = "Done"
 
+SkyrimNet_SexLab_Actions Property actions Auto
+
 String storage_key = "skyrimnet_sexlab_stages_anim_info"
 
 int anim_info_cache = 0
@@ -53,7 +53,6 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Function Setup()
-    actions = (self as Quest) As SkyrimNet_SexLab_Actions 
     String temp = "sl" ; attempt to set the capitalization of sl 
 
     ; Devious Devices

@@ -49,7 +49,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
         return false 
     endif 
 
-    if akActor.IsInFaction(main_local.handler_ostimnet.OStimActorCountFaction)
+    if main_local.ostimnet_found && SkyrimNet_SexLab_Handler_OstimNet.IsInOStim(akActor)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" OStim animation")
         return false 
     endif
@@ -128,13 +128,16 @@ sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String t
     return Sex_Start_helper(Speaker, actors, victims, style, "", tag) 
 EndFunction
 
-sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag, bool narration = False) 
-    Trace("Affection_start"," speaker:"+speaker.getDisplayName() +" target:"+target.GetDisplayName()+" style:"+style+" tag:"+tag)
+sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag, String narration = "silent") 
+    Trace("Affection_start"," speaker:"+speaker.getDisplayName() +" target:"+target.GetDisplayName()+" style:"+style+" tag:"+tag+" narration:"+narration)
 
     if tag == "hugging" 
         target.playIdleWithTarget(pa_HugA, speaker) 
-        if speaker != Game.GetPlayer() 
-            DirectNarration(speaker.GetDisplayName()+" hugs "+target.GetDisplayName()+".", speaker, target)
+        String msg = speaker.GetDisplayName()+" hugs "+target.GetDisplayName()+"."
+        if narration == "direct"
+            DirectNarration(msg, speaker, target)
+        else 
+            RegisterEvent("Hugging", msg, speaker, target)
         endif 
         return None 
     ; Couldn't make these look nice 

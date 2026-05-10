@@ -1,6 +1,6 @@
 name: change_outfit_target
 description: "[style] [verb] Target's outfit"
-questEditorId: SkyrimNet_SexLab
+questEditorId: SkyrimNet_SexLab_Actions
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Change_Outfit
 parameterMapping:

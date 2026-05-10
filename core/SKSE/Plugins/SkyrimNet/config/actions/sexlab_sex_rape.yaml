@@ -1,7 +1,7 @@
 customCategory: sexlab_sex
 name: Sexual_Assault
 description: "[style] [type] sexual assalt on [victim]"
-questEditorId: SkyrimNet_SexLab
+questEditorId: SkyrimNet_SexLab_Actions
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Rape_Start
 defaultPriority: 7

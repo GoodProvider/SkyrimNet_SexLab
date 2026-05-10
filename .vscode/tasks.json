@@ -9,32 +9,32 @@
 			"args": [
 				"-NoProfile",
 				"-Command",
-				"if (Test-Path 'Scripts') { Remove-Item -Path 'Scripts' -Recurse -Force -ErrorAction SilentlyContinue }; Get-ChildItem -Path *.esp, *.esl -ErrorAction SilentlyContinue | Remove-Item -Force; if (Test-Path 'SKSE') { Remove-Item -Path 'SKSE' -Recurse -Force -ErrorAction SilentlyContinue }; exit 0"
+				"if (Test-Path 'Scripts') { Remove-Item -Path 'Scripts' -Recurse -Force -ErrorAction SilentlyContinue }; if (Test-Path 'SKSE') { Remove-Item -Path 'SKSE' -Recurse -Force -ErrorAction SilentlyContinue }; exit 0"
 			],
             "presentation": { "reveal": "silent" }
         },
         {
             "label": "prep: Copy Core",
             "type": "shell",
-            "command": "Copy-Item -Path './core/Scripts/Source/*.psc' -Destination './Scripts/Source/' -Force; Copy-Item -Path './core/*.esp' -Destination './' -Force; Copy-Item -Path './core/SKSE' -Destination './' -Recurse -Force",
+            "command": "Copy-Item -Path './core/Scripts' -Destination '.' -Recurse -Force; Copy-Item -Path './core/SKSE' -Destination './' -Recurse -Force",
             "presentation": { "reveal": "silent" }
         },
         {
             "label": "prep: Overlay OstimNet",
             "type": "shell",
-            "command": "Copy-Item -Path './handler_ostimnet/Scripts/Source/*' -Destination './Scripts/Source/' -Recurse -Force; Copy-Item -Path './handler_ostimnet/*.esl' -Destination './' -Force",
+            "command": "Copy-Item -Path './handler_ostimnet/Scripts/*' -Destination './Scripts/.' -Recurse -Force",
             "presentation": { "reveal": "silent" }
         },
         {
             "label": "prep: Overlay DOM",
             "type": "shell",
-            "command": "Copy-Item -Path './handler_dom/Scripts/Source/*' -Destination './Scripts/Source/' -Recurse -Force; Copy-Item -Path './handler_dom/*.esl' -Destination './' -Force",
+            "command": "Copy-Item -Path './handler_dom/Scripts/*' -Destination './Scripts/.' -Recurse -Force",
             "presentation": { "reveal": "silent" }
         },
         {
             "label": "prep: Overlay UDNG",
             "type": "shell",
-            "command": "Copy-Item -Path './handler_udng/Scripts/Source/*' -Destination './Scripts/Source/' -Recurse -Force; Copy-Item -Path './handler_udng/*.esl' -Destination './' -Force",
+            "command": "Copy-Item -Path './handler_udng/Scripts/*' -Destination './Scripts/.' -Recurse -Force",
             "presentation": { "reveal": "silent" }
         },
 
@@ -68,16 +68,35 @@
             "presentation": { "reveal": "always" }
         },
         {
+            "label": "distribute: PEX to OstimNet",
+            "type": "shell",
+            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_ostimnet/Scripts core/Scripts",
+            "presentation": { "reveal": "always" }
+        },
+        {
             "label": "distribute: PEX to Core",
             "type": "shell",
             "command": "uv run python_scripts/copy-pex.py --source Scripts --destination core/Scripts",
             "presentation": { "reveal": "always" }
         },
+        /* --- Copy ESP files --- */
         {
-            "label": "save: Update Core ESP",
+            "label": "copy: SkyrimNet_SexLab.esp to Core",
             "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core/SkyrimNet_SexLab.esp' -Force",
-            "presentation": { "reveal": "silent" }
+            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core' -Recurse -Force",
+            "presentation": { "reveal": "always" }
+        },
+        {
+            "label": "copy: SkyrimNet_SexLab.esp to Core",
+            "type": "shell",
+            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core/.' -Recurse -Force",
+            "presentation": { "reveal": "always" }
+        },
+        {
+            "label": "copy: SkyrimNet_SexLab_Handler_OstimeNet.esp to Handler_OstimNet",
+            "type": "shell",
+            "command": "Copy-Item -Path './SkyrimNet_SexLab_Handler_OstimNet.esp' -Destination './handler_ostimnet/.' -Recurse -Force",
+            "presentation": { "reveal": "always" }
         },
 
         /* --- PIPELINES --- */
@@ -93,9 +112,24 @@
                 "prep: Overlay UDNG",
                 "pyro: Compile",
                 "distribute: PEX to All",
-                "save: Update Core ESP"
+                "copy: SkyrimNet_SexLab.esp to Core",
+                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet"
             ],
-            "group": { "kind": "build", "isDefault": true }
+            "group": { "kind": "build", "isDefault": false }
+        },
+        {
+            "label": "Build: OstimNet",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "prep: Clean Workspace",
+				"prep: Create Script Folders",
+                "prep: Copy Core",
+                "prep: Overlay OstimNet",
+                "pyro: Compile",
+                "distribute: PEX to OstimNet",
+                "copy: SkyrimNet_SexLab.esp to Core",
+                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet"
+            ]
         },
         {
             "label": "Build: Core Only",
@@ -105,7 +139,8 @@
 				"prep: Create Script Folders",
                 "prep: Copy Core",
                 "pyro: Compile",
-                "distribute: PEX to Core"
+                "distribute: PEX to Core",
+                "copy: SkyrimNet_SexLab.esp to Core"
             ]
         }
     ]
