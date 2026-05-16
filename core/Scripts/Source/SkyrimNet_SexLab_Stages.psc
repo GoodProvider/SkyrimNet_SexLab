@@ -1,6 +1,7 @@
 Scriptname SkyrimNet_SexLab_Stages extends Quest 
 
-import SkyrimNet_SexLab_Main
+SkyrimNet_SexLab_Main Property main Auto
+sslActorLibrary Property actorLib Auto
 import StorageUtil
 
 Bool Property hide_help = false Auto
@@ -54,18 +55,21 @@ EndFunction
 
 Function Setup()
     String temp = "sl" ; attempt to set the capitalization of sl 
+    main = (self as Quest) as SkyrimNet_SexLab_Main
+    actions = (self as Quest) as SkyrimNet_SexLab_Actions
 
     ; Devious Devices
-    if MiscUtil.FileExists("Data/Devious Devices - Assets.esm")
-        devices_found = true
-        zad_DeviousBelt = Game.GetFormFromFile(0x00F624, "Devious Devices -Assets.esm") as Keyword
-        if zad_DeviousBelt == None 
-            Trace("Setup","Devious Devices found but zad_DeviousBelt is None")
-            devices_found = false
-        endif
-    else 
-        devices_found = false
-    endif 
+    ;if MiscUtil.FileExists("Data/Devious Devices - Assets.esm")
+        ;devices_found = true
+        ;zad_DeviousBelt = Game.GetFormFromFile(0x00F624, "Devious Devices -Assets.esm") as Keyword
+        ;if zad_DeviousBelt == None 
+            ;Trace("Setup","Devious Devices found but zad_DeviousBelt is None")
+            ;devices_found = false
+        ;endif
+    ;else 
+        ;devices_found = false
+    ;endif 
+    devices_found = false ; temporarily disable devices integration until I can test and optimize it, since checking for the belt keyword on every stage update is causing some performance issues.
 
     desc_input = ""
     animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations"
@@ -194,7 +198,6 @@ Function EditDescriptions(sslThreadController thread)
 
     int button = desc_prev
 
-    SkyrimNet_SexLab_Main main = (self as Quest) as SkyrimNet_SexLab_Main
     while button != done 
         String source = "" 
         String desc = "" 
@@ -393,8 +396,6 @@ int[] Function GetOrgasmExpected(sslThreadController thread)
         return Utility.CreateIntArray(actors.length, 1)
     endif
 
-    SkyrimNet_SexLab_Main main = (self as Quest) as SkyrimNet_SexLab_Main
-    sslActorLibrary actorLib = (main.SexLab as Quest) as sslActorLibrary
     int[] orgasm_expected = Utility.CreateIntArray(actors.length, 1)
     sslBaseAnimation Animation = thread.animation
     Trace("GetOrgasmExpected","tags:"+animation.GetRawTags())

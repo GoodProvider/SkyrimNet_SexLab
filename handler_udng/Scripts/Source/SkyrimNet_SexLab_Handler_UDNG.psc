@@ -16,10 +16,10 @@ Function Setup()
     bool main_none = main == None
     bool udng_none = group_devices == None
     if !main_none && !udng_none
-        main.udng_found = true
+        ;main.udng_found = true
         Trace("Setup","main.udng_found set to true")
     else 
-        main.udng_found = false
+        ;main.udng_found = false
         Trace("Setup","main.udng_found set to false | main: " + main_none + " udng: " + udng_none)
     endif 
 EndFunction

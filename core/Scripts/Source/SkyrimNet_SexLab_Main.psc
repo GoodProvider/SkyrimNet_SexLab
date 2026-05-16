@@ -198,7 +198,8 @@ Function Setup()
     ; Decorators
     ; --------------------------------
     SkyrimNet_SexLab_Decorators.RegisterDecorators() 
-    ((self as Quest) as SkyrimNet_SexLab_MCM).Setup(self)
+    ((self as Quest) as SkyrimNet_SexLab_MCM).Setup()
+    ((self as Quest) as SkyrimNet_SexLab_Stages).Setup()
 EndFunction
 
 
@@ -907,6 +908,12 @@ EndFunction
 
 int Function GetNumberOfOrgasms(Actor akActor)
     return StorageUtil.GetIntValue(akActor, actor_num_orgasms_key, 0)
+EndFunction
+
+Function HandleDomSlaveOrgasmed(ACtor akActor, String msg) 
+    int num_orgasms = StorageUtil.GetIntValue(akActor, actor_num_orgasms_key, 0)
+    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms+1)
+    DirectNarration(msg, akActor, None)
 EndFunction
 
 ;----------------------------------------------------

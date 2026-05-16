@@ -1,17 +1,12 @@
 Scriptname SkyrimNet_SexLab_Handler_DOM extends Quest 
 
 bool Property found = False Auto
-Quest Property d_api = None Auto
-Quest Property d_sexlab = None Auto
+SkyrimNet_SexLab_Main Property main Auto
 
 Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Function Setup()
-EndFunction
-
-ReferenceAlias Function GetActor(Actor akActor) global
-    return None 
 EndFunction
 
 ; Increases the 
@@ -21,10 +16,6 @@ EndFunction
 
 Bool Function Target_Menu_Selection(Actor target, Actor player) global
     return false
-EndFunction
-
-ReferenceAlias Function GetDOMSlave(String file, String func, Actor akActor) global
-    return None 
 EndFunction
 
 String Function HandleOrgasmDenied(Actor akActor) global

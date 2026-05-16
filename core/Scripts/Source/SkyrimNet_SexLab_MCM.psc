@@ -59,15 +59,15 @@ Function Trace(String func, String msg, Bool notification=False) global
     endif 
 EndFunction
 
-Function Setup(SkyrimNet_SexLab_Main _main) 
-    main = _main
+Function Setup() 
+    main = (self as Quest) as SkyrimNet_SexLab_Main
+    actions = (self as Quest) as SkyrimNet_SexLab_Actions
 
     if sexlab_ostim_options.length == 0
        sexlab_ostim_options = new String[2]
        sexlab_ostim_options[0] = "SexLab"
        sexlab_ostim_options[1] = "Ostim" 
     endif 
-
 
 
 EndFunction 

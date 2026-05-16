@@ -68,6 +68,12 @@
             "presentation": { "reveal": "always" }
         },
         {
+            "label": "distribute: PEX to OstimNet+UDNG+Core",
+            "type": "shell",
+            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_ostimnet/Scripts handler_udng/Scripts core/Scripts",
+            "presentation": { "reveal": "always" }
+        },
+        {
             "label": "distribute: PEX to OstimNet",
             "type": "shell",
             "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_ostimnet/Scripts core/Scripts",
@@ -87,15 +93,21 @@
         },
         /* --- Copy ESP files --- */
         {
-            "label": "copy: SkyrimNet_SexLab.esp to Core",
+            "label": "copy: SkyrimNet_SexLab.esp and SkyrimNet_SexLab_Actions.esp to Core",
             "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core' -Recurse -Force",
+            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core' -Recurse -Force;Copy-Item -Path './SkyrimNet_SexLab_Actions.esp' -Destination './core' -Recurse -Force",
             "presentation": { "reveal": "always" }
         },
         {
-            "label": "copy: SkyrimNet_SexLab.esp to Core",
+            "label": "copy: SkyrimNet_SexLab_DOM.esp to DOM",
             "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core/.' -Recurse -Force",
+            "command": "Copy-Item -Path './SkyrimNet_SexLab_DOM.esp' -Destination './handler_dom/.' -Recurse -Force",
+            "presentation": { "reveal": "always" }
+        },
+        {
+            "label": "copy: SkyrimNet_SexLab_UDNG.esp to UDNG",
+            "type": "shell",
+            "command": "Copy-Item -Path './SkyrimNet_SexLab_UDNG.esp' -Destination './handler_udng/.' -Recurse -Force",
             "presentation": { "reveal": "always" }
         },
         {
@@ -107,7 +119,7 @@
 
         /* --- PIPELINES --- */
         {
-            "label": "Build: All Handlers",
+            "label": "Build: All",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "prep: Clean Workspace",
@@ -118,8 +130,27 @@
                 "prep: Overlay UDNG",
                 "pyro: Compile",
                 "distribute: PEX to All",
-                "copy: SkyrimNet_SexLab.esp to Core",
-                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet"
+                "copy: SkyrimNet_SexLab.esp and SkyrimNet_SexLab_Actions.esp to Core",
+                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet",
+                "copy: SkyrimNet_SexLab_Handler_DOM.esp to Handler_DOM",
+                "copy: SkyrimNet_SexLab_Handler_UDNG.esp to Handler_UDNG"
+            ],
+            "group": { "kind": "build", "isDefault": false }
+        },
+        {
+            "label": "Build: Ostimnet + UDNG",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "prep: Clean Workspace",
+				"prep: Create Script Folders",
+                "prep: Copy Core",
+                "prep: Overlay OstimNet",
+                "prep: Overlay UDNG",
+                "pyro: Compile",
+                "distribute: PEX to OstimNet+UDNG+Core",
+                "copy: SkyrimNet_SexLab.esp and SkyrimNet_SexLab_Actions.esp to Ostim+UDNG+Core",
+                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet",
+                "copy: SkyrimNet_SexLab_Handler_UDNG.esp to Handler_UDNG"
             ],
             "group": { "kind": "build", "isDefault": false }
         },

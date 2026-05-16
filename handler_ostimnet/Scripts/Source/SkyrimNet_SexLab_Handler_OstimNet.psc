@@ -16,10 +16,10 @@ Function Setup()
     bool main_none = main == None
     bool ostimnet_none = ostimnet_actions == None
     if !main_none && !ostimnet_none
-        main.ostimnet_found = true
+;        main.ostimnet_found = true
         Trace("Setup","main.ostimnet_found set to true")
     else 
-        main.ostimnet_found = false
+;        main.ostimnet_found = false
         Trace("Setup","main.ostimnet_found set to false |- main: " + main_none + " ostimnet_actions: " + ostimnet_none)
     endif 
 EndFunction
