@@ -1,7 +1,7 @@
 customCategory: sexlab_sex
 name: Masturbation_Start
 description: "[style] [type] masturbation"
-questEditorId: SkyrimNet_SexLab_Actions
+questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Masturbation_Start
 defaultPriority: 7

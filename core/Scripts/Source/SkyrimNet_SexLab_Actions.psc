@@ -6,6 +6,8 @@ import SkyrimNet_SexLab_Utilities
 
 Idle Property pa_HugA Auto  ; IDLE:000F4699
 
+Faction OStimActorCountFaction = None 
+
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Actions."+func+"] "+msg
     Debug.Trace(msg) 
@@ -13,6 +15,18 @@ Function Trace(String func, String msg, Bool notification=False) global
         Debug.Notification(msg)
     endif 
 EndFunction
+
+; -------------------------------------------------
+; SetUp
+; -------------------------------------------------
+Function Setup()
+    if MiscUtil.FileExists("Data/Ostim.esp") 
+        OStimActorCountFaction = Game.GetFormFromFile(0xECA, "Ostim.esp") as Faction
+        Trace("Setup","Found Ostim.esp, OStimActorCountFaction set to "+OStimActorCountFaction)
+    else 
+        OStimActorCountFaction = None 
+    endif 
+EndFunction 
 
 ; -------------------------------------------------
 ; Tag 
@@ -49,7 +63,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
         return false 
     endif 
 
-    if main_local.ostimnet_found && SkyrimNet_SexLab_Handler_OstimNet.IsInOStim(akActor)
+    if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" OStim animation")
         return false 
     endif

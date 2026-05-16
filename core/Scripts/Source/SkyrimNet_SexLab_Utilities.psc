@@ -13,6 +13,10 @@ Function Trace(String func, String msg, Bool notification=False) global
         Debug.Notification(msg)
     endif 
 EndFunction
+
+; ------------------------------------------------------------
+; Timestamps
+; ------------------------------------------------------------
 String Function GetTimestamp() global
     int ts = Utility.GetCurrentRealTime() as int
 

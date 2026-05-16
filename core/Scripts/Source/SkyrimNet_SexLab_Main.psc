@@ -123,6 +123,13 @@ int Property counter Auto
 
 Function Setup()
     Trace("SetUp","")
+    ; --------------------------------
+    ; Decorators
+    ; --------------------------------
+    SkyrimNet_SexLab_Decorators.RegisterDecorators() 
+    ((self as Quest) as SkyrimNet_SexLab_Actions).Setup()
+    ((self as Quest) as SkyrimNet_SexLab_MCM).Setup()
+    ((self as Quest) as SkyrimNet_SexLab_Stages).Setup()
 
     ;thread_started = new bool[32]
     thread_kissing_only = new bool[32]
@@ -197,9 +204,11 @@ Function Setup()
     ; --------------------------------
     ; Decorators
     ; --------------------------------
-    SkyrimNet_SexLab_Decorators.RegisterDecorators() 
-    ((self as Quest) as SkyrimNet_SexLab_MCM).Setup()
-    ((self as Quest) as SkyrimNet_SexLab_Stages).Setup()
+    if MiscUtil.FileExists("Data/TT_OStimNet.esp") 
+        ostimnet_found = True 
+        Trace("SetUp","Found TT_OstimNet.esp found")
+    endif 
+
 EndFunction
 
 
@@ -740,26 +749,26 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(actors[i])
-            if orgasm_expected[i] == 1
-                int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
-                if num_orgasms > 0 
-                    if has_penis
-                        someone_ejaculated = True 
-                    endif 
-                else 
-                    narration += SkyrimNet_SexLab_Handler_DOM.HandleOrgasmDenied(actors[i])
-                endif 
-            endif 
-            Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
-        else
+        ;if dom_found; && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(actors[i])
+            ;if orgasm_expected[i] == 1
+                ;int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
+                ;if num_orgasms > 0 
+                    ;if has_penis
+                        ;someone_ejaculated = True 
+                    ;endif 
+                ;else 
+                    ;narration += SkyrimNet_SexLab_Handler_DOM.HandleOrgasmDenied(actors[i])
+                ;endif 
+            ;endif 
+            ;Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
+        ;else
             if orgasm_expected[i] == 1
                 narration += name+" is orgasming. "
                 if has_penis
                     someone_ejaculated = True
                 endif
             endif 
-        endif 
+        ;endif 
         Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | narration: "+narration)
         i -= 1
     endwhile
@@ -791,9 +800,9 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    if dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(akActor)
-        return
-    endif 
+    ;if dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(akActor)
+    ;    return
+    ;endif 
 
     sslThreadController thread = GetThread(akActor) 
     if GetKissingOnly(thread.tid) 

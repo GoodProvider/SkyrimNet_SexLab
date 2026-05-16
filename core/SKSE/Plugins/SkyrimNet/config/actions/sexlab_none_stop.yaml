@@ -1,6 +1,6 @@
 name: Sex_Stop
 description: "Stop Consensual sex."
-questEditorId: SkyrimNet_SexLab_Actions
+questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Sex_Stop
 defaultPriority: 7

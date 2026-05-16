@@ -412,10 +412,10 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    if main.dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(target) 
-        SkyrimNet_SexLab_Handler_DOM.Target_Menu_Selection(target,player)
-        return 
-    endif 
+    ;if main.dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(target) 
+    ;    SkyrimNet_SexLab_Handler_DOM.Target_Menu_Selection(target,player)
+    ;    return 
+    ;endif 
 
     bool target_is_undressed = false 
     target_is_undressed = main.HasStrippedItems(target)
@@ -469,7 +469,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         if sexlab_ostim_player == 0 || !main.ostimnet_found
             actions.Masturbation_Start(target, "normal", "")
         else 
-            SkyrimNet_SexLab_Handler_OstimNet.StartSexActionExecute(target, None, None, None, None, "", "")
+            EventSend_OStimNet("SexStart", target, None, "")
         endif 
     elseif button == sexlab_ostim 
         String choice = ""
@@ -495,7 +495,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "kissing"
             bs[2] = "cuddling"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            SkyrimNet_SexLab_Handler_OstimNet.StartAffectionSceneExecute(player, target, tag)
+            EventSend_OstimNet("AffectionStart", player, target, tag)
         endif 
     elseif button == sex
 
@@ -507,7 +507,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[1] = "blowjob"
             bs[2] = "analsex"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            SkyrimNet_SexLab_Handler_OstimNet.StartSexActionExecute(player, target, None, None, None, tag, "")
+            EventSend_OstimNet("SexStart", player, target, tag)
         endif 
 
     elseif button == rapes_player
@@ -547,8 +547,22 @@ Function Target_Menu_Selection(Actor target, Actor player)
         actions.Change_Outfit(player, target, style, clothing_string+"es", narration)
 
     elseif button == bondage 
-        SkyrimNet_SexLab_Handler_UDNG.UpdateDevices(target)
+        EventSend_UDNG("UDNGMenu", target)
     endif 
+EndFunction
+
+Function EventSend_OstimNet(String type, Actor speaker, Actor target, String tag)
+    int handle = ModEvent.Create("SkyrimNet_SexLab_OStimNet_"+type)
+    ModEvent.PushForm(handle, speaker)
+    ModEvent.PushForm(handle, target)
+    ModEvent.PushString(handle, tag)
+    ModEvent.Send(handle)
+EndFunction
+
+Function EventSend_UDNG(String type, Actor target)
+    int handle = ModEvent.Create("SkyrimNet_SexLab_UDNG_"+type)
+    ModEvent.PushForm(handle, target)
+    ModEvent.Send(handle)
 EndFunction
 
 Function MutliTarget_Menu_Selection(Actor player)
