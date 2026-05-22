@@ -1,198 +1,87 @@
 {
     "version": "2.0.0",
     "tasks": [
-        /* --- PREP & CLEANUP TASKS --- */
+        /* --- Compilers --- */
         {
-            "label": "prep: Clean Workspace",
+            "label": "headers: build",
             "type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"if (Test-Path 'Scripts') { Remove-Item -Path 'Scripts' -Recurse -Force -ErrorAction SilentlyContinue }; if (Test-Path 'SKSE') { Remove-Item -Path 'SKSE' -Recurse -Force -ErrorAction SilentlyContinue }; exit 0"
-			],
-            "presentation": { "reveal": "silent" }
+            "command": "uv",
+            "args": [
+                "run",
+                "${workspaceFolder}/python_scripts/headers_build.py",
+                "-s",
+                "${workspaceFolder}/Scripts/Source",
+                "-p",
+                "${workspaceFolder}/skyrimse.ppj",
+                "-o",
+                "${workspaceFolder}/Headers"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
         },
         {
-            "label": "prep: Copy Core",
+            "label": "compile: papyrus",
             "type": "shell",
-            "command": "Copy-Item -Path './core/Scripts' -Destination '.' -Recurse -Force; Copy-Item -Path './core/SKSE' -Destination './' -Recurse -Force",
-            "presentation": { "reveal": "silent" }
+            "command": "c:/Skyrim/tools/papyrus-compiler/papyrus.exe",
+            "args": [
+                "compile",
+                "-nocache",
+                "-i", "${workspaceFolder}/Scripts/Source",
+                "-o", "${workspaceFolder}/Scripts",
+                "-h", "${workspaceFolder}/Headers",
+                "-h",
+                "${workspaceFolder}/Headers",
+                "-h",
+                "C:/Skyrim/dev/mods/SKSE64/Scripts/Source"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": "$msCompile"
         },
         {
-            "label": "prep: Overlay OstimNet",
-            "type": "shell",
-            "command": "Copy-Item -Path './handler_ostimnet/Scripts/*' -Destination './Scripts/.' -Recurse -Force",
-            "presentation": { "reveal": "silent" }
-        },
-        {
-            "label": "prep: Overlay DOM",
-            "type": "shell",
-            "command": "Copy-Item -Path './handler_dom/Scripts/*' -Destination './Scripts/.' -Recurse -Force",
-            "presentation": { "reveal": "silent" }
-        },
-        {
-            "label": "prep: Overlay UDNG",
-            "type": "shell",
-            "command": "Copy-Item -Path './handler_udng/Scripts/*' -Destination './Scripts/.' -Recurse -Force",
-            "presentation": { "reveal": "silent" }
-        },
-
-        /* --- BUILD & DISTRIBUTE --- */
-		{
-			"label": "prep: Create Script Folders",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"New-Item -Path 'Scripts/Source' -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null"
-			],
-			"presentation": {
-				"reveal": "silent",
-				"close": true
-			},
-			"problemMatcher": []
-		}
-        {
-            "label": "pyro: Compile",
+            "label": "compile: pyro",
             "type": "pyro",
             "projectFile": "skyrimse.ppj",
             "gamePath": "C:\\Skyrim\\dev\\skyrim",
             "problemMatcher": ["$PapyrusCompiler"]
         },
         {
-            "label": "distribute: PEX to All",
+            "label": "compile: skyrim",
             "type": "shell",
-            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_ostimnet/Scripts handler_dom/Scripts handler_udng/Scripts core/Scripts",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "distribute: PEX to OstimNet+UDNG+Core",
-            "type": "shell",
-            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_ostimnet/Scripts handler_udng/Scripts core/Scripts",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "distribute: PEX to OstimNet",
-            "type": "shell",
-            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_ostimnet/Scripts core/Scripts",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "distribute: PEX to UDNG",
-            "type": "shell",
-            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination handler_udng/Scripts core/Scripts",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "distribute: PEX to Core",
-            "type": "shell",
-            "command": "uv run python_scripts/copy-pex.py --source Scripts --destination core/Scripts",
-            "presentation": { "reveal": "always" }
-        },
-        /* --- Copy ESP files --- */
-        {
-            "label": "copy: SkyrimNet_SexLab.esp and SkyrimNet_SexLab_Actions.esp to Core",
-            "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab.esp' -Destination './core' -Recurse -Force;Copy-Item -Path './SkyrimNet_SexLab_Actions.esp' -Destination './core' -Recurse -Force",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "copy: SkyrimNet_SexLab_DOM.esp to DOM",
-            "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab_DOM.esp' -Destination './handler_dom/.' -Recurse -Force",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "copy: SkyrimNet_SexLab_UDNG.esp to UDNG",
-            "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab_UDNG.esp' -Destination './handler_udng/.' -Recurse -Force",
-            "presentation": { "reveal": "always" }
-        },
-        {
-            "label": "copy: SkyrimNet_SexLab_Handler_OstimeNet.esp to Handler_OstimNet",
-            "type": "shell",
-            "command": "Copy-Item -Path './SkyrimNet_SexLab_Handler_OstimNet.esp' -Destination './handler_ostimnet/.' -Recurse -Force",
-            "presentation": { "reveal": "always" }
-        },
-
-        /* --- PIPELINES --- */
-        {
-            "label": "Build: Core + OstimNet + UDNG + DOM",
-            "dependsOrder": "sequence",
-            "dependsOn": [
-                "prep: Clean Workspace",
-				"prep: Create Script Folders",
-                "prep: Copy Core",
-                "prep: Overlay OstimNet",
-                "prep: Overlay DOM",
-                "prep: Overlay UDNG",
-                "pyro: Compile",
-                "distribute: PEX to All",
-                "copy: SkyrimNet_SexLab.esp and SkyrimNet_SexLab_Actions.esp to Core",
-                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet",
-                "copy: SkyrimNet_SexLab_Handler_DOM.esp to Handler_DOM",
-                "copy: SkyrimNet_SexLab_Handler_UDNG.esp to Handler_UDNG"
+            "command": "C:\\Skyrim\\dev\\skyrim\\Papyrus Compiler\\PapyrusCompiler.exe",
+            "args": [
+                "${workspaceFolder}/Scripts/Source",
+                "-all",
+                "-output=${workspaceFolder}/Scripts",
+                "-import='${workspaceFolder}/Headers;${workspaceFolder}/Scripts/Source'"
             ],
-            "group": { "kind": "build", "isDefault": false }
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": []
         },
-        {
-            "label": "Build: Core + Ostimnet + UDNG",
-            "dependsOrder": "sequence",
-            "dependsOn": [
-                "prep: Clean Workspace",
-				"prep: Create Script Folders",
-                "prep: Copy Core",
-                "prep: Overlay OstimNet",
-                "prep: Overlay UDNG",
-                "pyro: Compile",
-                "distribute: PEX to OstimNet+UDNG+Core",
-                "copy: SkyrimNet_SexLab.esp and SkyrimNet_SexLab_Actions.esp to Ostim+UDNG+Core",
-                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet",
-                "copy: SkyrimNet_SexLab_Handler_UDNG.esp to Handler_UDNG"
-            ],
-            "group": { "kind": "build", "isDefault": false }
-        },
-        {
-            "label": "Build: Core + OstimNet",
-            "dependsOrder": "sequence",
-            "dependsOn": [
-                "prep: Clean Workspace",
-				"prep: Create Script Folders",
-                "prep: Copy Core",
-                "prep: Overlay OstimNet",
-                "pyro: Compile",
-                "distribute: PEX to OstimNet",
-                "copy: SkyrimNet_SexLab.esp to Core",
-                "copy: SkyrimNet_SexLab_Handler_OstimNet.esp to Handler_OstimNet"
-            ]
-        },
-        {
-            "label": "Build: Core+UDNG",
-            "dependsOrder": "sequence",
-            "dependsOn": [
-                "prep: Clean Workspace",
-				"prep: Create Script Folders",
-                "prep: Copy Core",
-                "prep: Overlay UDNG",
-                "pyro: Compile",
-                "distribute: PEX to UDNG",
-                "copy: SkyrimNet_SexLab.esp to Core",
-                "copy: SkyrimNet_SexLab_Handler_UDNG.esp to Handler_UDNG"
-            ]
-        },
-        {
-            "label": "Build: Core",
-            "dependsOrder": "sequence",
-            "dependsOn": [
-                "prep: Clean Workspace",
-				"prep: Create Script Folders",
-                "prep: Copy Core",
-                "pyro: Compile",
-                "distribute: PEX to Core",
-                "copy: SkyrimNet_SexLab.esp to Core"
-            ]
-        }
     ]
 }

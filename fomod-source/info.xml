@@ -2,7 +2,9 @@
   <!-- this file is generated from $source -->
   <Name>$name</Name>
   <Version>$version</Version>
-  <Id></Id>
+  <Description>Provider SexLab support for SkyrimNet</Description> 
   <Author>Good Provider</Author>
-  <Description/>
+  <Groups>
+        <element>Optional</element>
+  </Groups>
 </fomod>

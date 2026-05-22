@@ -1,7 +1,7 @@
 VERSION=0.29.0
 NAM0=SkyrimNet_SexLab
 
-RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
+RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.7z
 
 ANIM_SRC= C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet_SexLab\animations\_local_
 ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
@@ -19,14 +19,18 @@ update:
 dd: 
 	cd headers
 	git clone https://github.com/IHateMyKite/PapyrusSourcesDD
+	python3 ./python_scripts/FOMOD-info.py -v ${VERSION} -n '${NAME}' -o FOMOD/info.xml FOMOD-source/info.xml
 
 release: 
-	python3 ./python_scripts/fomod-info.py -v ${VERSION} -n '${NAME}' -o fomod/info.xml fomod-source/info.xml
 	python3 ./python_scripts/info.py -v ${VERSION} -n '${NAME}' -o SKSE/Plugins/SkyrimNet_SexLab/info.json
-	if exist '${RELEASE_file}' rm /Q /S '${RELEASE_FILE}'
-	7z -r a fomod \
-	    core \
-		handler_ostimnet 
+	if exist '${RELEASE_FILE}' rm /Q /S '${RELEASE_FILE}'
+	if exist "$(subst /,\\,core)" rmdir /s /q "$(subst /,\\,core)"	
+	mkdir core 
+	powershell -NoProfile -Command "Copy-Item -Path 'Scripts','SKSE','SkyrimNet_SexLab.esp' -Destination 'core/.' -Recurse -Force"
+	7z -bb1 a '${RELEASE_FILE}' -aoa FOMOD \
+		core \
+		images \
+		handler_udng 
 
 group_tags:
 	python3 ./python_scripts/group-tags.py animations > SkyrimNet_SexLab/group_tags.json

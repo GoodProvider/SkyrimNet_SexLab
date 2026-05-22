@@ -1,0 +1,34 @@
+customCategory: sexlab_sex
+name: Sexual_Activities
+description: 'PARAMS: {"type":"oral|vaginal|anal|masturbation|other"} - [type] sexual activities'
+enabled: true
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_global_value
+        arguments:
+          - SkyrimNet_SexLab_ostim_player
+        comparisonOperator: ==
+        expectedValue: 0
+      - decoratorName: is_in_faction
+        arguments:
+          - currentActor
+          - SexLabAnimatingFaction
+        comparisonOperator: ==
+        expectedValue: false
+      - decoratorName: is_in_faction
+        arguments:
+          - currentActor
+          - OStimActorCountFaction
+        comparisonOperator: ==
+        expectedValue: false
+      - decoratorName: is_in_combat
+        arguments:
+          - currentActor
+        comparisonOperator: ==
+        expectedValue: false
+      - decoratorName: decnpc
+        arguments:
+          - currentActor
+        comparisonOperator: ==
+        expectedValue: false
+        resultPath: isChild

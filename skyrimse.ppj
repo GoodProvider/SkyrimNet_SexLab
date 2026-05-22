@@ -13,14 +13,15 @@
         <!-- The folder where you store all of your mods -->
         <Variable Name="ModsFolder" Value="C:\Skyrim\dev\mods" />
     </Variables>
+
     <Imports>
         <Import>Scripts\Source</Import>
         <Import>Scripts\Source</Import>
-        <Import>.\Headers</Import>
-        <Import>.\Headers\OstimNet</Import>
-        <Import>.\Headers\Ostim</Import>
-        <Import>.\Headers\SkyrimNet_DOM</Import>
-            <Import>.\Headers\PAH Diary of Mine</Import>
+        <Import>.\Headers_Source</Import>
+        <Import>.\Headers_Source\OstimNet</Import>
+        <Import>.\Headers_Source\Ostim</Import>
+        <Import>.\Headers_Source\SkyrimNet_DOM</Import>
+            <Import>.\Headers_Source\PAH Diary of Mine</Import>
 
         <Import>@ModsFolder\SKSE64\Scripts\Source</Import>
         <Import>@ModsFolder\SkyrimNet\Source\Scripts</Import>
@@ -45,7 +46,9 @@
 
         <Import>@ModsFolder\SexLab Separate Orgasm\Scripts\Source</Import>
         <Import>@ModsFolder\SexLabFrameworkAE_v166b\scripts\Source</Import>
+
         <!--
+        <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
         <Import>.\Headers\SLO Aroused NG</Import>
         <Import>.\Headers\OStim</Import>
         <Import>.\Headers\Devious Devices</Import>
