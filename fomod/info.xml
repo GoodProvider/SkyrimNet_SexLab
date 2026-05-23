@@ -1,8 +1,10 @@
-<!-- Created with FOMOD Creation Kit by Cutleast: https://www.nexusmods.com/site/mods/1366 -->
-<fomod xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Cutleast/FOMOD-Creation-Kit/master/res/schemas/info.xsd">
-	<Name>SkyrimNet SexLab</Name>
-	<Author>Good Provider</Author>
-	<Version>0.29.0</Version>
-	<Website>https://github.com/GoodProvider/SkyrimNet_SexLab</Website>
-	<Description>SkyrimNet bridge to SexLab</Description>
+<fomod>
+  <!-- this file is generated from FOMOD_source/info.xml -->
+  <Name>SkyrimNet SexLab</Name>
+  <Version>0.29.1</Version>
+  <Description>Provider SexLab support for SkyrimNet</Description> 
+  <Author>Good Provider</Author>
+  <Groups>
+        <element>Optional</element>
+  </Groups>
 </fomod>

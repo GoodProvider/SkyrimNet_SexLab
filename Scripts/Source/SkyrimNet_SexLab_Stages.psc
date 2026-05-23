@@ -290,13 +290,16 @@ EndFunction
 ; ------------------------------------
 string Function GetPlayerInput() global
     Trace("GetPlayerInput","GetPlayerInput called")
-    UIExtensions.OpenMenu("UITextEntryMenu")
     ; Don't do this if we're in VR
     if SkyrimNetApi.IsRunningVR()
         Trace("SkyrimNetInternal","GetPlayerInput: Skipping input in VR")
         Debug.Notification("Text input is disabled in VR")
         return ""
     endif
+
+    ; ---------------------------------------------
+
+    UIExtensions.OpenMenu("UITextEntryMenu")
     string messageText = UIExtensions.GetMenuResultString("UITextEntryMenu")
     Trace("GetPlayerInput","GetPlayerInput returned: " + messageText)
     return messageText
