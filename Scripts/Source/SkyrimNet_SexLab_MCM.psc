@@ -555,7 +555,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         ;--------------------------------------------------
         ; Now do the action 
         Trace("Target_Menu_Selection","style:"+style+" clothing_string:"+clothing_string)
-        actions.Change_Outfit(player, target, style, clothing_string+"es", narration)
+        actions.Change_Outfit(player, target, style, clothing_string, narration)
 
     elseif button == bondage 
         EventSend_UDNG("MenuOpen", target)
@@ -774,10 +774,10 @@ Function MutliTarget_Menu_Selection(Actor player)
         if type == "rape>"
             Actor[] victims = new Actor[1]
             victims[0] = group[0]
-            actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
+            actions.Sex_Start_Helper_Short(group[1], group, victims)
         else 
             Actor[] victims = PapyrusUtil.ActorArray(0) 
-            actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
+            actions.Sex_Start_Helper_Short(group[1], group, victims)
         endif   
     endif 
 EndFunction

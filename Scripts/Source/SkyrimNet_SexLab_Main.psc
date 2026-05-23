@@ -661,12 +661,12 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
         if actors.length > 2 && actors[0] != actors[1]
             target = actors[1]
         endif 
-        int[] orgasm_expected = stages.GetOrgasmExpected(thread)
+        bool[] orgasm_expected = stages.GetOrgasmExpected(thread)
         int j = actors.length - 1 
         while 0 <= j 
             int num_orgasms = StorageUtil.GetIntValue(actors[j],actor_num_orgasms_key, 0)
             if num_orgasms < 1
-                if orgasm_expected.length > j && orgasm_expected[j] == 1
+                if orgasm_expected.length > j && orgasm_expected[j]
                     after += actors[j].GetDisplayName()+" failed to orgasm. "
                     target = actors[j]
                     orgasm_denied = true
@@ -792,7 +792,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
     ;Quest q = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as Quest
     ;SkyrimNet_SexLab_main main = q as SkyrimNet_SexLab_Main
     ;SkyrimNet_SexLab_Stages stages_lib = q as SkyrimNet_SexLab_Stages
-    int[] orgasm_expected = stages.GetOrgasmExpected(thread)
+    bool[] orgasm_expected = stages.GetOrgasmExpected(thread)
     bool someone_ejaculated = False 
     int i = actors.length - 1
     String narration = "" 
@@ -803,7 +803,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
         ;if dom_found; && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(actors[i])
-            ;if orgasm_expected[i] == 1
+            ;if orgasm_expected[i]
                 ;int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 ;if num_orgasms > 0 
                     ;if has_penis
@@ -815,7 +815,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
             ;endif 
             ;Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
         ;else
-            if orgasm_expected[i] == 1
+            if orgasm_expected[i]
                 narration += name+" is orgasming. "
                 if has_penis
                     someone_ejaculated = True
@@ -1121,11 +1121,11 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
     String rejection = ""
 
     if victims.length == 0
-        int[] actors_filter = Utility.CreateIntArray(actors.length, 1)
+        bool[] actors_filter = Utility.CreateBoolArray(actors.length, True)
         int i = actors.length - 1 
         while 0 <= i
             if actors[i] == player
-                actors_filter[i] = 0
+                actors_filter[i] = False
             endif 
             i -= 1
         endwhile
@@ -1140,27 +1140,27 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
             rejection = player_name+" refuses to have sex with "+names+"."
         endif 
     else
-        int[] victim_filter = Utility.CreateIntArray(actors.length, 1)
+        bool[] victim_filter = Utility.CreateBoolArray(actors.length, True)
         int i = victims.length - 1 
         Bool player_is_victim = False
         while 0 <= i
             if victims[i] == player
-                victim_filter[i] = 0
+                victim_filter[i] = False
                 player_is_victim = True 
             endif 
             i -= 1
         endwhile 
 
-        int[] assailant_filter = Utility.CreateIntArray(actors.length, 1)
+        bool[] assailant_filter = Utility.CreateBoolArray(actors.length, True)
         i = actors.length - 1 
         while 0 <= i
             if actors[i] == player
-                assailant_filter[i] = 0
+                assailant_filter[i] = False
             else    
                 int j = victims.length - 1 
-                while 0 <= j && assailant_filter[i] == 1
+                while 0 <= j && assailant_filter[i]
                     if actors[i] == victims[j]
-                        assailant_filter[i] = 0
+                        assailant_filter[i] = False
                     endif 
                     j -= 1
                 endwhile

@@ -93,14 +93,14 @@ EndFunction
 ; ------------------------------------------------------------
 ; Combines Actors or Strings into natural language list 
 ; will make a natural sentence with comma and 'and' 
-; filter is an int[] array 0 - false and 1 - true
+; filter is a bool[] array; true means included
 ; ------------------------------------------------------------
 String Function JoinActors(ACtor[] actors, String noun = "") global 
-    int[] filter = Utility.CreateIntArray(actors.length, 1)
+    bool[] filter = Utility.CreateBoolArray(actors.length, True)
     return JoinActorsFiltered(actors,filter,noun,True)
 EndFunction 
 
-String Function JoinActorsFiltered(Actor[] actors, int[] filter,  String Noun = "", Bool ignore_filter=False) global 
+String Function JoinActorsFiltered(Actor[] actors, bool[] filter,  String Noun = "", Bool ignore_filter=False) global 
     String[] strings = Utility.CreateStringArray(actors.length) 
     int i = actors.length - 1 
     while 0 <= i 
@@ -120,7 +120,7 @@ String Function JoinActorsFiltered(Actor[] actors, int[] filter,  String Noun = 
 EndFunction 
 
 String Function JoinStrings(String[] strings, bool add_is_are=False) global 
-    int[] filter = Utility.CreateIntArray(strings.length, 1)
+    bool[] filter = Utility.CreateBoolArray(strings.length, True)
 
     int total = strings.length 
     int i = 0
@@ -143,12 +143,12 @@ String Function JoinStrings(String[] strings, bool add_is_are=False) global
     return joined
 EndFunction 
 
-String Function JoinStringsFiltered(String[] strings, int[] filter, Bool add_is_are = false) global 
+String Function JoinStringsFiltered(String[] strings, bool[] filter, Bool add_is_are = false) global 
     int total = 0
     int i = 0
     int count = strings.length
     while i < count 
-        if filter[i] == 1
+        if filter[i]
             total += 1 
         endif 
         i += 1
@@ -158,7 +158,7 @@ String Function JoinStringsFiltered(String[] strings, int[] filter, Bool add_is_
     int j = 0
     string joined = "" 
     while i < count
-        if filter[i] == 1
+        if filter[i]
             if j > 0
                 if total > 2
                     joined += ", "
@@ -190,11 +190,11 @@ String Function JoinIsAre(String joined, int total, bool add_is_are) global
     return joined 
 EndFunction 
 
-String Function JoinStringToArray(String[] strings, int[] filter) global 
+String Function JoinStringToArray(String[] strings, bool[] filter) global 
     String array = "" 
     int i = strings.length - 1 
     while 0 <= i 
-        if filter[i] == 1
+        if filter[i]
             if array != "" 
                 array += ", "
             endif 

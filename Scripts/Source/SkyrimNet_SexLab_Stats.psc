@@ -76,7 +76,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
     ; Happing in this animation to this actor 
     bool[] matched = Utility.CreateBoolArray(stats_size)
     ; first time it has happend
-    int[] first_filter = Utility.CreateIntArray(stats_size) 
+    bool[] first_filter = Utility.CreateBoolArray(stats_size, False) 
 
     bool vaginal_matched = anim.HasTag("vaginal")
     bool oral_matched = anim.HasTag("oral") || anim.HasTag("cunnilingus") || anim.HasTag("blowjob") || anim.HasTag("69")
@@ -91,7 +91,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
         int type = types.length - 1 
         while 0 <= type 
             matched[type] = False 
-            first_filter[type] = 0
+            first_filter[type] = False
             type -= 1 
         endwhile 
 
@@ -189,9 +189,9 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
                         endif 
                     endif 
                     at_least_one = True 
-                    first_filter[type] = 1
+                    first_filter[type] = True
                 else 
-                    first_filter[type] = 0 
+                    first_filter[type] = False 
                 endif 
             endif 
             type -= 1 
