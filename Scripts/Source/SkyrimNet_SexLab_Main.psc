@@ -61,9 +61,11 @@ bool[] thread_started
 
 bool[] thread_kissing_only 
 bool Function GetKissingOnly(int id) 
+    EnsureThreadArraySize(id)
     return thread_kissing_only[id]
 EndFunction 
 Function SetKissingOnly(int id, bool value ) 
+    EnsureThreadArraySize(id)
     thread_kissing_only[id] = value 
 EndFunction 
 
@@ -325,10 +327,12 @@ EndFunction
 
 ;----------------------------------------------------------------------------------------------------
 Function SetThreadStyle(int thread_id, int style) 
+    EnsureThreadArraySize(thread_id)
     thread_style[thread_id] = style 
 EndFunction
 
 Int Function GetThreadStyle(int thread_id)
+    EnsureThreadArraySize(thread_id)
     return thread_style[thread_id]
 EndFunction
 
@@ -345,6 +349,39 @@ String Function GetThreadStyleString(int thread_id)
     endif 
     return "normally"
 EndFunction
+
+;----------------------------------------------------------------------------------------------------
+; Ensures the thread arrays are large enough 
+;----------------------------------------------------------------------------------------------------
+
+Function EnsureThreadArraySize(int tid)
+    ; Check if index is within current bounds
+    if thread_style.length > tid
+        return
+    endif
+
+    ; Create new size (adding a buffer, e.g., 10, to prevent constant resizing)
+    int newSize = tid + 10
+    
+    int[] new_style = Utility.CreateIntArray(newSize, 1) ; 1 is STYLE_NORMALLY [cite: 9]
+    bool[] new_started = Utility.CreateBoolArray(newSize, false)
+    bool[] new_kissing = Utility.CreateBoolArray(newSize, false)
+    
+    ; Copy existing data
+    int i = 0
+    while i < thread_style.length
+        new_style[i] = thread_style[i]
+        new_started[i] = thread_started[i]
+        new_kissing[i] = thread_kissing_only[i]
+        i += 1
+    endwhile
+    
+    ; Update references
+    thread_style = new_style
+    thread_started = new_started
+    thread_kissing_only = new_kissing
+EndFunction
+
 
 ;----------------------------------------------------------------------------------------------------
 bool Function Tag_SexAnimation(Actor akActor) 
@@ -419,6 +456,8 @@ Function RegisterSexlabEvents()
 EndFunction 
 
 event AnimationStart(int ThreadID, bool HasPlayer)
+    EnsureThreadArraySize(ThreadID)
+
     Trace("AnimationStart","ThreadID:"+ThreadID+" HasPlayer:"+HasPlayer)
     if SexLab == None
         return  
@@ -485,6 +524,7 @@ endEvent
 
 
 Event StageStart(int ThreadID, bool HasPlayer)
+    EnsureThreadArraySize(ThreadID)
     if SexLab == None
         return  
     endif
@@ -565,6 +605,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
 EndEvent 
 
 Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder) 
+    EnsureThreadArraySize(ThreadID)
     ; String desc = stages.GetStageDescription(SexLab.GetController(ThreadID))
     ; if desc != ""
         ; Actor[] actors = SexLab.GetController(ThreadID).Positions

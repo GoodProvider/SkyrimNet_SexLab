@@ -22,7 +22,7 @@ parameterMapping:
     description: oral|vaginal|anal|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjob
   - type: dynamic
     name: victim
-    description: (Target or Speaker)
+    description: Object Actor (Target or Speaker)
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value

@@ -11,6 +11,18 @@ Adds SkyrimNet support to SexLab.
 - My NPCs keep having too much sex! 
     - **Change [arousal prompts](https://github.com/GoodProvider/SkyrimNet_SexLab/blob/main/SKSE/Plugins/SkyrimNet/prompts/submodules/character_bio/0005_sexlab_variables.prompt#L12) to make your actors less horny**
     - **Check your social world settings to match the kind of sex you want** 
+- I am getting Memory errors when actions triggers!
+    - **SkyrimNet isn't seeing SkyrimNet_SexLab's Actions' functions.**:
+        - Make sure the SkyrimNet_SexLab.esp is the last plugin.
+        - When the game starts, use your hot key to open SkyrimNet's webUI
+            - Select '_tools" on the left column
+            - Select 'Game Data Explorer'
+            - In the search field type '_sexlab'
+            - Select SkyrimNet_SexLab's Quests
+            - Select 'View Scripts'
+            - Click the 'Refresh' Button
+            - Select 'Actions'
+                - If it has more then 0 functions you are good to go.
 
 # Actions 
 - NPC will be able to start sex

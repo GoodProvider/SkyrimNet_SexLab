@@ -85,6 +85,14 @@ sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, str
     return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
 EndFunction
 
+sslThreadModel Function Rape_Start_Target(Actor Speaker, Actor Target, string style, String direction, string tag)
+    return Rape_start(Speaker, Target, style, direction, tag, Target)
+EndFunction
+
+sslThreadModel Function Rape_Start_by_Target(Actor Speaker, Actor Target, string style, String direction, string tag)
+    return Rape_start(Speaker, Target, style, direction, tag, Speaker)
+EndFunction
+
 sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, String direction, string tag, Actor victim)
     Trace("Rape_Start",Speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style+" type: "+tag+" victim: "+victim.GetDisplayName())
     Actor[] actors = new Actor[2]

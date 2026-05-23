@@ -3,7 +3,7 @@ name: Sexual_Assault
 description: "[style] [type] sexual assalt on [speaker]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
-executionFunctionName: Rape_Start
+executionFunctionName: Rape_Start_by_Target
 defaultPriority: 7
 parameterMapping:
   - type: speaker
@@ -21,9 +21,6 @@ parameterMapping:
   - type: dynamic
     name: type
     description: oral|vaginal|anal|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjob
-  - type: dynamic
-    name: victim
-    description: Speaker
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value
