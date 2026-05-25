@@ -7,8 +7,8 @@ Adds SkyrimNet support to SexLab.
    - **People normally don't want to have sex where others can see them**: 
         - Use whipser mode to reduce the number of people watching 
             - SkyrimNet allows people to see/hear through walls/floors
-####    - **Check your social world settings to match the kind of sex you want** 
- My NPCs keep having too much sex! 
+   - **Check your social world settings to match the kind of sex you want** 
+#### My NPCs keep having too much sex! 
     - **Change [arousal prompts](https://github.com/GoodProvider/SkyrimNet_SexLab/blob/main/SKSE/Plugins/SkyrimNet/prompts/submodules/character_bio/0005_sexlab_variables.prompt#L12) to make your actors less horny**
     - **Check your social world settings to match the kind of sex you want** 
 #### I am getting Memory errors when actions triggers!
