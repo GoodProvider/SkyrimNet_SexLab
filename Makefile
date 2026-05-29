@@ -1,7 +1,7 @@
-VERSION=0.29.1
+VERSION=0.29.2
 NAME=SkyrimNet SexLab
 
-RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.7z
+RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.zip
 
 ANIM_SRC= C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet_SexLab\animations\_local_
 ANIM_DST= SKSE\Plugins\SkyrimNet_SexLab\animations\GoodProvider
