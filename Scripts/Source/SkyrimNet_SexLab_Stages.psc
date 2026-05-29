@@ -244,14 +244,14 @@ Function EditDescriptions(sslThreadController thread)
             msg += "["+source_stage+"] "+desc
         endif 
         msg += ""+newline+"style:"+main.Thread_Narration(thread,"are") 
-        bool[] orgasm_filter = GetOrgasmExpected(thread)
+        int[] orgasm_filter = GetOrgasmExpected(thread)
         if orgasm_filter.length == actors.length 
             int i = orgasm_filter.length - 1
             while 0 <= i 
-                if orgasm_filter[i]
-                    orgasm_filter[i] = false
+                if orgasm_filter[i] == 1
+                    orgasm_filter[i] = 0
                 else
-                    orgasm_filter[i] = true
+                    orgasm_filter[i] = 1
                 endif 
                 i -= 1
             endwhile
@@ -333,8 +333,7 @@ Function EditorDescription(SkyrimNet_SexLab_Main main, sslThreadController threa
 
             if button == accept 
                 StartThreadTracking(thread.tid)
-                bool[] orgasm_expected = GetOrgasmExpected(thread)
-                UpdateAnimInfo(main, thread, "stage", version, orgasm_expected)
+                UpdateAnimInfo(main, thread, "stage", version, new int[1] )
             elseif button == rewrite
                 EditorDescription(main, thread)
             endif 
@@ -380,13 +379,13 @@ EndFunction
 ; ------------------------------------
 ; Orgasm Expected Functions
 ; ------------------------------------
-bool[] Function GetOrgasmExpected(sslThreadController thread) 
+int[] Function GetOrgasmExpected(sslThreadController thread) 
     Trace("GetOrgasmExpected","thread: "+thread.tid+" "+thread.animation.name)
     String fname = GetFilename(thread)
     Actor[] actors = thread.Positions
     int anim_info = GetAnim_Info(thread)
     if anim_info == 0
-        return Utility.CreateBoolArray(actors.length, false)
+        return Utility.CreateIntArray(actors.length, 0)
     endif 
     int id = 0 
     if JMap.hasKey(anim_info, "orgasm_expected")
@@ -398,22 +397,17 @@ bool[] Function GetOrgasmExpected(sslThreadController thread)
         count = Jarray.count(id)
     endif 
     if count == actors.length
-        bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, false)
-        int i = 0
-        while i < count
-            orgasm_expected[i] = JArray.getInt(id, i) == 1
-            i += 1
-        endwhile
+        int[] orgasm_expected = JArray.asIntArray(id)
         Trace("GetOrgasmExpected","values found in file orgasm_expected: "+orgasm_expected)
-        return orgasm_expected
+        return JArray.asIntArray(id)
     endif 
 
     if actors.length > 2
         Trace("GetOrgasmExpected","more than 2 actors, all orgasm expected")
-        return Utility.CreateBoolArray(actors.length, true)
+        return Utility.CreateIntArray(actors.length, 1)
     endif
 
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, true)
+    int[] orgasm_expected = Utility.CreateIntArray(actors.length, 1)
     sslBaseAnimation Animation = thread.animation
     Trace("GetOrgasmExpected","tags:"+animation.GetRawTags())
 
@@ -430,40 +424,40 @@ bool[] Function GetOrgasmExpected(sslThreadController thread)
 
         String reason = ""
         if devices_found && actors[i].WornHasKeyword(zad_DeviousBelt)
-            orgasm_expected[i] = false
+            orgasm_expected[i] = 0
             reason = "has DD belt"
         elseif Animation.HasTag("Estrus")
-            orgasm_expected[i] = true
+            orgasm_expected[i] = 1
             reason = "animation has tag estrus"
         elseif Animation.HasTag("69") || Animation.HasTag("Masturbation")
-            orgasm_expected[i] = true
+            orgasm_expected[i] = 1
             reason = "animation has tag 69 or masturbation"
         else
             if i == 0 
                 if has_pussy && (Animation.HasTag("Vaginal") || Animation.HasTag("Cunnilingus") || Animation.HasTag("Lesbian") || Animation.HasTag("Fingering") || Animation.HasTag("Dildo"))
-                    orgasm_expected[i] = true 
+                    orgasm_expected[i] = 1 
                     reason = "position 0 with pussy and tag: vaginal, cunnilingus, lesbian, fingering, or dildo"
                 elseif Animation.hasTag("Anal") || Animation.HasTag("Fisting")
-                    orgasm_expected[i] = true 
+                    orgasm_expected[i] = 1 
                     reason = "position 0 with tags: anal or fisting)"
                 else
-                    orgasm_expected[i] = false
+                    orgasm_expected[i] = 0
                     reason = "position 0 with out: pussy+tag(vaginal, cunnilingus, lesbian, fingering, dildo) or (anal, fisting)"
                 endif 
             else 
                 if has_penis && (Animation.HasTag("Vaginal") || Animation.HasTag("Boobjob") || Animation.HasTag("Blowjob") || Animation.HasTag("Handjob") || Animation.HasTag("Footjob") || Animation.HasTag("Oral") || Animation.HasTag("Anal"))
-                    orgasm_expected[i] = true
+                    orgasm_expected[i] = 1
                     reason = "position 1+ with penis and tags: vaginal, boobjob, blowjob, handjob, footjob, oral, or anal"
 
                 else
-                    orgasm_expected[i] = false
+                    orgasm_expected[i] = 0
                     reason = "position 1+ without penis+tag(vaginal, boobjob, blowjob, handjob, footjob, oral, anal)"
                 endif 
             endif 
         endIf
 
         String name = actors[i].GetDisplayName()
-        bool expected = orgasm_expected[i]
+        bool expected = orgasm_expected[i] == 1 
         ; Trace("GetOrgasmExpected","    "+i+" "+name+" pussy:"+has_pussy+" penis:"+has_penis+" orgasm_expected:"+expected+" reasoning:"+reason)
         i -= 1
     endwhile
@@ -478,13 +472,13 @@ Function SetOrgasmExpected(SkyrimNet_SexLab_Main main, sslThreadController threa
     int orgasm_expected_id = JMap.getObj(anim_info, "orgasm_expected")
     int count = Jarray.count(orgasm_expected_id)
 
-    bool[] orgasm_expected = Utility.CreateBoolArray(num_actors, false)
+    int[] orgasm_expected = Utility.CreateIntArray(num_actors, 0)
     int i = num_actors - 1
     while 0 <= i 
         if i < count
-            orgasm_expected[i] = JArray.getInt(orgasm_expected_id, i) == 1
+            orgasm_expected[i] = JArray.getInt(orgasm_expected_id, i)
         else
-            orgasm_expected[i] = false
+            orgasm_expected[i] = 0
         endif 
         i -= 1
     endwhile
@@ -502,7 +496,7 @@ Function SetOrgasmExpected(SkyrimNet_SexLab_Main main, sslThreadController threa
         String msg = "Change if an actor orgasm expected."+newline
         while i < actors.length
             String name = actors[i].GetDisplayName()
-            if orgasm_expected[i]
+            if orgasm_expected[i] == 1
                 msg += ""+newline+name+"'s expects an orgasm."
                 buttons[i+1] = "Change "+ name+" to not expect orgasm."
             else
@@ -516,10 +510,10 @@ Function SetOrgasmExpected(SkyrimNet_SexLab_Main main, sslThreadController threa
         if go_back < button && button < done
             changed = true
             i = button - 1
-if orgasm_expected[i]
-            orgasm_expected[i] = false
-        else
-            orgasm_expected[i] = true    
+            if orgasm_expected[i] == 1
+                orgasm_expected[i] = 0
+            else
+                orgasm_expected[i] = 1    
             endif
         endif
     endwhile
@@ -630,7 +624,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
     return anim_info
 EndFunction 
 
-Function UpdateAnimInfo(SkyrimNet_SexLab_Main main, sslThreadController thread, String field, String version, bool[] orgasm_expected)
+Function UpdateAnimInfo(SkyrimNet_SexLab_Main main, sslThreadController thread, String field, String version, int[] orgasm_expected)
     String fname = GetFilename(thread)
     String path = local_folder+"/"+fname
     int anim_info = 0
@@ -649,11 +643,7 @@ Function UpdateAnimInfo(SkyrimNet_SexLab_Main main, sslThreadController thread, 
         int orgasm_expected_id = JArray.objectWithSize(orgasm_expected.length)
         int i = orgasm_expected.length - 1
         while 0 <= i 
-            int value = 0
-            if orgasm_expected[i]
-                value = 1
-            endif
-            JArray.setInt(orgasm_expected_id, i, value)
+            JArray.setInt(orgasm_expected_id, i, orgasm_expected[i])
             i -= 1
         endwhile
         JMap.setObj(anim_info, "orgasm_expected", orgasm_expected_id)

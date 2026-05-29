@@ -54,7 +54,6 @@ int Property BUTTON_NO = 3 Auto         ; 3
 int Property STYLE_FORCEFULLY = 0 Auto 
 int Property STYLE_NORMALLY = 1 Auto 
 int Property STYLE_GENTLY = 2 Auto 
-int Property STYLE_SILENTLY = 3 Auto 
 String style_string_current = "" ; Used by Anims Dialogue, to return the Style
 int[] thread_style
 bool[] thread_started
@@ -344,7 +343,7 @@ String Function GetThreadStyleString(int thread_id)
         return "normally"
     elseif style == STYLE_GENTLY
         return "gently"
-    elseif style == STYLE_SILENTLY
+    else
         return "silently"
     endif 
     return "normally"
@@ -534,7 +533,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
     Actor[] actors = thread.Positions
 
     Actor target = None 
-    if actors.length > 2 && actors[0] != actors[1]
+    if actors.length >= 2 && actors[0] != actors[1]
         target = actors[1]
     endif 
 
@@ -661,12 +660,12 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
         if actors.length > 2 && actors[0] != actors[1]
             target = actors[1]
         endif 
-        bool[] orgasm_expected = stages.GetOrgasmExpected(thread)
+        int[] orgasm_expected = stages.GetOrgasmExpected(thread)
         int j = actors.length - 1 
         while 0 <= j 
             int num_orgasms = StorageUtil.GetIntValue(actors[j],actor_num_orgasms_key, 0)
             if num_orgasms < 1
-                if orgasm_expected.length > j && orgasm_expected[j]
+                if orgasm_expected.length > j && orgasm_expected[j] == 1
                     after += actors[j].GetDisplayName()+" failed to orgasm. "
                     target = actors[j]
                     orgasm_denied = true
@@ -778,7 +777,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
     endif
 
     sslThreadController thread = SexLab.GetController(ThreadID)
-    if GetKissingOnly(thread.tid)
+    if thread == None || GetKissingOnly(thread.tid)
         return 
     endif 
 
@@ -792,7 +791,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
     ;Quest q = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as Quest
     ;SkyrimNet_SexLab_main main = q as SkyrimNet_SexLab_Main
     ;SkyrimNet_SexLab_Stages stages_lib = q as SkyrimNet_SexLab_Stages
-    bool[] orgasm_expected = stages.GetOrgasmExpected(thread)
+    int[] orgasm_expected = stages.GetOrgasmExpected(thread)
     bool someone_ejaculated = False 
     int i = actors.length - 1
     String narration = "" 
@@ -803,7 +802,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
         ;if dom_found; && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(actors[i])
-            ;if orgasm_expected[i]
+            ;if orgasm_expected[i] == 1
                 ;int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
                 ;if num_orgasms > 0 
                     ;if has_penis
@@ -815,7 +814,7 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
             ;endif 
             ;Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
         ;else
-            if orgasm_expected[i]
+            if orgasm_expected[i] == 1
                 narration += name+" is orgasming. "
                 if has_penis
                     someone_ejaculated = True
@@ -858,7 +857,7 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
     ;endif 
 
     sslThreadController thread = GetThread(akActor) 
-    if GetKissingOnly(thread.tid) 
+    if thread == None || GetKissingOnly(thread.tid) 
         return 
     endif 
 
@@ -1121,11 +1120,11 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
     String rejection = ""
 
     if victims.length == 0
-        bool[] actors_filter = Utility.CreateBoolArray(actors.length, True)
+        int[] actors_filter = Utility.CreateIntArray(actors.length, 1)
         int i = actors.length - 1 
         while 0 <= i
             if actors[i] == player
-                actors_filter[i] = False
+                actors_filter[i] = 0
             endif 
             i -= 1
         endwhile
@@ -1140,27 +1139,27 @@ int function YesNoSexDialog(Actor[] actors, Actor[] victims, Actor player, Strin
             rejection = player_name+" refuses to have sex with "+names+"."
         endif 
     else
-        bool[] victim_filter = Utility.CreateBoolArray(actors.length, True)
+        int[] victim_filter = Utility.CreateIntArray(actors.length, 1)
         int i = victims.length - 1 
         Bool player_is_victim = False
         while 0 <= i
             if victims[i] == player
-                victim_filter[i] = False
+                victim_filter[i] = 0
                 player_is_victim = True 
             endif 
             i -= 1
         endwhile 
 
-        bool[] assailant_filter = Utility.CreateBoolArray(actors.length, True)
+        int[] assailant_filter = Utility.CreateIntArray(actors.length, 1)
         i = actors.length - 1 
         while 0 <= i
             if actors[i] == player
-                assailant_filter[i] = False
+                assailant_filter[i] = 0
             else    
                 int j = victims.length - 1 
-                while 0 <= j && assailant_filter[i]
+                while 0 <= j && assailant_filter[i] == 1
                     if actors[i] == victims[j]
-                        assailant_filter[i] = False
+                        assailant_filter[i] = 0
                     endif 
                     j -= 1
                 endwhile

@@ -76,7 +76,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
     ; Happing in this animation to this actor 
     bool[] matched = Utility.CreateBoolArray(stats_size)
     ; first time it has happend
-    bool[] first_filter = Utility.CreateBoolArray(stats_size, False) 
+    int[] first_filter = Utility.CreateIntArray(stats_size) 
 
     bool vaginal_matched = anim.HasTag("vaginal")
     bool oral_matched = anim.HasTag("oral") || anim.HasTag("cunnilingus") || anim.HasTag("blowjob") || anim.HasTag("69")
@@ -91,7 +91,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
         int type = types.length - 1 
         while 0 <= type 
             matched[type] = False 
-            first_filter[type] = False
+            first_filter[type] = 0
             type -= 1 
         endwhile 
 
@@ -189,9 +189,9 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
                         endif 
                     endif 
                     at_least_one = True 
-                    first_filter[type] = True
+                    first_filter[type] = 1
                 else 
-                    first_filter[type] = False 
+                    first_filter[type] = 0 
                 endif 
             endif 
             type -= 1 
@@ -200,12 +200,7 @@ String Function First_Sex(Actor[] actors, sslThreadController thread)
         String first_string = ""
         if at_least_one
             String m = ""
-            ;if first_filter[stats_any] == 1  && False 
-                ;m = name+"'s first time having sex. "
-            ;else
-                ;m = name+"'s first time "+SkyrimNet_SexLab_Utilities.JoinStringsFiltered(messages,first_filter)+". "
-            ;endif 
-            m = name+"'s first time "+SkyrimNet_SexLab_Utilities.JoinStringsFiltered(messages,first_filter)+". "
+            m = name+"'s first time "+SkyrimNet_SexLab_Utilities.JoinNouns(messages,first_filter)+". "
             first_string += m 
         endif 
         first_string += bleeding 

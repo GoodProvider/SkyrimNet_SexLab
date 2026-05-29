@@ -539,23 +539,25 @@ Function Target_Menu_Selection(Actor target, Actor player)
         buttons[main.STYLE_FORCEFULLY] = "Forcefully by player "
         buttons[main.STYLE_NORMALLY] = "By player"
         buttons[main.STYLE_GENTLY] = "Gently by player"
-        buttons[main.STYLE_SILENTLY] = "( Silently )"
+        buttons[3] = "( Silently )"
 
         button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int 
         String style = "normally"
         String narration = "direct"
-        if button == main.STYLE_SILENTLY
-            narration = "none"
-        elseif button == main.STYLE_GENTLY 
+        if button == main.STYLE_GENTLY 
             style = "gently"
         elseif button == main.STYLE_FORCEFULLY 
             style = "forcefully"
+        elseif button == main.STYLE_NORMALLY
+            style = "normally"
+        else 
+            narration = "none"
         endif 
 
         ;--------------------------------------------------
         ; Now do the action 
         Trace("Target_Menu_Selection","style:"+style+" clothing_string:"+clothing_string)
-        actions.Change_Outfit(player, target, style, clothing_string, narration)
+        actions.Change_Outfit(player, target, style, clothing_string+"es", narration)
 
     elseif button == bondage 
         EventSend_UDNG("MenuOpen", target)
@@ -774,10 +776,10 @@ Function MutliTarget_Menu_Selection(Actor player)
         if type == "rape>"
             Actor[] victims = new Actor[1]
             victims[0] = group[0]
-            actions.Sex_Start_Helper_Short(group[1], group, victims)
+            actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
         else 
             Actor[] victims = PapyrusUtil.ActorArray(0) 
-            actions.Sex_Start_Helper_Short(group[1], group, victims)
+            actions.Sex_Start_Helper(group[1], group, victims, "normal", "", "")
         endif   
     endif 
 EndFunction

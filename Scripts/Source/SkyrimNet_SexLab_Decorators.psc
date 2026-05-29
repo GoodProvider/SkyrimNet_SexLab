@@ -215,7 +215,7 @@ String Function Get_Threads(Actor speaker) global
             String[] names = Utility.CreateStringArray(actors.Length)
             Float distance = -1 
             bool los = False 
-            bool[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
+            int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
             int j = actors.Length - 1
             String names_array = ""
             String victims_array = ""
@@ -236,7 +236,7 @@ String Function Get_Threads(Actor speaker) global
                     victims_array += ""+'"'+""+name+""+'"'+""
                 endif 
                 
-                if orgasm_expected[j]
+                if orgasm_expected[j] == 1
                     if orgasm_expected_array != ""
                         orgasm_expected_array += ", "
                     endif

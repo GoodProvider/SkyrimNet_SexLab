@@ -3,13 +3,10 @@ SkyrimNet_SexLab_Main Property main Auto
 SexLabFramework Property sexlab Auto 
 
 import SkyrimNet_SexLab_Utilities
-import JContainers
 
 Idle Property pa_HugA Auto  ; IDLE:000F4699
 
 Faction OStimActorCountFaction = None 
-
-String groups_dictionary = "Data/SKSE/Plugins/SkyrimNet_SexLab/groups/"
 
 Function Trace(String func, String msg, Bool notification=False) global
     msg = "[SkyrimNet_SexLab_Actions."+func+"] "+msg
@@ -85,12 +82,7 @@ sslThreadModel Function Sex_Start(Actor Speaker, Actor Target, string style, str
     actors[1] = Target
     Actor[] victims = PapyrusUtil.ActorArray(0) 
     Trace("Sex_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
-    bool[] clothed = Utility.CreateBoolArray(actors.length, false)
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, true)
-    bool[] orgasm_denied = Utility.CreateBoolArray(actors.length, false)
-    String[] tags = Utility.CreateStringArray(0)
-    String[] filter_tags = Utility.CreateStringArray(0)
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, direction)
+    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
 EndFunction
 
 sslThreadModel Function Rape_Start_Target(Actor Speaker, Actor Target, string style, String direction, string tag)
@@ -111,48 +103,32 @@ sslThreadModel Function Rape_Start(Actor Speaker, Actor Target, string style, St
     victims[0] = actors[0]
 
     Trace("Rape_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" victim:"+victim.GetDisplayName()+" style: "+style+" direction:"+direction+" type: "+tag)
-    bool[] clothed = Utility.CreateBoolArray(actors.length, false)
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, true)
-    bool[] orgasm_denied = Utility.CreateBoolArray(actors.length, false)
-    String[] tags = Utility.CreateStringArray(0)
-    String[] filter_tags = Utility.CreateStringArray(0)
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, direction)
+    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
 EndFunction
 
 sslThreadModel Function Orgy_Start(Actor Speaker, Actor Target, Actor participate, string style, String direction, string tag)
-    Actor[] possible = new Actor[3]
-    possible[0] = speaker
-    possible[1] = target
-    possible[2] = participate 
+    int count = 1
+    if Target != None && Target != Speaker
+        count += 1
+    endif
+    if participate != None && participate != Speaker && participate != Target
+        count += 1
+    endif
 
-    int num_actors = 1
-    int i = possible.length - 1
-    while 0 <= i
-        if possible[i] != None
-            num_actors += 1
-        endif
-        i -= 1
-    endwhile
-    Actor[] actors = PapyrusUtil.ActorArray(num_actors+1)
+    Actor[] actors = PapyrusUtil.ActorArray(count)
     actors[0] = Speaker
-    int k = 1
-    i = possible.length - 1
-    while 0 <= i
-        if possible[i] != None
-            actors[k] = possible[i]
-            k += 1
-        endif
-        i -= 1
-    endwhile
+    int next = 1
+    if Target != None && Target != Speaker
+        actors[next] = Target
+        next += 1
+    endif
+    if participate != None && participate != Speaker && participate != Target
+        actors[next] = participate
+    endif
 
     Trace("Orgy_Start",SkyrimNet_Sexlab_Utilities.JoinActors(actors)+" style: "+style+" direction:"+direction+" type: "+tag)
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    bool[] clothed = Utility.CreateBoolArray(actors.length, false)
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, true)
-    bool[] orgasm_denied = Utility.CreateBoolArray(actors.length, false)
-    String[] tags = Utility.CreateStringArray(0)
-    String[] filter_tags = Utility.CreateStringArray(0)
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, direction)
+    return Sex_Start_helper(Speaker, actors, victims, style, direction, tag) 
 EndFunction
 
 
@@ -165,12 +141,7 @@ sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String t
     actors[0] = speaker
 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    bool[] clothed = Utility.CreateBoolArray(actors.length, false)
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, true)
-    bool[] orgasm_denied = Utility.CreateBoolArray(actors.length, false)
-    String[] tags = Utility.CreateStringArray(0)
-    String[] filter_tags = Utility.CreateStringArray(0)
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, "") 
+    return Sex_Start_helper(Speaker, actors, victims, style, "", tag) 
 EndFunction
 
 sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String style, String tag, String narration = "silent") 
@@ -196,155 +167,24 @@ sslThreadModel Function Affection_Start(Actor Speaker, Actor Target, String styl
     actors[0] = Speaker 
     actors[1] = Target 
     Actor[] victims = PapyrusUtil.ActorArray(0) 
-    bool[] clothed = Utility.CreateBoolArray(actors.length, true)
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, false)
-    bool[] orgasm_denied = Utility.CreateBoolArray(actors.length, false)
-    String[] tags = Utility.CreateStringArray(0)
-    String[] filter_tags = Utility.CreateStringArray(0)
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, "giving") 
+    return Sex_Start_Helper(Speaker, actors, victims, style, "giving", "kissing_only") 
 EndFunction
 
-; -------------------------------------------------
-; Start Sex Group
-; -------------------------------------------------
-sslThreadModel Function Start_Sex_Group(Actor Speaker, Actor[] actors, Actor[] victims, String group_name, String direction, String style)
-    
-    ; 1. Initialize arrays with target size and default values
-    int target_size = actors.Length
-    
-    bool[] clothed = Utility.CreateBoolArray(target_size, true) 
-    bool[] orgasm_expected = Utility.CreateBoolArray(target_size, true) 
-    bool[] orgasm_denied = Utility.CreateBoolArray(target_size, false) 
-
-    ; 2. Formulate the path and load the JSON file using JContainers
-    String filename = groups_dictionary + "/" + group_name + ".json"
-    int jMapObj = JValue.readFromFile(filename)
-    
-    ; Safety check: Ensure the file actually loaded and is a valid JMap container
-    if (jMapObj == 0)
-        Debug.Notification("Error: Failed to load JSON file: " + filename)
-        ; Fallback: Proceed with defaults or exit early depending on your design
-    else
-        ; 3. Extract and safely populate fixed-size Papyrus arrays from JContainers
-        PopulateBoolArray(jMapObj, "clothed", clothed, target_size)
-        PopulateBoolArray(jMapObj, "orgasm_expected", orgasm_expected, target_size)
-        PopulateBoolArray(jMapObj, "orgasm_denied", orgasm_denied, target_size)
-
-    endif
-
-    ; 4. Dynamic/unbounded tags arrays (populated directly from JSON sizing)
-    String[] tags = PopulateStringArray(jMapObj, "tags")
-    String[] filter_tags = PopulateStringArray(jMapObj, "filter_tags")
-    String[] animation_names = PopulateStringArray(jMapObj, "animation_names")
-
-
-    ; Fallback initialization to empty arrays if keys were missing in JSON
-    if (tags.Length == 0)
-        tags = Utility.CreateStringArray(0)
-    endif
-    if (filter_tags.Length == 0)
-        filter_tags = Utility.CreateStringArray(0)
-    endif
-    if (animation_names.Length == 0)
-        animation_names = Utility.CreateStringArray(0)
-    endif
-
-    ; 5. Clean up memory: Release the root JMap object now that we have copied our data
-    JValue.release(jMapObj)
-
-    ; 6. Pass data down to your execution helper
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, direction)
-EndFunction
-
-
-; --- Helper Functions for Clean Array Extraction ---
-Function PopulateBoolArray(int jMapObj, String key, bool[] target_array, int max_length)
-    int jArrayObj = JMap.getObj(jMapObj, key)
-    
-    if (jArrayObj != 0)
-        int json_length = JArray.count(jArrayObj)
-        int index = 0
-        
-        ; Loop until we hit the end of the JSON array OR our target actor array length
-        while (index < json_length && index < max_length)
-            target_array[index] = JArray.getInt(jArrayObj, index) == 1
-            index += 1
-        endWhile
-    endif
-EndFunction
-
-String[] Function PopulateStringArray(int jMapObj, String key)
-    int jArrayObj = JMap.getObj(jMapObj, key)
-    if jArrayObj == 0
-        return Utility.CreateStringArray(0)
-    endif 
-    
-    int json_length = JArray.count(jArrayObj)
-    String[] strings = Utility.CreateStringArray(json_length)
-    int index = 0
-    
-    ; Loop until we hit the end of the JSON array OR our target string array length
-    while (index < json_length)
-        strings[index] = JArray.getStr(jArrayObj, index, "")
-        index += 1
-    endWhile
-    return strings
-EndFunction
-
-; -------------------------------------------------
-; Sex Start Helper 
-; -------------------------------------------------
-
-sslThreadModel Function Sex_Start_Helper_Short(Actor Speaker, Actor[] actors, Actor[] victims)
-    bool[] clothed = Utility.CreateBoolArray(actors.length, false)
-    bool[] orgasm_expected = Utility.CreateBoolArray(actors.length, true)
-    bool[] orgasm_denied = Utility.CreateBoolArray(actors.length, false)
-    String[] tags = Utility.CreateStringArray(0)
-    String[] filter_tags = Utility.CreateStringArray(0)
-    String style = "normal"
-    String direction = ""
-    return Sex_Start_Helper(Speaker, actors, victims, clothed, orgasm_expected, orgasm_denied, tags, filter_tags, style, direction)
-EndFunction
-
-sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] victims, Bool[] clothed, Bool[] orgasm_expected, Bool[] orgasm_denied, String[] tags, String[] filter_tags, String style, String direction, String hook="")
-    String tag = ""
-    String tagSupress = ""
-    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style:"+style+" direction:"+direction+" tags:"+tags)
+sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] victims, String style, String direction, String tag, String hook="")
+    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(actors)+" style:"+style+" direction:"+direction+" tag:"+tag)
     if !main.LockActors(actors) 
         return None
     endif 
 
     ; ------------------------------------------
-    ; Set up directions and tags from arrays
+    ; Set up directions and tags 
     ; ------------------------------------------
-    if tags.length > 0
-        int ti = 0
-        while ti < tags.length
-            if tags[ti] != ""
-                if tag != ""
-                    tag += ","
-                endif
-                tag += tags[ti]
-            endif
-            ti += 1
-        endwhile
-    endif
-
-    if filter_tags.length > 0
-        int fi = 0
-        while fi < filter_tags.length
-            if filter_tags[fi] != ""
-                if tagSupress != ""
-                    tagSupress += ","
-                endif
-                tagSupress += filter_tags[fi]
-            endif
-            fi += 1
-        endwhile
-    endif
-
-    if tag == "" && actors.length == 1
+    if actors.length == 1
+        if tag != ""
+            tag += ","
+        endif
         int gender = main.sexlab.GetGender(actors[0])
+
         bool has_penis = (gender != 1 && gender != 3)
         if has_penis 
             tag = "M"
@@ -384,11 +224,6 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
         i -= 1
     endwhile 
     
-    if names != ""
-        Trace("Sex_Start_Helper","Ineligible actors: "+names)
-        return NOne 
-    endif
-
     ;-------------------------------
     ; Animations
     ;-------------------------------
@@ -429,12 +264,12 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     ;-------------------------------
     Trace("Sex_Start_Helper","adding actors")
 
-    bool[] speaker_filter = Utility.CreateBoolArray(actors.length, True)
+    int[] speaker_filter = Utility.CreateIntArray(actors.length,1)
     i = 0 
     int count = actors.length 
     while i < count 
         if actors[i] == speaker
-            speaker_filter[i] = False
+            speaker_filter[i] = 0
         endif 
 
         if thread.addActor(actors[i]) < 0   
@@ -474,28 +309,6 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
         thread.SetHook(hook)
     endif 
 
-    ; Apply clothed/orgasm settings if provided
-    if clothed.length == actors.length || orgasm_denied.length == actors.length || orgasm_expected.length == actors.length
-        i = 0
-        while i < actors.length
-            if i < clothed.length && clothed[i]
-                thread.SetNoStripping(actors[i])
-            endif
-            if i < orgasm_denied.length && orgasm_denied[i]
-                thread.DisableOrgasm(actors[i], true)
-            endif
-            if i < orgasm_expected.length
-                ; store orgasm expected value (available to other systems if needed)
-                if orgasm_expected[i]
-                    StorageUtil.SetIntValue(actors[i], "skyrimnet_sexlab_orgasm_expected", 1)
-                else
-                    StorageUtil.SetIntValue(actors[i], "skyrimnet_sexlab_orgasm_expected", 0)
-                endif
-            endif
-            i += 1
-        endwhile
-    endif
-
     ; If gender is male and giving oral, treat as woman so they can stay in the giving location
     Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(thread.positions))
     if actors.length > 1 
@@ -517,9 +330,11 @@ EndFunction
 
 Function Sex_Stop(Actor akActor) 
     sslThreadController thread = main.GetThread(akActor) 
-    main.AnimationEndFunction(thread.tid,true, akActor) 
-    sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
-    thread_slots.StopThread(thread) 
+    if thread != None 
+        main.AnimationEndFunction(thread.tid,true, akActor) 
+        sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
+        thread_slots.StopThread(thread) 
+    endif 
 EndFunction 
 
 ;--------------------------------------
@@ -576,11 +391,11 @@ EndFunction
 ; Dress and Undress
 ; Narration: direct, silent, none (notification or event)
 ; -------------------------------------------------
-Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String action, String Narration)
-    Trace("Change_Outfit",Stripper.GetDisplayName()+" stripper "+Stripped.GetDisplayName()+" style:"+style+" action: "+action+" narration:"+narration)
+Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String how, String Narration)
+    Trace("Change_Outfit",Stripper.GetDisplayName()+" stripper "+Stripped.GetDisplayName()+" style:"+style+" how: "+how+" narration:"+narration)
 
     bool success = False
-    if action == "put on"
+    if how == "put on"
         Form[] forms = main.UnStoreStrippedItems(Stripped)
         if forms.length > 0
             sexlab.UnStripActor(Stripped, forms, false)
@@ -614,11 +429,11 @@ Function Change_Outfit(Actor Stripper, Actor Stripped, String Style, String acti
             listener = None 
         endif 
 
-        String msg = Stripper.GetDisplayName()+" "+style+" "+action+" "+Stripped.GetDisplayName()+"'s clothing."
+        String msg = Stripper.GetDisplayName()+" "+style+" "+how+"es "+Stripped.GetDisplayName()+"."
         if narration == "direct"
             DirectNarration(msg, stripper, listener) 
         elseif narration == "silent"
-            RegisterEvent(action,msg, stripper, listener) 
+            RegisterEvent(how,msg, stripper, listener) 
         endif 
     endif 
 EndFunction
