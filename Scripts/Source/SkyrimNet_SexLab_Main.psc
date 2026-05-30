@@ -657,7 +657,7 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
     Actor target = None
     if config.SeparateOrgasms
         String after = "" 
-        if actors.length > 2 && actors[0] != actors[1]
+        if actors.length >= 2 && actors[0] != actors[1]
             target = actors[1]
         endif 
         int[] orgasm_expected = stages.GetOrgasmExpected(thread)
@@ -682,16 +682,8 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
         endif 
     endif 
 
-    if target == None 
-        if actors.length > 2 && actors[0] != actors[1]
-            target = actors[1]
-        endif
-    elseif target == actors[0] 
-        if actors.length > 2 && actors[0] != actors[1]
-            target = actors[1]
-        else 
-            target = None
-        endif 
+    if target == None && actors.length >= 2 && actors[0] != actors[1]
+        target = actors[1]
     endif 
 
     if GetKissingOnly(thread.tid) 
