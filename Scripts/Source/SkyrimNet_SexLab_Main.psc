@@ -183,11 +183,16 @@ Function Setup()
     elseif JFormMap.count(actorLock) > 0
         Form[] forms = JFormMap.allKeysPArray(actorLock)
         if forms != None 
-            int i = forms.Length - 1  
+            int i = forms.length
             while i >= 0
-                ReleaseActorLock(forms[i] as Actor)
+                Actor akActor = forms[i] as Actor
+                if (akActor == None)
+                    JFormMap.removeKey(actorLock, forms[i]) ; Purge orphaned reference from map structure
+                else
+                    ReleaseActorLock(akActor)
+                endif
                 i -= 1
-            endwhile 
+            endwhile
         endif
     endif 
 

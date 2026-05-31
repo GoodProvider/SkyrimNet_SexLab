@@ -1,4 +1,4 @@
-VERSION=0.29.2
+VERSION=0.29.3
 NAME=SkyrimNet SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.7z

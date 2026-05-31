@@ -129,7 +129,6 @@ EndFunction
 sslThreadModel Function Masturbation_Start(Actor Speaker, string style, String tag)
     Trace("Masturbation_Start",Speaker.GetDisplayName()+" style: "+style+" tag: "+tag)
     int gender = main.sexlab.GetGender(Speaker)
-    bool has_penis = (gender != 1 && gender != 3)
 
     Actor[] actors = new Actor[1] 
     actors[0] = speaker

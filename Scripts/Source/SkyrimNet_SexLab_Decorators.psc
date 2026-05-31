@@ -66,6 +66,17 @@ EndFunction
 ;
 ; slot: 19 NoBody
 ; slot: 
+;bool Function IsActorNude(Actor akActor) global
+    ;if akActor.GetEquippedArmorInSlot(32) != None
+        ;return false ; Wearing main armor body layer
+    ;endif
+    ;; Check if clothing items exist unequipped within the local container list
+    ;if akActor.GetItemCount(Game.GetFormFromFile(0x00012E49, "Skyrim.esm")) > 0 ; Clothing Body Keyword match check
+        ;return true ; Is currently nude, but has clothes available
+    ;endif
+    ;return true
+;EndFunction
+
 String Function Outfit_Options(Actor speaker) global 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     String options = "undresses"
