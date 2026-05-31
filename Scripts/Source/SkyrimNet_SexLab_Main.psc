@@ -129,6 +129,7 @@ Function Setup()
     ((self as Quest) as SkyrimNet_SexLab_Actions).Setup()
     ((self as Quest) as SkyrimNet_SexLab_MCM).Setup()
     ((self as Quest) as SkyrimNet_SexLab_Stages).Setup()
+    ((self as Quest) as SkyrimNet_SexLab_Scene_Manager).Setup()
 
     bool skyrimnet_dom_found = MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
     bool skyrimnet_sexlab_handler_dom_found = MiscUtil.FileExists("Data/SkyrimNet_SexLab_Handler_DOM.esp")
