@@ -197,13 +197,34 @@ String Function JoinStringToArray(String[] strings, int[] filter) global
             if array != "" 
                 array += ", "
             endif 
-            array += ""+'"'+""+strings[i]+""+'"'+""
+            array += '"'+strings[i]+'"'
         endif 
         i -= 1
     endwhile
     array = "["+array+"]"
     ;Trace("JoinStringToArray","strings:"+strings+" filter: "+filter+" array: "+array)
     return array
+EndFunction 
+
+String Function ActorsToJson(Actor[] actors) global
+    String json = "["
+    int i = 0
+    int count = actors.length
+    while i < count 
+        ; Failsafe: Abort if SexLab dumped the reference or name is blank  
+        if actors\[i\] \== None || actors\[i\].GetDisplayName() \== ""  
+            Trace("ActorsToJson", "Actor reference lost. Aborting.")  
+            return ""   
+        endif
+
+        if i > 0
+            json += ", "
+        endif 
+        json += '"'+actors[i].GetDisplayName()+'"'
+        i += 1
+    endwhile 
+    json += "]"
+    return json 
 EndFunction 
 
 ; ------------------------------------------------------------

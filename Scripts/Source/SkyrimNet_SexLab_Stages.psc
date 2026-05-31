@@ -125,8 +125,14 @@ EndFunction
 
 String Function Description_Add_Actors(String version, Actor[] actors, String desc)
     if desc == ""
+        Trace("Description_Add_Actors","Description is empty")
         return ""
     endif 
+    if (actors.Length \== 0 || actors\[0\] \== None || actors\[0\].GetDisplayName() \== "")  
+        Trace("Description_Add_Actors","Actors are none or have not name")
+        return ""
+    endif 
+
     String result = "" 
     if version == VERSION_1_0
         if actors.length == 1 
@@ -142,7 +148,7 @@ String Function Description_Add_Actors(String version, Actor[] actors, String de
         if version != VERSION_2_0
             Trace("Description_Add_Actors","Unknown version "+version)
         endif 
-        String actors_json = SkyrimNet_SexLab_Main.ActorsToJson(actors)
+        String actors_json = SkyrimNet_SexLab_Utilities.ActorsToJson(actors)
         result = SkyrimNetApi.ParseString(desc, "sl", '{"actors":'+actors_json+"}")
     endif 
     Trace("Description_Add_Actors","version "+version+" actors:"+actors.length+" desc:"+desc+" -> "+result)
@@ -206,6 +212,7 @@ Function EditDescriptions(sslThreadController thread)
 
     int button = desc_prev
 
+    String style_start = main.GetThreadStyleString(thread.tid)
     while button != done 
         String source = "" 
         String desc = "" 
@@ -272,17 +279,23 @@ Function EditDescriptions(sslThreadController thread)
             endif 
         elseif button == desc_edit  
             EditorDescription(main, thread)
-        elseif button == stop 
-            actions.Sex_Stop(actors[0])
-            return
         elseif button == orgasm_edit 
             SetOrgasmExpected(main, thread)
         elseif button == tracking 
             ToggleThreadTracking(thread.tid)
         elseif button == style_edit 
             main.SexStyleDialog(thread.tid,  thread.GetVictim() != None) 
+        elseif button == stop 
+            actions.Sex_Stop(actors[0])
+            return
         endif 
     endwhile 
+
+    String style_end = main.GetThreadStyleString(thread.tid)
+    if style_start != style_end 
+        SkyrimNet_SexLab_Utilities.DirectNarration(thread.positions[0].getDisplayName()+"'s scene changed from '"+style_start+"' to '"+style_end+"'")
+    endif 
+
 EndFunction 
 
 ; ------------------------------------
@@ -371,7 +384,7 @@ String Function BuildExample(Actor[] actors)
         example = "{{sl.actors.2}}, {{sl.actors.1}}, and {{sl.actors.0}} are having an orgy."
     endif 
     String desc = Description_Add_Actors(VERSION_2_0, actors, example)
-    return ""+'"'+""+example+""+'"'+""+newline+ ""+'"'+""+desc+""+'"'+""
+    return '"'+example+'"'+newline+ '"'+desc+'"'
 EndFunction
 
 

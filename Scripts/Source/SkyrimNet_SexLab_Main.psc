@@ -8,13 +8,12 @@ import SkyrimNet_SexLab_Utilities
 import StorageUtil
 
 SkyrimNet_SexLab_Stages Property stages Auto
-SkyrimNet_SexLab_Stats Property stats Auto 
+SkyrimNet_SexLab_Handler_DOM_Interface Property handler_dom Auto 
 
 ; ---------------------------
 ; Optional Mods Found 
 ; ---------------------------
 Bool Property ostimnet_found = False Auto
-Bool Property dom_found = False Auto
 
 SexLabFramework Property sexlab Auto 
 
@@ -130,6 +129,16 @@ Function Setup()
     ((self as Quest) as SkyrimNet_SexLab_Actions).Setup()
     ((self as Quest) as SkyrimNet_SexLab_MCM).Setup()
     ((self as Quest) as SkyrimNet_SexLab_Stages).Setup()
+
+    bool skyrimnet_dom_found = MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
+    bool skyrimnet_sexlab_handler_dom_found = MiscUtil.FileExists("Data/SkyrimNet_SexLab_Handler_DOM.esp")
+    if skyrimnet_dom_found && skyrimnet_sexlab_handler_dom_found
+        handler_dom = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab_Handler_DOM.esp") as SkyrimNet_SexLab_Handler_DOM_Interface
+        Trace("Setup","SkyrimNet_DOM found setting main.dom_handler to SkyrimNet_SexLab_Handler_DOM")
+    else 
+        handler_dom = (self as Quest) as SkyrimNet_SexLab_Handler_DOM_Interface
+        Trace("Setup","SkyrimNet_SexLab_Handler_DOM found:"+skyrimnet_sexlab_handler_dom_found+", SkyrimNet_DOM found :"+skyrimnet_dom_found)
+    endif 
 
     ;thread_started = new bool[32]
     thread_kissing_only = new bool[32]
@@ -465,21 +474,6 @@ event AnimationStart(int ThreadID, bool HasPlayer)
     sslThreadController thread = SexLab.GetController(ThreadID)
     Actor[] actors = thread.Positions
 
-    ; This didn't work. it reset the animes, some of the time, but could also give you random results
-    ;sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(actors.length, "whip", "", true)
-    ;Trace("AnimationStart","Found "+anims.length+" whip animations for "+actors.length+" actors")
-    ;if anims.length > 0 
-        ;Trace("AnimationStart","Found whip animation, applying to thread "+ThreadID)
-        ;thread.ClearAnimations()
-        ;thread.SetAnimations(anims)
-        ;sslBaseAnimation[] before = thread.GetAnimations()
-        ;thread.SetStartingAnimation(anims[0])
-        ;sslBaseAnimation[] after = thread.GetAnimations()
-        ;Trace("AnimationStart","Thread "+ThreadID+" anims:"+anims.length +" before: "+before.length+" after: "+after.length)
-    ;endif 
-
-    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
-
     int i = actors.length - 1
     while 0 <= i 
         ReleaseActorLock(actors[i])
@@ -549,11 +543,6 @@ Event StageStart(int ThreadID, bool HasPlayer)
         thread_started[ThreadID] = True 
 
         String desc = Get_Thread_Description(thread, actorLib)
-        ; commenting out stats for now 
-        ;String first_sex = stats.First_Sex(actors, thread)
-        ;if first_sex != ""
-            ;desc = desc + " "+first_sex
-        ;endif 
         DirectNarration(desc, actors[0], target)
         ;AllowedDeniedOnlyIncrease(actors, thread, "start") 
     elseif thread.stage != thread.animation.StageCount()
@@ -723,6 +712,7 @@ Function AnimationEndFunction(int ThreadID, bool HasPlayer, Actor actorEnder)
 
     thread_style[thread.tid] = STYLE_NORMALLY
     thread_kissing_only[thread.tid] = false 
+    SkyrimNet_SexLab_Decorators.Save_Threads(SexLab)
 EndFunction 
 
 ; Function AllowedDeniedOnlyIncrease(Actor[] actors, sslThreadController thread, String status)
@@ -793,26 +783,26 @@ Event Orgasm_Combined(int ThreadID, bool HasPlayer)
         int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
         int gender_sexlab = sexlab.GetGender(actors[i]) 
         bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        ;if dom_found; && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(actors[i])
-            ;if orgasm_expected[i] == 1
-                ;int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
-                ;if num_orgasms > 0 
-                    ;if has_penis
-                        ;someone_ejaculated = True 
-                    ;endif 
-                ;else 
-                    ;narration += SkyrimNet_SexLab_Handler_DOM.HandleOrgasmDenied(actors[i])
-                ;endif 
-            ;endif 
-            ;Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
-        ;else
+        if handler_dom.IsDomSlave(actors[i])
+            if orgasm_expected[i] == 1
+                int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
+                if num_orgasms > 0 
+                    if has_penis
+                        someone_ejaculated = True 
+                    endif 
+                else 
+                    narration += handler_dom.HandleOrgasmDenied(actors[i])
+                endif 
+            endif 
+            Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
+        else
             if orgasm_expected[i] == 1
                 narration += name+" is orgasming. "
                 if has_penis
                     someone_ejaculated = True
                 endif
             endif 
-        ;endif 
+        endif 
         Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | narration: "+narration)
         i -= 1
     endwhile
@@ -844,9 +834,9 @@ Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
         Trace("Orgasm_Individual","akActor is None")
         return 
     endif 
-    ;if dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(akActor)
-    ;    return
-    ;endif 
+    if handler_dom.IsDOMSlave(akActor)
+        return
+    endif 
 
     sslThreadController thread = GetThread(akActor) 
     if thread == None || GetKissingOnly(thread.tid) 
@@ -1060,20 +1050,6 @@ String Function ActorsToString(Actor[] actors) global
     return names 
 endFunction
 
-String Function ActorsToJson(Actor[] actors) global
-    String json = "["
-    int i = 0
-    int count = actors.length
-    while i < count 
-        if i > 0
-            json += ", "
-        endif 
-        json += ""+'"'+""+actors[i].GetDisplayName()+""+'"'+""
-        i += 1
-    endwhile 
-    json += "]"
-    return json 
-EndFunction 
 
 ;----------------------------------------------------
 ; Yes No dialogue choice for the player 

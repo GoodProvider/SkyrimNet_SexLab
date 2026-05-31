@@ -425,10 +425,10 @@ Event OnKeyDown(int key_code)
 EndEvent 
 
 Function Target_Menu_Selection(Actor target, Actor player)
-    ;if main.dom_found && SkyrimNet_SexLab_Handler_DOM.IsDOMSlave(target) 
-    ;    SkyrimNet_SexLab_Handler_DOM.Target_Menu_Selection(target,player)
-    ;    return 
-    ;endif 
+    if main.handler_dom.IsDOMSlave(target)
+        main.handler_dom.Target_Menu_Selection(target,player)
+        return 
+    endif 
 
     bool target_is_undressed = false 
     target_is_undressed = main.HasStrippedItems(target)
@@ -763,11 +763,11 @@ Function MutliTarget_Menu_Selection(Actor player)
     if next == 1
         actions.Masturbation_Start(group[0], "normal", "")
     else 
-        String json = "{"+'"'+"target"+'"'+":"+'"'+""+group[1].GetDisplayName()+""+'"'+""
+        String json = "{"+'"'+"target"+'"'+":"+'"'+""+group[1].GetDisplayName()+'"'
         i = 2 
         while i < next 
             j = i - 2
-            json += ", "+'"'+"participate_"+j+""+'"'+":"+'"'+""+group[i].GetDisplayName()+""+'"'+""
+            json += ", "+'"'+"participate_"+j+""+'"'+":"+'"'+""+group[i].GetDisplayName()+'"'
             i += 1
         endwhile
         json += "}"
@@ -784,7 +784,7 @@ Function MutliTarget_Menu_Selection(Actor player)
     endif 
 EndFunction
 
-String Function SexRapeSelection()
+String Function SexRapeSelection(String current)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     listMenu.ResetMenu()
     listMenu.AddEntryItem("sex")
@@ -796,4 +796,5 @@ String Function SexRapeSelection()
     elseif index == 1
         return "rape>"
     endif
+    return current
 EndFunction

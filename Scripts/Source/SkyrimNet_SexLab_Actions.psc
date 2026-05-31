@@ -47,18 +47,12 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
         return false 
     endif 
 
-    ; SexLab check
-    SkyrimNet_SexLab_Main main_local = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    if main_local == None
-        return false
-    endif
-
-    if main_local.IsActorLocked(akActor)
+    if main.IsActorLocked(akActor)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is locked")
         return false 
     endif
 
-    if main_local.sexLab.IsActorActive(akActor) 
+    if main.sexLab.IsActorActive(akActor) 
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" SexLab animation")
         return false 
     endif 
@@ -280,6 +274,9 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
         if tag == "kissing_only"
             thread.SetNoStripping(actors[i])
             thread.DisableOrgasm(actors[i], true) 
+        elseif main.handler_dom.IsDOMSlave(actors[i]) 
+            thread.DisableOrgasm(actors[i], true) 
+            Debug.Notification(actors[i].getDisplayName()+" no orgasm!")
         endif 
         i += 1 
     endwhile 
@@ -298,8 +295,8 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     endwhile  
 
     Trace("Sex_Start_Helper",\
-         " actors: "+'"'+""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+""+'"'+""\
-        +" victims: "+'"'+""+SkyrimNet_SexLab_Utilities.JoinActors(victims)+""+'"'+""\
+         " actors: "+'"'+""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+'"'\
+        +" victims: "+'"'+""+SkyrimNet_SexLab_Utilities.JoinActors(victims)+'"'\
         +" tag:"+tag\
         +" style:"+style\
         +" has_player: "+has_player\
@@ -310,16 +307,16 @@ sslThreadModel Function Sex_Start_Helper(Actor Speaker, Actor[] actors, Actor[] 
     endif 
 
     ; If gender is male and giving oral, treat as woman so they can stay in the giving location
-    Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(thread.positions))
-    if actors.length > 1 
-        String msg = "" 
-        if tag == "kissing_only"
-            msg = speaker.GetDisplayName()+" starts activities with "+JoinActorsFiltered(actors,speaker_filter)+"."
-        else 
-            msg = speaker.GetDisplayName()+" starts sexual activites with "+JoinActorsFiltered(actors,speaker_filter)+"."
-        endif 
-        RegisterEvent("Start_Activities",msg, speaker) 
-    endif 
+    ;Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(thread.positions))
+    ;if actors.length > 1 
+        ;String msg = "" 
+        ;if tag == "kissing_only"
+            ;msg = speaker.GetDisplayName()+" starts activities with "+JoinActorsFiltered(actors,speaker_filter)+"."
+        ;else 
+            ;msg = speaker.GetDisplayName()+" starts sexual activites with "+JoinActorsFiltered(actors,speaker_filter)+"."
+        ;endif 
+        ;RegisterEvent("Start_Activities",msg, speaker) 
+    ;endif 
     thread.StartThread() 
     return thread 
 EndFunction

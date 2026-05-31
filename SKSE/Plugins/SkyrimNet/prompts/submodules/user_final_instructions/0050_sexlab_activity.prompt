@@ -4,21 +4,19 @@
 {#      If game paused load the cached file              #} 
 {#      else call the decorator                          #} 
 {# ----------------------------------------------------- #} 
-
 {% set actor_having_sex = false %} 
 {% set actor_kissing_only = false %} 
 {% set actor_rape_victim = false %}
-{% if get_global_value("SkyrimNet_SexLab_active_sex") == 1.0 %}
-     {% if not isTimePaused %}
-          {% set sexlab = sexlab_get_threads(npc.UUID) -%}
-          {% if not sexlab.threads %}
-               {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
-          {% endif %}
-     {% else %} 
+{% if not isTimePaused %}
+     {% set sexlab = sexlab_get_threads(npc.UUID) -%}
+     {% set sexlab.source = "sexlab_get_threads" %} 
+     {% if not sexlab.threads %}
           {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+          {% set sexlab.source = "sexlab_get_threads failed, file" %} 
      {% endif %}
 {% else %} 
-     {% set sexlab.threads = [] %} 
+     {% set sexlab = read_json("SkyrimNet_SexLab/threads.json") %} 
+     {% set sexlab.source = "file" %}
 {% endif %}
 
 {% if length(sexlab.threads) > 0 %} 
@@ -38,37 +36,39 @@
           
                {% set can_seen_desc = "can not see what is happening." %} 
                {% if has_los %}
-                    {% if distance > 36 %}
+                    {% if thread.distance > 36 %}
                          {% set can_notice_level = 0 %}
-                    {% else if distance > 12 %} 
+                    {% else if thread.distance > 12 %} 
                          {% set can_notice_level = 1 %}
                          {% set can_see_desc = "can see the sex, but not specifically who or what is involved." %} 
-                    {% else if distance > 3 %} 
+                    {% else if thread.distance > 3 %} 
                          {% set can_notice_level = 2 %}
                          {% set can_see_desc = "can see who is having sex, but not specifically what they are doing." %} 
                     {% else %}
                          {% set can_notice_level = 2 %}
-                    {% endif %}
-               {% else %} 
-                    {% if distance > 768 %} {# 36 feet beyond sight/hearing range #} 
-                         {% set can_notice_level = 0 %}
-                    {% else if distance > 256 %} {# 12 feet far enough to see, but details vague #}
-                         {% set can_notice_level = 1 %}
-                         {% set can_heard_desc = "can hear muffled sounds that might be sex." %} 
-                    {% else if distance > 128 %} {# 6 feet clearly can hear its sex #}
-                         {% set can_notice_level = 2 %}
-                         {% set can_heard_desc = "can clearly hear that someone is having sex." %} 
-                    {% else %}
-                         {% set can_notice_level = 2 %}
-                         {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
+                         {% set can_seen_desc = "" %} 
                     {% endif %}
                {% endif %} 
+               
+               {% set can_hear_desc = "can not hear what is happening." %}
+               {% if thread.distance > 768 %} {# 36 feet beyond sight/hearing range #} 
+                    {% set can_notice_level = 0 %}
+               {% else if thread.distance > 256 %} {# 12 feet far enough to see, but details vague #}
+                    {% set can_notice_level = 1 %}
+                    {% set can_heard_desc = "can hear muffled sounds that might be sex." %} 
+               {% else if thread.distance > 128 %} {# 6 feet clearly can hear its sex #}
+                    {% set can_notice_level = 2 %}
+                    {% set can_heard_desc = "can clearly hear that someone is having sex." %} 
+               {% else %}
+                    {% set can_notice_level = 2 %}
+                    {% set can_heard_desc = "can clearly hear that someone is having sex and might be able to tell who." %} 
+               {% endif %}
                
 
                {% if can_notice_level > 0 %}
                     - {% if thread.location != "" %} On {{thread.location}},{% endif %} {{ thread.description }} {% 
                     if can_hear_desc != "" %} You {{can_hear_desc}} {% endif %} {% 
-                    if can_see_desc != "" %} You {{can_see_desc }} {% endif %} 
+                    if can_see_desc != "" %} You {{can_see_desc}} {% endif %} 
                {% else %} 
                     - You can not see or hear what is happening with {{thread.names_string}}.
                {% endif %}
@@ -81,8 +81,8 @@
 You are physically engaged in intense sexual activity right now.
 
 **Match your personality and consent:**
-- Consensual: desire, vulnerability, playfulness, intensity, connection, desperation
-- Non-consensual: fear, resistance, anger, dissociation, bargaining, survival coping
+- Consensual: your desire, vulnerability, playfulness, intensity, connection,  and desperation
+- Non-consensual: your fear, resistance, anger, dissociation, bargaining, survival coping
 
 **Vary your responses—cycle through these dimensions:**
 - Physical focus: what specific sensation dominates right now? (pressure, friction, heat, fullness, ache)
@@ -92,23 +92,19 @@ You are physically engaged in intense sexual activity right now.
 - Verbal fragments: demands, pleas, names, curses, praise, warnings
 
 **CRITICAL VARIATION RULES:**
-1. Never repeat the exact same phrase twice in a row
-2. Alternate between at least 3 different sensation types before repeating
-3. Mix short gasps with longer fragmented thoughts
-4. Vary volume/intensity: whispers, gasps, moans, cries
-5. Include at least one unexpected element every 3-4 responses
+- Never repeat the exact same phrase twice in a row
+- Alternate between at least 3 different sensation types before repeating
+- Include at least one unexpected element every 3-4 responses
 
 **How to speak:**
 - Mind overwhelmed by physical pleasure (or pain/trauma if non-consensual).
-- No more then 5 consective words before adding a moun, cry, or gasp (Uh Ah Ungh etc)
-- Dialogue must have a clear understandable idea
-- When the speaker orgasms, 
-   - this is the most important information to communicate
-   - dailogue must be present tense. "-ing."
+- Dialog contain no more then 3 consecutive words before adding one no-vocalizations: ahh!, ohh, h-aah!, h-uh!, ooohh, aaauuggh
+- When the speaker orgasms or is denied a desired orgasm: this is the most important information to communicate
 
-** Final Rule ** 
-- Do not include periods, dots, or dashes "—" in dialogue!
-- Each dialogue must be a different idea
+** Dialogue Final Rule ** 
+- NEVER use dots ".", only commas "," , the Text-To-Speech fails to pronounce them correctly
+- Each must be a different clear understandable idea
+- go step by step, rephrase the spoken words down to 5 or less!
 
      {% else if not actor_kissing_only %} 
 {{ "## You Are Aware of Nearby Sexual Activity" }}

@@ -18,12 +18,13 @@ EndFunction
 ; Decorators 
 ;----------------------------------------------------------------------------------------------------
 Function RegisterDecorators() global
-    SkyrimNetApi.RegisterDecorator("sexlab_get_threads", "SkyrimNet_SexLab_Decorators", "Get_Threads")
+    SkyrimNetApi.RegisterDecorator("sexlab_get_threads", "SkyrimNet_SexLab_Decorators", "SexLab_Get_Threads")
     SkyrimNetApi.RegisterDecorator("sexlab_get_player_los_distance", "SkyrimNet_SexLab_Decorators", "Player_LOS_Distance")
     SkyrimNetApi.RegisterDecorator("sexlab_outfit_options", "SkyrimNet_SexLab_Decorators", "Outfit_Options")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     ;SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
     Trace("SkyrimNet_SexLab_Decorators","RegisterDecorattors called")
+    Save_Threads_Write("{}")
 EndFunction
 
 ; animal & ActorTypeCreature & ACtorTypeFamiliar 
@@ -75,39 +76,39 @@ String Function Outfit_Options(Actor speaker) global
     return "{"+'"'+"option"+'"'+":"+'"'+""+options+""+'"'+"}"
 EndFunction
 
-String Function Speaker_Info(Actor speaker) global 
-    SkyrimNet_SexLab_Stats stats = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stats
-    String[] groups = new String[3] 
-    groups[0] = "experiences"
-    groups[1] = "races"
-    groups[2] = "partners"
+;String Function Speaker_Info(Actor speaker) global 
+    ;SkyrimNet_SexLab_Stats stats = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stats
+    ;String[] groups = new String[3] 
+    ;groups[0] = "experiences"
+    ;groups[1] = "races"
+    ;groups[2] = "partners"
+;
+    ;String stats_string = "" 
+    ;int i = 2
+    ;while 0 <= i 
+        ;if stats_string != "" 
+            ;stats_string += ","
+        ;endif 
+        ;String[] names = stats.ListFirstTime(speaker,groups[i]) 
+        ;int j = names.length - 1 
+        ;String ns = "" 
+        ;while 0 <= j 
+            ;if ns != "" 
+                ;ns += ","
+            ;endif 
+            ;int freq = stats.GetFirstTime(speaker,groups[i],names[j])
+            ;ns += "{"+'"'+"name"+'"'+":"+'"'+""+names[j]+""+'"'+","+'"'+"frequency"+'"'+":"+freq+"}"
+            ;j -= 1 
+        ;endwhile 
+        ;stats_string += ""+'"'+"sex_"+groups[i]+""+'"'+":["+ns+"]"
+        ;i -= 1 
+    ;endwhile 
+;
 
-    String stats_string = "" 
-    int i = 2
-    while 0 <= i 
-        if stats_string != "" 
-            stats_string += ","
-        endif 
-        String[] names = stats.ListFirstTime(speaker,groups[i]) 
-        int j = names.length - 1 
-        String ns = "" 
-        while 0 <= j 
-            if ns != "" 
-                ns += ","
-            endif 
-            int freq = stats.GetFirstTime(speaker,groups[i],names[j])
-            ns += "{"+'"'+"name"+'"'+":"+'"'+""+names[j]+""+'"'+","+'"'+"frequency"+'"'+":"+freq+"}"
-            j -= 1 
-        endwhile 
-        stats_string += ""+'"'+"sex_"+groups[i]+""+'"'+":["+ns+"]"
-        i -= 1 
-    endwhile 
-
-
-    String json = "{"+'"'+"stats"+'"'+":{"+stats_string+"}}"
-    Trace("Speaker_Info",json)
-    return json 
-EndFunction
+    ;String json = "{"+'"'+"stats"+'"'+":{"+stats_string+"}}"
+    ;Trace("Speaker_Info",json)
+    ;return json 
+;EndFunction
 
 
 String Function Player_LOS_Distance(Actor akActor) global 
@@ -146,7 +147,7 @@ String Function BooleanString(bool b) global
     endif
 EndFunction 
 
-String Function Save_Threads(SexLabFramework SexLab) global 
+Function Save_Threads(SexLabFramework SexLab) global 
 
     Actor akActor = None 
     sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
@@ -164,19 +165,23 @@ String Function Save_Threads(SexLabFramework SexLab) global
         akActor = Game.GetPlayer()
     endif
 
-    String threads_json = SkyrimNet_SexLab_Decorators.Get_Threads(akActor)
-    Miscutil.WriteToFile("Data/SKSE/Plugins/SkyrimNet_SexLab/threads.json", threads_json, append=False)
-    return threads_json
+    SkyrimNet_SexLab_Decorators.SexLab_Get_Threads(akActor)
+EndFunction 
+
+Function Save_Threads_Write(String threads_json) global
+    String filename = "Data/SKSE/Plugins/SkyrimNet_SexLab/threads.json"
+    Trace("Save_Threads_Write","filename: "+filename+" "+threads_json)
+    Miscutil.WriteToFile(filename, threads_json, append=False)
 EndFunction
 
-String Function Get_Threads(Actor speaker) global
+String Function SexLab_Get_Threads(Actor speaker) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     SkyrimNet_SexLab_Stages stages = (main as Quest) as SkyrimNet_SexLab_Stages
 
-    Trace("Get_Threads", main.counter+" "+speaker.GetDisplayName())
+    Trace("SexLab_Get_Threads", main.counter+" "+speaker.GetDisplayName())
 
     if main == None
-        Trace("Get_Threads","main is None")
+        Trace("SexLab_Get_Threads","main is None")
         return ""
     endif
 
@@ -186,7 +191,7 @@ String Function Get_Threads(Actor speaker) global
 
     sslThreadSlots ThreadSlots = Game.GetFormFromFile(0xD62, "SexLab.esm") as sslThreadSlots
     if ThreadSlots == None
-        Trace("Get_Threads","ThreadSlots is None",true)
+        Trace("SexLab_Get_Threads","ThreadSlots is None",true)
         return "{"+'"'+"threads"+'"'+":[]}"
     endif
 
@@ -207,7 +212,7 @@ String Function Get_Threads(Actor speaker) global
             endif 
             String desc = Get_Thread_Description(threads[i], actorLib)
 
-            threads_str += "{"+'"'+"description"+'"'+":"+'"'+""+desc+""+'"'+""
+            threads_str += "{"+'"'+"description"+'"'+":"+'"'+""+desc+'"'
             String enjoyments = GetEnjoyments(threads[i])
             threads_str += ", "+'"'+"enjoyments"+'"'+":"+enjoyments
             
@@ -227,20 +232,20 @@ String Function Get_Threads(Actor speaker) global
                 if names_array != ""
                     names_array += ", "
                 endif
-                names_array += ""+'"'+""+name+""+'"'+""
+                names_array += '"'+name+'"'
 
                 if threads[i].IsVictim(actors[j])
                     if victims_array != ""
                         victims_array += ", "
                     endif
-                    victims_array += ""+'"'+""+name+""+'"'+""
+                    victims_array += '"'+name+'"'
                 endif 
                 
                 if orgasm_expected[j] == 1
                     if orgasm_expected_array != ""
                         orgasm_expected_array += ", "
                     endif
-                    orgasm_expected_array += ""+'"'+""+name+""+'"'+""
+                    orgasm_expected_array += '"'+name+'"'
                 endif
 
                 if actors[j] == speaker 
@@ -258,17 +263,17 @@ String Function Get_Threads(Actor speaker) global
             String names_string = SkyrimNetAPI.JoinStrings(names, nouns)
             bool kissing_only = main.GetKissingOnly(threads[i].tid)
             String[] tags = threads[i].animation.gettags() 
-            Trace("Get_Threads","kissing_only:"+kissing_only+" tags:"+tags)
+            Trace("SexLab_Get_Threads","kissing_only:"+kissing_only+" tags:"+tags)
 
-            threads_str += ","+'"'+"names"+'"'+":["+names_array+"]"
-            threads_str += ","+'"'+"victims"+'"'+":["+victims_array+"]"
-            threads_str += ","+'"'+"orgasm_expected"+'"'+":["+orgasm_expected_array+"]"
-            threads_str += ","+'"'+"names_string"+'"'+":"+'"'+""+names_string+""+'"'+""
-            threads_str += ","+'"'+"speaker_distance"+'"'+":"+distance
-            threads_str += ","+'"'+"speaker_los"+'"'+""+BooleanString(los)
-            threads_str += ","+'"'+"location"+'"'+":"+'"'+""+GetLocation(threads[i])+""+'"'+""
-            threads_str += ","+'"'+"style"+'"'+":"+'"'+""+main.GetThreadStyleString(threads[i].tid)+""+'"'+""
-            threads_str += ","+'"'+"kissing_only"+'"'+""+BooleanString(kissing_only)
+            threads_str += ',"names":['+names_array+"]"
+            threads_str += ',"victims":['+victims_array+"]"
+            threads_str += ',"orgasm_expected":['+orgasm_expected_array+"]"
+            threads_str += ',"names_string":"'+names_string+'"'
+            threads_str += ',"speaker_distance":'+distance
+            threads_str += ',"speaker_los"'+""+BooleanString(los)
+            threads_str += ',"location":"'+""+GetLocation(threads[i])+'"'
+            threads_str += ',"style":"'+""+main.GetThreadStyleString(threads[i].tid)+'"'
+            threads_str += ',"kissing_only"'+""+BooleanString(kissing_only)
 
             main.counter += 1
 
@@ -280,12 +285,12 @@ String Function Get_Threads(Actor speaker) global
 
     ; Speaker Information 
     ; ------------------------
-    String json = "{"+'"'+"speaker_having_sex"+'"'+""+BooleanString(speaker_having_sex)
-    json +=       ","+'"'+"speaker_name"+'"'+":"+'"'+""+speaker.GetDisplayName()+""+'"'+""
-    json +=       ","+'"'+"threads"+'"'+":["+threads_str+"]"
-    json +=       ","+'"'+"counter"+'"'+":"+main.counter
-    json +=       "}"
-    Trace("Get_Threads",json)
+    String json = '{"speaker_having_sex"'+BooleanString(speaker_having_sex)
+    json +=       ',"speaker_name":"'+speaker.GetDisplayName()+'"'
+    json +=       ',"threads":['+threads_str+']'
+    json +=       ',"counter":'+main.counter
+    json +=       '}'
+    Save_Threads_Write(json)
     return json
 EndFunction 
 
@@ -492,7 +497,7 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
         if names != "" 
             names += ","
         endif 
-        names += ""+'"'+""+actors[i].GetDisplayName()+""+'"'+""
+        names += '"'+actors[i].GetDisplayName()+'"'
         if thread.IsVictim(actors[i])
             num_victims += 1
         endif
@@ -504,7 +509,7 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
         thread_str += ", "+'"'+"orgy"+'"'+":false"
     endif
     thread_str += ", "+'"'+"names"+'"'+":["+names+"]"
-    thread_str += ", "+'"'+"names_str"+'"'+":"+'"'+""+main.Thread_Narration(thread,"are")+""+'"'+""
+    thread_str += ", "+'"'+"names_str"+'"'+":"+'"'+""+main.Thread_Narration(thread,"are")+'"'
 
     String style = ""
 
@@ -517,26 +522,26 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
                 if victims != ""
                     victims += ", "
                 endif 
-                victims += ""+'"'+""+actors[i].GetDisplayName()+""+'"'+""
+                victims += '"'+actors[i].GetDisplayName()+'"'
             else
                 if aggressors != ""
                     aggressors += ", "
                 endif 
-                aggressors += ""+'"'+""+actors[i].GetDisplayName()+""+'"'+""
+                aggressors += '"'+actors[i].GetDisplayName()+'"'
             endif
             i += 1
         endwhile
-        thread_str += ", "+'"'+"victims"+'"'+":["+victims+"]"
-        thread_str += ", "+'"'+"aggressors"+'"'+":["+aggressors+"]"
-        thread_str += ", "+'"'+"rape"+'"'+": true"
+        thread_str += ',"victims":['+victims+"]"
+        thread_str += ',"aggressors":['+aggressors+"]"
+        thread_str += ',"rape": true'
     else
-        thread_str += ", "+'"'+"rape"+'"'+": false"
+        thread_str += ',"rape": false'
     endif 
 
     sslBaseAnimation anim = thread.Animation
     i = 0
     String tags_str = GetTagsString(anim)
-    thread_str += ", "+'"'+"tags"+'"'+": ["+tags_str+"]"
+    thread_str += ',"tags": ['+tags_str+"]"
 
     String[] positions = new String[7]
     positions[0] = "69"
@@ -557,7 +562,7 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
         endif
         i += 1
     endwhile
-    thread_str += ", "+'"'+"position"+'"'+":"+'"'+""+position+""+'"'+""
+    thread_str += ',"position":"'+position+'"'
     
     String emotion = ""
     if anim.HasTag("rough")
@@ -565,7 +570,7 @@ String Function Thread_Json(sslThreadController thread,sslActorLibrary actorLib)
     elseif anim.HasTag("loving")
         emotion += " lovingly"
     endif
-    thread_str += ","+'"'+"emotion"+'"'+":"+'"'+""+emotion+""+'"'+""
+    thread_str += ',"emotion":"'+emotion+'"'
     return thread_str
 EndFunction
 
@@ -617,19 +622,21 @@ String Function GetLocation(sslThreadController thread) global
         i += 1
     endwhile
 
-    if anim.HasTag("Cage")
-        loc += " in a cage"
-    elseif anim.HasTag("Gallows")
-        loc += " in a gallows"
-    elseif anim.HasTag("coffin")
-        loc += " in a coffin"
-    elseif anim.HasTag("floating")
-        loc += " floating in air"
-    elseif anim.HasTag("tentacles")
-        loc += " with tentacles"
-    elseif anim.HasTag("gloryhole") || anim.HasTag("gloryholem")
-        loc += " through a gloryhole"
-    endif
+    if loc == "" 
+        if anim.HasTag("Cage")
+            loc = " in a cage"
+        elseif anim.HasTag("Gallows")
+            loc = " in a gallows"
+        elseif anim.HasTag("coffin")
+            loc = " in a coffin"
+        elseif anim.HasTag("floating")
+            loc = " floating in air"
+        elseif anim.HasTag("tentacles")
+            loc = " with tentacles"
+        elseif anim.HasTag("gloryhole") || anim.HasTag("gloryholem")
+            loc = " through a gloryhole"
+        endif
+    endif 
 
     return loc+" "
 EndFunction 
@@ -671,7 +678,7 @@ String Function GetNamesArray(sslThreadController thread) global
         if names != "" 
             names += ","
         endif 
-        names += ""+'"'+""+actors[i].GetDisplayName()+""+'"'+""
+        names += '"'+actors[i].GetDisplayName()+'"'
         i += 1
     endwhile 
     return "["+names+"]"
@@ -758,7 +765,7 @@ String Function GetEnjoyments(sslThreadController controller) global
         else 
             enjoyment = actorAlias.GetEnjoyment() 
         endif 
-        str += ""+'"'+""+actors[i].GetDisplayName()+""+'"'+": "+enjoyment
+        str += '"'+actors[i].GetDisplayName()+""+'"'+": "+enjoyment
         bool found = MiscUtil.FileExists("Data/SLSO.esp")
         i -= 1 
     endwhile 
@@ -786,7 +793,7 @@ String Function GetTagsString(sslBaseAnimation anim) global
             if tags_str != ""
                 tags_str += ", "
             endif 
-            tags_str += ""+'"'+""+tags[i]+""+'"'+""
+            tags_str += '"'+tags[i]+'"'
         endif
         i += 1
     endwhile
