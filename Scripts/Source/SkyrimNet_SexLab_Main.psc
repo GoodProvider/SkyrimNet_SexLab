@@ -50,13 +50,14 @@ int Property BUTTON_YES_RANDOM = 1 Auto ; 1
 int Property BUTTON_NO_SILENT = 2 Auto  ; 2
 int Property BUTTON_NO = 3 Auto         ; 3
 
-int Property STYLE_FORCEFULLY = 0 Auto 
-int Property STYLE_NORMALLY = 1 Auto 
-int Property STYLE_GENTLY = 2 Auto 
-String style_string_current = "" ; Used by Anims Dialogue, to return the Style
+
+; ---------------------------------------------------
+int Property STYLE_FORCEFULLY = 0 Auto
+int Property STYLE_NORMALLY = 1 Auto
+int Property STYLE_GENTLY = 2 Auto
+
 int[] thread_style
 bool[] thread_started
-
 bool[] thread_kissing_only 
 bool Function GetKissingOnly(int id) 
     EnsureThreadArraySize(id)
@@ -88,6 +89,7 @@ int Property group_ordered = 0 Auto
 
 int skynet_tag_sex_lock = 0 
 
+String Property storage_actor_lock_key = "skyrimnet_sexlab_actor_lock" Auto 
 String Property storage_items_key = "skyrimnet_sexlab_storage_items" Auto
 String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" Auto
 String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated" Auto
@@ -140,21 +142,6 @@ Function Setup()
         Trace("Setup","SkyrimNet_SexLab_Handler_DOM found:"+skyrimnet_sexlab_handler_dom_found+", SkyrimNet_DOM found :"+skyrimnet_dom_found)
     endif 
 
-    ;thread_started = new bool[32]
-    thread_kissing_only = new bool[32]
-    if thread_style.length == 0 
-        thread_style = new int[32] 
-        thread_started = new bool[32]
-        thread_kissing_only = new bool[32]
-        int j = thread_style.length - 1 
-        while 0 <= j 
-            thread_style[j] = STYLE_NORMALLY
-            thread_started[j] = false 
-            thread_kissing_only[j] = false 
-            j -= 1 
-        endwhile 
-    endif 
-
     if !MiscUtil.FileExists("Data/SexLab.esm")
         Trace("SetUp","Data/SexLab.esm does not exist") 
         Debug.MessageBox("Can't find Data/SexLab.esm"+StringUtil.AsChar(10)\
@@ -176,25 +163,7 @@ Function Setup()
     endif 
     direct_narration_last_time = 0 
 
-    if actorLock == 0 
-        actorLock = JFormMap.object() 
-        JValue.retain(actorLock)
-        ActorLockTimeout = 60.0
-    elseif JFormMap.count(actorLock) > 0
-        Form[] forms = JFormMap.allKeysPArray(actorLock)
-        if forms != None 
-            int i = forms.length
-            while i >= 0
-                Actor akActor = forms[i] as Actor
-                if (akActor == None)
-                    JFormMap.removeKey(actorLock, forms[i]) ; Purge orphaned reference from map structure
-                else
-                    ReleaseActorLock(akActor)
-                endif
-                i -= 1
-            endwhile
-        endif
-    endif 
+    ReleaseAllActorLock()
 
     if group_info == 0
         group_info = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
@@ -267,7 +236,7 @@ EndFunction
 
 bool Function LockActors(Actor[] actors) 
     int i = actors.length - 1 
-    while 0 <= i && SetActorLock(actors[i]) 
+    while 0 <= i && LockActorLock(actors[i]) 
         i -= 1 
     endwhile 
 
@@ -292,38 +261,27 @@ Function UnLockActors(Actor[] actors)
 EndFunction 
 
 Bool Function IsActorLocked(Actor akActor) 
-    bool locked = False
-    if akActor != None 
-        if JFormMap.hasKey(actorLock, akActor) 
-            float time = JFormMap.getFlt(actorLock, akActor) 
-            if Utility.GetCurrentGameTime() - time > actorLockTimeout
-                JFormMap.removeKey(actorLock, akActor)
-                locked = False
-            else
-                locked = True
-            endif 
-        endif 
-        Trace("IsActorLocked",akActor.GetDisplayName()+" "+locked)
-    endif 
-    return locked 
-EndFunction
+    return StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
+EndFunction 
 
-bool Function SetActorLock(Actor akActor) 
-    if akActor == None || IsActorLocked(akActor)
-        return false 
+bool Function LockActorLock(Actor akActor) 
+    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
+        return False 
     endif 
-    Trace("SetActorLock",akActor.GetDisplayName())
-    JFormMap.setFlt(actorLock, akActor, Utility.GetCurrentGameTime())
-    return true
-EndFunction
+    Trace("LockActorLock",akActor.GetDisplayName())
+    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1) 
+    return True 
+EndFunction 
 
 Function ReleaseActorLock(Actor akActor) 
-    if akActor == None 
-        return 
-    endif 
+    StorageUtil.UnsetIntValue(akActor, storage_actor_lock_key) 
     Trace("ReleaseActorLock",akActor.GetDisplayName())
-    JFormMap.removeKey(actorLock, akActor)
 EndFunction
+
+Function ReleaseAllActorLock() 
+    StorageUtil.ClearAllPrefix(storage_actor_lock_key)
+EndFunction
+
 
 ;----------------------------------------------------------------------------------------------------
 ;Function SetThreadEjaculated(Actor akActor, int cum_added) 

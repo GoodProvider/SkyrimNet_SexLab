@@ -47,9 +47,10 @@ eligibilityRules:
           - currentActor
         comparisonOperator: ==
         expectedValue: false
-      - decoratorName: decnpc
+      - decoratorName: papyrus_util
         arguments:
+          - "HasIntValue"
           - currentActor
+          - "skyrimnet_sexlab_actor_lock"
         comparisonOperator: ==
         expectedValue: false
-        resultPath: isChild

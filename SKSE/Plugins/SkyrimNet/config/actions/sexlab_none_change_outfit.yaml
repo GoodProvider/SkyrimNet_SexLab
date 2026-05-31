@@ -37,6 +37,13 @@ eligibilityRules:
         arguments: ["currentActor", "OStimExcitementFaction"]
         comparisonOperator: "=="
         expectedValue: false
+      - decoratorName: papyrus_util
+        arguments:
+          - "HasIntValue"
+          - currentActor
+          - "skyrimnet_sexlab_actor_lock"
+        comparisonOperator: ==
+        expectedValue: false
     logicalOperator: "AND"
     required: true
   - conditions:
