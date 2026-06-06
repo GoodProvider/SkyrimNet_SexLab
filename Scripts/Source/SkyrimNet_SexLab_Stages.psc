@@ -1,6 +1,7 @@
 Scriptname SkyrimNet_SexLab_Stages extends Quest 
 
 SkyrimNet_SexLab_Main Property main Auto
+SkyrimNet_SexLab_Manager Property manager Auto 
 sslActorLibrary Property actorLib Auto
 import StorageUtil
 
@@ -212,7 +213,8 @@ Function EditDescriptions(sslThreadController thread)
 
     int button = desc_prev
 
-    String style_start = main.GetThreadStyleString(thread.tid)
+    SkyrimNet_SexLab_Scene scene = manager.GetSceneFromThread(thread)
+    String style_start = scene.style
     while button != done 
         String source = "" 
         String desc = "" 
@@ -250,7 +252,7 @@ Function EditDescriptions(sslThreadController thread)
             String source_stage = source +" "+thread.stage+"/"+thread.animation.StageCount() 
             msg += "["+source_stage+"] "+desc
         endif 
-        msg += ""+newline+"style:"+main.Thread_Narration(thread,"are") 
+        msg += ""+newline+"style:"+scene.GetStatusMessage() 
         int[] orgasm_filter = GetOrgasmExpected(thread)
         if orgasm_filter.length == actors.length 
             int i = orgasm_filter.length - 1
@@ -280,18 +282,18 @@ Function EditDescriptions(sslThreadController thread)
         elseif button == desc_edit  
             EditorDescription(main, thread)
         elseif button == orgasm_edit 
-            SetOrgasmExpected(main, thread)
+            SetOrgasmExpected(thread)
         elseif button == tracking 
-            ToggleThreadTracking(thread.tid)
+            ToggleThreadTracking(thread)
         elseif button == style_edit 
-            main.SexStyleDialog(thread.tid,  thread.GetVictim() != None) 
+            scene.SexStyleDialog() 
         elseif button == stop 
             actions.Sex_Stop(actors[0])
             return
         endif 
     endwhile 
 
-    String style_end = main.GetThreadStyleString(thread.tid)
+    String style_end = scene.style
     if style_start != style_end 
         SkyrimNet_SexLab_Utilities.DirectNarration(thread.positions[0].getDisplayName()+"'s scene changed from '"+style_start+"' to '"+style_end+"'")
     endif 
@@ -346,7 +348,7 @@ Function EditorDescription(SkyrimNet_SexLab_Main main, sslThreadController threa
 
             if button == accept 
                 StartThreadTracking(thread.tid)
-                UpdateAnimInfo(main, thread, "stage", version, new int[1] )
+                UpdateAnimInfo(thread, "stage", version, new int[1] )
             elseif button == rewrite
                 EditorDescription(main, thread)
             endif 
@@ -532,7 +534,7 @@ Function SetOrgasmExpected(SkyrimNet_SexLab_Main main, sslThreadController threa
     endwhile
 
     if changed 
-        UpdateAnimInfo(main, thread, "orgasm_expected", VERSION_2_0, orgasm_expected)
+        UpdateAnimInfo(thread, "orgasm_expected", VERSION_2_0, orgasm_expected)
     endif 
 
     if button == done
@@ -637,7 +639,7 @@ int Function GetAnim_Info(sslThreadController thread, Bool force_load=False)
     return anim_info
 EndFunction 
 
-Function UpdateAnimInfo(SkyrimNet_SexLab_Main main, sslThreadController thread, String field, String version, int[] orgasm_expected)
+Function UpdateAnimInfo(sslThreadController thread, String field, String version, int[] orgasm_expected)
     String fname = GetFilename(thread)
     String path = local_folder+"/"+fname
     int anim_info = 0
@@ -665,7 +667,7 @@ Function UpdateAnimInfo(SkyrimNet_SexLab_Main main, sslThreadController thread, 
     Trace("saving "+fname,true)
     JValue.writeToFile(anim_info, path)
     JValue.writeToFile(anim_info, animations_folder+"/last.json")
-    SkyrimNet_SexLab_Decorators.Save_Threads(main.SexLab)
+    manager.SaveThreads()
 EndFunction 
 
 Function SetAnimCache(sslThreadController thread, int anim_info)

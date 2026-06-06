@@ -37,4 +37,5 @@ Function Store_Races() global
     String filename = "Data/SKSE/Plugins/SkyrimNet_Sexlab/name_race.json"
     Trace("SkyrimNet_SexLab_Creatures","forms count: "+JMap.count(races)+" writing "+filename)
     JValue.writeToFile(races, filename) 
+    JValue.release(races) 
 EndFunction
