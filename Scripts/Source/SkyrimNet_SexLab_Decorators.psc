@@ -23,11 +23,9 @@ Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("sexlab_outfit_options", "SkyrimNet_SexLab_Decorators", "Outfit_Options")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     ;SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
-    Trace("SkyrimNet_SexLab_Decorators","RegisterDecorattors called")
-    Save_Threads_Write("{}")
 EndFunction
 
-; animal & ActorTypeCreature & ACtorTypeFamiliar 
+; animal & ActorTypeCreature & ActorTypeFamiliar 
 ; skyrim.13798 & skyrim.13795 & skyrim.10ED7  
 ; 
 ; Bethesda-Used Body Slots
@@ -79,48 +77,18 @@ EndFunction
 
 String Function Outfit_Options(Actor speaker) global 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+       if main == None
+        Trace("Outfit_Options", "ERROR: Failed to get SkyrimNet_SexLab_Main form", True)
+        return '{"option":"undresses"}'
+    endif
     String options = "undresses"
-    if main.HasStrippedItems(speaker)
+    ; Check if the actor has undressed items, they could put on 
+    if main.HasStrippedItems(speaker) 
         options = "dresses"
     endif 
-    Trace("Outfit_Options",speaker.GetDisplayName()+" has stripped items")
-    return "{"+'"'+"option"+'"'+":"+'"'+""+options+""+'"'+"}"
+    Trace("Outfit_Options",speaker.GetDisplayName()+" has options:"+options)
+    return "{"+'"'+"option"+'"'+":"+'"'+options+'"'+"}"
 EndFunction
-
-;String Function Speaker_Info(Actor speaker) global 
-    ;SkyrimNet_SexLab_Stats stats = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stats
-    ;String[] groups = new String[3] 
-    ;groups[0] = "experiences"
-    ;groups[1] = "races"
-    ;groups[2] = "partners"
-;
-    ;String stats_string = "" 
-    ;int i = 2
-    ;while 0 <= i 
-        ;if stats_string != "" 
-            ;stats_string += ","
-        ;endif 
-        ;String[] names = stats.ListFirstTime(speaker,groups[i]) 
-        ;int j = names.length - 1 
-        ;String ns = "" 
-        ;while 0 <= j 
-            ;if ns != "" 
-                ;ns += ","
-            ;endif 
-            ;int freq = stats.GetFirstTime(speaker,groups[i],names[j])
-            ;ns += "{"+'"'+"name"+'"'+":"+'"'+""+names[j]+""+'"'+","+'"'+"frequency"+'"'+":"+freq+"}"
-            ;j -= 1 
-        ;endwhile 
-        ;stats_string += ""+'"'+"sex_"+groups[i]+""+'"'+":["+ns+"]"
-        ;i -= 1 
-    ;endwhile 
-;
-
-    ;String json = "{"+'"'+"stats"+'"'+":{"+stats_string+"}}"
-    ;Trace("Speaker_Info",json)
-    ;return json 
-;EndFunction
-
 
 String Function Player_LOS_Distance(Actor akActor) global 
     Actor player = Game.GetPlayer() 
@@ -150,20 +118,10 @@ String Function Is_Nudity(Actor akActor) global
     return "{"+'"'+"topless"+'"'+":"+topless+","+'"'+"bottomless"+'"'+":"+bottomless+"}"
 EndFunction
 
-String Function BooleanString(bool b) global
-    if b 
-        return ":true"
-    else 
-        return ":false"
-    endif
-EndFunction 
-
-
-
 String Function SexLab_Get_Threads(Actor speaker) global
     SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
     if manager == None 
         return '{"threads":[]}' 
     endif 
-    return manager.getThreadsJson(speaker) 
+    return manager.GetThreadsJson(speaker) 
 EndFunction 

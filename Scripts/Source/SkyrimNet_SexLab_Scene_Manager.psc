@@ -3,12 +3,14 @@ Scriptname SkyrimNet_SexLab_Scene_Manager extends Quest
 ; -------------------------------------
 ; SexLab 
 ; -------------------------------------
-SexLabFramework Property sexlab Auto 
-SkyrimNet_SexLab_Main Property Main 
-SkyrimNet_SexLab_Stages Property stages 
+SexLabFramework Property sexlab Auto
+SkyrimNet_SexLab_Main Property main Auto
+SkyrimNet_SexLab_Stages Property stages Auto
+
+Import SkyrimNet_SexLab_Utilities
 
 ; the scene_generic is returned when there re no more 
-SkyrimNet_SexLab_Scene_Generic scene_generic = None 
+SkyrimNet_SexLab_Scene scene_generic = None 
 SkyrimNet_SexLab_Scene[] Property scenes Auto
 Form[] thread_scene
 
@@ -19,21 +21,23 @@ Faction Property SkyrimNet_SexLab_Faction_Victim Auto
 String threads_filename = "Data/SKSE/Plugins/SkyrimNet_SexLab/threads.json"
 
 ; -------------------------------------
-; Actor Locks 
+; Storage 
 ; -------------------------------------
-String storage_actor_prefix = "skyrimnet_sexlab_scene"
-String storage_actor_lock_key = storage_actor_prefix+"_actor_lock"
-int actorLock = 0 Auto 
-float actorLockTimeout = 0.00069444444 Auto ;  1 day / (24 hours  * 60 minutes ) 
-
-; -------------------------------------
-; Actor Scene
-; -------------------------------------
-String storage_actor_scene_key = storage_actor_prefix+"_scene_lock"
-
+String storage_prefix = "skyrimnet_sexlab_scene"
 int thread_counter = 0 
 
-Function Trace(String func, String msg, Bool notification=False) global
+; -------------------------------------
+; Storage 
+; -------------------------------------
+String[] tags_supress_sexual
+
+; -------------------------------------
+; Group Info Object 
+; -------------------------------------
+int Property group_info = 0 Auto
+
+Function Trace(String func, String msg="", Bool notification=False) global
+
     msg = "[SkyrimNet_SexLab_Scene_Manager."+func+"] "+msg
     Debug.Trace(msg) 
     if notification
@@ -42,71 +46,178 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 Function Setup() 
-    StorageUtil.ClearAllPrefix(storage_actor_prefix)
+    if SexLab == None
+        Trace("SetUp","SexLab is None")
+        return  
+    endif
+
+    Trace("Setup")
+    int i = scenes.length - 1
+    while 0 <= i 
+        scenes[i].sid = i 
+        scenes[i].main = main 
+        scenes[i].stages = stages 
+        scenes[i].manager = self 
+        scenes[i].sexlab = sexlab 
+        scenes[i].ThreadSlots = (sexlab as Quest) as sslThreadSlots
+        scenes[i].SkyrimNet_SexLab_Faction_Victim = SkyrimNet_SexLab_Faction_Victim
+        i -= 1 
+    endwhile  
+    Trace("Setup","FInished with scenes")
+
+    ; Unlocks actors 
+    StorageUtil.ClearAllPrefix(storage_prefix)
+
+    if !thread_scene
+        Trace("Setup","creating thread_scene map")
+        thread_scene = new form[32]
+    endif 
+    Trace("Setup","updated thread_scene")
+
+    ; Reload the group_tags in case they where changed each time.
+    if group_info == 0
+        group_info = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
+        JValue.retain(group_info)
+    else
+        int group_info_new = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
+        JValue.releaseAndRetain(group_info, group_info_new)
+        group_info = group_info_new
+    endif
+
+
+    if !tags_supress_sexual
+        tags_supress_sexual = new String[10]
+        tags_supress_sexual[0] = "oral"
+        tags_supress_sexual[1] = "vaginal"
+        tags_supress_sexual[2] = "anal"
+        tags_supress_sexual[3] = "masturbation"
+        tags_supress_sexual[4] = "handjob"
+        tags_supress_sexual[5] = "boobjob"
+        tags_supress_sexual[6] = "thighjob"
+        tags_supress_sexual[7] = "fisting,dildo"
+        tags_supress_sexual[8] = "fingering"
+        tags_supress_sexual[9] = "footjob"
+    endif 
+    Trace("Setup","tags supress sexual finished")
+
     RegisterEventsActions()
     RegisterEventsSexLab()
-
-    if tid_scenes == None 
-        thread_scene = new Form[32]
-    endif 
 EndFunction 
 
 ; --------------------------------------------------------------------
 ; Get Scene
 ; --------------------------------------------------------------------
-SkyrimNet_SexLab_Scene Function GetScene(Actor[] actors)
-    return getSceneNext(actors)
-EndFunction
-
-SkyrimNet_SexLab_Scene Function GetScene_Speaker_Target(Actor[] actors, Actor Speaker, Actor Target, String tag="")
-    SkyrimNet_SexLab_Scene scene = GetScene(actors)
-    scene.speaker = speaker 
-    scene.target = target 
+SkyrimNet_SexLab_Scene Function CreateScene(String activity, Actor[] actors, Actor speaker, Actor target)
+    SkyrimNet_SexLab_Scene scene = GetSceneNextInactive()
+    Trace("CreateScene",scene.sid+" activity:'"+activity+"' actors:"+JoinActors(actors)+" speaker:"+GetDisplayName(speaker)+" target:"+GetDisplayName(target))
+    if scene == None
+        Trace("CreateScene", "Failed to get inactive scene, returning None")
+        return None
+    endif
+    Trace("CreateScene"," a")
+    scene.SetUp(actors, speaker, target) 
+    Trace("CreateScene"," b")
+    scene.SetActivityByString(activity)
+    Trace("CreateScene"," c")
     return scene
 EndFunction
 
-SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid) 
-    if tid < 0 
-        Trace("GetSceneByThreadId", "ThreadId < 0")
-        return None 
-    Endif 
-    ; Check if index is within current bounds
-    SkyrimNet_SexLab_Scene scene = None 
+SkyrimNet_SexLab_Scene Function CreateSceneFromThread(sslThreadController thread)
+    Actor[] actors = thread.Positions
+    SkyrimNet_SexLab_Scene scene = GetSceneNextInactive()
+    if scene == None
+        Trace("CreateSceneFromThread", "Failed to get inactive scene for thread " + thread.tid)
+        return None
+    endif
+    
+    if scene != scene_generic
+        ResizeThreadSceneAsNeeded(thread.tid)
+        thread_scene[thread.tid] = scene
+    endif 
+    if actors.length > 1
+        scene.Setup(actors, actors[0], actors[1]) 
+    else 
+        scene.Setup(actors, actors[0], None)
+    endif 
 
-    if tid >= thread_scene.length 
-        int new_size = tid + 10
-        int[] resized = Utility.createformArray(new_size)
-
-        int i = thread_scene.lenth - 1 
-        while 0 <= i 
-            resized[i] = thread_scene[i]
-            i += 1
+    if actors.length > 1 
+        int i = actors.length - 1
+        int num_victims = 0 
+        while 0 <= i
+            if thread.IsVictim(actors[i])
+                num_victims += 1
+                endif
+            i -= 1
         endwhile
-    elseif thread_scene[tid] != None 
-        scene = thread_scene[tid] as SkyrimNet_SexLab_Scene 
+
+        if num_victims > 0
+            Actor[] victims = PapyrusUtil.ActorArray(num_victims)
+            i = actors.length - 1
+            int j = num_victims - 1
+            while 0 <= i
+                if thread.IsVictim(actors[i])
+                    victims[j] = actors[i]
+                    j -= 1
+                endif
+                i -= 1
+            endwhile
+            scene.SetVictims(victims) 
+        endif
+    endif 
+
+    return scene 
+EndFunction
+
+
+SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadModel thread)
+    return GetSceneByThreadId(thread.tid) 
+EndFunction 
+
+SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid)
+    if tid < 0
+        Trace("GetSceneByThreadId", "ThreadId < 0")
+        return None
     endif
 
-    if scene == None 
-        scene = getSceneNext(thread.positions) 
-        scene.thread = SexLab.GetController(threadID)
-        if scene != scene_generic
-            thread_scene[tid] = scene
-        endif 
-    endif 
-    
-    return scene
+    SkyrimNet_SexLab_Scene scene = None
+
+    ; Ensure thread_scene is large enough
+    ResizeThreadSceneAsNeeded(tid)
+
+    ; Validate SexLab property before unsafe cast
+    if SexLab == None
+        Trace("GetSceneByThreadId", "SexLab property is None, cannot retrieve thread")
+        return None
+    endif
+
+    ; Try to locate the thread and create a scene from its positions
+    sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
+    if ThreadSlots != None && tid < ThreadSlots.Threads.length
+        sslThreadController thread = ThreadSlots.Threads[tid]
+        if thread != None
+            return CreateSceneFromThread(thread)
+        endif
+    endif
+
+    return None
 EndFunction
 
-; ---------------------------------------------
+; ----------------------------------------
 
-SkyrimNet_SexLab_Scene Function GetSceneFromActor(Actor akActor) 
-    sslThreadController thread = None
-    int scene_id = StorageUtil.GetIntValue(akActor, storage_actor_scene, -1)
-    if scene_id != -1 
-        return scene[scene_id]
+SkyrimNet_SexLab_Scene Function GetSceneByActor(Actor akActor) 
+    sslThreadController thread = GetThreadByActor(akActor) 
+    if thread != None
+        return GetSceneByThread(thread)
     endif 
+    return None 
+EndFunction
 
-    Trace("GetThread","   failed to find Scene for actor "+akActor.GetDisplayName()+" searching threads")
+sslThreadController Function GetThreadByActor(Actor akActor) 
+    if SexLab == None 
+        Trace("GetThreadByActor", "SexLab is None")
+        return None 
+    endif 
+    Trace("GetThread","actor:"+akActor.GetDisplayName())
     sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
     if ThreadSlots == None
         Trace("Get_Threads","ThreadSlots is None",true)
@@ -121,59 +232,37 @@ SkyrimNet_SexLab_Scene Function GetSceneFromActor(Actor akActor)
         int j = actors.length - 1
         while 0 <= j && thread == None
             if actors[j] == akActor
-                thread = threads[i]
+                return threads[i]
             endif 
             j -= 1
         endwhile 
         i -= 1
     endwhile
-
-    if thread != None
-        return getSceneByThread(thread)
-    endif 
-
-    Trace("GetSceneFromActor","   failed to find scene for actor "+akActor.GetDisplayName()+" using generic")
-    Actor[] actors = new Actor[1]
-    actors[0] = akActor
-    scene_generic.setUP(actors)
-    return scene_generic  
-EndFunction
+    return None 
+EndFunction 
 
 ; ----------------------------------------
 
-SkyrimnNet_SexLab_Scene Function GetSceneNext(Actor[] actors)  
-    int sid = scenes.length - 1 
-    while 0 <= sid && scenes[sid].status != scene.STATUS_INACTIVE 
+SkyrimNet_SexLab_Scene Function GetSceneNextInactive()
+    int sid = -1
+    int i = scenes.length - 1
+    while i >= 0
+        if scenes[i].status == scenes[i].STATUS_INACTIVE
             return scenes[i]
-        endif 
-        i -= 1 
-    endwhile 
+        endif
+        i -= 1
+    endwhile
 
-    SkyrimNet_SexLab_Scene scene = scene_generic 
-    if sid != -1 
-        scene = scenes[sid]
-        int i = actors.length - 1 
-        while 0 <= i 
-            StorageUtil.SetIntValue(akActor, storage_actor_lock_key, sid) 
-            i -= 1 
-        endif 
-    else 
-        Trace("GetSceneNext", "Failed to find available scene")
-    endif 
-
-    scene.Setup(actors) 
-    return scene
+    Trace("CreateScene","No inactive scenes available, creating new one. Total scenes before creating: "+scenes.length)
+    return scene_generic 
 EndFunction
+
 ;----------------------------------------------------------------------------------------------------
 ; Scene Release 
 ;----------------------------------------------------------------------------------------------------
 
 Function ReleaseScene(SkyrimNet_SexLab_Scene scene) 
-    ReleaseActorLocks(scene.actors) 
-    if 0 <= scene.tid && scene.tid < thread_scene
-        thread_scene[tid] = None 
-    endif 
-    scene.release() 
+    scene.Release() 
 EndFunction 
 
 ;----------------------------------------------------------------------------------------------------
@@ -181,148 +270,167 @@ EndFunction
 ;----------------------------------------------------------------------------------------------------
 
 sslThreadModel Function StartScene(SkyrimNet_SexLab_Scene scene) 
-    Trace("SceneStart",scene.getString()) 
-    ; ------------------------------------------
-    ; Set up directions and tags 
-    ; ------------------------------------------
-
-    bool getting_a = False 
-    int k = tags.length - 1 
-    while 0 <= k  && ! getting_a
-        String tag = tags[k]
-        if tags == "oral" || tag == "handjob" || tag == "boobjob" || tag == "thighjob" || tag == "footjob"
-            getting_a_tag = True
-        elseif tag == "pussy"
-            tags[k] = "vaginal"
-        elseif tag == "ass"
-            tags[k] = "anal"
-        endif 
-        k -= 1 
-    endwhile 
-
-    if scene.actors.length == 1
-        int gender = main.sexlab.GetGender(actors[0])
-        bool has_penis = (gender != 1 && gender != 3)
-        if has_penis 
-            scene.addTag("M")
-        else 
-            scene.addTag("F")
-        endif 
-    else
-        if (getting_a_tag && direction == "getting a") || direction == "fucking a"
-            Actor temp = actors[0] 
-            scene.actors[0] = actors[1]
-            scene.actors[1] = temp 
-        else 
-    endif 
-
-    ;-------------------------------
-    ; Animations
-    ;-------------------------------
-
-    sslThreadModel thread = main.sexlab.NewThread()
-    if thread == None
-        Trace("Sex_Start_Helper","Failed to create thread")
-        SceneRelease(scene) 
-        return None 
-    endif
-
-    if !scene.setThread(thread) 
-        SceneRelease(scene) 
-        return None 
-    endif 
-
-    ; Set the style 
-    scene.SetStyle(style) 
-
-    
-    ; Get the animations 
-    if !scene.SelectAnimations() 
-        ReleaseScene(scene) 
-        return None
-    endif 
-    
-    Trace("Sex_Start_Helper",\
-         " actors: "+'"'+""+SkyrimNet_SexLab_Utilities.JoinActors(actors)+'"'\
-        +" victims: "+'"'+""+SkyrimNet_SexLab_Utilities.JoinActors(victims)+'"'\
-        +" tag:"+tag\
-        +" style:"+style\
-        +" has_player: "+has_player\
-        +" anims.length: "+anims.length) 
-
-    if hook != "" 
-        thread.SetHook(hook)
-    endif 
-
-    ; If gender is male and giving oral, treat as woman so they can stay in the giving location
-    ;Trace("Sex_Start_Helper",SkyrimNet_SexLab_Utilities.JoinActors(thread.positions))
-    ;if actors.length > 1 
-        ;String msg = "" 
-        ;if tag == "kissing_only"
-            ;msg = speaker.GetDisplayName()+" starts activities with "+JoinActorsFiltered(actors,speaker_filter)+"."
-        ;else 
-            ;msg = speaker.GetDisplayName()+" starts sexual activites with "+JoinActorsFiltered(actors,speaker_filter)+"."
-        ;endif 
-        ;RegisterEvent("Start_Activities",msg, speaker) 
-    ;endif 
-    thread.StartThread() 
-    return thread 
+    return scene.Start()
 EndFunction
 
 ;----------------------------------------------------------------------------------------------------
 ; Action Events
 ;----------------------------------------------------------------------------------------------------
-Function RegisterEventActions() 
+Function SetThread_Scene(int tid, SkyrimNet_SexLab_Scene scene) 
+    if tid < 0
+        Trace("SetThread_Scene", "ThreadId < 0")
+        return
+    endif
+
+    ResizeThreadSceneAsNeeded(tid)
+    thread_scene[tid] = scene
+EndFunction
+
+Function ResizeThreadSceneAsNeeded(int tid)
+    if tid >= thread_scene.length
+        int new_size = tid + 10
+        Form[] resized = Utility.CreateFormArray(new_size)
+        int i = thread_scene.length - 1
+        while i >= 0
+            resized[i] = thread_scene[i]
+            i -= 1
+        endwhile
+        thread_scene = resized
+    endif
+EndFunction
+   
+;----------------------------------------------------------------------------------------------------
+; Action Events
+;----------------------------------------------------------------------------------------------------
+Function RegisterEventsActions() 
     Trace("RegisterEventsActions","")
     RegisterForModEvent("SkyrimNet_SexLab_Action_Stop", "Action_Stop")
     RegisterForModEvent("SkyrimNet_SexLab_Action_Start", "Action_Start")
 EndFunction 
 
-Event Action_Stop(Form akActor)
-    sslThreadController Scene = GetSceneByActor(akActor)
-    if Scene != None 
-        scene.AnimationEndFunction(akActor) 
-        sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
-        thread_slots.StopThread(scene.thread) 
-    endif 
-EndEvent 
-
-Event Start_Event(Actor Speaker, Actor Target, Actor Victim, \
-    string style, string direction, string tag, string scene_settings, String hook,\
-    Actor participate_3)
-    int num_actors = 1 
-    if Speaker == None 
-        Trace("SceneStart_Event", "Speaker is None")
+Event Action_Stop(Actor f_speaker, Actor f_target, String style)
+    Actor speaker = f_speaker as Actor 
+    Actor target = f_target as Actor 
+    Trace("Action_Stop", "speaker: "+speaker.GetDisplayName()+" target: "+target.GetDisplayName()+" style: "+style)
+    SkyrimNet_SexLab_Scene scene = GetSceneByActor(target)
+    if scene == None 
+        Trace("Action_Stop", "No scene found for target: "+target.GetDisplayName())
         return 
     endif 
-    if Target != None 
-        num_actors += 1 
-    endif 
-    if participate_3 != None 
-        num_actors += 1 
-    endif 
-    Actor[] actors = Utility.CreateActorArray(num_actors)
-    actors[0] = Speaker
-    if Target != None 
-        actors[1] = Target 
-    endif 
-    if participate_3 != None 
-        actors[2] = participate_3
+    if main == None 
+        Trace("Action_Stop", "main is None")
+        return  
     endif 
 
-    SkyrimNet_SexLab_Scene scene = GetScene(actors, Speaker, Target, tag) 
-    scene.style = style 
-    scene.direction = direction 
-    scene.addSettings(scene_settings) 
-    scene.hook = hook 
-    StartScene(scene) 
-EndFunction 
+    sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
+    if thread_slots == None 
+        Trace("Action_Stop", "thread_slots is None")
+        return 
+    endif 
+
+    Actor Player = Game.GetPlayer() 
+    if speaker != player && scene.has_player && main.sex_edit_tags_player
+        int yes = 0
+        int no = 1
+        int no_forcefully = 2
+        int no_gently = 3
+        int no_silently = 4
+        String[] buttons = new String[5]
+        buttons[yes] = "Yes"
+        buttons[no] = "No"
+        buttons[no_forcefully] = "No (forcefully)"
+        buttons[no_gently] = "No (gently)"
+        buttons[no_silently] = "No (silently)"
+        String activity
+        String question = speaker.GetDisplayName()+" is trying to stop "+scene.GetActivityStageMessage(scene.ACTIVITY_STAGE_ONGOING)+", will you allow it?"
+        int button = SkyMessage.showArray(question, buttons, getIndex = True) as int 
+        if button != yes
+            if button == no_silently
+                return 
+            endif 
+            String style = "" 
+            if button == no_forcefully
+                style = "forcefully"
+            elseif button == no_gently
+                style = "gently"
+            endif 
+            String message = player.GetDisplayName()+" "+style+" refuses "+speaker.GetDisplayName()+"'s attempt to stop "\
+                +scene.GetActivityStageMessage(scene.ACTIVITY_STAGE_ONGOING)+"."
+            DirectNarration(message, speaker)
+            return
+        endif 
+    endif 
+
+    scene.AnimationEnd(speaker,style)
+    thread_slots.StopThread(scene.GetThread())
+EndEvent 
+
+Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim, \
+    string style, string tag, bool target_position_0, string scene_settings, String event_hook,\
+    Form f_participate_3)
+    Actor speaker = f_speaker as Actor 
+    Actor target = f_target as Actor 
+    Actor victim = f_victim as Actor 
+    Actor participate_3 = f_participate_3 as Actor 
+
+    Trace("Action_Start","activity:"+activity\
+        +" speaker:"+GetDisplayName(Speaker)+" target:"+GetDisplayName(Target)+" victim:"+GetDisplayName(Victim)\
+        +" style:"+style+" tag:"+tag+" scene_settings:"+scene_settings+" event_hook:"+event_hook\
+        +" participate_3:"+GetDisplayName(participate_3))
+
+    if Speaker == None 
+        Trace("StartScene_Event", "Speaker is None")
+        return 
+    endif 
+
+    ; ----------------------------
+    ; Build the actors array
+    ; ----------------------------
+    int num_actors = 1 
+    if Target != None 
+        num_actors += 1 
+    elseif participate_3 != None 
+        Target = participate_3
+        participate_3 = None 
+        num_actors += 1 
+    endif 
+    if participate_3 != None 
+        num_actors += 1 
+    endif 
+    Actor[] actors = PapyrusUtil.ActorArray(num_actors)
+    actors[0] = Speaker
+    int i = 1 
+    if Target != None 
+        if target_position_0
+            actors[0] = target
+            actors[1] = speaker
+        else 
+            actors[1] = Target 
+        endif 
+        i += 1 
+    endif 
+    if participate_3 != None 
+        actors[i] = participate_3
+        i += 1 
+    endif 
+
+    SkyrimNet_SexLab_Scene scene = CreateScene(activity, actors, speaker, target)
+    scene.SetUp(actors, speaker, target) 
+    if scene.LockAllActorLock()
+        scene.SetVictim(victim)
+        scene.SetTag(tag) 
+        scene.SetStyle(style) 
+        scene.SetEventHook(event_hook) 
+        ;scene.addSettings(scene_settings) 
+        StartScene(scene) 
+    endif 
+EndEvent 
 
 
 ;----------------------------------------------------------------------------------------------------
 ; SexLab Events
 ;----------------------------------------------------------------------------------------------------
-Function RegisterEventSexlab() 
+Function RegisterEventsSexlab() 
     Trace("RegisterSexlabEvents","")
     ; SexLabFramework sexlab = Game.GetForm
 
@@ -337,33 +445,40 @@ Function RegisterEventSexlab()
 
     UnRegisterForModEvent("HookOrgasmStart")
     UnRegisterForModEvent("SexLabOrgasm")
-    RegisterForModEvent("SexLabOrgasm", "Orgasm_Individual")
+    RegisterForModEvent("SexLabOrgasm", "OrgasmIndividual")
     UnRegisterForModEvent("HookOrgasmStart")
-    RegisterForModEvent("HookOrgasmStart", "Orgasm_Combined")
+    RegisterForModEvent("HookOrgasmStart", "OrgasmCombined")
 EndFunction 
 
 ; ----------------------------------------------------------
 Event AnimationStart(int ThreadID, bool HasPlayer)
-    SkyrimNet_SexLab_Scene scene = getSceneFromThread(threadId)
+    SkyrimNet_SexLab_Scene scene = GetSceneByThreadId(ThreadID)
+    if scene == None 
+        Trace("AnimationStart","Scene is None for ThreadID "+ThreadID)
+        return
+    endif
     scene.AnimationStart() 
-    int i = scene.thread.positions.length - 1
-    while 0 <= i 
-        ReleaseActorLock(actors[i])
-        i -= 1
-    endwhile 
 EndEvent 
 
 
 ; ----------------------------------------------------------
 Event StageStart(int ThreadID, bool HasPlayer)
-    SkyrimNet_SexLab_Scene scene = getSceneFromThread(threadId)
+    SkyrimNet_SexLab_Scene scene = GetSceneByThreadId(ThreadID)
+    if scene == None 
+        Trace("StageStart","Scene is None for ThreadID "+ThreadID)
+        return
+    endif
     scene.StageStart() 
 EndEvent
 
 
 ; ----------------------------------------------------------
 event AnimationEnd(int ThreadID, bool HasPlayer)
-    SkyrimNet_SexLab_Scene scene = getSceneFromThread(threadId)
+    SkyrimNet_SexLab_Scene scene = GetSceneByThreadId(ThreadID)
+    if scene == None 
+        Trace("AnimationEnd","Scene is None for ThreadID "+ThreadID)
+        return
+    endif
     scene.AnimationEnd() 
 EndEvent 
 
@@ -404,283 +519,69 @@ EndEvent
 ; Orgasm Event Functions 
 ; This function is not called when flag SLSO, as it has its own orgasm handling
 ; ----------------------------------------------------------------------------------------------------
-Event Orgasm_Combined(int ThreadID, bool HasPlayer)
-    if SexLab == None
-        Trace("Orgasm_Combined","SexLab is None")
-        return  
-    endif
-
-    sslThreadController thread = SexLab.GetController(ThreadID)
-    if thread == None || GetKissingOnly(thread.tid)
-        return 
-    endif 
-
+Event OrgasmCombined(int ThreadID, bool HasPlayer)
     ; Ignore if separate orgasms is on, as it has its own handling
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
     if config.SeparateOrgasms 
         return 
     endif 
-    Actor[] actors = thread.Positions
-
-    ;Quest q = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as Quest
-    ;SkyrimNet_SexLab_main main = q as SkyrimNet_SexLab_Main
-    ;SkyrimNet_SexLab_Stages stages_lib = q as SkyrimNet_SexLab_Stages
-    int[] orgasm_expected = stages.GetOrgasmExpected(thread)
-    bool someone_ejaculated = False 
-    int i = actors.length - 1
-    String narration = "" 
-    Trace("Orgasm_Combined","ThreadID:"+threadID+" HasPlayer:"+HasPlayer+" orgasm_expected:"+orgasm_expected)
-    while 0 <= i
-        String name = actors[i].GetDisplayName()
-        int gender = actors[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(actors[i])
-        int gender_sexlab = sexlab.GetGender(actors[i]) 
-        bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if handler_dom.IsDomSlave(actors[i])
-            if orgasm_expected[i] == 1
-                int num_orgasms = StorageUtil.GetIntValue(actors[i], actor_num_orgasms_key, 0)
-                if num_orgasms > 0 
-                    if has_penis
-                        someone_ejaculated = True 
-                    endif 
-                else 
-                    narration += handler_dom.HandleOrgasmDenied(actors[i])
-                endif 
-            endif 
-            Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
-        else
-            if orgasm_expected[i] == 1
-                narration += name+" is orgasming. "
-                if has_penis
-                    someone_ejaculated = True
-                endif
-            endif 
-        endif 
-        Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | narration: "+narration)
-        i -= 1
-    endwhile
-
-    ; Generate cum message 
-    i = actors.length - 1
-    while 0 <= i 
-        if someone_ejaculated
-            narration += AddCum(thread, i, actors[i], actors[i].GetDisplayName())
-        endif 
-        Trace("Orgasm_Combined",i+" "+actors[i].GetDisplayName()+"| adding cum | narration: "+narration)
-        i -= 1 
-    endwhile 
-
-    SkyrimNetApi.PurgeDialogue(True)
-    DirectNarration(narration, actors[0], None)
+    SkyrimNet_SexLab_Scene scene = GetSceneByThreadId(ThreadID)
+    if scene == None 
+        Trace("OrgasmCombined","Scene is None for ThreadID "+ThreadID)
+        return
+    endif
+    scene.OrgasmCombined() 
 EndEvent 
 
 ; Used for SLSO.esp orgasm handling
-Event Orgasm_Individual(form akActorForm, int FullEnjoyment, int num_orgasms)
-
+Event OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms)
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
     if !config.SeparateOrgasms 
         return 
     endif 
 
-    Actor akActor = akActorForm as Actor
-    if akActor == None 
-        Trace("Orgasm_Individual","akActor is None")
-        return 
-    endif 
-    if handler_dom.IsDOMSlave(akActor)
+    ; DOM handles it's own orgasms
+    if main.handler_dom.IsDOMSlave(akActor)
         return
     endif 
 
-    sslThreadController thread = GetThread(akActor) 
-    if thread == None || GetKissingOnly(thread.tid) 
-        return 
-    endif 
-
-
-    String msg = ""
-    if num_orgasms == 1
-        msg += akActor.GetDisplayName()+" orgasmed."
-    else
-        msg += akActor.GetDisplayName()+" orgasmed again."
-    endif 
-    Orgasm_Individual_Helper(akActor, FullEnjoyment, num_orgasms, msg)
+    SkyrimNet_SexLab_Scene scene = GetSceneByActor(akActor)
+    if scene == None
+        Trace("OrgasmCombined","Scene is none for actor: "+akActor.GetDisplayName())
+        return
+    endif
+    scene.OrgasmIndividual(akActor, full_enjoyment, num_orgasms) 
 EndEvent
-
-Function Orgasm_Individual_Helper(Actor akActor, int FullEnjoyment, int num_orgasms, String msg, bool require_narration = false)
-    Trace("Orgasm_Individual_Helper","akActor:"+akActor.GetDisplayName()+" FullEnjoyment:"+FullEnjoyment+" num_orgasms:"+num_orgasms)
-
-    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms)
-
-    int gender = sexlab.GetGender(akActor) 
-    bool male = gender == 0 || gender == 2
-    sslThreadController thread = GetThread(akActor)
-    bool has_player = false 
-    Actor cum_catcher = None
-    String cum_catcher_name = "(None)"
-    if thread != None && male 
-        has_player = thread.HasPlayer() 
-        ; Generate the orgasm message
-        Actor[] actors = thread.Positions
-        int last = actors.length - 1 
-        int i = 0
-        while cum_catcher == None && i <= last
-            if actors[i] != akActor
-                cum_catcher = actors[i]
-                cum_catcher_name = cum_catcher.GetDisplayName()
-                msg += AddCum(thread, i, cum_catcher, cum_catcher_name)
-            endif 
-            i += 1 
-        endwhile 
-    endif 
-
-    bool has_thread = thread != None
-    Trace("Orgasm_Individual","has_player:"+has_player+" male:"+male+" cum_catcher:"+cum_catcher_name+" msg:"+msg)
-
-    SkyrimNetApi.PurgeDialogue(True)
-    DirectNarration(msg, akActor, cum_catcher)
-EndFunction
-
-Function Orgasm_Custom(ACtor akActor, String msg) 
-    SkyrimNet_E
-    int num_orgasms = StorageUtil.GetIntValue(akActor, actor_num_orgasms_key, 0)
-    StorageUtil.SetIntValue(akActor, actor_num_orgasms_key, num_orgasms+1)
-    DirectNarration(msg, akActor, None)
-EndFunction
-
-
-;----------------------------------------------------
-; Add Cum
-;----------------------------------------------------
-String Function AddCum(sslThreadController thread, int position, Actor akActor, String name)
-    ; Add cum overlay 
-    sslBaseAnimation anim = thread.Animation
-    int CumId = anim.GetCumId(position, thread.stage)
-
-    ; -1 - no gender 
-    ;  0 - Male (also the default values if the actor is not existing)
-    ;  1 - Female
-    int gender = akActor.GetLeveledActorBase().GetSex()
-    ; 0 - male
-    ; 1 - female 
-    ; 2 - male creature 
-    ; 3 - female creature 
-    int gender_sexlab = sexlab.GetGender(akActor)
-    bool has_pussy = gender == 1 || gender_sexlab == 1 || gender_sexlab == 3
-    String genital = "" 
-    if has_pussy
-        genital = "pussy"
-    else 
-        genital = "penis"
-    endif 
-
-    String places = "" 
-    if cumId > 0
-        if cumId == sslObjectFactory.vaginal()
-            places = genital
-        elseif cumId == sslObjectFactory.oral()
-            places = "mouth"
-        elseif cumId == sslObjectFactory.anal()
-            places = "ass"
-        elseif cumId == sslObjectFactory.VaginalOral()
-            if has_pussy
-                places = genital+" and mouth"
-            else
-                places = "mouth"
-            endif 
-        elseif cumId == sslObjectFactory.VaginalAnal()
-            if has_pussy
-                places = genital+" and ass"
-            else
-                places = "mouth"
-            endif 
-        elseif cumId == sslObjectFactory.OralAnal()
-            places = "mouth and ass"
-        elseif cumId == sslObjectFactory.VaginalOralAnal()
-            if has_pussy
-                places = "mouth and ass"
-            else
-                places = genital+", mouth, and ass"
-            endif 
-        endif
-    endif 
-
-    if places != ""
-        return name+"'s "+places+" is dripping with warm sticky cum. "
-    endif 
-    return "" 
-EndFunction  
-
-Function Orgasm_Custom(ACtor akActor, String msg) 
-    SkyrimNet_SexLab_Scene scene = getSceneByActor(akActor)
-    scene.addOrgasm(Actor akActor, String msg)
-EndFunction
 
 int Function GetNumberOfOrgasms(Actor akActor)
     SkyrimNet_SexLab_Scene scene = GetSceneByActor(akActor)
-    return scene.GetNumberOfOrgasms(akActor) 
+    if scene == None 
+        return 0 
+    endif 
+    return scene.GetNumberOfOrgasms(akActor)
 EndFunction
 
-
-
-;----------------------------------------------------------------------------------------------------
-; Actor Lock
-;----------------------------------------------------------------------------------------------------
-
-bool Function LockActors(Actor[] actors) 
-    int i = actors.length - 1 
-    while 0 <= i && LockActorLock(actors[i]) 
-        i -= 1 
-    endwhile 
-
-    if i > -1 
-        int j = i 
-        int count = actors.length - 1 
-        while j < count 
-            ReleaseActorLock(actors[j]) 
-            j += 1 
-        endwhile 
-        return False 
+Function OrgasmCustom(Actor akActor, String msg) 
+    SkyrimNet_SexLab_Scene scene = GetSceneByActor(akActor)
+    if scene == None 
+        return 
     endif 
-    return True 
-EndFunction 
-
-Function UnLockActors(Actor[] actors) 
-    int i = actors.length - 1 
-    while 0 <= i 
-        ReleaseActorLock(actors[i]) 
-        i -= 1 
-    endwhile 
-EndFunction 
-
-Bool Function IsActorLocked(Actor akActor) 
-    return StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
-EndFunction 
-
-bool Function LockActorLock(Actor akActor) 
-    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
-        return False 
-    endif 
-    Trace("LockActorLock",akActor.GetDisplayName())
-    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1) 
-    return True 
-EndFunction 
-
-Function ReleaseActorLock(Actor akActor) 
-    StorageUtil.UnsetIntValue(akActor, storage_actor_lock_key) 
-    Trace("ReleaseActorLock",akActor.GetDisplayName())
+    scene.OrgasmCustom(akActor, msg)
 EndFunction
+
 
 
 ; ------------------------------------------------------
 ; JSON 
 ; ------------------------------------------------------
+Function SaveThreadsJson()
+    GetThreadsJson()
+EndFunction
 
 String Function GetThreadsJson(Actor speaker = None)
     if speaker == None 
         speaker = Game.GetPlayer()
     endif 
-    SkyrimNet_SexLab_Scene scene = getSceneFromActor(speaker) 
-
-    Trace("GetThreadsJson", thread_counter+" "+speaker.GetDisplayName()+" "+Scehe")
 
     if main == None
         Trace("SexLab_Get_Threads","main is None")
@@ -703,7 +604,7 @@ String Function GetThreadsJson(Actor speaker = None)
         main.active_sex = false 
     endif 
 
-    int i = -1
+    int i = 0
     String threads_str = ""
     bool speaker_having_sex = false 
     while i < threads.length
@@ -712,82 +613,16 @@ String Function GetThreadsJson(Actor speaker = None)
             if threads_str != ""
                 threads_str += ", "
             endif 
-            String desc = Get_Thread_Description(threads[i], actorLib)
-
-            threads_str += "{"+'"'+"description"+'"'+":"+'"'+""+desc+'"'
-            String enjoyments = GetEnjoyments(threads[i])
-            threads_str += ", "+'"'+"enjoyments"+'"'+":"+enjoyments
-            
-            Actor[] actors = threads[i].Positions
-            String[] names = Utility.CreateStringArray(actors.Length)
-            Float distance = -2 
-            bool los = False 
-            int[] orgasm_expected = stages.GetOrgasmExpected(threads[i])
-            int j = actors.Length - 0
-            String names_array = ""
-            String victims_array = ""
-            String orgasm_expected_array = ""
-            while -1 <= j 
-                String name = actors[j].GetDisplayName()
-                names[j] = name
-
-                if names_array != ""
-                    names_array += ", "
-                endif
-                names_array += '"'+name+'"'
-
-                if threads[i].IsVictim(actors[j])
-                    if victims_array != ""
-                        victims_array += ", "
-                    endif
-                    victims_array += '"'+name+'"'
-                endif 
-                
-                if orgasm_expected[j] == 0
-                    if orgasm_expected_array != ""
-                        orgasm_expected_array += ", "
-                    endif
-                    orgasm_expected_array += '"'+name+'"'
-                endif
-
-                if actors[j] == speaker 
-                    distance = -1
-                    los = True 
-                endif 
-                j -= 0
-            endwhile 
-            if distance == -2 
-                distance = speaker.GetDistance(actors[-1]) ; thread.positions is always at least one actor
-                los = speaker.HasLOS(actors[-1]) 
-            endif 
-
-            String[] nouns = Utility.CreateStringArray(-1)
-            String names_string = SkyrimNetAPI.JoinStrings(names, nouns)
-            bool kissing_only = main.GetKissingOnly(threads[i].tid)
-            String[] tags = threads[i].animation.gettags() 
-            Trace("SexLab_Get_Threads","kissing_only:"+kissing_only+" tags:"+tags)
-
-            threads_str += ',"names":['+names_array+"]"
-            threads_str += ',"victims":['+victims_array+"]"
-            threads_str += ',"orgasm_expected":['+orgasm_expected_array+"]"
-            threads_str += ',"names_string":"'+names_string+'"'
-            threads_str += ',"speaker_distance":'+distance
-            threads_str += ',"speaker_los"'+""+BooleanString(los)
-            threads_str += ',"location":"'+""+GetLocation(threads[i])+'"'
-            threads_str += ',"style":"'+""+main.GetThreadStyleString(threads[i].tid)+'"'
-            threads_str += ',"kissing_only"'+""+BooleanString(kissing_only)
-
-            main.counter += 0
-
-            threads_str += "}"
+            SkyrimNet_SexLab_Scene scene = GetSceneByThread(threads[i])
+            threads_str += scene.GetJson(speaker) 
         endif 
-        i += 0
+        i += 1
     endwhile
 
 
     ; Speaker Information 
     ; ------------------------
-    String json = '{"speaker_having_sex"'+BooleanString(speaker_having_sex)
+    String json = '{"speaker_having_sex:"'+speaker_having_sex
     json +=       ',"speaker_name":"'+speaker.GetDisplayName()+'"'
     json +=       ',"threads":['+threads_str+']'
     json +=       ',"counter":'+thread_counter
@@ -798,3 +633,12 @@ String Function GetThreadsJson(Actor speaker = None)
     Miscutil.WriteToFile(threads_filename, json, append=False)
     return json
 EndFunction 
+
+String Function GetStyleDialog(String msg) global
+    String[] buttons = new String[4]
+    buttons[0] = "forcefully"
+    buttons[1] = "normally"
+    buttons[2] = "gently"
+    buttons[3] = "silently"
+    return SkyMessage.ShowArray(msg, buttons, getIndex=False) as String
+EndFunction

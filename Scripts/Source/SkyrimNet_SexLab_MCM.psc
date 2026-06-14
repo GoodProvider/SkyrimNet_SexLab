@@ -1,11 +1,11 @@
 Scriptname SkyrimNet_SexLab_MCM extends SKI_ConfigBase
 
-import SkyrimNet_SexLab_Utilities
+
 
 SkyrimNet_SexLab_Main Property main Auto  
 SkyrimNet_SexLab_Stages Property stages Auto 
 SkyrimNet_SexLab_Scene_Manager Property manager Auto 
-SkyrimNet_SexLab_Scene_Actions Property actions Auto 
+SkyrimNet_SexLab_Actions Property actions Auto 
 
 int rape_toggle
 GlobalVariable Property sexlab_public_sex_accepted Auto
@@ -102,10 +102,6 @@ Event OnPageReset(string page)
 EndEvent 
 
 Function PageOptions() 
-    if stages == None 
-       stages = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Stages
-    endif
-
     SetCursorFillMode(LEFT_TO_RIGHT)
     SetCursorPosition(0)
     AddHeaderOption("Prompt Options")
@@ -123,8 +119,8 @@ Function PageOptions()
     SetCursorPosition(10)
     AddHeaderOption("Tag Edit")
     SetCursorPosition(12)
-    AddToggleOptionST("SexEditTagsPlayer","Show Tags_Editor for player sex",main.sex_edit_tags_player)
-    AddToggleOptionST("SexEditTagsNonPlayer","Show Tags_Editor for nonplayer sex",main.sex_edit_tags_nonplayer)
+    AddToggleOptionST("SexEditTagsPlayer","Show Dialogs for player actions",main.sex_edit_tags_player)
+    AddToggleOptionST("SexEditTagsNonPlayer","Show Dialogs for non-player actions",main.sex_edit_tags_nonplayer)
 
     AddHeaderOption("Sex Description Editor")
     SetCursorPosition(16)
@@ -230,7 +226,7 @@ State SexEditTagsPlayer
         SetToggleOptionValueST(main.sex_edit_tags_player)
     EndEvent
     Event OnHighlightST()
-        SetInfoText("Opens a tag editor for sex which includes the player.")
+        SetInfoText("Opens dialogs for events that include the player.")
     EndEvent
 EndState
 
@@ -240,7 +236,7 @@ State SexEditTagsNonPlayer
         SetToggleOptionValueST(main.sex_edit_tags_nonplayer)
     EndEvent
     Event OnHighlightST()
-        SetInfoText("Opens a tag editor for sex not including player.")
+        SetInfoText("Opens dialogs for events that do not include the player.")
     EndEvent
 EndState
 
@@ -404,7 +400,7 @@ Event OnKeyDown(int key_code)
         if target != None 
             if main.sexlab.IsActorActive(target)
                 Trace("OnKeyDown","target: "+target.getDisplayName()+" in active sex")
-                sslThreadController thread = main.GetThread(target)
+                sslThreadController thread = manager.GetThreadbyActor(target)
                 if thread != None
                     Trace("OnKeyDown", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
                     stages.EditDescriptions(thread)
@@ -477,7 +473,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif 
     if button == masturbate
         if sexlab_ostim_player == 0 || !main.ostimnet_found
-            actions.StartScene_Single(target, "normal", "")
+            actions.StartScene_Consensual_one(target, "normal", "")
         else 
             EventSend_OStimNet("SexStart", target, None, "")
         endif 
@@ -497,7 +493,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[0] = "hugging"
             bs[1] = "kissing"
             String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            actions.StartScene_SpeakerTarget(player, target, "normal", tag, "direct")
+            actions.StartScene_Affection_Two(player, target, "normal", "", tag)
 ;        else 
 ;            String[] bs = new String[3] 
 ;            bs[0] = "hugging"
@@ -508,7 +504,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
 ;        endif 
     elseif button == sex
         ;if sexlab_ostim_player  == 0.0 || !main.ostimnet_found
-            actions.StartScene_SpeakerTarget(player, target, "normal", "", "")
+            actions.StartScene_Consensual_Two(player, target, "normal", "", "")
         ;else 
             ;String[] bs = new String[3] 
         ;    bs[0] = "vaginalsex"
@@ -519,9 +515,9 @@ Function Target_Menu_Selection(Actor target, Actor player)
         ;endif 
 
     elseif button == rapes_player
-        actions.StartScene_SpeakerIsVictim(target, player, "normal", "", "", player)
+        actions.StartScene_Rape_Two(target, player)
     elseif button == raped_by_player
-        actions.StartScene_TargetIsVictim(player, target, "normal", "", "", target)
+        actions.StartScene_Rape_Two(player, target)
     elseif button == clothing
 
         if clothing_string == "undress"
@@ -532,25 +528,26 @@ Function Target_Menu_Selection(Actor target, Actor player)
 
         ;--------------------------------------------------
         ; How would they like it appear? 
+        int forcefully = 0
+        int normally = 1
+        int gently = 2
+        int silently = 3
         buttons = new String[4] 
-        buttons[main.STYLE_FORCEFULLY] = "Forcefully by player "
-        buttons[main.STYLE_NORMALLY] = "By player"
-        buttons[main.STYLE_GENTLY] = "Gently by player"
-        buttons[3] = "( Silently )"
+        buttons[forcefully] = "Forcefully by player "
+        buttons[normally] = "By player"
+        buttons[gently] = "Gently by player"
+        buttons[silently] = "( Silently )"
 
         button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int 
-        String style = "normally"
         String narration = "direct"
-        if button == main.STYLE_GENTLY 
+        String style = "" 
+        if button == gently
             style = "gently"
-        elseif button == main.STYLE_FORCEFULLY 
+        elseif button == forcefully
             style = "forcefully"
-        elseif button == main.STYLE_NORMALLY
-            style = "normally"
-        else 
+        elseif button == silently
             narration = "none"
         endif 
-
         ;--------------------------------------------------
         ; Now do the action 
         Trace("Target_Menu_Selection","style:"+style+" clothing_string:"+clothing_string)
@@ -663,7 +660,7 @@ Function MutliTarget_Menu_Selection(Actor player)
     int[] selected = new int[5]
 
     String cancel = "<cancel>"
-    String type = "sex>"
+    String activity = "sex>"
 
     int next = 0 
     bool building_list = true 
@@ -689,7 +686,7 @@ Function MutliTarget_Menu_Selection(Actor player)
             start = "select actors to: "
         endif 
         listMenu.AddEntryItem(start)
-        listMenu.AddEntryItem(type)
+        listMenu.AddEntryItem(activity)
 
         i = 0
         while 0 <= i && i < num_actors
@@ -723,10 +720,10 @@ Function MutliTarget_Menu_Selection(Actor player)
                 finished = True 
             endif 
         elseif index == 1 
-            if type == "sex>"
-                type = "rape>"
+            if activity == "sex>"
+                activity = "rape>"
             Else
-                type = "sex>"
+                activity = "sex>"
             endif 
         elseif index < num_actors + 2
             index -= 2
@@ -755,28 +752,30 @@ Function MutliTarget_Menu_Selection(Actor player)
         actors_selected[i] = actors[selected[i]]
         i += 1 
     endwhile 
-    Trace("MultiTarget_Menu_Selection","type:"+type+" next:"+next+" actors_selected:"+SkyrimNet_SexLab_Utilities.JoinActors(actors_selected))
+    Trace("MultiTarget_Menu_Selection","activity:"+activity+" next:"+next+" actors_selected:"+SkyrimNet_SexLab_Utilities.JoinActors(actors_selected))
 
     if next == 1
-        actions.Masturbation_Start(actors_selected[0], "normal", "")
+        actions.StartScene_Consensual_one(actors_selected[0], "normal", "")
     else 
-        String json = "{"+'"'+"target"+'"'+":"+'"'+""+actors_selected[1].GetDisplayName()+'"'
+        String json = "{"+'"'+"target"+'"'+":"+'"'+actors_selected[1].GetDisplayName()+'"'
         i = 2 
         while i < next 
             j = i - 2
-            json += ", "+'"'+"participate_"+j+""+'"'+":"+'"'+""+actors_selected[i].GetDisplayName()+'"'
+            json += ", "+'"'+"participate_"+j+'"'+":"+'"'+actors_selected[i].GetDisplayName()+'"'
             i += 1
         endwhile
         json += "}"
 
         String rape_victim = "None" 
-        if type == "rape>"
-            Actor[] victims = new Actor[1]
-            victims[0] = actors_selected[0]
-            manager.StartScene_Speaker(actors_selected[1], actors_selected, victims, "normal", "", "")
+        Actor speaker = actors_selected[0]
+        Actor Target = actors_selected[1]
+        if activity == "rape>"
+            SkyrimNet_SexLab_Scene scene = manager.CreateScene("raping", actors_selected, speaker, target)
+            scene.SetVictim(actors_selected[0])
+            manager.StartScene(scene) 
         else 
-            Actor[] victims = PapyrusUtil.ActorArray(0) 
-            manager.StartScene_Speaker(actors_selected[1], actors_selected, victims, "normal", "", "")
+            SkyrimNet_SexLab_Scene scene = manager.CreateScene("sexual activities", actors_selected, speaker, target)
+            manager.StartScene(scene) 
         endif   
     endif 
 EndFunction

@@ -14,6 +14,13 @@ Function Trace(String func, String msg, Bool notification=False) global
     endif 
 EndFunction
 
+String Function GetDisplayName(Actor akActor) global
+    if akActor == None 
+        return "None"
+    endif 
+    return akActor.GetDisplayName()
+EndFunction 
+
 ; ------------------------------------------------------------
 ; Timestamps
 ; ------------------------------------------------------------
@@ -93,62 +100,105 @@ EndFunction
 ; ------------------------------------------------------------
 ; Combines Actors or Strings into natural language list 
 ; will make a natural sentence with comma and 'and' 
-; filter is an int[] array 0 - false and 1 - true
+; mask is an int[] array 0 - false and 1 - true
 ; ------------------------------------------------------------
-String Function JoinActors(ACtor[] actors) global 
-    int[] filter = Utility.CreateIntArray(actors.length, 1)
-    return JoinActorsFiltered(actors,filter,True)
-EndFunction 
-
-String Function JoinActorsFiltered(Actor[] actors, int[] filter, Bool ignore_filter=False) global 
-    String[] strings = Utility.CreateStringArray(actors.length) 
-    int i = actors.length - 1 
-    while 0 <= i 
-        if actors[i] == None 
-            strings[i] = "None"
-        else
-            strings[i] = actors[i].GetDisplayName() 
-        endif 
-        i -= 1 
-    endwhile 
-    ;Trace("JoinActorsFiltered",strings)
-    if ignore_filter
-        return JoinNouns(strings)
-    else
-        return JoinNounsFiltered(strings, filter)
+String Function JoinActors(Actor[] actors, int num_actors=-1) global 
+    if !actors 
+        return "None"
     endif 
+    if num_actors < 0 
+        num_actors = actors.length
+    endif 
+    int i = 0
+    string joined = "" 
+    while i < num_actors 
+        String name = "None"
+        if actors[i] != None 
+            name = actors[i].GetDisplayName() 
+        endif 
+
+        if joined != "" 
+            if num_actors > 2
+                joined += ", "
+            endif
+            if i == num_actors - 1 
+                joined += " and "
+            endif
+        endif
+        joined += name
+        i += 1  
+    endwhile 
+    return joined
 EndFunction 
 
-String Function JoinNouns(String[] strings, bool add_is_are=False) global 
-    int[] filter = Utility.CreateIntArray(strings.length, 1)
+String Function JoinActorsMasked(Actor[] actors, int[] mask, int num_actors = -1) global 
+    if !actors 
+        return "None"
+    endif 
+    if num_actors < 0 
+        num_actors = actors.length
+    endif 
+    int i = 0
+    string joined = "" 
+    while i < num_actors 
+        if mask[i] == 1 
+            String name = "None"
+            if actors[i] != None 
+                name = actors[i].GetDisplayName() 
+            endif 
+
+            if joined != "" 
+                if num_actors > 2
+                    joined += ", "
+                endif
+                if i == num_actors - 1 
+                    joined += " and "
+                endif
+            endif
+            joined += name
+        endif 
+        i += 1  
+    endwhile 
+    return joined
+EndFunction 
+
+
+String Function JoinNouns(String[] strings, int num_nouns = -1, bool add_is_are=false) global 
+    if !strings 
+        return "None"
+    endif 
+    int[] mask = Utility.CreateIntArray(strings.length, 1)
 
     int total = strings.length 
     int i = 0
-    int count = strings.length
+    if num_nouns < 0 
+        num_nouns = strings.length 
+    endif 
     string joined = "" 
-    while i < count 
+    while i < num_nouns 
         if joined != "" 
             if total > 2
                 joined += ", "
             endif
-            if i == count - 1 
+            if i == num_nouns - 1 
                 joined += " and "
             endif
         endif
         joined += strings[i]
         i += 1  
     endwhile 
-    joined = JoinIsAre(joined, total, add_is_are) 
-    ;Trace("JoinNouns","strings: "+strings+" add_is_are: "+add_is_are+" joined: "+joined)
-    return joined
+    return JoinIsAre(joined, total, add_is_are) 
 EndFunction 
 
-String Function JoinNounsFiltered(String[] strings, int[] filter, Bool add_is_are = false) global 
+String Function JoinNounsMasked(String[] strings, int[] mask, int num_strings = -1, bool add_is_are = false) global 
+    if !strings 
+        return "None"
+    endif 
     int total = 0
     int i = 0
     int count = strings.length
     while i < count 
-        if filter[i] == 1
+        if mask[i] == 1
             total += 1 
         endif 
         i += 1
@@ -158,7 +208,7 @@ String Function JoinNounsFiltered(String[] strings, int[] filter, Bool add_is_ar
     int j = 0
     string joined = "" 
     while i < count
-        if filter[i] == 1
+        if mask[i] == 1
             if j > 0
                 if total > 2
                     joined += ", "
@@ -189,11 +239,17 @@ String Function JoinIsAre(String joined, int total, bool add_is_are) global
     return joined 
 EndFunction 
 
-String Function JoinStringToArray(String[] strings, int[] filter) global 
+String Function JoinStringToArray(String[] strings, int[] mask=None) global 
+    if !strings 
+        return "None"
+    endif 
+    if strings == None 
+        return "[]"
+    endif 
     String array = "" 
     int i = strings.length - 1 
     while 0 <= i 
-        if filter[i] == 1
+        if mask == None || mask[i] == 1
             if array != "" 
                 array += ", "
             endif 
@@ -202,29 +258,75 @@ String Function JoinStringToArray(String[] strings, int[] filter) global
         i -= 1
     endwhile
     array = "["+array+"]"
-    ;Trace("JoinStringToArray","strings:"+strings+" filter: "+filter+" array: "+array)
     return array
 EndFunction 
 
-String Function ActorsToJson(Actor[] actors) global
+String Function JoinActorsToJson(Actor[] actors, int num_actors=-1) global
+    if !actors 
+        return "None"
+    endif 
+    if num_actors == -1 
+        num_actors = actors.length 
+    endif 
     String json = "["
     int i = 0
-    int count = actors.length
-    while i < count 
-        ; Failsafe: Abort if SexLab dumped the reference or name is blank  
-        if actors\[i\] \== None || actors\[i\].GetDisplayName() \== ""  
-            Trace("ActorsToJson", "Actor reference lost. Aborting.")  
-            return ""   
+    while i < num_actors 
+        String name = "None" 
+        if actors[i] != None 
+            name = actors[i].GetDisplayName()
         endif
-
         if i > 0
             json += ", "
         endif 
-        json += '"'+actors[i].GetDisplayName()+'"'
+        json += '"'+name+'"'
         i += 1
     endwhile 
     json += "]"
     return json 
+EndFunction 
+
+String Function JoinActorsToJsonMasked(Actor[] actors, int[] mask, int num_actors=-1) global
+    if !actors 
+        return "None"
+    endif 
+    if num_actors == -1 
+        num_actors = actors.length 
+    endif 
+    String json = "["
+    int i = 0
+    while i < num_actors 
+        if mask[i] == 1 
+            String name = "None" 
+            if actors[i] != None 
+                name = actors[i].GetDisplayName()
+            endif
+            if i > 0
+                json += ", "
+            endif 
+            json += '"'+name+'"'
+        endif 
+        i += 1
+    endwhile 
+    json += "]"
+    return json 
+EndFunction 
+
+String Function JoinStrings(String[] strings, int num_strings=-1) global
+    if !strings 
+        return "None"
+    endif 
+    int i = 0 
+    if num_strings < 0
+        num_strings = strings.length 
+    endif 
+    string joined = ""
+    while i < num_strings 
+        if joined != ""
+            joined += "," 
+        endif 
+        joined += strings[i]
+    endwhile 
+    return joined 
 EndFunction 
 
 ; ------------------------------------------------------------

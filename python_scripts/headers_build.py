@@ -111,7 +111,7 @@ def identify_used_classes(source_dir, class_filename, used_seen):
                         print ("----------------------------- ERROR: Unseen class usage -----------------------------")
                         print (f"{source_dir}\{filename}[{i+1}]\n  {line}\n  {stripped}")
                         for class_name, value  in unseen_values.items():
-                            print (f"   {class_name[filename.split('.')[0]]}")
+                            #print (f"   {class_name[filename.split('.')[0]]}")
                             print (f"     {class_name} ({value})")
                         exit() 
             if len(used_file) > 0:

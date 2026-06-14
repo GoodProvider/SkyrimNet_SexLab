@@ -58,12 +58,6 @@ bool Property rape_allowed = true Auto
 bool Property sex_edit_tags_player = true Auto 
 bool Property sex_edit_tags_nonplayer = False Auto
 
-int Property actorLock = 0 Auto 
-float Property actorLockTimeout = 0.00069444444 Auto ;  1 day / (24 hours  * 60 minutes ) 
-
-int Property group_info = 0 Auto
-int Property group_ordered = 0 Auto
-
 String Property storage_actor_lock_key = "skyrimnet_sexlab_actor_lock" Auto 
 String Property storage_items_key = "skyrimnet_sexlab_storage_items" Auto
 String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" Auto
@@ -80,12 +74,6 @@ Bool Property virgin_blood_enabled = True Auto
 ; needed, sine there appears to be a race condition on when things hit the audio queue
 ; -----------------------------
 
-; ---------------------------
-; Storage Keys 
-; ---------------------------
-string actor_num_orgasms_key = "skyrimnet_sexlab_actor_num_orgasms"
-string actor_thread_id = "skyrimnet_sexlab_actor_thread_id"
-
 ; Controls when Direction Narration occur 
 float Property direct_narration_cool_off Auto 
 float Property direct_narration_max_distance Auto 
@@ -99,6 +87,12 @@ int Property counter Auto
 
 Function Setup()
     Trace("SetUp","")
+
+    if !MiscUtil.FileExists("Data/SexLab.esm")
+        Trace("SetUp","Data/SexLab.esm does not exist") 
+        Trace("SetUp", "Can't find Data/SexLab.esm | SkyrimNet_SexLab will not work.", true)
+        return 
+    endif 
     ; --------------------------------
     ; Decorators
     ; --------------------------------
@@ -108,22 +102,32 @@ Function Setup()
     ((self as Quest) as SkyrimNet_SexLab_Stages).Setup()
     ((self as Quest) as SkyrimNet_SexLab_Scene_Manager).Setup()
 
+    ; --------------------------------
+    ; DOM Handler
+    ; --------------------------------
     bool skyrimnet_dom_found = MiscUtil.FileExists("Data/SkyrimNet_DOM.esp")
     bool skyrimnet_sexlab_handler_dom_found = MiscUtil.FileExists("Data/SkyrimNet_SexLab_Handler_DOM.esp")
     if skyrimnet_dom_found && skyrimnet_sexlab_handler_dom_found
         handler_dom = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab_Handler_DOM.esp") as SkyrimNet_SexLab_Handler_DOM_Interface
-        Trace("Setup","SkyrimNet_DOM found setting main.dom_handler to SkyrimNet_SexLab_Handler_DOM")
+        if handler_dom == None
+            handler_dom = (self as Quest) as SkyrimNet_SexLab_Handler_DOM_Interface
+            Trace("Setup", "ERROR: Failed to get external handler DOM. Using fallback.", true)
+        else 
+            Trace("Setup","SkyrimNet_DOM found setting main.handler_dom to SkyrimNet_SexLab_Handler_DOM")
+        endif      
     else 
         handler_dom = (self as Quest) as SkyrimNet_SexLab_Handler_DOM_Interface
         Trace("Setup","SkyrimNet_SexLab_Handler_DOM found:"+skyrimnet_sexlab_handler_dom_found+", SkyrimNet_DOM found :"+skyrimnet_dom_found)
     endif 
 
-    if !MiscUtil.FileExists("Data/SexLab.esm")
-        Trace("SetUp","Data/SexLab.esm does not exist") 
-        Debug.MessageBox("Can't find Data/SexLab.esm"+StringUtil.AsChar(10)\
-            +"SkyrimNet_SexLab will not work.")
-        return 
-    endif 
+    if handler_dom == None
+        Trace("Setup", "CRITICAL: handler_dom is None. Quest will not function.", true)
+    endif
+
+    ; --------------------------------
+    ; SexLab 
+    ; --------------------------------
+
 
     ; Direct Narration 
     if direct_narration_cool_off == 0 
@@ -133,26 +137,10 @@ Function Setup()
     endif 
     direct_narration_last_time = 0 
 
-    ReleaseAllActorLock()
-
-    if group_info == 0
-        group_info = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
-        JValue.retain(group_info)
-    else
-        int group_info_new = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/group_tags.json")
-        JValue.releaseAndRetain(group_info, group_info_new)
-        group_info = group_info_new
-    endif
-
     if race_to_description <= 0 
         race_to_description = JValue.readFromFile("Data/SKSE/Plugins/SkyrimNet_Sexlab/creatures.json")
         JValue.retain(race_to_description)
     endif 
-
-    ; --------------------------------
-    ; Register SexLab Events
-    ; --------------------------------
-    RegisterSexlabEvents()
 
     ; --------------------------------
     ; Decorators
@@ -183,6 +171,9 @@ Function StoreStrippedItems(Actor akActor, Form[] forms)
 EndFunction 
 
 Form[] Function UnStoreStrippedItems(Actor akActor)
+    if akActor == None 
+        return Utility.CreateFormArray(0)
+    endif 
     if !HasStrippedItems(akActor)
         Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" attempting to get stripped items: found none")
         return Utility.CreateFormArray(0)

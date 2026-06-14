@@ -31,9 +31,9 @@ String Function HandleOrgasmDenied(Actor akActor) global
 EndFunction
 
 Function DOMSlave_Orgasmed(Actor slave, String msg) global
-    SkyrimNet_SexLab_Main main_local = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    if main_local != None 
-        main_local.HandleDomSlaveOrgasmed(slave, msg)
+    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
+    if manager != None 
+        manager.OrgasmCustom(slave, msg)
     endif
 EndFunction
 

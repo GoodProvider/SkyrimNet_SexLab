@@ -8,13 +8,37 @@ A Skyrim mode that acts as a bridge between SkyrimNet and SexLab Framework.
 
 ## Key Paths
 
-- **Game root**: `{{GAME_ROOT}}/`
-- **User INI configs**: `{{DOCUMENTS_DIR}}/` (Skyrim.ini, SkyrimVR.ini, SkyrimPrefs.ini)
-- **Load order**: `C:/Users/{{USERNAME}}/AppData/Local/Skyrim VR/loadorder.txt` and `plugins.txt`
-- **SKSE plugins**: `Data/SKSE/Plugins/`
-- **Mod data**: `Data/` (ESPs, BSAs, meshes, textures, scripts)
+- **Repository root**: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`
+- **Project Scripts (source)**: `Scripts/Source`
+- **Compiled Scripts output**: `Scripts` (project `Output`)
+- **Papyrus Headers**: `Headers` 
+
+These are the authoritative locations used by the Papyrus project file `skyrimse.ppj` for imports and compilation.
+
+# Papyrus rules 
+- Papyrus is case insensitive, so these are only for human reviewers
+- Papyrus does not allow an array variable (String[] a for example) to be compared to None `if a == None`, it must always be checked directly `if a`
+```Papayrus
+String[] a = None 
+; This will check that a is not None and not empty.
+if a 
+; This will cause run time errors
+if a == None
+- Papyrus is case insensitive (aA == Aa == aa == AA) 
+```
+  
+   - correct `String[] a = None; If a 
+## naming convention  
+- Constant variable are all upper case: THIS_IS_A_CONSTANT
+- properties and variables:
+   -  start with a lower case letter: thisIsAVairable,  thisIs_Variable
+   - use mix of snake_case and camelCase
+- Functions and Events start with an Upper case letter. ThisIsAFunction, ThisIs_Function
+   - Match case to the close EndFunction, EndEvent 
+
 
 ## Installed Modding Tools
+Always include commented lines when calculating line number.
 
 All under `tools/`:
 
@@ -27,43 +51,10 @@ All under `tools/`:
 
 > **Note**: Install tools you need into a `tools/` folder in your game directory. See the [xeditlib](https://github.com/WingedGuardian/xeditlib) repo for XEditLib setup.
 
-## XEditLib.dll API (Critical Notes)
-
-The DLL is Delphi-compiled. These quirks caused hours of debugging:
-
-1. **All strings are UCS-2/UTF-16LE** (Delphi `PWideChar`), never UTF-8:
-   ```js
-   function wcb(s) { const b = Buffer.alloc((s.length+1)*2,0); b.write(s,0,'ucs2'); return b; }
-   ```
-
-2. **`InitXEdit()` and `CloseXEdit()` are VOID**, not bool. Declaring them as bool corrupts the call stack.
-
-3. **`WordBool` = `uint16`** (2 bytes), not bool/uint8.
-
-4. **String return pattern**: Functions don't return strings directly. They write a length to a `PInteger` param, then you call `GetResultString(buffer, len)` to retrieve the actual value:
-   ```js
-   function getString(fn) {
-       const lenBuf = Buffer.alloc(4, 0);
-       fn(lenBuf);
-       const len = lenBuf.readInt32LE(0);
-       if (len < 1) return '';
-       const strBuf = Buffer.alloc(len * 2, 0);
-       GetResultString(strBuf, len);
-       return strBuf.toString('utf16le', 0, len * 2);
-   }
-   ```
-
-5. **Game mode enum**: gmFNV=0, gmFO3=1, gmTES4=2, gmTES5=3, **gmSSE=4** (use this for Skyrim VR), gmFO4=5
-
-6. **Registry requirement**: XEditLib reads game path from `HKLM\SOFTWARE\WOW6432Node\Bethesda Softworks\Skyrim Special Edition` (the SSE key, not the VR key, because game mode 4 = SSE).
-
-7. **xelib.js wrapper**: See [xeditlib on GitHub](https://github.com/WingedGuardian/xeditlib) for the full wrapper with all 163 functions.
-
 ## INI Config Hierarchy
 
 Settings load in this order (later overrides earlier):
 1. `Skyrim.ini` -- base settings
-2. `SkyrimVR.ini` -- VR-specific overrides
 3. `SkyrimPrefs.ini` -- user preferences (loaded last)
 
 ## Nexus Mod Research (Standing Rule)
@@ -96,15 +87,6 @@ These are the most dangerous/common pitfalls. Consult `KNOWLEDGEBASE.md` for ful
 14. **GoToState("") in OnUnload -> Self=None crash** -- move to OnLoad instead
 15. **Navmesh creation is CK-only** -- xEdit can only delete, never recreate
 
-## xelib Dry-Run Convention
-
-All ESP modifications via xelib scripts must follow this two-pass workflow:
-1. **Read-only pass**: load the ESP, log what would change (records added/modified/removed), print to console -- do NOT call `SaveFile()`
-2. **User reviews** the proposed changes
-3. **Write pass**: only after user approval, run again with `SaveFile()` enabled
-
-This prevents accidental ESP corruption. The hook system blocks direct ESP writes, but xelib operates through Bash and can write via `SaveFile()`.
-
 ## Safety Rules
 
 Hooks in `.claude/settings.json` enforce these automatically:
@@ -126,7 +108,6 @@ Hooks in `.claude/settings.json` enforce these automatically:
 ### General rules
 - **Always review changes before applying** -- this is a delicate install
 - Never modify ESP/ESM files directly -- use xelib programmatically or Spriggit
-- Vortex manages load order -- direct edits to loadorder.txt/plugins.txt may be overwritten by Vortex
 - User is knowledgeable about Skyrim modding and INI settings
 
 ### Safety improvement loop
@@ -157,7 +138,6 @@ After every session, near-miss, or unexpected outcome, evaluate whether a new ho
 ### Investigation checklist (before any change)
 - [ ] Consulted `KNOWLEDGEBASE.md` for known quirks
 - [ ] Read the actual source files involved
-- [ ] Checked if VR differs from SSE for this feature
 - [ ] Web-searched for known issues with this approach
 - [ ] Considered rollback path if the change breaks something
 - [ ] Evaluated whether this task reveals a gap in current hook coverage
