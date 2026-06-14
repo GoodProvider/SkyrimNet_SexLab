@@ -1,9 +1,5 @@
 Scriptname SkyrimNet_SexLab_Utilities
 
-; ------------------------------------------------------------
-; Trace for Utilities
-; ------------------------------------------------------------
-
 Function Trace(String func, String msg, Bool notification=False) global
 
     ;msg = GetTimeStamp()+" [SkyrimNet_SexLab_Utilities."+func+"] "+msg

@@ -1,5 +1,6 @@
 Scriptname SkyrimNet_SexLab_Handler_UDNG extends Quest
 
+
 SkyrimNet_UDNG_Groups Property udng_groups = None Auto
 
 Function Trace(String func, String msg, Bool notification=False) global

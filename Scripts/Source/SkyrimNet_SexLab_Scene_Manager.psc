@@ -1,5 +1,4 @@
 Scriptname SkyrimNet_SexLab_Scene_Manager extends Quest 
-
 ; -------------------------------------
 ; SexLab 
 ; -------------------------------------

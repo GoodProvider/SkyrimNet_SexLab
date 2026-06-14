@@ -1,4 +1,5 @@
 scriptname SkyrimNet_SexLab_Creatures 
+
 ; This is a helper function used to find all the race form ids and store them into a JSON file 
 
 

@@ -1,7 +1,5 @@
 Scriptname SkyrimNet_SexLab_MCM extends SKI_ConfigBase
 
-
-
 SkyrimNet_SexLab_Main Property main Auto  
 SkyrimNet_SexLab_Stages Property stages Auto 
 SkyrimNet_SexLab_Scene_Manager Property manager Auto 
