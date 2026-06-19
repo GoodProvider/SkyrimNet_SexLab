@@ -235,23 +235,26 @@ String Function JoinIsAre(String joined, int total, bool add_is_are) global
     return joined 
 EndFunction 
 
-String Function JoinStringToArray(String[] strings, int[] mask=None) global 
+String Function JoinStringToArray(String[] strings, int[] mask=None, int num_strings=-1) global 
     if !strings 
         return "None"
     endif 
     if strings == None 
         return "[]"
     endif 
+    if num_strings == -1 
+        num_strings = strings.length 
+    endif 
     String array = "" 
-    int i = strings.length - 1 
-    while 0 <= i 
+    int i = 0
+    while i < num_strings 
         if mask == None || mask[i] == 1
             if array != "" 
                 array += ", "
             endif 
             array += '"'+strings[i]+'"'
         endif 
-        i -= 1
+        i += 1
     endwhile
     array = "["+array+"]"
     return array
@@ -264,21 +267,20 @@ String Function JoinActorsToJson(Actor[] actors, int num_actors=-1) global
     if num_actors == -1 
         num_actors = actors.length 
     endif 
-    String json = "["
+    String json = ""
     int i = 0
     while i < num_actors 
+        if json != ""
+            json += ", "
+        endif 
         String name = "None" 
         if actors[i] != None 
             name = actors[i].GetDisplayName()
         endif
-        if i > 0
-            json += ", "
-        endif 
         json += '"'+name+'"'
         i += 1
     endwhile 
-    json += "]"
-    return json 
+    return "["+json+"]"
 EndFunction 
 
 String Function JoinActorsToJsonMasked(Actor[] actors, int[] mask, int num_actors=-1) global
@@ -288,23 +290,23 @@ String Function JoinActorsToJsonMasked(Actor[] actors, int[] mask, int num_actor
     if num_actors == -1 
         num_actors = actors.length 
     endif 
-    String json = "["
+    String json = ""
     int i = 0
     while i < num_actors 
         if mask[i] == 1 
+            if json != ""
+                json += ","
+            endif 
+
             String name = "None" 
             if actors[i] != None 
                 name = actors[i].GetDisplayName()
             endif
-            if i > 0
-                json += ", "
-            endif 
             json += '"'+name+'"'
         endif 
         i += 1
     endwhile 
-    json += "]"
-    return json 
+    return "["+json+"]"
 EndFunction 
 
 String Function JoinStrings(String[] strings, int num_strings=-1) global
@@ -321,6 +323,7 @@ String Function JoinStrings(String[] strings, int num_strings=-1) global
             joined += "," 
         endif 
         joined += strings[i]
+        i += 1 
     endwhile 
     return joined 
 EndFunction 
@@ -435,4 +438,11 @@ String Function CheckDuplicate(String func, Actor source, String msg) global
         StorageUtil.SetStringValue(source, storage_key, msg)
         return msg
     endif
+EndFunction
+
+String Function JsonBool(bool value) global
+    if value 
+        return ":true"
+    endif 
+    return ":false"
 EndFunction

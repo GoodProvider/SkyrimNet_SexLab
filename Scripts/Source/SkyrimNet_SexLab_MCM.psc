@@ -490,8 +490,8 @@ Function Target_Menu_Selection(Actor target, Actor player)
             String[] bs = new String[2] 
             bs[0] = "hugging"
             bs[1] = "kissing"
-            String tag = SkyMessage.ShowArray("select", bs, getIndex = false) as string  
-            actions.StartScene_Affection_Two(player, target, "normal", "", tag)
+            String tag = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
+            actions.StartScene_Affection_Two(player, target, tag=tag)
 ;        else 
 ;            String[] bs = new String[3] 
 ;            bs[0] = "hugging"
@@ -502,7 +502,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
 ;        endif 
     elseif button == sex
         ;if sexlab_ostim_player  == 0.0 || !main.ostimnet_found
-            actions.StartScene_Consensual_Two(player, target, "normal", "", "")
+            actions.StartScene_Consensual_Two(player, target)
         ;else 
             ;String[] bs = new String[3] 
         ;    bs[0] = "vaginalsex"
@@ -768,12 +768,14 @@ Function MutliTarget_Menu_Selection(Actor player)
         Actor speaker = actors_selected[0]
         Actor Target = actors_selected[1]
         if activity == "rape>"
-            SkyrimNet_SexLab_Scene scene = manager.CreateScene("raping", actors_selected, speaker, target)
-            scene.SetVictim(actors_selected[0])
-            manager.StartScene(scene) 
+            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(actors_selected, speaker, target)
+            creator.SetActivity("raping")
+            creator.SetVictim(actors_selected[0])
+            creator.Start() 
         else 
-            SkyrimNet_SexLab_Scene scene = manager.CreateScene("sexual activities", actors_selected, speaker, target)
-            manager.StartScene(scene) 
+            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(actors_selected, speaker, target)
+            creator.SetActivity("sex")
+            creator.Start() 
         endif   
     endif 
 EndFunction

@@ -118,6 +118,7 @@ String Function GetStageDescription(sslThreadController thread, int stage_overri
 EndFunction 
 
 String Function AddActorDescriptionActors(String version, Actor[] actors, String desc)
+    Trace("AddActorDescriptionActors","version"+version+" actors:"+JoinActors(actors)+" desc:"+desc) 
     if desc == ""
         Trace("AddActorDescriptionActors","Description is empty")
         return ""
@@ -128,6 +129,7 @@ String Function AddActorDescriptionActors(String version, Actor[] actors, String
     endif 
 
     String result = "" 
+    String json = ""
     if version == VERSION_1_0
         if actors.length == 1 
             result = actors[0].GetDisplayName()+" "+desc+"."
@@ -143,9 +145,10 @@ String Function AddActorDescriptionActors(String version, Actor[] actors, String
             Trace("AddActorDescriptionActors","Unknown version "+version)
         endif 
         String actors_json = JoinActorsToJson(actors)
-        result = SkyrimNetApi.ParseString(desc, "sl", '{"actors":'+actors_json+"}")
+        json = '{"actors":'+actors_json+"}"
+        result = SkyrimNetApi.ParseString(desc, "sl", json)
     endif 
-    Trace("AddActorDescriptionActors","version "+version+" actors:"+actors.length+" desc:"+desc+" -> "+result)
+    Trace("AddActorDescriptionActors","version "+version+" actors:"+actors.length+" json:"+json+" desc:"+desc+" -> "+result)
     return result
 EndFunction 
 ; ------------------------------------
@@ -155,6 +158,7 @@ EndFunction
 
 Function EditDescriptions(sslThreadController thread)
     if thread == None 
+        Trace("EditDescriptions","thread is None")
         return
     endif 
     Actor[] actors = thread.Positions
@@ -293,6 +297,7 @@ EndFunction
 
 Function EditorDescription(SkyrimNet_SexLab_Main main, SkyrimNet_SexLab_Scene scene) 
     sslThreadController thread = scene.GetThread()
+    
     int thread_id = thread.tid
     Actor[] actors = thread.Positions
     String stage_id = "stage "+thread.stage
@@ -639,7 +644,8 @@ Function UpdateAnimInfo(sslThreadController thread, String field, String version
 
     Trace("saving "+fname,true)
     JValue.writeToFile(anim_info, path)
-    JValue.writeToFile(anim_info, animations_folder+"/last.json")
+    JValue.writeToFile(anim_info, animations_folder+"/animation_stage_description_last.json")
+    JValue.Release(anim_info)
     manager.SaveThreadsJson()
 EndFunction 
 

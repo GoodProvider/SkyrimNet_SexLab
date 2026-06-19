@@ -1,17 +1,22 @@
 Scriptname SkyrimNet_SexLab_Scene_Manager extends Quest 
-; -------------------------------------
-; SexLab 
-; -------------------------------------
-SexLabFramework Property sexlab Auto
-SkyrimNet_SexLab_Main Property main Auto
-SkyrimNet_SexLab_Stages Property stages Auto
 
 Import SkyrimNet_SexLab_Utilities
+
+SkyrimNet_SexLab_Main Property main Auto
+SkyrimNet_SexLab_Stages Property stages Auto
+SkyrimNet_SexLab_Scene_Manager Property manager Auto 
+
+SexLabFramework Property sexlab Auto
+sslThreadSlots Property threadSlots Auto
+sslActorLibrary Property actorLib Auto
 
 ; the scene_generic is returned when there re no more 
 SkyrimNet_SexLab_Scene scene_generic = None 
 SkyrimNet_SexLab_Scene[] Property scenes Auto
+
+; We use Form so we can use CreateFormArray if we need to increase the size 
 Form[] thread_scene
+SkyrimNet_SexLab_Scene_Creator[] creators
 
 ; -------------------------------------
 Faction Property SkyrimNet_SexLab_Faction_Victim Auto
@@ -35,7 +40,7 @@ String[] tags_supress_sexual
 ; -------------------------------------
 int Property group_info = 0 Auto
 
-Function Trace(String func, String msg="", Bool notification=False) global
+Function Trace(String func, String msg="", Bool notification=False)
 
     msg = "[SkyrimNet_SexLab_Scene_Manager."+func+"] "+msg
     Debug.Trace(msg) 
@@ -50,19 +55,21 @@ Function Setup()
         return  
     endif
 
+    scene_generic.Initialize(-1, self) 
+    scene_generic.SetGeneric() 
+
     Trace("Setup")
     int i = scenes.length - 1
     while 0 <= i 
-        scenes[i].sid = i 
-        scenes[i].main = main 
-        scenes[i].stages = stages 
-        scenes[i].manager = self 
-        scenes[i].sexlab = sexlab 
-        scenes[i].ThreadSlots = (sexlab as Quest) as sslThreadSlots
-        scenes[i].SkyrimNet_SexLab_Faction_Victim = SkyrimNet_SexLab_Faction_Victim
+        scenes[i].Initialize(i, self)
         i -= 1 
     endwhile  
-    Trace("Setup","FInished with scenes")
+
+    i = creators.length - 1 
+    while 0 <= i 
+        creators[i].Initialize(i, self) 
+        i -= 1 
+    endwhile 
 
     ; Unlocks actors 
     StorageUtil.ClearAllPrefix(storage_prefix)
@@ -71,7 +78,6 @@ Function Setup()
         Trace("Setup","creating thread_scene map")
         thread_scene = new form[32]
     endif 
-    Trace("Setup","updated thread_scene")
 
     ; Reload the group_tags in case they where changed each time.
     if group_info == 0
@@ -82,7 +88,6 @@ Function Setup()
         JValue.releaseAndRetain(group_info, group_info_new)
         group_info = group_info_new
     endif
-
 
     if !tags_supress_sexual
         tags_supress_sexual = new String[10]
@@ -97,202 +102,133 @@ Function Setup()
         tags_supress_sexual[8] = "fingering"
         tags_supress_sexual[9] = "footjob"
     endif 
-    Trace("Setup","tags supress sexual finished")
-
     RegisterEventsActions()
     RegisterEventsSexLab()
 EndFunction 
 
 ; --------------------------------------------------------------------
-; Get Scene
+; Create Creator 
 ; --------------------------------------------------------------------
-SkyrimNet_SexLab_Scene Function CreateScene(String activity, Actor[] actors, Actor speaker, Actor target)
-    SkyrimNet_SexLab_Scene scene = GetSceneNextInactive()
-    Trace("CreateScene",scene.sid+" activity:'"+activity+"' actors:"+JoinActors(actors)+" speaker:"+GetDisplayName(speaker)+" target:"+GetDisplayName(target))
-    if scene == None
-        Trace("CreateScene", "Failed to get inactive scene, returning None")
-        return None
-    endif
-    Trace("CreateScene"," a")
-    scene.SetUp(actors, speaker, target) 
-    Trace("CreateScene"," b")
-    scene.SetActivityByString(activity)
-    Trace("CreateScene"," c")
-    return scene
-EndFunction
+SkyrimNet_SexLab_Scene_Creator  Function CreateCreator(Actor[] actors, Actor speaker, Actor target)
 
-SkyrimNet_SexLab_Scene Function CreateSceneFromThread(sslThreadController thread)
-    Actor[] actors = thread.Positions
-    SkyrimNet_SexLab_Scene scene = GetSceneNextInactive()
-    if scene == None
-        Trace("CreateSceneFromThread", "Failed to get inactive scene for thread " + thread.tid)
-        return None
-    endif
-    
-    if scene != scene_generic
-        ResizeThreadSceneAsNeeded(thread.tid)
-        thread_scene[thread.tid] = scene
-    endif 
-    if actors.length > 1
-        scene.Setup(actors, actors[0], actors[1]) 
-    else 
-        scene.Setup(actors, actors[0], None)
-    endif 
-
-    if actors.length > 1 
-        int i = actors.length - 1
-        int num_victims = 0 
-        while 0 <= i
-            if thread.IsVictim(actors[i])
-                num_victims += 1
-                endif
-            i -= 1
-        endwhile
-
-        if num_victims > 0
-            Actor[] victims = PapyrusUtil.ActorArray(num_victims)
-            i = actors.length - 1
-            int j = num_victims - 1
-            while 0 <= i
-                if thread.IsVictim(actors[i])
-                    victims[j] = actors[i]
-                    j -= 1
-                endif
-                i -= 1
-            endwhile
-            scene.SetVictims(victims) 
+    int i = 0
+    int num_creators = creators.length 
+    while i < num_creators
+        if creators[i].IsInactive()
+            creators[i].SetUp(actors, speaker, target) 
+            return creators[i]
         endif
-    endif 
+        i += 1 
+    endwhile
 
-    return scene 
-EndFunction
-
-
-SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadModel thread)
-    return GetSceneByThreadId(thread.tid) 
-EndFunction 
-
-SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid)
-    if tid < 0
-        Trace("GetSceneByThreadId", "ThreadId < 0")
-        return None
-    endif
-
-    SkyrimNet_SexLab_Scene scene = None
-
-    ; Ensure thread_scene is large enough
-    ResizeThreadSceneAsNeeded(tid)
-
-    ; Validate SexLab property before unsafe cast
-    if SexLab == None
-        Trace("GetSceneByThreadId", "SexLab property is None, cannot retrieve thread")
-        return None
-    endif
-
-    ; Try to locate the thread and create a scene from its positions
-    sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
-    if ThreadSlots != None && tid < ThreadSlots.Threads.length
-        sslThreadController thread = ThreadSlots.Threads[tid]
-        if thread != None
-            return CreateSceneFromThread(thread)
-        endif
-    endif
-
+    Trace("CreateScene", "Failed to get inactive creator, returning None")
     return None
 EndFunction
+
+; --------------------------------------------------------------------
+; Get Scene 
+; --------------------------------------------------------------------
+SkyrimNet_SexLab_Scene Function CreateSceneByThread(sslThreadController thread) 
+    int i = 0 
+    int num_scenes = scenes.length 
+    while i < 0 
+        if scenes[i].IsInactive() 
+            scenes[i].Setup(thread)
+            return scenes[i]
+        endif 
+        i += 1 
+    endwhile 
+    scene_generic.SetUp(thread)
+    return scene_generic
+EndFunction 
+
+SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread)
+    int tid = thread.tid
+    if tid < thread_scene.length && thread_scene[tid] != None 
+        SkyrimNet_SexLab_Scene scene = thread_scene[tid] as SkyrimNet_SexLab_Scene
+        if scene.thread == thread
+            return scene
+        endif 
+        scene.Release() 
+    endif 
+    int sid = 0
+    int num_scenes = scenes.length 
+    while sid < num_scenes
+        if scenes[sid].IsInactive() 
+            scenes[sid].SetUp(thread) 
+            return scenes[sid]
+        endif 
+        sid += 1 
+    endwhile 
+
+    Trace("CreateSceneFromThread", "Failed to get inactive scene for thread " + thread.tid+" using generic")
+    scene_generic.SetUp(Thread)
+    return scene_generic
+EndFunction
+
+
+SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid)
+    sslThreadController thread = SexLab.GetController(tid)
+    if thread == None 
+        return None 
+    endif 
+    return GetSceneByThread(thread) 
+EndFunction 
 
 ; ----------------------------------------
 
 SkyrimNet_SexLab_Scene Function GetSceneByActor(Actor akActor) 
     sslThreadController thread = GetThreadByActor(akActor) 
-    if thread != None
-        return GetSceneByThread(thread)
+    if thread == None
+        return None 
     endif 
-    return None 
+    return GetSceneByThread(thread)
 EndFunction
 
 sslThreadController Function GetThreadByActor(Actor akActor) 
-    if SexLab == None 
-        Trace("GetThreadByActor", "SexLab is None")
-        return None 
-    endif 
     Trace("GetThread","actor:"+akActor.GetDisplayName())
-    sslThreadSlots ThreadSlots = (SexLab as Quest) as sslThreadSlots
-    if ThreadSlots == None
-        Trace("Get_Threads","ThreadSlots is None",true)
-        return None
-    endif
-
-    sslThreadController thread = None 
     sslThreadController[] threads = ThreadSlots.Threads
     int i = threads.length - 1
-    while 0 <= i && thread == None
-        Actor[] actors = threads[i].Positions
-        int j = actors.length - 1
-        while 0 <= j && thread == None
-            if actors[j] == akActor
-                return threads[i]
-            endif 
-            j -= 1
-        endwhile 
+    while 0 <= i
+        String status = (threads[i] as sslThreadModel).GetState()
+        if status == "animating" || status == "prepare"
+            Actor[] actors = threads[i].Positions
+            int j = actors.length - 1
+            while 0 <= j 
+                if actors[j] == akActor
+                    return threads[i]
+                endif 
+                j -= 1
+            endwhile 
+        endif 
         i -= 1
     endwhile
     return None 
 EndFunction 
 
-; ----------------------------------------
-
-SkyrimNet_SexLab_Scene Function GetSceneNextInactive()
-    int sid = -1
-    int i = scenes.length - 1
-    while i >= 0
-        if scenes[i].status == scenes[i].STATUS_INACTIVE
-            return scenes[i]
-        endif
-        i -= 1
-    endwhile
-
-    Trace("CreateScene","No inactive scenes available, creating new one. Total scenes before creating: "+scenes.length)
-    return scene_generic 
-EndFunction
-
 ;----------------------------------------------------------------------------------------------------
-; Scene Release 
-;----------------------------------------------------------------------------------------------------
-
-Function ReleaseScene(SkyrimNet_SexLab_Scene scene) 
-    scene.Release() 
-EndFunction 
-
-;----------------------------------------------------------------------------------------------------
-; Action Events
-;----------------------------------------------------------------------------------------------------
-
-sslThreadModel Function StartScene(SkyrimNet_SexLab_Scene scene) 
-    return scene.Start()
-EndFunction
-
-;----------------------------------------------------------------------------------------------------
-; Action Events
+; Thread_Scene Functions 
 ;----------------------------------------------------------------------------------------------------
 Function SetThread_Scene(int tid, SkyrimNet_SexLab_Scene scene) 
-    if tid < 0
-        Trace("SetThread_Scene", "ThreadId < 0")
-        return
-    endif
-
+    if scene == scene_generic
+        Trace("SetThread_Scene", "can not set scene_generic to thread_scene")
+        return 
+    endif 
     ResizeThreadSceneAsNeeded(tid)
     thread_scene[tid] = scene
 EndFunction
 
 Function ResizeThreadSceneAsNeeded(int tid)
+
     if tid >= thread_scene.length
+        Trace("ResizeThreadSceneAsNeeded","tid:"+tid+" thread_scene.length:"+thread_scene.length)
         int new_size = tid + 10
         Form[] resized = Utility.CreateFormArray(new_size)
-        int i = thread_scene.length - 1
-        while i >= 0
+        int i = 0
+        int length = thread_scene.length
+        while i < length 
             resized[i] = thread_scene[i]
-            i -= 1
+            i += 1
         endwhile
         thread_scene = resized
     endif
@@ -321,12 +257,6 @@ Event Action_Stop(Actor f_speaker, Actor f_target, String style)
         return  
     endif 
 
-    sslThreadSlots thread_slots = (main.sexlab as Quest) as sslThreadSlots
-    if thread_slots == None 
-        Trace("Action_Stop", "thread_slots is None")
-        return 
-    endif 
-
     Actor Player = Game.GetPlayer() 
     if speaker != player && scene.has_player && main.sex_edit_tags_player
         int yes = 0
@@ -341,7 +271,7 @@ Event Action_Stop(Actor f_speaker, Actor f_target, String style)
         buttons[no_gently] = "No (gently)"
         buttons[no_silently] = "No (silently)"
         String activity
-        String question = speaker.GetDisplayName()+" is trying to stop "+scene.GetActivityStageMessage(scene.ACTIVITY_STAGE_ONGOING)+", will you allow it?"
+        String question = speaker.GetDisplayName()+" is trying to stop "+scene.GetActivityMessage(scene.ACTIVITY_STAGE_ONGOING)+", will you allow it?"
         int button = SkyMessage.showArray(question, buttons, getIndex = True) as int 
         if button != yes
             if button == no_silently
@@ -354,14 +284,14 @@ Event Action_Stop(Actor f_speaker, Actor f_target, String style)
                 style = "gently"
             endif 
             String message = player.GetDisplayName()+" "+style+" refuses "+speaker.GetDisplayName()+"'s attempt to stop "\
-                +scene.GetActivityStageMessage(scene.ACTIVITY_STAGE_ONGOING)+"."
+                +scene.GetActivityMessage(scene.ACTIVITY_STAGE_ONGOING)+"."
             DirectNarration(message, speaker)
             return
         endif 
     endif 
 
     scene.AnimationEnd(speaker,style)
-    thread_slots.StopThread(scene.GetThread())
+    threadSlots.StopThread(scene.GetThread())
 EndEvent 
 
 Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim, \
@@ -413,15 +343,23 @@ Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim
         i += 1 
     endif 
 
-    SkyrimNet_SexLab_Scene scene = CreateScene(activity, actors, speaker, target)
-    scene.SetUp(actors, speaker, target) 
-    if scene.LockAllActorLock()
-        scene.SetVictim(victim)
-        scene.SetTag(tag) 
-        scene.SetStyle(style) 
-        scene.SetEventHook(event_hook) 
-        ;scene.addSettings(scene_settings) 
-        StartScene(scene) 
+    SkyrimNet_SexLab_Scene_Creator creator = CreateCreator(actors, speaker, target)
+    creator.SetUp(actors, speaker, target) 
+    if creator.LockAllActorLock()
+        creator.SetActivity(activity) 
+        if victim != None 
+            creator.SetVictim(victim)
+        endif 
+        Trace("Action_Start","--- a")
+        creator.SetTag(tag) 
+        Trace("Action_Start","--- b")
+        creator.SetStyle(style) 
+        Trace("Action_Start","--- c")
+        creator.SetEventHook(event_hook) 
+        Trace("Action_Start","--- c")
+        creator.SetEventHook(event_hook) 
+        Trace("Action_Start","--- d")
+        creator.Start() 
     endif 
 EndEvent 
 
@@ -583,18 +521,8 @@ String Function GetThreadsJson(Actor speaker = None)
     endif 
 
     if main == None
-        Trace("SexLab_Get_Threads","main is None")
+        Trace("GetthreadsJson","main is None")
         return ""
-    endif
-
-    Quest q = Game.GetFormFromFile(0xD61, "SexLab.esm")  as Quest 
-    sslActorLibrary actorLib = q as sslActorLibrary
-    sslCreatureAnimationSlots creatureLib = q as sslCreatureAnimationSlots
-
-    sslThreadSlots ThreadSlots = Game.GetFormFromFile(0xD61, "SexLab.esm") as sslThreadSlots
-    if ThreadSlots == None
-        Trace("SexLab_Get_Threads","ThreadSlots is None",true)
-        return "{"+'"'+"threads"+'"'+":[]}"
     endif
 
     sslThreadController[] threads = ThreadSlots.Threads
@@ -621,7 +549,7 @@ String Function GetThreadsJson(Actor speaker = None)
 
     ; Speaker Information 
     ; ------------------------
-    String json = '{"speaker_having_sex:"'+speaker_having_sex
+    String json = '{"speaker_having_sex"'+JsonBool(speaker_having_sex)
     json +=       ',"speaker_name":"'+speaker.GetDisplayName()+'"'
     json +=       ',"threads":['+threads_str+']'
     json +=       ',"counter":'+thread_counter

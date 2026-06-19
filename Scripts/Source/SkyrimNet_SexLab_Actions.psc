@@ -39,7 +39,7 @@ EndFunction
 
 Function StartScene_Consensual_One(Actor speaker, string style="", String tag="")
     Trace("StartScene_Consensual_One",speaker.GetDisplayName()+" style: "+style+" tag: "+tag)
-    StartScene_Event("sexual activities", Speaker, style=style, tag=tag) 
+    StartScene_Event("having sexual activities", Speaker, style=style, tag=tag) 
 EndFunction
 
 ;-------------------------------------------
@@ -48,12 +48,16 @@ EndFunction
 
 Function StartScene_Affection_Two(Actor speaker, Actor target, string style="", string tag="", bool target_position_0=false)
     Trace("StartScene_Affection_Two",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" target_position_0: "+target_position_0+" activity: "+tag)
-    StartScene_Event("affection", speaker, target, None, style, tag, target_position_0) 
+    String activity = "showing affection"
+    if tag == "hugging" || tag == "kissing"
+        activity = tag 
+    endif 
+    StartScene_Event(activity, speaker, target, None, style, tag, target_position_0) 
 EndFunction
 
 Function StartScene_Consensual_Two(Actor speaker, Actor target, string style="", string tag="", bool target_position_0=false)
     Trace("StartScene_Consensual_Two",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" target_position_0: "+target_position_0+" activity: "+tag)
-    StartScene_Event("sex", speaker, target, None, style, tag, target_position_0) 
+    StartScene_Event("having sexual activities", speaker, target, None, style, tag, target_position_0) 
 EndFunction
 
 Function StartScene_Rape_Two(Actor speaker, Actor target=None, string style="", string tag="", bool target_position_0=false, bool speaker_victim=false)
@@ -62,7 +66,7 @@ Function StartScene_Rape_Two(Actor speaker, Actor target=None, string style="", 
     if speaker_victim 
         victim = speaker
     endif 
-    StartScene_Event("rape", speaker, target, victim, style, tag, target_position_0) 
+    StartScene_Event("raping", speaker, target, victim, style, tag, target_position_0) 
 EndFunction
 
 ;-------------------------------------------
@@ -76,7 +80,7 @@ EndFunction
 
 Function StartScene_Consensual_Three(Actor speaker, Actor target, string style, string tag, bool target_position_0, Actor participate)
     Trace("StartScene_Consensual_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" target_position_0: "+target_position_0+" activity: "+tag+" participate:"+GetDisplayName(participate))
-    StartScene_Event("sexual activities", speaker, target, None, style, tag, target_position_0, participate) 
+    StartScene_Event("having sexual activities", speaker, target, None, style, tag, target_position_0, participate) 
 EndFunction
 
 Function StartScene_Rape_Three(Actor speaker, Actor target, string style, string tag, bool target_position_0, bool speaker_victim, Actor participate)
