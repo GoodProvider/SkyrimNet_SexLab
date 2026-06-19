@@ -18,7 +18,7 @@ Function Trace(String func, String msg, Bool notification=False) global
 EndFunction
 
 ; -------------------------------------------------
-; SetUp
+; Setup
 ; -------------------------------------------------
 Function Setup()
     if MiscUtil.FileExists("Data/Ostim.esp") 

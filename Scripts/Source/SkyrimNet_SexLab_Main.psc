@@ -87,11 +87,11 @@ int Property race_to_description Auto
 int Property counter Auto 
 
 Function Setup()
-    Trace("SetUp","")
+    Trace("Setup","")
 
     if !MiscUtil.FileExists("Data/SexLab.esm")
-        Trace("SetUp","Data/SexLab.esm does not exist") 
-        Trace("SetUp", "Can't find Data/SexLab.esm | SkyrimNet_SexLab will not work.", true)
+        Trace("Setup","Data/SexLab.esm does not exist") 
+        Trace("Setup", "Can't find Data/SexLab.esm | SkyrimNet_SexLab will not work.", true)
         return 
     endif 
     ; --------------------------------
@@ -148,7 +148,7 @@ Function Setup()
     ; --------------------------------
     if MiscUtil.FileExists("Data/TT_OStimNet.esp") 
         ostimnet_found = True 
-        Trace("SetUp","Found TT_OstimNet.esp found")
+        Trace("Setup","Found TT_OstimNet.esp found")
     endif 
 
 EndFunction
