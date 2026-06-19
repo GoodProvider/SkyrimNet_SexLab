@@ -766,7 +766,7 @@ Function MutliTarget_Menu_Selection(Actor player)
 
         String rape_victim = "None" 
         Actor speaker = actors_selected[0]
-        Actor Target = actors_selected[1]
+        Actor target = actors_selected[1]
         if activity == "rape>"
             SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(actors_selected, speaker, target)
             creator.SetActivity("raping")

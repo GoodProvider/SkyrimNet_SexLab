@@ -27,10 +27,16 @@ eligibilityRules:
           - SkyrimNet_SexLab_ostim_player
         comparisonOperator: ==
         expectedValue: 0
-      - decoratorName: is_in_faction
+      - decoratorName: get_faction_rank
         arguments:
           - currentActor
           - SexLabAnimatingFaction
+        comparisonOperator: <
+        expectedValue: 1
+      - decoratorName: is_in_faction
+        arguments:
+          - currentActor
+          - dse_dm_FactionActorUsingDevice
         comparisonOperator: ==
         expectedValue: false
       - decoratorName: is_in_faction

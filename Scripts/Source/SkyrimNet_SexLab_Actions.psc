@@ -39,7 +39,7 @@ EndFunction
 
 Function StartScene_Consensual_One(Actor speaker, string style="", String tag="")
     Trace("StartScene_Consensual_One",speaker.GetDisplayName()+" style: "+style+" tag: "+tag)
-    StartScene_Event("having sexual activities", Speaker, style=style, tag=tag) 
+    StartScene_Event("having sexual activities", speaker, style=style, tag=tag) 
 EndFunction
 
 ;-------------------------------------------
@@ -75,7 +75,7 @@ EndFunction
 
 Function StartScene_Affection_Three(Actor speaker, Actor target, string style, String target_position_0, string tag, Actor participate)
     Trace("StartScene_Consensual_Three",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" target_position_0: "+target_position_0+" activity: "+tag+" participate:"+participate.GetDisplayName())
-    StartScene_Event("showing affection", Speaker, target, None, style, target_position_0, tag, participate_3=participate) 
+    StartScene_Event("showing affection", speaker, target, None, style, target_position_0, tag, participate_3=participate) 
 EndFunction
 
 Function StartScene_Consensual_Three(Actor speaker, Actor target, string style, string tag, bool target_position_0, Actor participate)
@@ -96,8 +96,8 @@ EndFunction
 ; Threesome
 ;-------------------------------------------
 
-Function SceneStop(Actor speaker, Actor Target, String style)
-    Trace("SceneStop",speaker.GetDisplayName()+" + "+Target.GetDisplayName()+" style: "+style)
+Function SceneStop(Actor speaker, Actor target, String style)
+    Trace("SceneStop",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style)
     SceneStop_Event(speaker, target, style) 
 EndFunction
 

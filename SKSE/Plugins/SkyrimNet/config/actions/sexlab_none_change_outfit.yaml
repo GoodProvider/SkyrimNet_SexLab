@@ -29,9 +29,17 @@ eligibilityRules:
     logicalOperator: "AND"
     required: true
   - conditions:
-      - decoratorName: "is_in_faction"
-        arguments: ["currentActor", "SexLabAnimatingFaction"]
-        comparisonOperator: "=="
+      - decoratorName: get_faction_rank
+        arguments:
+          - currentActor
+          - SexLabAnimatingFaction
+        comparisonOperator: <
+        expectedValue: 1
+      - decoratorName: is_in_faction
+        arguments:
+          - currentActor
+          - dse_dm_FactionActorUsingDevice
+        comparisonOperator: ==
         expectedValue: false
       - decoratorName: "is_in_faction"
         arguments: ["currentActor", "OStimExcitementFaction"]

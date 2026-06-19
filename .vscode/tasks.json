@@ -83,5 +83,29 @@
             },
             "problemMatcher": []
         },
+        /* --- Helper Functions --- */
+        {
+            "label": "Swap Script Extensions",
+            "type": "shell",
+            "command": "uv",
+            "args": [
+                "run",
+                "python_scripts/change-extentions.py"
+    
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
     ]
 }
