@@ -1,5 +1,5 @@
 name: Rape_Start
-description: "[style] [type] sexual assalt on [victim]"
+description: "[style] [type] sexual assault on [victim]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: Rape_Start

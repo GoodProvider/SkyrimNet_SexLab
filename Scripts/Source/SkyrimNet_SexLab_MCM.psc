@@ -198,7 +198,8 @@ State HideHermaphroditesToggle
             skyrimnet_sexlab_hide_hermaphrodites.SetValue(1.0)
         endif 
         SetToggleOptionValueST(public_bool)
-        Trace("HideHermaphroditesToggle","hide_hermaphrodites: "+skyrimnet_sexlab_hide_hermaphrodites.GetValue() == 1.0)
+        bool hide = skyrimnet_sexlab_hide_hermaphrodites.GetValue() == 1.0
+        Trace("HideHermaphroditesToggle","hide_hermaphrodites: "+hide)
     EndEvent
     Event OnHighlightST()
         SetInfoText("Hides the hermaphrodite labels the prompt.")

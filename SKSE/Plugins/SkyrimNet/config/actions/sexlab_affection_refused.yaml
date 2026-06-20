@@ -1,0 +1,23 @@
+customCategory: sexlab_affection
+name: Affection_Show
+description: "[direction] a [style] [type] to show affection"
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: StartScene_Consensual_Two
+defaultPriority: 7
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: target
+    description: consenting actor
+  - type: dynamic
+    name: style
+    description: forceful|normal|gentle
+  - type: dynamic
+    name: type
+    description: kissing|hugging
+  - type: static
+    name: direction
+    description: "giving|getting"
