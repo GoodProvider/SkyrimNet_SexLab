@@ -311,7 +311,8 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
 EndEvent 
 
 Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim, \
-    string style, string tag, string direction, string scene_settings, String event_hook,\
+    string style, string tag, string direction, string scene_settings, \
+    String setting_name, String event_hook,\
     Form f_participate_3)
     Actor speaker = f_speaker as Actor 
     Actor target = f_target as Actor 
@@ -320,7 +321,7 @@ Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim
 
     Trace("Action_Start","activity:"+activity\
         +" speaker:"+GetDisplayName(speaker)+" target:"+GetDisplayName(target)+" victim:"+GetDisplayName(Victim)\
-        +" style:"+style+" tag:"+tag+" scene_settings:"+scene_settings+" event_hook:"+event_hook\
+        +setting_name+" event_hook:"+event_hook+" style:"+style+" tag:"+tag+" setting_name:"\
         +" participate_3:"+GetDisplayName(participate_3))
 
     if speaker == None 
@@ -366,10 +367,21 @@ Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim
         if victim != None 
             creator.SetVictim(victim)
         endif 
-        creator.SetStyle(style) 
-        creator.SetTag(tag) 
-        creator.SetDirection(direction) 
-        creator.SetEventHook(event_hook) 
+        if setting_name != ""
+            creator.LoadSettings(setting_name) 
+        endif 
+        if style != ""
+            creator.SetStyle(style) 
+        endif 
+        if tag != "" 
+            creator.AddTag(tag) 
+        endif 
+        if direction != ""
+            creator.SetDirection(direction) 
+        endif 
+        if event_hook != "" 
+            creator.SetEventHook(event_hook) 
+        endif 
         creator.Start() 
     endif 
     Trace("Action_Start","--- d")

@@ -1,9 +1,10 @@
-name: Affection_Show
+customCategory: sexlab_affection
+name: Show_Affection_Accepted
 description: "[direction] [style] [type] to show affection"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: StartScene_Consensual_Two
-defaultPriority: 7
+defaultPriority: 5
 parameterMapping:
   - type: speaker
     name: speaker

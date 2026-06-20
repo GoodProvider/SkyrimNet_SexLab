@@ -492,7 +492,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[0] = "hugging"
             bs[1] = "kissing"
             String tag = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
-            actions.StartScene_Affection_Two(player, target, tag=tag)
+            actions.StartScene_Consensual_Two("showing affection",player, target=target, tag=tag)
 ;        else 
 ;            String[] bs = new String[3] 
 ;            bs[0] = "hugging"
@@ -503,7 +503,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
 ;        endif 
     elseif button == sex
         ;if sexlab_ostim_player  == 0.0 || !main.ostimnet_found
-            actions.StartScene_Consensual_Two(player, target)
+            actions.StartScene_Consensual_Two("sexual activities", player, target=target)
         ;else 
             ;String[] bs = new String[3] 
         ;    bs[0] = "vaginalsex"

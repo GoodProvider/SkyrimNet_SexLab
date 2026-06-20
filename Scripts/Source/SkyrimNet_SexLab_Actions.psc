@@ -40,25 +40,33 @@ EndFunction
 
 Function StartScene_Consensual_One(Actor speaker, string style="", String tag="")
     Trace("StartScene_Consensual_One",speaker.GetDisplayName()+" style: "+style+" tag: "+tag)
-    StartScene_Event("having sexual activities", speaker, style=style, tag=tag) 
+    StartScene_Event("sexual activities", speaker, style=style, tag=tag) 
 EndFunction
 
 ;-------------------------------------------
 ; Two
 ;-------------------------------------------
 
-Function StartScene_Affection_Two(Actor speaker, Actor target, string style="", string tag="", string direction="")
-    Trace("StartScene_Affection_Two",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag)
-    String activity = "showing affection"
-    if tag == "hugging" || tag == "kissing"
-        activity = tag 
-    endif 
+Function StartScene_Affection_Two(String activity, Actor speaker, Actor target, string style="", string tag="", string direction="")
+    Trace("StartScene_Affection_Two","activity:"+activity+" speaker:"+speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag)
     StartScene_Event(activity, speaker, target, None, style, tag, direction) 
 EndFunction
 
-Function StartScene_Consensual_Two(Actor speaker, Actor target, string style="", string tag="", String direction="")
-    Trace("StartScene_Consensual_Two",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag)
-    StartScene_Event("having sexual activities", speaker, target, None, style, tag, direction) 
+Function StartScene_Consensual_Two(String activity, Actor speaker, Actor target, string style="", string tag="", String direction="", String setting_name="")
+    Trace("StartScene_Consensual_Two","activity:"+activity+" speaker:"+speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag+" setting_name:"+setting_name)
+    if tag == "hug"
+        target.playIdleWithTarget(pa_HugA, speaker) 
+        Actor sender = speaker 
+        Actor receiver = target 
+        if direction == "get" || direction == "getting"
+            sender = target 
+            receiver = speaker 
+        endif 
+        String msg = sender.GetDisplayName()+" hugs "+receiver.GetDisplayName()+"."
+        DirectNarration(msg, speaker, target)
+        return None 
+    endif 
+    StartScene_Event(activity, speaker, target, None, style, tag, direction, setting_name=setting_name) 
 EndFunction
 
 Function StartScene_Rape_Two(Actor speaker, Actor target=None, string style="", string tag="", String direction="", bool speaker_victim=false)
@@ -134,14 +142,14 @@ EndFunction
 ; Two actors 
 ;--------------------------------------
 Function StartScene_Event(String activity, Actor speaker, Actor target=None, Actor victim=None,\
-     string style="", string tag="", String direction="", string scene_settings="", String event_hook="",\
+     string style="", string tag="", String direction="", String event_hook="", String setting_name="",\
      Actor participate_3=None)
 
     String speaker_name = GetDisplayName(speaker)
     String target_name = GetDisplayName(target) 
     String victim_name = GetDisplayName(victim) 
     Trace("StartScene_Event","activity:"+activity+" speaker:"+speaker_name+" target:"+target_name+" victim:"+victim_name\
-        +" style:"+style+" direction:"+direction+" tag:"+tag+" scene_settings:"+scene_settings+" event_hook:"+event_hook)
+        +" style:"+style+" direction:"+direction+" tag:"+tag+" event_hook:"+event_hook+" setting_name:"+setting_name)
 
     int handle = ModEvent.Create("SkyrimNet_SexLab_Action_Start")
     ModEvent.PushString(handle, activity)
@@ -151,8 +159,8 @@ Function StartScene_Event(String activity, Actor speaker, Actor target=None, Act
     ModEvent.PushString(handle, style)
     ModEvent.PushString(handle, tag)
     ModEvent.PushString(handle, direction)
-    ModEvent.PushString(handle, scene_settings)
     ModEvent.PushString(handle, event_hook)
+    ModEvent.PushString(handle, setting_name)
     ModEvent.PushForm(handle, participate_3)
     ModEvent.Send(handle)
 EndFunction 

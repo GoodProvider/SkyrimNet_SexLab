@@ -29,6 +29,11 @@ Actor target
 
 int[] victim_mask
 int[] assailant_mask
+int[] no_orgasm_mask
+int[] no_stripping_mask
+
+String no_orgasm_names = ""
+String no_stripping_names = "" 
 
 ; --------------------------------------------
 ; Direction
@@ -70,6 +75,8 @@ String Function GetString()
     return " actors: "+'"'+actor_names+'"'\
           +" victims: "+'"'+victim_names+'"'\
           +" assailants: "+'"'+assailant_names+'"'\
+          +" no_orgasm: "+'"'+no_orgasm_names+'"'\
+          +" no_stripping: "+'"'+no_stripping_names+'"'\
           +" tags:"+tags_string\
           +" supress_tags:"+tags_supress_string\
           +" style:"+style\
@@ -104,6 +111,8 @@ Function CheckActorSize(int size)
     actors = EnsureActorsLargeEnough(actors, size) 
     victim_mask = EnsureIntsLargeEnough(victim_mask, size) 
     assailant_mask = EnsureIntsLargeEnough(assailant_mask, size) 
+    no_orgasm_mask = EnsureIntsLargeEnough(no_orgasm_mask, size) 
+    no_stripping_mask = EnsureIntsLargeEnough(no_stripping_mask, size) 
 EndFunction
 
 Function Setup(Actor[] _actors, Actor _speaker, Actor _target)
@@ -121,6 +130,9 @@ Function Setup(Actor[] _actors, Actor _speaker, Actor _target)
         Actor akActor = _actors[i]
         if akActor != None 
             actors[num_actors] = akActor
+            no_orgasm_mask[num_actors] = 0
+            no_stripping_mask[num_actors] = 0
+
             if player == akActor
                 has_player = True 
             endif 
@@ -192,6 +204,8 @@ Function SetNames()
     victim_names = JoinActorsMasked(actors, victim_mask, num_actors)
     assailant_names = JoinActorsMasked(actors, assailant_mask, num_actors)
 
+    no_orgasm_names = JoinActorsMasked(actors, no_orgasm_mask, num_actors)
+    no_stripping_names = JoinActorsMasked(actors, no_stripping_mask, num_actors)
 ;    Trace("SexNames",sid+" actors:"+JoinActors(actors,num_actors)+" num_actors:"+num_actors+\
 ;        " actor_names:"+actor_names+" actor_names_json:"+actor_names_json+\
 ;        " hermaphrodiate_names:"+hermaphrodiate_names+" strapon_names:"+strapon_names+\
@@ -359,6 +373,55 @@ Function SetEventHook(String _event_hook)
 EndFunction
 
 ; -------------------------------------------------------------------------------------
+; Load Scene Settings from File 
+; -------------------------------------------------------------------------------------
+Function LoadSettings(String setting_name) 
+    if setting_name == None 
+        Trace("LoadSettings", "setting_name is None, aborting")
+        return 
+    endif 
+    String filename = "Data/SKSE/Plugins/SkyrimNet_SexLab/scenes/"+setting_name+".json"
+    if !MiscUtil.FileExists(filename) 
+        Trace("LoadSettting","filename doesn't exit, aborting")
+        return 
+    endif  
+
+    int setting_id = JValue.readFromFile(filename)
+    if setting_id < 0 
+        Trace("LoadSettting","filename couldn't parse, aborting")
+        return 
+    endif  
+
+    int no_strip = 0 
+    int no_orgasm = 1 
+    String[] keys = new String[2] 
+    keys[no_strip] = "no_stripping"
+    keys[no_orgasm] = "no_orgasm"
+
+    int i = 0 
+    int num_keys = keys.length
+    while i < num_keys
+        if JMap.HasKey(setting_id, keys[i])
+            int array_id = JMap.GetObj(setting_id, keys[i])
+            int[] values = JArray.asIntArray(array_id)
+            int num_values = values.length
+            CheckActorSize(num_values) 
+            int j = 0 
+            while j < num_values 
+                if i == no_strip
+                    no_stripping_mask[j] = values[j]
+                elseif i == no_orgasm 
+                    no_orgasm_mask[j] = values[j]
+                else 
+                    Trace("LoadSetting","key index is unknown:"+i)
+                endif 
+                j += 1 
+            endwhile 
+        endif  
+    endwhile 
+EndFunction 
+
+; -------------------------------------------------------------------------------------
 ; Actor LOck
 ; -------------------------------------------------------------------------------------
 
@@ -443,6 +506,13 @@ SkyrimNet_SexLab_Scene Function Start()
         if model.AddActor(actors[i]) < 0 
             Trace("Start","AddActor failed on actor:"+actors[i].GetDisplayName())
             failed = True 
+        else 
+            if no_orgasm_mask[i] == 1 
+                model.DisableOrgasm(actors[i], true) 
+            endif 
+            if no_stripping_mask[i] == 1 
+                model.SetNoStripping(actors[i])
+            endif 
         endif 
         i += 1 
     endwhile 
@@ -502,7 +572,6 @@ SkyrimNet_SexLab_Scene Function Start()
         model.SetHook(event_hook)
     endif 
 
-
     String tags_string = JoinStrings(tags, num_tags)
     String tags_supress_string = JoinStrings(tags_supress, num_tags_supress)
     Trace("CreateThread",sid\
@@ -510,6 +579,8 @@ SkyrimNet_SexLab_Scene Function Start()
         +" actors: "+'"'+actor_names+'"'\
         +" victims: "+'"'+victim_names+'"'\
         +" assailants: "+'"'+assailant_names+'"'\
+        +" no_orgasm: "+'"'+no_orgasm_names+'"'\
+        +" no_stripping: "+'"'+no_stripping_names+'"'\
         +" tag:"+tags_string\
         +" tag:"+tags_supress_string\
         +" style:"+style\
