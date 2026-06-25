@@ -32,13 +32,17 @@ int[] assailant_mask
 int[] no_orgasm_mask
 int[] no_stripping_mask
 
+int no_orgasm_default_current = 0
+int no_stripping_default_current = 0
+String speaking_modifiers_default_current = ""
+
+String[] Property speaking_modifiers AUTO
+
 String no_orgasm_names = ""
 String no_stripping_names = "" 
 
-; --------------------------------------------
-; Direction
-; --------------------------------------------
-String direction = "" 
+
+String method = ""
 
 ; --------------------------------------------
 ; event_hook
@@ -51,15 +55,15 @@ String event_hook = ""
 int num_tags = 0 
 String[] tags = None 
 
-int num_tags_supress = 9 
-String[] tags_supress = None 
+int num_tags_suppress = 0 
+String[] tags_suppress = None 
 
 ; -------------------------------------
 ; Actor Locks 
 ; -------------------------------------
 String storage_actor_lock_key = "skyrimnet_sexlab_scene_actor_lock"
 int actorLock = 0 Auto 
-float actorLockTimeout = 0.00069444444 Auto ;  1 day / (24 hours  * 60 minutes ) 
+float actorLockTimeout = 0.00069444444 Auto ;  1 day / (24 hours  * 60 minutes )  
 
 Function Trace(String func, String msg="", Bool notification=False)
     msg = "[SkyrimNet_SexLab_Scene_Creator."+func+"] sid:"+sid+" "+msg
@@ -71,14 +75,14 @@ EndFunction
 
 String Function GetString() 
     String tags_string = JoinStrings(tags,num_tags)
-    String tags_supress_string = JoinStrings(tags_supress, num_tags_supress)
+    String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
     return " actors: "+'"'+actor_names+'"'\
           +" victims: "+'"'+victim_names+'"'\
           +" assailants: "+'"'+assailant_names+'"'\
           +" no_orgasm: "+'"'+no_orgasm_names+'"'\
           +" no_stripping: "+'"'+no_stripping_names+'"'\
           +" tags:"+tags_string\
-          +" supress_tags:"+tags_supress_string\
+          +" suppress_tags:"+tags_suppress_string\
           +" style:"+style\
           +" event_hook:"+event_hook
 EndFunction 
@@ -86,15 +90,68 @@ EndFunction
 Function Initialize(int _sid, SkyrimNet_SexLab_Scene_Manager _manager) 
     parent.Initialize(_sid, _manager) 
     sexlab = manager.sexlab
-    if !actors 
-        actors = new Actor[2] 
-        victims = new Actor[2] 
-    endif 
+    EnsureActorsArraysLargeEnough(2) 
     if !tags 
         tags = new String[10]
-        tags_supress = new String[10]
+        tags_suppress = new String[10]
     endif 
 EndFunction 
+
+; -------------------------------------------------------
+; Setup 
+; -------------------------------------------------------
+
+Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _target, String _method="", String setting_name="")
+    Trace("Setup","intent: "+_intent+" actors: ["+JoinActors(_actors)+"] speaker:"+GetDisplayName(_speaker)+" target:"+GetDisplayName(_target)+" method: "+_method)
+    intent = _intent
+    speaker = _speaker
+    target = _target 
+
+    EnsureActorsArraysLargeEnough(_actors.length) 
+
+    Actor player = Game.GetPlayer() 
+    num_actors = 0 
+    num_victims = 0 
+    has_player = False 
+
+    no_orgasm_default_current = 0
+    no_stripping_default_current = 0
+    speaking_modifiers_default_current = speaking_modifiers_default
+
+
+    int i = 0
+    int count = _actors.length
+    while i < count 
+        Actor akActor = _actors[i]
+        if akActor != None 
+            actors[num_actors] = akActor
+            no_orgasm_mask[num_actors] = no_orgasm_default_current
+            no_stripping_mask[num_actors] = no_stripping_default_current
+
+            if player == akActor
+                has_player = True 
+            endif 
+            speaking_modifiers[num_actors] = speaking_modifiers_DEFAULT
+            num_actors += 1 
+        endif 
+        i += 1 
+    endwhile 
+
+    status = STATUS_ACTIVE 
+    num_tags = 0
+    num_tags_suppress = 0 
+    style = STYLE_NORMALLY
+
+    LoadSetting("default")
+    if setting_name != ""
+        LoadSetting(setting_name) 
+    endif 
+
+    SetMethod(_method)
+    AddTag(_method) 
+    SetNames() 
+EndFunction 
+
 
 ; --------------------------------------------
 ; Release 
@@ -102,53 +159,143 @@ EndFunction
 Function Release()
     UnlockAllActorLock() 
     num_tags = 0
-    num_tags_supress = 0 
+    num_tags_suppress = 0 
     event_hook = None 
-    Release() 
+    parent.Release() 
 EndFunction
 
-Function CheckActorSize(int size) 
-    actors = EnsureActorsLargeEnough(actors, size) 
-    victim_mask = EnsureIntsLargeEnough(victim_mask, size) 
-    assailant_mask = EnsureIntsLargeEnough(assailant_mask, size) 
-    no_orgasm_mask = EnsureIntsLargeEnough(no_orgasm_mask, size) 
-    no_stripping_mask = EnsureIntsLargeEnough(no_stripping_mask, size) 
-EndFunction
+; --------------------------------------------
+; Start with Thread
+; --------------------------------------------
+SkyrimNet_SexLab_Scene Function Start() 
+    SetNames() 
 
-Function Setup(Actor[] _actors, Actor _speaker, Actor _target)
-    Trace("Setup","actors: ["+JoinActors(_actors)+"] speaker:"+GetDisplayName(_speaker)+" target:"+GetDisplayName(_target))
-    CheckActorSize(_actors.length) 
-    Trace("Setup","actors:"+JoinActors(actors))
+    Trace("Start",GetString()) 
 
-    Actor player = Game.GetPlayer() 
-    num_actors = 0 
-    num_victims = 0 
-    has_player = False 
-    int i = 0
-    int count = _actors.length
-    while i < count 
-        Actor akActor = _actors[i]
-        if akActor != None 
-            actors[num_actors] = akActor
-            no_orgasm_mask[num_actors] = 0
-            no_stripping_mask[num_actors] = 0
+    sslThreadModel model = sexlab.NewThread()
+    if model == None
+        Trace("Start","Failed to create model")
+        Release()
+        return None 
+    endif
 
-            if player == akActor
-                has_player = True 
+    sslBaseAnimation[] animations = SelectAnimations() 
+    if animations == empty
+        Trace("Start","SelectAnimations returned empty")
+        Release() 
+        return None
+    endif 
+    model.SetAnimations(animations) 
+
+    ; -----------------------------------------
+    ; Add Actors and Victims 
+    ; -----------------------------------------
+    int i = 0 
+    bool failed = False 
+    while i < num_actors && !failed 
+        if model.AddActor(actors[i]) < 0 
+            Trace("Start","AddActor failed on actor:"+actors[i].GetDisplayName())
+            failed = True 
+        else 
+            if no_orgasm_mask[i] == 1 
+                Trace("Start","no orgasm for "+actors[i].GetDisplayname())
+                model.DisableOrgasm(actors[i], true) 
             endif 
-            num_actors += 1 
+            if no_stripping_mask[i] == 1 
+                Trace("Start","no stripping for "+actors[i].GetDisplayname())
+                model.SetNoStripping(actors[i])
+            endif 
         endif 
         i += 1 
     endwhile 
 
-    num_tags = 0
-    num_tags_supress = 0 
-    SetActivity(ACTIVITY_DEFAULT) 
-    style = STYLE_NORMALLY
-    event_hook = ""
+    i = 0 
+    while i < num_victims && !failed
+        model.SetVictim(victims[i])
+        i += 1 
+    endwhile 
+
+    if failed 
+        Release() 
+        return 
+    endif 
+
+    ; Reset the masks, in case the names moves things around 
+    i = 0
+    num_actors = model.positions.length
+    while i < num_actors 
+        actors[i] = model.positions[i]
+        i += 1 
+    endwhile 
     SetNames() 
-    status = STATUS_ACTIVE 
-EndFunction 
+
+    ; ------------------------------------------
+    ; Add Tags
+    ; ------------------------------------------
+
+    i = 0
+    while i < num_tags
+        String tag = tags[i]
+        if tag == "mouth" || tag == "tongue"
+            tags[i] = "oral"
+        elseif tag == "pussy"
+            tags[i] = "vaginal"
+        elseif tag == "ass"
+            tags[i] = "anal"
+        endif 
+        i += 1 
+    endwhile 
+
+    if num_actors == 1
+        int gender = sexlab.GetGender(actors[0])
+        bool has_penis = (gender != 1 && gender != 3)
+        if has_penis 
+            addTag("M")
+        else 
+            addTag("F")
+        endif 
+    endif 
+
+    if event_hook != None && event_hook != "" 
+        model.SetHook(event_hook)
+    endif 
+
+    String tags_string = JoinStrings(tags, num_tags)
+    String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
+    Trace("Start","intent:"+intent\
+        +" actors: "+'"'+actor_names+'"'\
+        +" victims: "+'"'+victim_names+'"'\
+        +" assailants: "+'"'+assailant_names+'"'\
+        +" no_orgasm: "+'"'+no_orgasm_names+'"'\
+        +" no_stripping: "+'"'+no_stripping_names+'"'\
+        +" tag:"+tags_string\
+        +" suppressed:"+tags_suppress_string\
+        +" style:"+style\
+        +" event_hook:"+event_hook)
+
+    sslThreadController thread = model.StartThread() 
+    if thread == None 
+        Trace("Start","StartThread returned None, releasing scene.sid")
+        Release() 
+        return None 
+    endif 
+    Release() 
+
+    return manager.CreateSceneByCreator(self, thread) 
+EndFunction
+
+; --------------------------------------------
+; 
+; --------------------------------------------
+
+Function EnsureActorsArraysLargeEnough(int size) 
+    actors = EnsureActorsLargeEnough(actors, size) 
+    victim_mask = EnsureIntsLargeEnough(victim_mask, size) 
+    assailant_mask = EnsureIntsLargeEnough(assailant_mask, size) 
+    no_orgasm_mask = EnsureIntsLargeEnough(no_orgasm_mask, size, no_orgasm_default_current) 
+    no_stripping_mask = EnsureIntsLargeEnough(no_stripping_mask, size, no_stripping_default_current) 
+    speaking_modifiers = EnsureStringsLargeEnough(speaking_modifiers, size, speaking_modifiers_default_current) 
+EndFunction
 
 ; ---------------------------------
 ; Set Up Names 
@@ -159,17 +306,14 @@ Function ShiftActorsLeft()
     endif 
     
     String before = actor_names 
-    Actor actor_temp = actors[0]
-    
-    ; -----------------------------------------------------------------------
-    ; SOLUTION: Leveraging PapyrusUtil's native array shifting
-    ; This avoids the manual O(n) Papyrus while-loop shifting execution.
-    ; -----------------------------------------------------------------------
-    actors = PapyrusUtil.RemoveActor(actors, actor_temp)
-    actors = PapyrusUtil.PushActor(actors, actor_temp)
-    
+    Actor temp = actors[0] 
+    int i = 0 
+    while i+1 < num_actors
+        actors[i] = actors[i+1]
+        i += 1 
+    endwhile 
+    actors[i] = temp 
     SetNames() 
-    Trace("ShiftActorsLeft", before + " -> " + actor_names) 
 EndFunction
 
 Function SetMasks()
@@ -269,6 +413,15 @@ Function SetVictims(Actor[] _victims)
     SetNames() 
 EndFunction 
 
+Function SetMethod(String _method) 
+    method = _method
+    if method == "oral" || method == "vaginal" || method == "anal"
+        method += " sex"
+    elseif method == "whip"
+        method =  "whipping"
+    endif 
+EndFunction
+
 ; -------------------------
 ; Tag Functions 
 ; -------------------------
@@ -277,26 +430,40 @@ function SetTag(String tag)
     AddTag(tag)
 EndFunction 
 
-function SetTagSupress(String tag) 
-    num_tags_supress = 0 
-    AddTagSupress(tag)
+function SetTagSuppress(String tag) 
+    num_tags_suppress = 0 
+    AddTagSuppress(tag)
 EndFunction 
 
 function AddTag(String tag) 
     if tag == None || tag == "" 
         return 
     endif 
+    int i = 0 
+    while i < num_tags 
+        if tags[i] == tag 
+            return 
+        endif 
+        i += 1 
+    endwhile 
     tags = EnsureStringsLargeEnough(tags, num_tags + 1) 
     tags[num_tags] = tag
     num_tags += 1 
 EndFunction 
-function AddTagSupress(String tag) 
+function AddTagSuppress(String tag) 
     if tag == None || tag == "" 
         return 
     endif 
-    tags_supress = EnsureStringsLargeEnough(tags_supress, num_tags_supress + 1) 
-    tags_supress[num_tags_supress] = tag
-    num_tags_supress += 1 
+    int i = 0 
+    while i < num_tags_suppress
+        if tags_suppress[i] == tag 
+            return 
+        endif 
+        i += 1 
+    endwhile 
+    tags_suppress = EnsureStringsLargeEnough(tags_suppress, num_tags_suppress + 1) 
+    tags_suppress[num_tags_suppress] = tag
+    num_tags_suppress += 1 
 EndFunction 
 
 ; --------------------------------------------
@@ -305,8 +472,8 @@ function SetTags(String[] _tags)
     SetTags_Helper(True,_tags) 
 endfunction
 
-function SetTagsSupress(String[] _tags_supress) 
-    SetTags_Helper(False,_tags_supress) 
+function SetTagsSuppress(String[] _tags_suppress) 
+    SetTags_Helper(False,_tags_suppress) 
 endfunction
 
 Function SetTags_Helper(bool is_tags, String[] _tags)
@@ -322,7 +489,7 @@ Function SetTags_Helper(bool is_tags, String[] _tags)
 
     String[] ts = tags 
     if !is_tags
-        ts = tags_supress
+        ts = tags_suppress
     endif 
     if number > 0
         ts = EnsureStringsLargeEnough(ts, number) 
@@ -342,8 +509,8 @@ Function SetTags_Helper(bool is_tags, String[] _tags)
         num_tags = number
         tags = ts
     else
-        num_tags_supress = number
-        tags_supress = ts
+        num_tags_suppress = number
+        tags_suppress = ts
     endif 
 EndFunction 
 
@@ -357,68 +524,211 @@ String Function GetStyle()
     return style
 EndFunction
 
-Function SetDirection(String _direction)
-    direction = _direction
-    if actors.length > 1
-        if direction == "giving"
-            Actor temp = actors[0]
-            actors[0] = actors[1]
-            actors[1] = temp 
-        endif 
-    endif 
-EndFunction 
-
 Function SetEventHook(String _event_hook) 
     event_hook = _event_hook 
 EndFunction
 
+; -------------------------------------------------------------------------------
+; Get Speaker or Target 
+; -------------------------------------------------------------------------------
+
+Actor Function GetSpeaker() 
+    return speaker 
+EndFunction 
+
+Actor Function GetTarget() 
+    return target 
+EndFunction
+
 ; -------------------------------------------------------------------------------------
-; Load Scene Settings from File 
+; Load Scene Setting from File 
 ; -------------------------------------------------------------------------------------
-Function LoadSettings(String setting_name) 
+Function LoadSetting(String setting_name) 
     if setting_name == None 
-        Trace("LoadSettings", "setting_name is None, aborting")
+        Trace("LoadSetting", "setting_name is None, aborting")
         return 
     endif 
     String filename = "Data/SKSE/Plugins/SkyrimNet_SexLab/scenes/"+setting_name+".json"
     if !MiscUtil.FileExists(filename) 
-        Trace("LoadSettting","filename doesn't exit, aborting")
+        Trace("LoadSetting",filename+" doesn't exit, aborting")
         return 
     endif  
 
     int setting_id = JValue.readFromFile(filename)
     if setting_id < 0 
-        Trace("LoadSettting","filename couldn't parse, aborting")
+        Trace("LoadSetting",filename+" couldn't be parsed, aborting")
         return 
     endif  
 
-    int no_strip = 0 
-    int no_orgasm = 1 
-    String[] keys = new String[2] 
-    keys[no_strip] = "no_stripping"
-    keys[no_orgasm] = "no_orgasm"
+    ; --------------------------------------
+    ; Swap the first two positions, most sexlab have female at 0
+    ; --------------------------------------
+    if JMap.HasKey(setting_id, "male_position") && num_actors > 1
+        int position = JMap.GetInt(setting_id, "male_position") 
+        int other = 0
+        if position == 0 
+            other = 1 
+        endif 
+        Trace("LoadSetting","--- other: "+other+" position: "+position) 
+        Trace("LoadSetting","--- "+JoinActors(actors,num_actors))
+        int gender = sexlab.GetGender(actors[position])
+        bool position_male = gender == 0 || gender == 2 
+        gender = sexlab.GetGender(actors[other])
+        bool other_male = gender == 0 || gender == 2 
+        Trace("LoadSetting","---    position_male: "+position_male+" other_male: "+other_male)
+        ; position is not a male
+        if !position_male && other_male
+            Actor temp = actors[position]
+            actors[position] = actors[other] 
+            actors[other] = temp
+        endif 
+    endif 
+    Trace("Setup","--- "+JoinActors(actors,num_actors))
 
+    ; --------------------------------------
+    ; String Default 
+    ; --------------------------------------
+    if method == "" && JMap.HasKey(setting_id, "method") 
+        method = JMap.GetStr(setting_id, "method") 
+    endif 
+
+    if JMap.HasKey(setting_id, "intent") 
+        intent = JMap.GetStr(setting_id, "intent")
+    endif 
+    
+    ; ------------------------------
+    ; Array values 
+    ; ------------------------------
+    int no_stripping_key = 0 
+    int no_orgasm_key = 1 
+    int speaking_modifiers_key = 2
+    String[] keys = new String[3] 
+    int num_keys = keys.length 
+    keys[no_stripping_key] = "no_stripping"
+    keys[no_orgasm_key] = "no_orgasm"
+    keys[speaking_modifiers_key] = "speaking_modifiers"
+
+    ; ------------------------------------
+    ; Set Actors Arrays with defaults
+    ; ------------------------------------
+    if JMap.HasKey(setting_id, "array_defaults") 
+        int default_id = JMap.GetObj(setting_id, "array_default")
+        int i = 0
+        while i < num_keys 
+            if JMap.HasKey(default_id, keys[i]) 
+                if i == no_stripping_key || i == no_orgasm_key
+                    if i == no_stripping_key
+                        no_stripping_default_current = JMap.GetInt(default_id, keys[i])
+                    elseif i == no_orgasm_key 
+                        no_orgasm_default_current = JMap.GetInt(default_id, keys[i])
+                    endif 
+                    int j = 0 
+                    while j < num_actors 
+                        if i == no_stripping_key 
+                            no_stripping_mask[j] = no_stripping_default_current
+                        else 
+                            no_orgasm_mask[j] = no_orgasm_default_current
+                        endif 
+                        j += 1 
+                    endwhile 
+                elseif i == speaking_modifiers_key
+                    speaking_modifiers_default_current = JMap.GetStr(default_id, keys[i], "")
+                    int j = 0 
+                    while j < num_actors 
+                        speaking_modifiers[j] = speaking_modifiers_default_current
+                        j += 1 
+                    endwhile 
+                endif 
+            endif 
+            i += 1 
+        endwhile 
+    endif 
+
+    ; ------------------------------------
+    ; Set Actors Arrays with specifics
+    ; ------------------------------------
     int i = 0 
-    int num_keys = keys.length
-    while i < num_keys
+    while i < num_keys 
         if JMap.HasKey(setting_id, keys[i])
             int array_id = JMap.GetObj(setting_id, keys[i])
-            int[] values = JArray.asIntArray(array_id)
-            int num_values = values.length
-            CheckActorSize(num_values) 
+            if i == no_stripping_key || i == no_orgasm_key
+                int[] values = JArray.asIntArray(array_id)
+                int num_values = values.length
+                EnsureActorsArraysLargeEnough(num_values) 
+
+                ; Start with the values included in setting
+                int j = 0 
+                while j < num_values 
+                    if i == no_stripping_key
+                        no_stripping_mask[j] = values[j]
+                    elseif i == no_orgasm_key
+                        no_orgasm_mask[j] = values[j]
+                    endif 
+                    j += 1 
+                endwhile 
+            elseif i == speaking_modifiers_key
+                string[] strings = JArray.asStringArray(array_id)
+                int num_strings = strings.length
+                EnsureActorsArraysLargeEnough(num_strings) 
+
+                ; Start with the values included in setting
+                int j = 0 
+                while j < num_strings 
+                    if i == speaking_modifiers_key
+                        speaking_modifiers[j] = strings[j]
+                    endif 
+                    j += 1 
+                endwhile 
+            endif  
+        endif 
+        i += 1 
+    endwhile 
+
+    int tags_key = 0 
+    int tags_suppress_key = 1 
+    keys = new String[2] 
+    num_keys = keys.length 
+    keys[tags_key] = "tags"
+    keys[tags_suppress_key] = "tags_suppress"
+    i = 0
+    while i < num_keys
+        if JMap.HasKey(setting_id, keys[i]) 
+            String[] strings = StringUtil.Split(JMap.GetStr(setting_id, keys[i]), ",")
+            if !strings
+                strings = Utility.CreateStringArray(0)
+            endif 
+            int num_strings = strings.length 
+            if i == tags_key 
+                tags = EnsureStringsLargeEnough(tags, num_strings) 
+            elseif i == tags_suppress_key 
+                tags_suppress = EnsureStringsLargeEnough(tags_suppress, num_strings) 
+            endif 
+
             int j = 0 
-            while j < num_values 
-                if i == no_strip
-                    no_stripping_mask[j] = values[j]
-                elseif i == no_orgasm 
-                    no_orgasm_mask[j] = values[j]
-                else 
-                    Trace("LoadSetting","key index is unknown:"+i)
+            while j < num_strings 
+                if i == tags_key 
+                    tags[j] = strings[j]
+                elseif i == tags_suppress_key 
+                    tags_suppress[j] = strings[j]
                 endif 
                 j += 1 
             endwhile 
-        endif  
+            if i == tags_key 
+                num_tags = num_strings
+            elseif i == tags_suppress_key 
+                num_tags_suppress = num_strings
+            endif 
+        endif 
+        i += 1 
     endwhile 
+
+    JValue.release(setting_id) 
+
+    SetNames() 
+    String tags_string = JoinStrings(tags,num_tags)
+    String tags_suppress_string = JoinStrings(tags_suppress,num_tags_suppress)
+    Trace("LoadSetting","setting_name:"+setting_name+" no_stripping:["+no_stripping_mask+"] no_orgasm:["+no_orgasm_mask\
+        +"] tags:["+tags_string+"] suppress:["+tags_suppress_string+"]"+" speaking_modifiers:["+speaking_modifiers+"]")
 EndFunction 
 
 ; -------------------------------------------------------------------------------------
@@ -435,11 +745,7 @@ bool Function LockAllActorLock()
     endwhile 
 
     if i < num_actors 
-        int j = 0
-        while j < i
-            UnlockActorLock(actors[j]) 
-            j += 1 
-        endwhile 
+        UnlockAllActorLock()
         return False 
     endif 
     return True 
@@ -471,132 +777,7 @@ EndFunction
 
 Function UnlockActorLock(Actor akActor) 
     StorageUtil.UnsetIntValue(akActor, storage_actor_lock_key) 
-    Trace("ReleaseActorLock",akActor.GetDisplayName())
-EndFunction
-
-; --------------------------------------------
-; Start with Thread
-; --------------------------------------------
-SkyrimNet_SexLab_Scene Function Start() 
-    SetNames() 
-
-    Trace("CreateThread",GetString()) 
-
-    sslThreadModel model = sexlab.NewThread()
-    if model == None
-        Trace("CreateThread","Failed to create model")
-        Release()
-        return None 
-    endif
-
-    sslBaseAnimation[] animations = SelectAnimations() 
-    if animations == empty
-        Trace("CreateThread","SelectAnimations returned empty")
-        Release() 
-        return None
-    endif 
-    model.SetAnimations(animations) 
-    
-    ; -----------------------------------------
-    ; Add Actors and Victims 
-    ; -----------------------------------------
-    int i = 0 
-    bool failed = False 
-    while i < num_actors && !failed 
-        if model.AddActor(actors[i]) < 0 
-            Trace("Start","AddActor failed on actor:"+actors[i].GetDisplayName())
-            failed = True 
-        else 
-            if no_orgasm_mask[i] == 1 
-                model.DisableOrgasm(actors[i], true) 
-            endif 
-            if no_stripping_mask[i] == 1 
-                model.SetNoStripping(actors[i])
-            endif 
-        endif 
-        i += 1 
-    endwhile 
-
-    i = 0 
-    while i < num_victims && !failed
-        model.SetVictim(victims[i])
-        i += 1 
-    endwhile 
-
-    if failed 
-        Release() 
-        return 
-    endif 
-
-    ; Reset the masks, in case the names moves things around 
-    i = 0
-    num_actors = model.positions.length
-    while i < num_actors 
-        actors[i] = model.positions[i]
-        i += 1 
-    endwhile 
-    SetNames() 
-
-    Trace("CreateThread","--- a")
-
-    ; ------------------------------------------
-    ; Add Tags
-    ; ------------------------------------------
-
-    i = 0
-    while i < num_tags
-        String tag = tags[i]
-        if tag == "mouth" || tag == "tongue"
-            tags[i] = "oral"
-        elseif tag == "pussy"
-            tags[i] = "vaginal"
-        elseif tag == "ass"
-            tags[i] = "anal"
-        endif 
-        i += 1 
-    endwhile 
-
-    Trace("CreateThread","--- b")
-    if num_actors == 1
-        int gender = sexlab.GetGender(actors[0])
-        bool has_penis = (gender != 1 && gender != 3)
-        if has_penis 
-            addTag("M")
-        else 
-            addTag("F")
-        endif 
-    endif 
-
-    Trace("CreateThread","--- c")
-    if event_hook != None && event_hook != "" 
-        model.SetHook(event_hook)
-    endif 
-
-    String tags_string = JoinStrings(tags, num_tags)
-    String tags_supress_string = JoinStrings(tags_supress, num_tags_supress)
-    Trace("CreateThread",sid\
-        +" activity:"+activity\
-        +" actors: "+'"'+actor_names+'"'\
-        +" victims: "+'"'+victim_names+'"'\
-        +" assailants: "+'"'+assailant_names+'"'\
-        +" no_orgasm: "+'"'+no_orgasm_names+'"'\
-        +" no_stripping: "+'"'+no_stripping_names+'"'\
-        +" tag:"+tags_string\
-        +" tag:"+tags_supress_string\
-        +" style:"+style\
-        +" event_hook:"+event_hook)
-
-    Trace("CreateThread","--- d")
-    sslThreadController thread = model.StartThread() 
-    Trace("Start","--- f")
-    if thread == None 
-        Trace("Start","StartThread returned None, releasing scene.sid")
-        Release() 
-        return None 
-    endif 
-    Release() 
-
-    return manager.CreateSceneByThread(thread) 
+    Trace("UnlockActorLock",akActor.GetDisplayName())
 EndFunction
 
 ;---------------------------------------------------------------------------------------------------------------------
@@ -626,7 +807,12 @@ int function YesNoDialog()
     String question = ""
     String rejection = ""
 
-    Trace("YesNoDialog","activity:"+activity+" num_victims:"+num_victims)
+    String intent_method = intent 
+    if method != "" 
+        intent_method += " by "+method 
+    endif 
+
+    Trace("YesNoDialog","intent:"+intent+" num_victims:"+num_victims)
     if num_victims == 0
         int[] player_mask = Utility.CreateIntArray(num_actors, 1)
         int i = 0
@@ -637,15 +823,15 @@ int function YesNoDialog()
             i += 1
         endwhile
         String names = JoinActorsMasked(actors, player_mask, num_actors)
-        question = "Would you like to start "+activity+" with "+names+"?"
-        rejection = player_name+" refuses to start "+activity+" with "+names+"."
+        question = "Would you like to start "+intent_method+" with "+names+"?"
+        rejection = player_name+" refuses to start "+intent_method+" with "+names+"."
     else
         if player_is_victim
-            question = "Will you allow, "+assailant_names+" to start "+activity+" you?"
-            rejection = player_name+" prevents, "+assailant_names+" from to start "+activity+" them?"
+            question = "Will you allow, "+assailant_names+" to start "+intent_method+" you?"
+            rejection = player_name+" prevents, "+assailant_names+" from to start "+intent_method+" them?"
         else 
-            question = "Would you like to start "+activity+" "+victim_names+"?"
-            rejection = player_name+" refuses to start "+activity+" "+victim_names+"."
+            question = "Would you like to start "+intent_method+" "+victim_names+"?"
+            rejection = player_name+" refuses to start "+intent_method+" "+victim_names+"."
         endif 
     endif 
     
@@ -657,9 +843,10 @@ int function YesNoDialog()
     endif 
     return button
 EndFunction
-; -----------------------------------
-; Style 
-; -----------------------------------
+
+; ------------------------------------------------------------------------
+; Animations 
+; ------------------------------------------------------------------------
 
 sslBaseAnimation[] Function SelectAnimations()
     if num_victims > 0
@@ -681,26 +868,27 @@ sslBaseAnimation[] Function SelectAnimations()
             animations = SelectAnimationsDialog()
         else 
             String tags_string = JoinStrings(tags, num_tags)
-            String tags_supress_string = JoinStrings(tags_supress, num_tags_supress)
-            animations = sexLab.GetAnimationsByTags(num_actors, tags_string, tags_supress_string, true)
+            String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
+            animations = sexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, true)
         endif 
     else
         String tags_string = JoinStrings(tags, num_tags)
-        String tags_supress_string = JoinStrings(tags_supress, num_tags_supress)
-        animations =  sexLab.GetAnimationsByTags(num_actors, tags_string, tags_supress_string, true)
+        String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
+        animations =  sexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, true)
     endif 
     return animations  
 EndFunction 
 
 
+; ----------------------------------------
 ; This function returns the list of animations matching the requested animations
 ; If no animations were selected, it will return an array with a single None value `[None]`
 ; 
-;   anims = AnmisDialog(sexlab. positions, tag) 
-;   if anims.length > 0 && anims[0] != None 
+;   anims = SelectAnimationsDialog(sexlab. positions, tag) 
+;   if anims == empty
 ;        thread.SetAnimations(anims)
 ;   endif 
-;
+; ----------------------------------------
 sslBaseAnimation[] Function SelectAnimationsDialog() 
     if num_victims > 0
         Trace("SelectAnimationsDialog"," assailants:"+assailant_names+" victims:"+victim_names)
@@ -713,14 +901,16 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
         return empty 
     endif 
 
-    if num_tags > 0 || num_tags_supress > 0
-        String tags_string = JoinStrings(tags, num_tags)
-        String tags_supress_string = JoinStrings(tags_supress, num_tags_supress)
-        sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(num_actors, tags_string, tags_supress_string, true)
+    String tags_string = JoinStrings(tags, num_tags)
+    String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
+    if num_tags > 0 || num_tags_suppress > 0
+        sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, true)
         if anims.length == 0
-            Trace("SelectAnimationsDialog", "No animations found, dropping initial tag: "+tags_string+" tags_supress:"+tags_supress_string)
+            Trace("SelectAnimationsDialog", "No animations found, dropping initial tag: ["+tags_string+"] tags_suppress:["+tags_suppress_string+"]")
             num_tags = 0 
-            num_tags_supress = 0
+            num_tags_suppress = 0
+            tags_string = "" 
+            tags_suppress_string = "" 
         endif 
     endif 
 
@@ -737,31 +927,34 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
         JValue.retain(groups)
     endif 
 
-    int num_tags_max = tags.length 
     int group_count = JArray.count(groups)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
 
     while True
         String order_str ="change order>"
         bool finished = false
-        String tags_string = ""
-        Trace("SelectAnimationsDialog","num_tags:"+num_tags+" num_tags_max:"+num_tags_max)
-        while num_tags < num_tags_max && !finished
-            String start_label = "<start "+activity+">"
+        Trace("SelectAnimationsDialog","num_tags:"+num_tags)
+        while !finished
+            String start_label = "<start "+intent+">"
             Trace("SelectAnimationsDialog"," start_label:"+start_label)
             String style_button = "change style: "+style+">"
             listMenu.ResetMenu()
 
-            ; build the current tags
-            tags_string = JoinStrings(tags,num_tags)
-            ; Use the current set of tags 
-            String tags_label = "tags:"+tags_string
             listMenu.AddEntryItem(actor_names)
             if num_actors > 1 
                 listMenu.AddEntryItem(order_str)
             endif 
             listMenu.AddEntryItem(style_button)
+
+            ; build the current tags
+            tags_string = JoinStrings(tags,num_tags)
+            String tags_label = "tags:"+tags_string
             listMenu.AddEntryItem(tags_label)
+
+            tags_suppress_string = JoinStrings(tags_suppress,num_tags_suppress)
+            String tags_suppress_label = "suppress:"+tags_suppress_string
+            listMenu.AddEntryItem(tags_suppress_label)
+
             listMenu.AddEntryItem(start_label)
 
             ; there is at least one tag that can be removed 
@@ -805,7 +998,8 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
                 endif 
             endif 
         endwhile 
-        sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(num_actors, tags_string, "", true)
+
+        sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, true)
         if anims.length > 0
             JValue.release(groups)
             return anims 
@@ -835,7 +1029,7 @@ Function AddGroupTags(uilistMenu listMenu, int group_tags, String group) global
     endif 
 EndFunction
 
-String Function GroupDialog(int group_tags, String group)  global
+String Function GroupDialog(int group_tags, String group)
     uilistMenu listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
     listMenu.ResetMenu()
     listMenu.AddEntryItem("<back")

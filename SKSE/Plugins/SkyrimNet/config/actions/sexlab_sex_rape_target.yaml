@@ -1,60 +1,32 @@
 customCategory: sexlab_sex
-name: Sexual_Assault
-description: "[style] [type] sexual assalt on [target]"
+name: Sexual_Assault_Target
+description: "[style] [type] sexual assault on [Target]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
-executionFunctionName: Rape_Start_Target
-defaultPriority: 7
+executionFunctionName: StartScene_Nonconsensual_Two
+defaultPriority: 8
 parameterMapping:
+  - type: static 
+    name: intent
+    value: sexually assaulting
   - type: speaker
     name: speaker
     description: Speaker Actor parameter (triggering entity)
   - type: dynamic
     name: target
-    description: Object Actor (maybe Speaker)
-  - type: dynamic
-    name: direction
-    description: giving|getting
+    description: Object Actor
   - type: dynamic
     name: style
     description: forceful|normal|gentle
   - type: dynamic
-    name: type
+    name: method
     description: oral|vaginal|anal|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjob
-eligibilityRules:
-  - conditions:
-      - decoratorName: get_global_value
-        arguments:
-          - SkyrimNet_SexLab_ostim_player
-        comparisonOperator: ==
-        expectedValue: 0
-      - decoratorName: get_faction_rank
-        arguments:
-          - currentActor
-          - SexLabAnimatingFaction
-        comparisonOperator: <
-        expectedValue: 1
-      - decoratorName: is_in_faction
-        arguments:
-          - currentActor
-          - dse_dm_FactionActorUsingDevice
-        comparisonOperator: ==
-        expectedValue: false
-      - decoratorName: is_in_faction
-        arguments:
-          - currentActor
-          - OStimActorCountFaction
-        comparisonOperator: ==
-        expectedValue: false
-      - decoratorName: is_in_combat
-        arguments:
-          - currentActor
-        comparisonOperator: ==
-        expectedValue: false
-      - decoratorName: papyrus_util
-        arguments:
-          - "HasIntValue"
-          - currentActor
-          - "skyrimnet_sexlab_actor_lock"
-        comparisonOperator: ==
-        expectedValue: false
+  - type: dynamic
+    name: direction
+    description: giving|getting
+  - type: static 
+    name: speaking_victim
+    value: false
+  - type: static 
+    name: setting_name
+    value: ""

@@ -1,29 +1,23 @@
 customCategory: sexlab_sex
-name: SexLab_Start_Sexual_Activities
-description: "Consensual [style] [direction] [type]"
+name: Masturbation_Start
+description: "[style] [type] masturbation"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
-executionFunctionName: StartScene_Consensual_Two
-defaultPriority: 7
+executionFunctionName: StartScene_Consensual_One
+defaultPriority: 5
 parameterMapping:
-  - type: static 
+  - type: static
     name: intent
     value: sexual activities
   - type: speaker
     name: speaker
     description: Speaker Actor parameter (triggering entity)
   - type: dynamic
-    name: target
-    description: consenting actor
-  - type: dynamic
     name: style
     description: forceful|normal|gentle
   - type: dynamic
     name: method
-    description: mouth|pussy|ass
-  - type: dynamic
-    name: direction
-    description: fucked in|fucking
+    description: masturbation
   - type: static 
     name: setting_name
     value: ""

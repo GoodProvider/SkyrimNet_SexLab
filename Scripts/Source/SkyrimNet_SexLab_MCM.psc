@@ -183,7 +183,7 @@ State PublicSexAcceptedToggle
         Trace("PublicSexAcceptedToggle","sexlab_public: "+sexlab_public_sex_accepted.GetValue())
     EndEvent
     Event OnHighlightST()
-        SetInfoText("Makes public sex a socially accepted activity..")
+        SetInfoText("Makes public sex a socially accepted intent..")
     EndEvent
 EndState
 
@@ -436,12 +436,13 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif 
 
     int masturbate = cancel
-    int affection = cancel+1
-    int sex = cancel+2
-    int raped_by_player = cancel+3
-    int rapes_player = cancel+4
-    int clothing = cancel+5
-    cancel += 6 
+    int punish = cancel+1
+    int affection = cancel+2
+    int sex = cancel+3
+    int raped_by_player = cancel+4
+    int rapes_player = cancel+5
+    int clothing = cancel+6
+    cancel += 7 
 
     int bondage = -1
     if udng_found
@@ -454,6 +455,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
         buttons[sexlab_ostim] = sexlab_ostim_options[sexlab_ostim_player]
     endif 
     buttons[masturbate] = "masturbate"
+    buttons[punish] = "punish"
     buttons[affection] = "affection"
     buttons[sex] = "sex"
     buttons[raped_by_player] = "player rapes"
@@ -472,7 +474,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif 
     if button == masturbate
         if sexlab_ostim_player == 0 || !main.ostimnet_found
-            actions.StartScene_Consensual_one(target, "normal", "")
+            actions.StartScene_Consensual_one("sexual activites", target, "normal", "")
         else 
             EventSend_OStimNet("SexStart", target, None, "")
         endif 
@@ -486,13 +488,35 @@ Function Target_Menu_Selection(Actor target, Actor player)
             choice = "SexLab"
         endif 
         Debug.Notification("Switched to "+choice)
+    elseif button == punish 
+            String[] bs = new String[3] 
+            bs[0] = "spanking"
+            bs[1] = "spanking nude"
+            bs[2] = "whip"
+            String method = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
+            string setting_name= "punishing_spanking"
+            if method == "spanking nude"
+                method = "spanking"
+                string setting_name= "punishing_spanking_victim_nude"
+            elseif method == "whipping"  || method == "whip"
+                method = "whip"
+                string setting_name= "punishing_whipping_oral"
+            endif 
+            actions.StartScene_Nonconsensual_Two("punishing", player, target=target, method=method, direction="giving", setting_name=setting_name) 
     elseif button == affection
 ;        if sexlab_ostim_player == 0 || !main.ostimnet_found    
-            String[] bs = new String[2] 
-            bs[0] = "hugging"
-            bs[1] = "kissing"
-            String tag = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
-            actions.StartScene_Consensual_Two("showing affection",player, target=target, tag=tag)
+            String[] bs = new String[3] 
+            bs[0] = "single hug"
+            bs[1] = "cuddle"
+            bs[2] = "kissing"
+            String method = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
+            string setting_name = "nonsexual"
+            if method == "kissing" 
+                setting_name = "nonsexual_kissing"
+            elseif method == "cuddle"
+                setting_name = "nonsexual_cuddle"
+            endif 
+            actions.StartScene_Consensual_Two("showing affection",player, target=target, method=method,setting_name=setting_name)
 ;        else 
 ;            String[] bs = new String[3] 
 ;            bs[0] = "hugging"
@@ -502,8 +526,9 @@ Function Target_Menu_Selection(Actor target, Actor player)
 ;            EventSend_OstimNet("AffectionStart", player, target, tag)
 ;        endif 
     elseif button == sex
+        actions.StartScene_Consensual_Two("sexual activities", player, target=target)
         ;if sexlab_ostim_player  == 0.0 || !main.ostimnet_found
-            actions.StartScene_Consensual_Two("sexual activities", player, target=target)
+            ;actions.StartScene_Consensual_Two("sexual activities", player, target=target)
         ;else 
             ;String[] bs = new String[3] 
         ;    bs[0] = "vaginalsex"
@@ -514,9 +539,9 @@ Function Target_Menu_Selection(Actor target, Actor player)
         ;endif 
 
     elseif button == rapes_player
-        actions.StartScene_Rape_Two(target, player)
+        actions.StartScene_Nonconsensual_Two("raping", player,target, speaker_victim=True)
     elseif button == raped_by_player
-        actions.StartScene_Rape_Two(player, target)
+        actions.StartScene_Nonconsensual_Two("raping",player, target)
     elseif button == clothing
 
         if clothing_string == "undress"
@@ -659,7 +684,7 @@ Function MutliTarget_Menu_Selection(Actor player)
     int[] selected = new int[5]
 
     String cancel = "<cancel>"
-    String activity = "sex>"
+    String intent = "sex>"
 
     int next = 0 
     bool building_list = true 
@@ -685,7 +710,7 @@ Function MutliTarget_Menu_Selection(Actor player)
             start = "select actors to: "
         endif 
         listMenu.AddEntryItem(start)
-        listMenu.AddEntryItem(activity)
+        listMenu.AddEntryItem(intent)
 
         i = 0
         while 0 <= i && i < num_actors
@@ -719,10 +744,10 @@ Function MutliTarget_Menu_Selection(Actor player)
                 finished = True 
             endif 
         elseif index == 1 
-            if activity == "sex>"
-                activity = "rape>"
+            if intent == "sex>"
+                intent = "rape>"
             Else
-                activity = "sex>"
+                intent = "sex>"
             endif 
         elseif index < num_actors + 2
             index -= 2
@@ -751,10 +776,10 @@ Function MutliTarget_Menu_Selection(Actor player)
         actors_selected[i] = actors[selected[i]]
         i += 1 
     endwhile 
-    Trace("MultiTarget_Menu_Selection","activity:"+activity+" next:"+next+" actors_selected:"+SkyrimNet_SexLab_Utilities.JoinActors(actors_selected))
+    Trace("MultiTarget_Menu_Selection","intent:"+intent+" next:"+next+" actors_selected:"+SkyrimNet_SexLab_Utilities.JoinActors(actors_selected))
 
     if next == 1
-        actions.StartScene_Consensual_one(actors_selected[0], "normal", "")
+        actions.StartScene_Consensual_one("sexual activites", actors_selected[0], "normal", "")
     else 
         String json = "{"+'"'+"target"+'"'+":"+'"'+actors_selected[1].GetDisplayName()+'"'
         i = 2 
@@ -765,17 +790,15 @@ Function MutliTarget_Menu_Selection(Actor player)
         endwhile
         json += "}"
 
-        String rape_victim = "None" 
+        String rape_victim = "none" 
         Actor speaker = actors_selected[0]
         Actor target = actors_selected[1]
-        if activity == "rape>"
-            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(actors_selected, speaker, target)
-            creator.SetActivity("raping")
+        if intent == "rape>"
+            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator("raping", actors_selected, speaker, target,"")
             creator.SetVictim(actors_selected[0])
             creator.Start() 
         else 
-            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(actors_selected, speaker, target)
-            creator.SetActivity("sex")
+            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator("sexual activites", actors_selected, speaker, target, "")
             creator.Start() 
         endif   
     endif 

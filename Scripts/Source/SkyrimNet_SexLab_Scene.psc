@@ -14,8 +14,17 @@ int[] assailant_mask
 int[] hermaphrodiate_mask
 int[] strapon_mask
 
+String[] speaking_modifiers
+String[] speaking_modifiers_json
+
 String creature_descriptions = "" 
 
+; -------------------------------------------
+; Intent
+; -------------------------------------------
+int Property INTENT_STAGE_START = 0 Auto
+int Property INTENT_STAGE_ONGOING = 1 Auto
+int Property INTENT_STAGE_END = 2 Auto
 
 ; -------------------------------------------
 ; Who send the messages to SkyrimNet 
@@ -28,7 +37,7 @@ int[] total_orgasms = None
 ; --------------------------------------------
 ; Track Scene
 ; --------------------------------------------
-bool tracking = False
+bool Property tracking = False Auto
 
 ; --------------------------------------------
 ; Thread
@@ -57,8 +66,10 @@ EndFunction
 
 Function Initialize(int _sid, SkyrimNet_SexLab_Scene_Manager _manager) 
     parent.Initialize(_sid,_manager) 
+    EnsureActorsArraysLargeEnough(2)
     sexlab = manager.sexlab
     threadSlots = manager.threadSlots
+    actorLib = manager.actorLib
     SkyrimNet_SexLab_Faction_Victim = manager.SkyrimNet_SexLab_Faction_Victim
     is_generic = false
     if !total_orgasms 
@@ -66,66 +77,87 @@ Function Initialize(int _sid, SkyrimNet_SexLab_Scene_Manager _manager)
     endif 
 EndFunction 
 
-Function Setup(sslThreadController _thread, Actor speaker=None, Actor target=None) 
-    thread = _thread
+Function Setup(SkyrimNet_SexLab_Scene_Creator creator=None)
+    if thread == None 
+        Trace("Setup","thread is none, aborting")
+        return 
+    endif 
+    Actor[] actors = thread.positions
+    int num_actors = thread.positions.length
 
-    sender = None 
-    receiver = None 
+    EnsureActorsArraysLargeEnough(num_actors) 
+    if creator != None 
+        intent = creator.intent 
+        style = creator.style
+        sender = creator.GetSpeaker()
+        receiver = creator.GetTarget() 
+        int i = 0 
+        while i < num_actors
+            speaking_modifiers[i] = creator.speaking_modifiers[i]
+            String[] strings = StringUtil.Split(speaking_modifiers[i],",")
+            String json = "[]" 
+            if strings 
+                json = JoinStringsToJson(strings) 
+            endif 
+            speaking_modifiers_json[i] = json
+            i += 1 
+        endwhile 
+    else 
+        intent = INTENT_DEFAULT
+        style = STYLE_DEFAULT
+        if num_actors == 1 
+            sender = actors[0]
+            receiver = None 
+        else 
+            sender = actors[1] 
+            receiver = actors[0] 
+        endif 
+        int i = 0 
+        while i < num_actors
+            speaking_modifiers[i] = speaking_modifiers_DEFAULT
+            speaking_modifiers_json[i] = "[]"
+            i += 1 
+        endwhile 
+    endif 
+
+    if num_actors > 1
+        Actor victim = thread.GetVictim() 
+        if victim != None && sender == victim 
+            sender = receiver 
+            receiver = victim
+        endif 
+    endif 
+
 
     bool failed = False 
     num_victims = 0 
-    Actor[] actors = thread.positions
-    int num_actors = thread.positions.length
     int i = 0 
     while i < num_actors && !failed 
         if thread.IsVictim(actors[i]) 
-            if receiver == None  && num_actors > 1
-                receiver = actors[i]
-            endif 
             num_victims += 1 
             actors[i].AddToFaction(SkyrimNet_SexLab_Faction_Victim)
         else 
-            if sender == None 
-                sender = actors[i]
-            endif 
             if actors[i].IsInFaction(SkyrimNet_SexLab_Faction_Victim)
                 actors[i].RemoveFromFaction(SkyrimNet_SexLab_Faction_Victim)
             endif 
         endif 
         i += 1 
     endwhile 
-
-    if num_actors == 1 
-        sender = actors[0]
-        receiver = None 
-    else
-        if speaker != None
-            sender = speaker
-            if target != None && target != sender
-                receiver = target
-            endif 
-        endif 
-        if sender == receiver 
-            receiver = None 
-        endif 
-        i = 0 
-        while i < num_actors && receiver != None
-            if receiver != sender
-                receiver = actors[i]
-            endif 
-            i += 1 
-        endwhile 
-    endif 
             
     if !is_generic
         status = STATUS_SETUP
-        manager.SetThread_Scene(thread.tid,self) 
     else 
         status = STATUS_ACTIVE 
     endif 
 EndFunction 
 
 Function Release()
+    if thread == None 
+        Trace("Release","Thread is None, aborting") 
+        return 
+    endif 
+
+    status = STATUS_INACTIVE 
     int i = 0
     Actor[] actors = thread.positions
     int num_actors = actors.length
@@ -137,19 +169,21 @@ Function Release()
     endwhile
     num_actors = 0 
 
-    if thread != None && !is_generic
-        manager.SetThread_scene(thread.tid, None)
+    if !is_generic
+        manager.UnsetThread_scene(thread.tid)
     endif 
+    thread = None 
     Release() 
-    status = STATUS_INACTIVE 
 EndFunction
 
-Function CheckActorSize(int size) 
+Function EnsureActorsArraysLargeEnough(int size) 
     victim_mask = EnsureIntsLargeEnough(victim_mask, size) 
     assailant_mask = EnsureIntsLargeEnough(assailant_mask, size) 
     hermaphrodiate_mask = EnsureIntsLargeEnough(hermaphrodiate_mask, size) 
     strapon_mask = EnsureIntsLargeEnough(strapon_mask, size) 
     total_orgasms = EnsureIntsLargeEnough(total_orgasms, size) 
+    speaking_modifiers = EnsureStringsLargeEnough(speaking_modifiers, size) 
+    speaking_modifiers_json = EnsureStringsLargeEnough(speaking_modifiers_json, size) 
 EndFunction
 
 Function SetMasks()
@@ -158,7 +192,7 @@ Function SetMasks()
         return 
     endif 
     int num_actors = thread.positions.length
-    CheckActorSize(num_actors) 
+    EnsureActorsArraysLargeEnough(num_actors) 
 
     int i = 0 
     while i < num_actors 
@@ -251,6 +285,9 @@ int Function GetNumberOfOrgasms(Actor akActor)
 EndFunction
 
 
+Function SetThread(sslThreadController _thread) 
+    thread = _thread
+EndFunction 
 sslThreadController Function GetThread()
     if thread == None 
         Trace("GetThread","Thread is None | "+GetString())
@@ -266,11 +303,27 @@ bool Function IsGeneric()
 EndFunction 
 
 ; --------------------------------------------
+; Get a Status message for the scene (start, are, finished) 
+; --------------------------------------------
+String Function GetIntentMessage(int intent_stage = -1) 
+    String message = "are "+intent 
+    if intent_stage == INTENT_STAGE_START 
+        message = "start "+intent
+    elseif intent_stage == INTENT_STAGE_END 
+        message = "finished "+intent
+    endif 
+    if num_victims > 0
+        return assailant_names+" "+message+" "+victim_names+"."
+    endif 
+    return actor_names+" "+message+"."
+EndFunction 
+
+; --------------------------------------------
 ; Animation Event Handlers 
 ; --------------------------------------------
 Function AnimationStart()
     SetNames() 
-    String msg = GetActivityMessage(ACTIVITY_STAGE_START)
+    String msg = GetIntentMessage(INTENT_STAGE_START)
     RegisterEvent("sexlab update", msg, sender, receiver) 
     manager.SaveThreadsJson() 
 EndFunction
@@ -298,7 +351,7 @@ Function StageStart()
         ; Registers who started the activites 
         ; -----------------------------------
         if num_actors > 1 
-            desc = sender.GetDisplayName()+" initiates, "+ GetActivityMessage(ACTIVITY_STAGE_START)+desc
+            desc = sender.GetDisplayName()+" initiates, "+ GetIntentMessage(INTENT_STAGE_START)+desc
         endif 
 
         if desc == "" 
@@ -318,7 +371,7 @@ Function StageStart()
         if use_continue 
             ContinueActivity(sender, receiver, True)
         else
-            DirectNarration_optional("ChangePosition", sender, receiver) 
+            DirectNarration_optional("ChangePosition", desc, sender, receiver) 
         endif 
     endif 
 
@@ -344,7 +397,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
     SetNames() 
     int num_actors = thread.positions.length 
 
-    String msg = GetActivityMessage(ACTIVITY_STAGE_END)
+    String msg = GetIntentMessage(INTENT_STAGE_END)
     manager.SaveThreadsJson()
     if SexLab == None || thread == None 
         Trace("AnimationEnd","SexLab or thread is None for scene with actors "+actor_names)
@@ -357,7 +410,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
 
     String narration = ""
     if style != "silently" && speaker != None
-        narration = speaker.GetDisplayName()+" "+style+" stops, "+GetActivityMessage(ACTIVITY_STAGE_ONGOING)+". "
+        narration = speaker.GetDisplayName()+" "+style+" stops, "+GetIntentMessage(INTENT_STAGE_ONGOING)+". "
     endif
     bool has_tentacles = False 
 
@@ -369,7 +422,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         narration = "The tentacles orgasm flooding cum both inside and outside. "
     endif
 
-    narration += GetActivityMessage(ACTIVITY_STAGE_END)+". "
+    narration += GetIntentMessage(INTENT_STAGE_END)+". "
 
     bool orgasm_denied = false
     Actor target = None
@@ -620,7 +673,7 @@ String Function GetDescription()
     if thread == None 
         return ""
     endif 
-    return GetActivityMessage()+" "+stages.GetStageDescription(thread)
+    return GetIntentMessage()+" "+stages.GetStageDescription(thread)
 EndFunction
 
 String Function GetJson(Actor speaker)
@@ -640,8 +693,6 @@ String Function GetJson(Actor speaker)
     String description = GetDescription()
 
     String json = "{"+'"'+"description"+'"'+":"+'"'+description+'"'
-    String enjoyments = GetEnjoyments()
-    json += ", "+'"'+"enjoyments"+'"'+":"+enjoyments
     
     bool los = False 
     int[] orgasm_expected = stages.GetOrgasmExpected(thread)
@@ -660,19 +711,51 @@ String Function GetJson(Actor speaker)
         los = speaker.HasLOS(thread.positions[0]) 
     endif 
 
-    json += ',"actors":'+actor_names_json
-    json += ',"victims":'+victim_names_json
-    json += ',"orgasm_expected":'+orgasm_expected_json
-    json += ',"actor_names":"'+actor_names+'"'
-    json += ',"hermaphrodiate_names":"'+hermaphrodiate_names+'"'
-    json += ',"strapon_names":"'+strapon_names+'"'
+    json += ',"actors":'+GetActorsJson() 
+    json += ',"victim_names":'+victim_names_json
+    json += ',"actor_names_string":"'+actor_names+'"'
+    json += ',"hermaphrodiate_names_string":"'+hermaphrodiate_names+'"'
+    json += ',"strapon_names_string":"'+strapon_names+'"'
     json += ',"speaker_distance":'+distance
-    json += ',"speaker_los":'+los
+    json += ',"speaker_los:"'+JsonBool(los)
     json += ',"location":"'+GetLocation()+'"'
     json += ',"style":"'+style+'"'
     json += "}"
     return json
 EndFunction
+
+String Function GetActorsJson() 
+    String json = "" 
+    int i = 0 
+    Actor[] actors = thread.positions 
+    int num_actors = actors.length
+    while i < num_actors
+        String info = '"speaking_modifiers":'+speaking_modifiers_json[i]
+        info += ',"name":"'+actors[i].GetDisplayName()+'"'
+        info += ',"notice_level":"active"'
+        if thread.IsVictim(actors[i]) 
+            info += ',"victim":true'
+        else 
+            info += ',"victim":false'
+        endif 
+
+        int enjoyment = 0
+        sslActorAlias actorAlias = thread.ActorAlias(actors[i]) 
+        ;if MiscUtil.FileExists("Data/SLSO.esp")
+            ;enjoyment = actorAlias.Getfull_enjoyment() 
+        ;else 
+            enjoyment = actorAlias.GetEnjoyment() 
+        ;endif 
+        info += ',"enjoyment":'+enjoyment
+
+        if json  != "" 
+            json += ","
+        endif 
+        json += '"'+actors[i].GetDisplayName()+'":{'+info+'}'
+        i += 1 
+    endwhile 
+    return "{"+json+"}"
+EndFunction 
 
 String Function GetLocation()
 

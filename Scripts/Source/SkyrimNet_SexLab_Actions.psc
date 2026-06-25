@@ -38,23 +38,18 @@ EndFunction
 ; One
 ;-------------------------------------------
 
-Function StartScene_Consensual_One(Actor speaker, string style="", String tag="")
-    Trace("StartScene_Consensual_One",speaker.GetDisplayName()+" style: "+style+" tag: "+tag)
-    StartScene_Event("sexual activities", speaker, style=style, tag=tag) 
+Function StartScene_Consensual_One(String intent, Actor speaker, string style="", String method="", String setting_name="")
+    Trace("StartScene_Consensual_One",intent+" "+speaker.GetDisplayName()+" style: "+style+" method: "+method)
+    StartScene_Event(intent, speaker, style=style, method=method, setting_name=setting_name) 
 EndFunction
 
 ;-------------------------------------------
 ; Two
 ;-------------------------------------------
 
-Function StartScene_Affection_Two(String activity, Actor speaker, Actor target, string style="", string tag="", string direction="")
-    Trace("StartScene_Affection_Two","activity:"+activity+" speaker:"+speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag)
-    StartScene_Event(activity, speaker, target, None, style, tag, direction) 
-EndFunction
-
-Function StartScene_Consensual_Two(String activity, Actor speaker, Actor target, string style="", string tag="", String direction="", String setting_name="")
-    Trace("StartScene_Consensual_Two","activity:"+activity+" speaker:"+speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag+" setting_name:"+setting_name)
-    if tag == "hug"
+Function StartScene_Consensual_Two(String intent, Actor speaker, Actor target, string style="", string method="", String direction="", String setting_name="")
+    Trace("StartScene_Consensual_Two","intent:"+intent+" speaker:"+speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" intent: "+intent+" method:"+method+" setting_name:"+setting_name)
+    if method == "hug" || method == "single hug"
         target.playIdleWithTarget(pa_HugA, speaker) 
         Actor sender = speaker 
         Actor receiver = target 
@@ -66,47 +61,66 @@ Function StartScene_Consensual_Two(String activity, Actor speaker, Actor target,
         DirectNarration(msg, speaker, target)
         return None 
     endif 
-    StartScene_Event(activity, speaker, target, None, style, tag, direction, setting_name=setting_name) 
+    StartScene_Event(intent, speaker, target, None, style, method, direction, setting_name=setting_name) 
 EndFunction
 
-Function StartScene_Rape_Two(Actor speaker, Actor target=None, string style="", string tag="", String direction="", bool speaker_victim=false)
-    Trace("StartScene_RapeTarget_Two",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" tag:"+tag+" direction: "+direction)
+Function StartScene_Nonconsensual_Two(String intent, Actor speaker, Actor target=None, string style="", string method="", String direction="", bool speaker_victim=false, String setting_name="")
+    Trace("StartScene_Nonconsensual_Two",GetDisplayName(speaker)+" "+GetDisplayName(target)+" style: "+style+" method:"+method+" direction: "+direction+" speaker_victim:"+speaker_victim+" setting_name:"+setting_name)
     Actor victim = target
     if speaker_victim 
         victim = speaker
     endif 
-    StartScene_Event("raping", speaker, target, victim, style, tag, direction) 
+    StartScene_Event(intent, speaker, target, victim, style, method, direction, setting_name=setting_name) 
+EndFunction
+
+Function StartScene_Nonconsensual_Two_Victim(String intent, Actor speaker, Actor target=None, string style="", string method="", String direction="", Actor victim, String setting_name="")
+    Trace("StartScene_Nonconsensual_Two",GetDisplayName(speaker)+" "+GetDisplayName(target)+" style: "+style+" method:"+method+" direction: "+direction+" speaker_victim:"+GetDisplayName(victim)+" setting_name:"+setting_name)
+    StartScene_Event(intent, speaker, target, victim, style, method, direction, setting_name=setting_name) 
+EndFunction
+
+Function StartScene_Punish_Two(String intent, Actor speaker, Actor target=None, string style="", string method="", String direction="", String setting_name="")
+    Trace("StartScene_Punish_Two",GetDisplayName(speaker)+" "+GetDisplayName(target)+" style: "+style+" method:"+method+" direction: "+direction+" setting_name:"+setting_name)
+    Actor victim = target
+    if direction == "get" || "getting"
+        victim = speaker
+    endif 
+    StartScene_Event(intent, speaker, target, victim, style, method, direction, setting_name=setting_name) 
 EndFunction
 
 ;-------------------------------------------
 ; Threesome
 ;-------------------------------------------
 
-Function StartScene_Affection_Three(Actor speaker, Actor target, string style, string direction, string tag, Actor participate)
-    Trace("StartScene_Consensual_Three",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag+" participate:"+participate.GetDisplayName())
-    StartScene_Event("showing affection", speaker, target, None, style, direction, tag, participate_3=participate) 
+Function StartScene_Affection_Three(Actor speaker, Actor target, string style, string direction, string method, Actor participate)
+    Trace("StartScene_Consensual_Three",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" intent: "+method+" participate:"+participate.GetDisplayName())
+    StartScene_Event("showing affection", speaker, target, None, style, direction, method, participate_3=participate) 
 EndFunction
 
-Function StartScene_Consensual_Three(Actor speaker, Actor target, string style, string tag, string direction, Actor participate)
-    Trace("StartScene_Consensual_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" activity: "+tag+" participate:"+GetDisplayName(participate))
-    StartScene_Event("having sexual activities", speaker, target, None, style, tag, direction, participate_3=participate) 
+Function StartScene_Consensual_Three(Actor speaker, Actor target, string style, string method, string direction, Actor participate)
+    Trace("StartScene_Consensual_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" intent: "+method+" participate:"+GetDisplayName(participate))
+    StartScene_Event("having sexual activities", speaker, target, None, style, method, direction, participate_3=participate) 
 EndFunction
 
-Function StartScene_Rape_Three(Actor speaker, Actor target, string style, string tag, string direction, bool speaker_victim, Actor participate)
-    Trace("StartScene_Rape_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" activity: "+tag+" speaker_victim:"+speaker_victim+" participate:"+GetDisplayName(participate))
+Function StartScene_Rape_Three(Actor speaker, Actor target, string style, string method, string direction, bool speaker_victim, Actor participate)
+    Trace("StartScene_Rape_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" intent: "+method+" speaker_victim:"+speaker_victim+" participate:"+GetDisplayName(participate))
     Actor victim = target
     if speaker_victim 
         victim = speaker
     endif 
-    StartScene_Event("raping", speaker, target, victim, style, tag, direction, participate_3=participate) 
+    StartScene_Event("raping", speaker, target, victim, style, method, direction, participate_3=participate) 
 EndFunction
 
 ;-------------------------------------------
-; Threesome
+; Scene Stop 
 ;-------------------------------------------
 
-Function SceneStop(Actor speaker, Actor target, String style)
-    Trace("SceneStop",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style)
+Function SceneStop(Actor speaker, String style)
+    Trace("SceneStop",GetDisplayName(speaker)+" style: "+style)
+    SceneStop_Event(speaker, speaker, style) 
+EndFunction
+
+Function SceneStop_Target(Actor speaker, Actor target, String style)
+    Trace("SceneStop",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style)
     SceneStop_Event(speaker, target, style) 
 EndFunction
 
@@ -114,16 +128,20 @@ EndFunction
 ; Refused
 ;------------------------------------------------------------------------------
 
-Function StartScene_Refused_Two(Actor speaker, Actor target, string style="", string tag="", string direction="")
-    Trace("StartScene_Refused_Two",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" activity: "+tag)
+Function StartScene_Refused_Two(String intent, Actor speaker, Actor target, string style="", string method="", string direction="")
+    String speaker_name = GetDisplayName(speaker)
+    String target_name = GetDisplayName(target)
+    Trace("StartScene_Refused_Two","intent: "+intent+" "+speaker_name+" + "+target_name+" style: "+style+" direction: "+direction+" method: "+method)
     if style == "normal" || style == "normally"
         style = "" 
     endif 
-    if direction == ""
-        direction = "getting"
+    String msg = target_name+" "+style+" refused to allow"+intent+" by "
+    if direction == "" || direction == "getting" 
+        msg += direction+" "+method+" from "+speaker.GetDisplayName() 
+    else 
+        msg += direction+" "+method+" to "+speaker.GetDisplayName() 
     endif 
-    String message = target.GetDisplayName()+" "+style+" refused "+direction+" "+tag+" from "+speaker.GetDisplayName() 
-    DirectNarration(message, target, speaker) 
+    DirectNarration(msg, target, speaker) 
 EndFunction
 
 ;------------------------------------------------------------------------------
@@ -141,24 +159,59 @@ EndFunction
 ;--------------------------------------
 ; Two actors 
 ;--------------------------------------
-Function StartScene_Event(String activity, Actor speaker, Actor target=None, Actor victim=None,\
-     string style="", string tag="", String direction="", String event_hook="", String setting_name="",\
+Function StartScene_Event(String intent, Actor speaker, Actor target=None, Actor victim=None,\
+     string style="", string method="", String direction="", String event_hook="", String setting_name="",\
      Actor participate_3=None)
+
+    if target == None && participate_3 != None 
+        target = participate_3 
+        participate_3 = None 
+    endif 
 
     String speaker_name = GetDisplayName(speaker)
     String target_name = GetDisplayName(target) 
     String victim_name = GetDisplayName(victim) 
-    Trace("StartScene_Event","activity:"+activity+" speaker:"+speaker_name+" target:"+target_name+" victim:"+victim_name\
-        +" style:"+style+" direction:"+direction+" tag:"+tag+" event_hook:"+event_hook+" setting_name:"+setting_name)
+    String participate_3_name = GetDisplayName(participate_3) 
+    Trace("StartScene_Event","intent:"+intent+" speaker:"+speaker_name+" target:"+target_name+" victim:"+victim_name\
+        +" style:"+style+" speaker_position:"+speaker_position+" method:"+method+" event_hook:"+event_hook+" setting_name:"+setting_name\
+        +" participate_3_name:"+participate_3_name)
+    
+    if method == "pussy"
+        method = "vaginal"
+    elseif method == "mouth"
+        method = "oral"
+    elseif method == "ass" 
+        method = "anal"
+    endif 
+
+    if method == "whipping"
+        method = "whip"
+    endif 
+
+
+    int speaker_position = 0 
+    if target != None 
+        if method == "oral" || method == "vaginal" || method == "anal"
+            if direction == "fuck a"
+                speaker_position = 1 
+            endif 
+        elseif method == "hugging" || method == "kissing" || method == "spanking" || method == "whip"
+            if direction == "giving" || direction == "give" 
+                speaker_position = 1 
+            endif 
+        elseif direction == "get" || direction == "getting"
+            speaker_position = 1 
+        endif 
+    endif 
 
     int handle = ModEvent.Create("SkyrimNet_SexLab_Action_Start")
-    ModEvent.PushString(handle, activity)
+    ModEvent.PushString(handle, intent)
     ModEvent.PushForm(handle, speaker)
     ModEvent.PushForm(handle, target)
     ModEvent.PushForm(handle, victim)
     ModEvent.PushString(handle, style)
-    ModEvent.PushString(handle, tag)
-    ModEvent.PushString(handle, direction)
+    ModEvent.PushString(handle, method)
+    ModEvent.PushInt(handle, speaker_position)
     ModEvent.PushString(handle, event_hook)
     ModEvent.PushString(handle, setting_name)
     ModEvent.PushForm(handle, participate_3)
@@ -190,12 +243,12 @@ Function Change_Outfit(Actor stripper, Actor stripped, String style, String how,
         endif
     else
         ;/* StripActor
-        * * Strips an actor using SexLab's strip settings as chosen by the user from the SexLab MCM
+        * * Strips an actor using SexLab's strip setting as chosen by the user from the SexLab MCM
         * * 
         * * @param: Actor ActorRef - The actor whose equipment shall be unequipped.
-        * * @param: Actor VictimRef [OPTIONAL] - If ActorRef matches VictimRef victim strip settings are used. If VictimRef is set but doesn't match, aggressor settings are used.
+        * * @param: Actor VictimRef [OPTIONAL] - If ActorRef matches VictimRef victim strip setting are used. If VictimRef is set but doesn't match, aggressor setting are used.
         * * @param: bool DoAnimate [OPTIONAL true by default] - Whether or not to play the actor stripping animations during the strip
-        * * @param: bool LeadIn [OPTIONAL false by default] - If TRUE and VictimRef == none, Foreplay strip settings will be used.
+        * * @param: bool LeadIn [OPTIONAL false by default] - If TRUE and VictimRef == none, Foreplay strip setting will be used.
         * * @return: Form[] - An array of all equipment stripped from ActorRef
         */;
         Actor victim = None 
@@ -222,8 +275,9 @@ Function Change_Outfit(Actor stripper, Actor stripped, String style, String how,
         endif 
     endif 
 EndFunction
+
 ; -------------------------------------------------
-; Tag 
+; IsEligible
 ; -------------------------------------------------
 
 bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string paramsJson)

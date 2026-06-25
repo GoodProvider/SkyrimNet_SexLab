@@ -263,7 +263,7 @@ Function EditDescriptions(sslThreadController thread)
             scene.SetStyleDialog() 
         elseif button == stop 
             String style = SkyrimNet_SexLab_Scene_Manager.GetStyleDialog("How will you stop it?")
-            actions.SceneStop(player, actors[0], style)
+            actions.SceneStop_Target(player, actors[0], style)
             return
         endif 
     endwhile 

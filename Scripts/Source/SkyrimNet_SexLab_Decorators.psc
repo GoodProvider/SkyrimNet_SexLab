@@ -22,9 +22,71 @@ Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("sexlab_get_threads", "SkyrimNet_SexLab_Decorators", "SexLab_Get_Threads")
     SkyrimNetApi.RegisterDecorator("sexlab_get_player_los_distance", "SkyrimNet_SexLab_Decorators", "Player_LOS_Distance")
     SkyrimNetApi.RegisterDecorator("sexlab_outfit_options", "SkyrimNet_SexLab_Decorators", "Outfit_Options")
+    SkyrimNetApi.RegisterDecorator("sexlab_intent", "SkyrimNet_SexLab_Decorators", "Intent")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     ;SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
 EndFunction
+
+String Function Outfit_Options(Actor speaker) global 
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+       if main == None
+        Trace("Outfit_Options", "ERROR: Failed to get SkyrimNet_SexLab_Main form", True)
+        return '{"option":"undresses"}'
+    endif
+    String options = "undresses"
+    ; Check if the actor has undressed items, they could put on 
+    if main.HasStrippedItems(speaker) 
+        options = "dresses"
+    endif 
+    Trace("Outfit_Options",speaker.GetDisplayName()+" has options:"+options)
+    return "{"+'"'+"option"+'"'+":"+'"'+options+'"'+"}"
+EndFunction
+
+String Function Intent(Actor speaker) global 
+    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
+    SkyrimNet_SexLab_Scene scene = manager.GetSceneByActor(speaker) 
+    if scene != None 
+        return '{"intent":"'+scene.intent+'"}'
+    endif 
+    return "{}"
+EndFunction 
+
+
+String Function Player_LOS_Distance(Actor akActor) global 
+    Actor player = Game.GetPlayer() 
+    float distance = player.GetDistance(akActor) 
+    bool los = player.hasLOS(akActor) 
+    return "{"+'"'+"distance"+'"'+":"+distance+","+'"'+"los"+'"'+":"+los+"}"
+EndFunction 
+
+String Function Is_Nudity(Actor akActor) global
+    ; 32 off top
+    ; 52 and 49 off bottom 
+    bool topless = false
+    bool bottomless = false 
+    if akActor != None 
+        Form body = akActor.GetEquippedArmorInSlot(32)
+        Form pelvis_primary = akActor.GetEquippedArmorInSlot(52)
+        Form pelvis_secondary = akActor.GetEquippedArmorInSlot(49)
+
+
+        if body == None 
+            topless = true 
+        endif 
+        if pelvis_primary == None && pelvis_secondary == None
+            bottomless = true 
+        endif
+    endif 
+    return "{"+'"'+"topless"+'"'+":"+topless+","+'"'+"bottomless"+'"'+":"+bottomless+"}"
+EndFunction
+
+String Function SexLab_Get_Threads(Actor speaker) global
+    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
+    if manager == None 
+        return '{"threads":[]}' 
+    endif 
+    return manager.GetThreadsJson(speaker) 
+EndFunction 
 
 ; animal & ActorTypeCreature & ActorTypeFamiliar 
 ; skyrim.13798 & skyrim.13795 & skyrim.10ED7  
@@ -75,54 +137,3 @@ EndFunction
     ;endif
     ;return true
 ;EndFunction
-
-String Function Outfit_Options(Actor speaker) global 
-    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-       if main == None
-        Trace("Outfit_Options", "ERROR: Failed to get SkyrimNet_SexLab_Main form", True)
-        return '{"option":"undresses"}'
-    endif
-    String options = "undresses"
-    ; Check if the actor has undressed items, they could put on 
-    if main.HasStrippedItems(speaker) 
-        options = "dresses"
-    endif 
-    Trace("Outfit_Options",speaker.GetDisplayName()+" has options:"+options)
-    return "{"+'"'+"option"+'"'+":"+'"'+options+'"'+"}"
-EndFunction
-
-String Function Player_LOS_Distance(Actor akActor) global 
-    Actor player = Game.GetPlayer() 
-    float distance = player.GetDistance(akActor) 
-    bool los = player.hasLOS(akActor) 
-    return "{"+'"'+"distance"+'"'+":"+distance+","+'"'+"los"+'"'+":"+los+"}"
-EndFunction 
-
-String Function Is_Nudity(Actor akActor) global
-    ; 32 off top
-    ; 52 and 49 off bottom 
-    bool topless = false
-    bool bottomless = false 
-    if akActor != None 
-        Form body = akActor.GetEquippedArmorInSlot(32)
-        Form pelvis_primary = akActor.GetEquippedArmorInSlot(52)
-        Form pelvis_secondary = akActor.GetEquippedArmorInSlot(49)
-
-
-        if body == None 
-            topless = true 
-        endif 
-        if pelvis_primary == None && pelvis_secondary == None
-            bottomless = true 
-        endif
-    endif 
-    return "{"+'"'+"topless"+'"'+":"+topless+","+'"'+"bottomless"+'"'+":"+bottomless+"}"
-EndFunction
-
-String Function SexLab_Get_Threads(Actor speaker) global
-    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
-    if manager == None 
-        return '{"threads":[]}' 
-    endif 
-    return manager.GetThreadsJson(speaker) 
-EndFunction 

@@ -1,6 +1,7 @@
-customCategory: sexlab_affection
-name: Show_Affection
-description: 'PARAMS: {"direction":"giving|getting", "type":"hug|hugging|kissing|cuddling"} - [direction] [type] to show affection' 
+customCategory: sexlab_comfort
+name: ShowComfort
+description_: 'PARAMS: {"direction":"give|get", "intent":"who, why, and how"} - [direction] comfort with physical contact'
+description:  'You [direction] comfort with physical action {"direction":"give|get", "intent":"who, why, and how"}'
 enabled: true
 eligibilityRules:
   - conditions:

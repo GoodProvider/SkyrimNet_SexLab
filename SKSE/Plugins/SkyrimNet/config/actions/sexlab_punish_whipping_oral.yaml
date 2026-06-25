@@ -1,0 +1,29 @@
+customCategory: sexlab_punish
+name: SexLab_Punish_Whipping_Oral
+description: "punish by [direction] oral sex and [style] whipping"
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: StartScene_Punish_Two
+defaultPriority: 7
+parameterMapping:
+  - type: static 
+    name: intent
+    value: punish
+  - type: speaker
+    name: speaker
+    description: "Speaker Actor parameter (triggering entity)"
+  - type: dynamic
+    name: target
+    description: actor
+  - type: dynamic
+    name: style
+    description: "forcefully|normally|gently"
+  - type: static
+    name: type
+    value: whip
+  - type: dynamic
+    name: direction
+    value: giving|getting
+  - type: static 
+    name: setting_name
+    value: punishing_whipping_oral

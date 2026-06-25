@@ -32,11 +32,48 @@ SkyrimNet isn't seeing SkyrimNet_SexLab's Actions' functions.
 - NPC will be able to start sex
   - ability to set a style of sex: forceful, normal, or gentle 
 - NPC will be able to dress and undress
+- NPC can start kissing, hugging, and cuddling
+- NPC can start punishing with spanking and whipping 
 
-# SexLab Animation Descriptions 
-- Descriptions of the sex will be added to the prompt
-- Ability to create hand crafted description for each animation
-- Ability to flag some positions as not being able to get satisifation from the sex animation
+## Action Scene Settings
+When a action is called it contains an optional setting_name, this matches to a JSON file SKSE/Plugins/SkyrimNet_SexLab/scenes/(setting_name).json.  This provides the ability to set how SexLab will run the scene. Below is an example, but you can see other example files in [SKSE/Plugins/SkyrimNet_SexLab](SKSE/Plugins/Skyrimnet_SexLab).
+
+```
+# Actor.0 is punished by spanking/whipping of Actor.1
+# A scene setting where no one will orgasm, 
+# no one will strip off their clothing, 
+# position 0 speaking is modified by pain, position 1 has no modifiers, 
+# and animations with sex tags are suppressed. 
+{
+    "default":{
+        "no_orgasm":1,
+        "no_stripping":1,
+    },
+    "no_stripping":[0],
+    "speaking_modifiers":["pain",""],
+    "tags_suppress":"oral,vaginal,anal,masturbation,handjob,boobjob,thighjob,fisting,dildo,fingering,footjob,cuddling,spooning"
+}
+```
+
+| key | value |
+| ----| ------| 
+| default            | sets the default value for all positions, overwritten by specifics | 
+| ⠀-- specifics --   | -------------------------------------------------------------------|
+| no_orgasm          | 0 is default will orgasm , 1 position will not orgasm | 
+| no_stripping       | 0 will undress | 1 will not undress  |
+| method             | a string description how something is happen | 
+|                    | useful when the tag isn't a good description | 
+| speaking_modifiers | pain - the speaker is in intense pain | 
+|                    | pleasure - speaker is in intense pleasure  | 
+|                    | gagged - speaker is gagged, difficult to speak | 
+| tags               | animation must contain these tags | 
+| tags_suppressed    | animation must not contain these tags | 
+
+You are encouraged to create and share your own scene settings.  Example actions using scene_settings can be found in [SKSE/Plugins/SkyrimNet/config/actions](SKSE/Plugins/SkyrimNet/config/actions).
+
+### speaking modifiers
+
+Speaking modifiers control the instructions in [0050_sexlab_sexlab_activity.prompt](SKSE/Plugins/SkyrimNet/prompts/submodules/user_final_instructions/0050_sexlab_activity.prompt).  Please experiment and help us find new modifiers to include and improve the prompt. 
 
 # Hot Key
 There is an optional hot key, must be enabled in the MCM.  It supports: 

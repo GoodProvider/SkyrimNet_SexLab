@@ -12,7 +12,7 @@ EndFunction
 
 String Function GetDisplayName(Actor akActor) global
     if akActor == None 
-        return "None"
+        return "none"
     endif 
     return akActor.GetDisplayName()
 EndFunction 
@@ -100,7 +100,7 @@ EndFunction
 ; ------------------------------------------------------------
 String Function JoinActors(Actor[] actors, int num_actors=-1) global 
     if !actors 
-        return "None"
+        return "none"
     endif 
     if num_actors < 0 
         num_actors = actors.length
@@ -108,7 +108,7 @@ String Function JoinActors(Actor[] actors, int num_actors=-1) global
     int i = 0
     string joined = "" 
     while i < num_actors 
-        String name = "None"
+        String name = "none"
         if actors[i] != None 
             name = actors[i].GetDisplayName() 
         endif 
@@ -129,7 +129,7 @@ EndFunction
 
 String Function JoinActorsMasked(Actor[] actors, int[] mask, int num_actors = -1) global 
     if !actors 
-        return "None"
+        return "none"
     endif 
     if num_actors < 0 
         num_actors = actors.length
@@ -138,7 +138,7 @@ String Function JoinActorsMasked(Actor[] actors, int[] mask, int num_actors = -1
     string joined = "" 
     while i < num_actors 
         if mask[i] == 1 
-            String name = "None"
+            String name = "none"
             if actors[i] != None 
                 name = actors[i].GetDisplayName() 
             endif 
@@ -161,7 +161,7 @@ EndFunction
 
 String Function JoinNouns(String[] strings, int num_nouns = -1, bool add_is_are=false) global 
     if !strings 
-        return "None"
+        return "none"
     endif 
     int[] mask = Utility.CreateIntArray(strings.length, 1)
 
@@ -188,7 +188,7 @@ EndFunction
 
 String Function JoinNounsMasked(String[] strings, int[] mask, int num_strings = -1, bool add_is_are = false) global 
     if !strings 
-        return "None"
+        return "none"
     endif 
     int total = 0
     int i = 0
@@ -235,34 +235,51 @@ String Function JoinIsAre(String joined, int total, bool add_is_are) global
     return joined 
 EndFunction 
 
-String Function JoinStringToArray(String[] strings, int[] mask=None, int num_strings=-1) global 
+String Function JoinStringsToJson(String[] strings, int num_strings=-1) global 
     if !strings 
-        return "None"
-    endif 
-    if strings == None 
-        return "[]"
+        return "none"
     endif 
     if num_strings == -1 
         num_strings = strings.length 
     endif 
-    String array = "" 
+    String json = "" 
+    int i = 0
+    while i < num_strings 
+        if json != "" 
+            json += ", "
+        endif 
+        json += '"'+strings[i]+'"'
+        i += 1
+    endwhile
+    json = "["+json+"]"
+    return json
+EndFunction 
+
+String Function JoinStringsToJsonMasked(String[] strings, int[] mask=None, int num_strings=-1) global 
+    if !strings 
+        return "none"
+    endif 
+    if num_strings == -1 
+        num_strings = strings.length 
+    endif 
+    String json = "" 
     int i = 0
     while i < num_strings 
         if mask == None || mask[i] == 1
-            if array != "" 
-                array += ", "
+            if json != "" 
+                json += ", "
             endif 
-            array += '"'+strings[i]+'"'
+            json += '"'+strings[i]+'"'
         endif 
         i += 1
     endwhile
-    array = "["+array+"]"
-    return array
+    json = "["+json+"]"
+    return json
 EndFunction 
 
 String Function JoinActorsToJson(Actor[] actors, int num_actors=-1) global
     if !actors 
-        return "None"
+        return "none"
     endif 
     if num_actors == -1 
         num_actors = actors.length 
@@ -273,7 +290,7 @@ String Function JoinActorsToJson(Actor[] actors, int num_actors=-1) global
         if json != ""
             json += ", "
         endif 
-        String name = "None" 
+        String name = "none" 
         if actors[i] != None 
             name = actors[i].GetDisplayName()
         endif
@@ -285,7 +302,7 @@ EndFunction
 
 String Function JoinActorsToJsonMasked(Actor[] actors, int[] mask, int num_actors=-1) global
     if !actors 
-        return "None"
+        return "none"
     endif 
     if num_actors == -1 
         num_actors = actors.length 
@@ -298,7 +315,7 @@ String Function JoinActorsToJsonMasked(Actor[] actors, int[] mask, int num_actor
                 json += ","
             endif 
 
-            String name = "None" 
+            String name = "none" 
             if actors[i] != None 
                 name = actors[i].GetDisplayName()
             endif
@@ -311,7 +328,7 @@ EndFunction
 
 String Function JoinStrings(String[] strings, int num_strings=-1) global
     if !strings 
-        return "None"
+        return "none"
     endif 
     int i = 0 
     if num_strings < 0
@@ -347,6 +364,7 @@ Function ContinueActivity(Actor source=None, Actor target=None, bool optional=Fa
 EndFunction 
 
 Function DirectNarration_Optional(String event_type, String msg, Actor source=None, Actor target=None, bool optional=False) global
+    ;Trace("DirectNarration_OPtional","event_type: "+event_type+" source: "+GetDisplayName(source)+" target: "+GetDisplayName(target)+" optional: "+optional+" msg: "+msg)
 ;    msg = CheckDuplicate("DirectNarration_Optional", source, msg)
 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
@@ -446,3 +464,63 @@ String Function JsonBool(bool value) global
     endif 
     return ":false"
 EndFunction
+
+; --------------------------------------
+; Ensure Functions 
+; --------------------------------------
+int[] Function EnsureIntsLargeEnough(int[] ints, int total, int default=0) global 
+    if !ints 
+        return Utility.CreateIntArray(total, default) 
+    endif 
+    if total <= ints.length
+        return ints 
+    endif 
+
+    int[] _ints = Utility.CreateIntArray(total + 10,default) 
+    int i = 0 
+    int count = ints.length 
+    while i < count 
+        _ints[i] = ints[i]
+        i += 1 
+    endwhile 
+
+    return _ints 
+EndFunction 
+
+String[] Function EnsureStringsLargeEnough(String[] strings, int num_strings, String default="") global 
+    if !strings 
+        return Utility.CreateStringArray(num_strings,default) 
+    endif 
+    if num_strings <= strings.length
+        return strings 
+    endif 
+
+    String[] _strings = Utility.CreateStringArray(num_strings + 10,default) 
+    int i = 0 
+    int count = strings.length 
+    while i < count 
+        _strings[i] = strings[i]
+        i += 1 
+    endwhile 
+
+    return _strings 
+EndFunction 
+
+Actor[] Function EnsureActorsLargeEnough(Actor[] actors_current, int total) global 
+    if !actors_current
+        return PapyrusUtil.ActorArray(total) 
+    endif 
+    if total <= actors_current.length
+        return actors_current 
+    endif 
+
+    Actor[] _actors = PapyrusUtil.ActorArray(total + 10) 
+    int i = 0 
+    int count = actors_current.length 
+    while i < count 
+        _actors[i] = actors_current[i]
+        i += 1 
+    endwhile 
+
+    return _actors 
+EndFunction 

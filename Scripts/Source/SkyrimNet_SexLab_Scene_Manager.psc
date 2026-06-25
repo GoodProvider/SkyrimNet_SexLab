@@ -30,11 +30,6 @@ String storage_prefix = "skyrimnet_sexlab_scene"
 int thread_counter = 0 
 
 ; -------------------------------------
-; Storage 
-; -------------------------------------
-String[] tags_supress_sexual
-
-; -------------------------------------
 ; Group Info Object 
 ; -------------------------------------
 int Property group_info = 0 Auto
@@ -87,20 +82,6 @@ Function Setup()
         JValue.releaseAndRetain(group_info, group_info_new)
         group_info = group_info_new
     endif
-
-    if !tags_supress_sexual
-        tags_supress_sexual = new String[10]
-        tags_supress_sexual[0] = "oral"
-        tags_supress_sexual[1] = "vaginal"
-        tags_supress_sexual[2] = "anal"
-        tags_supress_sexual[3] = "masturbation"
-        tags_supress_sexual[4] = "handjob"
-        tags_supress_sexual[5] = "boobjob"
-        tags_supress_sexual[6] = "thighjob"
-        tags_supress_sexual[7] = "fisting,dildo"
-        tags_supress_sexual[8] = "fingering"
-        tags_supress_sexual[9] = "footjob"
-    endif 
     RegisterEventsActions()
     RegisterEventsSexLab()
 EndFunction 
@@ -108,13 +89,13 @@ EndFunction
 ; --------------------------------------------------------------------
 ; Create Creator 
 ; --------------------------------------------------------------------
-SkyrimNet_SexLab_Scene_Creator  Function CreateCreator(Actor[] actors, Actor speaker, Actor target)
+SkyrimNet_SexLab_Scene_Creator Function CreateCreator(String intent, Actor[] actors, Actor speaker, Actor target, String method="", String setting_name="")
 
     int i = 0
     int num_creators = creators.length 
     while i < num_creators
         if creators[i].IsInactive()
-            creators[i].Setup(actors, speaker, target) 
+            creators[i].Setup(intent, actors, speaker, target, method, setting_name) 
             return creators[i]
         endif
         i += 1 
@@ -127,42 +108,30 @@ EndFunction
 ; --------------------------------------------------------------------
 ; Get Scene 
 ; --------------------------------------------------------------------
-SkyrimNet_SexLab_Scene Function CreateSceneByThread(sslThreadController thread) 
-    int i = 0 
-    int num_scenes = scenes.length 
-    while i < num_scenes 
-        if scenes[i].IsInactive() 
-            scenes[i].Setup(thread)
-            return scenes[i]
-        endif 
-        i += 1 
-    endwhile 
-    scene_generic.Setup(thread)
-    return scene_generic
+SkyrimNet_SexLab_Scene Function CreateSceneByCreator(SkyrimNet_SexLab_Scene_Creator creator, sslThreadController thread) 
+    Trace("CreateSceneByCreator","--- ----------------------------------- a ")
+    SkyrimNet_SexLab_Scene scene = GetSceneInactive(thread)
+    scene.Setup(creator)
+    return scene
 EndFunction 
 
+; --------------------------------------
+; These will get a scene if they can find it or return scene_generic 
+; --------------------------------------
 SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread)
     int tid = thread.tid
     if tid < thread_scene.length && thread_scene[tid] != None 
         SkyrimNet_SexLab_Scene scene = thread_scene[tid] as SkyrimNet_SexLab_Scene
-        if scene.thread == thread
+        if scene.IsActive() && scene.GetThread() == thread
             return scene
         endif 
+        thread_scene[tid] = None
         scene.Release() 
     endif 
-    int sid = 0
-    int num_scenes = scenes.length 
-    while sid < num_scenes
-        if scenes[sid].IsInactive() 
-            scenes[sid].Setup(thread) 
-            return scenes[sid]
-        endif 
-        sid += 1 
-    endwhile 
-
-    Trace("CreateSceneFromThread", "Failed to get inactive scene for thread " + thread.tid+" using generic")
-    scene_generic.Setup(Thread)
-    return scene_generic
+    
+    SkyrimNet_SexLab_Scene scene = GetSceneInactive(thread)
+    scene.Setup()
+    return scene
 EndFunction
 
 
@@ -179,6 +148,23 @@ SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid)
 EndFunction 
 
 ; ----------------------------------------
+SkyrimNet_SexLab_Scene Function GetSceneInactive(sslThreadController thread) 
+    int i = 0 
+    int num_scenes = scenes.length 
+    SkyrimNet_SexLab_Scene scene = None 
+    while i < num_scenes && scene == None 
+        if scenes[i].IsInactive() 
+            EnsureThreadSceneLargeEnough(thread.tid) 
+            thread_scene[thread.tid] = scenes[i]
+            scenes[i].SetThread(thread)
+            return scenes[i]
+        endif 
+        i += 1 
+    endwhile 
+    Trace("GetSceneInactive","Failed to find inactive scene using generic")
+    scene_generic.SetThread(thread) 
+    return scene_generic
+EndFunction 
 
 SkyrimNet_SexLab_Scene Function GetSceneByActor(Actor akActor) 
     if akActor == None 
@@ -216,19 +202,15 @@ EndFunction
 ;----------------------------------------------------------------------------------------------------
 ; Thread_Scene Functions 
 ;----------------------------------------------------------------------------------------------------
-Function SetThread_Scene(int tid, SkyrimNet_SexLab_Scene scene) 
-    if scene == scene_generic
-        Trace("SetThread_Scene", "can not set scene_generic to thread_scene")
-        return 
+Function UnsetThread_Scene(int tid)
+    if 0 <= tid && tid < thread_scene.length
+        thread_scene[tid] = None 
     endif 
-    ResizeThreadSceneAsNeeded(tid)
-    thread_scene[tid] = scene
 EndFunction
 
-Function ResizeThreadSceneAsNeeded(int tid)
-
+Function EnsureThreadSceneLargeEnough(int tid)
     if tid >= thread_scene.length
-        Trace("ResizeThreadSceneAsNeeded","tid:"+tid+" thread_scene.length:"+thread_scene.length)
+        Trace("EnsureThreadSceneLargeEnough","tid:"+tid+" thread_scene.length:"+thread_scene.length)
         int new_size = tid + 10
         Form[] resized = Utility.CreateFormArray(new_size)
         int i = 0
@@ -274,54 +256,56 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
     endif 
 
     Actor Player = Game.GetPlayer() 
-    if speaker != player && scene.has_player && main.sex_edit_tags_player
-        int yes = 0
-        int no = 1
-        int no_forcefully = 2
-        int no_gently = 3
-        int no_silently = 4
-        String[] buttons = new String[5]
-        buttons[yes] = "Yes"
-        buttons[no] = "No"
-        buttons[no_forcefully] = "No (forcefully)"
-        buttons[no_gently] = "No (gently)"
-        buttons[no_silently] = "No (silently)"
-        String activity
-        String question = speaker.GetDisplayName()+" is trying to stop "+scene.GetActivityMessage(scene.ACTIVITY_STAGE_ONGOING)+", will you allow it?"
-        int button = SkyMessage.showArray(question, buttons, getIndex = True) as int 
-        if button != yes
-            if button == no_silently
-                return 
+    if scene.has_player
+        if speaker != player && main.sex_edit_tags_player
+            int yes = 0
+            int no = 1
+            int no_forcefully = 2
+            int no_gently = 3
+            int no_silently = 4
+            String[] buttons = new String[5]
+            buttons[yes] = "Yes"
+            buttons[no] = "No"
+            buttons[no_forcefully] = "No (forcefully)"
+            buttons[no_gently] = "No (gently)"
+            buttons[no_silently] = "No (silently)"
+            String intent
+            String question = speaker.GetDisplayName()+" is trying to stop "+scene.GetIntentMessage(scene.INTENT_STAGE_ONGOING)+", will you allow it?"
+            int button = SkyMessage.showArray(question, buttons, getIndex = True) as int 
+            if button != yes
+                if button == no_silently
+                    return 
+                endif 
+                String style = "" 
+                if button == no_forcefully
+                    style = "forcefully"
+                elseif button == no_gently
+                    style = "gently"
+                endif 
+                String message = player.GetDisplayName()+" "+style+" refuses "+speaker.GetDisplayName()+"'s attempt to stop "\
+                    +scene.GetIntentMessage(scene.INTENT_STAGE_ONGOING)+"."
+                DirectNarration(message, speaker)
+                return
             endif 
-            String style = "" 
-            if button == no_forcefully
-                style = "forcefully"
-            elseif button == no_gently
-                style = "gently"
-            endif 
-            String message = player.GetDisplayName()+" "+style+" refuses "+speaker.GetDisplayName()+"'s attempt to stop "\
-                +scene.GetActivityMessage(scene.ACTIVITY_STAGE_ONGOING)+"."
-            DirectNarration(message, speaker)
-            return
         endif 
-    endif 
 
-    scene.AnimationEnd(speaker,style)
+        scene.AnimationEnd(speaker,style)
+    endif 
     threadSlots.StopThread(scene.GetThread())
 EndEvent 
 
-Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim, \
-    string style, string tag, string direction, string scene_settings, \
-    String setting_name, String event_hook,\
+Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, \
+    string style, string method, int speaker_position,\ 
+    String event_hook, String setting_name,\ 
     Form f_participate_3)
     Actor speaker = f_speaker as Actor 
     Actor target = f_target as Actor 
     Actor victim = f_victim as Actor 
     Actor participate_3 = f_participate_3 as Actor 
 
-    Trace("Action_Start","activity:"+activity\
+    Trace("Action_Start","intent:"+intent\
         +" speaker:"+GetDisplayName(speaker)+" target:"+GetDisplayName(target)+" victim:"+GetDisplayName(Victim)\
-        +setting_name+" event_hook:"+event_hook+" style:"+style+" tag:"+tag+" setting_name:"\
+        +" style:"+style+" method:"+method+" speaker_position:"+speaker_position+" event_hook:"+event_hook+" setting_name:"+setting_name\
         +" participate_3:"+GetDisplayName(participate_3))
 
     if speaker == None 
@@ -335,56 +319,42 @@ Event Action_Start(String activity, Form f_speaker, Form f_target, Form f_victim
     int num_actors = 1 
     if target != None 
         num_actors += 1 
-    elseif participate_3 != None 
-        target = participate_3
-        participate_3 = None 
-        num_actors += 1 
-    endif 
-    if participate_3 != None 
-        num_actors += 1 
+        if participate_3 != None 
+            num_actors += 1 
+        endif 
     endif 
     Actor[] actors = PapyrusUtil.ActorArray(num_actors)
-    actors[0] = speaker
-    int i = 1 
-    if target != None 
-        if direction
-            actors[0] = target
-            actors[1] = speaker
-        else 
+    if target == None 
+        actors[0] = speaker
+    else
+        if speaker_position == 0 
+            actors[0] = speaker 
             actors[1] = target 
+        else 
+            actors[1] = speaker 
+            actors[0] = target 
         endif 
-        i += 1 
-    endif 
-    if participate_3 != None 
-        actors[i] = participate_3
-        i += 1 
+        if participate_3 != None 
+            actors[2] = participate_3
+        endif 
     endif 
 
-    SkyrimNet_SexLab_Scene_Creator creator = CreateCreator(actors, speaker, target)
-    creator.Setup(actors, speaker, target) 
+    SkyrimNet_SexLab_Scene_Creator creator = CreateCreator(intent, actors, speaker, target, method, setting_name)
     if creator.LockAllActorLock()
-        creator.SetActivity(activity) 
+        ; Can't be set by setting
         if victim != None 
             creator.SetVictim(victim)
-        endif 
-        if setting_name != ""
-            creator.LoadSettings(setting_name) 
         endif 
         if style != ""
             creator.SetStyle(style) 
         endif 
-        if tag != "" 
-            creator.AddTag(tag) 
-        endif 
-        if direction != ""
-            creator.SetDirection(direction) 
-        endif 
+        ; Can overwrite the setting values 
         if event_hook != "" 
             creator.SetEventHook(event_hook) 
         endif 
+
         creator.Start() 
     endif 
-    Trace("Action_Start","--- d")
 EndEvent 
 
 

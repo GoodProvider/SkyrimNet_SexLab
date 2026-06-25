@@ -16,9 +16,9 @@ Event OnInit()
 EndEvent 
 
 Event OnPlayerLoadGame()
-    if main == None 
-        main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    endif 
+    ;if main == None 
+        ;main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    ;endif 
     main.Setup()
 EndEvent
 

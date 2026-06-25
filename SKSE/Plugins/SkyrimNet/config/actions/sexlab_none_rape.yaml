@@ -1,10 +1,13 @@
-name: Rape_Start
-description: "[style] [type] sexual assault on [victim]"
+name: SexLab_Start_Rape
+description: "[style] [direction] [method] sexual assault on [victim]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
-executionFunctionName: Rape_Start
-defaultPriority: 7
+executionFunctionName: StartScene_Nonconsensual_Two_Victim
+defaultPriority: 8
 parameterMapping:
+  - type: static 
+    name: intent
+    value: raping
   - type: speaker
     name: speaker
     description: Speaker Actor parameter (triggering entity)
@@ -12,17 +15,20 @@ parameterMapping:
     name: target
     description: Object Actor (maybe Speaker)
   - type: dynamic
-    name: direction
-    description: giving|getting
-  - type: dynamic
     name: style
     description: forceful|normal|gentle
   - type: dynamic
-    name: type
-    description: oral|vaginal|anal|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjob
+    name: method
+    description: ass|pussy|mouth|masturbation|handjob|boobjob|thighjob|fisting|dildo|fingering|footjob
+  - type: dynamic
+    name: direction
+    description: giving|getting|fucking a|fucked in
   - type: dynamic
     name: victim
     description: Object Actor (Target or Speaker)
+  - type: static
+    name: setting_name
+    value: ""
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value

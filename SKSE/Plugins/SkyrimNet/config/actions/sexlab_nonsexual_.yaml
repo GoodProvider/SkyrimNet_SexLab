@@ -1,20 +1,8 @@
-customCategory: sexlab_sex
-name: Masturbation_Start
-description: "[style] [type] masturbation"
-questEditorId: SkyrimNet_SexLab
-scriptName: SkyrimNet_SexLab_Actions
-executionFunctionName: Masturbation_Start
-defaultPriority: 7
-parameterMapping:
-  - type: speaker
-    name: speaker
-    description: Speaker Actor parameter (triggering entity)
-  - type: dynamic
-    name: style
-    description: forceful|normal|gentle
-  - type: dynamic
-    name: type
-    description: masturbation
+customCategory: sexlab_nonsexual
+name: Sexlab_Show_nonsexual
+description_: 'PARAMS: {"direction":"giving|getting", "goal":"comfort|greeting|affection", "type":"hug|hugging|kissing|cuddling", "intent":"who, how, and why"} - [direction] [type] to physically show [goal]' 
+description:  'You [direction] [method] {"direction":"give|get", "intent":"who, why, and how", "method":"hug|cuddle|kiss"}'
+enabled: true
 eligibilityRules:
   - conditions:
       - decoratorName: get_global_value

@@ -1,23 +1,26 @@
-customCategory: sexlab_affection
-name: Show_Affection_Refused
-description: "[direction] a [style] [type] to show affection"
+customCategory: sexlab_sex
+name: SexLab_Nonsexual_Refused
+description: "[Target] [style] refuses to [direction] [method] for [intent]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
-executionFunctionName: StartScene_Consensual_Two
-defaultPriority: 5
+executionFunctionName: StartScene_Refused_Two
+defaultPriority: 6
 parameterMapping:
+  - type: dynamic 
+    name: intent 
+    description: one or two words 
   - type: speaker
     name: speaker
     description: Speaker Actor parameter (triggering entity)
   - type: dynamic
     name: target
-    description: consenting actor
+    description: rejecting actor
   - type: dynamic
     name: style
     description: forceful|normal|gentle
   - type: dynamic
-    name: type
-    description: kissing|hugging
+    name: method
+    description: one or two words
   - type: dynamic
     name: direction
     description: "giving|getting"
