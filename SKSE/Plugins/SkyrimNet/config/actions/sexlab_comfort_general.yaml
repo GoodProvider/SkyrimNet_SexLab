@@ -26,4 +26,4 @@ parameterMapping:
     description: "giving|getting"
   - type: static
     name: setting_name
-    value: "nonsexual"
+    value: "nonsexual_male_position_1"

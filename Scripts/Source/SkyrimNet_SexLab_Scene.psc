@@ -13,11 +13,13 @@ int[] victim_mask
 int[] assailant_mask
 int[] hermaphrodiate_mask
 int[] strapon_mask
+int[] no_orgasm_mask
 
 String[] speaking_modifiers
 String[] speaking_modifiers_json
 
 String creature_descriptions = "" 
+String no_orgasm_names = ""
 
 ; -------------------------------------------
 ; Intent
@@ -100,6 +102,7 @@ Function Setup(SkyrimNet_SexLab_Scene_Creator creator=None)
                 json = JoinStringsToJson(strings) 
             endif 
             speaking_modifiers_json[i] = json
+            no_orgasm_mask[i] = creator.no_orgasm_mask[i]
             i += 1 
         endwhile 
     else 
@@ -181,6 +184,7 @@ Function EnsureActorsArraysLargeEnough(int size)
     assailant_mask = EnsureIntsLargeEnough(assailant_mask, size) 
     hermaphrodiate_mask = EnsureIntsLargeEnough(hermaphrodiate_mask, size) 
     strapon_mask = EnsureIntsLargeEnough(strapon_mask, size) 
+    no_orgasm_mask = EnsureIntsLargeEnough(no_orgasm_mask, size) 
     total_orgasms = EnsureIntsLargeEnough(total_orgasms, size) 
     speaking_modifiers = EnsureStringsLargeEnough(speaking_modifiers, size) 
     speaking_modifiers_json = EnsureStringsLargeEnough(speaking_modifiers_json, size) 
@@ -227,6 +231,7 @@ Function SetNames()
 
     hermaphrodiate_names = JoinActorsMasked(thread.positions, hermaphrodiate_mask)
     strapon_names = JoinActorsMasked(thread.positions, strapon_mask)
+    no_orgasm_names = JoinActorsMasked(thread.positions, no_orgasm_mask)
 
     victim_names = JoinActorsMasked(thread.positions, victim_mask)
     victim_names_json = JoinActorsToJsonMasked(thread.positions, victim_mask)
@@ -462,7 +467,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
     elseif orgasm_denied
         DirectNarration_Optional(narration, sender, receiver)
     else
-        RegisterEvent("sex_end", narration, sender, receiver)
+        RegisterEvent("sex_activites", narration, sender, receiver)
     endif 
 
     if ThreadSlots == None
@@ -500,31 +505,37 @@ Function OrgasmCombined()
     Trace("Orgasm_Combined","ThreadID:"+thread.tid+" has_player:"+has_player+" orgasm_expected:"+orgasm_expected)
     int i = 0
     int num_actors = thread.positions.length 
+    bool no_orgasm_everyone = true
     while i < num_actors
-        String name = thread.positions[i].GetDisplayName()
-        int gender = thread.positions[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(thread.positions[i])
-        int gender_sexlab = sexlab.GetGender(thread.positions[i]) 
-        bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
-        if main.handler_dom.IsDomSlave(thread.positions[i])
-            if orgasm_expected[i] == 1
-                if total_orgasms[i] > 0
-                    if has_penis
-                        someone_ejaculated = True 
+        if no_orgasm_mask[i] == 0 
+            String name = thread.positions[i].GetDisplayName()
+            int gender = thread.positions[i].GetLeveledActorBase().GetSex() ; actorLib.GetGender(thread.positions[i])
+            int gender_sexlab = sexlab.GetGender(thread.positions[i]) 
+            bool has_penis = gender != 1 || (gender_sexlab != 1 && gender_sexlab != 3)
+            if main.handler_dom.IsDomSlave(thread.positions[i])
+                if orgasm_expected[i] == 1
+                    if total_orgasms[i] > 0
+                        if has_penis
+                            someone_ejaculated = True 
+                        endif 
+                    else 
+                        narration += main.handler_dom.HandleOrgasmDenied(thread.positions[i])
                     endif 
-                else 
-                    narration += main.handler_dom.HandleOrgasmDenied(thread.positions[i])
+                endif 
+                Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
+            else
+                if orgasm_expected[i] == 1
+                    narration += name+" is orgasming. "
+                    if has_penis
+                        someone_ejaculated = True
+                    endif
                 endif 
             endif 
-            Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | DOMSlave:true | narration: "+narration)
-        else
-            if orgasm_expected[i] == 1
-                narration += name+" is orgasming. "
-                if has_penis
-                    someone_ejaculated = True
-                endif
-            endif 
+            no_orgasm_everyone = false
+            Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | narration: "+narration)
+        else 
+            Trace("CombinedOrgasm","i:"+i+" "+GetDisplayName(thread.positions[i])+" shouldn't orgasm")
         endif 
-        Trace("Orgasm_Combined",i+" "+name+" | someone_ejaculated: "+someone_ejaculated+" | narration: "+narration)
         i += 1
     endwhile
 
@@ -538,12 +549,26 @@ Function OrgasmCombined()
         i += 1 
     endwhile 
 
-    SkyrimNetApi.PurgeDialogue(True)
-    DirectNarration(narration, sender, receiver)
+    if !no_orgasm_everyone
+        SkyrimNetApi.PurgeDialogue(True)
+        DirectNarration(narration, sender, receiver)
+    endif 
 EndFunction
 
 ; Used for SLSO.esp orgasm handling
 Event OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms)
+    ; Setup number of orgasms
+    int i = 0
+    int num_actors = thread.positions.length
+    while i < num_actors && thread.positions[i] != akActor
+        i += 1 
+    endwhile 
+
+    if i < num_actors && no_orgasm_mask[i] == 1
+        Trace("OrgasmIndividual","i:"+i+" "+GetDisplayName(thread.positions[i])+" shouldn't orgasm")
+        return 
+    endif 
+
     String msg = ""
     if num_orgasms == 1
         msg += akActor.GetDisplayName()+" orgasmed."
@@ -551,12 +576,6 @@ Event OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms)
         msg += akActor.GetDisplayName()+" orgasmed again."
     endif 
 
-    ; Setup number of orgasms
-    int i = 0
-    int num_actors = thread.positions.length
-    while i < num_actors && thread.positions[i] != akActor
-        i += 1 
-    endwhile 
 
     if i < thread.positions.length 
         total_orgasms[i] = num_orgasms

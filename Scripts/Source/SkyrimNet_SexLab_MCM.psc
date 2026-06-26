@@ -505,18 +505,21 @@ Function Target_Menu_Selection(Actor target, Actor player)
             actions.StartScene_Nonconsensual_Two("punishing", player, target=target, method=method, direction="giving", setting_name=setting_name) 
     elseif button == affection
 ;        if sexlab_ostim_player == 0 || !main.ostimnet_found    
-            String[] bs = new String[3] 
+            String[] bs = new String[6] 
             bs[0] = "single hug"
-            bs[1] = "cuddle"
-            bs[2] = "kissing"
+            bs[1] = "hugging"
+            bs[2] = "cuddle"
+            bs[3] = "spooning"
+            bs[4] = "kissing"
+            bs[5] = "headpat"
             String method = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
             string setting_name = "nonsexual"
             if method == "kissing" 
                 setting_name = "nonsexual_kissing"
-            elseif method == "cuddle"
-                setting_name = "nonsexual_cuddle"
+            elseif method == "cuddle" || method == "spooning" || method == "hugging" || method == "hug" 
+                setting_name = "nonsexual_male_position_1"
             endif 
-            actions.StartScene_Consensual_Two("showing affection",player, target=target, method=method,setting_name=setting_name)
+            actions.StartScene_Consensual_Two("showing affection",player, target=target, style="gently", method=method,setting_name=setting_name)
 ;        else 
 ;            String[] bs = new String[3] 
 ;            bs[0] = "hugging"
@@ -744,11 +747,14 @@ Function MutliTarget_Menu_Selection(Actor player)
                 finished = True 
             endif 
         elseif index == 1 
-            if intent == "sex>"
-                intent = "rape>"
-            Else
-                intent = "sex>"
-            endif 
+            String[] buttons = new String[4] 
+            buttons[0] = "comfort>"
+            buttons[1] = "affection>"
+            buttons[2] = "sex>"
+            buttons[3] = "rape>"
+
+            String msg = "What is the intent?"
+            intent = SkyMessage.ShowArray(msg, buttons, getIndex = false) as String
         elseif index < num_actors + 2
             index -= 2
             if indexes[index] == -1 
@@ -794,11 +800,28 @@ Function MutliTarget_Menu_Selection(Actor player)
         Actor speaker = actors_selected[0]
         Actor target = actors_selected[1]
         if intent == "rape>"
-            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator("raping", actors_selected, speaker, target,"")
+            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator("raping", actors_selected, speaker, target)
             creator.SetVictim(actors_selected[0])
             creator.Start() 
         else 
-            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator("sexual activites", actors_selected, speaker, target, "")
+            String setting_name = ""
+            String method = ""
+            if intent == "comfort>"
+                intent = "comfort"
+                setting_name = "nonsexual_male_position_1"
+                method = "spooning"
+            elseif intent == "affection>"
+                intent = "showing affection"
+                method = "spooning"
+                setting_name = "nonsexual_male_position_1"
+            else
+                intent = "sexual activites"
+            endif 
+            ;if actors.length > 2 && setting_name == "nonsexual_male_position_1"
+                ;method = "spooning"
+                ;setting_name = "nonsexual_male_position_0"
+            ;endif 
+            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(intent, actors_selected, speaker, target, method=method, setting_name=setting_name)
             creator.Start() 
         endif   
     endif 

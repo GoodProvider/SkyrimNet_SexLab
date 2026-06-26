@@ -188,6 +188,9 @@ Function StartScene_Event(String intent, Actor speaker, Actor target=None, Actor
         method = "whip"
     endif 
 
+    if method == "hugging"
+        method = "hug"
+    endif 
 
     int speaker_position = 0 
     if target != None 
@@ -195,7 +198,7 @@ Function StartScene_Event(String intent, Actor speaker, Actor target=None, Actor
             if direction == "fuck a"
                 speaker_position = 1 
             endif 
-        elseif method == "hugging" || method == "kissing" || method == "spanking" || method == "whip"
+        elseif method == "kissing" || method == "spanking" || method == "whip"
             if direction == "giving" || direction == "give" 
                 speaker_position = 1 
             endif 

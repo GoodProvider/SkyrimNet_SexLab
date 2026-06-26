@@ -345,6 +345,26 @@ String Function JoinStrings(String[] strings, int num_strings=-1) global
     return joined 
 EndFunction 
 
+String Function JoinIntsToJson(int[] ints, int num_ints=-1) global 
+    if !ints 
+        return "none"
+    endif 
+    if num_ints == -1 
+        num_ints = ints.length 
+    endif 
+    String json = "" 
+    int i = 0
+    while i < num_ints 
+        if json != "" 
+            json += ", "
+        endif 
+        json += ints[i]
+        i += 1
+    endwhile
+    json = "["+json+"]"
+    return json
+EndFunction 
+
 ; ------------------------------------------------------------
 ; Narration Wrappers 
 ; ------------------------------------------------------------

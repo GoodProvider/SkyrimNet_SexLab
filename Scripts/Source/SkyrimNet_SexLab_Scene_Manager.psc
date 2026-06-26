@@ -90,7 +90,7 @@ EndFunction
 ; Create Creator 
 ; --------------------------------------------------------------------
 SkyrimNet_SexLab_Scene_Creator Function CreateCreator(String intent, Actor[] actors, Actor speaker, Actor target, String method="", String setting_name="")
-
+    Trace("CreateCreator","intent: "+intent+" actors: "+JoinActorsToJson(actors)+" "+GetDisplayName(speaker)+" : "+GetDisplayName(target)+" method: "+method+" setting_name: "+setting_name)
     int i = 0
     int num_creators = creators.length 
     while i < num_creators

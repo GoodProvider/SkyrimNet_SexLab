@@ -29,7 +29,7 @@ Actor target
 
 int[] victim_mask
 int[] assailant_mask
-int[] no_orgasm_mask
+int[] Property no_orgasm_mask Auto
 int[] no_stripping_mask
 
 int no_orgasm_default_current = 0
@@ -76,7 +76,8 @@ EndFunction
 String Function GetString() 
     String tags_string = JoinStrings(tags,num_tags)
     String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
-    return " actors: "+'"'+actor_names+'"'\
+    return "intent: "+intent\
+          +" actors: "+'"'+actor_names+'"'\
           +" victims: "+'"'+victim_names+'"'\
           +" assailants: "+'"'+assailant_names+'"'\
           +" no_orgasm: "+'"'+no_orgasm_names+'"'\
@@ -341,6 +342,7 @@ Function SetMasks()
 EndFunction 
 
 Function SetNames() 
+    Trace("SetName","--- num_actors:"+num_actors)
     SetMasks()
     actor_names = JoinActors(actors, num_actors)
     actor_names_json = JoinActorsToJson(actors, num_actors)
@@ -559,6 +561,7 @@ Function LoadSetting(String setting_name)
         Trace("LoadSetting",filename+" couldn't be parsed, aborting")
         return 
     endif  
+    Trace("LoadSetting","loading "+setting_name)
 
     ; --------------------------------------
     ; Swap the first two positions, most sexlab have female at 0
@@ -581,9 +584,9 @@ Function LoadSetting(String setting_name)
             Actor temp = actors[position]
             actors[position] = actors[other] 
             actors[other] = temp
+            Trace("LoadSetting"," male_position caused swap: "+JoinActors(actors,num_actors))
         endif 
     endif 
-    Trace("Setup","--- "+JoinActors(actors,num_actors))
 
     ; --------------------------------------
     ; String Default 
@@ -592,10 +595,6 @@ Function LoadSetting(String setting_name)
         method = JMap.GetStr(setting_id, "method") 
     endif 
 
-    if JMap.HasKey(setting_id, "intent") 
-        intent = JMap.GetStr(setting_id, "intent")
-    endif 
-    
     ; ------------------------------
     ; Array values 
     ; ------------------------------
@@ -612,7 +611,7 @@ Function LoadSetting(String setting_name)
     ; Set Actors Arrays with defaults
     ; ------------------------------------
     if JMap.HasKey(setting_id, "array_defaults") 
-        int default_id = JMap.GetObj(setting_id, "array_default")
+        int default_id = JMap.GetObj(setting_id, "array_defaults")
         int i = 0
         while i < num_keys 
             if JMap.HasKey(default_id, keys[i]) 
@@ -727,8 +726,14 @@ Function LoadSetting(String setting_name)
     SetNames() 
     String tags_string = JoinStrings(tags,num_tags)
     String tags_suppress_string = JoinStrings(tags_suppress,num_tags_suppress)
-    Trace("LoadSetting","setting_name:"+setting_name+" no_stripping:["+no_stripping_mask+"] no_orgasm:["+no_orgasm_mask\
-        +"] tags:["+tags_string+"] suppress:["+tags_suppress_string+"]"+" speaking_modifiers:["+speaking_modifiers+"]")
+    String no_stripping_json = JoinIntsToJson(no_stripping_mask, num_actors)
+    String no_orgasm_json = JoinIntsToJson(no_orgasm_mask, num_actors)
+    String speaking_modifiers_json = JoinStringsToJson(speaking_modifiers,num_actors)
+    Trace("LoadSetting","defauls: no_strip:"+no_stripping_default_current+" no_orgasm:"+no_orgasm_default_current+" speaking_modifier:"+speaking_modifiers_default_current)
+    if setting_name != "default"
+        Trace("LoadSetting"," no_stripping:"+no_stripping_json+" no_orgasm:"+no_orgasm_json\
+            +" tags:["+tags_string+"] suppress:["+tags_suppress_string+"]"+" speaking_modifiers:["+speaking_modifiers+"]")
+    endif 
 EndFunction 
 
 ; -------------------------------------------------------------------------------------

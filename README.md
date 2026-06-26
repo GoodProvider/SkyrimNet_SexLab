@@ -150,7 +150,14 @@ The following and depedancies:
     - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - SkyrimNet (Beta7 or later)
    - You must have narration enabled
-- SkryimNet_SexLab (this mod) 
+- SkryimNet_SexLab (this mod)
+- **Animation Utilities**
+    - [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232)
+    - Pandora Output (recommended to store Pandora's output)
+    - [XP32 Maximum Skeleton Special Extended (XPMSSE)](https://www.nexusmods.com/skyrimspecialedition/mods/1988)
+    - [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/)
+- **Animation** 
+    - [Ace Animations](https://www.nexusmods.com/skyrimspecialedition/mods/81928) (cuddle/spooning animations)
  
 **Optional**
 - [SkyrimNet_Arousal](https://github.com/GoodProvider/SkyrimNet_Arousal) adds arousal to prompt / add arousal actions 
@@ -188,11 +195,6 @@ The following and depedancies:
 - **SexLab**
     -  [Sexlab Framework](https://www.loverslab.com/files/category/228-sexlab-framework-se/)
     -  [SexLab Tools](https://www.loverslab.com/files/file/10660-sexlab-tools-for-se-patched/) (Allows you to change animations with 'h' hotkey)
-- **Animation**
-    -  [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232)
-    -  Pandora Output (recommended to store Pandora's output)
-    -  [XP32 Maximum Skeleton Special Extended (XPMSSE)](https://www.nexusmods.com/skyrimspecialedition/mods/1988)
-    -   [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/)
 - **animations** (you might be able to get away with less ... )
     -   [Billyy](https://www.loverslab.com/files/file/3999-billyys-slal-animations-2025-1-1/)
 - **Devious Devices** 
