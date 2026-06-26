@@ -57,8 +57,7 @@ When a action is called it contains an optional setting_name, this matches to a 
 
 | key | value |
 | ----| ------| 
-| default            | sets the default value for all positions, overwritten by specifics | 
-| ⠀-- specifics --   | -------------------------------------------------------------------|
+| array_defaults            | sets the default value for the arrays | 
 | no_orgasm          | 0 is default will orgasm , 1 position will not orgasm | 
 | no_stripping       | 0 will undress | 1 will not undress  |
 | method             | a string description how something is happen | 
