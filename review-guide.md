@@ -1,0 +1,2 @@
+- All the files compile with https://github.com/russo-2025/papyrus-compiler. Do not report compiling errors.
+- papyrus is case insentive, don't report 
