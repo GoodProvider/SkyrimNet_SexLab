@@ -34,6 +34,11 @@ int thread_counter = 0
 ; -------------------------------------
 int Property group_info = 0 Auto
 
+; ---------------------------------------
+; Location of the Scenes 
+; ---------------------------------------
+String SCENES_FOLDER = "Data/SKSE/Plugins/SkyrimNet_SexLab/scenes/"
+
 Function Trace(String func, String msg="", Bool notification=False)
 
     msg = "[SkyrimNet_SexLab_Scene_Manager."+func+"] "+msg
@@ -228,6 +233,49 @@ Function EnsureThreadSceneLargeEnough(int tid)
         thread_scene = resized
     endif
 EndFunction
+
+;----------------------------------------------------------------------------------------------------
+; Get SceneSettings
+;----------------------------------------------------------------------------------------------------
+String Function GetSceneSettingFilename(String setting_name)
+    return SCENES_FOLDER+"/"+setting_name+".json"
+EndFunction
+String[] function GetSceneSettings()
+    ; 1. Read all filenames from the directory that end in .json
+    String[] files = MiscUtil.FilesInfolder(SCENES_FOLDER)
+
+    
+    ; Safety check: Handle empty directory or invalid paths smoothly
+    if !files || files.Length == 0
+        return Utility.CreateStringArray(0)
+    endif
+    
+    ; 2. Initialize your setting_names array dynamically matching the file count
+    ; (Vanilla Papyrus requires compile-time constants for array sizes, SKSE bypasses this)
+    String[] setting_names = Utility.CreateStringArray(files.Length)
+    
+    ; 3. Loop through files, strip the extension, and populate setting_names
+    int i = 0
+    while i < files.Length
+        String currentFile = files[i]
+        
+        ; Find the starting character index of the ".json" extension
+        int extIndex = StringUtil.Find(currentFile, ".json")
+        
+        if extIndex != -1
+            ; Extract everything from the start (index 0) up to the dot
+            setting_names[i] = StringUtil.Substring(currentFile, 0, extIndex)
+        else
+            ; Fallback case if a filename slips through without an extension
+            setting_names[i] = currentFile
+        endif
+        
+        i += 1
+    endwhile
+    
+    ; 4. Return the clean array of setting names
+    return setting_names
+endFunction
    
 ;----------------------------------------------------------------------------------------------------
 ; Action Events

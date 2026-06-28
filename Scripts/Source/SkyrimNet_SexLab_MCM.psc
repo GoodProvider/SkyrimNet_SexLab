@@ -685,7 +685,8 @@ Function MutliTarget_Menu_Selection(Actor player)
     int[] selected = new int[5]
 
     String cancel = "<cancel>"
-    String intent = "sex>"
+    String intent = "sexual activites"
+    String setting_name = ""
 
     int next = 0 
     bool building_list = true 
@@ -711,7 +712,8 @@ Function MutliTarget_Menu_Selection(Actor player)
             start = "select actors to: "
         endif 
         listMenu.AddEntryItem(start)
-        listMenu.AddEntryItem(intent)
+        listMenu.AddEntryItem("intent: '"+intent+"'>")
+        listMenu.AddEntryItem("setting: '"+setting_name+"'>")
 
         i = 0
         while 0 <= i && i < num_actors
@@ -746,15 +748,41 @@ Function MutliTarget_Menu_Selection(Actor player)
             endif 
         elseif index == 1 
             String[] buttons = new String[4] 
-            buttons[0] = "comfort>"
-            buttons[1] = "affection>"
-            buttons[2] = "sex>"
-            buttons[3] = "rape>"
+            buttons[0] = "showing affection"
+            buttons[1] = "sexual activites"
+            buttons[2] = "rape"
+            buttons[3] = "custom"
 
             String msg = "What is the intent?"
             intent = SkyMessage.ShowArray(msg, buttons, getIndex = false) as String
-        elseif index < num_actors + 2
-            index -= 2
+            if intent == "custom"
+                UIExtensions.OpenMenu("UITextEntryMenu")
+                intent = UIExtensions.GetMenuResultString("UITextEntryMenu")
+                Trace("MultiTarget_Menu_Selection","custom intent: " + intent)                
+            elseif intent == "affection"
+                setting_name = "nonsexual_male_position_1"
+            else 
+                setting_name = ""
+            endif 
+        elseif index == 2
+            String[] setting_names = manager.GetSceneSettings() 
+            listMenu = uiextensions.GetMenu("UIlistMenu") AS uilistMenu
+            listMenu.ResetMenu() 
+            int i = 0 
+            while i < setting_names.length 
+                listMenu.AddEntryItem(setting_names[i]) 
+                i += 1 
+            endwhile 
+            listMenu.OpenMenu()
+            i = listMenu.GetResultInt()
+            if 0 < i && i < setting_names.length 
+                setting_name = setting_names[i]
+            else 
+                setting_name = "" 
+            endif 
+
+        elseif index < num_actors + 3
+            index -= 3
             if indexes[index] == -1 
                 selected[next] = index
                 next += 1
@@ -787,24 +815,21 @@ Function MutliTarget_Menu_Selection(Actor player)
     if next > 1 
         target = actors_selected[1]
     endif 
+
+    String method = ""
+    if intent == "comfort"
+        setting_name = "nonsexual_male_position_1"
+        method = "spooning"
+    elseif intent == "showing affection"
+        method = "spooning"
+        setting_name = "nonsexual_male_position_1"
+    endif 
+
     if intent == "rape>"
         SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(intent, actors_selected, speaker, target, setting_name="")
         creator.SetVictim(actors_selected[0])
         creator.Start() 
     else 
-        String setting_name = ""
-        String method = ""
-        if intent == "comfort>"
-            intent = "comfort"
-            setting_name = "nonsexual_male_position_1"
-            method = "spooning"
-        elseif intent == "affection>"
-            intent = "showing affection"
-            method = "spooning"
-            setting_name = "nonsexual_male_position_1"
-        else
-            intent = "sexual activites"
-        endif 
         ;if actors.length > 2 && setting_name == "nonsexual_male_position_1"
             ;method = "spooning"
             ;setting_name = "nonsexual_male_position_0"

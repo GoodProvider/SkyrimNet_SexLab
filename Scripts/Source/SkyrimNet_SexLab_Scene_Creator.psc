@@ -41,7 +41,6 @@ String[] Property speaking_modifiers AUTO
 String no_orgasm_names = ""
 String no_stripping_names = "" 
 
-
 String method = ""
 
 ; --------------------------------------------
@@ -553,7 +552,7 @@ Function LoadSetting(String setting_name)
         Trace("LoadSetting", "setting_name is None, aborting")
         return 
     endif 
-    String filename = "Data/SKSE/Plugins/SkyrimNet_SexLab/scenes/"+setting_name+".json"
+    String filename = manager.GetSceneSettingFilename(setting_name)
     if !MiscUtil.FileExists(filename) 
         Trace("LoadSetting",filename+" doesn't exit, aborting")
         return 
