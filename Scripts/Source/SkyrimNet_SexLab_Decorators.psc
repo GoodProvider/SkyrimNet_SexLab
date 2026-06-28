@@ -19,13 +19,24 @@ EndFunction
 ; Decorators 
 ;----------------------------------------------------------------------------------------------------
 Function RegisterDecorators() global
-    SkyrimNetApi.RegisterDecorator("sexlab_get_threads", "SkyrimNet_SexLab_Decorators", "SexLab_Get_Threads")
+    SkyrimNetApi.RegisterDecorator("sexlab_get_threads", "SkyrimNet_SexLab_Decorators", "Get_Threads")
     SkyrimNetApi.RegisterDecorator("sexlab_get_player_los_distance", "SkyrimNet_SexLab_Decorators", "Player_LOS_Distance")
     SkyrimNetApi.RegisterDecorator("sexlab_outfit_options", "SkyrimNet_SexLab_Decorators", "Outfit_Options")
     SkyrimNetApi.RegisterDecorator("sexlab_intent", "SkyrimNet_SexLab_Decorators", "Intent")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     ;SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
 EndFunction
+
+String Function Get_Threads(Actor speaker) global
+    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
+    if manager == None 
+        Trace("Get_Threads","manger is None, aborting")
+        return '{"threads":[]}' 
+    endif 
+    String json = manager.GetThreadsJson(speaker) 
+    Trace("Get_Threads",json) 
+    return json 
+EndFunction 
 
 String Function Outfit_Options(Actor speaker) global 
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
@@ -79,14 +90,6 @@ String Function Is_Nudity(Actor akActor) global
     endif 
     return "{"+'"'+"topless"+'"'+":"+topless+","+'"'+"bottomless"+'"'+":"+bottomless+"}"
 EndFunction
-
-String Function SexLab_Get_Threads(Actor speaker) global
-    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
-    if manager == None 
-        return '{"threads":[]}' 
-    endif 
-    return manager.GetThreadsJson(speaker) 
-EndFunction 
 
 ; animal & ActorTypeCreature & ActorTypeFamiliar 
 ; skyrim.13798 & skyrim.13795 & skyrim.10ED7  

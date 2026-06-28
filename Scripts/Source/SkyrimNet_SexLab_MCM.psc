@@ -513,11 +513,9 @@ Function Target_Menu_Selection(Actor target, Actor player)
             bs[4] = "kissing"
             bs[5] = "headpat"
             String method = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
-            string setting_name = "nonsexual"
+            string setting_name = "nonsexual_male_position_1"
             if method == "kissing" 
                 setting_name = "nonsexual_kissing"
-            elseif method == "cuddle" || method == "spooning" || method == "hugging" || method == "hug" 
-                setting_name = "nonsexual_male_position_1"
             endif 
             actions.StartScene_Consensual_Two("showing affection",player, target=target, style="gently", method=method,setting_name=setting_name)
 ;        else 
@@ -784,46 +782,35 @@ Function MutliTarget_Menu_Selection(Actor player)
     endwhile 
     Trace("MultiTarget_Menu_Selection","intent:"+intent+" next:"+next+" actors_selected:"+SkyrimNet_SexLab_Utilities.JoinActors(actors_selected))
 
-    if next == 1
-        actions.StartScene_Consensual_one("sexual activites", actors_selected[0], "normal", "")
+    Actor speaker = actors_selected[0]
+    Actor target = None 
+    if next > 1 
+        target = actors_selected[1]
+    endif 
+    if intent == "rape>"
+        SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(intent, actors_selected, speaker, target, setting_name="")
+        creator.SetVictim(actors_selected[0])
+        creator.Start() 
     else 
-        String json = "{"+'"'+"target"+'"'+":"+'"'+actors_selected[1].GetDisplayName()+'"'
-        i = 2 
-        while i < next 
-            j = i - 2
-            json += ", "+'"'+"participate_"+j+'"'+":"+'"'+actors_selected[i].GetDisplayName()+'"'
-            i += 1
-        endwhile
-        json += "}"
-
-        String rape_victim = "none" 
-        Actor speaker = actors_selected[0]
-        Actor target = actors_selected[1]
-        if intent == "rape>"
-            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator("raping", actors_selected, speaker, target)
-            creator.SetVictim(actors_selected[0])
-            creator.Start() 
-        else 
-            String setting_name = ""
-            String method = ""
-            if intent == "comfort>"
-                intent = "comfort"
-                setting_name = "nonsexual_male_position_1"
-                method = "spooning"
-            elseif intent == "affection>"
-                intent = "showing affection"
-                method = "spooning"
-                setting_name = "nonsexual_male_position_1"
-            else
-                intent = "sexual activites"
-            endif 
-            ;if actors.length > 2 && setting_name == "nonsexual_male_position_1"
-                ;method = "spooning"
-                ;setting_name = "nonsexual_male_position_0"
-            ;endif 
-            SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(intent, actors_selected, speaker, target, method=method, setting_name=setting_name)
-            creator.Start() 
-        endif   
+        String setting_name = ""
+        String method = ""
+        if intent == "comfort>"
+            intent = "comfort"
+            setting_name = "nonsexual_male_position_1"
+            method = "spooning"
+        elseif intent == "affection>"
+            intent = "showing affection"
+            method = "spooning"
+            setting_name = "nonsexual_male_position_1"
+        else
+            intent = "sexual activites"
+        endif 
+        ;if actors.length > 2 && setting_name == "nonsexual_male_position_1"
+            ;method = "spooning"
+            ;setting_name = "nonsexual_male_position_0"
+        ;endif 
+        SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(intent, actors_selected, speaker, target, method=method, setting_name=setting_name)
+        creator.Start() 
     endif 
 EndFunction
 

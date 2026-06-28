@@ -91,23 +91,23 @@ EndFunction
 ; Threesome
 ;-------------------------------------------
 
-Function StartScene_Affection_Three(Actor speaker, Actor target, string style, string direction, string method, Actor participate)
-    Trace("StartScene_Consensual_Three",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" intent: "+method+" participate:"+participate.GetDisplayName())
-    StartScene_Event("showing affection", speaker, target, None, style, direction, method, participate_3=participate) 
+Function StartScene_Affection_Three(Actor speaker, Actor target, string style, string direction, string method, Actor participate, String setting_name="")
+    Trace("StartScene_Consensual_Three",speaker.GetDisplayName()+" + "+target.GetDisplayName()+" style: "+style+" direction: "+direction+" intent: "+method+" participate:"+participate.GetDisplayName()+" setting_name:"+setting_name)
+    StartScene_Event("showing affection", speaker, target, None, style, direction, method, setting_name=setting_name, participate_3=participate) 
 EndFunction
 
-Function StartScene_Consensual_Three(Actor speaker, Actor target, string style, string method, string direction, Actor participate)
-    Trace("StartScene_Consensual_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" intent: "+method+" participate:"+GetDisplayName(participate))
-    StartScene_Event("having sexual activities", speaker, target, None, style, method, direction, participate_3=participate) 
+Function StartScene_Consensual_Three(Actor speaker, Actor target, string style, string method, string direction, Actor participate, String setting_name="")
+    Trace("StartScene_Consensual_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" intent: "+method+" participate:"+GetDisplayName(participate)+" setting_name:"+setting_name)
+    StartScene_Event("having sexual activities", speaker, target, None, style, method, direction, setting_name=setting_name, participate_3=participate) 
 EndFunction
 
-Function StartScene_Rape_Three(Actor speaker, Actor target, string style, string method, string direction, bool speaker_victim, Actor participate)
-    Trace("StartScene_Rape_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" intent: "+method+" speaker_victim:"+speaker_victim+" participate:"+GetDisplayName(participate))
+Function StartScene_Rape_Three(Actor speaker, Actor target, string style, string method, string direction, bool speaker_victim, Actor participate, String setting_name="")
+    Trace("StartScene_Rape_three",GetDisplayName(speaker)+" + "+GetDisplayName(target)+" style: "+style+" direction: "+direction+" intent: "+method+" speaker_victim:"+speaker_victim+" participate:"+GetDisplayName(participate)+" setting_name:"+setting_name)
     Actor victim = target
     if speaker_victim 
         victim = speaker
     endif 
-    StartScene_Event("raping", speaker, target, victim, style, method, direction, participate_3=participate) 
+    StartScene_Event("raping", speaker, target, victim, style, method, direction, setting_name=setting_name, participate_3=participate) 
 EndFunction
 
 ;-------------------------------------------

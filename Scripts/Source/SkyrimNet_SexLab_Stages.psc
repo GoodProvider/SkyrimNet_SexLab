@@ -161,6 +161,12 @@ Function EditDescriptions(sslThreadController thread)
         Trace("EditDescriptions","thread is None")
         return
     endif 
+    SkyrimNet_SexLab_Scene scene = manager.GetSceneByThread(thread)
+    if scene == None 
+        Trace("EditDescriptions","scene is None")
+        return 
+    endif 
+
     Actor[] actors = thread.Positions
 
     sslBaseAnimation anim = thread.animation
@@ -187,7 +193,6 @@ Function EditDescriptions(sslThreadController thread)
 
     int button = desc_prev
 
-    SkyrimNet_SexLab_Scene scene = manager.GetSceneByThread(thread)
     String style_start = scene.GetStyle()
     while button != done 
         String source = "" 
@@ -459,6 +464,11 @@ EndFunction
 
 Function SetOrgasmExpected(sslThreadController thread)
     SkyrimNet_SexLab_Scene scene = manager.GetSceneByThread(thread)
+    if scene == None 
+        Trace("SetOrgasmExpected","scene is None")
+        return 
+    endif 
+
     Actor[] actors = thread.Positions
     int num_actors = actors.length
     int anim_info = GetAnim_Info(thread)

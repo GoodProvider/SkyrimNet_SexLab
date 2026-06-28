@@ -322,6 +322,18 @@ String Function GetIntentMessage(int intent_stage = -1)
     endif 
     return actor_names+" "+message+"."
 EndFunction 
+    
+bool Function GetThreadActive() 
+    if thread == None 
+        return false 
+    endif 
+    String s = (thread as sslThreadModel).GetState() 
+    if s != "animating" && s != "prepare"
+        Release() 
+        return false 
+    endif 
+    return true 
+EndFunction
 
 ; --------------------------------------------
 ; Animation Event Handlers 
@@ -696,6 +708,9 @@ String Function GetDescription()
 EndFunction
 
 String Function GetJson(Actor speaker)
+    if !GetThreadActive()
+        return ""
+    endif 
     SetNames()
     int num_actors = thread.positions.length
 

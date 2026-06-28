@@ -143,6 +143,10 @@ Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _target, S
     num_tags_suppress = 0 
     style = STYLE_NORMALLY
 
+    if (_method == "tenticles" || _method == "tenticle") && setting_name == "" 
+        setting_name =  "pleasure_pain"
+    endif 
+
     LoadSetting("default")
     if setting_name != ""
         LoadSetting(setting_name) 
@@ -342,7 +346,6 @@ Function SetMasks()
 EndFunction 
 
 Function SetNames() 
-    Trace("SetName","--- num_actors:"+num_actors)
     SetMasks()
     actor_names = JoinActors(actors, num_actors)
     actor_names_json = JoinActorsToJson(actors, num_actors)
@@ -572,13 +575,10 @@ Function LoadSetting(String setting_name)
         if position == 0 
             other = 1 
         endif 
-        Trace("LoadSetting","--- other: "+other+" position: "+position) 
-        Trace("LoadSetting","--- "+JoinActors(actors,num_actors))
         int gender = sexlab.GetGender(actors[position])
         bool position_male = gender == 0 || gender == 2 
         gender = sexlab.GetGender(actors[other])
         bool other_male = gender == 0 || gender == 2 
-        Trace("LoadSetting","---    position_male: "+position_male+" other_male: "+other_male)
         ; position is not a male
         if !position_male && other_male
             Actor temp = actors[position]
@@ -925,6 +925,7 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
         Trace("SelectAnimationsDialog", "group_tags not found in group_tags.json")
         return empty
     endif 
+    Trace("SelectAnimationDialog e")
 
     int groups = JMap.getObj(group_tags,"groups",0)
     if groups == 0

@@ -109,7 +109,6 @@ EndFunction
 ; Get Scene 
 ; --------------------------------------------------------------------
 SkyrimNet_SexLab_Scene Function CreateSceneByCreator(SkyrimNet_SexLab_Scene_Creator creator, sslThreadController thread) 
-    Trace("CreateSceneByCreator","--- ----------------------------------- a ")
     SkyrimNet_SexLab_Scene scene = GetSceneInactive(thread)
     scene.Setup(creator)
     return scene
@@ -118,7 +117,14 @@ EndFunction
 ; --------------------------------------
 ; These will get a scene if they can find it or return scene_generic 
 ; --------------------------------------
-SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread)
+SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread, Bool any_state=False)
+    if !any_state
+        String s = (thread as sslThreadModel).GetState()
+        if s != "animating" && s != "prepare"
+            return None 
+        endif 
+    endif 
+
     int tid = thread.tid
     if tid < thread_scene.length && thread_scene[tid] != None 
         SkyrimNet_SexLab_Scene scene = thread_scene[tid] as SkyrimNet_SexLab_Scene
@@ -135,7 +141,7 @@ SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread)
 EndFunction
 
 
-SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid)
+SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid, bool any_state=False)
     if sexlab == None 
         Trace("GetSceneBythreadId","Sexlab is None, aborting")
         return None
@@ -144,7 +150,7 @@ SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid)
     if thread == None 
         return None 
     endif 
-    return GetSceneByThread(thread) 
+    return GetSceneByThread(thread, any_state=False) 
 EndFunction 
 
 ; ----------------------------------------
@@ -405,7 +411,7 @@ EndEvent
 
 ; ----------------------------------------------------------
 event AnimationEnd(int ThreadID, bool HasPlayer)
-    SkyrimNet_SexLab_Scene scene = GetSceneByThreadId(ThreadID)
+    SkyrimNet_SexLab_Scene scene = GetSceneByThreadId(ThreadID, any_state=True)
     if scene == None 
         Trace("AnimationEnd","Scene is None for ThreadID "+ThreadID)
         return
@@ -529,13 +535,15 @@ String Function GetThreadsJson(Actor speaker = None)
     String threads_str = ""
     bool speaker_having_sex = false 
     while i < threads.length
-        String s = (threads[i] as sslThreadModel).GetState()
-        if s == "animating" || s == "prepare"
-            if threads_str != ""
-                threads_str += ", "
+        SkyrimNet_SexLab_Scene scene = GetSceneByThread(threads[i])
+        if scene != None 
+            String msg = scene.GetJson(speaker) 
+            if msg != "" 
+                if threads_str != ""
+                    threads_str += ", "
+                endif 
+                threads_str += msg 
             endif 
-            SkyrimNet_SexLab_Scene scene = GetSceneByThread(threads[i])
-            threads_str += scene.GetJson(speaker) 
         endif 
         i += 1
     endwhile
