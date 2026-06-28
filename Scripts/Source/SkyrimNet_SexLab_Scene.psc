@@ -24,9 +24,9 @@ String no_orgasm_names = ""
 ; -------------------------------------------
 ; Intent
 ; -------------------------------------------
-int Property INTENT_STAGE_START = 0 Auto
-int Property INTENT_STAGE_ONGOING = 1 Auto
-int Property INTENT_STAGE_END = 2 Auto
+int Property INTENT_STAGE_START = 0 AutoReadOnly
+int Property INTENT_STAGE_ONGOING = 1 AutoReadOnly
+int Property INTENT_STAGE_END = 2 AutoReadOnly
 
 ; -------------------------------------------
 ; Who send the messages to SkyrimNet 

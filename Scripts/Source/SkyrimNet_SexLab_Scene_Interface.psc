@@ -14,16 +14,16 @@ int Property sid = 0 Auto
 ; --------------------------------------------
 ; Style
 ; --------------------------------------------
-String Property STYLE_FORCEFULLY = "forcefully" Auto
-String Property STYLE_NORMALLY = "normally" Auto
-String Property STYLE_GENTLY = "gently" Auto
-String Property STYLE_DEFAULT = "normally" Auto
+String Property STYLE_FORCEFULLY = "forcefully" AutoREadOnly
+String Property STYLE_NORMALLY = "normally" AutoREadOnly
+String Property STYLE_GENTLY = "gently" AutoREadOnly
+String Property STYLE_DEFAULT = "normally" AutoREadOnly
 String Property style Auto
 
 ; --------------------------------------------
 ; Speaking Style
 ; --------------------------------------------
-String Property speaking_modifiers_DEFAULT = "pleasure" AUTO
+String Property speaking_modifiers_DEFAULT = "pleasure" AUTOReadOnly
 
 ; --------------------------------------------
 ; Number Victims

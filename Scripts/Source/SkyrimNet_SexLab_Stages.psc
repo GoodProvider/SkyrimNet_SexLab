@@ -12,8 +12,8 @@ Bool Property hide_help = false Auto
 
 Actor player = None 
 
-String Property animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations" Auto
-String Property local_folder =      "" Auto
+String Property animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations" AutoReadOnly
+String Property local_folder =      "" AutoReadOnly
 
 String VERSION_1_0 = "1.0"
 String VERSION_2_0 = "2.0"

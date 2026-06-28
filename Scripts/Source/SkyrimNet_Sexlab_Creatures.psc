@@ -22,6 +22,7 @@ Function Store_Races() global
     Form[] forms = PO3_SKSEFunctions.GetAllFormsInMod(asModName = creaturesum_esp, aiFormtype = actorBaseType)
     if forms == None 
         Trace("Store_Races", "forms is None, aborting") 
+        return 
     endif 
     int i = forms.length - 1 
     int races = JMap.object()

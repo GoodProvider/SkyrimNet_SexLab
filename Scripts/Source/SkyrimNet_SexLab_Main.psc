@@ -59,10 +59,10 @@ bool Property rape_allowed = true Auto
 bool Property sex_edit_tags_player = true Auto 
 bool Property sex_edit_tags_nonplayer = False Auto
 
-String Property storage_actor_lock_key = "skyrimnet_sexlab_actor_lock" Auto 
-String Property storage_items_key = "skyrimnet_sexlab_storage_items" Auto
-String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" Auto
-String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated" Auto
+String Property storage_actor_lock_key = "skyrimnet_sexlab_actor_lock" AutoReadOnly 
+String Property storage_items_key = "skyrimnet_sexlab_storage_items" AutoReadOnly
+String Property storage_arousal_key = "skyrimnet_sexlab_arousal_level" AutoReadOnly
+String Property storage_thread_ejaculated = "skyrimnet_sexlab_thread_ejaculated" AutoReadOnly
 
 
 ; -----------------------------
