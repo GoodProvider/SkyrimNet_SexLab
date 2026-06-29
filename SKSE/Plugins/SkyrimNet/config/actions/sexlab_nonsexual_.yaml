@@ -1,7 +1,7 @@
 customCategory: sexlab_nonsexual
-name: Sexlab_Show_nonsexual
-description_: 'PARAMS: {"direction":"giving|getting", "goal":"comfort|greeting|affection", "type":"hug|hugging|kissing|cuddling", "intent":"who, how, and why"} - [direction] [type] to physically show [goal]' 
-description:  'You [direction] [method] {"direction":"give|get", "intent":"who, why, and how", "method":"hug|cuddle|kiss"}'
+name: ExpressPhysicallyNonsexually
+description: 'PARAMS: {"direction":"giving|getting", "what":"comforting|greeting|showing affection", "type":"hug|kiss|hugging|kissing|cuddling", "intent":"who, how, and why"} - [what] by [direction] [type]' 
+description_:  'You [direction] [method] {"direction":"give|get", "intent":"who, why, and how", "method":"hug|cuddle|kiss"}'
 enabled: true
 eligibilityRules:
   - conditions:

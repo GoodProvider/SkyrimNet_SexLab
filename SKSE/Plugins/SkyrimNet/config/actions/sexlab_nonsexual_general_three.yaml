@@ -1,6 +1,6 @@
 customCategory: sexlab_sex
 name: SexLab_Start_Nonsexual_Three
-description: "[direction] [style] [method] with [Target] and [participate_3]"
+description: "[direction] [style] [method] with [Target] and [participate]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: StartScene_Consensual_Three
@@ -8,7 +8,7 @@ defaultPriority: 7
 parameterMapping:
   - type: dynamic 
     name: intent 
-    description: one or two words
+    description: one or two words of intent
   - type: speaker
     name: speaker
     description: Speaker Actor parameter (triggering entity)
@@ -26,7 +26,7 @@ parameterMapping:
     description: "giving|getting"
   - type: static
     name: setting_name
-    value: "nonsexual_male_position_1"
+    value: "nonsexual_male_position_2"
   - type: dynamic
-    name: participate_3 
+    name: participate 
     value: third participating actor 

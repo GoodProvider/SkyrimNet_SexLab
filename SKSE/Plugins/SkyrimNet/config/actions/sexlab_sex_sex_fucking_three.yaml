@@ -1,14 +1,14 @@
 customCategory: sexlab_sex
-name: SexLab_Start_Sexual_Activities
-description: "Consensual [style] [direction] [type] with [Target] and [participate_3]"
+name: SexLab_Start_Fucking_Three
+description: "Consensual [style] [direction] [type] with [Target] and [participate]"
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: StartScene_Consensual_Three
 defaultPriority: 7
 parameterMapping:
-  - type: static 
-    name: intent
-    value: sexual activities
+  - type: dynamic 
+    name: intent 
+    description: one to three words of intent
   - type: speaker
     name: speaker
     description: Speaker Actor parameter (triggering entity)
@@ -18,15 +18,15 @@ parameterMapping:
   - type: dynamic
     name: style
     description: forceful|normal|gentle
+  - type: dynamic 
+    name: direction 
+    description: fucked in|fucking
   - type: dynamic
     name: method
     description: mouth|pussy|ass
-  - type: dynamic
-    name: direction
-    description: fucked in|fucking
   - type: static 
     name: setting_name
     value: ""
   - type: dynamic
-    name: participate_3 
+    name: participate
     value: third participating actor 
