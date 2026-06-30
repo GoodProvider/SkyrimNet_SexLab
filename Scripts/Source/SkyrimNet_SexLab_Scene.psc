@@ -365,7 +365,7 @@ Function StageStart()
         status = STATUS_ACTIVE
 
         ; -----------------------------------
-        ; Registers who started the activities 
+        ; Registers who started the activites 
         ; -----------------------------------
         if num_actors > 1 
             desc = sender.GetDisplayName()+" initiates, "+ GetIntentMessage(INTENT_STAGE_START)+desc
@@ -431,9 +431,6 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
     endif
     bool has_tentacles = False 
 
-    if speaker != None && num_actors == 1
-        narration = speaker.GetDisplayName()+" stops, "+msg
-    endif 
     if  thread.Animation.HasTag("tentacles")
         has_tentacles = True 
         narration = "The tentacles orgasm flooding cum both inside and outside. "
@@ -472,12 +469,13 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         target = thread.positions[1]
     endif 
 
+    narration += msg +"."
     if speaker != None || has_tentacles
         DirectNarration(narration, sender, receiver)
     elseif orgasm_denied
         DirectNarration_Optional(narration, sender, receiver)
     else
-        RegisterEvent("sex_activities", narration, sender, receiver)
+        RegisterEvent("sex_activites", narration, sender, receiver)
     endif 
 
     if ThreadSlots == None

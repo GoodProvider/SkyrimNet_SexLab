@@ -153,9 +153,10 @@ SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid, bool any_state=False
     endif 
     sslThreadController thread = SexLab.GetController(tid)
     if thread == None 
+        Trace("GetSceneBythreadId", "thread is None, aborting")
         return None 
     endif 
-    return GetSceneByThread(thread, any_state=False) 
+    return GetSceneByThread(thread, any_state) 
 EndFunction 
 
 ; ----------------------------------------
