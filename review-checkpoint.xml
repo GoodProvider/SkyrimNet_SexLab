@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkpoint_instructions version="1.0" variant="code-review">
+
+  <purpose>
+    This document instructs an AI assistant (Claude) to generate a compressed
+    snapshot of an ONGOING, MULTI-ITERATION CODE REVIEW, named checkpoint.xml,
+    so the review can be resumed in a new chat session without re-supplying full
+    context. The review proceeds in rounds: the reviewer flags findings, the
+    author applies fixes, the reviewer re-checks, and the cycle repeats. The
+    checkpoint must preserve the lifecycle state of every finding across rounds,
+    not merely a snapshot of the latest comments.
+  </purpose>
+
+  <trigger>
+    Manual only. The user pastes the contents of this file into the chat (or
+    references it) when they want a checkpoint generated -- typically at the end
+    of a review round, before context grows too large. Do not auto-trigger.
+  </trigger>
+
+  <core_principles>
+    <principle>Track each finding by a STABLE ID that persists across all rounds.
+    F-003 must refer to the same defect in round 5 as in round 1.</principle>
+    <principle>Record a finding's full lifecycle STATUS, not just open/closed.
+    "Author says fixed" and "reviewer confirmed fixed" are different states and
+    must be distinguishable.</principle>
+    <principle>Do NOT reproduce full file contents or full diffs. Record the
+    file path, the enclosing symbol (function/class/method), and at most a few
+    lines of excerpt needed to re-locate the issue. The code itself lives on
+    disk or in the repo; the checkpoint is a map to it, not a copy.</principle>
+    <principle>Anchor findings on symbol name and a short snippet, NOT on line
+    number alone. Line numbers drift as edits land between rounds.</principle>
+    <principle>Keep resolved findings in the file (status verified_resolved) so
+    they are not re-flagged and a full audit trail is retained.</principle>
+    <principle>One level of nesting maximum. Use specific, unambiguous tag names
+    so the file parses reliably when re-ingested in a future session.</principle>
+  </core_principles>
+
+  <process>
+    <step order="1">Review the entire conversation from the start of the session
+    to the point this instruction was invoked, including any prior checkpoint
+    content already loaded.</step>
+    <step order="2">If a prior checkpoint exists in context, CARRY FORWARD all
+    existing findings and update their status -- do not drop resolved ones and do
+    not renumber. Assign new IDs only to genuinely new findings.</step>
+    <step order="3">Increment review_round in metadata by one relative to the
+    prior checkpoint (or set to 1 if this is the first).</step>
+    <step order="4">Populate the schema below. Over-include technical specifics
+    (paths, symbol names, parameter values, severity, exact recommended change)
+    since these are expensive to reconstruct and cheap to state.</step>
+    <step order="5">Summarize outcomes, not the dialogue that produced them. Do
+    not paste back-and-forth conversational prose.</step>
+    <step order="6">Write the result as checkpoint.xml using create_file, save to
+    /mnt/user-data/outputs/, and present it to the user.</step>
+  </process>
+
+  <status_taxonomy>
+    <status name="open">Flagged by reviewer; no fix attempted yet.</status>
+    <status name="fix_applied_unverified">Author reports a fix; reviewer has NOT
+    yet confirmed it in the current code.</status>
+    <status name="verified_resolved">Reviewer has confirmed the fix in the actual
+    code. Terminal state (unless it later regresses).</status>
+    <status name="wont_fix">Agreed not to address; record the reason.</status>
+    <status name="deferred">Acknowledged but pushed to a later round or backlog;
+    record why.</status>
+    <status name="regressed">Was verified_resolved, but a later change reopened
+    it. Treat as active again.</status>
+  </status_taxonomy>
+
+  <severity_scale>
+    <level name="blocker">Must be fixed before merge; correctness, security, or
+    data-loss risk.</level>
+    <level name="major">Significant issue; should be fixed before merge.</level>
+    <level name="minor">Worth fixing; not merge-blocking.</level>
+    <level name="nit">Style or preference; optional.</level>
+  </severity_scale>
+
+  <schema>
+    <!-- Target structure for checkpoint.xml -->
+    <code_review_checkpoint>
+
+      <metadata>
+        <date_created>ISO 8601 date</date_created>
+        <review_target>PR number, branch, changeset, or codebase identifier
+        under review</review_target>
+        <base_revision>commit hash / tag / revision the review is against, if
+        known (else "unspecified")</base_revision>
+        <review_round>integer; current round number</review_round>
+      </metadata>
+
+      <review_scope>
+        What is in scope for this review (files, modules, the change set) and
+        explicitly what is out of scope. One paragraph.
+      </review_scope>
+
+      <standards_applied>
+        <standard>A coding standard, style guide, security checklist, language
+        idiom, or project convention being enforced. One per element.</standard>
+      </standards_applied>
+
+      <coverage>
+        <reviewed>Files/modules/areas already examined in this or prior rounds.
+        Be specific with paths.</reviewed>
+        <not_yet_reviewed>Files/modules/areas still pending first examination.
+        Be specific with paths.</not_yet_reviewed>
+      </coverage>
+
+      <findings>
+        <finding>
+          <id>stable ID, e.g. F-001</id>
+          <severity>blocker | major | minor | nit</severity>
+          <status>one value from the status taxonomy</status>
+          <location>file path + enclosing symbol (function/class/method)</location>
+          <anchor>short code excerpt (a few lines) or symbol signature to
+          re-locate the issue independent of line numbers</anchor>
+          <description>what the issue is and why it matters</description>
+          <recommended_change>the specific fix the reviewer asked for</recommended_change>
+          <history>round-by-round notes: when raised, what the author did each
+          round, current verification state, and any regression notes. Short
+          prose, e.g. "R1 raised; R2 author refactored validateInput(); R2
+          reviewer not yet re-checked."</history>
+        </finding>
+        <!-- repeat per finding; include resolved and wont_fix ones too -->
+      </findings>
+
+      <iteration_log>
+        <round>Round N summary: count raised, count moved to verified_resolved,
+        count deferred, count regressed, plus any high-level outcome of that
+        round. One element per round.</round>
+      </iteration_log>
+
+      <open_questions>
+        <open_question>Unresolved ambiguity or a clarification needed from the
+        author/user before the next round can proceed. One per element.</open_question>
+      </open_questions>
+
+      <next_review_action>
+        Concrete description of what the reviewer should do immediately on
+        resumption -- e.g. "re-verify F-002 and F-005 against current code,"
+        "begin first review of src/auth/, which is not_yet_reviewed," or "raise
+        open_questions before continuing."
+      </next_review_action>
+
+      <user_preferences_reminder>
+        Echo explicit user preferences relevant to continuing the review (e.g.
+        technical depth, require sources/standards citations, clarify before
+        assuming) so they survive the session boundary.
+      </user_preferences_reminder>
+
+    </code_review_checkpoint>
+  </schema>
+
+  <resumption_protocol>
+    In the new chat session the user attaches checkpoint.xml. The assistant must:
+    1. Use the view tool to read checkpoint.xml in full before responding.
+    2. Treat it as ground truth for prior context; do not ask the author to
+       re-explain anything already captured.
+    3. CRITICAL: for any finding with status fix_applied_unverified or regressed,
+       re-read the actual current code at the recorded location (via view or
+       bash) and confirm the fix before changing its status to verified_resolved.
+       Do not trust the author's claim or the checkpoint's changelog as proof of
+       a fix -- the changelog is a summary, not a guarantee of current state.
+    4. Re-locate findings by the recorded symbol/anchor, not by stale line
+       numbers.
+    5. If open_questions are non-empty, raise them before proceeding with
+       next_review_action, consistent with a clarify-before-assuming preference.
+    6. When generating the next checkpoint, carry all findings forward per the
+       process steps above; never silently drop or renumber them.
+  </resumption_protocol>
+
+</checkpoint_instructions>
