@@ -330,13 +330,13 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
                 if button == no_silently
                     return 
                 endif 
-                String style = "" 
+                String player_style = "" 
                 if button == no_forcefully
-                    style = "forcefully"
+                    player_style = "forcefully"
                 elseif button == no_gently
-                    style = "gently"
+                    player_style = "gently"
                 endif 
-                String message = player.GetDisplayName()+" "+style+" refuses "+speaker.GetDisplayName()+"'s attempt to stop "\
+                String message = player.GetDisplayName()+" "+player_style+" refuses "+speaker.GetDisplayName()+"'s attempt to "+style+" stop "\
                     +scene.GetIntentMessage(scene.INTENT_STAGE_ONGOING)+"."
                 DirectNarration(message, speaker)
                 return

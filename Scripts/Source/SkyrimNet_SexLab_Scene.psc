@@ -365,7 +365,7 @@ Function StageStart()
         status = STATUS_ACTIVE
 
         ; -----------------------------------
-        ; Registers who started the activites 
+        ; Registers who started the activities 
         ; -----------------------------------
         if num_actors > 1 
             desc = sender.GetDisplayName()+" initiates, "+ GetIntentMessage(INTENT_STAGE_START)+desc
@@ -439,8 +439,6 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         narration = "The tentacles orgasm flooding cum both inside and outside. "
     endif
 
-    narration += GetIntentMessage(INTENT_STAGE_END)+". "
-
     bool orgasm_denied = false
     Actor target = None
     if config.SeparateOrgasms
@@ -479,7 +477,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
     elseif orgasm_denied
         DirectNarration_Optional(narration, sender, receiver)
     else
-        RegisterEvent("sex_activites", narration, sender, receiver)
+        RegisterEvent("sex_activities", narration, sender, receiver)
     endif 
 
     if ThreadSlots == None
@@ -602,7 +600,6 @@ Function OrgasmCustom(Actor akActor, String msg)
     while i < num_actors && thread.positions[i] != akActor
         i += 1 
     endwhile 
-
 
     if i < thread.positions.length
         total_orgasms[i] += 1
@@ -751,7 +748,7 @@ String Function GetJson(Actor speaker)
     json += ',"hermaphrodiate_names_string":"'+hermaphrodiate_names+'"'
     json += ',"strapon_names_string":"'+strapon_names+'"'
     json += ',"speaker_distance":'+distance
-    json += ',"speaker_los:"'+JsonBool(los)
+    json += ',"speaker_los"'+JsonBool(los)
     json += ',"location":"'+GetLocation()+'"'
     json += ',"style":"'+style+'"'
     json += "}"

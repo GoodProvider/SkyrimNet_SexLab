@@ -86,9 +86,6 @@ EndFunction
 Function StartScene_Punish_Two(String intent, Actor speaker, Actor target=None, string style="", string method="", String direction="", String setting_name="")
     Trace("StartScene_Punish_Two",GetDisplayName(speaker)+" "+GetDisplayName(target)+" style: "+style+" method:"+method+" direction: "+direction+" setting_name:"+setting_name)
     Actor victim = target
-    if direction == "get" || "getting"
-        victim = speaker
-    endif 
     StartScene_Event(intent, speaker, target, victim, style, method, direction, setting_name=setting_name) 
 EndFunction
 
@@ -235,6 +232,12 @@ EndFunction
 ; -------------------------------------------------
 Function Change_Outfit(Actor stripper, Actor stripped, String style, String how, String narration)
     Trace("Change_Outfit",stripper.GetDisplayName()+" stripper "+stripped.GetDisplayName()+" style:"+style+" how: "+how+" narration:"+narration)
+
+    if how == "take off" 
+        how = "undress"
+    elseif how == "put on"
+        how = "dress"
+    endif 
 
     bool success = False
     if how == "put on"

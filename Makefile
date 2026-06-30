@@ -1,4 +1,4 @@
-VERSION=0.30.3
+VERSION=0.30.5
 NAME=SkyrimNet SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.7z
@@ -39,6 +39,7 @@ release:
 		core \
 		images \
 		handler_udng 
+	if exist "$(subst /,\\,core)" rmdir /s /q "$(subst /,\\,core)"		
 
 group_tags:
 	python3 ./python_scripts/group-tags.py animations > SkyrimNet_SexLab/group_tags.json

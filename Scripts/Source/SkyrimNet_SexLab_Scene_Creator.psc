@@ -142,7 +142,7 @@ Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _target, S
     num_tags_suppress = 0 
     style = STYLE_NORMALLY
 
-    if (_method == "tenticles" || _method == "tenticle") && setting_name == "" 
+    if (_method == "tentacles" || _method == "tentacle") && setting_name == "" 
         setting_name =  "pleasure_pain"
     endif 
 
@@ -570,20 +570,22 @@ Function LoadSetting(String setting_name)
     ; --------------------------------------
     if JMap.HasKey(setting_id, "male_position") && num_actors > 1
         int position = JMap.GetInt(setting_id, "male_position") 
-        int other = 0
-        if position == 0 
-            other = 1 
-        endif 
-        int gender = sexlab.GetGender(actors[position])
-        bool position_male = gender == 0 || gender == 2 
-        gender = sexlab.GetGender(actors[other])
-        bool other_male = gender == 0 || gender == 2 
-        ; position is not a male
-        if !position_male && other_male
-            Actor temp = actors[position]
-            actors[position] = actors[other] 
-            actors[other] = temp
-            Trace("LoadSetting"," male_position caused swap: "+JoinActors(actors,num_actors))
+        if position < num_actors 
+            int other = 0
+            if position == 0 
+                other = 1 
+            endif 
+            int gender = sexlab.GetGender(actors[position])
+            bool position_male = gender == 0 || gender == 2 
+            gender = sexlab.GetGender(actors[other])
+            bool other_male = gender == 0 || gender == 2 
+            ; position is not a male
+            if !position_male && other_male
+                Actor temp = actors[position]
+                actors[position] = actors[other] 
+                actors[other] = temp
+                Trace("LoadSetting"," male_position caused swap: "+JoinActors(actors,num_actors))
+            endif 
         endif 
     endif 
 
@@ -998,8 +1000,7 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
                 num_tags -= 1
             elseif button != "-continue-" && button != actor_names && button != tags_label
                 if button != "" 
-                    tags[num_tags] = button 
-                    num_tags += 1
+                    AddTag(button)
                 endif 
             endif 
         endwhile 

@@ -24,11 +24,15 @@ Function Setup()
 EndFunction
 
 Event MenuOpen(Form target_form)
-    Actor target = target_form as Actor 
-    if udng_groups != None
-        Trace("UpdateDevices","Updating devices for target: "+target.GetDisplayName())
-        udng_groups.UpdateDevices(target) 
-    else
-        Trace("UpdateDevices","Update failed, target: "+target.GetDisplayName())
-    endif
+    if target_form != None 
+        Actor target = target_form as Actor 
+        if udng_groups != None
+            Trace("UpdateDevices","Updating devices for target: "+target.GetDisplayName())
+            udng_groups.UpdateDevices(target) 
+        else
+            Trace("UpdateDevices","Update failed, target: "+target.GetDisplayName())
+        endif
+    else 
+        Trace("UpdateDevices","target_form is None")
+    endif 
 EndEvent

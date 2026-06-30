@@ -474,7 +474,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     endif 
     if button == masturbate
         if sexlab_ostim_player == 0 || !main.ostimnet_found
-            actions.StartScene_Consensual_one("sexual activites", target, "normal", "")
+            actions.StartScene_Consensual_one("sexual activities", target, "normal", "")
         else 
             EventSend_OStimNet("SexStart", target, None, "")
         endif 
@@ -685,7 +685,7 @@ Function MutliTarget_Menu_Selection(Actor player)
     int[] selected = new int[5]
 
     String cancel = "<cancel>"
-    String intent = "sexual activites"
+    String intent = "sexual activities"
     String setting_name = ""
 
     int next = 0 
@@ -749,8 +749,8 @@ Function MutliTarget_Menu_Selection(Actor player)
         elseif index == 1 
             String[] buttons = new String[4] 
             buttons[0] = "showing affection"
-            buttons[1] = "sexual activites"
-            buttons[2] = "rape"
+            buttons[1] = "sexual activities"
+            buttons[2] = "raping"
             buttons[3] = "custom"
 
             String msg = "What is the intent?"
@@ -825,7 +825,7 @@ Function MutliTarget_Menu_Selection(Actor player)
         setting_name = "nonsexual_male_position_1"
     endif 
 
-    if intent == "rape>"
+    if intent == "raping"
         SkyrimNet_SexLab_Scene_Creator creator = manager.CreateCreator(intent, actors_selected, speaker, target, setting_name="")
         creator.SetVictim(actors_selected[0])
         creator.Start() 

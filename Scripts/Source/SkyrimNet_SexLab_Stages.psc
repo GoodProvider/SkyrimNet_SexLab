@@ -13,7 +13,7 @@ Bool Property hide_help = false Auto
 Actor player = None 
 
 String Property animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations" AutoReadOnly
-String Property local_folder =      "" AutoReadOnly
+String Property local_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations/_local_" AutoReadOnly
 
 String VERSION_1_0 = "1.0"
 String VERSION_2_0 = "2.0"
@@ -77,8 +77,6 @@ Function Setup()
     devices_found = false ; temporarily disable devices integration until I can test and optimize it, since checking for the belt keyword on every stage update is causing some performance issues.
 
     desc_input = ""
-    animations_folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/animations"
-    local_folder =      animations_folder+"/_local_"
     if player == None 
         player = Game.GetPlayer()
     endif 
@@ -123,7 +121,7 @@ String Function AddActorDescriptionActors(String version, Actor[] actors, String
         Trace("AddActorDescriptionActors","Description is empty")
         return ""
     endif 
-    if (actors.Length \== 0 || actors\[0\] \== None || actors\[0\].GetDisplayName() \== "")  
+    if (actors.Length == 0 || actors[0] == None || actors[0].GetDisplayName() == "")  
         Trace("AddActorDescriptionActors","Actors are none or have not name")
         return ""
     endif 
@@ -157,15 +155,18 @@ EndFunction
 ; ------------------------------------
 
 Function EditDescriptions(sslThreadController thread)
+    Trace("EditDecriptions","-- a")
     if thread == None 
         Trace("EditDescriptions","thread is None")
         return
     endif 
+    Trace("EditDecriptions","-- b")
     SkyrimNet_SexLab_Scene scene = manager.GetSceneByThread(thread)
     if scene == None 
         Trace("EditDescriptions","scene is None")
         return 
     endif 
+    Trace("EditDecriptions","-- c")
 
     Actor[] actors = thread.Positions
 
@@ -173,6 +174,7 @@ Function EditDescriptions(sslThreadController thread)
     String fname = GetFilename(thread)
     Trace("EditDescriptions","fname: "+fname)
 
+    Trace("EditDecriptions","-- d")
     String[] buttons = new String[8]
     int desc_prev = 0 
     int desc_edit = 1 
@@ -193,6 +195,7 @@ Function EditDescriptions(sslThreadController thread)
 
     int button = desc_prev
 
+    Trace("EditDecriptions","-- e")
     String style_start = scene.GetStyle()
     while button != done 
         String source = "" 
@@ -212,6 +215,7 @@ Function EditDescriptions(sslThreadController thread)
             endif 
         endwhile 
 
+    Trace("EditDecriptions","-- g")
         if scene.tracking
             buttons[tracking] = Button_Stop_Tracking
         else
@@ -250,6 +254,7 @@ Function EditDescriptions(sslThreadController thread)
         endif 
         button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
+    Trace("EditDecriptions","-- h")
         if button == desc_prev
             if thread.stage > 1 
                 thread.GoToStage(thread.stage - 1)
@@ -273,10 +278,12 @@ Function EditDescriptions(sslThreadController thread)
         endif 
     endwhile 
 
+    Trace("EditDecriptions","-- j")
     String style_end = scene.style
     if style_start != style_end 
         DirectNarration(thread.positions[0].getDisplayName()+"'s scene changed from '"+style_start+"' to '"+style_end+"'")
     endif 
+    Trace("EditDecriptions","-- k")
 
 EndFunction 
 
