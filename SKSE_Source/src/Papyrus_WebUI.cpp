@@ -18,6 +18,27 @@ extern std::string (*PublicGetActorNameByUUID)(uint64_t uuid);
 
 namespace PapyrusBindings_WebUI
 {
+    namespace
+    {
+        /// configureTargetMenu plus a loader so Custom/punish use C++-shipped scenes/*.json.
+        /// PrismaUI cannot fetch ../../../SKSE/... from the overlay HTML.
+        std::string ConfigureTargetMenuScript(const nlohmann::json& catalog)
+        {
+            return "configureTargetMenu(" + catalog.dump() + ");"
+                   "(function(){"
+                   "var S=(typeof TARGET_CATALOG!=='undefined'&&TARGET_CATALOG&&TARGET_CATALOG.sceneSettings)||{};"
+                   "window.SCENE_SETTINGS=S;"
+                   "if(typeof ssLoadSetting!=='function'||ssLoadSetting._fromCatalog)return;"
+                   "var orig=ssLoadSetting;"
+                   "ssLoadSetting=async function(n){"
+                   "n=String(n||'nonsexual').trim()||'nonsexual';"
+                   "if(window.SCENE_SETTINGS&&window.SCENE_SETTINGS[n])return window.SCENE_SETTINGS[n];"
+                   "return orig.apply(this,arguments);"
+                   "};"
+                   "ssLoadSetting._fromCatalog=true;"
+                   "})();";
+        }
+    }
     RE::Actor* Target_Current = nullptr;
     std::int32_t YesNo_Creator_Sid = -1;
     bool EditTagsPlayer = true;
@@ -236,7 +257,7 @@ namespace PapyrusBindings_WebUI
             if (!ActionCatalog::IsLoaded())
                 ActionCatalog::Load();
             auto catalog = ActionCatalog::BuildUICatalog(hasStrippedItems);
-            WebUI_Invoke("configureTargetMenu(" + catalog.dump() + ");");
+            WebUI_Invoke(ConfigureTargetMenuScript(catalog));
             WebUI_Invoke("configureControlPanel(" + ActionCatalog::BuildMainPanelsCatalog().dump() + ");");
             WebUI_Invoke("showPanel('target_menu_panel');");
             WebUI_Visibility_Show();
@@ -266,7 +287,7 @@ namespace PapyrusBindings_WebUI
             editTagsNonPlayer);
 
         auto catalog = ActionCatalog::BuildUICatalog(hasStrippedItems);
-        WebUI_Invoke("configureTargetMenu(" + catalog.dump() + ");");
+        WebUI_Invoke(ConfigureTargetMenuScript(catalog));
         WebUI_Invoke("configureControlPanel(" + ActionCatalog::BuildMainPanelsCatalog().dump() + ");");
         const std::string uuidStr =
             uuid ? std::to_string(uuid) : std::to_string(static_cast<unsigned>(targetFormId));
@@ -290,7 +311,7 @@ namespace PapyrusBindings_WebUI
 
         webui_log::info("Target_Menu_Refresh hasStrippedItems={}", hasStrippedItems);
         auto catalog = ActionCatalog::BuildUICatalog(hasStrippedItems);
-        WebUI_Invoke("configureTargetMenu(" + catalog.dump() + ");");
+        WebUI_Invoke(ConfigureTargetMenuScript(catalog));
     }
 
     /// Resets the overlay and shows the sex_menu_panel for an active sex thread.

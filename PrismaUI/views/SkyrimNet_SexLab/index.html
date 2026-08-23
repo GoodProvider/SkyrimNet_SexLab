@@ -1649,6 +1649,43 @@
             }
         }
 
+        function tmSceneCreatorIsOpen() {
+            if (MAIN_SELECTED_KEY === 'scene_creator_panel' || MAIN_SELECTED_KEY === 'scene-creator-panel')
+                return true;
+            const el = document.getElementById('scene-creator-panel');
+            if (!el) return false;
+            const d = el.style.display;
+            return d === 'flex' || d === 'block';
+        }
+
+        function tmToggleSceneCreator() {
+            if (typeof tmCascadeIsOpen === 'function' && tmCascadeIsOpen()) {
+                closeTargetPulldowns();
+                if (typeof renderTargetMenu === 'function')
+                    renderTargetMenu();
+            }
+            if (tmSceneCreatorIsOpen()) {
+                if (typeof selectMainPanelByLabel === 'function')
+                    selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
+                if (typeof hidePanel === 'function')
+                    hidePanel('scene_creator_panel');
+                if (typeof renderTargetMenu === 'function')
+                    renderTargetMenu();
+                return;
+            }
+            if (typeof ensureCreatorSceneInfo === 'function')
+                ensureCreatorSceneInfo();
+            selectedSceneInfoKey = 'new';
+            if (typeof showPanel === 'function')
+                showPanel('scene_creator_panel');
+            else if (typeof window.onMainPanelChange === 'function')
+                window.onMainPanelChange(JSON.stringify({ key: 'scene_creator_panel' }));
+            if (typeof bindVisiblePanelsFromSceneInfo === 'function')
+                bindVisiblePanelsFromSceneInfo();
+            if (typeof renderTargetMenu === 'function')
+                renderTargetMenu();
+        }
+
         function renderControlPanelPulldown() {
             const host = document.getElementById('control-panel-host');
             if (!host) return;
@@ -1835,6 +1872,13 @@
             }
         }
 
+        function overlayElIsOpen(id) {
+            const el = document.getElementById(id);
+            if (!el) return false;
+            const d = el.style.display;
+            return d === 'block' || d === 'flex';
+        }
+
         function visiblePanelId() {
             for (const pid of ['yesno-panel', 'scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel', 'target-menu-row', 'sex-menu-panel']) {
                 const el = document.getElementById(pid);
@@ -1943,25 +1987,59 @@
         }
 
         function handleGlobalEscape() {
-            const pid = visiblePanelId();
-            if (pid === 'yesno-panel') {
+            if (document.querySelector('.pulldown.open')) {
+                closeAllPulldowns();
+                return;
+            }
+            if (overlayElIsOpen('intent-panel')) {
+                if (typeof ssIntentCancel === 'function')
+                    ssIntentCancel();
+                else
+                    ssCloseIntentPanel();
+                return;
+            }
+            if (overlayElIsOpen('yesno-panel')) {
                 yesNoClick(2);
-            } else if (pid === 'scene-creator-panel') {
-                scCancel();
-            } else if (pid === 'animation-menu-panel') {
-                if (typeof window.onCancel === 'function') window.onCancel();
-                else hidePanel('animation_menu_panel');
-            } else {
-                if (typeof window.onCancel === 'function') window.onCancel();
-                else {
-                    hidePanel('target_menu_panel');
-                    hidePanel('sex_menu_panel');
+                return;
+            }
+            if (overlayElIsOpen('sex-menu-panel')) {
+                hideSexMenu();
+                return;
+            }
+            if (typeof tmCascadeIsOpen === 'function' && tmCascadeIsOpen()) {
+                tmPeelCascade();
+                return;
+            }
+            const targetOpen = overlayElIsOpen('target-menu-row');
+            if (MAIN_SELECTED_KEY) {
+                if (targetOpen) {
+                    const key = MAIN_SELECTED_KEY;
+                    if (typeof selectMainPanelByLabel === 'function')
+                        selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
+                    if (key && typeof hidePanel === 'function')
+                        hidePanel(key);
+                    if (typeof renderTargetMenu === 'function')
+                        renderTargetMenu();
+                    return;
                 }
+                if (MAIN_SELECTED_KEY === 'scene_creator_panel'
+                    || MAIN_SELECTED_KEY === 'scene-creator-panel'
+                    || (typeof tmSceneCreatorIsOpen === 'function' && tmSceneCreatorIsOpen())) {
+                    scCancel();
+                    return;
+                }
+            }
+            if (typeof window.onCancel === 'function')
+                window.onCancel();
+            else {
+                hidePanel('target_menu_panel');
+                hidePanel('sex_menu_panel');
             }
         }
 
         // ── Target menu (JSON/YAML catalog) ───────────────────────
         let TARGET_CATALOG = { defaultsParameters: {}, options: [], actions: {} };
+        let SCENE_SETTINGS = {};
         let paramDict = {};           // typed parameter dictionary (mutable)
         let navStack = [];            // stack of pulldown option objects
         let selectedActionName = null;
@@ -2604,6 +2682,8 @@
 
         function configureTargetMenu(catalog) {
             TARGET_CATALOG = catalog || { defaultsParameters: {}, options: [], actions: {} };
+            if (catalog && catalog.sceneSettings && typeof catalog.sceneSettings === 'object')
+                SCENE_SETTINGS = catalog.sceneSettings;
             buildParamTree();
             resetTargetMenuState();
             renderTargetMenu();
@@ -2638,6 +2718,40 @@
             ssCloseIntentPanel();
             const host = document.getElementById('target-cascade-host');
             if (host) host.innerHTML = '';
+        }
+
+        function tmCascadeIsOpen() {
+            if (papyrusSelectedOpt) return true;
+            if (navStack && navStack.length) return true;
+            if (selectedActionName) return true;
+            const host = document.getElementById('target-cascade-host');
+            return !!(host && host.children.length);
+        }
+
+        function tmPeelCascade() {
+            if (papyrusSelectedOpt) {
+                papyrusSelectedOpt = null;
+                if (!navStack.length) {
+                    closeTargetPulldowns();
+                }
+                if (typeof renderTargetMenu === 'function')
+                    renderTargetMenu();
+                return;
+            }
+            if (selectedActionName) {
+                selectedActionName = null;
+                selectedActionLabel = null;
+                if (typeof renderTargetMenu === 'function')
+                    renderTargetMenu();
+                return;
+            }
+            if (navStack.length > 1) {
+                popNavStackTo(navStack.length - 1);
+                return;
+            }
+            closeTargetPulldowns();
+            if (typeof renderTargetMenu === 'function')
+                renderTargetMenu();
         }
 
         function setTargetActor(uuid, name, formId) {
@@ -2708,6 +2822,14 @@
                     ));
                     continue;
                 }
+                if (opt.type === 'scene_creator') {
+                    const row = document.createElement('div');
+                    row.className = 'option' + (tmSceneCreatorIsOpen() ? ' selected' : '');
+                    row.textContent = displayLabel(opt);
+                    row.onclick = () => tmToggleSceneCreator();
+                    left.appendChild(row);
+                    continue;
+                }
                 if (opt.type === 'papyrus') {
                     const row = document.createElement('div');
                     row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
@@ -2761,7 +2883,21 @@
                 window.onNotify(JSON.stringify({ msg: String(msg || '') }));
         }
 
+        function ssIsSceneStartPanel(opt) {
+            const p = opt && opt.panel;
+            return p === 'scene_start' || p === 'cuddle';
+        }
+
         function selectPapyrusOption(opt) {
+            if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) {
+                leftSelectedOpt = opt;
+                papyrusSelectedOpt = null;
+                navStack = [];
+                selectedActionName = null;
+                selectedActionLabel = null;
+                ssApplySceneStartDefaultsToCreator(opt);
+                return;
+            }
             leftSelectedOpt = opt;
             papyrusSelectedOpt = opt;
             navStack = [];
@@ -3451,10 +3587,10 @@
             }
         }
 
-        function ssApplyDefaults(opt, pool) {
+        function ssApplyDefaults(opt, pool, force) {
             const label = displayLabel(opt);
             const d = (opt && (opt.panelDefaults || opt.paneldefaults)) || {};
-            if (ssUi.seededForLabel === label)
+            if (!force && ssUi.seededForLabel === label)
                 return;
             ssUi.seededForLabel = label;
             ssUi.seedObjectRelation = d.objectRelation || 'with';
@@ -3467,7 +3603,7 @@
             ssUi.customIntent = '';
             ssUi.intentBeforeCustom = ssUi.intent === 'custom' ? 'sexual activities' : ssUi.intent;
             ssUi.style = d.style || 'normally';
-            ssUi.settingName = d.settingName || 'default';
+            ssUi.settingName = d.settingName || d.setting_name || 'default';
             const sub = ssActorBySource(pool, d.subject || 'player');
             ssUi.subjectFormId = sub ? formIdU32(sub.formId) : 0;
             if (ssUi.objectRelation !== 'none') {
@@ -3583,23 +3719,96 @@
             // Refresh nearby so Scene Creator Include lists everyone in range.
             if (typeof window.onNearbyRangeChange === 'function')
                 window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 100 }));
+            if (typeof renderTargetMenu === 'function')
+                renderTargetMenu();
         }
 
-        async function ssLoadSettingSuppress(settingName) {
+        function ssCsv(raw) {
+            if (raw == null || raw === '') return '';
+            if (Array.isArray(raw))
+                return raw.map(String).map(s => s.trim()).filter(Boolean).join(',');
+            return String(raw).split(',').map(s => s.trim()).filter(Boolean).join(',');
+        }
+
+        function ssMergeCsv(a, b) {
+            const seen = new Set();
+            const out = [];
+            String(a || '').split(',').concat(String(b || '').split(',')).forEach(t => {
+                const s = String(t).trim();
+                if (!s) return;
+                const k = s.toLowerCase();
+                if (seen.has(k)) return;
+                seen.add(k);
+                out.push(s);
+            });
+            return out.join(',');
+        }
+
+        function ssSettingField(data, snake, alt) {
+            if (!data) return undefined;
+            if (data[snake] != null) return data[snake];
+            if (alt && data[alt] != null) return data[alt];
+            return undefined;
+        }
+
+        async function ssLoadSetting(settingName) {
             const name = String(settingName || 'nonsexual').trim() || 'nonsexual';
-            try {
-                const res = await fetch('../../../SKSE/Plugins/SkyrimNet_SexLab/scenes/' + name + '.json');
-                if (!res.ok) throw new Error('http ' + res.status);
-                const data = await res.json();
-                const raw = data && data.tags_suppress != null ? data.tags_suppress : '';
-                if (Array.isArray(raw))
-                    return raw.map(String).join(',');
-                return String(raw || '');
-            } catch (e) {
-                if (name === 'nonsexual' || name.indexOf('nonsexual') === 0)
-                    return NONSEXUAL_SUPPRESS_FALLBACK;
-                return '';
+            const cached = SCENE_SETTINGS && SCENE_SETTINGS[name];
+            if (cached && typeof cached === 'object')
+                return cached;
+            const urls = [
+                'scenes/' + name + '.json',
+                '../../../SKSE/Plugins/SkyrimNet_SexLab/scenes/' + name + '.json'
+            ];
+            for (let i = 0; i < urls.length; i++) {
+                try {
+                    const res = await fetch(urls[i]);
+                    if (!res.ok) continue;
+                    return await res.json();
+                } catch (e) { /* PrismaUI file:// often blocks ../../../ */ }
             }
+            if (name === 'nonsexual' || name.indexOf('nonsexual') === 0)
+                return { tags_suppress: NONSEXUAL_SUPPRESS_FALLBACK };
+            return {};
+        }
+
+        function ssSpeakCsv(v) {
+            if (v == null) return null;
+            if (Array.isArray(v))
+                return v.map(x => (x == null ? '' : String(x).trim())).filter(Boolean).join(',');
+            return String(v).trim();
+        }
+
+        function ssApplySettingToState(state, data) {
+            data = data || {};
+            const defs = ssSettingField(data, 'array_defaults', 'array_defaults') || {};
+            const stripDef = ssSettingField(defs, 'no_stripping', 'no_stripping');
+            const orgasmDef = ssSettingField(defs, 'no_orgasm', 'no_orgasm');
+            const speakDefCsv = ssSpeakCsv(ssSettingField(defs, 'speaking_modifiers', 'speaking_modifiers'));
+            const stripArr = ssSettingField(data, 'no_stripping', 'no_stripping');
+            const orgasmArr = ssSettingField(data, 'no_orgasm', 'no_orgasm');
+            const speakArr = ssSettingField(data, 'speaking_modifiers', 'speaking_modifiers');
+            (state._positions || []).forEach((p, i) => {
+                if (!p) return;
+                if (stripDef != null) p._dressed = Number(stripDef) ? 1 : 0;
+                if (orgasmDef != null) p._no_orgasm = Number(orgasmDef) ? 1 : 0;
+                if (speakDefCsv != null) p._speaking = speakDefCsv;
+                if (Array.isArray(stripArr) && stripArr[i] != null) p._dressed = Number(stripArr[i]) ? 1 : 0;
+                if (Array.isArray(orgasmArr) && orgasmArr[i] != null) p._no_orgasm = Number(orgasmArr[i]) ? 1 : 0;
+                if (Array.isArray(speakArr) && i < speakArr.length && speakArr[i] != null) {
+                    const csv = ssSpeakCsv(speakArr[i]);
+                    if (csv != null) p._speaking = csv;
+                }
+            });
+            const suppressRaw = ssSettingField(data, 'tags_suppress', 'tags_suppress');
+            const suppress = ssCsv(suppressRaw);
+            if (suppress)
+                state._tags_suppress = suppress;
+            else if (suppressRaw == null && !state._tags_suppress)
+                state._tags_suppress = '';
+            const extraTags = ssCsv(ssSettingField(data, 'tags', 'tags'));
+            if (extraTags)
+                state._tags = ssMergeCsv(state._tags, extraTags);
         }
 
         function ssToPos(a, victim) {
@@ -3693,10 +3902,10 @@
             };
         }
 
-        function ssCustom(opt) {
+        function ssBuildCreatorState(opt) {
             const pool = ssActorPool();
             const cast = ssResolveCast(pool);
-            if (!ssCanCustom(cast)) return;
+            if (!ssCanCustom(cast)) return null;
             const intent = ssPapyrusIntent();
             const tag = ssRemapMethod(ssUi.method);
             const settingName = ssUi.settingName || 'default';
@@ -3721,7 +3930,7 @@
                 pushPos(cast.subject, false);
             }
             pushPos(cast.third, false);
-            const state = {
+            return {
                 _creator_sid: 0,
                 _from_target_menu: true,
                 _intent: intent,
@@ -3736,15 +3945,39 @@
                 _group_tags: {},
                 _group_order: []
             };
+        }
+
+        function ssApplyCreatorState(state) {
+            if (!state) return;
+            if (typeof ensureCreatorSceneInfo === 'function')
+                ensureCreatorSceneInfo();
+            selectedSceneInfoKey = 'new';
+            const settingName = (state._scene_presets && state._scene_presets[0]) || 'default';
             const fallback = (settingName === 'nonsexual' || settingName.indexOf('nonsexual') === 0)
                 ? NONSEXUAL_SUPPRESS_FALLBACK : '';
-            ssLoadSettingSuppress(settingName).then((suppress) => {
-                state._tags_suppress = suppress || fallback;
+            const finish = (data) => {
+                ssApplySettingToState(state, data);
+                if (!state._tags_suppress && fallback)
+                    state._tags_suppress = fallback;
                 ssApplySceneCreator(state);
-            }).catch(() => {
-                state._tags_suppress = fallback;
-                ssApplySceneCreator(state);
-            });
+                const info = sceneInfoByKey.get('new');
+                if (info) info.dirty = true;
+            };
+            ssLoadSetting(settingName).then(finish).catch(() => finish(fallback ? { tags_suppress: fallback } : {}));
+        }
+
+        function ssCustom(opt) {
+            const state = ssBuildCreatorState(opt);
+            if (!state) return;
+            ssApplyCreatorState(state);
+        }
+
+        function ssApplySceneStartDefaultsToCreator(opt) {
+            const pool = ssActorPool();
+            ssApplyDefaults(opt, pool, true);
+            ssCustom(opt);
+            if (typeof renderTargetMenu === 'function')
+                renderTargetMenu();
         }
 
         function ssStart(opt) {

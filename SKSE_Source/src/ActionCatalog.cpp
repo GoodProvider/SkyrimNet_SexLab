@@ -25,6 +25,7 @@ namespace ActionCatalog
         nlohmann::json g_actorOptions = nlohmann::json::object();
         nlohmann::json g_sceneOptions = nlohmann::json::object();
         nlohmann::json g_mainPanels = nlohmann::json::array();
+        nlohmann::json g_sceneSettings = nlohmann::json::object();
         std::string g_currentMainPanelKey;
         bool g_animationPanelPreferredOpen = false;
         bool g_loaded = false;
@@ -663,6 +664,38 @@ namespace ActionCatalog
             return optionsArr;
         }
 
+        /// Loads Data/SKSE/Plugins/SkyrimNet_SexLab/scenes/*.json (sibling of webui/).
+        /// PrismaUI cannot fetch ../../../SKSE/... from the overlay, so Custom/punish
+        /// apply these objects from the TargetMenu catalog instead.
+        nlohmann::json LoadSceneSettings(const std::filesystem::path& webuiDir)
+        {
+            nlohmann::json out = nlohmann::json::object();
+            const auto scenesDir = webuiDir.parent_path() / "scenes";
+            if (!std::filesystem::is_directory(scenesDir)) {
+                webui_log::warn("ActionCatalog: missing scenes directory {}", scenesDir.string());
+                return out;
+            }
+            for (const auto& path : SortedJsonFiles(scenesDir)) {
+                auto raw = ReadFile(path);
+                if (raw.empty()) {
+                    webui_log::warn("ActionCatalog: skipping empty scene setting {}", path.string());
+                    continue;
+                }
+                try {
+                    auto node = nlohmann::json::parse(raw);
+                    if (!node.is_object()) {
+                        webui_log::warn("ActionCatalog: skipping non-object scene setting {}", path.string());
+                        continue;
+                    }
+                    out[path.stem().string()] = std::move(node);
+                } catch (const std::exception& e) {
+                    webui_log::warn("ActionCatalog: bad scene setting {}: {}", path.string(), e.what());
+                }
+            }
+            webui_log::info("ActionCatalog loaded {} scene settings from {}", out.size(), scenesDir.string());
+            return out;
+        }
+
         nlohmann::json LoadDefaultsParameters(const std::filesystem::path& defaultsPath)
         {
             nlohmann::json defaultsParameters = nlohmann::json::object();
@@ -717,6 +750,7 @@ namespace ActionCatalog
         g_actorOptions = nlohmann::json::object();
         g_sceneOptions = nlohmann::json::object();
         g_mainPanels = nlohmann::json::array();
+        g_sceneSettings = nlohmann::json::object();
         g_currentMainPanelKey.clear();
         g_loaded = false;
 
@@ -803,13 +837,16 @@ namespace ActionCatalog
             if (g_mainPanels.empty())
                 webui_log::warn("ActionCatalog: no MainPanels loaded from {}", mainPanelsDir.string());
 
+            g_sceneSettings = LoadSceneSettings(dir);
+
             g_loaded = true;
             webui_log::info(
-                "ActionCatalog loaded {} actions, {} actor options, {} scene options, {} main panels",
+                "ActionCatalog loaded {} actions, {} actor options, {} scene options, {} main panels, {} scene settings",
                 g_actions.size(),
                 g_actorOptions["options"].size(),
                 g_sceneOptions["options"].size(),
-                g_mainPanels.size());
+                g_mainPanels.size(),
+                g_sceneSettings.size());
             return true;
         } catch (const std::exception& e) {
             webui_log::error("ActionCatalog::Load failed: {}", e.what());
@@ -905,6 +942,7 @@ namespace ActionCatalog
         }
 
         catalog["actions"] = actionsObj;
+        catalog["sceneSettings"] = g_sceneSettings;
         return catalog;
     }
 
