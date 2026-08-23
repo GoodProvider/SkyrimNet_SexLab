@@ -964,6 +964,7 @@ namespace ActionCatalog
         }
         catalog["panels"] = std::move(panels);
         catalog["selected"] = g_currentMainPanelKey;
+        catalog["sceneSettings"] = g_sceneSettings;
         return catalog;
     }
 

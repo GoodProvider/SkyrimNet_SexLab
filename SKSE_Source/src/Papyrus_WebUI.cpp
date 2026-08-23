@@ -26,13 +26,16 @@ namespace PapyrusBindings_WebUI
         {
             return "configureTargetMenu(" + catalog.dump() + ");"
                    "(function(){"
-                   "var S=(typeof TARGET_CATALOG!=='undefined'&&TARGET_CATALOG&&TARGET_CATALOG.sceneSettings)||{};"
+                   "var S=(typeof TARGET_CATALOG!=='undefined'&&TARGET_CATALOG&&(TARGET_CATALOG.sceneSettings||TARGET_CATALOG.scenesettings))||{};"
                    "window.SCENE_SETTINGS=S;"
+                   "if(typeof ssAdoptSceneSettings==='function')ssAdoptSceneSettings(S);"
                    "if(typeof ssLoadSetting!=='function'||ssLoadSetting._fromCatalog)return;"
                    "var orig=ssLoadSetting;"
                    "ssLoadSetting=async function(n){"
-                   "n=String(n||'nonsexual').trim()||'nonsexual';"
-                   "if(window.SCENE_SETTINGS&&window.SCENE_SETTINGS[n])return window.SCENE_SETTINGS[n];"
+                   "n=String(n||'').trim();"
+                   "if(!n)n='default';"
+                   "var C=(typeof ssSceneSettingsCatalog==='function'&&ssSceneSettingsCatalog())||window.SCENE_SETTINGS||{};"
+                   "if(C&&C[n])return C[n];"
                    "return orig.apply(this,arguments);"
                    "};"
                    "ssLoadSetting._fromCatalog=true;"
@@ -515,6 +518,16 @@ namespace PapyrusBindings_WebUI
             return cached;
         }
 
+        /// 0 male, 1 female — SexLab human mapping. Papyrus GetGender overwrites (creatures 2/3).
+        int ActorSex(RE::Actor* actor)
+        {
+            if (!actor)
+                return 0;
+            if (auto* base = actor->GetActorBase())
+                return static_cast<int>(base->GetSex());
+            return 0;
+        }
+
         std::string ActorDisplayNameLocal(RE::Actor* actor)
         {
             if (!actor)
@@ -634,7 +647,8 @@ namespace PapyrusBindings_WebUI
                 { "status", cls.status },
                 { "selectable", cls.selectable },
                 { "sortRank", cls.sortRank },
-                { "isPlayer", isPlayer }
+                { "isPlayer", isPlayer },
+                { "gender", ActorSex(actor) }
             });
         }
     }
@@ -744,8 +758,8 @@ namespace PapyrusBindings_WebUI
             const std::string uuidStr =
                 playerUUID ? std::to_string(playerUUID) : std::to_string(static_cast<unsigned>(formId));
             std::string playerName = ActorDisplayNameLocal(player);
-            WebUI_Invoke(std::format("setPlayerActor('{}', '{}', {});", uuidStr, EscapeJsString(playerName),
-                static_cast<unsigned>(formId)));
+            WebUI_Invoke(std::format("setPlayerActor('{}', '{}', {}, {});", uuidStr, EscapeJsString(playerName),
+                static_cast<unsigned>(formId), ActorSex(player)));
         }
 
         if (!player) {

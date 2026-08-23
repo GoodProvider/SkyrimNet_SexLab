@@ -701,11 +701,103 @@ Function WebUI_OnSceneCreatorLoad(int creator_sid, String setting_name)
     endif
 EndFunction
 
+Bool Function SceneSettingNameIsValid(String setting_name)
+    if setting_name == "" || setting_name == "none"
+        return False
+    endif
+    if StringUtil.Find(setting_name, "/") != -1
+        return False
+    endif
+    if StringUtil.Find(setting_name, "\\") != -1
+        return False
+    endif
+    if StringUtil.Find(setting_name, "..") != -1
+        return False
+    endif
+    return True
+EndFunction
+
+Function SaveSceneSettingFromWebUIJson(String json)
+    int obj = JValue.objectFromPrototype(json)
+    if obj == 0
+        Trace("SaveSceneSettingFromWebUIJson", "bad json", True)
+        return
+    endif
+    String setting_name = JMap.getStr(obj, "_scene_preset", "")
+    if !SceneSettingNameIsValid(setting_name)
+        Trace("SaveSceneSettingFromWebUIJson", "invalid name:"+setting_name, True)
+        JValue.release(obj)
+        return
+    endif
+    int setting_id = JMap.object()
+    String style = JMap.getStr(obj, "_style", "")
+    if style != "" && style != "normally"
+        JMap.setStr(setting_id, "style", style)
+    endif
+    String method = JMap.getStr(obj, "_method", "")
+    if method != ""
+        JMap.setStr(setting_id, "method", method)
+    endif
+    String hook = JMap.getStr(obj, "_event_hook", "")
+    if hook != ""
+        JMap.setStr(setting_id, "event_hook", hook)
+    endif
+    String tags = JMap.getStr(obj, "_tags", "")
+    if tags != ""
+        JMap.setStr(setting_id, "tags", tags)
+    endif
+    String suppress = JMap.getStr(obj, "_tags_suppress", "")
+    if suppress != ""
+        JMap.setStr(setting_id, "tags_suppress", suppress)
+    endif
+    int pos_arr = JMap.getObj(obj, "_positions")
+    int n = 0
+    if pos_arr != 0
+        n = JArray.count(pos_arr)
+    endif
+    if n > 0
+        int no_strip_arr = JArray.objectWithSize(n)
+        int no_org_arr = JArray.objectWithSize(n)
+        int speak_arr = JArray.objectWithSize(n)
+        int victim_arr = JArray.objectWithSize(n)
+        int i = 0
+        while i < n
+            int po = JArray.getObj(pos_arr, i)
+            int dressed = 0
+            int no_org = 0
+            String speaking = ""
+            int victim = 0
+            if po != 0
+                dressed = JMap.getInt(po, "_dressed", 0)
+                no_org = JMap.getInt(po, "_no_orgasm", 0)
+                speaking = JMap.getStr(po, "_speaking", "")
+                victim = JMap.getInt(po, "_victim", 0)
+            endif
+            JArray.setInt(no_strip_arr, i, dressed)
+            JArray.setInt(no_org_arr, i, no_org)
+            JArray.setStr(speak_arr, i, speaking)
+            JArray.setInt(victim_arr, i, victim)
+            i += 1
+        endwhile
+        JMap.setObj(setting_id, "no_stripping", no_strip_arr)
+        JMap.setObj(setting_id, "no_orgasm", no_org_arr)
+        JMap.setObj(setting_id, "speaking_modifiers", speak_arr)
+        JMap.setObj(setting_id, "victim", victim_arr)
+    endif
+    String filename = GetSceneSettingFilename(setting_name)
+    JValue.writeToFile(setting_id, filename)
+    JValue.release(setting_id)
+    JValue.release(obj)
+    Trace("SaveSceneSettingFromWebUIJson", "wrote "+filename)
+EndFunction
+
 Function WebUI_OnSceneCreatorSave(int creator_sid, String json)
     SkyrimNet_SexLab_Scene_Creator creator = GetCreatorBySid(creator_sid)
     if creator
         creator.SavePresetFromWebUI(json)
+        return
     endif
+    SaveSceneSettingFromWebUIJson(json)
 EndFunction
 
 Function WebUI_OnAnimationMenuClose(int scene_sid, String json)

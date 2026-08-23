@@ -989,17 +989,15 @@ Function LoadSetting(String setting_name)
                     j += 1 
                 endwhile 
             elseif i == speaking_modifiers_key
-                string[] strings = JArray.asStringArray(array_id)
-                int num_strings = strings.length
-                EnsureActorsArraysLargeEnough(num_strings) 
+                int num_strings = JArray.count(array_id)
+                EnsureActorsArraysLargeEnough(num_strings)
 
-                ; Start with the values included in setting
-                int j = 0 
-                while j < num_strings 
-                    if i == speaking_modifiers_key
-                        speaking_modifiers[j] = strings[j]
-                    endif 
-                    j += 1 
+                ; Start with the values included in setting.
+                ; getStr keeps JSON "" (asStringArray can drop empty slots).
+                int j = 0
+                while j < num_strings
+                    speaking_modifiers[j] = JArray.getStr(array_id, j, "")
+                    j += 1
                 endwhile 
             endif  
         endif 

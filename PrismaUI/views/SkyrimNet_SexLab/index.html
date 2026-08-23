@@ -230,6 +230,13 @@
             overflow: hidden;
         }
 
+        #main-panel-host > #scene-creator-panel {
+            overflow: hidden;
+            height: 100%;
+            max-height: 100%;
+            min-height: 0;
+        }
+
         #main-panel-host > #animation-menu-panel {
             overflow: hidden;
             display: none;
@@ -375,11 +382,12 @@
 
         #scene-creator-panel {
             width: auto;
-            height: auto;
-            max-height: none;
+            height: 100%;
+            max-height: 100%;
             overflow: hidden;
             display: none;
             flex-direction: column;
+            min-height: 0;
         }
 
         #animation-menu-panel {
@@ -418,10 +426,11 @@
 
         .sc-split-row {
             display: flex;
-            align-items: flex-start;
+            align-items: stretch;
             gap: var(--space-md);
             min-height: 0;
             flex: 1 1 auto;
+            overflow: hidden;
         }
 
         .sc-split-row > * + * {
@@ -435,6 +444,7 @@
             min-height: 0;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
         .sc-col-tags {
@@ -501,19 +511,75 @@
             font-size: inherit;
         }
 
-        #sc-header-row2 #sc-preset-name {
-            width: 90px;
-            font-size: inherit;
+        #sc-header-row2 #sc-setting-cluster {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            flex-wrap: nowrap;
+            flex-shrink: 0;
+        }
+
+        #sc-save-confirm-panel,
+        #sc-save-setting-panel,
+        #sc-save-overwrite-panel {
+            position: fixed;
+            left: 50%;
+            top: 40%;
+            transform: translate(-50%, -50%);
+            z-index: 50;
+            min-width: min(320px, 40vw);
+            max-width: min(420px, 70vw);
+        }
+
+        #sc-save-setting-name {
+            width: 100%;
+            box-sizing: border-box;
+            background: rgba(28, 28, 33, 0.9);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: var(--font-ui);
+            font-size: var(--text-base);
+            padding: var(--space-xs) var(--space-sm);
+            min-height: var(--target-min);
+            outline: none;
+            margin: var(--space-sm) 0;
+        }
+
+        #sc-save-setting-list {
+            max-height: 12em;
+            margin-top: var(--space-sm);
+        }
+
+        #sc-save-setting-list .sc-save-file {
+            cursor: pointer;
+            padding: var(--space-xs) var(--space-sm);
+        }
+
+        #sc-save-setting-list .sc-save-file:hover {
+            background: rgba(255, 255, 255, 0.08);
         }
 
         .sc-anims-section {
             margin-top: var(--space-sm);
             padding-top: var(--space-sm);
             border-top: 1px solid var(--border);
-            flex: 1;
+            flex: 0 0 50%;
+            height: 50%;
+            max-height: 50%;
             min-height: 0;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+        }
+
+        .sc-anims-section > .section-header,
+        .sc-anims-section > .compact-row {
+            flex-shrink: 0;
+        }
+
+        #sc-stage-row {
+            flex-shrink: 0;
         }
 
         #scene-creator-panel > .bottom-bar {
@@ -599,7 +665,7 @@
 
         #sc-anims-list {
             padding: 0;
-            flex: 1;
+            flex: 1 1 auto;
             min-height: 0;
             max-height: none;
             overflow-y: auto;
@@ -622,6 +688,20 @@
             margin-right: var(--space-sm);
         }
 
+        .sc-col-positions > .section-header,
+        .sc-col-tags > .section-header,
+        .sc-col-tags > .tag-mode-row,
+        .sc-col-tags > .compact-row {
+            flex-shrink: 0;
+        }
+
+        #sc-available-tags {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
+            overflow-y: auto;
+        }
+
         #sc-positions-table,
         #tm-positions-table {
             table-layout: auto;
@@ -629,7 +709,8 @@
         }
 
         .sc-positions-scroll {
-            max-height: 22em;
+            flex: 1 1 auto;
+            max-height: none;
             overflow-y: auto;
             overflow-x: hidden;
             min-height: 0;
@@ -1336,11 +1417,11 @@
             </span>
             <span>activity</span>
             <input id="sc-intent" type="text" />
-            <span>preset</span>
-            <div id="sc-preset-pulldown"></div>
-            <input id="sc-preset-name" type="text" placeholder="name" />
-            <div class="action-btn" id="sc-btn-load" onclick="scLoadPreset()">Load</div>
-            <div class="action-btn" id="sc-btn-save" onclick="scSavePreset()">Save</div>
+            <span id="sc-setting-cluster">
+                <span>setting</span>
+                <div id="sc-setting-pulldown"></div>
+                <div class="action-btn" id="sc-btn-save" onclick="scSaveSetting()">Save</div>
+            </span>
         </div>
         <div class="sc-split-row">
             <div class="sc-col-positions">
@@ -1491,6 +1572,30 @@
             <div class="action-btn" onclick="yesNoClick(1)">Yes (Random)</div>
             <div class="option-cancel" onclick="yesNoClick(2)">No (Silent)</div>
             <div class="option-cancel" onclick="yesNoClick(3)">No</div>
+        </div>
+    </div>
+    <div id="sc-save-confirm-panel" class="panel" style="display:none">
+        <div class="target-row">Save SceneSetting</div>
+        <div class="yesno-question">Do you want to save the current scene as a setting?</div>
+        <div class="btn-row">
+            <div class="action-btn" onclick="scSaveConfirmYes()">Yes</div>
+            <div class="option-cancel" onclick="scSaveConfirmNo()">No</div>
+        </div>
+    </div>
+    <div id="sc-save-setting-panel" class="panel" style="display:none">
+        <div class="target-row">Save SceneSetting</div>
+        <input id="sc-save-setting-name" type="text" placeholder="name" />
+        <div class="bottom-bar">
+            <div class="action-btn" onclick="scSaveSettingWrite()">Save</div>
+        </div>
+        <div id="sc-save-setting-list" class="scroll-list"></div>
+    </div>
+    <div id="sc-save-overwrite-panel" class="panel" style="display:none">
+        <div class="target-row">Save SceneSetting</div>
+        <div id="sc-save-overwrite-question" class="yesno-question">filename already exists, do you want to overwrite?</div>
+        <div class="btn-row">
+            <div class="action-btn" onclick="scSaveOverwriteYes()">Yes</div>
+            <div class="option-cancel" onclick="scSaveOverwriteNo()">No</div>
         </div>
     </div>
     </div><!-- #overlay-panels -->
@@ -1708,6 +1813,8 @@
                 MAIN_SELECTED_KEY = catalog.selected || '';
             else if (MAIN_SELECTED_KEY && !findMainPanelByKey(MAIN_SELECTED_KEY))
                 MAIN_SELECTED_KEY = '';
+            if (typeof ssAdoptSceneSettings === 'function')
+                ssAdoptSceneSettings(ssCatalogSceneSettings(catalog));
             renderControlPanelPulldown();
         }
 
@@ -1991,6 +2098,18 @@
                 closeAllPulldowns();
                 return;
             }
+            if (overlayElIsOpen('sc-save-overwrite-panel')) {
+                if (typeof scSaveOverwriteNo === 'function') scSaveOverwriteNo();
+                return;
+            }
+            if (overlayElIsOpen('sc-save-setting-panel')) {
+                if (typeof scCloseSaveSettingPanel === 'function') scCloseSaveSettingPanel();
+                return;
+            }
+            if (overlayElIsOpen('sc-save-confirm-panel')) {
+                if (typeof scSaveConfirmNo === 'function') scSaveConfirmNo();
+                return;
+            }
             if (overlayElIsOpen('intent-panel')) {
                 if (typeof ssIntentCancel === 'function')
                     ssIntentCancel();
@@ -2040,6 +2159,45 @@
         // ── Target menu (JSON/YAML catalog) ───────────────────────
         let TARGET_CATALOG = { defaultsParameters: {}, options: [], actions: {} };
         let SCENE_SETTINGS = {};
+
+        function ssCatalogSceneSettings(src) {
+            if (!src || typeof src !== 'object') return null;
+            if (src.sceneSettings && typeof src.sceneSettings === 'object' && !Array.isArray(src.sceneSettings))
+                return src.sceneSettings;
+            if (src.scenesettings && typeof src.scenesettings === 'object' && !Array.isArray(src.scenesettings))
+                return src.scenesettings;
+            return null;
+        }
+
+        function ssSceneSettingsCatalog() {
+            const cands = [];
+            if (typeof TARGET_CATALOG !== 'undefined' && TARGET_CATALOG) {
+                cands.push(TARGET_CATALOG.sceneSettings, TARGET_CATALOG.scenesettings);
+            }
+            if (typeof window !== 'undefined')
+                cands.push(window.SCENE_SETTINGS);
+            cands.push(SCENE_SETTINGS);
+            for (let i = 0; i < cands.length; i++) {
+                const c = cands[i];
+                if (c && typeof c === 'object' && !Array.isArray(c) && Object.keys(c).length)
+                    return c;
+            }
+            return SCENE_SETTINGS || {};
+        }
+
+        function ssAdoptSceneSettings(obj) {
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+            if (!Object.keys(obj).length) return;
+            SCENE_SETTINGS = obj;
+            if (typeof window !== 'undefined')
+                window.SCENE_SETTINGS = obj;
+            if (typeof TARGET_CATALOG === 'object' && TARGET_CATALOG)
+                TARGET_CATALOG.sceneSettings = obj;
+            if (typeof scRenderSettingPulldown === 'function'
+                && document.getElementById('sc-setting-pulldown'))
+                scRenderSettingPulldown((typeof SC !== 'undefined' && SC.settingName) || 'none');
+        }
+
         let paramDict = {};           // typed parameter dictionary (mutable)
         let navStack = [];            // stack of pulldown option objects
         let selectedActionName = null;
@@ -2682,8 +2840,7 @@
 
         function configureTargetMenu(catalog) {
             TARGET_CATALOG = catalog || { defaultsParameters: {}, options: [], actions: {} };
-            if (catalog && catalog.sceneSettings && typeof catalog.sceneSettings === 'object')
-                SCENE_SETTINGS = catalog.sceneSettings;
+            ssAdoptSceneSettings(ssCatalogSceneSettings(TARGET_CATALOG));
             buildParamTree();
             resetTargetMenuState();
             renderTargetMenu();
@@ -3712,6 +3869,7 @@
             SC.filterByOnce = ssIsAffection() ? 'none' : SC_FILTER_DEFAULT;
             if (typeof configureSceneCreator === 'function')
                 configureSceneCreator(state);
+            ssApplyPendingSettingToCreator();
             if (typeof showPanel === 'function')
                 showPanel('scene_creator_panel');
             else if (typeof window.onMainPanelChange === 'function')
@@ -3719,6 +3877,7 @@
             // Refresh nearby so Scene Creator Include lists everyone in range.
             if (typeof window.onNearbyRangeChange === 'function')
                 window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 100 }));
+            ssApplyPendingSettingToCreator();
             if (typeof renderTargetMenu === 'function')
                 renderTargetMenu();
         }
@@ -3752,8 +3911,9 @@
         }
 
         async function ssLoadSetting(settingName) {
-            const name = String(settingName || 'nonsexual').trim() || 'nonsexual';
-            const cached = SCENE_SETTINGS && SCENE_SETTINGS[name];
+            const name = String(settingName || 'default').trim() || 'default';
+            const cat = ssSceneSettingsCatalog();
+            const cached = cat && cat[name];
             if (cached && typeof cached === 'object')
                 return cached;
             const urls = [
@@ -3772,34 +3932,64 @@
             return {};
         }
 
-        function ssSpeakCsv(v) {
-            if (v == null) return null;
+        let ssPendingSettingData = null;
+
+        /// Per-slot speaking: missing → skip (null); "" → clear. Token arrays join with
+        /// filter(Boolean); do not filter a per-position scalar ("" means silent).
+        function ssSpeakSlot(v) {
+            if (v === undefined || v === null) return null;
             if (Array.isArray(v))
                 return v.map(x => (x == null ? '' : String(x).trim())).filter(Boolean).join(',');
             return String(v).trim();
         }
 
-        function ssApplySettingToState(state, data) {
+        function ssSpeakCsv(v) {
+            return ssSpeakSlot(v);
+        }
+
+        function ssApplySettingToPositions(positions, data) {
             data = data || {};
             const defs = ssSettingField(data, 'array_defaults', 'array_defaults') || {};
             const stripDef = ssSettingField(defs, 'no_stripping', 'no_stripping');
             const orgasmDef = ssSettingField(defs, 'no_orgasm', 'no_orgasm');
-            const speakDefCsv = ssSpeakCsv(ssSettingField(defs, 'speaking_modifiers', 'speaking_modifiers'));
+            const speakDefCsv = ssSpeakSlot(ssSettingField(defs, 'speaking_modifiers', 'speaking_modifiers'));
             const stripArr = ssSettingField(data, 'no_stripping', 'no_stripping');
             const orgasmArr = ssSettingField(data, 'no_orgasm', 'no_orgasm');
             const speakArr = ssSettingField(data, 'speaking_modifiers', 'speaking_modifiers');
-            (state._positions || []).forEach((p, i) => {
+            const speakAllCsv = (!Array.isArray(speakArr) && speakArr !== undefined)
+                ? ssSpeakSlot(speakArr)
+                : null;
+            (positions || []).forEach((p, i) => {
                 if (!p) return;
                 if (stripDef != null) p._dressed = Number(stripDef) ? 1 : 0;
                 if (orgasmDef != null) p._no_orgasm = Number(orgasmDef) ? 1 : 0;
                 if (speakDefCsv != null) p._speaking = speakDefCsv;
+                if (speakAllCsv != null) p._speaking = speakAllCsv;
                 if (Array.isArray(stripArr) && stripArr[i] != null) p._dressed = Number(stripArr[i]) ? 1 : 0;
                 if (Array.isArray(orgasmArr) && orgasmArr[i] != null) p._no_orgasm = Number(orgasmArr[i]) ? 1 : 0;
-                if (Array.isArray(speakArr) && i < speakArr.length && speakArr[i] != null) {
-                    const csv = ssSpeakCsv(speakArr[i]);
+                if (Array.isArray(speakArr) && i < speakArr.length && speakArr[i] !== undefined) {
+                    const csv = ssSpeakSlot(speakArr[i]);
                     if (csv != null) p._speaking = csv;
                 }
             });
+        }
+
+        function ssApplyPendingSettingToCreator() {
+            if (!ssPendingSettingData) return;
+            if (typeof SC === 'undefined' || !SC.positions || !SC.positions.length) return;
+            const chain = Array.isArray(ssPendingSettingData)
+                ? ssPendingSettingData
+                : [ssPendingSettingData];
+            chain.forEach(data => ssApplySettingToPositions(SC.positions, data));
+            if (typeof scPersistPositionsToSceneInfo === 'function')
+                scPersistPositionsToSceneInfo();
+            if (typeof scRenderPositions === 'function')
+                scRenderPositions();
+        }
+
+        function ssApplySettingToState(state, data) {
+            data = data || {};
+            ssApplySettingToPositions(state._positions || [], data);
             const suppressRaw = ssSettingField(data, 'tags_suppress', 'tags_suppress');
             const suppress = ssCsv(suppressRaw);
             if (suppress)
@@ -3809,6 +3999,22 @@
             const extraTags = ssCsv(ssSettingField(data, 'tags', 'tags'));
             if (extraTags)
                 state._tags = ssMergeCsv(state._tags, extraTags);
+            const style = ssSettingField(data, 'style', 'style');
+            if (style != null && String(style).trim() !== '')
+                state._style = String(style).trim();
+            const method = ssSettingField(data, 'method', 'method');
+            if (method != null && String(method).trim() !== '')
+                state._method = String(method).trim();
+            const hook = ssSettingField(data, 'event_hook', 'event_hook');
+            if (hook != null && String(hook).trim() !== '')
+                state._event_hook = String(hook).trim();
+            const victimArr = ssSettingField(data, 'victim', 'victim');
+            if (Array.isArray(victimArr)) {
+                (state._positions || []).forEach((p, i) => {
+                    if (p && i < victimArr.length && victimArr[i] != null)
+                        p._victim = Number(victimArr[i]) ? 1 : 0;
+                });
+            }
         }
 
         function ssToPos(a, victim) {
@@ -3821,7 +4027,7 @@
                 _no_orgasm: 0,
                 _victim: victim ? 1 : 0,
                 _speaking: affection ? '' : '_pleasure_',
-                _gender: (a && a.gender != null) ? a.gender : 0,
+                _gender: scActorGender(a),
                 _race_key: ''
             };
         }
@@ -3955,15 +4161,38 @@
             const settingName = (state._scene_presets && state._scene_presets[0]) || 'default';
             const fallback = (settingName === 'nonsexual' || settingName.indexOf('nonsexual') === 0)
                 ? NONSEXUAL_SUPPRESS_FALLBACK : '';
-            const finish = (data) => {
-                ssApplySettingToState(state, data);
+            const finish = (defData, selData) => {
+                ssApplySettingToState(state, defData || {});
+                if (selData)
+                    ssApplySettingToState(state, selData);
+                ssPendingSettingData = selData
+                    ? [defData || {}, selData]
+                    : [defData || {}];
                 if (!state._tags_suppress && fallback)
                     state._tags_suppress = fallback;
                 ssApplySceneCreator(state);
+                if (typeof scRenderSettingPulldown === 'function')
+                    scRenderSettingPulldown('none');
                 const info = sceneInfoByKey.get('new');
                 if (info) info.dirty = true;
             };
-            ssLoadSetting(settingName).then(finish).catch(() => finish(fallback ? { tags_suppress: fallback } : {}));
+            ssLoadSetting('default').then(defData => {
+                if (!settingName || settingName === 'default') {
+                    finish(defData, null);
+                    return;
+                }
+                ssLoadSetting(settingName).then(sel => finish(defData, sel)).catch(() => {
+                    finish(defData, fallback ? { tags_suppress: fallback } : {});
+                });
+            }).catch(() => {
+                if (!settingName || settingName === 'default') {
+                    finish({}, null);
+                    return;
+                }
+                ssLoadSetting(settingName).then(sel => finish({}, sel)).catch(() => {
+                    finish({}, fallback ? { tags_suppress: fallback } : {});
+                });
+            });
         }
 
         function ssCustom(opt) {
@@ -4872,6 +5101,69 @@
             return Number(x || 0) >>> 0;
         }
 
+        /// 0 is SexLab male — not “unknown”. null/undefined/'' are unresolved.
+        function scGenderKnown(g) {
+            return g != null && g !== '' && Number.isFinite(Number(g));
+        }
+
+        function scActorGender(a) {
+            if (!a) return null;
+            if (scGenderKnown(a.gender)) return Number(a.gender);
+            if (scGenderKnown(a._gender)) return Number(a._gender);
+            return null;
+        }
+
+        function scPosGender(p) {
+            if (!p) return null;
+            return scGenderKnown(p._gender) ? Number(p._gender) : null;
+        }
+
+        function scPositionsGendersReady() {
+            const pos = SC.positions || [];
+            if (!pos.length) return true;
+            return pos.every(p => scPosGender(p) != null);
+        }
+
+        function scCastGenderLabel() {
+            const pos = SC.positions || [];
+            if (!pos.length) return '';
+            return pos.map(p => {
+                const g = scPosGender(p);
+                if (g == null) return '?';
+                return (g === 0 || g === 2) ? 'M' : 'F';
+            }).join(' ');
+        }
+
+        function scPersistPositionsToSceneInfo() {
+            if (typeof selectedSceneInfo !== 'function') return;
+            const info = selectedSceneInfo();
+            if (!info) return;
+            info.positions = sceneInfoClone(SC.positions || []);
+        }
+
+        function scFillGendersFromNearby() {
+            if (typeof SC === 'undefined' || !SC.positions || !SC.positions.length) return false;
+            const byFid = new Map();
+            (nearbyActors || []).forEach(a => {
+                const fid = formIdU32(a.formId);
+                if (fid && scGenderKnown(a.gender)) byFid.set(fid, Number(a.gender));
+            });
+            if (playerActor && scGenderKnown(playerActor.gender)) {
+                const pf = formIdU32(playerActor.formId);
+                if (pf) byFid.set(pf, Number(playerActor.gender));
+            }
+            let changed = false;
+            SC.positions.forEach(p => {
+                if (scPosGender(p) != null) return;
+                const g = byFid.get(formIdU32(p._form_id != null ? p._form_id : p.formId));
+                if (g == null) return;
+                p._gender = g;
+                changed = true;
+            });
+            if (changed) scPersistPositionsToSceneInfo();
+            return changed;
+        }
+
         function softNearbyActors() {
             return (nearbyActors || []).filter(a => a && a.selectable && a.status === 'ok');
         }
@@ -4896,7 +5188,9 @@
                     dist: a.dist != null ? Number(a.dist) : Number.POSITIVE_INFINITY,
                     status,
                     selectable,
-                    isPlayer: !!a.isPlayer || !!a.is_player
+                    isPlayer: !!a.isPlayer || !!a.is_player,
+                    gender: scGenderKnown(a.gender) ? Number(a.gender)
+                        : (scGenderKnown(a._gender) ? Number(a._gender) : null)
                 };
             });
             actorNames = {};
@@ -4909,6 +5203,12 @@
             renderNearby();
             renderControlActorPulldown();
             if (typeof scEnsurePositionSeed === 'function') scEnsurePositionSeed();
+            if (typeof ssApplyPendingSettingToCreator === 'function')
+                ssApplyPendingSettingToCreator();
+            if (typeof scFillGendersFromNearby === 'function' && scFillGendersFromNearby()) {
+                if (typeof scRefreshTags === 'function') scRefreshTags();
+                if (typeof scRefreshAnims === 'function') scRefreshAnims();
+            }
             if (typeof scRenderPositions === 'function') scRenderPositions();
         }
 
@@ -4996,10 +5296,21 @@
             }, disabled));
         }
 
-        function setPlayerActor(uuid, name, formId) {
-            playerActor = { uuid: String(uuid), name: name || 'Player', formId: formIdU32(formId) };
+        function setPlayerActor(uuid, name, formId, gender) {
+            const g = scGenderKnown(gender) ? Number(gender)
+                : (playerActor && scGenderKnown(playerActor.gender) ? Number(playerActor.gender) : null);
+            playerActor = {
+                uuid: String(uuid),
+                name: name || 'Player',
+                formId: formIdU32(formId),
+                gender: g
+            };
             actorNames[playerActor.uuid] = playerActor.name;
             playerName = playerActor.name;
+            if (typeof scFillGendersFromNearby === 'function' && scFillGendersFromNearby()) {
+                if (typeof scRefreshTags === 'function') scRefreshTags();
+                if (typeof scRefreshAnims === 'function') scRefreshAnims();
+            }
             if (typeof scRenderPositions === 'function') scRenderPositions();
         }
 
@@ -5559,6 +5870,7 @@
             stageCount: 0,
             stages: [],
             nearbyRange: 100,
+            settingName: 'none',
             filterBy: SC_FILTER_DEFAULT,
             filterStart: SC_FILTER_DEFAULT,
             filterChain: [],
@@ -5646,17 +5958,7 @@
             }
             const intentEl = document.getElementById('sc-intent');
             if (intentEl) intentEl.value = SC.intent;
-            const seedPreset = SC.presets[0] || 'default';
-            const presetNameEl = document.getElementById('sc-preset-name');
-            if (presetNameEl) presetNameEl.value = seedPreset;
-            const presetHost = document.getElementById('sc-preset-pulldown');
-            if (presetHost) {
-                presetHost.innerHTML = '';
-                presetHost.appendChild(createPulldown(SC.presets.length ? SC.presets : ['default'], seedPreset, v => {
-                    const el = document.getElementById('sc-preset-name');
-                    if (el) el.value = v;
-                }));
-            }
+            scRenderSettingPulldown('none');
             const styleHost = document.getElementById('sc-style-pulldown');
             if (styleHost) {
                 styleHost.innerHTML = '';
@@ -5701,16 +6003,14 @@
             setDisp('sc-btn-start', !active);
             setDisp('sc-btn-cancel', !active);
             setDisp('sc-btn-stop', active);
-            setDisp('sc-btn-load', !active);
+            setDisp('sc-setting-cluster', !active);
             setDisp('sc-btn-save', !active);
             setDisp('sc-btn-all', !active);
             setDisp('sc-btn-none', !active);
             setDisp('sc-btn-update', active);
             setDisp('sc-stage-row', active);
-            const presetName = document.getElementById('sc-preset-name');
-            const presetPull = document.getElementById('sc-preset-pulldown');
-            if (presetName) presetName.disabled = active;
-            if (presetPull) presetPull.style.opacity = active ? '0.5' : '';
+            const settingPull = document.getElementById('sc-setting-pulldown');
+            if (settingPull) settingPull.style.opacity = active ? '0.5' : '';
             const stageLabel = document.getElementById('sc-stage-label');
             if (stageLabel) stageLabel.textContent = active ? `stage ${SC.stage}/${SC.stageCount || '?'}` : '';
         }
@@ -5786,9 +6086,9 @@
                 const fid = Number(a.formId || 0);
                 if (fid) distByKey.set('f:' + fid, a.dist != null ? Number(a.dist) : Number.POSITIVE_INFINITY);
             });
-            const addPool = (name, uuid, formId, preferDist) => {
+            const addPool = (name, uuid, formId, preferDist, gender) => {
                 let u = String(uuid || '');
-                const fid = Number(formId || 0);
+                const fid = formIdU32(formId);
                 if ((!u || u === '0') && fid) u = String(fid);
                 if (!u || u === '0') return;
                 let dist = preferDist != null ? Number(preferDist) : Number.POSITIVE_INFINITY;
@@ -5796,27 +6096,34 @@
                     if (distByKey.has(u)) dist = distByKey.get(u);
                     else if (fid && distByKey.has('f:' + fid)) dist = distByKey.get('f:' + fid);
                 }
+                const g = scGenderKnown(gender) ? Number(gender) : null;
                 const prev = byUuid.get(u);
-                if (prev && Number.isFinite(prev.dist) && prev.dist <= dist) return;
+                if (prev) {
+                    if (g != null) prev.gender = g;
+                    if (Number.isFinite(prev.dist) && prev.dist <= dist) return;
+                }
                 byUuid.set(u, {
                     name: name || actorNames[u] || u,
                     uuid: u,
                     formId: fid,
-                    dist: Number.isFinite(dist) ? dist : Number.POSITIVE_INFINITY
+                    dist: Number.isFinite(dist) ? dist : Number.POSITIVE_INFINITY,
+                    gender: g != null ? g : (prev && scGenderKnown(prev.gender) ? prev.gender : null)
                 });
             };
             if (playerActor) {
-                addPool(playerActor.name || 'Player', playerActor.uuid, playerActor.formId);
+                addPool(playerActor.name || 'Player', playerActor.uuid, playerActor.formId,
+                    undefined, playerActor.gender);
             }
             if (targetActor) {
                 // Target is the distance anchor when present → treat as nearest (0).
-                addPool(targetActor.name || 'Target', targetActor.uuid, targetActor.formId, 0);
+                addPool(targetActor.name || 'Target', targetActor.uuid, targetActor.formId, 0,
+                    scActorGender(targetActor));
             }
             (nearbyActors || []).forEach(a => {
                 if (!a) return;
                 const st = String(a.status || '');
                 if (st === 'child' || st === 'dead') return;
-                addPool(a.name, a.uuid, a.formId != null ? a.formId : 0, a.dist);
+                addPool(a.name, a.uuid, a.formId != null ? a.formId : 0, a.dist, a.gender);
             });
             return [...byUuid.values()];
         }
@@ -5833,13 +6140,13 @@
             return {
                 _name: a.name || '',
                 _uuid: a.uuid,
-                _form_id: a.formId || 0,
+                _form_id: formIdU32(a.formId),
                 _dressed: 0,
                 _no_orgasm: 0,
                 _victim: 0,
                 _speaking: '_pleasure_',
-                _gender: 0,
-                _race_key: ''
+                _gender: scActorGender(a),
+                _race_key: a.race_key || a._race_key || ''
             };
         }
 
@@ -5870,6 +6177,7 @@
             if (!seeded.length) return;
 
             SC.positions = seeded;
+            scPersistPositionsToSceneInfo();
             const formIds = seeded.map(p => p._form_id).filter(id => id);
             if (formIds.length && typeof window.onResolveActorMeta === 'function') {
                 const id = 'e' + (++SC.metaQueryId);
@@ -5880,6 +6188,7 @@
 
         function scOnActorCountChanged() {
             SC.deselectedRegistries = [];
+            scPersistPositionsToSceneInfo();
             scRefreshTags();
             scRefreshAnims();
         }
@@ -5890,6 +6199,7 @@
             const tmp = SC.positions[i];
             SC.positions[i] = SC.positions[j];
             SC.positions[j] = tmp;
+            scPersistPositionsToSceneInfo();
             scRenderPositions();
             scRefreshAnims();
         }
@@ -5910,13 +6220,13 @@
             SC.pendingNearby = {
                 _name: pool.name,
                 _uuid: pool.uuid,
-                _form_id: formId,
+                _form_id: formIdU32(formId),
                 _dressed: 0,
                 _no_orgasm: 0,
                 _victim: 0,
                 _speaking: '_pleasure_',
-                _gender: 0,
-                _race_key: ''
+                _gender: scActorGender(pool),
+                _race_key: pool.race_key || pool._race_key || ''
             };
             if (formId && typeof window.onResolveActorMeta === 'function') {
                 const id = 'n' + (++SC.metaQueryId);
@@ -5934,7 +6244,7 @@
 
         function scRequestActorMeta(formIds, requestId) {
             if (typeof window.onResolveActorMeta !== 'function') return false;
-            const ids = (formIds || []).filter(id => id);
+            const ids = (formIds || []).map(id => formIdU32(id)).filter(id => id);
             if (!ids.length) return false;
             window.onResolveActorMeta(JSON.stringify({
                 _request_id: requestId,
@@ -5957,29 +6267,37 @@
             const actors = (payload && payload._actors) || [];
             const byForm = new Map();
             actors.forEach(a => {
-                const fid = a._form_id != null ? a._form_id : 0;
+                const fid = formIdU32(a._form_id != null ? a._form_id : 0);
                 if (fid) byForm.set(fid, a);
             });
             if (rid.startsWith('n') && SC.pendingNearby) {
-                const meta = byForm.get(SC.pendingNearby._form_id) || actors[0];
+                const pendingFid = formIdU32(SC.pendingNearby._form_id);
+                const meta = byForm.get(pendingFid) || actors[0];
                 if (meta) {
-                    if (meta._gender != null) SC.pendingNearby._gender = meta._gender;
+                    if (meta._gender != null && meta._gender !== '')
+                        SC.pendingNearby._gender = Number(meta._gender);
                     if (meta._race_key != null) SC.pendingNearby._race_key = meta._race_key;
                     if (meta._name) SC.pendingNearby._name = meta._name;
                 }
                 SC.positions.push(SC.pendingNearby);
                 SC.pendingNearby = null;
+                scPersistPositionsToSceneInfo();
                 scRenderPositions();
                 scOnActorCountChanged();
+                if (typeof ssApplyPendingSettingToCreator === 'function')
+                    ssApplyPendingSettingToCreator();
                 return;
             }
             let changed = false;
             (SC.positions || []).forEach(p => {
-                const meta = byForm.get(p._form_id || 0);
+                const meta = byForm.get(formIdU32(p._form_id != null ? p._form_id : p.formId));
                 if (!meta) return;
-                if (meta._gender != null && p._gender !== meta._gender) {
-                    p._gender = meta._gender;
-                    changed = true;
+                if (meta._gender != null && meta._gender !== '') {
+                    const g = Number(meta._gender);
+                    if (p._gender !== g) {
+                        p._gender = g;
+                        changed = true;
+                    }
                 }
                 const rk = meta._race_key != null ? meta._race_key : '';
                 if (p._race_key !== rk) {
@@ -5987,7 +6305,12 @@
                     changed = true;
                 }
             });
-            if (changed) scRenderPositions();
+            if (changed) {
+                scPersistPositionsToSceneInfo();
+                scRenderPositions();
+            }
+            if (typeof ssApplyPendingSettingToCreator === 'function')
+                ssApplyPendingSettingToCreator();
             // Genders/race keys land after the first open-time query, so restart the downgrade
             // rather than letting the placeholder-gender pass decide the mode.
             if (rid.startsWith('e') && SC.filterAuto) scArmFilterDowngrade(SC.filterStart);
@@ -6160,6 +6483,7 @@
         function scRemoveMod(i, token) {
             const p = SC.positions[i];
             if (!p) return;
+            ssPendingSettingData = null;
             scSetMods(p, scParseMods(p).filter(m => m !== token));
             scRenderPositions();
         }
@@ -6169,6 +6493,7 @@
             if (!p || !token) return;
             const mods = scParseMods(p);
             if (mods.includes(token)) return;
+            ssPendingSettingData = null;
             mods.push(token);
             scSetMods(p, mods);
             scRenderPositions();
@@ -6206,18 +6531,22 @@
         function scBuildFilter() {
             const filter = { _actor_count: SC.positions.length, _must_tags: SC.tags, _suppress_tags: SC.suppress, _require_all: SC.tags.length > 0 };
             const mode = SC.filterBy || SC_FILTER_DEFAULT;
-            const hasCreature = SC.positions.some(p => (p._gender | 0) >= 2 || (p._race_key || ''));
+            const gendersReady = scPositionsGendersReady();
+            const hasCreature = SC.positions.some(p => {
+                const g = scPosGender(p);
+                return (g != null && g >= 2) || (p._race_key || '');
+            });
             filter._creature = hasCreature ? 'require' : 'exclude';
-            if (mode === 'positions') {
+            if (mode === 'positions' && gendersReady) {
                 filter._position_match = true;
-                filter._pos_genders = SC.positions.map(p => (p._gender != null ? p._gender : 0));
+                filter._pos_genders = SC.positions.map(p => scPosGender(p));
                 if (hasCreature) {
                     filter._pos_race_keys = SC.positions.map(p => (p._race_key || '').toLowerCase());
                 }
-            } else if (mode === 'gender') {
+            } else if (mode === 'gender' && gendersReady) {
                 let males = 0, females = 0, maleCreatures = 0, femaleCreatures = 0;
                 SC.positions.forEach(p => {
-                    const g = p._gender | 0;
+                    const g = scPosGender(p);
                     if (g === 0) males++;
                     else if (g === 1) females++;
                     else if (g === 2) maleCreatures++;
@@ -6229,7 +6558,8 @@
                 filter._male_creatures = maleCreatures;
                 filter._female_creatures = femaleCreatures;
             }
-            if (document.getElementById('sc-filter-has-description').checked) {
+            const descEl = document.getElementById('sc-filter-has-description');
+            if (descEl && descEl.checked) {
                 filter._has_description = true;
             }
             return filter;
@@ -6242,6 +6572,9 @@
 
         function scRefreshTags() {
             if (typeof window.onAnimDbQuery !== 'function') return;
+            const mode = SC.filterBy || SC_FILTER_DEFAULT;
+            if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady())
+                return;
             const id = ++SC.tagQueryId;
             window.onAnimDbQuery(JSON.stringify({ _request_id: String(id), _type: 'tags', _filter: scBuildFilter(), _n: 0 }));
         }
@@ -6430,6 +6763,12 @@
 
         function scRefreshAnims() {
             if (typeof window.onAnimDbQuery !== 'function') return;
+            const mode = SC.filterBy || SC_FILTER_DEFAULT;
+            if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady()) {
+                const countEl = document.getElementById('sc-anim-count');
+                if (countEl) countEl.textContent = 'animations …';
+                return;
+            }
             const id = ++SC.animQueryId;
             window.onAnimDbQuery(JSON.stringify({ _request_id: 'a' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 }));
         }
@@ -6450,8 +6789,11 @@
                 SC.lastAnims = anims;
                 SC.lastAnimRegistries = anims.map(a => a._registry).filter(Boolean);
                 const countEl = document.getElementById('sc-anim-count');
-                if (countEl)
-                    countEl.textContent = `animations ${anims.length}/${payload._total_enabled || '?'}`;
+                if (countEl) {
+                    const cast = scCastGenderLabel();
+                    countEl.textContent = `animations ${anims.length}/${payload._total_enabled || '?'}`
+                        + (cast ? ` (${cast})` : '');
+                }
                 scRenderAnimList();
                 return;
             }
@@ -6497,27 +6839,206 @@
         }
 
         function scCurrentPresetName() {
-            const typed = (document.getElementById('sc-preset-name').value || '').trim();
-            if (typed) return typed;
-            const val = document.querySelector('#sc-preset-pulldown .pulldown-value');
-            return val ? val.textContent.trim() : 'default';
+            return (SC && SC.settingName && SC.settingName !== 'none') ? SC.settingName : '';
         }
 
-        function scLoadPreset() {
-            if (SC.from_target_menu || SC.mode === 'active') return;
-            if (typeof window.onSceneCreatorLoad !== 'function') return;
-            window.onSceneCreatorLoad(JSON.stringify({
-                _creator_sid: SC.creator_sid,
-                _scene_preset: scCurrentPresetName()
+        function scSceneSettingNames() {
+            const keys = Object.keys(ssSceneSettingsCatalog() || {})
+                .filter(k => k && String(k).toLowerCase() !== 'none');
+            keys.sort((a, b) => String(a).localeCompare(String(b)));
+            return ['none'].concat(keys);
+        }
+
+        function scRenderSettingPulldown(selected) {
+            const host = document.getElementById('sc-setting-pulldown');
+            if (!host) return;
+            const cur = selected || 'none';
+            SC.settingName = cur;
+            host.innerHTML = '';
+            host.appendChild(createPulldown(scSceneSettingNames(), cur, v => {
+                scOnSettingPulldown(v);
             }));
         }
 
-        function scSavePreset() {
-            if (SC.from_target_menu || SC.mode === 'active') return;
-            if (typeof window.onSceneCreatorSave !== 'function') return;
+        function scOnSettingPulldown(name) {
+            ssPendingSettingData = null;
+            const v = String(name || 'none');
+            SC.settingName = v;
+            if (!v || v === 'none') return;
+            scApplySceneSettingName(v);
+        }
+
+        function scApplyLoadedSettingsToCreator(defData, selData) {
+            const state = {
+                _positions: SC.positions || [],
+                _tags: (SC.tags || []).join(','),
+                _tags_suppress: (SC.suppress || []).join(','),
+                _style: SC.style,
+                _method: SC.method,
+                _event_hook: SC.event_hook || ''
+            };
+            if (defData) ssApplySettingToState(state, defData);
+            if (selData) ssApplySettingToState(state, selData);
+            SC.tags = String(state._tags || '').split(',').map(s => s.trim()).filter(Boolean);
+            SC.suppress = String(state._tags_suppress || '').split(',').map(s => s.trim()).filter(Boolean);
+            if (state._style) SC.style = state._style;
+            if (state._method) SC.method = state._method;
+            if (state._event_hook != null) SC.event_hook = state._event_hook;
+            const styleHost = document.getElementById('sc-style-pulldown');
+            if (styleHost) {
+                styleHost.innerHTML = '';
+                styleHost.appendChild(createPulldown(['forcefully', 'normally', 'gently'], SC.style, v => {
+                    SC.style = v;
+                }));
+            }
+            if (typeof applySceneMenuDraftToSceneInfo === 'function')
+                applySceneMenuDraftToSceneInfo({});
+            else if (typeof scPersistPositionsToSceneInfo === 'function')
+                scPersistPositionsToSceneInfo();
+            if (typeof scRenderPositions === 'function') scRenderPositions();
+            if (typeof scRenderTagChips === 'function') scRenderTagChips();
+            if (typeof scRefreshTags === 'function') scRefreshTags();
+            if (typeof scRefreshAnims === 'function') scRefreshAnims();
+        }
+
+        function scApplySceneSettingName(name) {
+            const n = String(name || '').trim();
+            if (!n || n === 'none') return;
+            ssLoadSetting('default').then(defData => {
+                if (n === 'default') {
+                    scApplyLoadedSettingsToCreator(defData, null);
+                    return;
+                }
+                ssLoadSetting(n).then(sel => {
+                    scApplyLoadedSettingsToCreator(defData, sel);
+                }).catch(() => {
+                    scApplyLoadedSettingsToCreator(defData, null);
+                });
+            }).catch(() => {
+                if (n === 'default') return;
+                ssLoadSetting(n).then(sel => {
+                    scApplyLoadedSettingsToCreator(null, sel);
+                }).catch(() => {});
+            });
+        }
+
+        function scPanelShow(id, show) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = show ? 'block' : 'none';
+        }
+
+        function scCloseSaveOverwritePanel() {
+            scPanelShow('sc-save-overwrite-panel', false);
+        }
+
+        function scCloseSaveSettingPanel() {
+            scCloseSaveOverwritePanel();
+            scPanelShow('sc-save-setting-panel', false);
+        }
+
+        function scCloseSaveConfirmPanel() {
+            scPanelShow('sc-save-confirm-panel', false);
+        }
+
+        function scSaveSetting() {
+            if (SC.mode === 'active') return;
+            scCloseSaveSettingPanel();
+            scPanelShow('sc-save-confirm-panel', true);
+        }
+
+        function scSaveConfirmYes() {
+            scCloseSaveConfirmPanel();
+            const input = document.getElementById('sc-save-setting-name');
+            if (input) input.value = (SC.settingName && SC.settingName !== 'none') ? SC.settingName : '';
+            const list = document.getElementById('sc-save-setting-list');
+            if (list) {
+                const names = scSceneSettingNames().filter(n => n !== 'none');
+                list.innerHTML = names.map(n =>
+                    `<div class="sc-save-file" onclick="scSaveSettingPickName(${JSON.stringify(n)})">${n}</div>`
+                ).join('');
+            }
+            scPanelShow('sc-save-setting-panel', true);
+        }
+
+        function scSaveConfirmNo() {
+            scCloseSaveConfirmPanel();
+        }
+
+        function scSaveSettingPickName(name) {
+            const input = document.getElementById('sc-save-setting-name');
+            if (input) input.value = String(name || '');
+        }
+
+        function scSanitizeSettingName(raw) {
+            const n = String(raw || '').trim();
+            if (!n || n.toLowerCase() === 'none') return '';
+            if (/[\\/:*?"<>|]/.test(n) || n.indexOf('..') >= 0) return '';
+            return n;
+        }
+
+        function scBuildSceneSettingObject() {
+            const positions = SC.positions || [];
+            const out = {};
+            if (SC.style && SC.style !== 'normally') out.style = SC.style;
+            if (SC.method) out.method = SC.method;
+            if (SC.event_hook) out.event_hook = SC.event_hook;
+            const tags = (SC.tags || []).join(',');
+            if (tags) out.tags = tags;
+            const suppress = (SC.suppress || []).join(',');
+            if (suppress) out.tags_suppress = suppress;
+            out.no_stripping = positions.map(p => p && p._dressed ? 1 : 0);
+            out.no_orgasm = positions.map(p => p && p._no_orgasm ? 1 : 0);
+            out.speaking_modifiers = positions.map(p => (p && p._speaking != null) ? p._speaking : '');
+            out.victim = positions.map(p => p && p._victim ? 1 : 0);
+            return out;
+        }
+
+        function scRememberSceneSetting(name, obj) {
+            if (!name || !obj) return;
+            const cat = Object.assign({}, ssSceneSettingsCatalog());
+            cat[name] = obj;
+            ssAdoptSceneSettings(cat);
+        }
+
+        function scWriteSceneSetting(name) {
+            const obj = scBuildSceneSettingObject();
             const payload = scBuildResult('save');
-            payload._scene_preset = scCurrentPresetName();
-            window.onSceneCreatorSave(JSON.stringify(payload));
+            payload._scene_preset = name;
+            if (typeof window.onSceneCreatorSave === 'function')
+                window.onSceneCreatorSave(JSON.stringify(payload));
+            scRememberSceneSetting(name, obj);
+            scCloseSaveSettingPanel();
+            scRenderSettingPulldown(SC.settingName || 'none');
+        }
+
+        function scSaveSettingWrite() {
+            const input = document.getElementById('sc-save-setting-name');
+            const name = scSanitizeSettingName(input && input.value);
+            if (!name) {
+                if (typeof notifyPlayer === 'function')
+                    notifyPlayer('Enter a valid setting name.');
+                return;
+            }
+            const exists = !!(SCENE_SETTINGS && Object.prototype.hasOwnProperty.call(SCENE_SETTINGS, name));
+            if (exists) {
+                const q = document.getElementById('sc-save-overwrite-question');
+                if (q) q.textContent = 'filename already exists, do you want to overwrite?';
+                scPanelShow('sc-save-overwrite-panel', true);
+                return;
+            }
+            scWriteSceneSetting(name);
+        }
+
+        function scSaveOverwriteYes() {
+            const input = document.getElementById('sc-save-setting-name');
+            const name = scSanitizeSettingName(input && input.value);
+            scCloseSaveOverwritePanel();
+            if (!name) return;
+            scWriteSceneSetting(name);
+        }
+
+        function scSaveOverwriteNo() {
+            scCloseSaveOverwritePanel();
         }
 
         function scBuildResult(action) {
