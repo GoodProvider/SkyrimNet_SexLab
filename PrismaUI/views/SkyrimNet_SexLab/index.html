@@ -292,6 +292,17 @@
             margin-top: var(--space-sm);
         }
 
+        .target-params-panel > .bottom-bar.top-bar,
+        .target-papyrus-panel .bottom-bar.top-bar {
+            flex-shrink: 0;
+            margin-top: 0;
+            margin-bottom: var(--space-sm);
+            border-top: none;
+            border-bottom: 1px solid var(--border);
+            padding-top: 0;
+            padding-bottom: var(--space-sm);
+        }
+
         .target-params-panel .pulldown-menu,
         .target-pulldown-panel .pulldown-menu,
         .target-papyrus-panel .pulldown-menu {
@@ -331,6 +342,16 @@
         .bondage-device-row .pulldown {
             flex: 1 1 auto;
             min-width: 0;
+        }
+
+        .labeled-fields > .bondage-device-row {
+            display: contents;
+        }
+
+        .labeled-fields > .bondage-device-row .pulldown {
+            justify-self: start;
+            min-width: 8em;
+            flex: none;
         }
 
         /* ── Panel ────────────────────────────────────────────── */
@@ -1217,6 +1238,33 @@
         }
 
         .dyn-field.disabled {
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
+        .labeled-fields {
+            display: grid;
+            grid-template-columns: max-content minmax(8em, 1fr);
+            column-gap: var(--space-sm);
+            row-gap: var(--space-xs);
+            align-items: center;
+        }
+
+        .labeled-fields > .dyn-field {
+            display: contents;
+        }
+
+        .labeled-fields > .dyn-field > label {
+            margin: 0;
+        }
+
+        .labeled-fields > .dyn-field > .pulldown,
+        .labeled-fields > .dyn-field > input {
+            justify-self: start;
+            min-width: 8em;
+        }
+
+        .labeled-fields > .dyn-field.disabled > * {
             opacity: 0.45;
             pointer-events: none;
         }
@@ -2932,9 +2980,8 @@
                 const s = speakers.find(x => x.label === v);
                 tmStopSpeakerFormId = s ? s.formId : 0;
             }));
-            body.appendChild(row);
             const btns = document.createElement('div');
-            btns.className = 'compact-row';
+            btns.className = 'bottom-bar top-bar';
             const silent = document.createElement('div');
             silent.className = 'action-btn';
             silent.textContent = 'silent';
@@ -2955,6 +3002,7 @@
             btns.appendChild(stop);
             btns.appendChild(explain);
             body.appendChild(btns);
+            body.appendChild(row);
         }
 
         function tmStageList() {
@@ -3866,18 +3914,24 @@
             if (third) ssUi.thirdFormId = formIdU32(third.formId);
             else if (ssUi.andThird === 'and') ssUi.thirdFormId = 0;
 
+            const fields = document.createElement('div');
+            fields.className = 'labeled-fields';
             const addField = (labelTextOrNode, node, disabled) => {
                 const field = document.createElement('div');
                 field.className = 'dyn-field' + (disabled ? ' disabled' : '');
                 if (typeof labelTextOrNode === 'string') {
                     const lab = document.createElement('label');
-                    lab.textContent = labelTextOrNode;
+                    lab.textContent = labelTextOrNode || '\u00a0';
                     field.appendChild(lab);
                 } else if (labelTextOrNode) {
                     field.appendChild(labelTextOrNode);
+                } else {
+                    const lab = document.createElement('label');
+                    lab.textContent = '\u00a0';
+                    field.appendChild(lab);
                 }
                 if (node) field.appendChild(node);
-                body.appendChild(field);
+                fields.appendChild(field);
             };
 
             addField('Subject', ssActorPulldown(pool, subject, (entry) => {
@@ -3926,7 +3980,7 @@
                 if (v === 'none') ssUi.objectFormId = 0;
                 renderPapyrusPanel();
             });
-            addField(relPd, null, objectDisabled);
+            addField('', relPd, objectDisabled);
 
             if (ssUi.objectRelation !== 'none' && !objectDisabled) {
                 const objPool = pool.filter(a => formIdU32(a.formId) !== ssUi.subjectFormId);
@@ -3964,7 +4018,7 @@
             }));
 
             const bar = document.createElement('div');
-            bar.className = 'bottom-bar';
+            bar.className = 'bottom-bar top-bar';
             const cast = ssResolveCast(pool);
             const customBtn = document.createElement('div');
             customBtn.className = 'action-btn';
@@ -3985,6 +4039,7 @@
             bar.appendChild(customBtn);
             bar.appendChild(startBtn);
             body.appendChild(bar);
+            body.appendChild(fields);
         }
 
         function outfitFindActor(pool, fid) {
@@ -4027,24 +4082,8 @@
             const lab = String(displayLabel(opt) || '').toLowerCase();
             const verb = (lab === 'dress' || lab === 'dresses') ? 'dresses' : 'undresses';
 
-            const row = document.createElement('div');
-            row.className = 'compact-row';
-            row.appendChild(outfitActorPulldown(pool, pos1, (entry) => {
-                outfitUi.pos1 = formIdU32(entry.formId);
-            }));
-            row.appendChild(createPulldown(OUTFIT_STYLES, outfitUi.style, (v) => {
-                outfitUi.style = v;
-            }));
-            const verbEl = document.createElement('span');
-            verbEl.textContent = verb;
-            row.appendChild(verbEl);
-            row.appendChild(outfitActorPulldown(pool, pos0, (entry) => {
-                outfitUi.pos0 = formIdU32(entry.formId);
-            }));
-            body.appendChild(row);
-
             const bar = document.createElement('div');
-            bar.className = 'bottom-bar';
+            bar.className = 'bottom-bar top-bar';
             const startBtn = document.createElement('div');
             startBtn.className = 'action-btn';
             startBtn.textContent = 'Start';
@@ -4064,6 +4103,22 @@
             };
             bar.appendChild(startBtn);
             body.appendChild(bar);
+
+            const row = document.createElement('div');
+            row.className = 'compact-row';
+            row.appendChild(outfitActorPulldown(pool, pos1, (entry) => {
+                outfitUi.pos1 = formIdU32(entry.formId);
+            }));
+            row.appendChild(createPulldown(OUTFIT_STYLES, outfitUi.style, (v) => {
+                outfitUi.style = v;
+            }));
+            const verbEl = document.createElement('span');
+            verbEl.textContent = verb;
+            row.appendChild(verbEl);
+            row.appendChild(outfitActorPulldown(pool, pos0, (entry) => {
+                outfitUi.pos0 = formIdU32(entry.formId);
+            }));
+            body.appendChild(row);
         }
 
         function bondageConfigure(state) {
@@ -4187,53 +4242,8 @@
             if (!OUTFIT_STYLES.includes(bondageUi.style))
                 bondageUi.style = 'normally';
 
-            const row = document.createElement('div');
-            row.className = 'compact-row';
-            row.appendChild(outfitActorPulldown(pool, speaker, (entry) => {
-                bondageUi.speaker = formIdU32(entry.formId);
-            }));
-            row.appendChild(createPulldown(OUTFIT_STYLES, bondageUi.style, (v) => {
-                bondageUi.style = v;
-            }));
-            const verbEl = document.createElement('span');
-            verbEl.textContent = 'changes devices on';
-            row.appendChild(verbEl);
-            row.appendChild(outfitActorPulldown(pool, target, (entry) => {
-                const fid = formIdU32(entry.formId);
-                bondageUi.target = fid;
-                bondageFire(opt, 'TM_BondageRefresh', [
-                    { type: 'target', name: 'target' }
-                ], { target: tmActorParam(fid) });
-            }));
-            body.appendChild(row);
-
-            const groups = bondageSortedGroups();
-            if (!groups.length) {
-                const empty = document.createElement('div');
-                empty.className = 'compact-row';
-                empty.textContent = 'loading…';
-                body.appendChild(empty);
-            }
-            const ab = bondageGetOrCreate(bondageUi.target);
-            groups.forEach((g) => {
-                const devices = g.devices || [];
-                const labels = ['none'].concat(devices.map(bondageDeviceName));
-                const seed = bondageCurrentLabel(ab, g);
-                const field = document.createElement('div');
-                field.className = 'bondage-device-row';
-                field.setAttribute('data-group', g.name || '');
-                const lab = document.createElement('span');
-                lab.className = 'bondage-device-label';
-                lab.textContent = (g.name || 'group') + ':';
-                field.appendChild(lab);
-                field.appendChild(createPulldown(labels, seed, (picked) => {
-                    bondageApplyPick(opt, g, picked);
-                }));
-                body.appendChild(field);
-            });
-
             const bar = document.createElement('div');
-            bar.className = 'bottom-bar';
+            bar.className = 'bottom-bar top-bar';
             const cancelBtn = document.createElement('div');
             cancelBtn.className = 'action-btn option-cancel';
             cancelBtn.textContent = 'Cancel';
@@ -4265,6 +4275,54 @@
             bar.appendChild(cancelBtn);
             bar.appendChild(doneBtn);
             body.appendChild(bar);
+
+            const row = document.createElement('div');
+            row.className = 'compact-row';
+            row.appendChild(outfitActorPulldown(pool, speaker, (entry) => {
+                bondageUi.speaker = formIdU32(entry.formId);
+            }));
+            row.appendChild(createPulldown(OUTFIT_STYLES, bondageUi.style, (v) => {
+                bondageUi.style = v;
+            }));
+            const verbEl = document.createElement('span');
+            verbEl.textContent = 'changes devices on';
+            row.appendChild(verbEl);
+            row.appendChild(outfitActorPulldown(pool, target, (entry) => {
+                const fid = formIdU32(entry.formId);
+                bondageUi.target = fid;
+                bondageFire(opt, 'TM_BondageRefresh', [
+                    { type: 'target', name: 'target' }
+                ], { target: tmActorParam(fid) });
+            }));
+            body.appendChild(row);
+
+            const groups = bondageSortedGroups();
+            if (!groups.length) {
+                const empty = document.createElement('div');
+                empty.className = 'compact-row';
+                empty.textContent = 'loading…';
+                body.appendChild(empty);
+            }
+            const devicesHost = document.createElement('div');
+            devicesHost.className = 'labeled-fields';
+            const ab = bondageGetOrCreate(bondageUi.target);
+            groups.forEach((g) => {
+                const devices = g.devices || [];
+                const labels = ['none'].concat(devices.map(bondageDeviceName));
+                const seed = bondageCurrentLabel(ab, g);
+                const field = document.createElement('div');
+                field.className = 'bondage-device-row';
+                field.setAttribute('data-group', g.name || '');
+                const lab = document.createElement('span');
+                lab.className = 'bondage-device-label';
+                lab.textContent = (g.name || 'group') + ':';
+                field.appendChild(lab);
+                field.appendChild(createPulldown(labels, seed, (picked) => {
+                    bondageApplyPick(opt, g, picked);
+                }));
+                devicesHost.appendChild(field);
+            });
+            body.appendChild(devicesHost);
         }
 
         function renderPapyrusPanel() {
@@ -4276,13 +4334,17 @@
 
             const panel = document.createElement('div');
             panel.className = 'panel target-papyrus-panel';
-            const header = document.createElement('div');
-            header.className = 'section-header';
-            header.textContent = displayLabel(opt);
-            panel.appendChild(header);
+            const kind = opt.panel;
+            const skipHeader = kind === 'scene_start' || kind === 'cuddle'
+                || kind === 'outfit' || kind === 'bondage' || kind === 'stop';
+            if (!skipHeader) {
+                const header = document.createElement('div');
+                header.className = 'section-header';
+                header.textContent = displayLabel(opt);
+                panel.appendChild(header);
+            }
 
             const body = document.createElement('div');
-            const kind = opt.panel;
 
             if (kind === 'scene_start' || kind === 'cuddle') {
                 renderSceneStartPanelBody(body, opt);
@@ -4428,14 +4490,25 @@
             const actionNode = findActionNode(selectedActionName);
             if (actionNode) ensureActionParams(actionNode);
 
-            const header = document.createElement('div');
-            header.className = 'section-header';
-            header.id = 'right-header';
-            header.textContent = selectedActionLabel || selectedActionName;
-            panel.appendChild(header);
+            const bar = document.createElement('div');
+            bar.className = 'bottom-bar top-bar';
+            const customBtn = document.createElement('div');
+            customBtn.id = 'target-custom-btn';
+            customBtn.className = 'action-btn';
+            customBtn.textContent = 'Custom';
+            customBtn.onclick = () => targetMenuCustom();
+            const startBtn = document.createElement('div');
+            startBtn.id = 'target-start-btn';
+            startBtn.className = 'action-btn';
+            startBtn.textContent = 'Start';
+            startBtn.onclick = () => targetMenuStart();
+            bar.appendChild(customBtn);
+            bar.appendChild(startBtn);
+            panel.appendChild(bar);
 
             const dyn = document.createElement('div');
             dyn.id = 'right-dynamics';
+            dyn.className = 'labeled-fields';
 
             const pool = eligibleParamActors();
             const defaults = defaultParamsPositions(pool);
@@ -4488,22 +4561,6 @@
                 dyn.appendChild(field);
             }
             panel.appendChild(dyn);
-
-            const bar = document.createElement('div');
-            bar.className = 'bottom-bar';
-            const customBtn = document.createElement('div');
-            customBtn.id = 'target-custom-btn';
-            customBtn.className = 'action-btn';
-            customBtn.textContent = 'Custom';
-            customBtn.onclick = () => targetMenuCustom();
-            const startBtn = document.createElement('div');
-            startBtn.id = 'target-start-btn';
-            startBtn.className = 'action-btn';
-            startBtn.textContent = 'Start';
-            startBtn.onclick = () => targetMenuStart();
-            bar.appendChild(customBtn);
-            bar.appendChild(startBtn);
-            panel.appendChild(bar);
 
             updateTargetConfirmButtons();
         }

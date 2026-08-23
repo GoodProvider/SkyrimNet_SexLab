@@ -57,6 +57,11 @@
 - **Fix:** Both paths resolve Actor dict via `ResolveActorDictEntry` first, then fall back to `source`.
 - **Also:** `ExecutePapyrusOption` must apply UI params **after** `defaultsParameters` (same as `ExecuteAction`). Defaults-last wiped Cuddle `speaker`/`target` formIds back to `playerActor`/`currentActor`.
 
+## TargetMenu cascade label+pulldown rows (2026-08-23)
+
+- Parameters, scene start (Cuddle), outfit, bondage, and stop put confirm buttons (`Custom`/`Start`, `Cancel`/`Done`, silent/stop/explain) as the **first row** of the cascade panel. The left TargetMenu option already names the panel (no title+buttons header).
+- `.labeled-fields` is a 2-col grid (`max-content` + pulldown). Child `.dyn-field` / `.bondage-device-row` use `display: contents` so pulldown left edges align down the column. `#right-dynamics` still scrolls; menus stay `position: fixed` so they are not clipped.
+
 ## TargetMenu Parameters pulldown clip (2026-08-08)
 
 - `#right-dynamics { overflow-y: auto }` makes `overflow-x: visible` ineffective (CSS forces both axes). Right-opening `.pulldown-menu` children were clipped while Start/Custom (outside the scroller) still worked.
