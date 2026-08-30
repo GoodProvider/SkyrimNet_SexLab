@@ -1,0 +1,35 @@
+{
+  "version": "3.0",
+  "creator": "GoodProvider",
+  "orgasm_expected": [1, 1],
+  "speaking_modifiers": [["_pleasure_"], ["_pleasure_"]],
+  "clothed": [0, 0],
+  "tags": ["doggy", "vaginal"],
+  "stage 1": {
+    "description": "{{sl.actors.1}} stands behind {{sl.actors.0}} fingering their pussy getting them ready.",
+    "tags": ["fingering", "doggy"],
+    "speaking_modifiers": [["_pleasure_"], []]
+  },
+  "stage 2": {
+    "description": "{{sl.actors.1}} fucks {{sl.actors.0}} from behind.",
+    "tags": ["doggy", "vaginal"]
+  },
+  "stage 3": {
+    "description": "{{sl.actors.1}} forces {{sl.actors.0}} to their knees and fucks them from behind.",
+    "tags": ["doggy", "vaginal", "aggressive"],
+    "speaking_modifiers": [["_pleasure_", "_pain_"], ["_pleasure_"]]
+  },
+  "stage 4": {
+    "description": "{{sl.actors.0}} on hands and knees, with ass in the air and head on the ground. {{sl.actors.1}} squats over {{sl.actors.0}} and fucks from behind, while holding {{sl.actors.0}} in place.",
+    "tags": ["doggy", "vaginal"],
+    "speaking_modifiers": [["_pleasure_", "_gagged_"], ["_pleasure_"]]
+  },
+  "transitions": {
+    "1-2": "{{sl.actors.1}} stops fingering and pushes into {{sl.actors.0}} from behind.",
+    "2-1": "{{sl.actors.1}} pulls out and returns to fingering {{sl.actors.0}}.",
+    "2-3": "{{sl.actors.1}} forces {{sl.actors.0}} down onto their knees while staying behind them.",
+    "3-2": "{{sl.actors.0}} rises from their knees as {{sl.actors.1}} eases the pace from behind.",
+    "3-4": "{{sl.actors.0}} drops their head to the ground with hips raised as {{sl.actors.1}} grips them in place.",
+    "4-3": "{{sl.actors.0}} lifts their head and torso as {{sl.actors.1}} eases the hold from behind."
+  }
+}

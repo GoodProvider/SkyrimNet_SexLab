@@ -1,0 +1,9 @@
+{
+  "version": "3.0",
+  "stage 1": {
+    "description": "{{sl.actors.0}} sits on the ground, {{sl.actors.1}}'s lays on side with head on {{sl.actors.0}}'s lap."
+  },
+  "stage 2": {
+    "description": "{{sl.actors.0}} sits on the ground, {{sl.actors.1}}'s lays on side with head on {{sl.actors.0}}'s lap. {{sl.actors.1}} turns head up to look into {{sl.actors.0}}'s eyes. {{sl.actors.0}}'s hand strokes {{sl.actors.0}}'s hair."
+  }
+}

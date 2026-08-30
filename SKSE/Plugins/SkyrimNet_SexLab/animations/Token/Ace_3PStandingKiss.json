@@ -1,0 +1,9 @@
+{
+  "version": "3.0",
+  "stage 1": {
+    "description": "{{sl.actors.0}} stands side by side with {{sl.actors.1}} with {{sl.actors.2}} across them in a three way ebrace. {{sl.actors.2}} kisses {{sl.actors.0}} passionately."
+  },
+  "stage 2": {
+    "description": "{{sl.actors.2}} switches to kissing {{sl.actors.1}} while affectionately holding {{sl.actors.0}}s hand."
+  }
+}
