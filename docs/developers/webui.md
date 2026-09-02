@@ -134,6 +134,8 @@ Drink your own champagne: official optional packages use the same filesystem JSO
 
 CMake tasks in `.vscode/tasks.json` with `cwd` = `SKSE_Source`. Needs VS 2022, `VCPKG_ROOT`, `x64-windows-static`.
 
+Papyrus C++ bindings declare SkyrimNet PublicAPI symbols as `extern` function pointers (`PublicFormIDToUUID`, …). Do not `#include "PublicAPI.h"` from this plugin.
+
 | Task | Effect |
 |------|--------|
 | `CMake: Configure (Debug\|Release)` | submodule init + cmake preset |

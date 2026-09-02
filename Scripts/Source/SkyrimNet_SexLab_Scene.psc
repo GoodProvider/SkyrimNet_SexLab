@@ -234,7 +234,6 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
         if receiver == None && num_actors >= 2
             receiver = positions[0]
         endif
-        Trace("Setup", "initiator:"+GetDisplayName(initiator)+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
         i = 0 
         while i < num_actors 
             if i < creator.num_actors
@@ -279,6 +278,8 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
             receiver = victim
         endif
     endif
+    PickNonVictimInitiator()
+    Trace("Setup", "initiator:"+GetDisplayName(initiator)+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
 
     if !is_generic
         status = STATUS_SETUP
@@ -318,6 +319,51 @@ Bool Function Setup_CheckLinks()
     endif
 
     return links_ok
+EndFunction
+
+; When the thread has victims, keep initiator only if they are not a victim.
+; Otherwise pick the first non-victim from positions 1..n then 0, or None.
+Function PickNonVictimInitiator()
+    DbgEnter("PickNonVictimInitiator")
+    if thread == None || num_victims < 1
+        DbgReturn("PickNonVictimInitiator", "no victims")
+        return
+    endif
+    if initiator != None
+        DbgMsg("PickNonVictimInitiator", "thread.IsVictim "+initiator.GetDisplayName())
+        if !thread.IsVictim(initiator)
+            DbgReturn("PickNonVictimInitiator", "keep "+GetDisplayName(initiator))
+            return
+        endif
+    endif
+    initiator = None
+    Actor[] positions = thread.positions
+    if !positions
+        DbgReturn("PickNonVictimInitiator", "no positions")
+        return
+    endif
+    int n = positions.length
+    int i = 1
+    while i < n && initiator == None
+        Actor a = positions[i]
+        if a != None
+            DbgMsg("PickNonVictimInitiator", "thread.IsVictim "+a.GetDisplayName())
+            if !thread.IsVictim(a)
+                initiator = a
+            endif
+        endif
+        i += 1
+    endwhile
+    if initiator == None && n > 0
+        Actor a = positions[0]
+        if a != None
+            DbgMsg("PickNonVictimInitiator", "thread.IsVictim "+a.GetDisplayName())
+            if !thread.IsVictim(a)
+                initiator = a
+            endif
+        endif
+    endif
+    DbgEnd("PickNonVictimInitiator", GetDisplayName(initiator))
 EndFunction
 
 ; Reconcile SkyrimNet_SexLab_Faction_Victim membership with the current

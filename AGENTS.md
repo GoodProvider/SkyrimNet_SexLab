@@ -70,6 +70,7 @@ First ~72 characters summarize the commit. Prefer multi-line body with concrete 
 
 - **Nexus first:** search the mod’s Nexus page before investigating blind.
 - **Knowledgebase:** consult [KNOWLEDGEBASE.md](KNOWLEDGEBASE.md) before changes; append new quirks after sessions.
+- **User scratch:** `z-*` files and directories (repo root) are local scratch. Never ingest, treat as ship set, changelog, or commit.
 - **INI load order:** Skyrim.ini then SkyrimPrefs.ini (last wins).
 - **SE ≠ VR** — never assume parity.
 

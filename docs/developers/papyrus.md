@@ -42,10 +42,13 @@ Scene_Creator (pooled) ──StartScene──► Scene_Manager.CreateSceneByCrea
 - Creator: `CreateCreator()` → ACTIVE; always `Release()` after cancel or after Setup copies state.
 - `SelectAnimations()` before `sexlab.NewThread()`; abort → `model.Initialize()` then `Release()`.
 - `Scene.Setup` returns `Bool`; failure → Release, no half-init slot.
+- `Scene.initiator` is the speaker by default. If `num_victims > 0`, `PickNonVictimInitiator()` keeps initiator only when they are not a victim; otherwise first non-victim from positions 1…n then 0 (or None). First-stage `"X initiates: …"` only; do not recompute on AlignActors / live SetVictim.
+- External / DOM threads: `EnsureSceneForThread` from `AnimationStart` / `StageStart`. `GetSceneInactive` calls `SetThread` before `thread_scene[tid]`. `GetSceneByThread` treats that slot as authoritative during Setup (status still INACTIVE); Release only on tid mismatch.
 - Actor lock: `skyrimnet_sexlab_scene_actor_lock`.
 - Trace → `WebUI.TraceLog` → `SKSE\SkyrimNet_SexLab.log` (prefix `"---"`).
 - DOM optional: `handler_dom`; Dom orgasm → `OrgasmCustom` + `" is orgasming."`. Nonconsensual wrappers omit `style` (8-arg limit).
 - DD optional: `handler_udng` / `SkyrimNet_SexLab_Handler_UDNG` only. `zadLibs` via `GetFormFromFile(0x00F624, "Devious Devices - Integration.esm")`. Compile import `@ModsFolder\Devious Devices for SE-AE-VR\Scripts\Source` and `PapyrusSourcesDD\SRC_SLA` (`slautilscr`). Do not import SkyrimNet_UDNG or clone PapyrusSourcesDD into this repo. BondagePanel: `TM_BondageRefresh` seeds original; pulldowns do not call Papyrus; `TM_BondageFinish(speaker, target, style, currentJson)` applies then CloseOverlay; `TM_BondageOnWebUIClosed` is ReleaseAll only. `TM_BondageApply` unused by BondagePanel.
+- Quirks (initiator vs victim, DOM bind race): [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 
 ## Review
 

@@ -32,7 +32,7 @@
 - reviews/ (historical review notes; use review-checkpoint.xml for current constraints)
 - Source/*.pex and other loose .pex copies under Source/
 - crash-*.log, Papyrus.0.log at repo root
-- versions/, dist/, z-ignored/, handler_* unpack dirs if present
+- versions/, dist/, z-* files and directories (user scratch), handler_* unpack dirs if present
 - SKSE_Source/build/, SKSE_Source/lib/CommonLibSSE-NG/ (vendored; huge)
 
 ## Compile reminders
