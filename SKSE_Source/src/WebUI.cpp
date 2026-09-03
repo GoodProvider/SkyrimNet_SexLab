@@ -763,6 +763,9 @@ void InitWebUI()
         PrismaUI->RegisterJSListener(g_view, "onNotify", [](const char* value) {
             PapyrusBindings_WebUI::HandleNotify(value);
         });
+        PrismaUI->RegisterJSListener(g_view, "onLeashStatus", [](const char* value) {
+            PapyrusBindings_WebUI::HandleLeashStatus(value);
+        });
 
         PrismaUI->RegisterJSListener(g_view, "onNearbyRangeChange", [](const char* value) {
             if (!value)

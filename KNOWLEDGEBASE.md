@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## Leash TargetMenu panel (2026-09-02)
+
+- TargetMenu **leash** is `panel: leash` (`SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/Actor/options/0700_sexlab_leash.json`). Catalog `requiresPlugin`: `SkyrimNet_Leash.esp`. Core SKSE tree (not FOMOD-split).
+- Start-only ParameterPanel. Action pulldown is its own row (label column): not leashed → `tie to` / `give to`; leashed → `unleash` / `tie to` / `give to`. Control column: location if `tie to`, holder otherwise, empty if `unleash`.
+- Status from C++ `onLeashStatus` → `LeashFramework.IsLeashed` / `GetLeashHolder` (faction 0xD6A fallback). Do not copy YAML leash decorators. Start dispatches `SkyrimNet_Leash_Actions` (no YAML / `actions_index`). No refuses.
+
 ## YAML comparisonOperator `>` is a folded block (2026-09-02)
 
 Unquoted `comparisonOperator: >` in action YAML is a YAML folded block scalar, so the operator parses as blank. SkyrimNet logs `PapyrusQuestActionConfig: ... has a blank comparisonOperator; the rule always evaluates false` and the action is never eligible (`SEXLAB_STOP` hit this). Always quote operators (`">"`, `"<"`, `"=="`, `"!="`). Unquoted `|` is the same class of YAML block indicator.

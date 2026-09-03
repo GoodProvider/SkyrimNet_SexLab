@@ -189,7 +189,8 @@ namespace ActionCatalog
             // Common actor arg names when YAML still uses type: dynamic.
             static const char* kActorNames[] = {
                 "speaker", "target", "victim", "participate", "participate_3",
-                "stripper", "stripped", "actor"
+                "stripper", "stripped", "actor", "subject", "leashed", "holder",
+                "receiver"
             };
             for (auto* n : kActorNames) {
                 if (EqualsIgnoreCase(pm.name, n))

@@ -1378,7 +1378,8 @@
         }
 
         .labeled-fields > .dyn-field > .pulldown,
-        .labeled-fields > .dyn-field > input {
+        .labeled-fields > .dyn-field > input,
+        .labeled-fields > .dyn-field > span {
             justify-self: start;
             min-width: 8em;
         }
@@ -2251,6 +2252,22 @@
         let outfitUi = { pos0: 0, pos1: 0, style: 'normally' };
         const OUTFIT_STYLES = ['forcefully', 'normally', 'gently', 'silently'];
         let bondageUi = { speaker: 0, target: 0, style: 'normally' };
+        let leashUi = {
+            subject: 0,
+            leashed: 0,
+            holder: 0,
+            style: 'normally',
+            action: 'give to',
+            tiePoint: 'floor',
+            isLeashed: false,
+            statusHolderFormId: 0,
+            statusHolderName: ''
+        };
+        const LEASH_STYLES = ['forcefully', 'normally', 'gently'];
+        const LEASH_TIE_POINTS = ['floor', 'left', 'back', 'front', 'right', 'wall'];
+        const LEASH_DIST_DEFAULT = 'middle';
+        const LEASH_TYPE_DEFAULT = 'rope';
+        const LEASH_BODY_DEFAULT = 'neck';
         let bondageState = { groups: [] };
         const BONDAGE_GROUP_ORDER = [
             'Blindfold', 'Gag', 'Collar', 'Piercing Nipple', 'Body', 'Arms',
@@ -2970,7 +2987,8 @@
             const t = (m.type || '').toLowerCase();
             if (t === 'speaker' || t === 'target') return true;
             const n = (m.name || '').toLowerCase();
-            return ['speaker','target','victim','participate','participate_3','stripper','stripped','actor'].includes(n);
+            return ['speaker','target','victim','participate','participate_3','stripper','stripped','actor',
+                'subject','leashed','holder','receiver'].includes(n);
         }
 
         function isStaticMapping(m) {
@@ -3139,6 +3157,18 @@
                         target: tmActorParam(bondageUi.target),
                         closeWebUI: false
                     });
+                }
+                if (opt.panel === 'leash') {
+                    const pool = eligibleParamActors();
+                    if (!outfitFindActor(pool, leashUi.leashed))
+                        leashUi.leashed = formIdU32(targetActor && targetActor.formId)
+                            || (pool[0] && pool[0].formId) || 0;
+                    if (!outfitFindActor(pool, leashUi.subject))
+                        leashUi.subject = formIdU32(playerActor && playerActor.formId)
+                            || leashUi.leashed;
+                    if (!outfitFindActor(pool, leashUi.holder))
+                        leashUi.holder = leashUi.subject;
+                    leashRequestStatus(leashUi.leashed);
                 }
                 renderTargetMenu();
                 return;
@@ -4829,6 +4859,241 @@
             body.appendChild(devicesHost);
         }
 
+        function leashActionValues() {
+            return leashUi.isLeashed ? ['unleash', 'tie to', 'give to'] : ['tie to', 'give to'];
+        }
+
+        function leashSeedAction() {
+            if (!leashUi.isLeashed && leashUi.action === 'unleash')
+                leashUi.action = 'give to';
+        }
+
+        function leashRequestStatus(formId) {
+            const fid = formIdU32(formId);
+            if (!fid) {
+                leashUi.isLeashed = false;
+                leashUi.statusHolderFormId = 0;
+                leashUi.statusHolderName = '';
+                return;
+            }
+            if (typeof window.onLeashStatus === 'function')
+                window.onLeashStatus(JSON.stringify({ formId: fid }));
+        }
+
+        function leashStatusResult(payload) {
+            const src = payload && typeof payload === 'object' ? payload : {};
+            const fid = formIdU32(src.formId);
+            if (fid !== formIdU32(leashUi.leashed))
+                return;
+            leashUi.isLeashed = !!src.isLeashed;
+            leashUi.statusHolderFormId = formIdU32(src.holderFormId);
+            leashUi.statusHolderName = src.holderName ? String(src.holderName) : '';
+            leashSeedAction();
+            if (papyrusSelectedOpt && papyrusSelectedOpt.panel === 'leash')
+                renderPapyrusPanel();
+        }
+
+        function leashFireStart(opt) {
+            const subject = tmActorParam(leashUi.subject);
+            const leashed = tmActorParam(leashUi.leashed);
+            const holder = tmActorParam(leashUi.holder);
+            const style = leashUi.style || 'normally';
+            const dist = LEASH_DIST_DEFAULT;
+            const kind = LEASH_TYPE_DEFAULT;
+            const body = LEASH_BODY_DEFAULT;
+            let fn = 'LeashedToHolder';
+            let mapping = [
+                { type: 'speaker', name: 'subject' },
+                { type: 'target', name: 'leashed' },
+                { type: 'speaker', name: 'holder' },
+                { type: 'dynamic', name: 'style' },
+                { type: 'dynamic', name: 'leashDistance' },
+                { type: 'dynamic', name: 'leashType' },
+                { type: 'dynamic', name: 'body_part' }
+            ];
+            let parameters = {
+                subject: subject,
+                leashed: leashed,
+                holder: holder,
+                style: style,
+                leashDistance: dist,
+                leashType: kind,
+                body_part: body,
+                closeWebUI: true
+            };
+            if (leashUi.action === 'unleash') {
+                if (formIdU32(leashUi.subject) === formIdU32(leashUi.leashed)) {
+                    fn = 'UnleashSpeakerExecute';
+                    mapping = [{ type: 'speaker', name: 'subject' }];
+                    parameters = { subject: subject, closeWebUI: true };
+                } else {
+                    fn = 'UnleashTargetExecute';
+                    mapping = [
+                        { type: 'speaker', name: 'subject' },
+                        { type: 'target', name: 'target' }
+                    ];
+                    parameters = { subject: subject, target: leashed, closeWebUI: true };
+                }
+            } else if (leashUi.action === 'tie to') {
+                fn = 'LeashedToTiePoint';
+                mapping = [
+                    { type: 'speaker', name: 'subject' },
+                    { type: 'target', name: 'leashed' },
+                    { type: 'dynamic', name: 'style' },
+                    { type: 'dynamic', name: 'leashDistance' },
+                    { type: 'dynamic', name: 'leashType' },
+                    { type: 'dynamic', name: 'body_part' },
+                    { type: 'dynamic', name: 'tiePoint' }
+                ];
+                parameters = {
+                    subject: subject,
+                    leashed: leashed,
+                    style: style,
+                    leashDistance: dist,
+                    leashType: kind,
+                    body_part: body,
+                    tiePoint: leashUi.tiePoint || 'floor',
+                    closeWebUI: true
+                };
+            } else if (leashUi.isLeashed) {
+                if (formIdU32(leashUi.holder) === formIdU32(leashUi.subject)) {
+                    fn = 'TakeLeash';
+                    mapping = [
+                        { type: 'speaker', name: 'subject' },
+                        { type: 'target', name: 'leashed' }
+                    ];
+                    parameters = { subject: subject, leashed: leashed, closeWebUI: true };
+                } else {
+                    fn = 'GiveLeash';
+                    mapping = [
+                        { type: 'speaker', name: 'subject' },
+                        { type: 'target', name: 'leashed' },
+                        { type: 'target', name: 'receiver' }
+                    ];
+                    parameters = {
+                        subject: subject,
+                        leashed: leashed,
+                        receiver: holder,
+                        closeWebUI: true
+                    };
+                }
+            }
+            firePapyrusOption(opt, Object.assign({
+                executionFunctionName: fn,
+                parameterMapping: mapping
+            }, parameters));
+            if (typeof hidePanel === 'function') {
+                hidePanel('target_menu_panel');
+                hidePanel('control_panel');
+            }
+        }
+
+        function renderLeashPanelBody(body, opt) {
+            const pool = eligibleParamActors();
+            let subject = outfitFindActor(pool, leashUi.subject)
+                || outfitFindActor(pool, playerActor && playerActor.formId)
+                || pool[0]
+                || null;
+            let leashed = outfitFindActor(pool, leashUi.leashed)
+                || outfitFindActor(pool, targetActor && targetActor.formId)
+                || pool[0]
+                || null;
+            if (subject) leashUi.subject = formIdU32(subject.formId);
+            if (leashed) leashUi.leashed = formIdU32(leashed.formId);
+            if (!LEASH_STYLES.includes(leashUi.style))
+                leashUi.style = 'normally';
+            if (!LEASH_TIE_POINTS.includes(leashUi.tiePoint))
+                leashUi.tiePoint = 'floor';
+            leashSeedAction();
+
+            const holderPool = pool.filter(a => formIdU32(a.formId) !== formIdU32(leashUi.leashed));
+            let holder = outfitFindActor(holderPool, leashUi.holder)
+                || outfitFindActor(holderPool, leashUi.subject)
+                || holderPool[0]
+                || null;
+            if (holder) leashUi.holder = formIdU32(holder.formId);
+            else leashUi.holder = 0;
+
+            const bar = document.createElement('div');
+            bar.className = 'bottom-bar top-bar';
+            const startBtn = document.createElement('div');
+            startBtn.className = 'action-btn';
+            startBtn.textContent = 'Start';
+            const canStart = !!leashUi.subject && !!leashUi.leashed
+                && (leashUi.action !== 'give to' || (leashUi.holder && leashUi.holder !== leashUi.leashed));
+            if (!canStart) startBtn.classList.add('disabled');
+            startBtn.onclick = () => {
+                if (startBtn.classList.contains('disabled')) return;
+                leashFireStart(opt);
+            };
+            bar.appendChild(startBtn);
+            body.appendChild(bar);
+
+            const fields = document.createElement('div');
+            fields.className = 'labeled-fields';
+            const addField = (labelTextOrNode, node) => {
+                const field = document.createElement('div');
+                field.className = 'dyn-field';
+                if (typeof labelTextOrNode === 'string') {
+                    const lab = document.createElement('label');
+                    lab.textContent = labelTextOrNode || '\u00a0';
+                    field.appendChild(lab);
+                } else if (labelTextOrNode) {
+                    field.appendChild(labelTextOrNode);
+                } else {
+                    const lab = document.createElement('label');
+                    lab.textContent = '\u00a0';
+                    field.appendChild(lab);
+                }
+                if (node) field.appendChild(node);
+                fields.appendChild(field);
+            };
+
+            addField('Subject', outfitActorPulldown(pool, subject, (entry) => {
+                leashUi.subject = formIdU32(entry.formId);
+                renderPapyrusPanel();
+            }));
+            addField('Leashed', outfitActorPulldown(pool, leashed, (entry) => {
+                leashUi.leashed = formIdU32(entry.formId);
+                leashUi.isLeashed = false;
+                leashUi.statusHolderFormId = 0;
+                leashUi.statusHolderName = '';
+                leashRequestStatus(leashUi.leashed);
+                renderPapyrusPanel();
+            }));
+            if (leashUi.isLeashed) {
+                const statusVal = document.createElement('span');
+                if (leashUi.statusHolderFormId) {
+                    statusVal.textContent = leashUi.statusHolderName || '?';
+                    addField('is leashed by', statusVal);
+                } else {
+                    statusVal.textContent = 'world';
+                    addField('is tied to', statusVal);
+                }
+            }
+            addField('style', createPulldown(LEASH_STYLES, leashUi.style, (v) => {
+                leashUi.style = v;
+            }));
+
+            const actionPd = createPulldown(leashActionValues(), leashUi.action, (v) => {
+                leashUi.action = v;
+                renderPapyrusPanel();
+            });
+            let extra = null;
+            if (leashUi.action === 'tie to') {
+                extra = createPulldown(LEASH_TIE_POINTS, leashUi.tiePoint, (v) => {
+                    leashUi.tiePoint = v;
+                });
+            } else if (leashUi.action === 'give to') {
+                extra = outfitActorPulldown(holderPool, holder, (entry) => {
+                    leashUi.holder = formIdU32(entry.formId);
+                    renderPapyrusPanel();
+                });
+            }
+            addField(actionPd, extra);
+            body.appendChild(fields);
+        }
+
         function renderPapyrusPanel() {
             const host = document.getElementById('target-cascade-host');
             if (!host) return;
@@ -4840,7 +5105,7 @@
             panel.className = 'panel target-papyrus-panel';
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
-                || kind === 'outfit' || kind === 'bondage' || kind === 'stop';
+                || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop';
             if (!skipHeader) {
                 const header = document.createElement('div');
                 header.className = 'section-header';
@@ -4868,6 +5133,8 @@
             } else if (kind === 'bondage') {
                 panel.classList.add('target-bondage-panel');
                 renderBondagePanelBody(body, opt);
+            } else if (kind === 'leash') {
+                renderLeashPanelBody(body, opt);
             } else {
                 body.textContent = 'Unknown panel: ' + kind;
             }

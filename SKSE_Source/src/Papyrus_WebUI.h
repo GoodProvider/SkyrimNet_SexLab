@@ -125,4 +125,7 @@ namespace PapyrusBindings_WebUI {
 
     /// JS: onNotify({msg}) → RE::DebugNotification
     void HandleNotify(const char* value);
+
+    /// JS: onLeashStatus({formId}) → leashStatusResult({formId, isLeashed, holderFormId, holderName})
+    void HandleLeashStatus(const char* value);
 }
