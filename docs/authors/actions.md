@@ -85,6 +85,8 @@ Copy patterns: `sexlab_sex2_sex_fucking.yaml`, `sexlab_punish_spanking.yaml`, `s
 
 Groups need `logicalOperator` (`AND`/`OR`) and `required: true`. Actor lock key: `skyrimnet_sexlab_scene_actor_lock` (not old `skyrimnet_sexlab_actor_lock`).
 
+Always quote `comparisonOperator` (`"=="`, `"<"`, `">"`, `"!="`). Unquoted `>` and `|` are YAML block scalars — `comparisonOperator: >` parses as blank and SkyrimNet treats the rule as always false.
+
 Rape actions: MCM **Add rape actions** → toggle, save, reload, Game Data Explorer Refresh.
 
 ## After changes
@@ -98,5 +100,5 @@ Rape actions: MCM **Add rape actions** → toggle, save, reload, Game Data Explo
 - [ ] Unique `name`; ≤ 8 mappings; order matches Papyrus
 - [ ] `static`/`dynamic` fields correct; no `speaking_victim`
 - [ ] `setting_name` file exists; modifiers use `_token_` form
-- [ ] Eligibility: `logicalOperator` + `required: true`
+- [ ] Eligibility: `logicalOperator` + `required: true`; quoted `comparisonOperator`
 - [ ] Game Data Explorer Refresh

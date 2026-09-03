@@ -1,5 +1,9 @@
 # Knowledgebase
 
+## YAML comparisonOperator `>` is a folded block (2026-09-02)
+
+Unquoted `comparisonOperator: >` in action YAML is a YAML folded block scalar, so the operator parses as blank. SkyrimNet logs `PapyrusQuestActionConfig: ... has a blank comparisonOperator; the rule always evaluates false` and the action is never eligible (`SEXLAB_STOP` hit this). Always quote operators (`">"`, `"<"`, `"=="`, `"!="`). Unquoted `|` is the same class of YAML block indicator.
+
 ## Scene initiator vs victim (2026-08-30)
 
 `Scene.initiator` is the speaker by default. If the thread has victims (`num_victims > 0`), a victim is never initiator: keep the current initiator only when they are not a victim; otherwise pick the first non-victim from positions 1…n then 0 (or None). Used for `"X initiates: …"` on first StageStart. Do not recompute on AlignActors / live SetVictim.

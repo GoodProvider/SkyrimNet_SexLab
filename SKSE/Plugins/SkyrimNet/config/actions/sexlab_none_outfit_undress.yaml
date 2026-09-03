@@ -35,13 +35,13 @@ eligibilityRules:
         arguments:
           - currentActor
           - SexLabAnimatingFaction
-        comparisonOperator: <
+        comparisonOperator: "<"
         expectedValue: 1
       - decoratorName: is_in_faction
         arguments:
           - currentActor
           - dse_dm_FactionActorUsingDevice
-        comparisonOperator: ==
+        comparisonOperator: "=="
         expectedValue: false
       - decoratorName: "is_in_faction"
         arguments: ["currentActor", "OStimActorCountFaction"]
@@ -52,7 +52,7 @@ eligibilityRules:
           - "HasIntValue"
           - currentActor
           - "skyrimnet_sexlab_scene_actor_lock"
-        comparisonOperator: ==
+        comparisonOperator: "=="
         expectedValue: false
     logicalOperator: "AND"
     required: true
