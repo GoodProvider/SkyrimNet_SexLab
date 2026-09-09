@@ -5,6 +5,7 @@
 #include "ActionCatalog.h"
 #include "AnimationDB.h"
 #include "Config.h"
+#include "RE/V/VirtualMachine.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -651,6 +652,94 @@ namespace PapyrusBindings_WebUI
                 { "gender", ActorSex(actor) }
             });
         }
+
+        class BoolVmCallback : public RE::BSScript::IStackCallbackFunctor
+        {
+        public:
+            void operator()(RE::BSScript::Variable a_result) override
+            {
+                if (a_result.IsBool())
+                    value = a_result.GetBool();
+                done = true;
+            }
+            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
+
+            bool value = false;
+            bool done = false;
+        };
+
+        class ActorVmCallback : public RE::BSScript::IStackCallbackFunctor
+        {
+        public:
+            void operator()(RE::BSScript::Variable a_result) override
+            {
+                if (a_result.IsObject() && !a_result.IsNoneObject())
+                    actor = a_result.Unpack<RE::Actor*>();
+                done = true;
+            }
+            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
+
+            RE::Actor* actor = nullptr;
+            bool done = false;
+        };
+
+        bool PumpVm(RE::BSScript::Internal::VirtualMachine* vm, bool& done)
+        {
+            if (!vm)
+                return false;
+            for (int i = 0; i < 64 && !done; ++i)
+                vm->Update(0.0f);
+            return done;
+        }
+
+        bool FactionIsLeashed(RE::Actor* actor)
+        {
+            auto* dh = RE::TESDataHandler::GetSingleton();
+            if (!dh || !actor)
+                return false;
+            if (!dh->LookupModByName("Leash.esm"))
+                return false;
+            auto* fac = dh->LookupForm<RE::TESFaction>(0xD6A, "Leash.esm");
+            return fac && actor->IsInFaction(fac);
+        }
+
+        bool NativeIsLeashed(RE::Actor* actor, bool& nativeOk)
+        {
+            nativeOk = false;
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm || !actor)
+                return false;
+            auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new BoolVmCallback() };
+            auto* cb = static_cast<BoolVmCallback*>(cbPtr.get());
+            auto* args = RE::MakeFunctionArguments(actor);
+            if (!vm->DispatchStaticCall(
+                    RE::BSFixedString("LeashFramework"), RE::BSFixedString("IsLeashed"), args, cbPtr)) {
+                return false;
+            }
+            if (!PumpVm(vm, cb->done))
+                return false;
+            nativeOk = true;
+            return cb->value;
+        }
+
+        RE::Actor* NativeGetLeashHolder(RE::Actor* actor)
+        {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm || !actor)
+                return nullptr;
+            auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new ActorVmCallback() };
+            auto* cb = static_cast<ActorVmCallback*>(cbPtr.get());
+            auto* args = RE::MakeFunctionArguments(actor);
+            if (!vm->DispatchStaticCall(
+                    RE::BSFixedString("LeashFramework"),
+                    RE::BSFixedString("GetLeashHolder"),
+                    args,
+                    cbPtr)) {
+                return nullptr;
+            }
+            PumpVm(vm, cb->done);
+            return cb->actor;
+        }
     }
 
     bool SetNearbyRadius(float radius)
@@ -1103,6 +1192,48 @@ namespace PapyrusBindings_WebUI
                 callback);
             if (!ok)
                 webui_log::warn("HandleNotify: DispatchStaticCall failed");
+        });
+    }
+
+    void HandleLeashStatus(const char* value)
+    {
+        std::uint32_t formId = 0;
+        try {
+            auto j = nlohmann::json::parse(value ? value : "");
+            if (j.contains("formId") && j["formId"].is_number()) {
+                if (j["formId"].is_number_unsigned())
+                    formId = j["formId"].get<std::uint32_t>();
+                else if (j["formId"].is_number_integer())
+                    formId = static_cast<std::uint32_t>(j["formId"].get<std::int64_t>());
+                else
+                    formId = static_cast<std::uint32_t>(j["formId"].get<double>());
+            }
+        } catch (...) {
+            webui_log::warn("HandleLeashStatus: parse failed");
+            return;
+        }
+
+        SKSE::GetTaskInterface()->AddTask([formId]() {
+            nlohmann::json out;
+            out["formId"] = formId;
+            out["isLeashed"] = false;
+            out["holderFormId"] = 0;
+            out["holderName"] = "";
+            auto* actor = formId ? RE::TESForm::LookupByID<RE::Actor>(formId) : nullptr;
+            if (actor) {
+                bool nativeOk = false;
+                bool leashed = NativeIsLeashed(actor, nativeOk);
+                if (!nativeOk)
+                    leashed = FactionIsLeashed(actor);
+                out["isLeashed"] = leashed;
+                if (leashed) {
+                    if (auto* holder = NativeGetLeashHolder(actor)) {
+                        out["holderFormId"] = holder->GetFormID();
+                        out["holderName"] = ActorDisplayNameLocal(holder);
+                    }
+                }
+            }
+            WebUI_Invoke(std::string("leashStatusResult(") + out.dump() + ");");
         });
     }
 
