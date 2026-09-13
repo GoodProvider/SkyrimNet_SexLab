@@ -18,6 +18,7 @@ The substring `" is orgasming."` must stay exact on the whole direct-narration s
 | Denied / non-orgasming | **No** — Combined and Separate: `name+" is not orgasming right now. "`; Dom denied / afterglow: “did not orgasm” / “failed to orgasm” |
 
 - Dom: `Handler_DOM.DOMSlave_Orgasmed` → `Scene_Manager.OrgasmCustom` appends `". "+name+" is orgasming."` on purpose — do not strip without updating the prompt.
+- Dom player-orgasm tease (`squirms under your grasp` / `your orgasm submerges you`) is **not** a slave climax. `DOMSlave_Orgasmed` must return without `OrgasmCustom` or DN. Combined then names the slave `" is not orgasming right now."` unless a real melt already bumped totals.
 - Combined / `GetIsOrgasming`: Papyrus emits `name+" is orgasming. "` (and `. again.` / tentacles append). Do not strip that substring without updating the prompt.
 - Dom Combined fallback: if orgasm expected and totals > 0 but custom text raced empty, still append `name+" is orgasming. "` (same gate).
 - Combined flush (`OrgasmMessagesToNarration`) and `OrgasmIndividual` name every non-orgasming actor with `" is not orgasming right now."` instead of a generic “only listed” sentence. That substring must **not** match the orgasm gate.
