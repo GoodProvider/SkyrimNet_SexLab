@@ -117,12 +117,14 @@ Function DOMSlave_Orgasmed(Actor slave, String msg)
     endif
     ; Player-climax tease from DOM_Mind — not a slave orgasm. Do not OrgasmCustom / DN.
     if StringUtil.Find(msg, "squirms under your grasp") >= 0 || StringUtil.Find(msg, "your orgasm submerges you") >= 0
-        Trace("DOMSlave_Orgasmed", "skipping player-orgasm tease for "+GetDisplayName(slave)+": "+msg)
+        Trace("DOMSlave_Orgasmed", "--- skip player-orgasm tease for "+GetDisplayName(slave)+": "+msg)
         return
     endif
     if manager == None 
-        Trace("DOMSlave_Orgasmed","manager is None, aborting")
+        Trace("DOMSlave_Orgasmed","--- manager is None, aborting")
+        return
     elseif !manager.sexlab.IsActorActive(slave) 
+        Trace("DOMSlave_Orgasmed", "--- delayed inactive DN for "+GetDisplayName(slave))
         int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
         msg += " "+GetDisplayName(slave)+" is orgasming. "
         if total == 0 
@@ -135,6 +137,7 @@ Function DOMSlave_Orgasmed(Actor slave, String msg)
         endif
         RegisterForSingleUpdate(1.0)
     else 
+        Trace("DOMSlave_Orgasmed", "--- OrgasmCustom for "+GetDisplayName(slave)+": "+msg)
         manager.OrgasmCustom(slave, msg)
     endif
 EndFunction

@@ -18,11 +18,11 @@ int actors_objs
 ; who leaves the scene mid-run (position swap / reshuffle) still gets the faction
 ; cleared. thread.positions stays authoritative for the participant list.
 int victim_faction_forms
-; Stores the Orgasm messages for the next stage Start
-; We store the message to give more time for all the OrgasmStart messages
-; to be processed.  Specifically DOM's 
+; Stores the Orgasm messages for Combined flush (StageStart, or Scene OnUpdate
+; when a DOM slave is in the thread so last-stage melt can join the player).
 String[] orgasm_messages
 bool orgasm_messages_set = false
+bool orgasm_window_open = false
 
 String storage_prefix = "skyrimnet_sexlab_scene"
 String storage_obj_key = "skyrimnet_sexlab_scene_actor_position_obj"
@@ -199,6 +199,8 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     DbgMsg("Setup", "thread.positions count="+num_actors)
     EnsureActorArraysLargeEnough(num_actors) 
     orgasm_messages_set = false
+    orgasm_window_open = false
+    UnregisterForUpdate()
 
     int i = 0 
     ; Assign interface property (not a local) before SetPosition/SetActor so assailant flags work.
@@ -433,6 +435,8 @@ EndFunction
 ; AlignActors must not tear down; only Release owns resource cleanup.
 Function Release()
     DbgEnter("Release")
+    UnregisterForUpdate()
+    orgasm_window_open = false
     int i = 0
     int num_actors = 0
     if thread != None
@@ -492,6 +496,7 @@ Function Release()
         endwhile
     endif
     orgasm_messages_set = false
+    orgasm_window_open = false
     animating_started_at = 0.0
 
     sender = None 
@@ -977,6 +982,8 @@ Function AnimationStart()
             endwhile
         endif
         orgasm_messages_set = false
+        orgasm_window_open = false
+        UnregisterForUpdate()
     endif
     DbgEnter("AnimationStart")
     if thread == None
@@ -1015,7 +1022,12 @@ Function StageStart()
         endif
     endif
 
-    String orgasm_narration = OrgasmMessagesToNarration()
+    String orgasm_narration = ""
+    if orgasm_window_open && orgasm_messages_set
+        Trace("StageStart", "--- holding orgasm stash for DOM window")
+    else
+        orgasm_narration = OrgasmMessagesToNarration()
+    endif
     String desc = GetDescription()
 
     ; Send a DN if its a start and includes a player
@@ -1023,20 +1035,24 @@ Function StageStart()
     ; GetDescription: stage JSON, else tag fallback (raw GetStageDescription alone leaves initiates: empty)
     if status != STATUS_ACTIVE
         status = STATUS_ACTIVE
-        String narration = desc + orgasm_narration
-        if initiator != None
-            narration = initiator.GetDisplayName()+" initiates: "+desc
-            narration += orgasm_narration
-        endif
-        if orgasm_narration != ""
-            RegisterEvent("sexlab update", orgasm_narration, sender, receiver)
-        else 
-            if has_player
-                DirectNarration(narration, sender, receiver) 
-            else
-                DirectNarration_Optional("start", narration, sender, receiver) 
+        if orgasm_window_open && orgasm_messages_set
+            RegisterEvent("sexlab update", desc, sender, receiver)
+        else
+            String narration = desc + orgasm_narration
+            if initiator != None
+                narration = initiator.GetDisplayName()+" initiates: "+desc
+                narration += orgasm_narration
             endif
-        endif 
+            if orgasm_narration != ""
+                RegisterEvent("sexlab update", orgasm_narration, sender, receiver)
+            else 
+                if has_player
+                    DirectNarration(narration, sender, receiver) 
+                else
+                    DirectNarration_Optional("start", narration, sender, receiver) 
+                endif
+            endif
+        endif
     ; Late Dom custom msgs may arrive after Combined; flush any leftovers before send/Release
     else
         String narration = ""
@@ -1050,7 +1066,11 @@ Function StageStart()
                 desc = ""
             endif 
         endif 
-        if orgasm_narration != ""
+        if orgasm_window_open && orgasm_messages_set
+            if change_scene
+                RegisterEvent("change", narration, sender, receiver)
+            endif
+        elseif orgasm_narration != ""
             if change_scene 
                 RegisterEvent("change", narration, sender, receiver)
             endif 
@@ -1110,12 +1130,12 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         DbgMsg("AnimationEnd", "SexLab as sslSystemConfig")
         sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
 
-        ; Leftover Combined orgasm stash → event before purge (not ongoing-activity DN).
-        ; Tentacles flavor is appended inside GetIsOrgasming when the animation is tagged.
+        UnregisterForUpdate()
+        orgasm_window_open = false
+
+        ; Leftover Combined orgasm stash folded into the end DN so 0550 still gates
+        ; (RegisterEvent-only leftover is invisible to contains(_direct_narration, ...)).
         String orgasm_narration = OrgasmMessagesToNarration()
-        if orgasm_narration != ""
-            RegisterEvent("orgasm", orgasm_narration, sender, receiver)
-        endif
 
         ; Post-activity afterglow (SeparateOrgasms); not ongoing sexual activity
         String afterglow = ""
@@ -1150,6 +1170,9 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
 
         ; Mirror AnimationStart: "A and B finish <intent>."
         String end_message = GetIntentMessage(INTENT_STAGE_END)
+        if orgasm_narration != ""
+            end_message = orgasm_narration + " " + end_message
+        endif
         if afterglow != ""
             end_message += " "+afterglow
         endif
@@ -1182,6 +1205,9 @@ EndFunction
 ; may send their messages before we get ours.
 ; We will there for store all the orgasm messages 
 ; and send them at the start of the next stage. 
+; When a DOM slave is in the thread, do not flush on StageStart and do not
+; use thread.UpdateTimer as the clock (P+ _ForceAdvance hops). Arm a Scene
+; OnUpdate window so a last-stage melt can join the player in one DN.
 ; --------------------------------------------
 Function OrgasmCombined()
     DbgEnter("OrgasmCombined")
@@ -1190,6 +1216,7 @@ Function OrgasmCombined()
     int i = 0
     int num_actors = thread.positions.length
     EnsureActorArraysLargeEnough(num_actors)
+    bool has_dom_slave = ThreadHasDomSlave()
     while i < num_actors
         int obj = position_objs[i] 
         bool no_orgasm = JMap.getInt(obj, "no_orgasm") == 1
@@ -1201,8 +1228,13 @@ Function OrgasmCombined()
         endif 
         i += 1
     endwhile
-    if orgasm_messages_set && thread != None
-        thread.UpdateTimer(4.0)
+    if orgasm_messages_set
+        if has_dom_slave
+            Trace("OrgasmCombined", "--- DOM window, skip UpdateTimer")
+            ArmOrgasmWindow()
+        elseif thread != None
+            thread.UpdateTimer(4.0)
+        endif
     endif
 
     DbgEnd("OrgasmCombined")
@@ -1255,8 +1287,14 @@ Function OrgasmCustom(Actor akActor, String msg)
     endif
 
     if config.SeparateOrgasms
+        Trace("OrgasmCustom", "--- SeparateOrgasms OrgasmHelper "+GetDisplayName(akActor))
         OrgasmHelper(akActor, msg)
     else 
+        if thread == None
+            Trace("OrgasmCustom", "--- thread is None, aborting")
+            DbgEnd("OrgasmCustom")
+            return
+        endif
         EnsureActorArraysLargeEnough(thread.positions.length)
         int i = 0 
         while i < thread.positions.length && thread.positions[i] != akActor
@@ -1265,9 +1303,10 @@ Function OrgasmCustom(Actor akActor, String msg)
         if i < thread.positions.length
             orgasm_messages_set = true
             orgasm_messages[i] = msg
-            if thread != None
-                thread.UpdateTimer(4.0)
-            endif
+            Trace("OrgasmCustom", "--- Combined stash "+GetDisplayName(akActor)+" slot:"+i)
+            ArmOrgasmWindow()
+        else
+            Trace("OrgasmCustom", "--- actor not in thread.positions, stash skipped "+GetDisplayName(akActor))
         endif
     endif
     DbgEnd("OrgasmCustom")
@@ -1363,6 +1402,70 @@ String Function OrgasmMessagesToNarration()
         return ""
     endif
 EndFunction
+
+bool Function ThreadHasDomSlave()
+    if !position_objs || thread == None
+        return false
+    endif
+    int i = 0
+    int n = thread.positions.length
+    while i < n && i < position_objs.length
+        if JMap.getInt(position_objs[i], "dom_slave") == 1
+            return true
+        endif
+        i += 1
+    endwhile
+    return false
+EndFunction
+
+float Function GetOrgasmDelay()
+    float delay = 5.0
+    if main
+        delay = main.orgasm_delay
+    endif
+    if delay < 0.5
+        delay = 0.5
+    endif
+    return delay
+EndFunction
+
+Function ArmOrgasmWindow()
+    float delay = GetOrgasmDelay()
+    orgasm_window_open = true
+    RegisterForSingleUpdate(delay)
+    Trace("ArmOrgasmWindow", "--- delay:"+delay)
+EndFunction
+
+Function FlushOrgasmWindow()
+    UnregisterForUpdate()
+    orgasm_window_open = false
+    String orgasm_narration = OrgasmMessagesToNarration()
+    if orgasm_narration == ""
+        Trace("FlushOrgasmWindow", "--- empty stash")
+        return
+    endif
+    Trace("FlushOrgasmWindow", "--- "+orgasm_narration)
+    if has_player
+        DirectNarration(orgasm_narration, sender, receiver, purge_dialogue=True)
+    else
+        DirectNarration_Optional("orgasm", orgasm_narration, sender, receiver)
+    endif
+EndFunction
+
+Event OnUpdate()
+    if Utility.IsInMenuMode()
+        RegisterForSingleUpdate(0.5)
+        Trace("OnUpdate", "--- orgasm window waiting on menu")
+        return
+    endif
+    if !orgasm_messages_set
+        orgasm_window_open = false
+        Trace("OnUpdate", "--- orgasm window empty, skip")
+        return
+    endif
+    Trace("OnUpdate", "--- flushing orgasm window")
+    FlushOrgasmWindow()
+EndEvent
 
 ;----------------------------------------------------
 ; Add Cum
@@ -1770,11 +1873,15 @@ Function SetStyleDialog()
     parent.SetStyleDialog()
 
     if style_old != style
-        String name = GetDisplayName(sender)
-        if has_player
-            name = GetDisplayName(game.GetPlayer())
+        if orgasm_messages_set
+            Trace("SetStyleDialog", "--- skipping style DN, orgasm window open")
+        else
+            String name = GetDisplayName(sender)
+            if has_player
+                name = GetDisplayName(game.GetPlayer())
+            endif
+            DirectNarration(name+" changes from '"+style_old+"' to '"+style+"'", sender, receiver)
         endif
-        DirectNarration(name+" changes from '"+style_old+"' to '"+style+"'", sender, receiver)
     endif 
     DbgReturn("SetStyleDialog")
 endFunction

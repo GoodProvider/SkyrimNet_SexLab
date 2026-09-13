@@ -22,6 +22,7 @@ The substring `" is orgasming."` must stay exact on the whole direct-narration s
 - Combined / `GetIsOrgasming`: Papyrus emits `name+" is orgasming. "` (and `. again.` / tentacles append). Do not strip that substring without updating the prompt.
 - Dom Combined fallback: if orgasm expected and totals > 0 but custom text raced empty, still append `name+" is orgasming. "` (same gate).
 - Combined flush (`OrgasmMessagesToNarration`) and `OrgasmIndividual` name every non-orgasming actor with `" is not orgasming right now."` instead of a generic “only listed” sentence. That substring must **not** match the orgasm gate.
+- Combined + Dom last-stage: do **not** DirectNarrate a melt immediately. `OrgasmCustom` / `OrgasmCombined` stash into `orgasm_messages` and restart a Scene `OnUpdate` window (`sexlab.orgasm.delay`, default 5s) so player and slave climaxes are both counted, then one DirectNarration contains every `" is orgasming."` clause. StageStart must not consume the stash while that window is open (a later player DN would overwrite the slave). Style-change DN is skipped while the stash is pending.
 
 If you change the gate in the prompt, update every Papyrus narration site that appends it.
 

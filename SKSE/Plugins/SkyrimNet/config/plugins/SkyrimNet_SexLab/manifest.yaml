@@ -1,6 +1,6 @@
 plugin:
   name: "SkyrimNet_SexLab"
-  version: "0.33.0"
+  version: "0.34.0"
   description: "Sexlab-SkyrimNet integration"
   icon: "⚗️"
 
@@ -69,7 +69,7 @@ schema:
     - name: "Orgasm delay (sec)"
       path: "sexlab.orgasm.delay"
       type: "float"
-      description: "Number of seconds added to the current stage when an orgasm is narrated."
+      description: "Seconds to wait after the last orgasm (player or Dom slave) before one combined Direct Narration. Without a Dom slave, also extends the current stage when that narration is sent."
       min: 0
       max: 60
       defaultValue: 5.0

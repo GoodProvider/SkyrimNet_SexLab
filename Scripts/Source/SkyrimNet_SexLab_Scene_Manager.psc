@@ -866,8 +866,10 @@ EndFunction
 Function OrgasmCustom(Actor akActor, String msg) 
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(akActor)
     if sl_scene == None 
+        Trace("OrgasmCustom", "--- scene is None for "+GetDisplayName(akActor)+", aborting")
         return 
     endif 
+    Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" "+msg)
     sl_scene.OrgasmCustom(akActor, msg + ". "+GetDisplayName(akActor)+" is orgasming.")
 EndFunction
 
