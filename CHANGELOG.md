@@ -1,9 +1,9 @@
 # Changelog
 
-## [0.33.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.33.0) — since [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5)
+## [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0) — since [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5)
 
 ### Actions / scenes
-- Ship LLM actions and prompts as SkyrimNet Beta 25 external plugin `goodprovider.sexlab` (`SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`). Plugin `manifest.json`: `id` goodprovider.sexlab, `type` bundle, `version` 0.33.0, `min_skyrimnet_version` 0.25.0; `mods` requires `SkyrimNet_SexLab.esp`. Action YAML filenames now equal in-file `name` (e.g. `SexLab_Start_Giving.yaml`); `name` values unchanged
+- Ship LLM actions and prompts as SkyrimNet Beta 25 external plugin `goodprovider.sexlab` (`SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`). Plugin `manifest.json`: `id` goodprovider.sexlab, `type` bundle, `version` 0.34.0, `min_skyrimnet_version` 0.25.0; `mods` requires `SkyrimNet_SexLab.esp`. Action YAML filenames now equal in-file `name` (e.g. `SexLab_Start_Giving.yaml`); `name` values unchanged
 - `change_outfit.yaml` / `SEXLAB_STOP.yaml`: `render_template` paths `helpers/sexlab/none_change_outfit` and `helpers/sexlab/none_stop` (helpers moved off `helpers/sexlab_*`)
 - Removed unused helpers `action_rape_target_start`, `action_raped_by_target_start`, `default_sex_life`
 
@@ -28,7 +28,7 @@
 - P+ playing set: empty tags skip lookup; tagged hits capped to one via `PickOneAnimation` (avoids `FindSimilarSceneStage` hopping). Details: [docs/developers/papyrus.md](docs/developers/papyrus.md)
 
 ### Install / MCM
-- Requires SkyrimNet **0.25.0+**. Plugin should appear under Installed Plugins with an **External** badge. Settings schema stays at [`config/plugins/SkyrimNet_SexLab/manifest.yaml`](SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml) (`schema.fields` + `defaultValue`, `plugin.version` 0.33.0, 12 `sexlab.*` keys). Dashboard hid SexLab when the old list/`default` shape loaded as 0 fields. Start Sex hotkey is `type: hotkey` default **backslash** (`\`, VK 220). Change options in the SkyrimNet dashboard, not the MCM.
+- Requires SkyrimNet **0.25.0+**. Plugin should appear under Installed Plugins with an **External** badge. Settings schema stays at [`config/plugins/SkyrimNet_SexLab/manifest.yaml`](SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml) (`schema.fields` + `defaultValue`, `plugin.version` 0.34.0, 12 `sexlab.*` keys). Dashboard hid SexLab when the old list/`default` shape loaded as 0 fields. Start Sex hotkey is `type: hotkey` default **backslash** (`\`, VK 220). Change options in the SkyrimNet dashboard, not the MCM.
 - SkyMessage target menu **leash** button when `SkyrimNet_Leashed.esp` is loaded (does not require Leashed’s own hotkey)
 
 ### Docs

@@ -20,9 +20,12 @@ Protocol **values** (speaking modifiers) are separate — still `_pain_`, etc. S
 
 ```papyrus
 ; Serialize JValue -> JSON string with all object keys lowercased. Empty/invalid -> "{}".
-; Only project call site for JValue.toJsonString.
+; Walks JMap/JArray/JFormMap/JIntMap. Do not call JValue.toJsonString (JC 4.2.13.1+ only).
 String Function ObjectToLowerCaseKeyJson(int obj) global
-    String json = JValue.toJsonString(obj)
+    String json = JValueToJsonString(obj)
+    if json == "" || json == "null"
+        return "{}"
+    endif
     json = JsonLowerCaseKeys(json)
     if !json
         return "{}"

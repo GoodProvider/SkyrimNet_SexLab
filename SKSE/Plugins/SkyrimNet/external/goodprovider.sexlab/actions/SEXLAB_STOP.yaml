@@ -18,13 +18,13 @@ eligibilityRules:
         arguments:
           - currentActor
           - SexLabAnimatingFaction
-        comparisonOperator: > 
+        comparisonOperator: ">"
         expectedValue: 0
       - decoratorName: get_faction_rank
         arguments:
           - currentActor
           - SkyrimNet_SexLab_Faction_Victim
-        comparisonOperator: < 
+        comparisonOperator: "<"
         expectedValue: 0
     logicalOperator: AND
     required: true

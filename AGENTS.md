@@ -32,6 +32,13 @@ Repo root: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`.
 | Release docs | [release-guide.md](release-guide.md) + [.cursor/skills/release/SKILL.md](.cursor/skills/release/SKILL.md) + [release-checkpoint.xml](release-checkpoint.xml) |
 | Portable doc template (other repos) | [documentation-guide.xml](documentation-guide.xml) |
 
+## Logs 
+SkyrimNet: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet.log
+SkyrimNet_SexLab: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log
+SkyrimNet_DOM: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
+Papyrus (general code): C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
+
+
 ### Canonical contracts (do not restate elsewhere)
 
 | Topic | File |

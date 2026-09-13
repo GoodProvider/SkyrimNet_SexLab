@@ -4,7 +4,7 @@
 
 - [SexLab Framework](https://www.loverslab.com/files/category/228-sexlab-framework-se/) (vanilla or [P+](https://www.loverslab.com/files/file/25318-sexlab-p/); P+ Separate/enjoyment-wait scenes are capped so LLM scenes end)
 - [Papyrus MessageBox](https://www.nexusmods.com/skyrimspecialedition/mods/83578)
-- [JContainers v4.2.13.1+](https://www.nexusmods.com/skyrimspecialedition/mods/16495)
+- [JContainers](https://www.nexusmods.com/skyrimspecialedition/mods/16495)
 - [SkyUI SE](https://www.nexusmods.com/skyrimspecialedition/mods/12604)
 - [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561)
   - [UIExtensions_UITextEntryMenu_with_VR_support](https://github.com/mrowrpurr/UIExtensions_UITextEntryMenu_with_VR_support) (VR)

@@ -14,8 +14,8 @@
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
     <updated>2026-09-13</updated>
     <base_tag>0.31.5</base_tag>
-    <next_version>0.33.0</next_version>
-    <version_status>Makefile VERSION=0.33.0; info.json / FOMOD already 0.33.0 in tree; git tag 0.33.0 and GitHub Release pending</version_status>
+    <next_version>0.34.0</next_version>
+    <version_status>Makefile VERSION=0.34.0 (authoritative); plugin manifest.json and settings manifest.yaml 0.34.0; info.json / FOMOD still 0.33.0 until make release; git tag 0.34.0 pending (0.33.0 was never tagged)</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -60,11 +60,12 @@
   </doc_files>
 
   <status>
-    <note>2026-09-13: Branch main (ahead of origin/main). Shipping untracked: SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/manifest.json. Still omit: reviews/, y-MIGRATING_TO_BETA25.md. make release copies SKSE so the untracked manifest is in the 7z; commit it before tagging.</note>
+    <note>2026-09-13: Retitled untagged 0.33.0 ship as 0.34.0 since tagged 0.31.5. Same delta; no new feature bullets. Branch main. Omit: reviews/, y-MIGRATING_TO_BETA25.md.</note>
+    <note>2026-09-13: Branch main (ahead of origin/main). Plugin manifest.json committed in 2ec7400. Still omit: reviews/, y-MIGRATING_TO_BETA25.md.</note>
     <note>2026-09-12: Beta 25 content plugin `goodprovider.sexlab` (external layer). Actions renamed to match in-file `name`. Settings schema stays at config/plugins. y-MIGRATING_TO_BETA25.md remains user scratch, not shipped.</note>
-    <note>2026-09-12: Release docs for 0.33.0 since tagged 0.31.5 (7fad407). Delta: RenderSlPrompt afterglow/cum, P+ PickOneAnimation + 120s duration cap + empty-tag skip (SelectAnimations and SelectAnimationsDialog), leash MCM/menu/WebUI handoff, orgasm "is not orgasming right now", helper path helpers/sexlab/. Handler ESPs unchanged. Omitted from changelog: OStimNet gitlink, webui/MainPanels stubs, TargetMenu split JSON (ActionCatalog loads target_options.json only), bondage/group-devices.json, Scripts.zip, reviews/, y-MIGRATING_TO_BETA25.md.</note>
+    <note>2026-09-12: Release docs since tagged 0.31.5 (7fad407). Delta: RenderSlPrompt afterglow/cum, P+ PickOneAnimation + 120s duration cap + empty-tag skip (SelectAnimations and SelectAnimationsDialog), leash MCM/menu/WebUI handoff, orgasm "is not orgasming right now", helper path helpers/sexlab/. Handler ESPs unchanged. Omitted from changelog: OStimNet gitlink, webui/MainPanels stubs, TargetMenu split JSON (ActionCatalog loads target_options.json only), bondage/group-devices.json, Scripts.zip, reviews/, y-MIGRATING_TO_BETA25.md.</note>
     <note>2026-09-01: Replaced release-guide.xml with release-guide.md (human) + .cursor/skills/release/SKILL.md (agent). Checkpoint is session state only.</note>
-    <note>Open: commit untracked plugin manifest.json plus changelog/checkpoint edits, git tag 0.33.0, GitHub Release. Package exists: versions/SkyrimNet_SexLab 0.33.0.7z. Papyrus .pex and SKSE DLL timestamps match current sources (no compile this pass).</note>
+    <note>Open: commit version bump (Makefile, changelogs, plugin manifests, checkpoint, prompts.md), make release (writes info.json / FOMOD 0.34.0; stale versions/SkyrimNet_SexLab 0.33.0.7z is leftover), git tag 0.34.0, GitHub Release. Do not tag 0.33.0.</note>
   </status>
 
   <conventions>
