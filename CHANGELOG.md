@@ -3,7 +3,7 @@
 ## [0.33.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.33.0) — since [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5)
 
 ### Actions / scenes
-- Ship LLM actions and prompts as SkyrimNet Beta 25 external plugin `goodprovider.sexlab` (`SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`). Action YAML filenames now equal in-file `name` (e.g. `SexLab_Start_Giving.yaml`); `name` values unchanged
+- Ship LLM actions and prompts as SkyrimNet Beta 25 external plugin `goodprovider.sexlab` (`SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`). Plugin `manifest.json`: `id` goodprovider.sexlab, `type` bundle, `version` 0.33.0, `min_skyrimnet_version` 0.25.0; `mods` requires `SkyrimNet_SexLab.esp`. Action YAML filenames now equal in-file `name` (e.g. `SexLab_Start_Giving.yaml`); `name` values unchanged
 - `change_outfit.yaml` / `SEXLAB_STOP.yaml`: `render_template` paths `helpers/sexlab/none_change_outfit` and `helpers/sexlab/none_stop` (helpers moved off `helpers/sexlab_*`)
 - Removed unused helpers `action_rape_target_start`, `action_raped_by_target_start`, `default_sex_life`
 

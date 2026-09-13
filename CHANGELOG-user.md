@@ -9,5 +9,5 @@ Requires SkyrimNet 0.25.0 (Beta 25) or later.
 - After a scene, afterglow and cum lines come from prompt files (`afterglow.prompt`, `cum.prompt`) instead of hard-coded Papyrus sentences.
     - this allows users to edit them without recompiling. 
 - Orgasm narration names who is orgasming and who is not, without treating the “not orgasming” line as an orgasm.
-- If SkyrimNet_Leashed is installed, the SkyMessage includes a leash optoin and open SkyrimNet_Leashed's panel 
+- If SkyrimNet_Leashed is installed, the SkyMessage includes a leash option and opens SkyrimNet_Leashed’s panel. 
 - Change-outfit and stop action helper prompts moved under `helpers/sexlab/`. Refresh Actions in Game Data Explorer if those descriptions look missing.
