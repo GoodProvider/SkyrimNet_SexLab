@@ -10,7 +10,15 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-ACTIONS_DIR = ROOT / "SKSE" / "Plugins" / "SkyrimNet" / "config" / "actions"
+ACTIONS_DIR = (
+    ROOT
+    / "SKSE"
+    / "Plugins"
+    / "SkyrimNet"
+    / "external"
+    / "goodprovider.sexlab"
+    / "actions"
+)
 OUT_JSON = ROOT / "SKSE" / "Plugins" / "SkyrimNet_SexLab" / "webui" / "actions_index.json"
 
 LABELS: dict[str, str] = {

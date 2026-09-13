@@ -18,7 +18,7 @@ Empty tags: skip `GetAnimationsByTags` so SexLab picks. Tagged matches: `PickOne
 
 ## In-game editor
 
-MCM **Sex Description Editor** hot key while in a SexLab animation: add/replace stage description, set `orgasm_expected`, change sex style (if Tag Editor dialogs on).
+Enable the Start Sex / Edit Stage hotkey in the SkyrimNet dashboard (default backslash `\`) while in a SexLab animation: add/replace stage description, set `orgasm_expected`, change sex style (if Tag Editor dialogs on).
 
 ESC cancels cleanly. Save aborts if existing JSON fails to parse (avoids wiping with `{}`).
 

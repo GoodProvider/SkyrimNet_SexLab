@@ -7,7 +7,7 @@ Contracts: [../reference/json-keys.md](../reference/json-keys.md), [../reference
 ## Paths
 
 ```
-SKSE/Plugins/SkyrimNet/prompts/
+SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/prompts/
   helpers/
     sexlab/
   submodules/

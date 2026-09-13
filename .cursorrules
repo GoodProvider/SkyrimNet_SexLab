@@ -12,6 +12,7 @@ SkyrimNet ↔ SexLab bridge.
 
 - Repo: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`
 - Source: `Scripts/Source/` → output `Scripts/`; headers `Headers/`; project `skyrimse.ppj`
+- LLM plugin: `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`
 
 ## Docs (pointers only)
 

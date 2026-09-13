@@ -1,6 +1,6 @@
 # Hotkeys and in-scene controls
 
-Enable the optional hot key in the MCM (**Sex Description Editor** / related bindings).
+Enable the optional hot key in the SkyrimNet dashboard plugin settings (**Enable Start Sex / Edit Stage hotkey**, default **backslash** `\\`). A dashboard save rebinds the key in-game; you do not need to open the MCM or reload. The in-game MCM only points at that page. Do not bind this to the same key as SkyrimNet_Leashed’s leash panel.
 
 ## Out of animation
 

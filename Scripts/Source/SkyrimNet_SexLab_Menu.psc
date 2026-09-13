@@ -125,8 +125,14 @@ Function Target_Menu_Selection(Actor target, Actor player)
     
     String[] buttons = Utility.CreateStringArray(cancel+1)
 
+    int ostim_player = SkyrimNetApi.GetConfigInt("Plugin_SkyrimNet_SexLab", "sexlab.ostim.player", 0)
+    if ostim_player < 0
+        ostim_player = 0
+    elseif ostim_player > 1
+        ostim_player = 1
+    endif
     if sexlab_ostim != -1
-        buttons[sexlab_ostim] = mcm.sexlab_ostim_options[mcm.sexlab_ostim_player]
+        buttons[sexlab_ostim] = mcm.sexlab_ostim_options[ostim_player]
     endif 
     buttons[masturbate] = "masturbate"
     buttons[punish] = "punish"
@@ -154,7 +160,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     Trace("Target_Menu_Selection","button:" +buttons[button]) 
     
     if button == masturbate
-        if mcm.sexlab_ostim_player == 1 && main.ostimnet_found
+        if ostim_player == 1 && main.ostimnet_found
             EventSend_OStimNet("SexStart", target, None, "")
         elseif main.handler_dom.IsDOMSlave(target) 
             main.handler_dom.Start_Masturbate("sexual training", target, player)
@@ -163,13 +169,14 @@ Function Target_Menu_Selection(Actor target, Actor player)
         endif 
     elseif sexlab_ostim != -1 && button == sexlab_ostim 
         String choice = ""
-        if mcm.sexlab_ostim_player == 0
-            mcm.sexlab_ostim_player = 1
+        if ostim_player == 0
+            ostim_player = 1
             choice = "Ostim"
         else
-            mcm.sexlab_ostim_player = 0
+            ostim_player = 0
             choice = "SexLab"
-        endif 
+        endif
+        SkyrimNetApi.PatchConfig("Plugin_SkyrimNet_SexLab", "{ \"sexlab\": { \"ostim\": { \"player\": "+ostim_player+" } } }")
         Debug.Notification("Switched to "+choice)
     elseif button == punish 
         String[] bs = new String[4] 
@@ -201,7 +208,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             actions.StartScene_Nonconsensual_Two_TargetVictim(punish_intent, player, target, method=method, setting_name=setting_name)
         endif 
     elseif button == affection
-        if mcm.sexlab_ostim_player == 0 || !main.ostimnet_found    
+        if ostim_player == 0 || !main.ostimnet_found    
             String[] bs = new String[6] 
             bs[0] = "single hug"
             bs[1] = "hugging"

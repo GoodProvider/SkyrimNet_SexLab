@@ -1,13 +1,11 @@
-customCategory: sexlab_nonsexual
-name: ExpressPhysicallyNonsexually
-label: Affection
-description: 'PARAMS: {"direction":"giving|getting", "what":"comforting|greeting|showing affection", "type":"hug|kiss|hugging|kissing|cuddling", "intent":"who, how, and why"} - [what] by [direction] [type]'
+customCategory: sexlab_sex1
+name: SexLab_Sexual_Activities_One
+label: sex (one)
+description: masturbation
 enabled: true
 eligibilityRules:
   - conditions:
-      - decoratorName: get_global_value
-        arguments:
-          - SkyrimNet_SexLab_ostim_player
+      - decoratorName: sexlab_ostim_player
         comparisonOperator: ==
         expectedValue: 0
       - decoratorName: get_faction_rank

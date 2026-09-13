@@ -1,5 +1,7 @@
 #include "Papyrus_Utilities.h"
 #include "WebUI_Log.h"
+
+#include <Windows.h>
 #include <algorithm>
 #include <cctype>
 #include <nlohmann/json.hpp>
@@ -53,6 +55,15 @@ namespace PapyrusBindings_Utilities
         }
     }
 
+    std::int32_t VkToDxScanCode(RE::StaticFunctionTag*, std::int32_t vk)
+    {
+        if (vk < 1 || vk > 255) {
+            return 0x2B;
+        }
+        const UINT dx = MapVirtualKeyA(static_cast<UINT>(vk), MAPVK_VK_TO_VSC);
+        return dx != 0 ? static_cast<std::int32_t>(dx) : 0x2B;
+    }
+
     /// Binds JsonLowerCaseKeys on SkyrimNet_SexLab_Utilities.
     bool Register_Utilities_Functions(RE::BSScript::IVirtualMachine* a_vm)
     {
@@ -64,6 +75,7 @@ namespace PapyrusBindings_Utilities
         constexpr std::string_view scriptName = "SkyrimNet_SexLab_Utilities";
 
         a_vm->RegisterFunction("JsonLowerCaseKeys", scriptName, JsonLowerCaseKeys);
+        a_vm->RegisterFunction("VkToDxScanCode", scriptName, VkToDxScanCode);
 
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;

@@ -629,6 +629,10 @@ EndFunction
 ; Recursively lowercase all JSON object keys (SKSE native). Invalid/empty -> "".
 String Function JsonLowerCaseKeys(String json) global native
 
+; SkyrimNet dashboard hotkey fields store VK; Papyrus RegisterForKey wants DX.
+; Invalid/unmapped VK -> DX backslash (0x2B).
+int Function VkToDxScanCode(int vk) global native
+
 ; Serialize JValue -> JSON string with all object keys lowercased. Empty/invalid -> "{}".
 ; Only project call site for JValue.toJsonString.
 String Function ObjectToLowerCaseKeyJson(int obj) global

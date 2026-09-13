@@ -7,7 +7,7 @@ Do **not** implement these while shipping TargetMenu `type: papyrus` controls. T
 
 ## Scope (later run)
 
-Create SkyrimNet action YAML under `SKSE/Plugins/SkyrimNet/config/actions/` (+ prompts as needed), regenerate `actions_index.json` via `tools/generate_actions_index.py`, and wire eligibility `SexLabAnimatingFaction > 0` where appropriate.
+Create SkyrimNet action YAML under `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/actions/` (+ prompts as needed), regenerate `actions_index.json` via `tools/generate_actions_index.py`, and wire eligibility `SexLabAnimatingFaction > 0` where appropriate. YAML filename must equal the in-file `name`.
 
 | Area | Notes |
 |------|--------|

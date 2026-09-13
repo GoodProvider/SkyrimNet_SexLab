@@ -13,8 +13,8 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 | `Headers/` | Import headers |
 | `skyrimse.ppj` | Pyro project |
 | `Spriggit/` | ESP ↔ JSON |
-| `SKSE/Plugins/SkyrimNet/config/actions/` | Action YAML |
-| `SKSE/Plugins/SkyrimNet/prompts/` | Prompts |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Action YAML + prompts (`manifest.json`; no settings schema) |
+| `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/` | Settings schema (`Plugin_SkyrimNet_SexLab`, `sexlab.*`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/` | Scenes, animations, threads |
 | `SKSE_Source/` | C++ WebUI plugin |
 
@@ -50,6 +50,7 @@ Scene_Creator (pooled) ──StartScene──► Scene_Manager.CreateSceneByCrea
 - Trace → `WebUI.TraceLog` → `SKSE\SkyrimNet_SexLab.log` (prefix `"---"`).
 - DOM optional: `handler_dom`; Dom orgasm → `OrgasmCustom` + `" is orgasming."`. Nonconsensual wrappers omit `style` (8-arg limit).
 - Leash: `MCM.leashed_found` (`GetFormFromFile(0x800, "SkyrimNet_Leashed.esp")`); `Menu.EventSend_LeashedOpen` hides WebUI then `SkyrimNet_Leashed_OpenPanel`. Bondage/leash SkyMessage buttons skipped when their index is `-1`.
+- Settings: MCM is a pointer; `ApplyPluginConfig` reads `Plugin_SkyrimNet_SexLab`. `Setup` registers `SkyrimNet_OnPluginConfigSaved` → `OnPluginConfigSaved` → `ApplyPluginConfig` so a dashboard save rebinds `RegisterForKey`. `ApplyHotkey` maps leftover saved `43` (old DX backslash) to VK `220`, then `VkToDxScanCode`. Ostim framework is `GetConfigInt` / `PatchConfig` `sexlab.ostim.player` (decorator `sexlab_ostim_player`). Do not write `skyrimnet_sexlab_ostim_player`.
 - Quirks (initiator vs victim, P+ hop vs end, DOM bind race): [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 
 ## Review

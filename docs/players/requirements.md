@@ -11,7 +11,7 @@
 - [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
   - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - [Dragonborn voice over 2](https://www.nexusmods.com/skyrimspecialedition/mods/84329)
-- SkyrimNet (Beta7 or later; narration enabled)
+- SkyrimNet **0.25.0+** (Beta 25; narration enabled). This mod ships LLM content as plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/`. Older SkyrimNet builds that only read `prompts/` and `config/actions/` will not load those files.
 - SkyrimNet_SexLab (this mod)
 - Animation utilities: [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232), [XPMSSE](https://www.nexusmods.com/skyrimspecialedition/mods/1988), [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/), [Hug kill move fix for USSEP](https://www.nexusmods.com/skyrimspecialedition/mods/139572)
 - [Ace Animations](https://www.nexusmods.com/skyrimspecialedition/mods/81928) (cuddle/spooning)
@@ -21,7 +21,7 @@
 - [SkyrimNet_DOM](https://github.com/GoodProvider) — `SkyrimNet_DOM.esp`; Domination slave orgasm / hotkey routing
 - [SkyrimNet_Arousal](https://github.com/GoodProvider/SkyrimNet_Arousal)
 - [OSL Aroused](https://www.nexusmods.com/skyrimspecialedition/mods/65454)
-- [OstimNet](https://github.com/tetherball88/OStimNet) — MCM picks SexLab vs OStim for LLM starts
+- [OstimNet](https://github.com/tetherball88/OStimNet) — SkyrimNet dashboard **Sex framework** (`sexlab.ostim.player`) picks SexLab vs OStim for LLM starts
 - `SkyrimNet_Leashed.esp` — SkyMessage / PrismaUI Target Menu **leash** opens that mod’s panel
 
 ## Related NSFW

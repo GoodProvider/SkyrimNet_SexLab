@@ -1064,7 +1064,11 @@ Function StageStart()
     endif 
 
     if orgasm_narration != ""
-        thread.UpdateTimer(orgasm_delay)
+        float delay = 5.0
+        if main
+            delay = main.orgasm_delay
+        endif
+        thread.UpdateTimer(delay)
         if has_player
             DirectNarration(orgasm_narration, sender, receiver, purge_dialogue=True)
         else

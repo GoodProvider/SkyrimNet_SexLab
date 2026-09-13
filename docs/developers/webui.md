@@ -12,7 +12,8 @@ Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (PrismaUI view path, ac
 | `SKSE/Plugins/SkyrimNet_SexLab.dll` | Built plugin |
 | `PrismaUI/views/SkyrimNet_SexLab/index.html` | Overlay HTML under `Data/PrismaUI/views/` |
 | `SKSE/Plugins/SkyrimNet_SexLab/webui/` | `target_options.json`, `actions_index.json`, `TargetMenu/Actor/options/` |
-| `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml` | SkyrimNet plugin schema (e.g. `sexlab.orgasm.delay`) |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Beta 25 content plugin (actions + prompts; no settings schema) |
+| `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml` | Settings schema for ConfigManager (`Plugin_SkyrimNet_SexLab`, `sexlab.*`) |
 | `Scripts/Source/SkyrimNet_SexLab_WebUI.psc` | `Target_Menu_Open` / `Sex_Menu_Open` / `Hide` natives |
 
 ## Lifecycle

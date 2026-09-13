@@ -21,7 +21,7 @@
 
 ## Optional examples
 
-- Action YAML: SKSE/Plugins/SkyrimNet/config/actions/sexlab_sex2_sex_giving.yaml
+- Action YAML: SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/actions/SexLab_Start_Giving.yaml
 - Scene JSON: SKSE/Plugins/SkyrimNet_SexLab/scenes/no_penis.json, scenes/punish_spanking.json
 - Synthetic stub: docs/examples/minimal-scene-setting.json
 

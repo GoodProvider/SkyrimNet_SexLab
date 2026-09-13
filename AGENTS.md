@@ -14,6 +14,7 @@ Bridge mod between SkyrimNet (LLM) and SexLab Framework.
 | `Scripts/` | Compiled `.pex` |
 | `Headers/` | Papyrus headers |
 | `skyrimse.ppj` | Pyro project |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Beta 25 LLM plugin (actions + prompts + settings schema) |
 
 Repo root: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`.
 

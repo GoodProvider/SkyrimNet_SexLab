@@ -60,6 +60,7 @@
   </doc_files>
 
   <status>
+    <note>2026-09-12: Beta 25 content plugin `goodprovider.sexlab` (external layer). Actions renamed to match in-file `name`. Settings schema stays at config/plugins. y-MIGRATING_TO_BETA25.md remains user scratch, not shipped.</note>
     <note>2026-09-12: Release docs for 0.33.0 since tagged 0.31.5 (7fad407). Branch better-ending. Delta: RenderSlPrompt afterglow/cum, P+ PickOneAnimation + 120s duration cap + empty-tag skip (SelectAnimations and SelectAnimationsDialog), leash MCM/menu/WebUI handoff, orgasm "is not orgasming right now", helper path helpers/sexlab/. Uncommitted Menu.psc / Scene_Creator.psc / afterglow+0050+0550 prompts included as shipping. Handler ESPs unchanged. Omitted from changelog: OStimNet gitlink, webui/MainPanels stubs, TargetMenu split JSON (ActionCatalog loads target_options.json only), bondage/group-devices.json, Scripts.zip, reviews/, y-MIGRATING_TO_BETA25.md.</note>
     <note>2026-09-01: Replaced release-guide.xml with release-guide.md (human) + .cursor/skills/release/SKILL.md (agent). Checkpoint is session state only.</note>
     <note>Open: commit shipping tree (Makefile + docs + papyrus/prompts), compile: pyro if .pex drift, make release (writes info.json / FOMOD 0.33.0), git tag 0.33.0, GitHub Release. Branch better-ending, not main.</note>
