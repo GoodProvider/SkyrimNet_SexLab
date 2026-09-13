@@ -1,5 +1,17 @@
 # Knowledgebase
 
+## DOM masturbation is a synthetic thread, not SexLab (2026-09-13)
+
+DOM solo masturbation is behaviour `masturbate` (idles / `DOMActionMasturbating`), not a SexLab `ThreadSlots` scene. `0050_sexlab_activity.prompt` presents it via `handler_dom.GetThreads()` merged in `GetThreadsJson`. DOM bio `0055` skips `masturbating.` on purpose so 0050 owns description + `_pleasure_` speaking rules.
+
+SkyrimNet **blocks Papyrus decorators when any menu pauses the game** (`ExecuteDecorator: Blocking VM call … because game is paused`). That is not `isTimePaused`. `0050` then falls back to `threads.json`. `Handler_DOM` refreshes that file from `DOMOnBehaviourChange` on masturbate start/stop — do not rely on `sexlab_get_threads` alone.
+
+Sibling `SkyrimNet_DOM_API.GetThreads` walks `DOM02.actorAliases` / `GetMaxActorCount` (same as capture scan). `GetActorCount` / `actorArray` lag until `UpdateActorArray`. Skip when `IsBusy` so a live SexLab scene is not double-listed.
+
+## YAML `>` is not a comparison operator (2026-09-13)
+
+Unquoted `comparisonOperator: >` is a YAML folded block scalar, so SkyrimNet stores a blank operator. `SEXLAB_STOP` then logs `blank comparisonOperator; the rule always evaluates false` and EligibilityChecker `Unknown comparison operator ''` on every pass — Stop never becomes eligible while animating. Quote it: `comparisonOperator: ">"`. `<` and `==` can stay unquoted; quoting `>` (and `<` for consistency) is required.
+
 ## Dom player-orgasm tease is not slave climax (2026-09-13)
 
 `DOM_Mind` sends `{name} squirms under your grasp as your orgasm submerges you` when the **player** climaxes. That is not a Dom slave orgasm. `Handler_DOM.DOMSlave_Orgasmed` must refuse it (no `OrgasmCustom` / DN). Sibling Dom Events skips it in `OnNotifcationSkip` and only routes melt phrasing to the handler. Oral `orgasm_expected [0, 1]` plus Combined skip of `dom_slave` already omit the giver; do not let the tease override that.

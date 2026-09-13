@@ -915,9 +915,15 @@ String Function GetThreadsJson(Actor speaker = None)
         i += 1
     endwhile
 
-    int threads_dom = main.handler_dom.GetThreads()
+    int threads_dom = 0
+    int dom_count = 0
+    int dom_kept = 0
+    if main.handler_dom
+        threads_dom = main.handler_dom.GetThreads()
+    endif
     if threads_dom
-        i = JArray.count(threads_dom) - 1
+        dom_count = JArray.count(threads_dom)
+        i = dom_count - 1
         while i >= 0
             int thread = JArray.getObj(threads_dom, i)
             String description = JMap.getStr(thread, "description")
@@ -957,17 +963,21 @@ String Function GetThreadsJson(Actor speaker = None)
                 JMap.setFlt(thread, "speaker_distance", distance)
                 JMap.setInt(thread, "speaker_los", los as int)
                 JArray.addObj(threads_array, thread)
+                dom_kept += 1
             endif
             i -= 1
         endwhile
     endif
+    Trace("GetThreadsJson", "--- dom threads:"+dom_count+" kept:"+dom_kept)
 
     JMap.setObj(obj, "threads", threads_array) 
 
     String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(obj) 
     
     JValue.release(obj) 
-    JValue.release(threads_dom)
+    if threads_dom
+        JValue.release(threads_dom)
+    endif
     Miscutil.WriteToFile(threads_filename, json, append=False)
     return json
 EndFunction 

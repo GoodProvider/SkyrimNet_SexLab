@@ -6,6 +6,7 @@ import SkyrimNet_SexLab_Utilities
 
 String storage_actor_orgasm_total_key = "skyrimnet_sexlab_domactor_orgasm_total"
 String storage_actor_orgasm_message_key = "skyrimnet_sexlab_domactor_orgasm_message"
+String storage_behaviour_key = "skyrimnet_sexlab_dom_behaviour"
 
 
 
@@ -36,6 +37,10 @@ bool Function Setup()
         actors_obj = JArray.object()
         Jvalue.retain(actors_obj)
     endif
+
+    UnRegisterForModEvent("DOMOnBehaviourChange")
+    RegisterForModEvent("DOMOnBehaviourChange", "OnBehaviourChange")
+    Trace("Setup", "--- registered DOMOnBehaviourChange")
 
     return True 
 endFunction
@@ -179,6 +184,29 @@ EndFunction
 int Function GetThreads()
     return SkyrimNet_DOM_API.GetThreads()
 EndFunction
+
+; DOM solo masturbation is not a SexLab thread. Dump threads.json on start/stop so
+; 0050_sexlab_activity can read it when SkyrimNet blocks sexlab_get_threads (menu pause).
+Event OnBehaviourChange(Form akRef, String type)
+    Actor slave = akRef as Actor
+    if slave == None
+        Trace("OnBehaviourChange", "akRef is not an Actor, skipping")
+        return
+    endif
+    String current = StorageUtil.GetStringValue(akRef, storage_behaviour_key, "")
+    Trace("OnBehaviourChange", GetDisplayName(slave)+" "+current+"->"+type)
+    bool refresh = (type == "masturbate") || (current == "masturbate")
+    StorageUtil.SetStringValue(akRef, storage_behaviour_key, type)
+    if !refresh
+        return
+    endif
+    if manager == None
+        Trace("OnBehaviourChange", "manager is None, aborting")
+        return
+    endif
+    manager.SaveThreadsJson()
+    Trace("OnBehaviourChange", "--- refreshed threads.json for "+GetDisplayName(slave)+" type:"+type)
+EndEvent
 
 
 
