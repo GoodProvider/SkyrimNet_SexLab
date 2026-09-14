@@ -70,7 +70,7 @@ Function ProcessHotkey(int key_code)
     if target != None 
         if main.sexlab.IsActorActive(target)
             Trace("ProcessHotkey","target: "+target.getDisplayName()+" in active sex")
-            sslThreadController thread = manager.GetThreadbyActor(target)
+            sslThreadController thread = manager.GetThreadByActor(target, true)
             if thread != None
                 Trace("ProcessHotkey", "thread found "+thread.tid+" for target:"+target.GetDisplayName())
                 stages.EditDescriptions(thread)

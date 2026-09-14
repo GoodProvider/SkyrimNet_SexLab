@@ -8,6 +8,7 @@ SkyrimNet_SexLab_Menu Property menu Auto
 
 GlobalVariable Property sexlab_public_sex_accepted Auto
 GlobalVariable Property skyrimnet_sexlab_hide_hermaphrodites Auto
+GlobalVariable Property skyrimnet_sexlab_ostim_player Auto
 
 String page_options = "options"
 
@@ -116,6 +117,14 @@ Function ApplyPluginConfig()
             skyrimnet_sexlab_hide_hermaphrodites.SetValue(1.0)
         else
             skyrimnet_sexlab_hide_hermaphrodites.SetValue(0.0)
+        endif
+    endif
+
+    if skyrimnet_sexlab_ostim_player
+        if SkyrimNetApi.GetConfigInt(PLUGIN_CONFIG, "sexlab.ostim.player", 0) != 0
+            skyrimnet_sexlab_ostim_player.SetValue(1.0)
+        else
+            skyrimnet_sexlab_ostim_player.SetValue(0.0)
         endif
     endif
 

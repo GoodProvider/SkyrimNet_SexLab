@@ -5,7 +5,9 @@ description: 'PARAMS: {"direction":"giving|getting", "type":"spanking|whipping",
 enabled: true
 eligibilityRules:
   - conditions:
-      - decoratorName: sexlab_ostim_player
+      - decoratorName: get_global_value
+        arguments:
+          - skyrimnet_sexlab_ostim_player
         comparisonOperator: ==
         expectedValue: 0
       - decoratorName: get_faction_rank

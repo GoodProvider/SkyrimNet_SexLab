@@ -196,7 +196,7 @@ Function EditDescriptions(sslThreadController thread)
         return
     endif 
     Trace("EditDecriptions","-- b")
-    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByThread(thread)
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByThread(thread, false, true)
     if sl_scene == None 
         Trace("EditDescriptions","sl_scene is None")
         return 
@@ -514,7 +514,7 @@ int[] Function GetOrgasmExpected(sslThreadController thread)
 EndFunction
 
 Function SetOrgasmExpected(sslThreadController thread)
-    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByThread(thread)
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByThread(thread, false, true)
     if sl_scene == None 
         Trace("SetOrgasmExpected","sl_scene is None")
         return 
