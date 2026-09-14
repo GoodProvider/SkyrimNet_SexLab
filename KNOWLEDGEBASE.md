@@ -1,5 +1,15 @@
 # Knowledgebase
 
+## MO2: installed release vs dev folder (2026-09-13)
+
+Profiles can enable the packaged mod (`SkyrimNet SexLab`, space) while the git workspace (`SkyrimNet_SexLab`, underscore) is disabled. Compiling this repo then does **not** affect the running game.
+
+**Symptom:** Dom melt DN works, but Combined last-stage still emits a second `" is orgasming."` for the slave (pre-`orgasm_narrated` / pre-window build). Or melt waits until the next StageStart (~tens of seconds) instead of flushing after `sexlab.orgasm.delay`.
+
+**Tell from the log:** after a melt, expect `Combined stash`, `ArmOrgasmWindow`, then `OnUpdate` / `FlushOrgasmWindow`. Absence of those traces means the installed release `.pex` is loaded, not this repo.
+
+**Fix:** enable the MO2 entry that maps to `C:\Skyrim\dev\mods\SkyrimNet_SexLab` (this workspace) and disable the installed-release folder for that profile.
+
 ## JValue.toJsonString is JC 4.2.13.1+ only (2026-09-13)
 
 `JValue.toJsonString` landed in JContainers SE 4.2.13.1. Older `JValue.pex` (Wabbajack lists, Nefaram) logs `Static function toJsonString not found` and returns None; `ObjectToLowerCaseKeyJson` then fed `""` to `JsonLowerCaseKeys` and every decorator dumped `{}`. Papyrus cannot guard a missing native — the compiled `.pex` must not call it. Walk JMap/JArray/JFormMap/JIntMap in `JValueToJsonString`, then `JsonLowerCaseKeys`. Do not `writeToFile` a shared temp path (decorator spam + races).
@@ -8,7 +18,7 @@
 
 DOM solo masturbation is behaviour `masturbate` (idles / `DOMActionMasturbating`), not a SexLab `ThreadSlots` scene. `0050_sexlab_activity.prompt` presents it via `handler_dom.GetThreads()` merged in `GetThreadsJson`. DOM bio `0055` skips `masturbating.` on purpose so 0050 owns description + `_pleasure_` speaking rules.
 
-SkyrimNet **blocks Papyrus decorators when any menu pauses the game** (`ExecuteDecorator: Blocking VM call … because game is paused`). That is not `isTimePaused`. `0050` then falls back to `threads.json`. `Handler_DOM` refreshes that file from `DOMOnBehaviourChange` on masturbate start/stop — do not rely on `sexlab_get_threads` alone.
+SkyrimNet **blocks Papyrus decorators when any menu pauses the game** (`ExecuteDecorator: Blocking VM call … because game is paused`). That is not `isTimePaused`. `0050` then falls back to `threads.json`. `DOMOnBehaviourChange` is a queued ModEvent sent after `EnterWait()`, so the next paused prompt can still see the start dump. Skip a thread in `0050` / `0550` unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating`. Sibling start/stop actions dump `threads.json` synchronously; `Handler_DOM` still refreshes on behaviour change for wheel-menu / NPC stops.
 
 Sibling `SkyrimNet_DOM_API.GetThreads` walks `DOM02.actorAliases` / `GetMaxActorCount` (same as capture scan). `GetActorCount` / `actorArray` lag until `UpdateActorArray`. Skip when `IsBusy` so a live SexLab scene is not double-listed.
 
@@ -101,11 +111,25 @@ The **Speaker is always the subject** of LLM-facing sentences. `speaker_position
 
 1. `OrgasmCombined` / Combined `OrgasmCustom` stash into `orgasm_messages`.
 2. **No Dom slave in thread:** `thread.UpdateTimer(4.0)`; next `StageStart` flushes via `OrgasmMessagesToNarration()` into one DirectNarration.
-3. **Dom slave in thread:** do **not** `UpdateTimer` (P+ `_ForceAdvance` hops) and do **not** consume the stash on StageStart. `ArmOrgasmWindow` → `RegisterForSingleUpdate(sexlab.orgasm.delay)` (default 5s), restarted on every Combined/Custom event. Scene `OnUpdate` waits out `IsInMenuMode`, then one DirectNarration of every `" is orgasming."` clause (player + slave). Immediate `OrgasmHelper` on melt would be overwritten by a later player climax DN.
+3. **Dom slave in thread:** do **not** `UpdateTimer` (P+ `_ForceAdvance` hops) and do **not** consume the stash on StageStart. `ArmOrgasmWindow` → `RegisterForSingleUpdate(sexlab.orgasm.delay)` (default 5s), restarted on every Combined/Custom event but capped at **2× delay** from `orgasm_window_started_at`. Scene `OnUpdate` waits out `IsInMenuMode`, then `FlushOrgasmWindow` (`AlignActors` then one DirectNarration of every `" is orgasming."` clause). Immediate `OrgasmHelper` on melt would be overwritten by a later player climax DN.
 4. `SetStyleDialog` skips its DirectNarration while `orgasm_messages_set` (style is already in scene JSON).
 5. `AnimationEnd`: leftover stash is prepended to the finish DirectNarration (must include `" is orgasming."`). Do not RegisterEvent-only leftover — 0550 gates on DirectNarration. Then `Release` (UnregisterForUpdate). SeparateOrgasms afterglow unchanged. Do not narrate ongoing activity at end.
+6. `AnimationStart` (STATUS_SETUP): flush a pending stash before clearing — do not drop a melt that raced AnimationEnd→next start.
+7. Handler delayed melt: after 1s, retry `manager.OrgasmCustom` if the scene is back; only DirectNarrate when still unreachable (keeps scene totals / Combined window in sync).
 
 **Symptom (2026-09-13):** Dom HUD `Nina's brain melts…`, `total_orgasm` 0→1, no `" is orgasming."` DN; 0550 never gated. SexLab hotkey SkyMessage was open; Combined stash waited on StageStart/`UpdateTimer`; style DN (`Bob changes from 'forcefully' to 'gently'`) took the slot.
+
+**Symptom (2026-09-13 later):** Melt DN correct (`Nina is orgasming`, total 0→1). Last-stage Combined then flushed `Nina is orgasming. Bob is orgasming.` even though DOM skipped the player-tease HUD and Nina’s total stayed 1.
+
+**Cause:** `OrgasmMessagesToNarration` Combined slave fallback treated lifetime `total_orgasm > 0` as “orgasming now”. Also: MO2 profile was loading the installed release without `ArmOrgasmWindow` / `orgasm_narrated`.
+
+**Fix:** Position JMap `orgasm_narrated` records how many orgasms were already spoken. Flush marks it when emitting a stash clause. Fallback only if `GetTotalOrgasms > orgasm_narrated`. Already-spoken slave gets `" is not orgasming right now."` (not denied). Enable the git workspace mod in MO2 when testing.
+
+**Symptom (2026-09-13 StageEnd melt):** DOM HUD `Nina melt orgasm` between `HookStageEnd` and `HookStageStart`. `Get_Threads` stayed `total_orgasm: 0`. StageStart sent `continue activity`. No `"brain melts"` DN.
+
+**Cause:** `GetThreadByActor` / `GetSceneByThread` require SexLab state `animating` or `prepare`. During StageEnd the controller is often neither, so `OrgasmCustom` aborts. Separately, first-stage melt flushed via `RegisterEvent` then `DirectNarration` of the same sentence; `CheckDuplicate` emptied the DN (0550 gates on DN only).
+
+**Fix:** `GetSceneByActor` scans `thread_scene` (and `sl_scenes`) when the state filter misses. `OrgasmCustom` uses `GetThreadByActor(any_state)` + `GetSceneByThread(any_state, create_if_missing=false)`. Handler delays the melt 1s if scene is still None, then retries `OrgasmCustom` before falling back to DirectNarration. StageStart RegisterEvents the stage desc only, then DirectNarrates the orgasm sentence.
 
 ## Actor lock key (2026-07-23)
 

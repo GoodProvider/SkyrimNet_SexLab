@@ -20,6 +20,13 @@
 
 {% if existsIn(sexlab,"threads") and length(sexlab.threads) > 0 %}
      {% for thread in sexlab.threads %}
+          {% set _thread_live = false %}
+          {%- for actor_record in thread.actors %}
+               {% if is_in_faction(to_number(actor_record.uuid), "SexLabAnimatingFaction") or is_in_faction(to_number(actor_record.uuid), "OStimActorCountFaction") or is_in_faction(to_number(actor_record.uuid), "DOMActionMasturbating") %}
+                    {% set _thread_live = true %}
+               {% endif %}
+          {% endfor %}
+          {% if _thread_live %}
           {% set _notice_level = 0 %} 
 
           {% if _notice_level != 2 %} 
@@ -55,6 +62,7 @@
                     {% endfor %} 
           {% else if _notice_level == 1 %} 
                - You can tell someone is having sex{% if _includes_creatures %}, which includes creatures{% endif %}.
+          {% endif %}
           {% endif %}
      {%- endfor -%}
 {% endif %} 

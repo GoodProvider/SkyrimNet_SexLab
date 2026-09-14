@@ -442,13 +442,17 @@ SkyrimNet_SexLab_Scene Function GetSceneByActor(Actor akActor)
         return None 
     endif 
     sslThreadController thread = GetThreadByActor(akActor) 
-    if thread == None
-        return None 
-    endif 
-    return GetSceneByThread(thread)
+    if thread != None
+        return GetSceneByThread(thread)
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = FindSceneByActorInThreadScene(akActor)
+    if sl_scene == None
+        Trace("GetSceneByActor", "--- no scene for "+GetDisplayName(akActor)+" (thread not animating/prepare)")
+    endif
+    return sl_scene
 EndFunction
 
-sslThreadController Function GetThreadByActor(Actor akActor) 
+sslThreadController Function GetThreadByActor(Actor akActor, bool any_state=False) 
     Trace("GetThread","actor:"+akActor.GetDisplayName())
     sslThreadController[] threads = ThreadSlots.Threads
     if threads.length == -1 
@@ -458,7 +462,7 @@ sslThreadController Function GetThreadByActor(Actor akActor)
     int i = threads.length - 1
     while 0 <= i
         String status = (threads[i] as sslThreadModel).GetState()
-        if status == "animating" || status == "prepare"
+        if any_state || status == "animating" || status == "prepare"
             Actor[] actors = threads[i].Positions
             int j = actors.length - 1
             while 0 <= j 
@@ -471,6 +475,60 @@ sslThreadController Function GetThreadByActor(Actor akActor)
         i -= 1
     endwhile
     return None 
+EndFunction
+
+; StageEnd can leave the SexLab controller outside animating/prepare while thread_scene is still bound.
+SkyrimNet_SexLab_Scene Function FindSceneByActorInThreadScene(Actor akActor)
+    if !thread_scene || akActor == None
+        return None
+    endif
+    int i = 0
+    int n = thread_scene.length
+    while i < n
+        SkyrimNet_SexLab_Scene sl_scene = thread_scene[i] as SkyrimNet_SexLab_Scene
+        if sl_scene != None
+            sslThreadController bound = sl_scene.GetThread()
+            if bound != None
+                Actor[] actors = bound.Positions
+                if actors
+                    int j = 0
+                    while j < actors.length
+                        if actors[j] == akActor
+                            Trace("FindSceneByActorInThreadScene", "--- "+GetDisplayName(akActor)+" sid:"+sl_scene.sid+" tid:"+bound.tid)
+                            return sl_scene
+                        endif
+                        j += 1
+                    endwhile
+                endif
+            endif
+        endif
+        i += 1
+    endwhile
+    if sl_scenes
+        i = 0
+        n = sl_scenes.length
+        while i < n
+            SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
+            if sl_scene != None
+                sslThreadController bound = sl_scene.GetThread()
+                if bound != None
+                    Actor[] actors = bound.Positions
+                    if actors
+                        int j = 0
+                        while j < actors.length
+                            if actors[j] == akActor
+                                Trace("FindSceneByActorInThreadScene", "--- sl_scenes "+GetDisplayName(akActor)+" sid:"+sl_scene.sid+" tid:"+bound.tid)
+                                return sl_scene
+                            endif
+                            j += 1
+                        endwhile
+                    endif
+                endif
+            endif
+            i += 1
+        endwhile
+    endif
+    return None
 EndFunction 
 
 ;----------------------------------------------------------------------------------------------------
@@ -864,7 +922,14 @@ int Function GettotalOrgasms(Actor akActor)
 EndFunction
 
 Function OrgasmCustom(Actor akActor, String msg) 
-    SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(akActor)
+    sslThreadController thread = GetThreadByActor(akActor, true)
+    SkyrimNet_SexLab_Scene sl_scene = None
+    if thread != None
+        sl_scene = GetSceneByThread(thread, true, false)
+    endif
+    if sl_scene == None
+        sl_scene = FindSceneByActorInThreadScene(akActor)
+    endif
     if sl_scene == None 
         Trace("OrgasmCustom", "--- scene is None for "+GetDisplayName(akActor)+", aborting")
         return 

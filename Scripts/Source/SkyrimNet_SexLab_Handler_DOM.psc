@@ -123,23 +123,28 @@ Function DOMSlave_Orgasmed(Actor slave, String msg)
     if manager == None 
         Trace("DOMSlave_Orgasmed","--- manager is None, aborting")
         return
-    elseif !manager.sexlab.IsActorActive(slave) 
-        Trace("DOMSlave_Orgasmed", "--- delayed inactive DN for "+GetDisplayName(slave))
-        int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
-        msg += " "+GetDisplayName(slave)+" is orgasming. "
-        if total == 0 
-            StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, 1)
-            StorageUtil.SetStringValue(slave, storage_actor_orgasm_message_key, msg)
-            JArray.addForm(actors_obj, slave)
-        else
-            total += 1
-            StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, total)
-        endif
-        RegisterForSingleUpdate(1.0)
+    elseif !manager.sexlab.IsActorActive(slave) || manager.GetSceneByActor(slave) == None
+        DelayMeltNarration(slave, msg)
     else 
         Trace("DOMSlave_Orgasmed", "--- OrgasmCustom for "+GetDisplayName(slave)+": "+msg)
         manager.OrgasmCustom(slave, msg)
     endif
+EndFunction
+
+Function DelayMeltNarration(Actor slave, String msg)
+    ; Store the raw melt text. OnUpdate retries OrgasmCustom (Manager adds the
+    ; gate); only the unreachable-scene fallback appends " is orgasming." here.
+    Trace("DOMSlave_Orgasmed", "--- delayed melt DN for "+GetDisplayName(slave))
+    int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
+    if total == 0 
+        StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, 1)
+        StorageUtil.SetStringValue(slave, storage_actor_orgasm_message_key, msg)
+        JArray.addForm(actors_obj, slave)
+    else
+        total += 1
+        StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, total)
+    endif
+    RegisterForSingleUpdate(1.0)
 EndFunction
 
 Event OnUpdate() 
@@ -151,21 +156,29 @@ Event OnUpdate()
     Actor receiver = None 
     while i < count
         Actor slave = objs[i] as Actor
-        if sender == None 
-            sender = slave
-        elseif receiver == None 
-            receiver = slave
-        endif
         int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
         String msg = StorageUtil.GetStringValue(slave, storage_actor_orgasm_message_key, "")
-        if total > 0 
-            if total > 1 
-                msg += total+" times, over and over again." 
-            endif 
-            StorageUtil.UnsetIntValue(slave, storage_actor_orgasm_total_key)
-            StorageUtil.UnsetStringValue(slave, storage_actor_orgasm_message_key)
+        StorageUtil.UnsetIntValue(slave, storage_actor_orgasm_total_key)
+        StorageUtil.UnsetStringValue(slave, storage_actor_orgasm_message_key)
+
+        ; Prefer rejoining the SexLab scene so totals / Combined window stay in sync.
+        if slave != None && manager != None && manager.sexlab.IsActorActive(slave) && manager.GetSceneByActor(slave) != None
+            Trace("OnUpdate", "--- retry OrgasmCustom for "+GetDisplayName(slave))
+            manager.OrgasmCustom(slave, msg)
+        else
+            if sender == None 
+                sender = slave
+            elseif receiver == None 
+                receiver = slave
+            endif
+            if total > 0 
+                msg += " "+GetDisplayName(slave)+" is orgasming. "
+                if total > 1 
+                    msg += total+" times, over and over again." 
+                endif 
+            endif
+            narration += msg+". "
         endif
-        narration += msg+". "
         i += 1 
     endwhile 
     JArray.clear(actors_obj)

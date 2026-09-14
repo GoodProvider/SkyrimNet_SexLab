@@ -45,8 +45,9 @@ Keep literals character-for-character or matching breaks.
 ## Activity flow (`0050`)
 
 1. `sexlab_get_threads(npc.UUID)` or `threads.json` fallback.
-2. Match speaker by `uuid`; read `speaking_modifiers`, `victim`, etc.
-3. Emit context + Speaking Rules when modifiers present.
+2. Skip a thread unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating` (stale DOM masturbate rows after stop).
+3. Match speaker by `uuid`; read `speaking_modifiers`, `victim`, etc.
+4. Emit context + Speaking Rules when modifiers present.
 
 `contains(speaker.speaking_modifiers, "_pain_")` is case-sensitive.
 

@@ -23,6 +23,9 @@ int victim_faction_forms
 String[] orgasm_messages
 bool orgasm_messages_set = false
 bool orgasm_window_open = false
+; Real-time stamp when the Combined DOM window first armed; ArmOrgasmWindow
+; will not extend past 2x orgasm_delay from this start.
+float orgasm_window_started_at = 0.0
 
 String storage_prefix = "skyrimnet_sexlab_scene"
 String storage_obj_key = "skyrimnet_sexlab_scene_actor_position_obj"
@@ -200,6 +203,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     EnsureActorArraysLargeEnough(num_actors) 
     orgasm_messages_set = false
     orgasm_window_open = false
+    orgasm_window_started_at = 0.0
     UnregisterForUpdate()
 
     int i = 0 
@@ -437,6 +441,7 @@ Function Release()
     DbgEnter("Release")
     UnregisterForUpdate()
     orgasm_window_open = false
+    orgasm_window_started_at = 0.0
     int i = 0
     int num_actors = 0
     if thread != None
@@ -497,6 +502,7 @@ Function Release()
     endif
     orgasm_messages_set = false
     orgasm_window_open = false
+    orgasm_window_started_at = 0.0
     animating_started_at = 0.0
 
     sender = None 
@@ -641,6 +647,7 @@ bool Function SetActor(int i, Actor akActor)
         JMap.setStr(obj,"notice_level","active")
     endif
     JMap.setInt(obj,"total_orgasm",0)
+    JMap.setInt(obj,"orgasm_narrated",0)
     JMap.setInt(obj,"arousal", -1) 
     DbgMsg("SetActor", "thread.IsVictim "+akActor.GetDisplayName())
     if thread.IsVictim(akActor) 
@@ -925,13 +932,21 @@ String Function GetIntentMessage(int intent_stage = -1)
     elseif intent_stage == INTENT_STAGE_END 
         verb = "finish"
     endif
-    String fallback = actor_names+" "+verb+" "+intent+"."
+    ; DOM / empty-intent creators must not emit "Nina and Bob finish ."
+    String fallback = ""
     if num_victims > 0
-        fallback = assailant_names+" "+verb+" "+intent+" "+victim_names+"."
-    endif
-    if num_victims > 0
+        if intent != ""
+            fallback = assailant_names+" "+verb+" "+intent+" "+victim_names+"."
+        else
+            fallback = assailant_names+" "+verb+" "+victim_names+"."
+        endif
         DbgReturn("GetIntentMessage", "with victims")
     else
+        if intent != ""
+            fallback = actor_names+" "+verb+" "+intent+"."
+        else
+            fallback = actor_names+" "+verb+"."
+        endif
         DbgReturn("GetIntentMessage", "actors only")
     endif
     return fallback
@@ -969,21 +984,28 @@ Function AnimationStart()
     ; Re-entrant mid-scene AnimationStart must not force STATUS_SETUP (would re-run
     ; first-start/initiator path) or clear orgasm_messages_set while leaving non-empty
     ; slots (flush skips; Combined will not refill). Only reset orgasm stash on first start.
+    ; A melt that landed between AnimationEnd and this start must still DN — flush first.
     if status != STATUS_ACTIVE
         status = STATUS_SETUP
         if animating_started_at <= 0.0
             animating_started_at = Utility.GetCurrentRealTime()
         endif
-        if orgasm_messages
-            int m = 0
-            while m < orgasm_messages.length
-                orgasm_messages[m] = ""
-                m += 1
-            endwhile
+        if orgasm_messages_set
+            Trace("AnimationStart", "--- flushing pending orgasm stash before reset")
+            FlushOrgasmWindow()
+        else
+            if orgasm_messages
+                int m = 0
+                while m < orgasm_messages.length
+                    orgasm_messages[m] = ""
+                    m += 1
+                endwhile
+            endif
+            orgasm_messages_set = false
+            orgasm_window_open = false
+            orgasm_window_started_at = 0.0
+            UnregisterForUpdate()
         endif
-        orgasm_messages_set = false
-        orgasm_window_open = false
-        UnregisterForUpdate()
     endif
     DbgEnter("AnimationStart")
     if thread == None
@@ -1044,7 +1066,10 @@ Function StageStart()
                 narration += orgasm_narration
             endif
             if orgasm_narration != ""
-                RegisterEvent("sexlab update", orgasm_narration, sender, receiver)
+                ; Do not RegisterEvent the orgasm sentence — CheckDuplicate would blank the DN below.
+                if desc != ""
+                    RegisterEvent("sexlab update", desc, sender, receiver)
+                endif
             else 
                 if has_player
                     DirectNarration(narration, sender, receiver) 
@@ -1132,6 +1157,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
 
         UnregisterForUpdate()
         orgasm_window_open = false
+        orgasm_window_started_at = 0.0
 
         ; Leftover Combined orgasm stash folded into the end DN so 0550 still gates
         ; (RegisterEvent-only leftover is invisible to contains(_direct_narration, ...)).
@@ -1364,16 +1390,25 @@ String Function OrgasmMessagesToNarration()
                 endif 
                 narration += orgasm_messages[k]
                 orgasm_messages[k] = ""
+                MarkOrgasmNarrated(obj, thread.positions[k])
             elseif orgasm_expected.length > k && orgasm_expected[k] == 1 && JMap.getInt(obj, "dom_slave") == 1
-                ; Dom Combined fallback: custom raced past stash but totals already bumped.
-                if GetTotalOrgasms(thread.positions[k]) > 0 || JMap.getInt(obj, "total_orgasm") > 0
+                ; Dom Combined fallback: custom raced empty this window (unspoken total bump).
+                int total = GetTotalOrgasms(thread.positions[k])
+                if total < 1
+                    total = JMap.getInt(obj, "total_orgasm")
+                endif
+                int narrated = JMap.getInt(obj, "orgasm_narrated")
+                if total > narrated
                     orgasm_happened = true
                     if JMap.getInt(obj, "has_penis") == 1
                         ejaculation_happened = true
                     endif
                     narration += name+" is orgasming. "
-                else
+                    MarkOrgasmNarrated(obj, thread.positions[k])
+                elseif total < 1
                     narration += main.handler_dom.HandleOrgasmDenied(thread.positions[k])
+                else
+                    narration += name+" is not orgasming right now. "
                 endif
             else
                 narration += name+" is not orgasming right now. "
@@ -1401,6 +1436,20 @@ String Function OrgasmMessagesToNarration()
     else 
         return ""
     endif
+EndFunction
+
+Function MarkOrgasmNarrated(int obj, Actor akActor)
+    if obj == 0
+        return
+    endif
+    int spoken = 0
+    if akActor != None
+        spoken = GetTotalOrgasms(akActor)
+    endif
+    if spoken < 1
+        spoken = JMap.getInt(obj, "total_orgasm")
+    endif
+    JMap.setInt(obj, "orgasm_narrated", spoken)
 EndFunction
 
 bool Function ThreadHasDomSlave()
@@ -1431,14 +1480,49 @@ EndFunction
 
 Function ArmOrgasmWindow()
     float delay = GetOrgasmDelay()
+    float now = Utility.GetCurrentRealTime()
+    float cap = delay * 2.0
+    if !orgasm_window_open || orgasm_window_started_at <= 0.0
+        orgasm_window_started_at = now
+        orgasm_window_open = true
+        RegisterForSingleUpdate(delay)
+        Trace("ArmOrgasmWindow", "--- delay:"+delay)
+        return
+    endif
+    float elapsed = now - orgasm_window_started_at
+    float remaining = cap - elapsed
+    if remaining <= 0.0
+        Trace("ArmOrgasmWindow", "--- cap reached elapsed:"+elapsed+" cap:"+cap+", flush now")
+        FlushOrgasmWindow()
+        return
+    endif
+    if remaining > delay
+        remaining = delay
+    endif
     orgasm_window_open = true
-    RegisterForSingleUpdate(delay)
-    Trace("ArmOrgasmWindow", "--- delay:"+delay)
+    RegisterForSingleUpdate(remaining)
+    Trace("ArmOrgasmWindow", "--- delay:"+remaining+" elapsed:"+elapsed+" cap:"+cap)
 EndFunction
 
 Function FlushOrgasmWindow()
     UnregisterForUpdate()
     orgasm_window_open = false
+    orgasm_window_started_at = 0.0
+    if thread == None
+        Trace("FlushOrgasmWindow", "--- thread is None, clearing stash")
+        if orgasm_messages
+            int m = 0
+            while m < orgasm_messages.length
+                orgasm_messages[m] = ""
+                m += 1
+            endwhile
+        endif
+        orgasm_messages_set = false
+        return
+    endif
+    ; Match StageStart / AnimationEnd: keep actors_objs aligned with positions
+    ; before OrgasmMessagesToNarration reads names / orgasm_narrated.
+    AlignActors()
     String orgasm_narration = OrgasmMessagesToNarration()
     if orgasm_narration == ""
         Trace("FlushOrgasmWindow", "--- empty stash")
@@ -1460,6 +1544,7 @@ Event OnUpdate()
     endif
     if !orgasm_messages_set
         orgasm_window_open = false
+        orgasm_window_started_at = 0.0
         Trace("OnUpdate", "--- orgasm window empty, skip")
         return
     endif
