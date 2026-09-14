@@ -174,10 +174,11 @@ SkyrimNet_SexLab_Scene_Creator Function CreateCreator(String intent, Actor[] act
     int i = 0
     int num_creators = creators.length 
     while i < num_creators
-        if !creators[i].IsActive()
+        if creators[i].TryClaim()
             if creators[i].Setup(intent, actors, speaker, target, method, setting_name)
                 return creators[i]
             endif
+            creators[i].Release()
             Trace("CreateCreator", "Setup failed for creators["+i+"], trying next slot")
         endif 
         i += 1 

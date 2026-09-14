@@ -150,6 +150,9 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
         return False
     endif
 
+    ; TryClaim already set SETUP; set it here before latent GetPlayer if called without TryClaim.
+    status = STATUS_SETUP
+
     intent = _intent
     speaker = _speaker
     target = _target
@@ -261,11 +264,32 @@ SkyrimNet_SexLab_Scene Function StartScene()
 
     Trace("StartScene",GetString()) 
 
+    if num_actors < 1 || !actors
+        Trace("StartScene","no actors, aborting before NewThread")
+        Release()
+        DbgReturn("StartScene", "None")
+        return None
+    endif
+
+    if !EnsureSexLabActorsValid()
+        Trace("StartScene","actors not valid for SexLab, aborting before SelectAnimations")
+        Release()
+        DbgReturn("StartScene", "None")
+        return None
+    endif
+
     ; Select animations before NewThread so cancel/UI never claims a SexLab Making slot.
     sslBaseAnimation[] animations = SelectAnimations() 
     if animations == manager.cancel
         Trace("StartScene","SelectAnimations returned cancel")
         Release() 
+        DbgReturn("StartScene", "None")
+        return None
+    endif
+
+    if !EnsureSexLabActorsValid()
+        Trace("StartScene","actors not valid for SexLab, aborting before NewThread")
+        Release()
         DbgReturn("StartScene", "None")
         return None
     endif
@@ -294,7 +318,8 @@ SkyrimNet_SexLab_Scene Function StartScene()
     while i < num_actors && !failed 
         DbgMsg("StartScene", "model.AddActor "+actors[i].GetDisplayName())
         if model.AddActor(actors[i]) < 0 
-            Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName())
+            int code = sexlab.ValidateActor(actors[i])
+            Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName()+" ValidateActor:"+code)
             failed = True 
         else 
             if no_orgasm_mask[i] == 1 
@@ -955,6 +980,43 @@ Function LoadSetting(String setting_name)
     DbgEnd("LoadSetting")
 EndFunction 
 
+; Clear sticky SexLab ForbiddenFaction, then ValidateActor. Call before UI and before NewThread.
+bool Function EnsureSexLabActorsValid()
+    DbgEnter("EnsureSexLabActorsValid")
+    if sexlab == None
+        Trace("EnsureSexLabActorsValid", "sexlab is None")
+        DbgReturn("EnsureSexLabActorsValid", "False")
+        return False
+    endif
+    if !actors || num_actors < 1
+        Trace("EnsureSexLabActorsValid", "no actors")
+        DbgReturn("EnsureSexLabActorsValid", "False")
+        return False
+    endif
+    int i = 0
+    while i < num_actors
+        Actor akActor = actors[i]
+        if akActor == None
+            Trace("EnsureSexLabActorsValid", "actors["+i+"] is None")
+            DbgReturn("EnsureSexLabActorsValid", "False")
+            return False
+        endif
+        if sexlab.IsForbidden(akActor)
+            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" was forbidden, AllowActor")
+            sexlab.AllowActor(akActor)
+        endif
+        int code = sexlab.ValidateActor(akActor)
+        if code < 0
+            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" ValidateActor:"+code)
+            DbgReturn("EnsureSexLabActorsValid", "False")
+            return False
+        endif
+        i += 1
+    endwhile
+    DbgReturn("EnsureSexLabActorsValid", "True")
+    return True
+EndFunction
+
 ; -------------------------------------------------------------------------------------
 ; Actor LOck
 ; -------------------------------------------------------------------------------------
@@ -1011,27 +1073,24 @@ bool Function LockActorLock(Actor akActor)
         return false 
     endif 
 
-    if StorageUtil.HasIntValue(akActor, "skyrimnet_sexlab_scene_actor_lock")
-        Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
-        return false 
+    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key)
+        Trace("LockActorLock", GetDisplayName(akActor)+" is already locked")
+        return false
     endif
+    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1)
 
     if sexlab.IsActorActive(akActor) 
         Trace("LockActorLock", GetDisplayName(akActor)+" SexLab animation")
+        UnlockActorLock(akActor)
         return false 
     endif 
 
     if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
         Trace("LockActorLock", GetDisplayName(akActor)+" OStim animation")
+        UnlockActorLock(akActor)
         return false 
     endif
-    Trace("LockActorLock", GetDisplayName(akActor)+" is eligible for sex")
-    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
-        Trace("LockActorLock", GetDisplayName(akActor)+" is already locked")
-        return false 
-    endif 
-    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1) 
-    ; Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
+    Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
     DbgReturn("LockActorLock", "True")
     return true 
 EndFunction 

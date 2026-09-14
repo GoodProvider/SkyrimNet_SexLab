@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.34.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1) — since [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0)
+
+### Orgasm / narration
+- Combined + Dom last-stage: stash into `orgasm_messages` and `ArmOrgasmWindow` (`sexlab.orgasm.delay`, default 5s, cap **2×** from `orgasm_window_started_at`) so player and slave climaxes share one DirectNarration. StageStart does not consume the stash while the window is open. Contract: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md)
+- Position JMap `orgasm_narrated`: Combined fallback only if `GetTotalOrgasms > orgasm_narrated`; already-spoken totals get `" is not orgasming right now."`
+- `DOMSlave_Orgasmed` skips player-orgasm teases (`squirms under your grasp` / `your orgasm submerges you`)
+- Melt with no scene: Handler delays 1s then retries `OrgasmCustom`; DirectNarrates only if still unreachable. `FlushOrgasmWindow` calls `AlignActors()` first; `AnimationStart` flushes a pending stash before clear
+- `0050_sexlab_activity.prompt` / `0550_sexlab_narration.prompt`: skip a thread unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating`
+
+### Papyrus
+- `EnsureSexLabActorsValid` before Yes/Edit Tags and before `NewThread`: `IsForbidden` → `AllowActor`, then `ValidateActor`; abort with name+code if still `< 0`. `AddActor` failure logs `ValidateActor` again (sticky `ForbiddenFaction` -11 after tag UI)
+- `CreateCreator` `TryClaim()` marks the pool slot `SETUP` before latent `Setup` / `Game.GetPlayer()` so two overlapping `Action_Start` events cannot share sid:0; `StartScene` aborts before `NewThread` when `num_actors < 1`. `LockActorLock` sets StorageUtil immediately (`"already locked"` vs `"locked"`)
+- DOM solo `masturbate` is a synthetic thread via `handler_dom.GetThreads()` in `GetThreadsJson`; `OnBehaviourChange` (`DOMOnBehaviourChange`) dumps `threads.json` on masturbate start/stop
+- `OrgasmCustom` / `GetSceneByActor`: `GetThreadByActor(any_state)` + `thread_scene` fallback when animating/prepare miss
+- `GetIntentMessage`: empty `intent` no longer emits `"Nina and Bob finish ."`
+- `ObjectToLowerCaseKeyJson` walks JMap/JArray/JFormMap/JIntMap (`JValueToJsonString`); do not call `JValue.toJsonString` (JC 4.2.13.1+)
+
+### Actions / scenes
+- `SEXLAB_STOP.yaml`: `comparisonOperator` values quoted (`">"` / `"<"`)
+
+### Install / MCM
+- Plugin `manifest.json` / settings `plugin.version` **0.34.1**. Dashboard **Orgasm delay** (`sexlab.orgasm.delay`) waits after the last orgasm (player or Dom slave) before one combined Direct Narration
+
+### Docs
+- Orgasm window / `orgasm_narrated` / tease skip / delayed melt: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md)
+- Live-thread faction skip: [docs/authors/prompts.md](docs/authors/prompts.md)
+- KNOWLEDGEBASE: Combined window, DOM masturbation synthetic thread, MO2 installed-release vs workspace, overlapping `Action_Start` empty `StartThread`, `AddActor` ForbiddenFaction -11 after Edit Tags
+
 ## [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0) — since [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5)
 
 ### Actions / scenes

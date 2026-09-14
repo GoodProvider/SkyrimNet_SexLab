@@ -1,5 +1,39 @@
 # Knowledgebase
 
+## AddActor -11 ForbiddenFaction after Edit Tags (2026-09-14)
+
+Threesome Setup/locks/Yes/Edit Tags succeeded (35 Oral 3-actor anims). After the UI, `NewThread` + `AddActor(Nina)` failed. Papyrus: `ValidateActor(Nina) -- FALSE -- They are flagged as forbidden from animating` then `FATAL ... not a valid target for animation`. Edit Tags is not the failure — AddActor runs after the menu.
+
+**Cause:** SexLab `ForbiddenFaction` (ValidateActor **-11**). A prior `CanAnimate` miss **adds** that faction; later checks hit “flagged as forbidden” first. MCM/manual forbid uses the same faction.
+
+**Fix:** `EnsureSexLabActorsValid` before `SelectAnimations` and again before `NewThread`: `IsForbidden` → `AllowActor`, then `ValidateActor`. Still `< 0` aborts with name+code (no Yes/Edit Tags on a doomed start). AddActor failure logs `ValidateActor` again. If race/`CanAnimate` is the real reason, SexLab re-forbids and the code is no longer a sticky -11.
+
+## Overlapping Action_Start shares creator sid:0 (2026-09-14)
+
+SkyrimNet can queue the same start action twice (two LLM selections). Both `ModEvent`s run `CreateCreator`; `IsActive()` was still false until `Setup` finished latent `Game.GetPlayer()` and set `STATUS_ACTIVE`. Both claimed sid:0. The loser `Release()`d the shared creator (`num_actors = 0`, names/tags cleared). The winner called `StartThread` with no actors.
+
+**Symptom:** `SexLab_Start_Giving` (or any start) logs Setup with actors, then `StartScene` with empty actors/tags. Papyrus: `SEXLAB - FATAL - Thread[0] - No valid actors available for animation`.
+
+**Log trap:** `LockActorLock` `"X is locked"` used to mean **already locked** (failure). Success had no info trace.
+
+**Fix:** `TryClaim()` sets `STATUS_SETUP` with no natives before `Setup`; second start gets the next pool slot. `StartScene` aborts before `NewThread` if `num_actors < 1`. `LockActorLock` sets StorageUtil immediately; `"already locked"` vs `"locked"`.
+
+## Action eligibility cannot use Papyrus decorators (2026-09-14)
+
+Category parents (`ShowComfort`, `ExpressPhysicallyNonsexually`, `Sexlab_Punish`, `SexLab_Sexual_Activities_One`/`Two`/`Three`) gated on Papyrus `sexlab_ostim_player == 0`. Eligibility `CallDecoratorDirect` does **not** live-call 1-arg Papyrus decorators: missing `arguments` logs `expects exactly 1 argument (EntityUUID), got 0`; with `currentActor` it logs `cache miss … returning empty`. Empty ≠ `0`, so the AND group fails and the whole tree (comfort / sex / punish / affection) stays hidden. Prompt-cache calls that pass an actor still return `'0'`.
+
+**Symptom:** embedded eligible actions are only top-level native ones (`change_outfit`, DD lock/unlock, WAITHERE, DOM slave pack). Not Nina-specific.
+
+**Fix:** native `get_global_value` / `skyrimnet_sexlab_ostim_player` on those six parents. `MCM.ApplyPluginConfig` `SetValue`s that global from `sexlab.ostim.player`. Keep `Ostim_Player` for prompts; do not use it in action YAML. Refresh Actions in Game Data Explorer.
+
+## Hotkey SkyMessage: GetThreadByActor arity (2026-09-14)
+
+Start Sex hotkey fired (`OnKeyDown` DX 43) but SkyMessage did not open when the crosshair target was already in SexLab. Papyrus: `Expected 2, got 1` for `GetThreadByActor(Actor akActor, bool any_state)` from `Menu.ProcessHotkey`. The VM never entered the function, so the log showed `failed to find thread` even though the SexLab thread existed.
+
+**Cause:** `GetThreadByActor` gained `any_state`; Papyrus defaults are compile-time at the call site. `Menu.pex` still made a 1-arg call. Same trap: `Stages.EditDescriptions` / `SetOrgasmExpected` calling `GetSceneByThread(thread)` after that function gained two extra args.
+
+**Fix:** cross-script callers pass every arg (`GetThreadByActor(target, true)` while `IsActorActive`; `GetSceneByThread(thread, false, true)`). Recompile callers after any signature change.
+
 ## MO2: installed release vs dev folder (2026-09-13)
 
 Profiles can enable the packaged mod (`SkyrimNet SexLab`, space) while the git workspace (`SkyrimNet_SexLab`, underscore) is disabled. Compiling this repo then does **not** affect the running game.

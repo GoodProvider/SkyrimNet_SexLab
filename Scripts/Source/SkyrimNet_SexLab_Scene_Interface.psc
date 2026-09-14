@@ -136,6 +136,16 @@ bool Function IsActive()
     return status != STATUS_INACTIVE 
 EndFunction
 
+; Claim a pool slot before Setup / GetPlayer (latent). No natives — two
+; overlapping CreateCreator calls must not both see INACTIVE on the same sid.
+bool Function TryClaim()
+    if status != STATUS_INACTIVE
+        return false
+    endif
+    status = STATUS_SETUP
+    return true
+EndFunction
+
 ; Selects the style of sex 
 ; 0 forcefully 
 ; 1 normally 
