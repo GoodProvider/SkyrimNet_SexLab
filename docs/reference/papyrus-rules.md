@@ -18,6 +18,16 @@ if a
 if a == None
 ```
 
+## Default parameters
+
+Default args are filled **at the caller's compile**, not at runtime. Adding a parameter (even with a default) requires recompiling **every** caller. Cross-script calls should pass every argument explicitly so a stale `.pex` cannot log `Expected N, got M` and return None.
+
+```papyrus
+; Callee: GetThreadByActor(Actor akActor, bool any_state=False)
+; Other script — pass both; do not rely on the default
+sslThreadController thread = manager.GetThreadByActor(target, true)
+```
+
 ## Naming
 
 | Kind | Rule | Example |

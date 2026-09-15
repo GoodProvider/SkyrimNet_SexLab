@@ -17,20 +17,27 @@ int Property sexlab_ostim_player
     EndFunction
 EndProperty
 
+GlobalVariable Property sexlab_public_sex_accepted Auto
+GlobalVariable Property skyrimnet_sexlab_hide_hermaphrodites Auto
+
 String page_options = "options"
 String[] Property sexlab_ostim_options Auto
 bool Property udng_found = false Auto
+bool Property leashed_found = false Auto
 
 ; DX scancode hotkey (SkyUI KeyMap). Live override via WebUI_SetHotkey.
 bool hot_key_toggle = False
 int sex_edit_key = 43 ; backslash \
+bool rape_actions_unregistered = False
 
 string newline = ""
+
+String PLUGIN_CONFIG = "Plugin_SkyrimNet_SexLab"
 
 Function Trace(String func, String msg, Bool notification=False) global
     String logged = SkyrimNet_SexLab_WebUI.TraceLog("SkyrimNet_SexLab_MCM", func, msg)
     if notification
-        Debug.Notification(msg)
+        Debug.Notification(logged)
     endif
 EndFunction
 
@@ -52,11 +59,13 @@ Function Setup()
         udng_found = False
     endif
 
-    ; Apply after C++ ApplyFromConfig. Only push when MCM enable is on so we do not
-    ; wipe a hotkey enabled via the SkyrimNet plugin menu.
-    if hot_key_toggle
-        SkyrimNet_SexLab_WebUI.WebUI_SetHotkey(sex_edit_key, True)
-    endif
+    leashed_found = Game.GetFormFromFile(0x800, "SkyrimNet_Leashed.esp") != None
+    Trace("Setup", "leashed_found: "+leashed_found)
+
+    UnRegisterForModEvent("SkyrimNet_OnPluginConfigSaved")
+    RegisterForModEvent("SkyrimNet_OnPluginConfigSaved", "OnPluginConfigSaved")
+
+    ApplyPluginConfig()
     Trace("Setup", "complete hotkey enabled="+hot_key_toggle+" dx="+sex_edit_key)
 EndFunction
 
@@ -101,9 +110,93 @@ Bool Function Setup_CheckLinks()
     return links_ok
 EndFunction
 
+Function ApplyPluginConfig()
+    if main == None
+        return
+    endif
+
+    if sexlab_public_sex_accepted
+        if SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.prompt.public_sex_accepted", false)
+            sexlab_public_sex_accepted.SetValue(1.0)
+        else
+            sexlab_public_sex_accepted.SetValue(0.0)
+        endif
+    endif
+
+    if skyrimnet_sexlab_hide_hermaphrodites
+        if SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.prompt.hide_hermaphrodites", false)
+            skyrimnet_sexlab_hide_hermaphrodites.SetValue(1.0)
+        else
+            skyrimnet_sexlab_hide_hermaphrodites.SetValue(0.0)
+        endif
+    endif
+
+    if skyrimnet_sexlab_ostim_player
+        if SkyrimNetApi.GetConfigInt(PLUGIN_CONFIG, "sexlab.ostim.player", 0) != 0
+            skyrimnet_sexlab_ostim_player.SetValue(1.0)
+        else
+            skyrimnet_sexlab_ostim_player.SetValue(0.0)
+        endif
+    endif
+
+    main.rape_allowed = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.actions.rape_allowed", true)
+    main.sex_edit_tags_player = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.tags.player", true)
+    main.sex_edit_tags_nonplayer = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.tags.nonplayer", false)
+    main.orgasm_delay = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.orgasm.delay", 5.0)
+    main.direct_narration_cool_off = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.narration.cooldown", 20.0)
+    main.direct_narration_max_distance = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.narration.max_distance", 15.0)
+    main.direct_narration_max_distance_default = 15.0
+    if animdb
+        animdb.hide_help = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.editor.hide_help", false)
+    endif
+
+    ApplyRapeActions()
+    ApplyHotkey()
+    Trace("ApplyPluginConfig", "rape_allowed:"+main.rape_allowed+" cool_off:"+main.direct_narration_cool_off+" hotkey:"+sex_edit_key+" enabled:"+hot_key_toggle)
+EndFunction
+
+Function ApplyRapeActions()
+    if main.rape_allowed
+        if rape_actions_unregistered
+            Trace("ApplyRapeActions", "rape re-enabled; save and reload to restore LLM actions")
+        endif
+        return
+    endif
+    if rape_actions_unregistered
+        return
+    endif
+    SkyrimNetApi.UnregisterAction("SexLab_Sexual_Assault_Target")
+    SkyrimNetApi.UnregisterAction("SexLab_Sexual_Assault_Speaker")
+    SkyrimNetApi.UnregisterAction("SexLab_Punish_Rape_Target")
+    SkyrimNetApi.UnregisterAction("SexLab_Punish_Rape_Target_By_Target")
+    SkyrimNetApi.UnregisterAction("SexLab_Masturbation_Forced")
+    rape_actions_unregistered = True
+    Trace("ApplyRapeActions", "unregistered rape LLM actions")
+EndFunction
+
+Function ApplyHotkey()
+    hot_key_toggle = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.editor.hotkey_enabled", false)
+    int vk = SkyrimNetApi.GetConfigInt(PLUGIN_CONFIG, "sexlab.editor.hotkey", 220)
+    ; Pre-VK default was DX 43 (backslash). Dashboard type:hotkey now stores VK 220.
+    if vk == 43
+        Trace("ApplyHotkey", "--- leftover DX 43 mapped to VK 220")
+        vk = 220
+    endif
+    sex_edit_key = SkyrimNet_SexLab_Utilities.VkToDxScanCode(vk)
+    ; C++ KeyHandler, not Papyrus RegisterForKey.
+    SkyrimNet_SexLab_WebUI.WebUI_SetHotkey(sex_edit_key, hot_key_toggle)
+    Trace("ApplyHotkey", "--- webui enabled:"+hot_key_toggle+" vk:"+vk+" dx:"+sex_edit_key)
+EndFunction
+
+Event OnPluginConfigSaved(string eventName, string strArg, float numArg, Form sender)
+    Trace("OnPluginConfigSaved", "--- reloading plugin config")
+    ApplyPluginConfig()
+EndEvent
+
 Event OnConfigOpen()
     Pages = new String[1]
     pages[0] = page_options
+    ApplyPluginConfig()
 EndEvent
 
 Event OnPageReset(string page)

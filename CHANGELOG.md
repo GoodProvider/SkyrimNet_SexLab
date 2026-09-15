@@ -10,6 +10,77 @@
 - Ship `PrismaUI/views/SkyrimNet_SexLab/index.html` in the FOMOD zip (`make release` copies `PrismaUI/` into `core`)
 - Do not Show/Focus the overlay until DomReady; Escape Unfocus/Hide if the view never loaded (missing HTML no longer pauses the game with a blank overlay)
 
+### Actions
+- LLM outfit actions remain `outfit_dress` / `outfit_undress` (`Outfit_Dress` / `Outfit_Undress`) as Beta 25 files `outfit_dress.yaml` / `outfit_undress.yaml` in `external/goodprovider.sexlab/actions/`; not combined `change_outfit`
+
+## [0.34.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1) — since [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0)
+
+### Orgasm / narration
+- Combined + Dom last-stage: stash into `orgasm_messages` and `ArmOrgasmWindow` (`sexlab.orgasm.delay`, default 5s, cap **2×** from `orgasm_window_started_at`) so player and slave climaxes share one DirectNarration. StageStart does not consume the stash while the window is open. Contract: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md)
+- Position JMap `orgasm_narrated`: Combined fallback only if `GetTotalOrgasms > orgasm_narrated`; already-spoken totals get `" is not orgasming right now."`
+- `DOMSlave_Orgasmed` skips player-orgasm teases (`squirms under your grasp` / `your orgasm submerges you`)
+- Melt with no scene: Handler delays 1s then retries `OrgasmCustom`; DirectNarrates only if still unreachable. `FlushOrgasmWindow` calls `AlignActors()` first; `AnimationStart` flushes a pending stash before clear
+- `0050_sexlab_activity.prompt` / `0550_sexlab_narration.prompt`: skip a thread unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating`
+
+### Papyrus
+- `EnsureSexLabActorsValid` before Yes/Edit Tags and before `NewThread`: `IsForbidden` → `AllowActor`, then `ValidateActor`; abort with name+code if still `< 0`. `AddActor` failure logs `ValidateActor` again (sticky `ForbiddenFaction` -11 after tag UI)
+- `CreateCreator` `TryClaim()` marks the pool slot `SETUP` before latent `Setup` / `Game.GetPlayer()` so two overlapping `Action_Start` events cannot share sid:0; `StartScene` aborts before `NewThread` when `num_actors < 1`. `LockActorLock` sets StorageUtil immediately (`"already locked"` vs `"locked"`)
+- DOM solo `masturbate` is a synthetic thread via `handler_dom.GetThreads()` in `GetThreadsJson`; `OnBehaviourChange` (`DOMOnBehaviourChange`) dumps `threads.json` on masturbate start/stop
+- `OrgasmCustom` / `GetSceneByActor`: `GetThreadByActor(any_state)` + `thread_scene` fallback when animating/prepare miss
+- `GetIntentMessage`: empty `intent` no longer emits `"Nina and Bob finish ."`
+- `ObjectToLowerCaseKeyJson` walks JMap/JArray/JFormMap/JIntMap (`JValueToJsonString`); do not call `JValue.toJsonString` (JC 4.2.13.1+)
+- `MCM.ApplyPluginConfig` `SetValue`s `skyrimnet_sexlab_ostim_player` from `sexlab.ostim.player` so eligibility can read the global
+- `Menu.ProcessHotkey` calls `GetThreadByActor(target, true)`; `Stages.EditDescriptions` / `SetOrgasmExpected` call `GetSceneByThread(thread, false, true)` after those callees gained extra args
+
+### Actions / scenes
+- `SEXLAB_STOP.yaml`: `comparisonOperator` values quoted (`">"` / `"<"`)
+- Category parents `ShowComfort`, `ExpressPhysicallyNonsexually`, `Sexlab_Punish`, `SexLab_Sexual_Activities_One`/`Two`/`Three`: eligibility uses native `get_global_value` / `skyrimnet_sexlab_ostim_player` (Papyrus `sexlab_ostim_player` cache-misses and hid the tree)
+
+### Install / MCM
+- Plugin `manifest.json` / settings `plugin.version` **0.34.1**. Dashboard **Orgasm delay** (`sexlab.orgasm.delay`) waits after the last orgasm (player or Dom slave) before one combined Direct Narration
+
+### Docs
+- Orgasm window / `orgasm_narrated` / tease skip / delayed melt: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md)
+- Live-thread faction skip: [docs/authors/prompts.md](docs/authors/prompts.md)
+- Eligibility / caller arity: [docs/authors/actions.md](docs/authors/actions.md), [docs/reference/papyrus-rules.md](docs/reference/papyrus-rules.md)
+- KNOWLEDGEBASE: Combined window, DOM masturbation synthetic thread, MO2 installed-release vs workspace, overlapping `Action_Start` empty `StartThread`, `AddActor` ForbiddenFaction -11 after Edit Tags, Papyrus eligibility cache-miss, `GetThreadByActor` arity
+
+## [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0) — since [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5)
+
+### Actions / scenes
+- Ship LLM actions and prompts as SkyrimNet Beta 25 external plugin `goodprovider.sexlab` (`SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`). Plugin `manifest.json`: `id` goodprovider.sexlab, `type` bundle, `version` 0.34.0, `min_skyrimnet_version` 0.25.0; `mods` requires `SkyrimNet_SexLab.esp`. Action YAML filenames now equal in-file `name` (e.g. `SexLab_Start_Giving.yaml`); `name` values unchanged
+- `change_outfit.yaml` / `SEXLAB_STOP.yaml`: `render_template` paths `helpers/sexlab/none_change_outfit` and `helpers/sexlab/none_stop` (helpers moved off `helpers/sexlab_*`)
+- Removed unused helpers `action_rape_target_start`, `action_raped_by_target_start`, `default_sex_life`
+
+### Orgasm / narration
+- Afterglow / cum clauses via `RenderSlPrompt` (`helpers/sexlab/afterglow.prompt`, `cum.prompt`); empty, `Error*`, inja exception, or leftover `{{` falls back to the previous Papyrus sentence. Bind `{{sl.*}}` only (`{{sl.name}}` is a string)
+- Combined flush (`OrgasmMessagesToNarration`) and `OrgasmIndividual` name every non-orgasming actor with `" is not orgasming right now."` — must not match the `" is orgasming."` gate. Contract: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md)
+- `afterglow.prompt`: totals under 1 and `expected == 1` → “failed to orgasm”; else “finished having orgasmed N times”
+
+### Papyrus
+- `SelectAnimations` / `SelectAnimationsDialog`: `num_tags == 0 && num_tags_suppress == 0` skips `GetAnimationsByTags` and returns `manager.empty` (SexLab picks internally)
+- `PickOneAnimation`: on P+, a tagged match list longer than one is capped to one random animation
+- `Scene.StageStart`: P+ `DURATION_CAP_SECONDS` 120s real-time → `thread.EndAnimation()` (enjoyment-wait cannot loop a single SLSB graph). Do not use `UpdateTimer` as an end mechanism on P+
+- `MCM`: options moved to SkyrimNet plugin settings; MCM is a pointer page. `ApplyPluginConfig` reads `Plugin_SkyrimNet_SexLab`. Listens for `SkyrimNet_OnPluginConfigSaved` so a dashboard save re-registers the Start Sex hotkey without MCM open or reload. `ApplyHotkey` logs enabled/vk/dx; leftover saved `43` (old DX backslash) maps to VK `220`. `leashed_found` from `GetFormFromFile(0x800, "SkyrimNet_Leashed.esp")`; `EventSend_LeashedOpen` hides WebUI then `SkyrimNet_Leashed_OpenPanel`
+- `Decorators.Ostim_Player`: reads `sexlab.ostim.player` (YAML/WebUI eligibility `decoratorName: sexlab_ostim_player`)
+- `Menu.Target_Menu_Selection`: cancel/negative button returns immediately; `bondage` / `leash` run only when their index is not `-1`. SexLab/Ostim toggle uses `GetConfigInt` / `PatchConfig` `sexlab.ostim.player` (no `sexlab_ostim_player` global)
+
+### SKSE / WebUI
+- `target_options.json`: `type: handoff` option `leash` (`requiresPlugin: SkyrimNet_Leashed.esp`, `modEvent: SkyrimNet_Leashed_OpenPanel`)
+- `WebUI.cpp` / `Papyrus_WebUI.cpp`: handoff hides this overlay and `DispatchMethodCall` `EventSend_LeashedOpen`; DLL rebuilt
+
+### Animations
+- P+ playing set: empty tags skip lookup; tagged hits capped to one via `PickOneAnimation` (avoids `FindSimilarSceneStage` hopping). Details: [docs/developers/papyrus.md](docs/developers/papyrus.md)
+
+### Install / MCM
+- Requires SkyrimNet **0.25.0+**. Plugin should appear under Installed Plugins with an **External** badge. Settings schema stays at [`config/plugins/SkyrimNet_SexLab/manifest.yaml`](SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml) (`schema.fields` + `defaultValue`, `plugin.version` 0.34.0, 12 `sexlab.*` keys). Dashboard hid SexLab when the old list/`default` shape loaded as 0 fields. Start Sex hotkey is `type: hotkey` default **backslash** (`\`, VK 220). Change options in the SkyrimNet dashboard, not the MCM.
+- SkyMessage target menu **leash** button when `SkyrimNet_Leashed.esp` is loaded (does not require Leashed’s own hotkey)
+
+### Docs
+- KNOWLEDGEBASE: P+ scene hop vs end (`AdvanceFromTimer` / `GetPlayingScenes`); Beta 25 `goodprovider.sexlab` layout; settings schema at `config/plugins/SkyrimNet_SexLab/` only
+- `helpers/sexlab/` prompt paths; orgasm denied clause; leash on [docs/players/hotkeys.md](docs/players/hotkeys.md)
+- Author/player/dev paths point at `external/goodprovider.sexlab/`
+
 ## [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5) — since [0.31.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.4)
 
 ### Papyrus / scenes

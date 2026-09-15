@@ -14,10 +14,10 @@
       <directory>Scripts/Source</directory>
     </code>
     <action_yamls>
-      <directory>SKSE/Plugins/SkyrimNet/config/actions</directory>
+      <directory>SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/actions</directory>
     </action_yamls>
     <skryimnet_prompts>
-      <directory>SKSE/Plugins/SkyrimNet/config/prompts</directory>
+      <directory>SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/prompts</directory>
     </skryimnet_prompts>
   </directories>
 

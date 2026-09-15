@@ -12,6 +12,7 @@ SkyrimNet ↔ SexLab bridge.
 
 - Repo: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`
 - Source: `Scripts/Source/` → output `Scripts/`; headers `Headers/`; project `skyrimse.ppj`
+- LLM plugin: `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/`
 
 ## Docs (pointers only)
 
@@ -21,7 +22,6 @@ SkyrimNet ↔ SexLab bridge.
 | Actions | [docs/authors/actions.md](docs/authors/actions.md) |
 | Prompts | [docs/authors/prompts.md](docs/authors/prompts.md) |
 | Animations | [docs/authors/animations.md](docs/authors/animations.md) |
-| Anidata schema 3.0 | [docs/developers/anidata-schema.md](docs/developers/anidata-schema.md) |
 | Papyrus | [docs/developers/papyrus.md](docs/developers/papyrus.md) |
 | WebUI | [docs/developers/webui.md](docs/developers/webui.md) |
 | Papyrus rules | [docs/reference/papyrus-rules.md](docs/reference/papyrus-rules.md) |
@@ -30,7 +30,8 @@ SkyrimNet ↔ SexLab bridge.
 | Orgasm narration | [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md) |
 | Scene settings | [docs/reference/scene-settings.md](docs/reference/scene-settings.md) |
 | Quirks | [KNOWLEDGEBASE.md](KNOWLEDGEBASE.md) |
-| Release | [release-guide.xml](release-guide.xml) |
+| Release | [release-guide.md](release-guide.md), [.cursor/skills/release/SKILL.md](.cursor/skills/release/SKILL.md) |
+| Dependency API drift | [.cursor/skills/dependancy-drift/SKILL.md](.cursor/skills/dependancy-drift/SKILL.md) |
 | Portable doc template | [documentation-guide.xml](documentation-guide.xml) |
 
 Do not duplicate contract text here — edit the canonical `docs/reference/` file.

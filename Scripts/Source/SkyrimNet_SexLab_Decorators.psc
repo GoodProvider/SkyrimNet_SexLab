@@ -21,6 +21,7 @@ Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("sexlab_get_player_los_distance", "SkyrimNet_SexLab_Decorators", "Player_LOS_Distance")
     SkyrimNetApi.RegisterDecorator("sexlab_intent", "SkyrimNet_SexLab_Decorators", "Intent")
     SkyrimNetApi.RegisterDecorator("sexlab_activities", "SkyrimNet_SexLab_Decorators", "Activities")
+    SkyrimNetApi.RegisterDecorator("sexlab_ostim_player", "SkyrimNet_SexLab_Decorators", "Ostim_Player")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     ;SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
 EndFunction
@@ -91,6 +92,11 @@ String Function Activities(Actor akActor) global
     return json
 EndFunction
 
+
+String Function Ostim_Player(Actor akActor) global
+    int value = SkyrimNetApi.GetConfigInt("Plugin_SkyrimNet_SexLab", "sexlab.ostim.player", 0)
+    return ""+value
+EndFunction
 
 String Function Player_LOS_Distance(Actor akActor) global 
     Actor player = Game.GetPlayer() 

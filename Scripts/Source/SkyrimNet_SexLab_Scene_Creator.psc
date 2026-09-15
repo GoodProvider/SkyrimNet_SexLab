@@ -159,6 +159,9 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
         return False
     endif
 
+    ; TryClaim already set SETUP; set it here before latent GetPlayer if called without TryClaim.
+    status = STATUS_SETUP
+
     intent = _intent
     speaker = _speaker
     target = _target
@@ -301,6 +304,21 @@ SkyrimNet_SexLab_Scene Function StartScene()
 
     Trace("StartScene",GetString()) 
 
+    if num_actors < 1 || !actors
+        Trace("StartScene","no actors, aborting before NewThread")
+        Release()
+        DbgReturn("StartScene", "None")
+        return None
+    endif
+
+    if !EnsureSexLabActorsValid()
+        Trace("StartScene","actors not valid for SexLab, aborting before SelectAnimations")
+        Release()
+        DbgReturn("StartScene", "None")
+        return None
+    endif
+
+    ; Select animations before NewThread so cancel/UI never claims a SexLab Making slot.
     sslBaseAnimation[] animations = SelectAnimations() 
     if animations == manager.ui_pending
         start_scene_pending = true
@@ -327,6 +345,14 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
         return None
     endif
 
+    if !EnsureSexLabActorsValid()
+        Trace("FinishStartScene","actors not valid for SexLab, aborting before NewThread")
+        Release()
+        DbgReturn("FinishStartScene", "None")
+        return None
+    endif
+
+    DbgMsg("FinishStartScene", "sexlab.NewThread()")
     sslThreadModel model = sexlab.NewThread()
     DbgMsg("StartScene", "sexlab.NewThread() returned model="+model)
     if model == None
@@ -351,7 +377,8 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     while i < num_actors && !failed 
         DbgMsg("StartScene", "model.AddActor "+actors[i].GetDisplayName())
         if model.AddActor(actors[i]) < 0 
-            Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName())
+            int code = sexlab.ValidateActor(actors[i])
+            Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName()+" ValidateActor:"+code)
             failed = True 
         else 
             if no_orgasm_mask[i] == 1 
@@ -1071,6 +1098,43 @@ Function LoadSetting(String setting_name)
     DbgEnd("LoadSetting")
 EndFunction 
 
+; Clear sticky SexLab ForbiddenFaction, then ValidateActor. Call before UI and before NewThread.
+bool Function EnsureSexLabActorsValid()
+    DbgEnter("EnsureSexLabActorsValid")
+    if sexlab == None
+        Trace("EnsureSexLabActorsValid", "sexlab is None")
+        DbgReturn("EnsureSexLabActorsValid", "False")
+        return False
+    endif
+    if !actors || num_actors < 1
+        Trace("EnsureSexLabActorsValid", "no actors")
+        DbgReturn("EnsureSexLabActorsValid", "False")
+        return False
+    endif
+    int i = 0
+    while i < num_actors
+        Actor akActor = actors[i]
+        if akActor == None
+            Trace("EnsureSexLabActorsValid", "actors["+i+"] is None")
+            DbgReturn("EnsureSexLabActorsValid", "False")
+            return False
+        endif
+        if sexlab.IsForbidden(akActor)
+            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" was forbidden, AllowActor")
+            sexlab.AllowActor(akActor)
+        endif
+        int code = sexlab.ValidateActor(akActor)
+        if code < 0
+            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" ValidateActor:"+code)
+            DbgReturn("EnsureSexLabActorsValid", "False")
+            return False
+        endif
+        i += 1
+    endwhile
+    DbgReturn("EnsureSexLabActorsValid", "True")
+    return True
+EndFunction
+
 ; -------------------------------------------------------------------------------------
 ; Actor LOck
 ; -------------------------------------------------------------------------------------
@@ -1127,27 +1191,24 @@ bool Function LockActorLock(Actor akActor)
         return false 
     endif 
 
-    if StorageUtil.HasIntValue(akActor, "skyrimnet_sexlab_scene_actor_lock")
-        Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
-        return false 
+    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key)
+        Trace("LockActorLock", GetDisplayName(akActor)+" is already locked")
+        return false
     endif
+    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1)
 
     if sexlab.IsActorActive(akActor) 
         Trace("LockActorLock", GetDisplayName(akActor)+" SexLab animation")
+        UnlockActorLock(akActor)
         return false 
     endif 
 
     if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
         Trace("LockActorLock", GetDisplayName(akActor)+" OStim animation")
+        UnlockActorLock(akActor)
         return false 
     endif
-    Trace("LockActorLock", GetDisplayName(akActor)+" is eligible for sex")
-    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
-        Trace("LockActorLock", GetDisplayName(akActor)+" is already locked")
-        return false 
-    endif 
-    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1) 
-    ; Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
+    Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
     DbgReturn("LockActorLock", "True")
     return true 
 EndFunction 
@@ -1610,16 +1671,19 @@ sslBaseAnimation[] Function SelectAnimations()
     endif
 
     ; YES without tag editor, YES_RANDOM, or dialog returned empty:
-    ; look up by tags when we do not already have a non-empty list from the dialog.
+    ; look up by tags only when the caller actually supplied tags.
+    ; Empty tags + GetAnimationsByTags(require=false) returns every N-actor anim;
+    ; on P+ that list becomes GetPlayingScenes() and enjoyment-wait hops forever.
     if animations == manager.empty || !animations || animations.length == 0
+        if num_tags == 0 && num_tags_suppress == 0
+            Trace("SelectAnimations", "no tags; skip GetAnimationsByTags so SexLab picks")
+            DbgReturn("SelectAnimations", "manager.empty")
+            return manager.empty
+        endif
         String tags_string = JoinStrings(tags, num_tags)
         String tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
-        bool require = false 
-        if num_tags > 0 || num_tags_suppress > 0
-            require = true 
-        endif 
-        DbgMsg("SelectAnimations", "sexlab.GetAnimationsByTags actors="+num_actors+" tags="+tags_string+" suppress="+tags_suppress_string+" require="+require)
-        animations = sexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, require)
+        DbgMsg("SelectAnimations", "sexlab.GetAnimationsByTags actors="+num_actors+" tags="+tags_string+" suppress="+tags_suppress_string+" require=true")
+        animations = sexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, true)
         DbgMsg("SelectAnimations", "sexlab.GetAnimationsByTags returned count="+animations.length)
         ; Prefer AnimDB none peel (gender/pos → secondary must → suppress → front tag).
         if (animations == manager.empty || !animations || animations.length == 0) && (num_tags > 0 || num_tags_suppress > 0)
@@ -1636,6 +1700,11 @@ sslBaseAnimation[] Function SelectAnimations()
         endif
         DbgReturn("SelectAnimations", "manager.empty")
         return manager.empty
+    endif
+    if IsSexLabPPlus() && animations.length > 1
+        int n = animations.length
+        animations = PickOneAnimation(animations)
+        Trace("SelectAnimations", "P+ playing set capped to 1 of "+n)
     endif
     DbgReturn("SelectAnimations", "animations")
     return animations  
@@ -1918,6 +1987,16 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
             endif 
         endwhile 
 
+        tags_string = JoinStrings(tags, num_tags)
+        tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
+        if num_tags == 0 && num_tags_suppress == 0
+            if groups_owned
+                JValue.release(groups)
+            endif
+            Trace("SelectAnimationsDialog", "no tags; skip GetAnimationsByTags so SexLab picks")
+            DbgReturn("SelectAnimationsDialog", "manager.empty")
+            return manager.empty
+        endif
         DbgMsg("SelectAnimationsDialog", "sexlab.GetAnimationsByTags final tags="+tags_string)
         sslBaseAnimation[] anims =  SexLab.GetAnimationsByTags(num_actors, tags_string, tags_suppress_string, true)
         DbgMsg("SelectAnimationsDialog", "sexlab.GetAnimationsByTags final returned count="+anims.length)

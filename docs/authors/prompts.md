@@ -7,8 +7,9 @@ Contracts: [../reference/json-keys.md](../reference/json-keys.md), [../reference
 ## Paths
 
 ```
-SKSE/Plugins/SkyrimNet/prompts/
+SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/prompts/
   helpers/
+    sexlab/
   submodules/
     character_bio/
     system_head/
@@ -22,9 +23,14 @@ SKSE/Plugins/SkyrimNet/prompts/
 | `system_head/0020_sexlab_setting.prompt` | System-head settings |
 | `user_final_instructions/0050_sexlab_activity.prompt` | Scene + speaking rules |
 | `user_final_instructions/0550_sexlab_narration.prompt` | Direct narration / orgasm gate |
-| `helpers/sexlab_*.prompt` | Per-action helpers |
+| `helpers/sexlab/action_orgy.prompt` | Orgy action helper |
+| `helpers/sexlab/none_stop.prompt` | Stop action helper |
+| `helpers/sexlab/afterglow.prompt` | Scene afterglow (`RenderSlPrompt`) |
+| `helpers/sexlab/cum.prompt` | Scene cum clause (`RenderSlPrompt`) |
 
-Outfit: separate actions `outfit_dress` / `outfit_undress` (no shared `how` helper). No `0520_sexlab_dressing_instructions.prompt`.
+No `0520_sexlab_dressing_instructions.prompt`.
+
+Scene afterglow and cum are Papyrus-rendered sentences (v0.34.0+), not LLM system prompts. Bind `{{sl.*}}` only. A single actor name is a string (`{{sl.name}}`), not a one-element array. Papyrus builds lowercase JSON via `ObjectToLowerCaseKeyJson`, then `RenderTemplate` + `ParseString`. Empty, error-looking, or leftover-`{{` renders fall back to the previous Papyrus sentence. The `" is orgasming."` gate is Papyrus (`GetIsOrgasming`) — see [../reference/orgasm-narration.md](../reference/orgasm-narration.md).
 
 ## Keys vs values
 
@@ -38,8 +44,9 @@ Keep literals character-for-character or matching breaks.
 ## Activity flow (`0050`)
 
 1. `sexlab_get_threads(npc.UUID)` or `threads.json` fallback.
-2. Match speaker by `uuid`; read `speaking_modifiers`, `victim`, etc.
-3. Emit context + Speaking Rules when modifiers present.
+2. v0.34.1+: skip a thread unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating` (stale DOM masturbate rows after stop).
+3. Match speaker by `uuid`; read `speaking_modifiers`, `victim`, etc.
+4. Emit context + Speaking Rules when modifiers present.
 
 `contains(speaker.speaking_modifiers, "_pain_")` is case-sensitive.
 
@@ -60,6 +67,7 @@ contains(_direct_narration, " is orgasming.")
 | Scene `speaking_modifiers` | `0050_sexlab_activity.prompt` |
 | `threads` / `actors` JSON | activity + narration |
 | DirectNarration + `" is orgasming."` | `0550_sexlab_narration.prompt` |
+| Scene `RenderSlPrompt` (`afterglow.prompt`, `cum.prompt`) | DirectNarration / RegisterEvent |
 
 ## Checklist
 

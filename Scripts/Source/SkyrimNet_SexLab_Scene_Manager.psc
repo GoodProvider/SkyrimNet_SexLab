@@ -180,10 +180,11 @@ SkyrimNet_SexLab_Scene_Creator Function CreateCreator(String intent, Actor[] act
     int i = 0
     int num_creators = creators.length 
     while i < num_creators
-        if !creators[i].IsActive()
+        if creators[i].TryClaim()
             if creators[i].Setup(intent, actors, speaker, target, tags, setting_name)
                 return creators[i]
             endif
+            creators[i].Release()
             Trace("CreateCreator", "Setup failed for creators["+i+"], trying next slot")
         endif 
         i += 1 
@@ -448,13 +449,17 @@ SkyrimNet_SexLab_Scene Function GetSceneByActor(Actor akActor)
         return None 
     endif 
     sslThreadController thread = GetThreadByActor(akActor) 
-    if thread == None
-        return None 
-    endif 
-    return GetSceneByThread(thread)
+    if thread != None
+        return GetSceneByThread(thread)
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = FindSceneByActorInThreadScene(akActor)
+    if sl_scene == None
+        Trace("GetSceneByActor", "--- no scene for "+GetDisplayName(akActor)+" (thread not animating/prepare)")
+    endif
+    return sl_scene
 EndFunction
 
-sslThreadController Function GetThreadByActor(Actor akActor) 
+sslThreadController Function GetThreadByActor(Actor akActor, bool any_state=False) 
     Trace("GetThread","actor:"+akActor.GetDisplayName())
     sslThreadController[] threads = ThreadSlots.Threads
     if threads.length == -1 
@@ -464,7 +469,7 @@ sslThreadController Function GetThreadByActor(Actor akActor)
     int i = threads.length - 1
     while 0 <= i
         String status = (threads[i] as sslThreadModel).GetState()
-        if status == "animating" || status == "prepare"
+        if any_state || status == "animating" || status == "prepare"
             Actor[] actors = threads[i].Positions
             int j = actors.length - 1
             while 0 <= j 
@@ -477,6 +482,60 @@ sslThreadController Function GetThreadByActor(Actor akActor)
         i -= 1
     endwhile
     return None 
+EndFunction
+
+; StageEnd can leave the SexLab controller outside animating/prepare while thread_scene is still bound.
+SkyrimNet_SexLab_Scene Function FindSceneByActorInThreadScene(Actor akActor)
+    if !thread_scene || akActor == None
+        return None
+    endif
+    int i = 0
+    int n = thread_scene.length
+    while i < n
+        SkyrimNet_SexLab_Scene sl_scene = thread_scene[i] as SkyrimNet_SexLab_Scene
+        if sl_scene != None
+            sslThreadController bound = sl_scene.GetThread()
+            if bound != None
+                Actor[] actors = bound.Positions
+                if actors
+                    int j = 0
+                    while j < actors.length
+                        if actors[j] == akActor
+                            Trace("FindSceneByActorInThreadScene", "--- "+GetDisplayName(akActor)+" sid:"+sl_scene.sid+" tid:"+bound.tid)
+                            return sl_scene
+                        endif
+                        j += 1
+                    endwhile
+                endif
+            endif
+        endif
+        i += 1
+    endwhile
+    if sl_scenes
+        i = 0
+        n = sl_scenes.length
+        while i < n
+            SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
+            if sl_scene != None
+                sslThreadController bound = sl_scene.GetThread()
+                if bound != None
+                    Actor[] actors = bound.Positions
+                    if actors
+                        int j = 0
+                        while j < actors.length
+                            if actors[j] == akActor
+                                Trace("FindSceneByActorInThreadScene", "--- sl_scenes "+GetDisplayName(akActor)+" sid:"+sl_scene.sid+" tid:"+bound.tid)
+                                return sl_scene
+                            endif
+                            j += 1
+                        endwhile
+                    endif
+                endif
+            endif
+            i += 1
+        endwhile
+    endif
+    return None
 EndFunction 
 
 ;----------------------------------------------------------------------------------------------------
@@ -1431,10 +1490,19 @@ int Function GettotalOrgasms(Actor akActor)
 EndFunction
 
 Function OrgasmCustom(Actor akActor, String msg) 
-    SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(akActor)
+    sslThreadController thread = GetThreadByActor(akActor, true)
+    SkyrimNet_SexLab_Scene sl_scene = None
+    if thread != None
+        sl_scene = GetSceneByThread(thread, true, false)
+    endif
+    if sl_scene == None
+        sl_scene = FindSceneByActorInThreadScene(akActor)
+    endif
     if sl_scene == None 
+        Trace("OrgasmCustom", "--- scene is None for "+GetDisplayName(akActor)+", aborting")
         return 
     endif 
+    Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" "+msg)
     sl_scene.OrgasmCustom(akActor, msg + ". "+GetDisplayName(akActor)+" is orgasming.")
 EndFunction
 
@@ -1482,9 +1550,15 @@ String Function GetThreadsJson(Actor speaker = None)
         i += 1
     endwhile
 
-    int threads_dom = main.handler_dom.GetThreads()
+    int threads_dom = 0
+    int dom_count = 0
+    int dom_kept = 0
+    if main.handler_dom
+        threads_dom = main.handler_dom.GetThreads()
+    endif
     if threads_dom
-        i = JArray.count(threads_dom) - 1
+        dom_count = JArray.count(threads_dom)
+        i = dom_count - 1
         while i >= 0
             int thread = JArray.getObj(threads_dom, i)
             String description = JMap.getStr(thread, "description")
@@ -1524,17 +1598,21 @@ String Function GetThreadsJson(Actor speaker = None)
                 JMap.setFlt(thread, "speaker_distance", distance)
                 JMap.setInt(thread, "speaker_los", los as int)
                 JArray.addObj(threads_array, thread)
+                dom_kept += 1
             endif
             i -= 1
         endwhile
     endif
+    Trace("GetThreadsJson", "--- dom threads:"+dom_count+" kept:"+dom_kept)
 
     JMap.setObj(obj, "threads", threads_array) 
 
     String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(obj) 
     
     JValue.release(obj) 
-    JValue.release(threads_dom)
+    if threads_dom
+        JValue.release(threads_dom)
+    endif
     Miscutil.WriteToFile(threads_filename, json, append=False)
     return json
 EndFunction 

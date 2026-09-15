@@ -2,7 +2,6 @@
 
 Per-stage SexLab animation descriptions for SkyrimNet_SexLab.
 
-**Format contract (schema 3.0):** [../developers/anidata-schema.md](../developers/anidata-schema.md).  
 Orgasm narration when a stage climaxes: [../reference/orgasm-narration.md](../reference/orgasm-narration.md).
 
 ## Paths
@@ -13,25 +12,44 @@ Orgasm narration when a stage climaxes: [../reference/orgasm-narration.md](../re
 | `SKSE/Plugins/SkyrimNet_SexLab/animations/(author)/` | Shared packs |
 | `animations/GoodProvider/` | Example pack |
 
-Files are keyed by SexLab **registrar** (`<registrar>.json`). Display-name filenames still load
-with a warning; port packs with `tools/port_anidata_v3.py`.
+## SexLab P+ playing set
+
+Empty tags: skip `GetAnimationsByTags` so SexLab picks. Tagged matches: `PickOneAnimation` keeps one random anim (P+ `GetPlayingScenes` hops otherwise). `Scene.StageStart` ends the thread after 120s real-time. Papyrus: [../developers/papyrus.md](../developers/papyrus.md).
 
 ## In-game editor
 
-Press the **Sex Description Editor** hot key on an actor in sex:
+Enable the Start Sex / Edit Stage hotkey in the SkyrimNet dashboard (default backslash `\`) while in a SexLab animation: add/replace stage description, set `orgasm_expected`, change sex style (if Tag Editor dialogs on).
 
-- View or replace an existing stage description, or add one (actor placeholders filled in).
-- Set `orgasm_expected` and sex style when Tag Editor dialogs are on.
-
-ESC cancels. Save aborts if existing JSON fails to parse.
+ESC cancels cleanly. Save aborts if existing JSON fails to parse (avoids wiping with `{}`).
 
 ## Fallback
 
-No stage description → tag-based. Current stage empty → last earlier stage with text.  
-Stage change with a `transitions` entry → that text; otherwise `"Scene changes to " + description`.
+No stage description → tag-based. Current stage empty → last earlier stage with text.
+
+## JSON format
+
+Keys are **case-sensitive** (JContainers). Use lowercase `"stage N"` and `"version"`.
+
+```json
+{
+    "stage 1": {
+        "description": "{{sl.actors.1}} fingers {{sl.actors.0}}.",
+        "version": "2.0"
+    },
+    "orgasm_expected": [1, 0]
+}
+```
+
+Inja `2.0`: actors array; victim usually first; `{{sl.actors.0}}`, `{{sl.actors.1}}`, …
+
+### orgasm_expected
+
+Int array by thread position: `0` no orgasm expected, `1` expects orgasm.
+
+### Sex style (Tag Editor)
+
+Forcefully fucking / having sex / gently making love.
 
 ## Sharing
 
-Zip your `_local_` folder with an author name (anonymous OK): Discord, or email
-da.good.provider@gmail.com. Install under `animations/(author_name)/`. Keep personal overrides
-in `_local_`.
+Zip `_local_` or an author folder; install under `animations/(author_name)/`. Keep personal overrides in `_local_`.

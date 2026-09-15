@@ -1,111 +1,103 @@
 plugin:
   name: "SkyrimNet_SexLab"
-  version: "0.31.4"
-  description: "SexLab-SkyrimNet integration"
+  version: "0.34.1"
+  description: "Sexlab-SkyrimNet integration"
   icon: "⚗️"
 
 schema:
   fields:
-    # Prompt Options
-    - name: "Hide hermaphrodite from prompt"
-      path: "sexlab.prompt.hideHermaphrodites"
+    - name: "Hide hermaphrodites from prompt"
+      path: "sexlab.prompt.hide_hermaphrodites"
       type: "bool"
-      description: "Hides hermaphrodite labels in prompts."
+      description: "Hides hermaphrodite labels in the prompt."
       defaultValue: false
-      category: "Prompt Options"
+      category: "Prompt"
 
     - name: "Public sex accepted"
-      path: "sexlab.prompt.publicSexAccepted"
+      path: "sexlab.prompt.public_sex_accepted"
       type: "bool"
-      description: "Makes public sex a socially accepted intent."
+      description: "Treat public sex as a socially accepted intent in prompts."
       defaultValue: false
-      category: "Prompt Options"
+      category: "Prompt"
 
-    # Rape Options
     - name: "Add rape actions"
-      path: "sexlab.rape.allowed"
+      path: "sexlab.actions.rape_allowed"
       type: "bool"
-      description: "Enables rape-related actions. May require save/reload for action eligibility to refresh."
+      description: "When off, unregisters NPC rape LLM actions. Turning this back on requires a save and reload."
       defaultValue: true
-      category: "Rape Options"
+      category: "Actions"
 
-    # Tag Edit
-    - name: "Show dialogs for player actions"
-      path: "sexlab.tagEdit.playerDialogs"
+    - name: "Tag dialogs for player actions"
+      path: "sexlab.tags.player"
       type: "bool"
-      description: "Opens tag/stage dialogs for events that include the player."
+      description: "Opens tag-edit dialogs for events that include the player."
       defaultValue: true
-      category: "Tag Edit"
+      category: "Tags"
 
-    - name: "Show dialogs for non-player actions"
-      path: "sexlab.tagEdit.nonPlayerDialogs"
+    - name: "Tag dialogs for non-player actions"
+      path: "sexlab.tags.nonplayer"
       type: "bool"
-      description: "Opens tag/stage dialogs for events that do not include the player."
+      description: "Opens tag-edit dialogs for events that do not include the player."
       defaultValue: false
-      category: "Tag Edit"
+      category: "Tags"
 
-    # Sex Description Editor
     - name: "Enable Start Sex / Edit Stage hotkey"
-      path: "sexlab.controls.editStageHotkeyEnabled"
+      path: "sexlab.editor.hotkey_enabled"
       type: "bool"
-      description: "Enables the PrismaUI Start Sex / Edit Stage hotkey."
+      description: "Enables the Start Sex / Edit Stage Description hotkey."
       defaultValue: false
-      category: "Sex Description Editor"
+      category: "Controls"
 
     - name: "Start Sex / Edit Stage hotkey"
-      path: "sexlab.controls.editStageHotkey"
+      path: "sexlab.editor.hotkey"
       type: "hotkey"
-      description: "Hotkey to start sex or open the stage description editor.\nCrosshair on actor not in sex: start sex.\nCrosshair on actor in sex: stage editor.\nNo crosshair: start sex among nearby eligible actors."
+      description: "Hotkey to open Start Sex / Edit Stage Description. Applies when the hotkey is enabled. Default is backslash (\\)."
       min: 1
       max: 255
       required: false
       defaultValue: 220
-      category: "Sex Description Editor"
+      category: "Controls"
       supportsOverride: false
 
-    - name: "Hide Edit Stage Description Help"
-      path: "sexlab.editor.hideHelp"
+    - name: "Hide Edit Stage Description help"
+      path: "sexlab.editor.hide_help"
       type: "bool"
-      description: "Hides the help dialogue that appears if no stage description is found."
+      description: "Hides the help dialogue when a stage has no description."
       defaultValue: false
-      category: "Sex Description Editor"
+      category: "Editor"
 
-    # Direction Narration Blocking
-    - name: "Narration cooldown (seconds)"
+    - name: "Orgasm delay (sec)"
+      path: "sexlab.orgasm.delay"
+      type: "float"
+      description: "Seconds to wait after the last orgasm (player or Dom slave) before one combined Direct Narration. Without a Dom slave, also extends the current stage when that narration is sent."
+      min: 0
+      max: 60
+      defaultValue: 5.0
+      category: "Narration"
+
+    - name: "Narration cooldown (sec)"
       path: "sexlab.narration.cooldown"
       type: "float"
       description: "Minimum seconds since last audio ended before the next optional Direct Narration."
       min: 1
       max: 120
       defaultValue: 20
-      category: "Direction Narration Blocking"
+      category: "Narration"
 
-    - name: "Narration max distance (meters)"
-      path: "sexlab.narration.maxDistance"
+    - name: "Narration max distance (m)"
+      path: "sexlab.narration.max_distance"
       type: "float"
-      description: "Maximum distance in meters that can generate a new direct narration."
+      description: "Maximum distance in meters that can generate a new Direct Narration."
       min: 5
       max: 100
       defaultValue: 15
-      category: "Direction Narration Blocking"
+      category: "Narration"
 
-    # Framework
-    - name: "Player sex framework"
-      path: "sexlab.framework.player"
-      type: "select"
-      description: "Which sex framework to use for player-facing actions when OStimNet is installed."
-      defaultValue: "SexLab"
-      options:
-        - "SexLab"
-        - "Ostim"
-      category: "Framework"
-
-    # Orgasm
-    - name: "Orgasm delay (seconds)"
-      path: "sexlab.orgasm.delay"
-      type: "float"
-      description: "Number of seconds added to the stage with orgasm."
+    - name: "Sex framework (0 SexLab, 1 Ostim)"
+      path: "sexlab.ostim.player"
+      type: "int"
+      description: "Which framework starts sex for the player when OstimNet is installed. 0 = SexLab, 1 = Ostim."
       min: 0
-      max: 60
-      defaultValue: 5.0
-      category: "Orgasm"
+      max: 1
+      defaultValue: 0
+      category: "General"

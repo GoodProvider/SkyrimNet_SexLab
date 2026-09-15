@@ -92,11 +92,11 @@ Function Open_WebUI_Target(Actor target)
     endif
     bool hasStripped = main.HasStrippedItems(target)
     Trace("Open_WebUI_Target", target.GetDisplayName()+" hasStripped:"+hasStripped \
-        +" editTagsPlayer:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.playerDialogs", true) \
-        +" editTagsNonPlayer:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.nonPlayerDialogs", false))
+        +" editTagsPlayer:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true) \
+        +" editTagsNonPlayer:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false))
     if !SkyrimNet_SexLab_WebUI.Target_Menu_Open(target, hasStripped, \
-        SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.playerDialogs", true), \
-        SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.nonPlayerDialogs", false))
+        SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true), \
+        SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false))
         Trace("Open_WebUI_Target", \
             "PrismaUI overlay missing Data/PrismaUI/views/SkyrimNet_SexLab/index.html", True)
         return
@@ -145,12 +145,24 @@ Function Target_Menu_Selection(Actor target, Actor player)
     if mcm.udng_found
         bondage = cancel
         cancel += 1 
-    endif  
+    endif
+
+    int leash = -1
+    if mcm.leashed_found
+        leash = cancel
+        cancel += 1
+    endif
     
     String[] buttons = Utility.CreateStringArray(cancel+1)
 
+    int ostim_player = SkyrimNetApi.GetConfigInt("Plugin_SkyrimNet_SexLab", "sexlab.ostim.player", 0)
+    if ostim_player < 0
+        ostim_player = 0
+    elseif ostim_player > 1
+        ostim_player = 1
+    endif
     if sexlab_ostim != -1
-        buttons[sexlab_ostim] = mcm.sexlab_ostim_options[mcm.sexlab_ostim_player]
+        buttons[sexlab_ostim] = mcm.sexlab_ostim_options[ostim_player]
     endif 
     buttons[masturbate] = "masturbate"
     buttons[punish] = "punish"
@@ -160,18 +172,24 @@ Function Target_Menu_Selection(Actor target, Actor player)
     buttons[rapes_player] = "rapes player"
     if bondage != -1 
         buttons[bondage] = "bondage"
-    endif 
+    endif
+    if leash != -1
+        buttons[leash] = "leash"
+    endif
+    Trace("Target_Menu_Selection", "leashed_found: "+mcm.leashed_found+ "leash index: "+leash)
     buttons[cancel] = "cancel"
 
     String msg = "Should "+target.getDisplayName()+":"
     int button = SkyMessage.ShowArray(msg, buttons, getIndex = true) as int  
 
-    if button >= 0 && button <= cancel
-        Trace("Target_Menu_Selection","button:" +buttons[button])
-    endif 
+    if button < 0 || button == cancel
+        Trace("Target_Menu_Selection","cancelled")
+        return
+    endif
+    Trace("Target_Menu_Selection","button:" +buttons[button]) 
     
     if button == masturbate
-        if mcm.sexlab_ostim_player == 1 && main.ostimnet_found
+        if ostim_player == 1 && main.ostimnet_found
             EventSend_OStimNet("SexStart", target, None, "")
         elseif main.handler_dom.IsDOMSlave(target) 
             main.handler_dom.Start_Masturbate("sexual training", target, player)
@@ -180,13 +198,14 @@ Function Target_Menu_Selection(Actor target, Actor player)
         endif 
     elseif sexlab_ostim != -1 && button == sexlab_ostim 
         String choice = ""
-        if mcm.sexlab_ostim_player == 0
-            mcm.sexlab_ostim_player = 1
+        if ostim_player == 0
+            ostim_player = 1
             choice = "Ostim"
         else
-            mcm.sexlab_ostim_player = 0
+            ostim_player = 0
             choice = "SexLab"
-        endif 
+        endif
+        SkyrimNetApi.PatchConfig("Plugin_SkyrimNet_SexLab", "{ \"sexlab\": { \"ostim\": { \"player\": "+ostim_player+" } } }")
         Debug.Notification("Switched to "+choice)
     elseif button == punish 
         String[] bs = new String[4] 
@@ -215,10 +234,10 @@ Function Target_Menu_Selection(Actor target, Actor player)
         if debug_mode && main.handler_dom.IsDOMSlave(target) 
             main.handler_dom.StartScene_Nonconsensual_Two_SpeakerVictim(punish_intent, target, player, player, method=method, setting_name=setting_name)
         else
-            actions.StartScene_Nonconsensual_Two_TargetVictim(punish_intent, player, target, tags=method, setting_name=setting_name)
+            actions.StartScene_Nonconsensual_Two_TargetVictim(punish_intent, player, target, method=method, setting_name=setting_name)
         endif 
     elseif button == affection
-        if mcm.sexlab_ostim_player == 0 || !main.ostimnet_found    
+        if ostim_player == 0 || !main.ostimnet_found    
             String[] bs = new String[6] 
             bs[0] = "single hug"
             bs[1] = "hugging"
@@ -235,7 +254,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
             if method == "kissing" 
                 setting_name = "nonsexual_kissing"
             endif 
-            actions.StartScene_Consensual_Two("showing physical affection",player, target=target, style="gently", tags=method,setting_name=setting_name)
+            actions.StartScene_Consensual_Two("showing physical affection",player, target=target, style="gently", method=method,setting_name=setting_name)
         else
             Debug.Notification("Affection is not available while OStim is the active framework.")
         endif 
@@ -258,8 +277,10 @@ Function Target_Menu_Selection(Actor target, Actor player)
         else
             actions.StartScene_Nonconsensual_Two_TargetVictim("sexual assault",player, target)
         endif 
-    elseif button == bondage 
+    elseif button == bondage
         EventSend_UDNG("MenuOpen", target)
+    elseif leash != -1 && button == leash
+        EventSend_LeashedOpen()
     endif 
 EndFunction
 
@@ -274,6 +295,12 @@ EndFunction
 Function EventSend_UDNG(String type, Actor target)
     int handle = ModEvent.Create("SkyrimNet_SexLab_UDNG_"+type)
     ModEvent.PushForm(handle, target)
+    ModEvent.Send(handle)
+EndFunction
+
+Function EventSend_LeashedOpen()
+    SkyrimNet_SexLab_WebUI.WebUI_CloseOverlay()
+    int handle = ModEvent.Create("SkyrimNet_Leashed_OpenPanel")
     ModEvent.Send(handle)
 EndFunction
 

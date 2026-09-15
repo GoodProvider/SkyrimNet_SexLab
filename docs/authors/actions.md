@@ -12,16 +12,21 @@ SkyrimNet allows **at most 8** `parameterMapping` entries. Threesome actions alr
 
 ## Paths
 
+SkyrimNet Beta 25+ reads this mod's LLM content from the **external plugin** folder. Folder name must equal `manifest.json` `id`.
+
 | Path | Purpose |
 |------|---------|
-| `SKSE/Plugins/SkyrimNet/config/actions/` | Action YAML |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Plugin root (`manifest.json`) |
+| `…/actions/` | Action YAML |
 | `SKSE/Plugins/SkyrimNet_SexLab/scenes/` | Scene JSON via `setting_name` |
-| `SKSE/Plugins/SkyrimNet/prompts/helpers/` | Optional helpers |
+| `…/prompts/helpers/sexlab/` | Optional helpers |
 | `Scripts/Source/SkyrimNet_SexLab_Actions.psc` | `executionFunctionName` targets |
 
-Categories (prefix / `customCategory`): `sexlab_sex1` / `sexlab_sex2` / `sexlab_sex3`, `sexlab_nonsexual` / `sexlab_comfort`, `sexlab_punish`, `sexlab_none`.
+The YAML filename (before `.yaml`) must equal the in-file `name`, compared case-insensitively. Keep the `name` casing; that is what the LLM sees. Do not rename an action `name` unless you intend to reset per-action enabled/cooldown settings.
 
-Category parents end with `_` only (e.g. `sexlab_sex2_.yaml`) — no Papyrus call.
+Categories (`customCategory`): `sexlab_sex1` / `sexlab_sex2` / `sexlab_sex3`, `sexlab_nonsexual` / `sexlab_comfort`, `sexlab_punish`, `sexlab_none`.
+
+Category parents have no `executionFunctionName` (e.g. `ShowComfort.yaml`, `SexLab_Sexual_Activities_Two.yaml`) — no Papyrus call.
 
 ## Category vs executable
 
@@ -48,7 +53,7 @@ Prefer Papyrus slot names: `method`, `how` (outfit), `victim` when needed.
 | `StartScene_Refused_Two` | Refusal |
 | `Outfit_Dress` / `Outfit_Undress` | Speaker dresses/undresses Target; narration `silent` → RegisterEvent |
 
-No `speaking_victim`. No `sexlab_none_rape`. Outfit: StorageUtil on Target (`FormListCount` == 0 undress / != 0 dress); eligibility also uses `OStimActorCountFaction`.
+No `speaking_victim`. No `sexlab_none_rape`. Outfit eligibility uses `OStimActorCountFaction`.
 
 ## setting_name
 
@@ -66,7 +71,7 @@ Loads `scenes/(setting_name).json`. See [../reference/scene-settings.md](../refe
 
 ## Example (shipped)
 
-[`sexlab_sex2_sex_giving.yaml`](../../SKSE/Plugins/SkyrimNet/config/actions/sexlab_sex2_sex_giving.yaml):
+[`SexLab_Start_Giving.yaml`](../../SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/actions/SexLab_Start_Giving.yaml):
 
 ```yaml
 customCategory: sexlab_sex2
@@ -79,15 +84,13 @@ parameterMapping:
   # ... speaker, target, style, method, direction (≤ 8 total)
 ```
 
-Copy patterns: `sexlab_sex2_sex_fucking.yaml`, `sexlab_punish_spanking.yaml`, `sexlab_none_outfit_undress.yaml` / `sexlab_none_outfit_dress.yaml`, `sexlab_none_stop.yaml`.
+Copy patterns: `SexLab_Start_Fucking.yaml`, `SexLab_Punish_Spanking_Target.yaml`, `outfit_dress.yaml` / `outfit_undress.yaml`, `SEXLAB_STOP.yaml`. Stop `description` template: `helpers/sexlab/none_stop`. Outfit actions use inline descriptions (no shared `how` helper).
 
 ## Eligibility
 
-Groups need `logicalOperator` (`AND`/`OR`) and `required: true`. Actor lock key: `skyrimnet_sexlab_scene_actor_lock` (not old `skyrimnet_sexlab_actor_lock`).
+Groups need `logicalOperator` (`AND`/`OR`) and `required: true`. Actor lock key: `skyrimnet_sexlab_scene_actor_lock` (not old `skyrimnet_sexlab_actor_lock`). Quote `comparisonOperator: ">"` — unquoted `>` is a YAML folded block and loads as blank (Stop never eligible). Do not use Papyrus decorators in action eligibility — `CallDecoratorDirect` returns empty on cache miss; use native `get_global_value` / factions (OStim gate: `skyrimnet_sexlab_ostim_player`).
 
-Always quote `comparisonOperator` (`"=="`, `"<"`, `">"`, `"!="`). Unquoted `>` and `|` are YAML block scalars — `comparisonOperator: >` parses as blank and SkyrimNet treats the rule as always false.
-
-Rape actions: MCM **Add rape actions** → toggle, save, reload, Game Data Explorer Refresh.
+Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_allowed`). Off unregisters LLM actions immediately; on needs save and reload, then Game Data Explorer Refresh.
 
 ## After changes
 
@@ -97,8 +100,8 @@ Rape actions: MCM **Add rape actions** → toggle, save, reload, Game Data Explo
 
 ## Checklist
 
-- [ ] Unique `name`; ≤ 8 mappings; order matches Papyrus
+- [ ] Unique `name`; filename equals `name`; ≤ 8 mappings; order matches Papyrus
 - [ ] `static`/`dynamic` fields correct; no `speaking_victim`
 - [ ] `setting_name` file exists; modifiers use `_token_` form
-- [ ] Eligibility: `logicalOperator` + `required: true`; quoted `comparisonOperator`
+- [ ] Eligibility: `logicalOperator` + `required: true`
 - [ ] Game Data Explorer Refresh

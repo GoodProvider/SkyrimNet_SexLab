@@ -14,6 +14,7 @@ Bridge mod between SkyrimNet (LLM) and SexLab Framework.
 | `Scripts/` | Compiled `.pex` |
 | `Headers/` | Papyrus headers |
 | `skyrimse.ppj` | Pyro project |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Beta 25 LLM plugin (actions + prompts + settings schema) |
 
 Repo root: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`.
 
@@ -43,6 +44,13 @@ Relative paths for other machines: [docs/reference/papyrus-rules.md](docs/refere
 | WebUI / SKSE | [docs/developers/webui.md](docs/developers/webui.md) |
 | Release docs | [release-guide.xml](release-guide.xml) + [release-checkpoint.xml](release-checkpoint.xml) |
 | Portable doc template (other repos) | [documentation-guide.xml](documentation-guide.xml) |
+
+## Logs 
+SkyrimNet: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet.log
+SkyrimNet_SexLab: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log
+SkyrimNet_DOM: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
+Papyrus (general code): C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
+
 
 ### Canonical contracts (do not restate elsewhere)
 

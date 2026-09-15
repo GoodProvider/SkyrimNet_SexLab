@@ -1,0 +1,20 @@
+{
+  "id": "goodprovider.sexlab",
+  "type": "bundle",
+  "title": "SkyrimNet SexLab",
+  "tagline": "LLM actions and prompts for SexLab scenes.",
+  "description": "Ships the SexLab actions, helper prompts, and character-bio / narration submodules used by SkyrimNet_SexLab. Requires `SkyrimNet_SexLab.esp`.\n\nPlugin menu settings stay in `config/plugins/SkyrimNet_SexLab/` (`sexlab.*` keys). Change options in the SkyrimNet dashboard, not the in-game MCM. Decorators and Papyrus execute live in this mod's SKSE plugin and scripts, not in this content folder.\n\nScene JSON, animations, and the WebUI stay in this mod's own `SKSE/Plugins/SkyrimNet_SexLab/` folder, not in this plugin.",
+  "author": "goodprovider",
+  "tags": ["sexlab", "nsfw"],
+  "nsfw": true,
+  "icon": "sparkles",
+  "version": "0.34.1",
+  "min_skyrimnet_version": "0.25.0",
+  "mods": [
+    {
+      "name": "SkyrimNet SexLab",
+      "file": "SkyrimNet_SexLab.esp",
+      "required": true
+    }
+  ]
+}

@@ -7,6 +7,26 @@ Function Trace(String func, String msg, Bool notification=False) global
     endif 
 EndFunction
 
+; Vanilla SexLabUtil SKSE versions are ~16000–17000 (1.62–1.66).
+; P+ registers the same plugin name with a packed 2.x.x.x version in the high bits.
+bool Function IsSexLabPPlus() global
+    int v = SKSE.GetPluginVersion("SexLabUtil")
+    if v <= 0
+        v = SexLabUtil.GetVersion()
+    endif
+    return v > 20000
+EndFunction
+
+; P+ FindSimilarSceneStage hops every animation in SetAnimations; pass one only.
+sslBaseAnimation[] Function PickOneAnimation(sslBaseAnimation[] animations) global
+    if !animations || animations.length <= 1
+        return animations
+    endif
+    sslBaseAnimation[] one = new sslBaseAnimation[1]
+    one[0] = animations[Utility.RandomInt(0, animations.length - 1)]
+    return one
+EndFunction
+
 String Function GetDisplayName(Actor akActor) global
     if akActor == None 
         return "none"
@@ -635,15 +655,274 @@ EndFunction
 ; Recursively lowercase all JSON object keys (SKSE native). Invalid/empty -> "".
 String Function JsonLowerCaseKeys(String json) global native
 
+; SkyrimNet dashboard hotkey fields store VK; Papyrus RegisterForKey wants DX.
+; Invalid/unmapped VK -> DX backslash (0x2B).
+int Function VkToDxScanCode(int vk) global native
+
+; JSON string literal. Fast path keeps the interned string (GetNthChar would fold case).
+String Function JsonQuote(String s) global
+    int n = StringUtil.GetLength(s)
+    int i = 0
+    int first_special = -1
+    while i < n
+        String ch = StringUtil.GetNthChar(s, i)
+        int o = StringUtil.AsOrd(ch)
+        if o < 32 || ch == "\"" || ch == "\\"
+            first_special = i
+            i = n
+        else
+            i += 1
+        endif
+    endwhile
+    if first_special < 0
+        return "\"" + s + "\""
+    endif
+    String out = "\""
+    int start = 0
+    i = 0
+    while i < n
+        String ch = StringUtil.GetNthChar(s, i)
+        int o = StringUtil.AsOrd(ch)
+        if o < 32 || ch == "\"" || ch == "\\"
+            if i > start
+                out += StringUtil.Substring(s, start, i - start)
+            endif
+            if ch == "\""
+                out += "\\\""
+            elseif ch == "\\"
+                out += "\\\\"
+            elseif o == 10
+                out += "\\n"
+            elseif o == 13
+                out += "\\r"
+            elseif o == 9
+                out += "\\t"
+            else
+                out += "\\u00" + JsonHexByte(o)
+            endif
+            start = i + 1
+        endif
+        i += 1
+    endwhile
+    if start < n
+        out += StringUtil.Substring(s, start, n - start)
+    endif
+    return out + "\""
+EndFunction
+
+String Function JsonHexByte(int o) global
+    if o < 0
+        o = 0
+    elseif o > 255
+        o = 255
+    endif
+    String hex = "0123456789abcdef"
+    int hi = o / 16
+    int lo = o - (hi * 16)
+    return StringUtil.GetNthChar(hex, hi) + StringUtil.GetNthChar(hex, lo)
+EndFunction
+
+; JC writeToFile form token, or null.
+String Function JsonForm(Form akForm) global
+    if akForm == None
+        return "null"
+    endif
+    return JsonQuote(JString.encodeFormToString(akForm))
+EndFunction
+
+; Walk JMap/JArray/JFormMap/JIntMap. Do not call JValue.toJsonString (JC 4.2.13.1+ only).
+String Function JValueToJsonString(int obj) global
+    if obj == 0 || !JValue.isExists(obj)
+        return "null"
+    endif
+    if JValue.isMap(obj)
+        return JMapToJson(obj)
+    elseif JValue.isArray(obj)
+        return JArrayToJson(obj)
+    elseif JValue.isFormMap(obj)
+        return JFormMapToJson(obj)
+    elseif JValue.isIntegerMap(obj)
+        return JIntMapToJson(obj)
+    endif
+    return "null"
+EndFunction
+
+String Function JMapToJson(int obj) global
+    String json = "{"
+    bool first = true
+    String map_key = JMap.nextKey(obj, "", "")
+    while map_key != ""
+        if !first
+            json += ","
+        endif
+        first = false
+        json += JsonQuote(map_key) + ":" + JMapValueToJson(obj, map_key)
+        map_key = JMap.nextKey(obj, map_key, "")
+    endwhile
+    return json + "}"
+EndFunction
+
+String Function JMapValueToJson(int obj, String map_key) global
+    int t = JMap.valueType(obj, map_key)
+    if t == 2
+        return JMap.getInt(obj, map_key)
+    elseif t == 3
+        return JMap.getFlt(obj, map_key)
+    elseif t == 4
+        return JsonForm(JMap.getForm(obj, map_key))
+    elseif t == 5
+        return JValueToJsonString(JMap.getObj(obj, map_key))
+    elseif t == 6
+        return JsonQuote(JMap.getStr(obj, map_key))
+    endif
+    return "null"
+EndFunction
+
+String Function JArrayToJson(int obj) global
+    String json = "["
+    int n = JArray.count(obj)
+    int i = 0
+    while i < n
+        if i > 0
+            json += ","
+        endif
+        json += JArrayValueToJson(obj, i)
+        i += 1
+    endwhile
+    return json + "]"
+EndFunction
+
+String Function JArrayValueToJson(int obj, int index) global
+    int t = JArray.valueType(obj, index)
+    if t == 2
+        return JArray.getInt(obj, index)
+    elseif t == 3
+        return JArray.getFlt(obj, index)
+    elseif t == 4
+        return JsonForm(JArray.getForm(obj, index))
+    elseif t == 5
+        return JValueToJsonString(JArray.getObj(obj, index))
+    elseif t == 6
+        return JsonQuote(JArray.getStr(obj, index))
+    endif
+    return "null"
+EndFunction
+
+String Function JFormMapToJson(int obj) global
+    String json = "{"
+    bool first = true
+    Form map_key = JFormMap.nextKey(obj, None, None)
+    while map_key != None
+        if !first
+            json += ","
+        endif
+        first = false
+        json += JsonForm(map_key) + ":" + JFormMapValueToJson(obj, map_key)
+        map_key = JFormMap.nextKey(obj, map_key, None)
+    endwhile
+    return json + "}"
+EndFunction
+
+String Function JFormMapValueToJson(int obj, Form map_key) global
+    int t = JFormMap.valueType(obj, map_key)
+    if t == 2
+        return JFormMap.getInt(obj, map_key)
+    elseif t == 3
+        return JFormMap.getFlt(obj, map_key)
+    elseif t == 4
+        return JsonForm(JFormMap.getForm(obj, map_key))
+    elseif t == 5
+        return JValueToJsonString(JFormMap.getObj(obj, map_key))
+    elseif t == 6
+        return JsonQuote(JFormMap.getStr(obj, map_key))
+    endif
+    return "null"
+EndFunction
+
+String Function JIntMapToJson(int obj) global
+    String json = "{"
+    int[] keys = JIntMap.allKeysPArray(obj)
+    if keys
+        int i = 0
+        int n = keys.length
+        while i < n
+            if i > 0
+                json += ","
+            endif
+            int map_key = keys[i]
+            json += JsonQuote(map_key) + ":" + JIntMapValueToJson(obj, map_key)
+            i += 1
+        endwhile
+    endif
+    return json + "}"
+EndFunction
+
+String Function JIntMapValueToJson(int obj, int map_key) global
+    int t = JIntMap.valueType(obj, map_key)
+    if t == 2
+        return JIntMap.getInt(obj, map_key)
+    elseif t == 3
+        return JIntMap.getFlt(obj, map_key)
+    elseif t == 4
+        return JsonForm(JIntMap.getForm(obj, map_key))
+    elseif t == 5
+        return JValueToJsonString(JIntMap.getObj(obj, map_key))
+    elseif t == 6
+        return JsonQuote(JIntMap.getStr(obj, map_key))
+    endif
+    return "null"
+EndFunction
+
 ; Serialize JValue -> JSON string with all object keys lowercased. Empty/invalid -> "{}".
-; Only project call site for JValue.toJsonString.
+; Walks JC containers; do not call JValue.toJsonString (missing on JC before 4.2.13.1).
 String Function ObjectToLowerCaseKeyJson(int obj) global
-    String json = JValue.toJsonString(obj)
+    String json = JValueToJsonString(obj)
+    if json == "" || json == "null"
+        return "{}"
+    endif
     json = JsonLowerCaseKeys(json)
     if !json
         return "{}"
     endif
     return json
+EndFunction
+
+; Load helpers/sexlab/*.prompt via RenderTemplate, then bind sl JSON with ParseString
+; (same namespace as Stages AddActorDescriptionActors). Releases obj. Empty, error,
+; leftover "{{", or inja text -> fallback so SkyrimNet errors are never DirectNarrated.
+String Function RenderSlPrompt(String template_name, int obj, String fallback="") global
+    String json = "{}"
+    if obj > 0
+        json = ObjectToLowerCaseKeyJson(obj)
+        JValue.release(obj)
+    endif
+    String result = SkyrimNetApi.RenderTemplate(template_name, "sl", json)
+    if result == ""
+        Trace("RenderSlPrompt", "--- empty template:"+template_name+" json:"+json)
+        return fallback
+    endif
+    String head = StringUtil.Substring(result, 0, 5)
+    if head == "Error" || head == "error" || head == "ERROR"
+        Trace("RenderSlPrompt", "--- render failed template:"+template_name+" json:"+json+" result:"+result)
+        return fallback
+    endif
+    if StringUtil.Find(result, "inja.exception") >= 0
+        Trace("RenderSlPrompt", "--- inja error template:"+template_name+" json:"+json+" result:"+result)
+        return fallback
+    endif
+    String parsed = SkyrimNetApi.ParseString(result, "sl", json)
+    if parsed != "" && StringUtil.Find(parsed, "inja.exception") < 0
+        String parsed_head = StringUtil.Substring(parsed, 0, 5)
+        if parsed_head != "Error" && parsed_head != "error" && parsed_head != "ERROR"
+            result = parsed
+        endif
+    endif
+    if StringUtil.Find(result, "{{") >= 0
+        Trace("RenderSlPrompt", "--- leftover braces template:"+template_name+" json:"+json+" result:"+result)
+        return fallback
+    endif
+    Trace("RenderSlPrompt", "--- template:"+template_name+" json:"+json+" result:"+result)
+    return result
 EndFunction
 
 ; ------------------------------------------------------------

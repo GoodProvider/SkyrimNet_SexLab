@@ -2,8 +2,8 @@
 <!--
   release-checkpoint.xml — cold-start context for release documentation of SkyrimNet_SexLab.
 
-  Purpose: feed this file together with release-guide.xml to a fresh agent so it can
-  continue release-doc alignment without rediscovering the ground rules.
+  Purpose: feed this file together with release-guide.md and the release skill so a
+  fresh agent can continue release-doc alignment without rediscovering the ground rules.
 
   Design: durable release-doc state only. Per-change detail lives in CHANGELOG.md.
 -->
@@ -12,13 +12,15 @@
     <project>SkyrimNet_SexLab</project>
     <summary>Bridge mod between SkyrimNet (LLM) and SexLab Framework.</summary>
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
-    <updated>2026-07-27</updated>
-    <base_tag>0.31.3</base_tag>
-    <next_version>0.31.4</next_version>
-    <version_status>Makefile VERSION=0.31.4 (authoritative); info.json / FOMOD synced; git tag and package still pending</version_status>
+    <updated>2026-09-14</updated>
+    <base_tag>0.34.0</base_tag>
+    <next_version>0.34.1</next_version>
+    <version_status>Makefile VERSION=0.34.1 (authoritative); plugin manifest.json and settings manifest.yaml 0.34.1; info.json / FOMOD written by make release; git tags include 0.33.0 and 0.34.0; 0.34.1 not tagged</version_status>
     <related_artifacts>
-      <artifact role="release rules / persona">release-guide.xml</artifact>
+      <artifact role="release rules (human)">release-guide.md</artifact>
+      <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
       <artifact role="portable doc-system template">documentation-guide.xml</artifact>
+      <artifact role="agent policy">AGENTS.md</artifact>
       <artifact role="agent router">llms.txt</artifact>
       <artifact role="changelog since last tag">CHANGELOG.md</artifact>
       <artifact role="player changelog summary">CHANGELOG-user.md</artifact>
@@ -35,6 +37,7 @@
 
   <doc_files>
     <file>README.md</file>
+    <file>AGENTS.md</file>
     <file>llms.txt</file>
     <file>CHANGELOG.md</file>
     <file>CHANGELOG-user.md</file>
@@ -52,12 +55,19 @@
     <file>docs/reference/orgasm-narration.md</file>
     <file>docs/reference/scene-settings.md</file>
     <file>release-checkpoint.xml</file>
-    <file>release-guide.xml</file>
+    <file>release-guide.md</file>
+    <file>.cursor/skills/release/SKILL.md</file>
   </doc_files>
 
   <status>
-    <note>2026-07-27: Release docs for 0.31.4 since 0.31.3 (no 0.30.5 in changelogs). Delta: no_penis.json, plugin manifest orgasm delay, docs/ migration. SexLab-repo DOM bridge included if present in window (none this pass); sibling SkyrimNet_DOM excluded. General churn omitted.</note>
-    <note>Open: commit shipping tree, compile: pyro if needed, make release, git tag 0.31.4, GitHub Release.</note>
+    <note>2026-09-14: Rebuild 0.34.1 since tagged 0.34.0 (HEAD 798f752). Added eligibility `get_global_value` / `skyrimnet_sexlab_ostim_player` and `GetThreadByActor`/`GetSceneByThread` caller arity to changelogs. pyro then make release. SKSE DLL and handler ESPs unchanged. Omit: reviews/, y-MIGRATING_TO_BETA25.md, z-*. 0.34.1 still untagged.</note>
+    <note>2026-09-13: 0.34.1 since untagged 0.34.0. Delta: five main commits (DOM Combined window / orgasm_narrated / tease skip / delayed melt / synthetic masturbate thread / JC JSON walk). pex committed in 33f84e1. SKSE DLL and handler ESPs unchanged. Omit: reviews/, y-MIGRATING_TO_BETA25.md, z-*. Last git tag still 0.31.5.</note>
+    <note>2026-09-13: Retitled untagged 0.33.0 ship as 0.34.0 since tagged 0.31.5. Same delta; no new feature bullets. Branch main. Omit: reviews/, y-MIGRATING_TO_BETA25.md.</note>
+    <note>2026-09-13: Branch main (ahead of origin/main). Plugin manifest.json committed in 2ec7400. Still omit: reviews/, y-MIGRATING_TO_BETA25.md.</note>
+    <note>2026-09-12: Beta 25 content plugin `goodprovider.sexlab` (external layer). Actions renamed to match in-file `name`. Settings schema stays at config/plugins. y-MIGRATING_TO_BETA25.md remains user scratch, not shipped.</note>
+    <note>2026-09-12: Release docs since tagged 0.31.5 (7fad407). Delta: RenderSlPrompt afterglow/cum, P+ PickOneAnimation + 120s duration cap + empty-tag skip (SelectAnimations and SelectAnimationsDialog), leash MCM/menu/WebUI handoff, orgasm "is not orgasming right now", helper path helpers/sexlab/. Handler ESPs unchanged. Omitted from changelog: OStimNet gitlink, webui/MainPanels stubs, TargetMenu split JSON (ActionCatalog loads target_options.json only), bondage/group-devices.json, Scripts.zip, reviews/, y-MIGRATING_TO_BETA25.md.</note>
+    <note>2026-09-01: Replaced release-guide.xml with release-guide.md (human) + .cursor/skills/release/SKILL.md (agent). Checkpoint is session state only.</note>
+    <note>Open: commit changelog/pex if the rebuild dirtied the tree. Pack: versions/SkyrimNet_SexLab 0.34.1.7z. Then git tag 0.34.1, GitHub Release. Leftover versions/ 0.33.0.7z and 0.34.0.7z are local packs.</note>
   </status>
 
   <conventions>
@@ -67,5 +77,6 @@
     <convention>Actor lock StorageUtil key: skyrimnet_sexlab_scene_actor_lock.</convention>
     <convention>Orgasm narration gate substring: " is orgasming." Canonical: docs/reference/orgasm-narration.md</convention>
     <convention>Sex giving actions use setting_name no_penis; fucking uses empty setting_name.</convention>
+    <convention>z-* files and directories at repo root are user scratch. Never ingest, changelog, or commit.</convention>
   </conventions>
 </checkpoint>

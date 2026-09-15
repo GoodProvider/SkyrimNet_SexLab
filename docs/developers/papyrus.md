@@ -13,8 +13,8 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 | `Headers/` | Import headers |
 | `skyrimse.ppj` | Pyro project |
 | `Spriggit/` | ESP ↔ JSON |
-| `SKSE/Plugins/SkyrimNet/config/actions/` | Action YAML |
-| `SKSE/Plugins/SkyrimNet/prompts/` | Prompts |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Action YAML + prompts (`manifest.json`; no settings schema) |
+| `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/` | Settings schema (`Plugin_SkyrimNet_SexLab`, `sexlab.*`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/` | Scenes, animations, threads |
 | `SKSE_Source/` | C++ WebUI plugin |
 
@@ -39,16 +39,20 @@ Scene_Creator (pooled) ──StartScene──► Scene_Manager.CreateSceneByCrea
                          Decorators / threads.json → prompts
 ```
 
-- Creator: `CreateCreator()` → ACTIVE; always `Release()` after cancel or after Setup copies state.
+- Creator: `CreateCreator()` `TryClaim()` → SETUP (before latent `Setup` / `GetPlayer`), then `Setup` → ACTIVE; always `Release()` after cancel or after Setup copies state. `StartScene` aborts before `NewThread` when `num_actors < 1`.
+- `SelectAnimations()` / `SelectAnimationsDialog()`: empty tags (`num_tags == 0 && num_tags_suppress == 0`) skip `GetAnimationsByTags` and return `manager.empty` so SexLab picks. On P+, tagged hits go through `PickOneAnimation` (one random). `Scene.StageStart` `EndAnimation()` after `DURATION_CAP_SECONDS` (120s real-time). Do not `UpdateTimer` to end a P+ thread.
+- Afterglow / cum: `RenderSlPrompt` with `helpers/sexlab/afterglow` or `helpers/sexlab/cum` — empty / `Error*` / inja / leftover `{{` → fallback. See [prompts.md](../authors/prompts.md).
 - `SelectAnimations()` before `sexlab.NewThread()`; abort → `model.Initialize()` then `Release()`.
 - `Scene.Setup` returns `Bool`; failure → Release, no half-init slot.
 - `Scene.initiator` is the speaker by default. If `num_victims > 0`, `PickNonVictimInitiator()` keeps initiator only when they are not a victim; otherwise first non-victim from positions 1…n then 0 (or None). First-stage `"X initiates: …"` only; do not recompute on AlignActors / live SetVictim.
 - External / DOM threads: `EnsureSceneForThread` from `AnimationStart` / `StageStart`. `GetSceneInactive` calls `SetThread` before `thread_scene[tid]`. `GetSceneByThread` treats that slot as authoritative during Setup (status still INACTIVE); Release only on tid mismatch.
 - Actor lock: `skyrimnet_sexlab_scene_actor_lock`.
 - Trace → `WebUI.TraceLog` → `SKSE\SkyrimNet_SexLab.log` (prefix `"---"`).
-- DOM optional: `handler_dom`; Dom orgasm → `OrgasmCustom` + `" is orgasming."`. Nonconsensual wrappers omit `style` (8-arg limit).
-- DD optional: `handler_udng` / `SkyrimNet_SexLab_Handler_UDNG` only. `zadLibs` via `GetFormFromFile(0x00F624, "Devious Devices - Integration.esm")`. Compile import `@ModsFolder\Devious Devices for SE-AE-VR\Scripts\Source` and `PapyrusSourcesDD\SRC_SLA` (`slautilscr`). Do not import SkyrimNet_UDNG or clone PapyrusSourcesDD into this repo. BondagePanel: `TM_BondageRefresh` seeds original; pulldowns do not call Papyrus; `TM_BondageFinish(speaker, target, style, currentJson)` applies then CloseOverlay; `TM_BondageOnWebUIClosed` is ReleaseAll only. `TM_BondageApply` unused by BondagePanel.
-- Quirks (initiator vs victim, DOM bind race): [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
+- DOM optional: `handler_dom`; Dom orgasm → `OrgasmCustom` + `" is orgasming."`. Combined + Dom last-stage uses `ArmOrgasmWindow` / `orgasm_narrated` instead of immediate DN — [orgasm-narration.md](../reference/orgasm-narration.md). Solo `masturbate` is a synthetic thread (`GetThreadsJson` + `DOMOnBehaviourChange` → `SaveThreadsJson`). Nonconsensual wrappers omit `style` (8-arg limit).
+- `GetIntentMessage`: empty `intent` omits the activity clause (no `"finish ."`). `ObjectToLowerCaseKeyJson` walks JC containers; do not call `JValue.toJsonString`.
+- Leash: `MCM.leashed_found` (`GetFormFromFile(0x800, "SkyrimNet_Leashed.esp")`); `Menu.EventSend_LeashedOpen` hides WebUI then `SkyrimNet_Leashed_OpenPanel`. Bondage/leash SkyMessage buttons skipped when their index is `-1`.
+- Settings: MCM is a pointer; `ApplyPluginConfig` reads `Plugin_SkyrimNet_SexLab`. `Setup` registers `SkyrimNet_OnPluginConfigSaved` → `OnPluginConfigSaved` → `ApplyPluginConfig` so a dashboard save rebinds `RegisterForKey`. `ApplyHotkey` maps leftover saved `43` (old DX backslash) to VK `220`, then `VkToDxScanCode`. Ostim framework setting is `GetConfigInt` / `PatchConfig` `sexlab.ostim.player` (prompt decorator `sexlab_ostim_player`). `ApplyPluginConfig` mirrors that into GlobalVariable `skyrimnet_sexlab_ostim_player` for action eligibility (`get_global_value`). Do not use the Papyrus decorator name as a dashboard key or in action YAML.
+- Quirks (initiator vs victim, P+ hop vs end, DOM bind race): [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 
 ## Review
 
@@ -71,7 +75,7 @@ Do not hand-edit `.esp`. `Spriggit/` is source of truth for the main plugin.
 | `make esp` | `Spriggit/` → `.esp` |
 | `make release` | version + esp + pack `.7z` |
 
-Handler ESPs are not Spriggit-backed yet. Rebuild UDNG handler (drop UDNG master): `python python_scripts/rebuild_handler_udng_esp.py`.
+Handler ESPs are not Spriggit-backed yet.
 
 ## Content authors
 

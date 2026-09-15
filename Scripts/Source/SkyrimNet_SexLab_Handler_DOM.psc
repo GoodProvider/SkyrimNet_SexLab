@@ -6,6 +6,7 @@ import SkyrimNet_SexLab_Utilities
 
 String storage_actor_orgasm_total_key = "skyrimnet_sexlab_domactor_orgasm_total"
 String storage_actor_orgasm_message_key = "skyrimnet_sexlab_domactor_orgasm_message"
+String storage_behaviour_key = "skyrimnet_sexlab_dom_behaviour"
 
 
 
@@ -36,6 +37,10 @@ bool Function Setup()
         actors_obj = JArray.object()
         Jvalue.retain(actors_obj)
     endif
+
+    UnRegisterForModEvent("DOMOnBehaviourChange")
+    RegisterForModEvent("DOMOnBehaviourChange", "OnBehaviourChange")
+    Trace("Setup", "--- registered DOMOnBehaviourChange")
 
     return True 
 endFunction
@@ -108,23 +113,38 @@ EndFunction
 Function DOMSlave_Orgasmed(Actor slave, String msg)
     if slave == None 
         Trace("DOMSlave_Orgasmed","slave is None, aborting")
-    elseif manager == None 
-        Trace("DOMSlave_Orgasmed","manager is None, aborting")
-    elseif !manager.sexlab.IsActorActive(slave) 
-        int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
-        msg += " "+GetDisplayName(slave)+" is orgasming. "
-        if total == 0 
-            StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, 1)
-            StorageUtil.SetStringValue(slave, storage_actor_orgasm_message_key, msg)
-            JArray.addForm(actors_obj, slave)
-        else
-            total += 1
-            StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, total)
-        endif
-        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    ; Player-climax tease from DOM_Mind — not a slave orgasm. Do not OrgasmCustom / DN.
+    if StringUtil.Find(msg, "squirms under your grasp") >= 0 || StringUtil.Find(msg, "your orgasm submerges you") >= 0
+        Trace("DOMSlave_Orgasmed", "--- skip player-orgasm tease for "+GetDisplayName(slave)+": "+msg)
+        return
+    endif
+    if manager == None 
+        Trace("DOMSlave_Orgasmed","--- manager is None, aborting")
+        return
+    elseif !manager.sexlab.IsActorActive(slave) || manager.GetSceneByActor(slave) == None
+        DelayMeltNarration(slave, msg)
     else 
+        Trace("DOMSlave_Orgasmed", "--- OrgasmCustom for "+GetDisplayName(slave)+": "+msg)
         manager.OrgasmCustom(slave, msg)
     endif
+EndFunction
+
+Function DelayMeltNarration(Actor slave, String msg)
+    ; Store the raw melt text. OnUpdate retries OrgasmCustom (Manager adds the
+    ; gate); only the unreachable-scene fallback appends " is orgasming." here.
+    Trace("DOMSlave_Orgasmed", "--- delayed melt DN for "+GetDisplayName(slave))
+    int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
+    if total == 0 
+        StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, 1)
+        StorageUtil.SetStringValue(slave, storage_actor_orgasm_message_key, msg)
+        JArray.addForm(actors_obj, slave)
+    else
+        total += 1
+        StorageUtil.SetIntValue(slave, storage_actor_orgasm_total_key, total)
+    endif
+    RegisterForSingleUpdate(1.0)
 EndFunction
 
 Event OnUpdate() 
@@ -136,21 +156,29 @@ Event OnUpdate()
     Actor receiver = None 
     while i < count
         Actor slave = objs[i] as Actor
-        if sender == None 
-            sender = slave
-        elseif receiver == None 
-            receiver = slave
-        endif
         int total = StorageUtil.GetIntValue(slave, storage_actor_orgasm_total_key, 0)
         String msg = StorageUtil.GetStringValue(slave, storage_actor_orgasm_message_key, "")
-        if total > 0 
-            if total > 1 
-                msg += total+" times, over and over again." 
-            endif 
-            StorageUtil.UnsetIntValue(slave, storage_actor_orgasm_total_key)
-            StorageUtil.UnsetStringValue(slave, storage_actor_orgasm_message_key)
+        StorageUtil.UnsetIntValue(slave, storage_actor_orgasm_total_key)
+        StorageUtil.UnsetStringValue(slave, storage_actor_orgasm_message_key)
+
+        ; Prefer rejoining the SexLab scene so totals / Combined window stay in sync.
+        if slave != None && manager != None && manager.sexlab.IsActorActive(slave) && manager.GetSceneByActor(slave) != None
+            Trace("OnUpdate", "--- retry OrgasmCustom for "+GetDisplayName(slave))
+            manager.OrgasmCustom(slave, msg)
+        else
+            if sender == None 
+                sender = slave
+            elseif receiver == None 
+                receiver = slave
+            endif
+            if total > 0 
+                msg += " "+GetDisplayName(slave)+" is orgasming. "
+                if total > 1 
+                    msg += total+" times, over and over again." 
+                endif 
+            endif
+            narration += msg+". "
         endif
-        narration += msg+". "
         i += 1 
     endwhile 
     JArray.clear(actors_obj)
@@ -172,6 +200,29 @@ EndFunction
 int Function GetThreads()
     return SkyrimNet_DOM_API.GetThreads()
 EndFunction
+
+; DOM solo masturbation is not a SexLab thread. Dump threads.json on start/stop so
+; 0050_sexlab_activity can read it when SkyrimNet blocks sexlab_get_threads (menu pause).
+Event OnBehaviourChange(Form akRef, String type)
+    Actor slave = akRef as Actor
+    if slave == None
+        Trace("OnBehaviourChange", "akRef is not an Actor, skipping")
+        return
+    endif
+    String current = StorageUtil.GetStringValue(akRef, storage_behaviour_key, "")
+    Trace("OnBehaviourChange", GetDisplayName(slave)+" "+current+"->"+type)
+    bool refresh = (type == "masturbate") || (current == "masturbate")
+    StorageUtil.SetStringValue(akRef, storage_behaviour_key, type)
+    if !refresh
+        return
+    endif
+    if manager == None
+        Trace("OnBehaviourChange", "manager is None, aborting")
+        return
+    endif
+    manager.SaveThreadsJson()
+    Trace("OnBehaviourChange", "--- refreshed threads.json for "+GetDisplayName(slave)+" type:"+type)
+EndEvent
 
 
 

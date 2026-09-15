@@ -1,32 +1,26 @@
 # Hotkeys and in-scene controls
 
-Enable the Start Sex / Edit Stage hotkey in either:
-
-1. **SkyUI MCM** → Enable hotkey + KeyMap (DirectInput scancode), or
-2. **SkyrimNet mod menu** → SkyrimNet_SexLab → Sex Description Editor hotkey fields (VK)
-
-Both drive the same C++ `KeyHandler` via `WebUI_SetHotkey` / control-store apply. There is no separate Papyrus key sink.
+Enable the optional hot key in the SkyrimNet dashboard plugin settings (**Enable Start Sex / Edit Stage hotkey**, default **backslash** `\\`). A dashboard save rebinds the key in-game; you do not need to open the MCM or reload. The in-game MCM only points at that page. Do not bind this to the same key as SkyrimNet_Leashed’s leash panel.
 
 ## Out of animation
 
-- Same hotkey **toggles** ControlPanel + TargetMenu (open if hidden, close if visible — any focus actor). Open uses ControlPanel actor focus (crosshair preferred; else nearby list — MultiTarget picker retired)
+- Start a sexual act with crosshair NPC, or between NPCs not under crosshair
 - Dress / undress under crosshair (including silently)
 - **Punish:** spanking, spanking nude, whip, rape
 - **Affection** (SexLab): hug, kiss, cuddle, spoon, headpat
 - **Player rapes** / **rapes player**
 - OstimNet installed: swap SexLab vs OStim framework
 - Domination slave (`SkyrimNet_DOM.esp`): starts route through DOM handler APIs
+- **Leash** (`SkyrimNet_Leashed.esp`): opens the SkyrimNet_Leashed PrismaUI leash panel (same as that mod’s panel hotkey). Shown only when Leashed is loaded. Does not require Leashed’s own hotkey to be enabled. On the PrismaUI Target Menu, **leash** closes this overlay first, then opens Leashed.
 
 ## In SexLab animation
 
-- Same hotkey toggles ControlPanel + TargetMenu; Animation main panel restores on open only if it was left open
-- Mid-scene TargetMenu: stop / stage / position / animation / save to json
-- Change sex style (when Tag Editor dialogs are on)
-- Add / edit a per-stage description
-- Change whether a given actor expects an orgasm
+- Change sex style (Tag Editor dialogs on)
+- Add / edit per-stage description
+- Set whether a given actor expects an orgasm
 
 Stage JSON format: [../authors/animations.md](../authors/animations.md).
 
 ## WebUI menus
 
-In-game PrismaUI target / sex / YesNo / Scene Creator menus (SKSE DLL). Build and paths: [../developers/webui.md](../developers/webui.md).
+In-game PrismaUI target / sex menus (SKSE DLL). Build and paths: [../developers/webui.md](../developers/webui.md). Target Menu **leash** (when `SkyrimNet_Leashed.esp` is loaded) hides this overlay and opens Leashed’s bar.
