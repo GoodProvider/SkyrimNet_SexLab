@@ -10,4 +10,6 @@ Requires SkyrimNet 0.25.0 (Beta 25 rc7) or later.
 - Empty-intent Dom scenes no longer say “finish .” with a blank activity.
 - When the LLM picks the same start-sex action twice in a row, the scene still starts instead of aborting with no animation.
 - Start-sex after the tag editor no longer dies silently if SexLab had marked someone “forbidden”; that flag is cleared and the scene starts unless SexLab still refuses.
+- Comfort, affection, punish, and sex actions show for the LLM again (they were hidden by a broken eligibility check).
+- Start Sex hotkey opens the menu when the person under the crosshair is already in a SexLab scene.
 - JSON export works on older JContainers (no longer requires JC’s `toJsonString`).

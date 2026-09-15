@@ -16,9 +16,12 @@
 - `OrgasmCustom` / `GetSceneByActor`: `GetThreadByActor(any_state)` + `thread_scene` fallback when animating/prepare miss
 - `GetIntentMessage`: empty `intent` no longer emits `"Nina and Bob finish ."`
 - `ObjectToLowerCaseKeyJson` walks JMap/JArray/JFormMap/JIntMap (`JValueToJsonString`); do not call `JValue.toJsonString` (JC 4.2.13.1+)
+- `MCM.ApplyPluginConfig` `SetValue`s `skyrimnet_sexlab_ostim_player` from `sexlab.ostim.player` so eligibility can read the global
+- `Menu.ProcessHotkey` calls `GetThreadByActor(target, true)`; `Stages.EditDescriptions` / `SetOrgasmExpected` call `GetSceneByThread(thread, false, true)` after those callees gained extra args
 
 ### Actions / scenes
 - `SEXLAB_STOP.yaml`: `comparisonOperator` values quoted (`">"` / `"<"`)
+- Category parents `ShowComfort`, `ExpressPhysicallyNonsexually`, `Sexlab_Punish`, `SexLab_Sexual_Activities_One`/`Two`/`Three`: eligibility uses native `get_global_value` / `skyrimnet_sexlab_ostim_player` (Papyrus `sexlab_ostim_player` cache-misses and hid the tree)
 
 ### Install / MCM
 - Plugin `manifest.json` / settings `plugin.version` **0.34.1**. Dashboard **Orgasm delay** (`sexlab.orgasm.delay`) waits after the last orgasm (player or Dom slave) before one combined Direct Narration
@@ -26,7 +29,8 @@
 ### Docs
 - Orgasm window / `orgasm_narrated` / tease skip / delayed melt: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md)
 - Live-thread faction skip: [docs/authors/prompts.md](docs/authors/prompts.md)
-- KNOWLEDGEBASE: Combined window, DOM masturbation synthetic thread, MO2 installed-release vs workspace, overlapping `Action_Start` empty `StartThread`, `AddActor` ForbiddenFaction -11 after Edit Tags
+- Eligibility / caller arity: [docs/authors/actions.md](docs/authors/actions.md), [docs/reference/papyrus-rules.md](docs/reference/papyrus-rules.md)
+- KNOWLEDGEBASE: Combined window, DOM masturbation synthetic thread, MO2 installed-release vs workspace, overlapping `Action_Start` empty `StartThread`, `AddActor` ForbiddenFaction -11 after Edit Tags, Papyrus eligibility cache-miss, `GetThreadByActor` arity
 
 ## [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0) — since [0.31.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.31.5)
 
