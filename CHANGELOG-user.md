@@ -3,6 +3,7 @@ Unreleased ⚗️
 - AnimDB no longer rebuilds itself when you load a save. If it is empty or the animation count does not match SexLab, you get a notification and a dialog to Build/Rebuild or Close.
 - Start Sex / Edit Stage hotkey now always closes the Control Panel if it is already open (does not matter who is selected).
 - The overlay HTML is included in the installer. If it is missing, the hotkey shows a notification instead of pausing the game with a blank screen.
+- LLM actions and prompts ship in both the Beta 25 plugin folder and the older SkyrimNet folders, so this version still works on pre-0.25 SkyrimNet.
 
 https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1
 

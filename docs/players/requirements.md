@@ -11,7 +11,7 @@
 - [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
   - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - [Dragonborn voice over 2](https://www.nexusmods.com/skyrimspecialedition/mods/84329)
-- SkyrimNet **0.25.0+** (Beta 25; narration enabled). This mod ships LLM content as plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/`. Older SkyrimNet builds that only read `prompts/` and `config/actions/` will not load those files.
+- SkyrimNet (narration enabled). This zip ships LLM content in both layouts: 0.25+ reads plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/`; older SkyrimNet reads `prompts/` and `config/actions/`.
 - SkyrimNet_SexLab (this mod)
 - Animation utilities: [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232), [XPMSSE](https://www.nexusmods.com/skyrimspecialedition/mods/1988), [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/), [Hug kill move fix for USSEP](https://www.nexusmods.com/skyrimspecialedition/mods/139572)
 - [Ace Animations](https://www.nexusmods.com/skyrimspecialedition/mods/81928) (cuddle/spooning)

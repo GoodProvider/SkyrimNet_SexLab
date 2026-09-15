@@ -16,6 +16,8 @@ SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/prompts/
     user_final_instructions/
 ```
 
+Canonical source is the plugin tree. After editing, run `tools/sync_legacy_skyrimnet_content.py` to copy into `SKSE/Plugins/SkyrimNet/prompts/` for pre-0.25 SkyrimNet.
+
 | File | Role |
 |------|------|
 | `character_bio/0005_sexlab_variables.prompt` | Arousal / sex-active bio |
@@ -75,3 +77,4 @@ contains(_direct_narration, " is orgasming.")
 - [ ] Orgasm gate still `" is orgasming."` (or Papyrus updated with it)
 - [ ] Denied orgasm text never includes that substring
 - [ ] Narration-enabled smoke test for changed paths
+- [ ] `tools/sync_legacy_skyrimnet_content.py` if prompts changed

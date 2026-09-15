@@ -167,7 +167,7 @@ Per-actor arrays of tokens; animation and/or stage level; resolve per §5.
 | `_kissing_` | mouth occupied; ≤5 words |
 
 Authority for effect:
-`SKSE/Plugins/SkyrimNet/prompts/submodules/user_final_instructions/0050_sexlab_activity.prompt`.
+`SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/prompts/submodules/user_final_instructions/0050_sexlab_activity.prompt` (pre-0.25 copy under `SKSE/Plugins/SkyrimNet/prompts/`).
 `_gagged_` wins over pleasure/pain vocalization rules. `_kissing_` is only reached when neither
 `_pleasure_` nor `_pain_` is present — do not emit `["_pleasure_", "_kissing_"]`.
 

@@ -12,6 +12,7 @@
 
 ### Actions
 - LLM outfit actions remain `outfit_dress` / `outfit_undress` (`Outfit_Dress` / `Outfit_Undress`) as Beta 25 files `outfit_dress.yaml` / `outfit_undress.yaml` in `external/goodprovider.sexlab/actions/`; not combined `change_outfit`
+- Dual-ship LLM actions and prompts: canonical `external/goodprovider.sexlab/` plus pre-0.25 copies at `config/actions/` and `prompts/` (`tools/sync_legacy_skyrimnet_content.py`)
 
 ## [0.34.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1) — since [0.34.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.0)
 

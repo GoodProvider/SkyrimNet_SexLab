@@ -13,7 +13,7 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 | `Headers/` | Import headers |
 | `skyrimse.ppj` | Pyro project |
 | `Spriggit/` | ESP ↔ JSON |
-| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Action YAML + prompts (`manifest.json`; no settings schema) |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Canonical action YAML + prompts (`manifest.json`; no settings schema). Pre-0.25 copies: `config/actions/`, `prompts/` |
 | `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/` | Settings schema (`Plugin_SkyrimNet_SexLab`, `sexlab.*`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/` | Scenes, animations, threads |
 | `SKSE_Source/` | C++ WebUI plugin |

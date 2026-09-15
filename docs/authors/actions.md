@@ -12,12 +12,14 @@ SkyrimNet allows **at most 8** `parameterMapping` entries. Threesome actions alr
 
 ## Paths
 
-SkyrimNet Beta 25+ reads this mod's LLM content from the **external plugin** folder. Folder name must equal `manifest.json` `id`.
+SkyrimNet Beta 25+ reads this mod's LLM content from the **external plugin** folder. Folder name must equal `manifest.json` `id`. Edit that tree, then run `tools/sync_legacy_skyrimnet_content.py` so pre-0.25 copies stay identical.
 
 | Path | Purpose |
 |------|---------|
-| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Plugin root (`manifest.json`) |
+| `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Canonical plugin root (`manifest.json`) |
 | `…/actions/` | Action YAML |
+| `SKSE/Plugins/SkyrimNet/config/actions/` | Pre-0.25 copy of action YAML |
+| `SKSE/Plugins/SkyrimNet/prompts/` | Pre-0.25 copy of prompts |
 | `SKSE/Plugins/SkyrimNet_SexLab/scenes/` | Scene JSON via `setting_name` |
 | `…/prompts/helpers/sexlab/` | Optional helpers |
 | `Scripts/Source/SkyrimNet_SexLab_Actions.psc` | `executionFunctionName` targets |
@@ -97,6 +99,7 @@ Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_all
 1. `SkyrimNet_SexLab.esp` last in load order.
 2. SkyrimNet webUI → Game Data Explorer → `_sexlab` → Refresh Actions (function count > 0).
 3. If WebUI `label`s changed: `tools/generate_actions_index.py` — [../developers/webui.md](../developers/webui.md).
+4. After editing plugin YAML or prompts: `tools/sync_legacy_skyrimnet_content.py`.
 
 ## Checklist
 
@@ -105,3 +108,4 @@ Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_all
 - [ ] `setting_name` file exists; modifiers use `_token_` form
 - [ ] Eligibility: `logicalOperator` + `required: true`
 - [ ] Game Data Explorer Refresh
+- [ ] `tools/sync_legacy_skyrimnet_content.py` if YAML/prompts changed

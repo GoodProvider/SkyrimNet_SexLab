@@ -4,13 +4,13 @@ SkyrimNet_SexLab bridges SkyrimNet (LLM) and SexLab Framework.
 
 Hotkeys: [hotkeys.md](hotkeys.md). Authoring: [../authors/actions.md](../authors/actions.md). Changelog: [../../CHANGELOG.md](../../CHANGELOG.md).
 
-LLM actions and prompts ship as SkyrimNet plugin `goodprovider.sexlab` (External on the Plugins page). Requires SkyrimNet 0.25.0+.
+LLM actions and prompts ship in both layouts. SkyrimNet 0.25+ loads plugin `goodprovider.sexlab` (External on the Plugins page). Older SkyrimNet loads `prompts/` and `config/actions/`.
 
 ## FAQ
 
 ### Actions or prompts missing after updating SkyrimNet
 
-Confirm SkyrimNet is 0.25.0 or later, then check **Plugins > Installed Plugins** for `goodprovider.sexlab` with an **External** badge. Files left in the old `prompts/` or `config/actions/` folders are ignored. **Plugins > Import Old Content** is for personal tweaks, not this mod — an imported copy hides later updates.
+On SkyrimNet 0.25+, check **Plugins > Installed Plugins** for `goodprovider.sexlab` with an **External** badge (the shipped `prompts/` and `config/actions/` copies are ignored there). Pre-0.25 uses those copies. **Plugins > Import Old Content** is for personal tweaks, not this mod — an imported copy hides later updates.
 
 ### NPCs avoid casual sex
 

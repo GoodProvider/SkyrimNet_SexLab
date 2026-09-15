@@ -12,8 +12,8 @@ Adds SkyrimNet (LLM) support to SexLab Framework.
 
 ## Quick start
 
-1. Install requirements ([docs/players/requirements.md](docs/players/requirements.md)). SkyrimNet **0.25.0+**.
-2. Put `SkyrimNet_SexLab.esp` last; enable narration in SkyrimNet. Plugin `goodprovider.sexlab` should appear under Plugins (External).
+1. Install requirements ([docs/players/requirements.md](docs/players/requirements.md)). SkyrimNet with narration; 0.25+ uses plugin `goodprovider.sexlab`, older builds use the shipped `prompts/` + `config/actions/` copies.
+2. Put `SkyrimNet_SexLab.esp` last; enable narration in SkyrimNet. On 0.25+, plugin `goodprovider.sexlab` should appear under Plugins (External).
 3. If Actions fail: Game Data Explorer → `_sexlab` → Refresh (see [FAQ](docs/players/overview.md)).
 
 ## Extending
