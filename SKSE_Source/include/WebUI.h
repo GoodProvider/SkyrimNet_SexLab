@@ -45,6 +45,9 @@ bool WebUI_IsHidden();
 /// True when the PrismaUI view exists and DomReady has fired (safe to Show/Focus).
 bool WebUI_IsReady();
 void WebUI_Invoke(const std::string& script);
+/// C++ → JS: Invoke(fn(JSON.parse("..."))). Do not use PrismaUI InteropCall
+/// (empty/bad args after a good parse wiped BondagePanel groups to []).
+void WebUI_InteropCall(const char* functionName, const std::string& jsonArgument);
 /// Push OStimNet-gated SexLab/OStim ControlPanel pulldown (setFrameworkToggle).
 void WebUI_InvokeFrameworkToggle();
 void WebUI_Reset();

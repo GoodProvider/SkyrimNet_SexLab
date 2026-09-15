@@ -4,11 +4,14 @@
 #include "WebUI.h"
 #include "ActionCatalog.h"
 #include "AnimationDB.h"
+#include "BondageCatalog.h"
 #include "Config.h"
 #include "RE/V/VirtualMachine.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <vector>
 
 // Defined in PublicAPI.h (included once from Config.cpp).
@@ -41,6 +44,112 @@ namespace PapyrusBindings_WebUI
                    "};"
                    "ssLoadSetting._fromCatalog=true;"
                    "})();";
+        }
+
+        std::uint32_t ParseFormIdJson(const nlohmann::json& v)
+        {
+            if (v.is_number()) {
+                std::int64_t n = 0;
+                if (v.is_number_float())
+                    n = static_cast<std::int64_t>(v.get<double>());
+                else
+                    n = v.get<std::int64_t>();
+                return static_cast<std::uint32_t>(n);
+            }
+            if (v.is_string()) {
+                const auto s = v.get<std::string>();
+                if (s.empty())
+                    return 0;
+                try {
+                    return static_cast<std::uint32_t>(std::stoll(s, nullptr, 0));
+                } catch (...) {
+                    return 0;
+                }
+            }
+            if (v.is_object()) {
+                for (auto it = v.begin(); it != v.end(); ++it) {
+                    std::string k = it.key();
+                    for (auto& c : k) {
+                        if (c >= 'A' && c <= 'Z')
+                            c = static_cast<char>(c - 'A' + 'a');
+                    }
+                    if (k == "formid" || k == "form_id" || k == "_form_id" || k == "target")
+                        return ParseFormIdJson(it.value());
+                }
+            }
+            return 0;
+        }
+
+        std::uint32_t FormIdFromHint(const nlohmann::json& hint)
+        {
+            if (!hint.is_object())
+                return 0;
+            std::uint32_t fid = 0;
+            for (auto it = hint.begin(); it != hint.end(); ++it) {
+                std::string k = it.key();
+                for (auto& c : k) {
+                    if (c >= 'A' && c <= 'Z')
+                        c = static_cast<char>(c - 'A' + 'a');
+                }
+                if (k == "target" || k == "formid" || k == "form_id" || k == "_form_id") {
+                    fid = ParseFormIdJson(it.value());
+                    if (fid)
+                        return fid;
+                }
+            }
+            return 0;
+        }
+
+        void SendBondageChunks(RE::Actor* target, const nlohmann::json& hint,
+            const nlohmann::json& groupsIn, bool wornFromApi, const char* source)
+        {
+            auto state = BondageCatalog::BuildState(target, hint, groupsIn, wornFromApi);
+            nlohmann::json groups = nlohmann::json::array();
+            if (state.contains("groups") && state["groups"].is_array())
+                groups = state["groups"];
+
+            nlohmann::json header = nlohmann::json::object();
+            if (state.contains("target"))
+                header["target"] = state["target"];
+            else
+                header["target"] = 0;
+            header["source"] = source ? source : "";
+            nlohmann::json headerGroups = nlohmann::json::array();
+            std::size_t device_n = 0;
+            for (const auto& g : groups) {
+                nlohmann::json hg = nlohmann::json::object();
+                if (g.is_object() && g.contains("name"))
+                    hg["name"] = g["name"];
+                else
+                    hg["name"] = "";
+                if (g.is_object() && g.contains("equippedId"))
+                    hg["equippedId"] = g["equippedId"];
+                else
+                    hg["equippedId"] = "";
+                hg["devices"] = nlohmann::json::array();
+                headerGroups.push_back(std::move(hg));
+                if (g.is_object() && g.contains("devices") && g["devices"].is_array())
+                    device_n += g["devices"].size();
+            }
+            header["groups"] = std::move(headerGroups);
+            const auto headerDump = header.dump();
+            const auto tid = target ? target->GetFormID() : 0u;
+            webui_log::info("Bondage_Configure {} target={:08X} groups={} devices={} bytes={}", source ? source : "",
+                tid, header["groups"].size(), device_n, headerDump.size());
+            WebUI_Invoke(std::string("bondageConfigure(") + headerDump + ");");
+
+            for (std::size_t i = 0; i < groups.size(); ++i) {
+                const auto& g = groups[i];
+                nlohmann::json chunk = nlohmann::json::object();
+                chunk["index"] = i;
+                chunk["devices"] = (g.is_object() && g.contains("devices") && g["devices"].is_array())
+                    ? g["devices"]
+                    : nlohmann::json::array();
+                const auto dumped = chunk.dump();
+                webui_log::info("Bondage_Configure {} chunk {}/{} devices={} bytes={}", source ? source : "",
+                    i + 1, groups.size(), chunk["devices"].size(), dumped.size());
+                WebUI_Invoke(std::string("bondageConfigureDevices(") + dumped + ");");
+            }
         }
     }
     RE::Actor* Target_Current = nullptr;
@@ -378,15 +487,35 @@ namespace PapyrusBindings_WebUI
     void Bondage_Configure(RE::StaticFunctionTag*, RE::BSFixedString state_json)
     {
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
-        std::string dumped = "{}";
+        nlohmann::json hint = nlohmann::json::object();
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            hint = nlohmann::json::parse(raw);
         } catch (const std::exception& e) {
             webui_log::error("Bondage_Configure: bad state_json ({}); using {{}}", e.what());
+            hint = nlohmann::json::object();
         } catch (...) {
             webui_log::error("Bondage_Configure: bad state_json; using {{}}");
+            hint = nlohmann::json::object();
         }
-        WebUI_Invoke(std::string("bondageConfigure(") + dumped + ");");
+
+        RE::Actor* target = nullptr;
+        const std::uint32_t fid = FormIdFromHint(hint);
+        if (fid) {
+            if (auto* form = RE::TESForm::LookupByID(fid))
+                target = form->As<RE::Actor>();
+        }
+        webui_log::info("Bondage_Configure hint target={:08X} actor={} json={}", fid, target ? "ok" : "null",
+            hint.dump());
+
+        if (BondageCatalog::ApiCatalogReady()) {
+            SendBondageChunks(target, hint, BondageCatalog::ApiGroups(), true, "api");
+            return;
+        }
+
+        SendBondageChunks(target, hint, BondageCatalog::FileGroups(), false, "file");
+        auto api = BondageCatalog::ApiGroups();
+        if (!api.empty())
+            SendBondageChunks(target, hint, api, true, "api");
     }
 
     void ActorAnimMeta_Result(RE::StaticFunctionTag*, RE::BSFixedString json)
@@ -711,7 +840,7 @@ namespace PapyrusBindings_WebUI
                 return false;
             auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new BoolVmCallback() };
             auto* cb = static_cast<BoolVmCallback*>(cbPtr.get());
-            auto* args = RE::MakeFunctionArguments(actor);
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor));
             if (!vm->DispatchStaticCall(
                     RE::BSFixedString("LeashFramework"), RE::BSFixedString("IsLeashed"), args, cbPtr)) {
                 return false;
@@ -729,7 +858,7 @@ namespace PapyrusBindings_WebUI
                 return nullptr;
             auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new ActorVmCallback() };
             auto* cb = static_cast<ActorVmCallback*>(cbPtr.get());
-            auto* args = RE::MakeFunctionArguments(actor);
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor));
             if (!vm->DispatchStaticCall(
                     RE::BSFixedString("LeashFramework"),
                     RE::BSFixedString("GetLeashHolder"),
@@ -1174,6 +1303,11 @@ namespace PapyrusBindings_WebUI
         }
         if (msg.empty())
             return;
+
+        if (msg.rfind("bondageGot", 0) == 0) {
+            webui_log::info("{}", msg);
+            return;
+        }
 
         std::string payload = std::move(msg);
         SKSE::GetTaskInterface()->AddTask([payload]() {

@@ -182,14 +182,25 @@ namespace ActionCatalog
                 WalkOptionsForSynthesis(node["options"]);
         }
 
+        bool DllPresent(const std::string& dllName)
+        {
+            if (dllName.empty())
+                return true;
+            std::wstring wide(dllName.begin(), dllName.end());
+            return GetModuleHandleW(wide.c_str()) != nullptr;
+        }
+
         bool PassesRequiresPlugin(const nlohmann::json& node)
         {
             if (!node.is_object())
                 return true;
             const std::string req = node.value("requiresPlugin", "");
-            if (req.empty())
-                return true;
-            return IsPluginLoaded(req);
+            if (!req.empty() && !IsPluginLoaded(req))
+                return false;
+            const std::string dll = node.value("requiresDll", "");
+            if (!dll.empty() && !DllPresent(dll))
+                return false;
+            return true;
         }
 
         double AsNumber(const nlohmann::json& v)

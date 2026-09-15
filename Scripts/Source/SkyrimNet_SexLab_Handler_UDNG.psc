@@ -3,7 +3,7 @@ Scriptname SkyrimNet_SexLab_Handler_UDNG extends Quest
 ; Optional Devious Devices handler. zadLibs types must stay on this quest (Handler ESP)
 ; so the main ESP does not fail to bind when DD is absent.
 ; Per-actor WebUI session: JFormMap of original worn ids for narration. Pulldowns
-; edit JS current only; Done applies currentJson then CloseOverlay. Hide/Cancel
+; edit JS current only; Start applies currentJson then CloseOverlay. Hide/Cancel
 ; release the session without restoring devices (the actor was never mutated).
 
 zadLibs zlibs = None
@@ -35,6 +35,16 @@ EndFunction
 Bool Function Setup_CheckLinks()
     if Game.GetModByName("Devious Devices - Assets.esm") == 255
         Trace("Setup_CheckLinks", "--- Devious Devices - Assets.esm not loaded")
+        return false
+    endif
+    if Game.GetModByName("Devious Devices - Integration.esm") == 255
+        Trace("Setup_CheckLinks", "--- Devious Devices - Integration.esm not loaded")
+        return false
+    endif
+    ; SKSE plugin name from DDNG CMake; equivalent to zadNativeFunctions.PluginInstalled("DeviousDevices.dll")
+    ; without a Handler compile dep on zadNativeFunctions.
+    if SKSE.GetPluginVersion("DeviousDevices") == 0
+        Trace("Setup_CheckLinks", "--- DeviousDevices.dll not loaded (Devious Devices NG required for BondagePanel)")
         return false
     endif
 
@@ -96,6 +106,54 @@ String Function DeviceNameOf(int device)
         return n
     endif
     return DeviceIdOf(device)
+EndFunction
+
+int Function HexToInt(String s)
+    if s == ""
+        return 0
+    endif
+    int start = 0
+    if StringUtil.GetLength(s) >= 2
+        String a = StringUtil.GetNthChar(s, 0)
+        String b = StringUtil.GetNthChar(s, 1)
+        if a == "0" && (b == "x" || b == "X")
+            start = 2
+        endif
+    endif
+    String digits = "0123456789abcdefABCDEF"
+    int n = 0
+    int i = start
+    int len = StringUtil.GetLength(s)
+    while i < len
+        String c = StringUtil.GetNthChar(s, i)
+        int d = StringUtil.Find(digits, c)
+        if d < 0
+            return 0
+        endif
+        if d > 15
+            d -= 6
+        endif
+        n = n * 16 + d
+        i += 1
+    endwhile
+    return n
+EndFunction
+
+Armor Function ArmorFromWantedId(String wantedId)
+    if wantedId == ""
+        return None
+    endif
+    int colon = StringUtil.Find(wantedId, ":")
+    if colon < 0
+        return None
+    endif
+    String plugin = StringUtil.Substring(wantedId, 0, colon)
+    String hex = StringUtil.Substring(wantedId, colon + 1)
+    int local = HexToInt(hex)
+    if local <= 0 || plugin == ""
+        return None
+    endif
+    return Game.GetFormFromFile(local, plugin) as Armor
 EndFunction
 
 Keyword Function DeviceKeywordOf(int device)
@@ -171,7 +229,7 @@ int Function SessionOf(Actor target)
 EndFunction
 
 Function EnsureSession(Actor target)
-    if target == None || group_devices == 0
+    if target == None
         return
     endif
     if actor_bondage == 0
@@ -181,24 +239,75 @@ Function EnsureSession(Actor target)
     if JFormMap.hasKey(actor_bondage, target)
         return
     endif
+    ; Do not scan group-devices.json here — 750 IsWearingDevice calls stall the
+    ; overlay on "loading…". Original worn comes from JS ActorBondage (C++ GetWornDevices).
     int session = JMap.object()
-    int orig = JArray.object()
-    int n = JArray.count(group_devices)
-    int i = 0
-    while i < n
-        int group = JArray.getObj(group_devices, i)
-        int devices = JMap.getObj(group, "devices")
-        int worn = WornDeviceInGroup(target, devices)
-        if worn > 0
-            JArray.addStr(orig, DeviceIdOf(worn))
-        else
-            JArray.addStr(orig, "")
-        endif
-        i += 1
-    endwhile
-    JMap.setObj(session, "original", orig)
+    JMap.setObj(session, "original", JArray.object())
     JFormMap.setObj(actor_bondage, target, session)
     Trace("EnsureSession", "--- seed "+GetDisplayNameSafe(target))
+EndFunction
+
+int Function BondageWantedMap(int payload)
+    if payload == 0
+        return 0
+    endif
+    int nested = JMap.getObj(payload, "current")
+    if nested != 0
+        return nested
+    endif
+    return payload
+EndFunction
+
+int Function BondageOriginalMap(int payload)
+    if payload == 0
+        return 0
+    endif
+    return JMap.getObj(payload, "original")
+EndFunction
+
+String Function OriginalIdForGroup(int origMap, int session, int index, String gname)
+    if origMap != 0 && gname != ""
+        if JMap.hasKey(origMap, gname)
+            return JMap.getStr(origMap, gname)
+        endif
+        String[] keys = JMap.allKeysPArray(origMap)
+        if keys
+            int n = keys.Length
+            int i = 0
+            while i < n
+                if keys[i] == gname
+                    return JMap.getStr(origMap, keys[i])
+                endif
+                i += 1
+            endwhile
+        endif
+    endif
+    return OriginalIdAt(session, index)
+EndFunction
+
+Function PushBondageState(Actor target)
+    if target == None
+        return
+    endif
+    int root = JMap.object()
+    JMap.setInt(root, "target", target.GetFormID())
+    String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(root)
+    JValue.release(root)
+    Trace("PushBondageState", "--- formId="+target.GetFormID())
+    SkyrimNet_SexLab_WebUI.Bondage_Configure(json)
+EndFunction
+
+Function TM_BondageRefresh(Actor target)
+    if target == None
+        Trace("TM_BondageRefresh", "--- target is None")
+        return
+    endif
+    if !EnsureReady()
+        Trace("TM_BondageRefresh", "--- DD not ready")
+        return
+    endif
+    PushBondageState(target)
+    EnsureSession(target)
 EndFunction
 
 String Function OriginalIdAt(int session, int index)
@@ -256,81 +365,25 @@ Bool Function SetGroupToId(Actor target, int devices, String wantedId)
         return UnlockWornInGroup(target, devices)
     endif
     int picked = FindDeviceById(devices, wantedId)
-    if picked <= 0
-        Trace("SetGroupToId", "--- device not in catalog: "+wantedId)
-        return false
+    Armor inventory = None
+    Keyword kword = None
+    if picked > 0
+        inventory = JMap.getForm(picked, "formInventory") as Armor
+        kword = DeviceKeywordOf(picked)
+    else
+        inventory = ArmorFromWantedId(wantedId)
+        if inventory == None
+            Trace("SetGroupToId", "--- device not in catalog: "+wantedId)
+            return false
+        endif
     endif
     AddKeys(target, zlibs.chastityKey, 1)
     AddKeys(target, zlibs.restraintsKey, 2)
     AddKeys(target, zlibs.piercingKey, 1)
-    Armor inventory = JMap.getForm(picked, "formInventory") as Armor
-    Keyword kword = DeviceKeywordOf(picked)
     if worn <= 0
         return zlibs.LockDevice(target, inventory, force = true)
     endif
     return zlibs.SwapDevices(target, inventory, kword, destroyDevice = true)
-EndFunction
-
-Function PushBondageState(Actor target)
-    if target == None || group_devices == 0
-        return
-    endif
-    int root = JMap.object()
-    JMap.setInt(root, "target", target.GetFormID())
-    int groups = JArray.object()
-    JMap.setObj(root, "groups", groups)
-    int n = JArray.count(group_devices)
-    int i = 0
-    while i < n
-        int group = JArray.getObj(group_devices, i)
-        int devices = JMap.getObj(group, "devices")
-        int worn = WornDeviceInGroup(target, devices)
-        int go = JMap.object()
-        JMap.setStr(go, "name", JMap.getStr(group, "name"))
-        if worn > 0
-            JMap.setStr(go, "equippedId", DeviceIdOf(worn))
-        else
-            JMap.setStr(go, "equippedId", "")
-        endif
-        int darr = JArray.object()
-        JMap.setObj(go, "devices", darr)
-        int dn = 0
-        if devices != 0
-            dn = JArray.count(devices)
-        endif
-        int j = 0
-        while j < dn
-            int device = JArray.getObj(devices, j)
-            int dobj = JMap.object()
-            JMap.setStr(dobj, "id", DeviceIdOf(device))
-            JMap.setStr(dobj, "name", DeviceNameOf(device))
-            int wearing = 0
-            if DeviceIsWorn(target, device)
-                wearing = 1
-            endif
-            JMap.setInt(dobj, "wearing", wearing)
-            JArray.addObj(darr, dobj)
-            j += 1
-        endwhile
-        JArray.addObj(groups, go)
-        i += 1
-    endwhile
-    String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(root)
-    JValue.release(root)
-    SkyrimNet_SexLab_WebUI.Bondage_Configure(json)
-EndFunction
-
-Function TM_BondageRefresh(Actor target)
-    if target == None
-        Trace("TM_BondageRefresh", "--- target is None")
-        return
-    endif
-    if !EnsureReady()
-        Trace("TM_BondageRefresh", "--- DD not ready")
-        return
-    endif
-    EnsureSession(target)
-    PushBondageState(target)
 EndFunction
 
 Function TM_BondageApply(Actor target, String deviceId)
@@ -397,10 +450,12 @@ Function TM_BondageFinish(Actor speaker, Actor target, String style, String curr
     endif
     EnsureSession(target)
 
-    int wantedMap = 0
+    int payload = 0
     if currentJson != ""
-        wantedMap = JValue.objectFromPrototype(currentJson)
+        payload = JValue.objectFromPrototype(currentJson)
     endif
+    int wantedMap = BondageWantedMap(payload)
+    int origMap = BondageOriginalMap(payload)
 
     String added = ""
     String removed = ""
@@ -414,10 +469,10 @@ Function TM_BondageFinish(Actor speaker, Actor target, String style, String curr
         if gname == ""
             gname = JMap.getStr(group, "Name")
         endif
-        String origId = OriginalIdAt(session, i)
+        String origId = OriginalIdForGroup(origMap, session, i, gname)
         String wantedId = CurrentIdForGroup(wantedMap, gname, origId)
-        SetGroupToId(target, devices, wantedId)
         if origId != wantedId
+            SetGroupToId(target, devices, wantedId)
             if wantedId != ""
                 int picked = FindDeviceById(devices, wantedId)
                 if picked > 0

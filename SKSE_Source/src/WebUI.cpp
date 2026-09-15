@@ -487,6 +487,14 @@ void WebUI_Invoke(const std::string& script)
     PrismaUI->Invoke(g_view, script.c_str());
 }
 
+void WebUI_InteropCall(const char* functionName, const std::string& jsonArgument)
+{
+    if (!functionName || !*functionName)
+        return;
+    const std::string quoted = nlohmann::json(jsonArgument).dump();
+    WebUI_Invoke(std::string(functionName) + "(JSON.parse(" + quoted + "));");
+}
+
 /// Drains the DomReady queue and Invokes each pending script on the live view.
 static void FlushPendingInvokes()
 {
@@ -982,7 +990,7 @@ void InitWebUI()
             webui_log::info("Escape key pressed.");
             WebUI_Invoke("handleGlobalEscape();");
         });
-        // Menu hotkey is control-store-driven via Config::ApplyMenuHotkey.
+        // Menu hotkey: Config::ApplyMenuHotkey reads sexlab.editor.hotkey* (VK→DX).
     });
 }
 

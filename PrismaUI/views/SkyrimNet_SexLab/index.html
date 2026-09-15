@@ -106,6 +106,7 @@
             min-width: 0;
             box-sizing: border-box;
             flex: 0 0 auto;
+            z-index: 6;
         }
 
         #control-panel .control-panel-title {
@@ -115,6 +116,30 @@
             color: var(--accent-text);
             margin: 0;
             letter-spacing: 0.04em;
+        }
+
+        #control-panel .control-section {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: var(--space-xs);
+            min-width: 0;
+        }
+
+        #control-panel .control-section-label {
+            font-family: var(--font-ui);
+            font-size: calc(var(--text-base) * 0.75);
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.04em;
+            margin: 0;
+        }
+
+        #control-panel .control-section-indent {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            padding-left: var(--space-lg);
         }
 
         #control-panel-host {
@@ -148,7 +173,7 @@
         #control-panel-host .pulldown-menu,
         #control-actor-pulldown .pulldown-menu,
         #framework-row .pulldown-menu {
-            left: calc(100% + var(--space-sm));
+            left: calc(100% + var(--space-md));
             top: 0;
             right: auto;
             min-width: min(280px, 40vw);
@@ -312,7 +337,7 @@
 
         .target-params-panel .pulldown-menu,
         .target-pulldown-panel .pulldown-menu,
-        .target-papyrus-panel .pulldown-menu {
+        .target-papyrus-panel:not(.target-bondage-panel) .pulldown-menu {
             left: calc(100% + var(--space-sm));
             top: 0;
             right: auto;
@@ -333,32 +358,46 @@
             overflow-x: visible;
         }
 
-        .bondage-device-row {
+        .target-bondage-panel .bondage-groups {
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            align-items: stretch;
             gap: var(--space-sm);
-            flex-wrap: nowrap;
-            margin: var(--space-xs) 0;
-        }
-
-        .bondage-device-row .bondage-device-label {
-            flex: 0 0 auto;
-            white-space: nowrap;
-        }
-
-        .bondage-device-row .pulldown {
-            flex: 1 1 auto;
+            margin-top: var(--space-sm);
             min-width: 0;
         }
 
-        .labeled-fields > .bondage-device-row {
-            display: contents;
+        .target-bondage-panel .bondage-group {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: var(--space-xs);
+            min-width: 0;
         }
 
-        .labeled-fields > .bondage-device-row .pulldown {
-            justify-self: start;
-            min-width: 8em;
-            flex: none;
+        .target-bondage-panel .bondage-group-label {
+            font-family: var(--font-ui);
+            font-size: calc(var(--text-base) * 0.75);
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.04em;
+            margin: 0;
+        }
+
+        .target-bondage-panel .bondage-group-indent {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            padding-left: 1em;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .target-bondage-panel .bondage-group-indent .pulldown {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
         }
 
         /* ── Panel ────────────────────────────────────────────── */
@@ -1421,9 +1460,15 @@
     <div id="left-column">
         <div id="control-panel" class="panel" style="display:none">
             <div class="control-panel-title">SkyrimNet SexLab</div>
-            <div id="control-panel-host"></div>
-            <div id="framework-row" style="display:none"></div>
-            <div id="control-actor-pulldown"></div>
+            <div class="control-section">
+                <div class="control-section-label">views</div>
+                <div id="control-panel-host" class="control-section-indent"></div>
+            </div>
+            <div id="framework-row" class="control-section-indent" style="display:none"></div>
+            <div class="control-section">
+                <div class="control-section-label">target</div>
+                <div id="control-actor-pulldown" class="control-section-indent"></div>
+            </div>
         </div>
         <div id="target-menu-row" style="display:none">
             <div id="target-panel" class="panel">
@@ -2269,9 +2314,10 @@
         const LEASH_TYPE_DEFAULT = 'rope';
         const LEASH_BODY_DEFAULT = 'neck';
         let bondageState = { groups: [] };
+        let bondageConfigured = false;
         const BONDAGE_GROUP_ORDER = [
-            'Blindfold', 'Gag', 'Collar', 'Piercing Nipple', 'Body', 'Arms',
-            'Belt', 'Piercing Vaginal', 'Plug Vaginal', 'Plug Anal', 'Legs'
+            'Blindfold', 'Gag', 'Hood', 'Collar', 'Piercing Nipple', 'Body', 'Arms',
+            'Belt', 'Piercing Vaginal', 'Plug Vaginal', 'Plug Anal', 'Legs', 'Boots', 'Suit'
         ];
         const actorBondageByFormId = new Map();
 
@@ -2280,21 +2326,23 @@
                 this.formId = formIdU32(formId);
                 this.original = {};
                 this.current = {};
+                this.nav = {};
                 this.groups = [];
             }
             applyState(state) {
                 const groups = Array.isArray(state && state.groups) ? state.groups : [];
                 this.groups = groups.slice();
-                for (const g of this.groups) {
-                    const name = g && g.name ? String(g.name) : '';
-                    if (!name) continue;
-                    if (this.original[name] !== undefined)
-                        continue;
+                this.groups.forEach((g, index) => {
+                    const name = bondageGroupName(g, index);
+                    if (!name) return;
                     const worn = bondageWornInGroup(g);
                     const id = worn && worn.id ? String(worn.id) : '';
+                    if (this.original[name])
+                        return;
                     this.original[name] = id;
-                    this.current[name] = id;
-                }
+                    if (!this.current[name])
+                        this.current[name] = id;
+                });
             }
         }
 
@@ -2311,6 +2359,8 @@
 
         function bondageReleaseAll() {
             actorBondageByFormId.clear();
+            bondageConfigured = false;
+            bondageState = { groups: [] };
         }
 
         function bondageCatalogOpt() {
@@ -2322,6 +2372,8 @@
             const opt = bondageCatalogOpt();
             const fid = formIdU32(formId);
             if (!opt || !fid) return;
+            if (!papyrusSelectedOpt || papyrusSelectedOpt.panel !== 'bondage')
+                return;
             bondageFire(opt, 'TM_BondageRefresh', [
                 { type: 'target', name: 'target' }
             ], { target: tmActorParam(fid) });
@@ -2810,16 +2862,51 @@
             menu.style.zIndex = '';
         }
 
+        function cssPxToken(name, fallback) {
+            const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            const n = parseFloat(raw);
+            return Number.isFinite(n) ? n : fallback;
+        }
+
         // Fixed coords so menus escape overflow scrollers (e.g. #right-dynamics).
+        // ControlPanel menus stay position:absolute with CSS top:0 (match the trigger
+        // under body.zoom). Only left is the panel edge + --space-md.
         function positionOpenPulldownMenu(root) {
             const valueEl = root.querySelector('.pulldown-value');
             const menu = root.querySelector('.pulldown-menu');
             if (!valueEl || !menu) return;
-            const gap = 8;
+            const panel = root.closest('#control-panel');
+            if (panel) {
+                const zoom = parseFloat(document.body.style.zoom) || 1;
+                const left = (panel.getBoundingClientRect().right
+                    - root.getBoundingClientRect().left) / zoom
+                    + cssPxToken('--space-md', 14);
+                menu.style.left = left + 'px';
+                return;
+            }
+            const gap = cssPxToken('--space-sm', 8);
             const rect = valueEl.getBoundingClientRect();
             const vw = window.innerWidth || document.documentElement.clientWidth || 0;
             const vh = window.innerHeight || document.documentElement.clientHeight || 0;
             const minW = Math.max(rect.width, 160);
+            if (root.closest('.target-bondage-panel')) {
+                const parent = root.closest('.target-bondage-panel');
+                const cp = document.getElementById('control-panel');
+                const margin = cssPxToken('--space-md', 14);
+                const prect = parent.getBoundingClientRect();
+                const cpRect = cp ? cp.getBoundingClientRect() : null;
+                const left = prect.right + margin;
+                const top = cpRect ? cpRect.top : rect.top;
+                const maxH = Math.max(80, vh - top - gap);
+                menu.style.position = 'fixed';
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
+                menu.style.right = 'auto';
+                menu.style.minWidth = minW + 'px';
+                menu.style.maxHeight = maxH + 'px';
+                menu.style.zIndex = '50';
+                return;
+            }
             let left = rect.right + gap;
             if (left + minW > vw - gap)
                 left = Math.max(gap, rect.left - minW - gap);
@@ -4655,59 +4742,130 @@
             body.appendChild(row);
         }
 
-        function bondageConfigure(state) {
-            const src = state && typeof state === 'object' ? state : { groups: [] };
-            if (!Array.isArray(src.groups))
-                src.groups = [];
-            const fid = formIdU32(src.target);
-            bondageState = src;
-            if (fid) {
-                const ab = bondageGetOrCreate(fid);
-                ab.applyState(src);
-                if (papyrusSelectedOpt && papyrusSelectedOpt.panel === 'bondage'
-                    && formIdU32(bondageUi.target) === fid) {
-                    const panel = document.querySelector('.target-bondage-panel');
-                    if (!panel || !panel.querySelector('.bondage-device-row'))
-                        renderPapyrusPanel();
-                    else
-                        bondagePatchPulldowns(ab);
-                    return;
+        function bondageParseArg(arg) {
+            if (typeof arg === 'string') {
+                try {
+                    return JSON.parse(arg);
+                } catch (e) {
+                    return null;
                 }
             }
-            if (papyrusSelectedOpt && papyrusSelectedOpt.panel === 'bondage'
-                && !document.querySelector('.bondage-device-row'))
-                renderPapyrusPanel();
+            if (arg && typeof arg === 'object')
+                return arg;
+            return null;
         }
 
-        function bondageCurrentId(ab, group) {
-            const name = group && group.name ? String(group.name) : '';
+        function bondageAck(msg) {
+            if (typeof window.onNotify !== 'function')
+                return;
+            const text = String(msg || '');
+            setTimeout(() => {
+                window.onNotify(JSON.stringify({ msg: text }));
+            }, 0);
+        }
+
+        let bondageRenderQueued = false;
+        function bondageRequestRender() {
+            if (!papyrusSelectedOpt || papyrusSelectedOpt.panel !== 'bondage')
+                return;
+            if (bondageRenderQueued)
+                return;
+            bondageRenderQueued = true;
+            setTimeout(() => {
+                bondageRenderQueued = false;
+                if (papyrusSelectedOpt && papyrusSelectedOpt.panel === 'bondage')
+                    renderPapyrusPanel();
+            }, 0);
+        }
+
+        function bondageStubGroups() {
+            return BONDAGE_GROUP_ORDER.map(name => ({ name: name, devices: [], equippedId: '' }));
+        }
+
+        function bondageApplyCatalog(src) {
+            const ids = [formIdU32(src && src.target), formIdU32(bondageUi.target)];
+            const seen = {};
+            ids.forEach(fid => {
+                if (!fid || seen[fid])
+                    return;
+                seen[fid] = true;
+                const ab = bondageGetOrCreate(fid);
+                if (ab)
+                    ab.applyState(src);
+            });
+        }
+
+        function bondageConfigure(state) {
+            const src = bondageParseArg(state);
+            if (!src || !Array.isArray(src.groups) || src.groups.length === 0)
+                return;
+            bondageConfigured = true;
+            const prev = (bondageState && bondageState.groups) || [];
+            const prevByName = {};
+            prev.forEach((g, i) => {
+                const n = bondageGroupName(g, i);
+                if (n && g && Array.isArray(g.devices) && g.devices.length)
+                    prevByName[n] = g.devices;
+            });
+            src.groups.forEach((g, i) => {
+                if (!g || typeof g !== 'object')
+                    return;
+                if (!Array.isArray(g.devices) || g.devices.length === 0) {
+                    const n = bondageGroupName(g, i);
+                    if (n && prevByName[n])
+                        g.devices = prevByName[n];
+                }
+            });
+            bondageState = src;
+            bondageApplyCatalog(src);
+            bondageAck('bondageGot source=' + (src.source || '') + ' groups=' + src.groups.length);
+            bondageRequestRender();
+        }
+
+        function bondageConfigureDevices(payload) {
+            const src = bondageParseArg(payload);
+            if (!src || !Array.isArray(bondageState.groups))
+                return;
+            const index = Number(src.index);
+            if (!Number.isInteger(index) || index < 0 || index >= bondageState.groups.length)
+                return;
+            const devices = Array.isArray(src.devices) ? src.devices : [];
+            const group = bondageState.groups[index];
+            if (!group || typeof group !== 'object')
+                return;
+            group.devices = devices;
+            bondageApplyCatalog(bondageState);
+            bondageRequestRender();
+        }
+
+        window.bondageConfigure = bondageConfigure;
+        window.bondageConfigureDevices = bondageConfigureDevices;
+
+        function bondageGroupName(g, index) {
+            const n = g && (g.name || g.Name);
+            if (n) return String(n);
+            return BONDAGE_GROUP_ORDER[index] || 'group';
+        }
+        function bondageGroupDevices(g) {
+            const d = g && (g.devices || g.Devices);
+            if (Array.isArray(d)) return d;
+            if (d && typeof d === 'object') return Object.values(d);
+            return [];
+        }
+
+        function bondageCurrentId(ab, group, index) {
+            const name = bondageGroupName(group, index);
             if (!ab || !name || ab.current[name] == null)
                 return '';
             return String(ab.current[name]);
         }
 
-        function bondageCurrentLabel(ab, group) {
-            const curId = bondageCurrentId(ab, group);
+        function bondageCurrentLabel(ab, group, index) {
+            const curId = bondageCurrentId(ab, group, index);
             if (!curId) return 'none';
-            const devices = (group && group.devices) || [];
+            const devices = bondageGroupDevices(group);
             const d = devices.find(dev => String(dev.id || '') === curId);
             return d ? bondageDeviceName(d) : 'none';
-        }
-
-        function bondagePatchPulldowns(ab) {
-            if (!ab) return;
-            const panel = document.querySelector('.target-bondage-panel');
-            if (!panel) return;
-            panel.querySelectorAll('.bondage-device-row[data-group]').forEach((row) => {
-                const gname = row.getAttribute('data-group') || '';
-                const g = (ab.groups || []).find(x => String(x.name || '') === gname);
-                const seed = g ? bondageCurrentLabel(ab, g) : 'none';
-                const val = row.querySelector('.pulldown-value');
-                if (val) val.textContent = seed;
-                row.querySelectorAll('.pulldown-option').forEach((optEl) => {
-                    optEl.classList.toggle('selected', optEl.textContent === seed);
-                });
-            });
         }
 
         function bondageFire(opt, fn, extraMapping, extraParams) {
@@ -4719,46 +4877,298 @@
         }
 
         function bondageDeviceName(d) {
-            return (d && (d.name || d.id)) ? String(d.name || d.id) : '?';
+            return (d && (d.name || d.Name || d.id)) ? String(d.name || d.Name || d.id) : '?';
         }
 
         function bondageWornInGroup(g) {
-            const devices = (g && g.devices) || [];
+            const devices = bondageGroupDevices(g);
             const equipped = g && (g.equippedid || g.equippedId);
             return devices.find(d => d.wearing)
                 || (equipped ? devices.find(d => d.id === equipped) : null)
                 || null;
         }
 
+        const BONDAGE_MENU_MAX = 20;
+        const BONDAGE_MATERIALS = [
+            'ebonite', 'leather', 'rubber', 'latex', 'vinyl', 'rope', 'iron', 'steel',
+            'chain', 'metal', 'padded', 'silk', 'cloth', 'cotton', 'wood', 'wooden',
+            'glass', 'crystal', 'bone', 'gold', 'silver', 'bronze', 'copper', 'plastic'
+        ];
+        const BONDAGE_COLORS = [
+            'black', 'white', 'red', 'green', 'blue', 'pink', 'purple', 'brown',
+            'yellow', 'orange', 'grey', 'gray', 'gold', 'silver', 'clear', 'transparent',
+            'dark', 'light', 'crimson', 'scarlet', 'ivory', 'nude', 'natural'
+        ];
+        const BONDAGE_STOP = new Set([
+            'a', 'an', 'the', 'of', 'and', 'with', 'for', 'on', 'to', 'in', 'by',
+            'heavy', 'lockable', 'dd', 'zad', 'devious', 'devices'
+        ]);
+
+        function bondageNameTokens(d, groupName) {
+            const raw = bondageDeviceName(d).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            const drop = new Set(String(groupName || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ')
+                .trim().split(/\s+/).filter(Boolean).concat([...BONDAGE_STOP]));
+            return raw.split(/\s+/).filter(t => t && !drop.has(t));
+        }
+
+        function bondageFirstHit(tokens, list) {
+            for (let i = 0; i < list.length; i++) {
+                if (tokens.indexOf(list[i]) >= 0)
+                    return list[i];
+            }
+            return '';
+        }
+
+        function bondageMaterialOf(d, groupName) {
+            return bondageFirstHit(bondageNameTokens(d, groupName), BONDAGE_MATERIALS);
+        }
+
+        function bondageColorOf(d, groupName) {
+            return bondageFirstHit(bondageNameTokens(d, groupName), BONDAGE_COLORS);
+        }
+
+        function bondageWordOf(d, groupName) {
+            const tokens = bondageNameTokens(d, groupName);
+            for (let i = 0; i < tokens.length; i++) {
+                const t = tokens[i];
+                if (BONDAGE_MATERIALS.indexOf(t) < 0 && BONDAGE_COLORS.indexOf(t) < 0)
+                    return t;
+            }
+            return '';
+        }
+
+        function bondagePartition(devices, keyFn, maxKeys) {
+            const buckets = new Map();
+            devices.forEach(d => {
+                const k = keyFn(d) || 'other';
+                if (!buckets.has(k))
+                    buckets.set(k, []);
+                buckets.get(k).push(d);
+            });
+            if (buckets.size < 2)
+                return null;
+            let entries = Array.from(buckets.entries());
+            if (entries.length > maxKeys) {
+                entries.sort((a, b) => b[1].length - a[1].length);
+                const head = entries.slice(0, maxKeys - 1);
+                const rest = [];
+                entries.slice(maxKeys - 1).forEach(e => rest.push.apply(rest, e[1]));
+                entries = head.concat([['other', rest]]);
+            }
+            const largest = Math.max.apply(null, entries.map(e => e[1].length));
+            if (largest >= devices.length)
+                return null;
+            entries.sort((a, b) => {
+                if (a[0] === 'other') return 1;
+                if (b[0] === 'other') return -1;
+                return a[0].localeCompare(b[0]);
+            });
+            return entries;
+        }
+
+        function bondageAlphaChunks(devices, maxN) {
+            const sorted = devices.slice().sort((a, b) =>
+                bondageDeviceName(a).localeCompare(bondageDeviceName(b)));
+            const chunks = [];
+            for (let i = 0; i < sorted.length; i += maxN)
+                chunks.push(sorted.slice(i, i + maxN));
+            return chunks.map(devs => {
+                const a = bondageDeviceName(devs[0]).slice(0, 8);
+                const b = bondageDeviceName(devs[devs.length - 1]).slice(0, 8);
+                return { label: a === b ? a : a + '…' + b, devices: devs };
+            });
+        }
+
+        function bondageDeviceTree(devices, groupName, withNone) {
+            const list = Array.isArray(devices) ? devices.slice() : [];
+            const maxN = withNone ? BONDAGE_MENU_MAX - 1 : BONDAGE_MENU_MAX;
+            if (list.length <= maxN)
+                return { kind: 'devices', devices: list };
+            const splits = [
+                d => bondageMaterialOf(d, groupName),
+                d => bondageColorOf(d, groupName),
+                d => bondageWordOf(d, groupName)
+            ];
+            for (let s = 0; s < splits.length; s++) {
+                const part = bondagePartition(list, splits[s], maxN);
+                if (!part)
+                    continue;
+                return {
+                    kind: 'branch',
+                    children: part.map(e => ({
+                        label: e[0],
+                        node: bondageDeviceTree(e[1], groupName, false)
+                    }))
+                };
+            }
+            const chunks = bondageAlphaChunks(list, maxN);
+            if (chunks.length === 1)
+                return { kind: 'devices', devices: chunks[0].devices };
+            if (chunks.length > maxN) {
+                const head = chunks.slice(0, maxN - 1);
+                const rest = [];
+                chunks.slice(maxN - 1).forEach(c => rest.push.apply(rest, c.devices));
+                head.push({ label: 'other', devices: rest });
+                return {
+                    kind: 'branch',
+                    children: head.map(c => ({
+                        label: c.label,
+                        node: bondageDeviceTree(c.devices, groupName, false)
+                    }))
+                };
+            }
+            return {
+                kind: 'branch',
+                children: chunks.map(c => ({
+                    label: c.label,
+                    node: bondageDeviceTree(c.devices, groupName, false)
+                }))
+            };
+        }
+
+        function bondageFirstDevice(node) {
+            if (!node)
+                return null;
+            if (node.kind === 'devices')
+                return node.devices[0] || null;
+            for (let i = 0; i < (node.children || []).length; i++) {
+                const d = bondageFirstDevice(node.children[i].node);
+                if (d) return d;
+            }
+            return null;
+        }
+
+        function bondagePathForId(node, id, acc) {
+            const path = acc || [];
+            if (!node || !id)
+                return null;
+            if (node.kind === 'devices') {
+                const d = node.devices.find(x => String(x.id || '') === String(id));
+                return d ? path : null;
+            }
+            const kids = node.children || [];
+            for (let i = 0; i < kids.length; i++) {
+                const hit = bondagePathForId(kids[i].node, id, path.concat([kids[i].label]));
+                if (hit)
+                    return hit;
+            }
+            return null;
+        }
+
+        function bondageLeafLabels(devices, groupName) {
+            const rows = (devices || []).map(d => {
+                const full = bondageDeviceName(d);
+                let short = full;
+                const drop = [].concat(
+                    String(groupName || '').split(/\s+/),
+                    bondageMaterialOf(d, groupName),
+                    bondageColorOf(d, groupName)
+                ).filter(Boolean);
+                drop.forEach(w => {
+                    const re = new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'ig');
+                    short = short.replace(re, '').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+                });
+                short = short.replace(/^[-–—,.:]+|[-–—,.:]+$/g, '').trim() || full;
+                return { d: d, full: full, short: short };
+            });
+            const counts = {};
+            rows.forEach(r => { counts[r.short] = (counts[r.short] || 0) + 1; });
+            return rows.map(r => counts[r.short] > 1 ? r.full : r.short);
+        }
+
         function bondageSortedGroups() {
             const fid = formIdU32(bondageUi.target);
             const ab = fid ? actorBondageByFormId.get(fid) : null;
-            const groups = ((ab && ab.groups) || bondageState.groups || []).slice();
+            let groups = [];
+            if (ab && Array.isArray(ab.groups) && ab.groups.length)
+                groups = ab.groups.slice();
+            else if (Array.isArray(bondageState.groups) && bondageState.groups.length)
+                groups = bondageState.groups.slice();
+            else
+                groups = bondageStubGroups();
             const rank = new Map(BONDAGE_GROUP_ORDER.map((n, i) => [n.toLowerCase(), i]));
             groups.sort((a, b) => {
-                const ia = rank.has((a.name || '').toLowerCase())
-                    ? rank.get((a.name || '').toLowerCase()) : 1000;
-                const ib = rank.has((b.name || '').toLowerCase())
-                    ? rank.get((b.name || '').toLowerCase()) : 1000;
+                const ia = rank.has(bondageGroupName(a, 0).toLowerCase())
+                    ? rank.get(bondageGroupName(a, 0).toLowerCase()) : 1000;
+                const ib = rank.has(bondageGroupName(b, 0).toLowerCase())
+                    ? rank.get(bondageGroupName(b, 0).toLowerCase()) : 1000;
                 if (ia !== ib) return ia - ib;
-                return String(a.name || '').localeCompare(String(b.name || ''));
+                return bondageGroupName(a, 0).localeCompare(bondageGroupName(b, 0));
             });
             return groups;
         }
 
-        function bondageApplyPick(opt, group, pickedLabel) {
-            if (!bondageUi.target || !group) return;
-            const ab = bondageGetOrCreate(bondageUi.target);
-            const name = group.name ? String(group.name) : '';
-            if (!ab || !name) return;
-            if (pickedLabel === 'none') {
-                ab.current[name] = '';
-                return;
+        function bondagePaintGroupStack(indent, group, index, ab, opt) {
+            const gname = bondageGroupName(group, index);
+            const devices = bondageGroupDevices(group);
+            const tree = bondageDeviceTree(devices, gname, true);
+            const curId = bondageCurrentId(ab, group, index);
+            const idPath = bondagePathForId(tree, curId) || [];
+            const nav = curId ? idPath : ((ab && ab.nav && ab.nav[gname]) || []);
+
+            function setCurrent(id, path) {
+                if (!ab || !gname) return;
+                if (!ab.nav) ab.nav = {};
+                ab.current[gname] = id ? String(id) : '';
+                ab.nav[gname] = path ? path.slice() : [];
             }
-            const devices = group.devices || [];
-            const d = devices.find(dev => bondageDeviceName(dev) === pickedLabel);
-            if (!d || !d.id) return;
-            ab.current[name] = String(d.id);
+
+            function paint(node, depth, isRoot, walked) {
+                if (!node) return;
+                if (node.kind === 'devices') {
+                    const labels = [];
+                    if (isRoot) labels.push('none');
+                    const shorts = bondageLeafLabels(node.devices, gname);
+                    shorts.forEach(s => labels.push(s));
+                    let seed = 'none';
+                    if (curId) {
+                        const di = node.devices.findIndex(d => String(d.id || '') === String(curId));
+                        seed = di >= 0 ? shorts[di] : (isRoot ? 'none' : shorts[0]);
+                    } else if (!isRoot && shorts[0])
+                        seed = shorts[0];
+                    indent.appendChild(createPulldown(labels, seed, (picked) => {
+                        if (picked === 'none') {
+                            setCurrent('', []);
+                            bondageRequestRender();
+                            return;
+                        }
+                        const di = shorts.indexOf(picked);
+                        const d = di >= 0 ? node.devices[di] : node.devices.find(x => bondageDeviceName(x) === picked);
+                        if (d && d.id)
+                            setCurrent(d.id, walked);
+                        bondageRequestRender();
+                    }));
+                    return;
+                }
+                const childLabels = (node.children || []).map(c => c.label);
+                const labels = isRoot ? ['none'].concat(childLabels) : childLabels.slice();
+                const chosen = nav[depth] || (isRoot && !curId ? 'none' : childLabels[0]);
+                indent.appendChild(createPulldown(labels, chosen, (picked) => {
+                    if (picked === 'none') {
+                        setCurrent('', []);
+                        bondageRequestRender();
+                        return;
+                    }
+                    const ch = (node.children || []).find(c => c.label === picked);
+                    if (!ch) return;
+                    const first = bondageFirstDevice(ch.node);
+                    if (first && first.id)
+                        setCurrent(first.id, walked.concat([picked]));
+                    else
+                        setCurrent('', walked.concat([picked]));
+                    bondageRequestRender();
+                }));
+                if (chosen === 'none' || !chosen)
+                    return;
+                const ch = (node.children || []).find(c => c.label === chosen);
+                if (!ch)
+                    return;
+                if (ch.node.kind === 'devices' && ch.node.devices.length === 1)
+                    return;
+                paint(ch.node, depth + 1, false, walked.concat([chosen]));
+            }
+
+            paint(tree, 0, true, []);
         }
 
         function renderBondagePanelBody(body, opt) {
@@ -4788,12 +5198,15 @@
             };
             const doneBtn = document.createElement('div');
             doneBtn.className = 'action-btn';
-            doneBtn.textContent = 'Done';
+            doneBtn.textContent = 'Start';
             if (!bondageUi.target) doneBtn.classList.add('disabled');
             doneBtn.onclick = () => {
                 if (doneBtn.classList.contains('disabled')) return;
                 const session = actorBondageByFormId.get(formIdU32(bondageUi.target));
-                const currentJson = JSON.stringify((session && session.current) || {});
+                const currentJson = JSON.stringify({
+                    current: (session && session.current) || {},
+                    original: (session && session.original) || {}
+                });
                 bondageFire(opt, 'TM_BondageFinish', [
                     { type: 'speaker', name: 'speaker' },
                     { type: 'target', name: 'target' },
@@ -4831,29 +5244,22 @@
             body.appendChild(row);
 
             const groups = bondageSortedGroups();
-            if (!groups.length) {
-                const empty = document.createElement('div');
-                empty.className = 'compact-row';
-                empty.textContent = 'loading…';
-                body.appendChild(empty);
-            }
             const devicesHost = document.createElement('div');
-            devicesHost.className = 'labeled-fields';
+            devicesHost.className = 'bondage-groups';
             const ab = bondageGetOrCreate(bondageUi.target);
-            groups.forEach((g) => {
-                const devices = g.devices || [];
-                const labels = ['none'].concat(devices.map(bondageDeviceName));
-                const seed = bondageCurrentLabel(ab, g);
+            groups.forEach((g, index) => {
                 const field = document.createElement('div');
-                field.className = 'bondage-device-row';
-                field.setAttribute('data-group', g.name || '');
-                const lab = document.createElement('span');
-                lab.className = 'bondage-device-label';
-                lab.textContent = (g.name || 'group') + ':';
+                field.className = 'bondage-group';
+                const gname = bondageGroupName(g, index);
+                field.setAttribute('data-group', gname);
+                const lab = document.createElement('div');
+                lab.className = 'bondage-group-label';
+                lab.textContent = gname;
+                const indent = document.createElement('div');
+                indent.className = 'bondage-group-indent';
+                bondagePaintGroupStack(indent, g, index, ab, opt);
                 field.appendChild(lab);
-                field.appendChild(createPulldown(labels, seed, (picked) => {
-                    bondageApplyPick(opt, g, picked);
-                }));
+                field.appendChild(indent);
                 devicesHost.appendChild(field);
             });
             body.appendChild(devicesHost);

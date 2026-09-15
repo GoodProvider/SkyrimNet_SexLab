@@ -1,0 +1,24 @@
+customCategory: sexlab_sex1
+name: SexLab_Masturbation_Start
+label: Masturbate
+description: "[style] [method] masturbation"
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: StartScene_Consensual_One
+defaultPriority: 5
+parameterMapping:
+  - type: static
+    name: intent
+    value: masturbation
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: style
+    description: forceful|normal|gentle
+  - type: dynamic
+    name: method
+    description: masturbation
+  - type: static 
+    name: setting_name
+    value: ""

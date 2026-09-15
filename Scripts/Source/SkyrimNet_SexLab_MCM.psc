@@ -183,6 +183,11 @@ Function ApplyHotkey()
         vk = 220
     endif
     sex_edit_key = SkyrimNet_SexLab_Utilities.VkToDxScanCode(vk)
+    ; Unbound native returns None → 0. WebUI_SetHotkey(0, true) disables the C++ KeyHandler.
+    if sex_edit_key == 0
+        Trace("ApplyHotkey", "--- VkToDxScanCode returned 0; fallback DX 43")
+        sex_edit_key = 43
+    endif
     ; C++ KeyHandler, not Papyrus RegisterForKey.
     SkyrimNet_SexLab_WebUI.WebUI_SetHotkey(sex_edit_key, hot_key_toggle)
     Trace("ApplyHotkey", "--- webui enabled:"+hot_key_toggle+" vk:"+vk+" dx:"+sex_edit_key)

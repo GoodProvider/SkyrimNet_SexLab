@@ -4,6 +4,7 @@
   "panel": "bondage",
   "closeWebUI": false,
   "requiresPlugin": "Devious Devices - Assets.esm",
+  "requiresDll": "DeviousDevices.dll",
   "plugin": "SkyrimNet_SexLab_Handler_UDNG.esp",
   "questFormId": "0x800",
   "scriptName": "SkyrimNet_SexLab_Handler_UDNG",

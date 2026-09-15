@@ -1,0 +1,24 @@
+customCategory: sexlab_sex1
+name: SexLab_Masturbation_Forced
+label: Forced masturbation
+description: "forced to [style] [method] masturbation"
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: StartScene_Nonconsensual_One
+defaultPriority: 5
+parameterMapping:
+  - type: static
+    name: intent
+    value: being forced to masturbate
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: style
+    description: forceful|normal|gentle
+  - type: dynamic
+    name: method
+    description: masturbation
+  - type: static 
+    name: setting_name
+    value: ""

@@ -11,7 +11,7 @@
 				<group name="Select plugins to support" type="SelectAny">
 					<plugins order="Explicit">
 						<plugin name="Devious Devices bondage">
-							<description> TargetMenu bondage panel (Devious Devices). Requires Devious Devices - Assets.esm. LLM device actions remain in SkyrimNet_UDNG.</description>
+							<description> TargetMenu bondage panel. Requires Devious Devices NG (DeviousDevices.dll) plus Devious Devices - Assets.esm and Integration.esm. Optional: SkyrimNet_SexLab still runs without it. LLM device actions remain in SkyrimNet_UDNG.</description>
 							<image path="images\sexlab_logo.png" />
 							<files>
 								<file source="handler_udng\SkyrimNet_SexLab_Handler_UDNG.esp" destination="" alwaysInstall="false" installIfUsable="false" priority="0"/>
@@ -25,6 +25,7 @@
 										<pattern>
 											<dependencies operator="And">
 												<fileDependency file="Devious Devices - Assets.esm" state="Active"/>
+												<fileDependency file="Devious Devices - Integration.esm" state="Active"/>
 											</dependencies>
 											<type name="Recommended"/>
 										</pattern>
