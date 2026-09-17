@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### SKSE / WebUI
+- Removed in-tree `TargetMenu/Actor/options/0700_leash.json` (`type: handoff`). SkyrimNet_Leashed now overlays `leash` / `unleash` rows into that folder; this overlay does not host a second leash ParameterPanel
+- `is_in_faction` resolves `LeashedFaction` via `Leash.esm` `0xD6A` when EditorID lookup misses
+
 ### AnimDB
 - Stop auto-rebuilding AnimDB on load. If counts differ from SexLab after SexLab is ready, notify `SkyrimNet SexLab # animations doesn't match` and show a SkyMessage (empty → Build/Close; mismatch → Rebuild/Close)
 

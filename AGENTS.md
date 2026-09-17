@@ -40,7 +40,8 @@ Relative paths for other machines: [docs/reference/papyrus-rules.md](docs/refere
 | Prompts | [docs/authors/prompts.md](docs/authors/prompts.md) |
 | Animations (authors) | [docs/authors/animations.md](docs/authors/animations.md) |
 | Anidata schema 3.0 | [docs/developers/anidata-schema.md](docs/developers/anidata-schema.md) |
-| Stage descriptor prototype | [descriptor/README.md](descriptor/README.md) |
+| AniDescriber (HKX fill for missing stages) | [docs/developers/anidescriber.md](docs/developers/anidescriber.md) |
+| Stage descriptor prototype | [descriptor/README.md](descriptor/README.md) (planning only) |
 | Papyrus / ESP | [docs/developers/papyrus.md](docs/developers/papyrus.md) |
 | WebUI / SKSE | [docs/developers/webui.md](docs/developers/webui.md) (ControlPanel modes, sentinels, foreign table/detail hosts) |
 | Release docs | [release-guide.xml](release-guide.xml) + [release-checkpoint.xml](release-checkpoint.xml) |

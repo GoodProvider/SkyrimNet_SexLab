@@ -920,20 +920,6 @@ void InitWebUI()
             PapyrusBindings_WebUI::ApplyControlActorFocusJson(value);
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onControlModeChange", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const std::string id = j.value("id", "");
-                webui_log::info("onControlModeChange id={}", id);
-                ActionCatalog::SwitchControlMode(id);
-            } catch (...) {
-                webui_log::info("onControlModeChange id={}", value);
-                ActionCatalog::SwitchControlMode(value);
-            }
-        });
-
         PrismaUI->RegisterJSListener(g_view, "onMainPanelRow", [](const char* value) {
             if (!value)
                 return;

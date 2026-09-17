@@ -1584,6 +1584,14 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke(std::string("setMainPanelData(") + raw + ");");
     }
 
+    void WebUI_PushCascadeChoices(RE::StaticFunctionTag*, RE::BSFixedString json)
+    {
+        const char* raw = json.c_str();
+        if (!raw || !raw[0])
+            return;
+        WebUI_Invoke(std::string("setCascadeChoices(") + raw + ");");
+    }
+
     RE::Actor* WebUI_GetFocusActor(RE::StaticFunctionTag*)
     {
         return Target_Current;
@@ -1644,6 +1652,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("SetNearbyActorsJson", scriptName, SetNearbyActorsJson);
         a_vm->RegisterFunction("IsAvailableActor", scriptName, IsAvailableActor_Native);
         a_vm->RegisterFunction("WebUI_PushMainPanelData", scriptName, WebUI_PushMainPanelData);
+        a_vm->RegisterFunction("WebUI_PushCascadeChoices", scriptName, WebUI_PushCascadeChoices);
         a_vm->RegisterFunction("WebUI_GetFocusActor", scriptName, WebUI_GetFocusActor);
         a_vm->RegisterFunction("WebUI_GetFocusKind", scriptName, WebUI_GetFocusKind);
 

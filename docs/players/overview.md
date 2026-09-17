@@ -56,7 +56,7 @@ Configure in SkyrimNet under plugin **SkyrimNet_SexLab** (`goodprovider.sexlab`)
 - Tag Edit dialogs; Start Sex / Edit Stage hotkey (default backslash `\`)
 - Direct Narration: cooldown, max distance
 - OstimNet: sex framework 0 SexLab / 1 Ostim (`sexlab.ostim.player`)
-- Leash (`SkyrimNet_Leashed.esp`): SkyMessage / Target Menu opens the Leashed panel
+- Leash (`SkyrimNet_Leashed.esp`): SkyMessage / Target Menu **leash** or **unleash** opens the Leashed panel
 
 ## Requirements
 

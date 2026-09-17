@@ -631,17 +631,15 @@ namespace ActionCatalog
 
     bool IsSceneStartExecution(const std::string& fn)
     {
-        constexpr const char* kPrefix = "startscene_";
-        constexpr size_t kPrefixLen = 11;
-        if (fn.size() < kPrefixLen)
+        // Match StartScene_* and WebUI_StartScene_* (DOM DomObedience wrappers).
+        std::string lower;
+        lower.reserve(fn.size());
+        for (char ch : fn)
+            lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        if (lower.find("startscene_") == std::string::npos)
             return false;
-        for (size_t i = 0; i < kPrefixLen; ++i) {
-            if (std::tolower(static_cast<unsigned char>(fn[i])) !=
-                static_cast<unsigned char>(kPrefix[i]))
-                return false;
-        }
         // StartScene_Refused_* is narration-only, not a creator open.
-        return fn.find("Refused") == std::string::npos && fn.find("refused") == std::string::npos;
+        return lower.find("refused") == std::string::npos;
     }
 
     namespace
@@ -964,6 +962,16 @@ namespace ActionCatalog
         nlohmann::json state;
         state["_creator_sid"] = 0;
         state["_from_target_menu"] = true;
+        {
+            std::string src = "sexlab";
+            if (uiParameters.is_object() && uiParameters.contains("source") && uiParameters["source"].is_string()) {
+                src = uiParameters["source"].get<std::string>();
+            }
+            // Catalog option may carry source on the action root — callers pass it in uiParameters.
+            if (src != "dom")
+                src = "sexlab";
+            state["_source"] = src;
+        }
         state["_intent"] = params.intent;
         state["_style"] = params.style.empty() ? "normally" : params.style;
         state["_method"] = params.method;

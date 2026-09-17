@@ -45,19 +45,13 @@ namespace ActionCatalog
     // focusHasStrippedItems: StorageUtil strip-store on focus (currentActor) for actionSwitch.
     nlohmann::json BuildUICatalog(bool focusHasStrippedItems = false);
 
-    /// Catalog for JS configureControlPanel(...): panels, selected, modes, sentinels, hideFramework.
+    /// Catalog for JS configureControlPanel(...): panels, selected, sentinels.
     nlohmann::json BuildMainPanelsCatalog();
 
     /// Apply main-panel selection from JS (id or panel key). Closes previous, opens next.
     void SwitchMainPanel(const std::string& key);
 
-    /// Swap ControlPanel mode (built-in sexlab or ControlPanel/*.json). Returns false if unknown/omitted.
-    bool SwitchControlMode(const std::string& modeId);
-
-    std::string CurrentControlModeId();
     nlohmann::json CurrentSentinels();
-    bool CurrentModeHidesFramework();
-    bool IsSexLabControlMode();
     /// MainPanel id to open after a data_table row click; empty = leave the current panel.
     std::string CurrentRowClickMainPanel();
     /// MainPanel id for a sentinel pulldown entry; empty = do not switch.
@@ -70,7 +64,7 @@ namespace ActionCatalog
     bool IsAnimationPanelPreferredOpen();
     void SetAnimationPanelPreferredOpen(bool open);
 
-    // Assembled TargetMenu Actor or Scene defaultsParameters + options (matches ControlPanel focus)
+    // Assembled TargetMenu Actor or Scene defaultsParameters + options (ControlPanel focus)
     const nlohmann::json& TargetOptions();
 
     std::filesystem::path WebUIDir();

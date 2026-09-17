@@ -22,7 +22,7 @@
 - [SkyrimNet_Arousal](https://github.com/GoodProvider/SkyrimNet_Arousal)
 - [OSL Aroused](https://www.nexusmods.com/skyrimspecialedition/mods/65454)
 - [OstimNet](https://github.com/tetherball88/OStimNet) — SkyrimNet dashboard **Sex framework** (`sexlab.ostim.player`) picks SexLab vs OStim for LLM starts
-- `SkyrimNet_Leashed.esp` — SkyMessage / PrismaUI Target Menu **leash** opens that mod’s panel
+- `SkyrimNet_Leashed.esp` — SkyMessage / PrismaUI Target Menu **leash** / **unleash** opens that mod’s panel
 
 ## Related NSFW
 

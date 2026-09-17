@@ -1,5 +1,6 @@
 #include "Papyrus_AnimationDB.h"
 #include "AnimationDB.h"
+#include "AniDescriber.h"
 #include "WebUI_Log.h"
 
 #include <nlohmann/json.hpp>
@@ -191,9 +192,19 @@ namespace PapyrusBindings_AnimationDB
         return AnimationDB::TotalCount();
     }
 
+    bool AnimDb_NeedsEventBackfill(RE::StaticFunctionTag*)
+    {
+        return AnimationDB::NeedsEventBackfill();
+    }
+
     RE::BSFixedString AnimDb_GetByRegistry(RE::StaticFunctionTag*, RE::BSFixedString registry)
     {
-        auto row = AnimationDB::GetByRegistry(registry.c_str() ? registry.c_str() : "");
+        const char* reg = registry.c_str() ? registry.c_str() : "";
+        auto row = AnimationDB::GetByRegistry(reg);
+        if (!row)
+            return RE::BSFixedString("");
+        AniDescriber::Ensure(*row);
+        row = AnimationDB::GetByRegistry(reg);
         if (!row)
             return RE::BSFixedString("");
         return RE::BSFixedString(RowToJson(*row).dump());
@@ -255,6 +266,11 @@ namespace PapyrusBindings_AnimationDB
             tag.c_str() ? tag.c_str() : "");
     }
 
+    RE::BSFixedString AnimDb_DumpAniDescriber(RE::StaticFunctionTag*, RE::BSFixedString registry)
+    {
+        return RE::BSFixedString(AniDescriber::Dump(registry.c_str() ? registry.c_str() : ""));
+    }
+
     bool Register_AnimationDB_Functions(RE::BSScript::IVirtualMachine* a_vm)
     {
         if (!a_vm) {
@@ -271,6 +287,7 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_QueryTopNTags", scriptName, AnimDb_QueryTopNTags);
         a_vm->RegisterFunction("AnimDb_TotalEnabled", scriptName, AnimDb_TotalEnabled);
         a_vm->RegisterFunction("AnimDb_TotalCount", scriptName, AnimDb_TotalCount);
+        a_vm->RegisterFunction("AnimDb_NeedsEventBackfill", scriptName, AnimDb_NeedsEventBackfill);
         a_vm->RegisterFunction("AnimDb_GetByRegistry", scriptName, AnimDb_GetByRegistry);
         a_vm->RegisterFunction("AnimDb_GetStageDescription", scriptName, AnimDb_GetStageDescription);
         a_vm->RegisterFunction("AnimDb_GetTransition", scriptName, AnimDb_GetTransition);
@@ -278,6 +295,7 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_SaveAnimLocal", scriptName, AnimDb_SaveAnimLocal);
         a_vm->RegisterFunction("AnimDb_ResolveTags", scriptName, AnimDb_ResolveTags);
         a_vm->RegisterFunction("AnimDb_CsvHasTag", scriptName, AnimDb_CsvHasTag);
+        a_vm->RegisterFunction("AnimDb_DumpAniDescriber", scriptName, AnimDb_DumpAniDescriber);
 
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;

@@ -109,8 +109,7 @@
             z-index: 6;
         }
 
-        #control-panel .control-panel-title,
-        #control-mode-pulldown {
+        #control-panel .control-panel-title {
             font-family: var(--font-ui);
             font-size: var(--text-xl);
             font-weight: 600;
@@ -158,7 +157,6 @@
         }
 
         #control-panel-host .pulldown,
-        #control-mode-pulldown .pulldown,
         #control-actor-pulldown .pulldown,
         #framework-row .pulldown {
             width: 100%;
@@ -166,7 +164,6 @@
             box-sizing: border-box;
         }
 
-        #control-mode-pulldown .pulldown-value,
         #control-actor-pulldown .pulldown-value,
         #framework-row .pulldown-value {
             width: 100%;
@@ -176,7 +173,6 @@
         }
 
         #control-panel-host .pulldown-menu,
-        #control-mode-pulldown .pulldown-menu,
         #control-actor-pulldown .pulldown-menu,
         #framework-row .pulldown-menu {
             left: calc(100% + var(--space-md));
@@ -1110,6 +1106,33 @@
             opacity: 0.4;
         }
 
+        .has-source,
+        .option.has-source,
+        .action-btn.has-source {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .option-source {
+            font-size: 50%;
+            line-height: 1;
+            color: var(--text-secondary);
+            align-self: flex-start;
+        }
+
+        .option-label {
+            display: block;
+        }
+
+        .source-sup {
+            font-size: 50%;
+            vertical-align: super;
+            margin-right: 0.15em;
+            line-height: 0;
+        }
+
         .option-cancel {
             font-family: var(--font-ui);
             font-size: var(--text-base);
@@ -1225,6 +1248,17 @@
             border-color: var(--border);
             cursor: default;
             pointer-events: none;
+        }
+
+        .target-pulldown-panel.layout-buttons .pulldown-btn-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .target-pulldown-panel.layout-buttons .action-btn {
+            width: 100%;
+            justify-content: space-between;
         }
 
         .tag-mode-row {
@@ -1434,7 +1468,8 @@
             pointer-events: none;
         }
 
-        #intent-panel {
+        #intent-panel,
+        #fields-text-panel {
             position: fixed;
             left: 50%;
             top: 40%;
@@ -1444,7 +1479,8 @@
             max-width: min(420px, 70vw);
         }
 
-        #intent-panel-text {
+        #intent-panel-text,
+        #fields-text-panel-input {
             width: 100%;
             box-sizing: border-box;
             background: rgba(28, 28, 33, 0.9);
@@ -1465,7 +1501,6 @@
     <div id="ui-shell">
     <div id="left-column">
         <div id="control-panel" class="panel" style="display:none">
-            <div id="control-mode-pulldown" class="control-panel-title"></div>
             <div class="control-section">
                 <div class="control-section-label">views</div>
                 <div id="control-panel-host" class="control-section-indent"></div>
@@ -1767,7 +1802,7 @@
             const row = document.getElementById('framework-row');
             if (!row) return;
             row.innerHTML = '';
-            if (!enabled || CONTROL_HIDE_FRAMEWORK) {
+            if (!enabled) {
                 row.style.display = 'none';
                 return;
             }
@@ -1834,7 +1869,6 @@
         function showControlPanel() {
             const el = document.getElementById('control-panel');
             if (el) el.style.display = 'flex';
-            renderControlModePulldown();
             renderControlPanelPulldown();
             if (typeof renderControlActorPulldown === 'function')
                 renderControlActorPulldown();
@@ -1890,6 +1924,12 @@
             if (typeof ensureCreatorSceneInfo === 'function')
                 ensureCreatorSceneInfo();
             selectedSceneInfoKey = 'new';
+            // Root Custom is SexLab-origin (not a DOM scene_start handoff).
+            if (typeof SC !== 'undefined')
+                SC.menu_source = 'sexlab';
+            const rootInfo = typeof selectedSceneInfo === 'function' ? selectedSceneInfo() : null;
+            if (rootInfo)
+                rootInfo.menu_source = 'sexlab';
             if (typeof showPanel === 'function')
                 showPanel('scene_creator_panel');
             else if (typeof window.onMainPanelChange === 'function')
@@ -1912,43 +1952,12 @@
             host.appendChild(createPulldown(labels, seed, (label) => {
                 if (mainPanelPulldownBusy) return;
                 selectMainPanelByLabel(label);
-            }));
+            }, null, decorateMainPanelViewLabel));
         }
 
-        let CONTROL_MODES = [{ id: 'sexlab', label: 'SkyrimNet SexLab' }];
-        let CONTROL_MODE_ID = 'sexlab';
         let CONTROL_SENTINELS = [];
-        let CONTROL_HIDE_FRAMEWORK = false;
         let CONTROL_FOCUS_KIND = '';
         let FOREIGN_PANEL_DISPATCH = null;
-        let controlModePulldownBusy = false;
-
-        function renderControlModePulldown() {
-            const host = document.getElementById('control-mode-pulldown');
-            if (!host || typeof createPulldown !== 'function') return;
-            const modes = CONTROL_MODES.length ? CONTROL_MODES : [{ id: 'sexlab', label: 'SkyrimNet SexLab' }];
-            host.innerHTML = '';
-            const labels = modes.map(m => m.label || m.id);
-            const cur = modes.find(m => m.id === CONTROL_MODE_ID) || modes[0];
-            const seed = cur ? (cur.label || cur.id) : labels[0];
-            host.appendChild(createPulldown(labels, seed, (picked, idx) => {
-                if (controlModePulldownBusy) return;
-                const mode = (idx != null && idx >= 0 && idx < modes.length)
-                    ? modes[idx]
-                    : modes.find(m => (m.label || m.id) === picked);
-                if (!mode || mode.id === CONTROL_MODE_ID) return;
-                CONTROL_MODE_ID = mode.id;
-                if (typeof window.onControlModeChange === 'function')
-                    window.onControlModeChange(JSON.stringify({ id: mode.id }));
-            }));
-        }
-
-        function applyFrameworkVisibility() {
-            const row = document.getElementById('framework-row');
-            if (!row) return;
-            if (CONTROL_HIDE_FRAMEWORK)
-                row.style.display = 'none';
-        }
 
         function configureControlPanel(catalog) {
             const panels = (catalog && catalog.panels) ? catalog.panels.slice() : [];
@@ -1957,16 +1966,9 @@
                 MAIN_SELECTED_KEY = catalog.selected || '';
             else if (MAIN_SELECTED_KEY && !findMainPanelByKey(MAIN_SELECTED_KEY))
                 MAIN_SELECTED_KEY = '';
-            if (catalog && catalog.modes && catalog.modes.length)
-                CONTROL_MODES = catalog.modes.slice();
-            if (catalog && catalog.mode)
-                CONTROL_MODE_ID = catalog.mode;
             CONTROL_SENTINELS = (catalog && catalog.sentinels) ? catalog.sentinels.slice() : [];
-            CONTROL_HIDE_FRAMEWORK = !!(catalog && catalog.hideFramework);
-            applyFrameworkVisibility();
             if (typeof ssAdoptSceneSettings === 'function')
                 ssAdoptSceneSettings(ssCatalogSceneSettings(catalog));
-            renderControlModePulldown();
             renderControlPanelPulldown();
             if (typeof renderControlActorPulldown === 'function')
                 renderControlActorPulldown();
@@ -2066,6 +2068,41 @@
                 renderForeignDataTable(payload);
             else if (panel === 'actor_detail')
                 renderForeignActorDetail(payload);
+        }
+
+        function setCascadeChoices(payload) {
+            if (typeof payload === 'string') {
+                try { payload = JSON.parse(payload); } catch (e) { return; }
+            }
+            if (!payload || typeof payload !== 'object') return;
+            const kind = String(payload.panel || '').toLowerCase();
+            if (kind === 'fields') {
+                const next = Object.assign({}, papyrusSelectedOpt || {}, payload);
+                next.type = 'papyrus';
+                next.panel = 'fields';
+                if (payload.panelFields || payload.panelfields)
+                    next.panelFields = payload.panelFields || payload.panelfields;
+                if (payload.panelDefaults || payload.paneldefaults)
+                    next.panelDefaults = payload.panelDefaults || payload.paneldefaults;
+                papyrusSelectedOpt = next;
+                fieldsUi = { key: '', values: {} };
+                fieldsCloseTextPanel();
+                renderTargetMenu();
+                return;
+            }
+            const opt = {
+                type: 'pulldown',
+                label: payload.title || payload.label || 'choose',
+                layout: 'buttons',
+                source: payload.source || 'dom',
+                options: payload.options || []
+            };
+            papyrusSelectedOpt = null;
+            if (!navStack.length)
+                navStack = [opt];
+            else
+                navStack = navStack.concat([opt]);
+            renderTargetMenu();
         }
 
         function renderForeignDataTable(payload) {
@@ -2542,6 +2579,7 @@
             statusHolderFormId: 0,
             statusHolderName: ''
         };
+        let fieldsUi = { key: '', values: {} };
         const LEASH_STYLES = ['forcefully', 'normally', 'gently'];
         const LEASH_TIE_POINTS = ['floor', 'left', 'back', 'front', 'right', 'wall'];
         const LEASH_DIST_DEFAULT = 'middle';
@@ -2624,6 +2662,75 @@
         function displayLabel(obj) {
             if (!obj) return '';
             return (obj.label && String(obj.label).length) ? obj.label : (obj.name || '');
+        }
+
+        function sourceOf(obj) {
+            if (!obj || obj.source == null) return '';
+            return String(obj.source).trim();
+        }
+
+        /// TargetMenu provenance for Scene Creator / Start: only "dom" is non-sexlab.
+        function menuSourceOf(opt) {
+            return String(sourceOf(opt) || '').trim().toLowerCase() === 'dom' ? 'dom' : 'sexlab';
+        }
+
+        function isForeignSource(src) {
+            const s = String(src || '').trim().toLowerCase();
+            return s.length > 0 && s !== 'sexlab';
+        }
+
+        function sourceDisplay(src) {
+            return String(src || '').toUpperCase();
+        }
+
+        function optionWithInheritedSource(entry, parent) {
+            if (!entry || typeof entry !== 'object') return entry;
+            if (sourceOf(entry) || !isForeignSource(sourceOf(parent)))
+                return entry;
+            const copy = Object.assign({}, entry);
+            copy.source = sourceOf(parent);
+            return copy;
+        }
+
+        function decorateTargetOption(el, opt) {
+            if (!el) return;
+            const label = (opt && typeof opt === 'object') ? displayLabel(opt) : String(opt || '');
+            const src = (opt && typeof opt === 'object') ? sourceOf(opt) : '';
+            el.textContent = '';
+            if (isForeignSource(src)) {
+                el.classList.add('has-source');
+                const badge = document.createElement('span');
+                badge.className = 'option-source';
+                badge.textContent = sourceDisplay(src);
+                const lab = document.createElement('span');
+                lab.className = 'option-label';
+                lab.textContent = label;
+                el.appendChild(badge);
+                el.appendChild(lab);
+            } else {
+                el.classList.remove('has-source');
+                el.textContent = label;
+            }
+        }
+
+        function decorateMainPanelViewLabel(el, label) {
+            if (!el) return;
+            el.textContent = '';
+            if (label === MAIN_PANEL_NONE_LABEL) {
+                el.textContent = label;
+                return;
+            }
+            const entry = MAIN_PANELS.find((p) => mainPanelLabelOf(p) === label);
+            const src = entry ? sourceOf(entry) : '';
+            if (!isForeignSource(src)) {
+                el.textContent = label;
+                return;
+            }
+            const sup = document.createElement('sup');
+            sup.className = 'source-sup';
+            sup.textContent = sourceDisplay(src);
+            el.appendChild(sup);
+            el.appendChild(document.createTextNode(label));
         }
 
         function deepClone(o) {
@@ -3033,13 +3140,13 @@
             dyn.appendChild(field);
         }
 
-        function makeActionRow(label, name, selected, onBefore, optionParameters, disabled) {
+        function makeActionRow(label, name, selected, onBefore, optionParameters, disabled, source) {
             const row = document.createElement('div');
             row.className = 'option-row' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
 
             const main = document.createElement('div');
             main.className = 'option' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
-            main.textContent = label;
+            decorateTargetOption(main, { label: label, source: source });
             if (!disabled) {
                 main.onclick = (e) => {
                     e.stopPropagation();
@@ -3052,20 +3159,40 @@
             return row;
         }
 
-        function makeNestedPulldownRow(opt, depthIndex) {
-            const row = document.createElement('div');
-            row.className = 'option-row';
+        function pulldownLayoutButtons(opt) {
+            return String((opt && opt.layout) || '').toLowerCase() === 'buttons';
+        }
 
-            const main = document.createElement('div');
-            main.className = 'option';
-            main.textContent = displayLabel(opt);
+        function makeNestedPulldownRow(opt, depthIndex, asButton) {
             const drill = () => {
                 navStack = navStack.slice(0, depthIndex + 1);
                 navStack.push(opt);
                 selectedActionName = null;
                 selectedActionLabel = null;
+                papyrusSelectedOpt = null;
                 renderTargetMenu();
             };
+            if (asButton) {
+                const btn = document.createElement('div');
+                btn.className = 'action-btn';
+                const lab = document.createElement('span');
+                decorateTargetOption(lab, opt);
+                const chev = document.createElement('span');
+                chev.textContent = '❯';
+                btn.appendChild(lab);
+                btn.appendChild(chev);
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    drill();
+                };
+                return btn;
+            }
+            const row = document.createElement('div');
+            row.className = 'option-row';
+
+            const main = document.createElement('div');
+            main.className = 'option';
+            decorateTargetOption(main, opt);
             main.onclick = (e) => {
                 e.stopPropagation();
                 drill();
@@ -3165,20 +3292,28 @@
             });
         }
 
-        function createPulldown(values, current, onChange, disabledValues) {
+        function createPulldown(values, current, onChange, disabledValues, decorate) {
             const root = document.createElement('div');
             root.className = 'pulldown';
             const valueEl = document.createElement('div');
             valueEl.className = 'pulldown-value';
-            valueEl.textContent = current || (values[0] || '');
             const menu = document.createElement('div');
             menu.className = 'pulldown-menu';
             const disabled = disabledValues instanceof Set
                 ? disabledValues
                 : new Set(Array.isArray(disabledValues) ? disabledValues : []);
 
+            const paintText = (el, v) => {
+                if (typeof decorate === 'function') {
+                    el.textContent = '';
+                    decorate(el, v);
+                } else {
+                    el.textContent = v;
+                }
+            };
+
             const paint = (selected) => {
-                valueEl.textContent = selected;
+                paintText(valueEl, selected);
                 menu.innerHTML = '';
                 for (let i = 0; i < values.length; i++) {
                     const v = values[i];
@@ -3187,7 +3322,7 @@
                     item.className = 'pulldown-option'
                         + (v === selected ? ' selected' : '')
                         + (isDisabled ? ' disabled' : '');
-                    item.textContent = v;
+                    paintText(item, v);
                     if (!isDisabled) {
                         item.onclick = (e) => {
                             e.stopPropagation();
@@ -3210,7 +3345,7 @@
                 else clearPulldownMenuPosition(menu);
             };
 
-            paint(valueEl.textContent);
+            paint(current || (values[0] || ''));
             root.appendChild(valueEl);
             root.appendChild(menu);
             return root;
@@ -3237,9 +3372,11 @@
             outfitUi.pos0 = 0;
             outfitUi.pos1 = 0;
             bondageUi = { speaker: 0, target: 0, style: 'normally' };
+            fieldsUi = { key: '', values: {} };
             bondageState = { groups: [] };
             ssUi.seededForLabel = '';
             ssCloseIntentPanel();
+            if (typeof fieldsCloseTextPanel === 'function') fieldsCloseTextPanel();
             const host = document.getElementById('target-cascade-host');
             if (host) host.innerHTML = '';
         }
@@ -3356,14 +3493,15 @@
                             navStack = [];
                         },
                         opt.parameters || null,
-                        !!opt.disabled
+                        !!opt.disabled,
+                        sourceOf(opt)
                     ));
                     continue;
                 }
                 if (opt.type === 'scene_creator') {
                     const row = document.createElement('div');
                     row.className = 'option' + (tmSceneCreatorIsOpen() ? ' selected' : '');
-                    row.textContent = displayLabel(opt);
+                    decorateTargetOption(row, opt);
                     row.onclick = () => tmToggleSceneCreator();
                     left.appendChild(row);
                     continue;
@@ -3371,7 +3509,7 @@
                 if (opt.type === 'papyrus') {
                     const row = document.createElement('div');
                     row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
-                    row.textContent = displayLabel(opt);
+                    decorateTargetOption(row, opt);
                     row.onclick = () => selectPapyrusOption(opt);
                     left.appendChild(row);
                     continue;
@@ -3379,7 +3517,7 @@
                 if (opt.type !== 'pulldown') continue;
                 const row = document.createElement('div');
                 row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
-                row.textContent = displayLabel(opt);
+                decorateTargetOption(row, opt);
                 row.onclick = () => selectLeftPulldown(opt);
                 left.appendChild(row);
             }
@@ -3411,7 +3549,8 @@
                 executionFunctionName,
                 parameterMapping,
                 parameters,
-                closeWebUI
+                closeWebUI,
+                source: menuSourceOf(opt)
             };
             window.onAction(JSON.stringify(payload));
         }
@@ -3426,7 +3565,7 @@
             return p === 'scene_start' || p === 'cuddle';
         }
 
-        function selectPapyrusOption(opt) {
+        function selectPapyrusOption(opt, keepNav) {
             if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) {
                 leftSelectedOpt = opt;
                 papyrusSelectedOpt = null;
@@ -3436,9 +3575,11 @@
                 ssApplySceneStartDefaultsToCreator(opt);
                 return;
             }
-            leftSelectedOpt = opt;
+            if (!keepNav)
+                leftSelectedOpt = opt;
             papyrusSelectedOpt = opt;
-            navStack = [];
+            if (!keepNav)
+                navStack = [];
             selectedActionName = null;
             selectedActionLabel = null;
             if (opt.confirmSave) {
@@ -3490,6 +3631,11 @@
                     if (!outfitFindActor(pool, leashUi.holder))
                         leashUi.holder = leashUi.subject;
                     leashRequestStatus(leashUi.leashed);
+                }
+                if (opt.panel === 'fields') {
+                    const spec = fieldsPanelSpec(opt);
+                    if (!spec.length)
+                        firePapyrusOption(opt, { closeWebUI: false });
                 }
                 renderTargetMenu();
                 return;
@@ -4203,12 +4349,21 @@
             return new Set(ids).size !== ids.length;
         }
 
-        function ssCanCustom(cast) {
+        function tmHasSceneCreatorPanel() {
+            return !!findMainPanelByKey('scene_creator_panel');
+        }
+
+        function ssHasCast(cast) {
             return !!(cast && cast.subject);
         }
 
+        function ssCanCustom(cast) {
+            if (!tmHasSceneCreatorPanel()) return false;
+            return ssHasCast(cast);
+        }
+
         function ssCanStart(pool, cast) {
-            if (!ssCanCustom(cast)) return false;
+            if (!ssHasCast(cast)) return false;
             if (ssDuplicates(cast)) return false;
             const n = ssSelectable(pool).length;
             if (ssUi.seedObjectRelation !== 'none' && n < 2) return false;
@@ -4532,6 +4687,7 @@
             return {
                 _creator_sid: 0,
                 _from_target_menu: true,
+                _source: menuSourceOf(opt),
                 _intent: intent,
                 _style: ssUi.style || 'normally',
                 _method: tag,
@@ -4642,6 +4798,8 @@
                 notifyPlayer('No matching animations for those tags.');
                 return;
             }
+            const src = menuSourceOf(pending.opt);
+            let executionFunctionName = pending.spec.executionFunctionName;
             const params = {
                 speaker: ssActorDict(pending.cast.subject),
                 intent: pending.intent,
@@ -4649,9 +4807,10 @@
                 setting_name: pending.settingName,
                 tags: resolved,
                 direction: pending.direction,
-                executionFunctionName: pending.spec.executionFunctionName,
+                executionFunctionName,
                 parameterMapping: pending.spec.parameterMapping,
-                closeWebUI: true
+                closeWebUI: true,
+                _source: src
             };
             if (pending.cast.object)
                 params.target = ssActorDict(pending.cast.object);
@@ -4659,7 +4818,22 @@
                 params.participate = ssActorDict(pending.cast.third);
             if (pending.toVictim && pending.cast.object)
                 params.victim = ssActorDict(pending.cast.object);
-            firePapyrusOption(pending.opt, params);
+            // DOM consensual scene_start → DomObedience gate wrappers on SkyrimNet_DOM_Actions.
+            // Rape / to-victim stays on SexLab (ungated).
+            const optForFire = Object.assign({}, pending.opt);
+            if (src === 'dom' && !pending.toVictim
+                && String(executionFunctionName).indexOf('Nonconsensual') < 0) {
+                optForFire.plugin = 'SkyrimNet_DOM.esp';
+                optForFire.questFormId = '0x800';
+                optForFire.scriptName = 'SkyrimNet_DOM_Actions';
+                if (executionFunctionName === 'StartScene_Consensual_Two')
+                    params.executionFunctionName = 'WebUI_StartScene_Consensual_Two';
+                else if (executionFunctionName === 'StartScene_Consensual_Three')
+                    params.executionFunctionName = 'WebUI_StartScene_Consensual_Three';
+                else if (executionFunctionName === 'StartScene_Consensual_One')
+                    params.executionFunctionName = 'WebUI_StartScene_Consensual_One';
+            }
+            firePapyrusOption(optForFire, params);
             ssCloseIntentPanel();
             if (typeof hidePanel === 'function') {
                 hidePanel('target_menu_panel');
@@ -4891,7 +5065,8 @@
                 if (startBtn.classList.contains('disabled')) return;
                 ssStart(opt);
             };
-            bar.appendChild(customBtn);
+            if (tmHasSceneCreatorPanel())
+                bar.appendChild(customBtn);
             bar.appendChild(startBtn);
             body.appendChild(bar);
             body.appendChild(fields);
@@ -5734,6 +5909,215 @@
             body.appendChild(fields);
         }
 
+        function fieldsPanelSpec(opt) {
+            return (opt && (opt.panelFields || opt.panelfields)) || [];
+        }
+
+        function fieldsEnsure(opt) {
+            const key = String((opt && opt.executionFunctionName) || '') + '|' + String((opt && opt.label) || '');
+            const defaults = (opt && (opt.panelDefaults || opt.paneldefaults)) || {};
+            if (fieldsUi.key !== key) {
+                fieldsUi = { key: key, values: {} };
+                Object.keys(defaults).forEach((k) => {
+                    fieldsUi.values[k] = String(defaults[k]);
+                });
+                fieldsPanelSpec(opt).forEach((f) => {
+                    if (!f || !f.name) return;
+                    if (fieldsUi.values[f.name] != null && fieldsUi.values[f.name] !== '')
+                        return;
+                    const opts = Array.isArray(f.options) ? f.options : [];
+                    const first = opts[0];
+                    fieldsUi.values[f.name] = first
+                        ? String(first.value != null ? first.value : (first.id != null ? first.id : (first.label || '')))
+                        : '';
+                });
+            }
+            return fieldsUi.values;
+        }
+
+        function fieldApplyOnChange(f) {
+            return !!(f && (f.applyOnChange || f.applyonchange));
+        }
+
+        function fieldOptionOpensText(o) {
+            return !!(o && (o.opensText || o.openstext));
+        }
+
+        function fieldsTextState() {
+            if (!fieldsUi.text)
+                fieldsUi.text = { fieldName: '', before: '', seed: '', title: '' };
+            return fieldsUi.text;
+        }
+
+        function fieldsEnsureTextPanel() {
+            let el = document.getElementById('fields-text-panel');
+            if (el) return el;
+            const host = document.getElementById('overlay-panels') || document.body;
+            el = document.createElement('div');
+            el.id = 'fields-text-panel';
+            el.className = 'panel';
+            el.style.display = 'none';
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.id = 'fields-text-panel-title';
+            header.textContent = 'custom';
+            el.appendChild(header);
+            const input = document.createElement('input');
+            input.id = 'fields-text-panel-input';
+            input.type = 'text';
+            el.appendChild(input);
+            const bar = document.createElement('div');
+            bar.className = 'bottom-bar';
+            const cancel = document.createElement('div');
+            cancel.className = 'option-cancel';
+            cancel.textContent = 'Cancel';
+            cancel.onclick = () => fieldsTextCancel();
+            const ok = document.createElement('div');
+            ok.className = 'action-btn';
+            ok.textContent = 'Ok';
+            ok.onclick = () => fieldsTextOk();
+            bar.appendChild(cancel);
+            bar.appendChild(ok);
+            el.appendChild(bar);
+            host.appendChild(el);
+            return el;
+        }
+
+        function fieldsOpenTextPanel(fieldName, title, seed) {
+            const st = fieldsTextState();
+            st.fieldName = fieldName;
+            st.title = title || fieldName || 'custom';
+            st.seed = seed || '';
+            const el = fieldsEnsureTextPanel();
+            const header = document.getElementById('fields-text-panel-title');
+            if (header) header.textContent = st.title;
+            const input = document.getElementById('fields-text-panel-input');
+            if (input) input.value = st.seed;
+            el.style.display = 'block';
+            if (input) {
+                try { input.focus(); input.select(); } catch (e) {}
+            }
+        }
+
+        function fieldsCloseTextPanel() {
+            const el = document.getElementById('fields-text-panel');
+            if (el) el.style.display = 'none';
+        }
+
+        function fieldsTextCancel() {
+            const st = fieldsTextState();
+            const values = fieldsUi.values || {};
+            if (st.fieldName)
+                values[st.fieldName] = st.before;
+            fieldsCloseTextPanel();
+            renderPapyrusPanel();
+        }
+
+        function fieldsTextOk() {
+            const st = fieldsTextState();
+            const input = document.getElementById('fields-text-panel-input');
+            const typed = String((input && input.value) || '').trim();
+            const values = fieldsUi.values || {};
+            if (!typed) {
+                fieldsTextCancel();
+                return;
+            }
+            if (st.fieldName)
+                values[st.fieldName] = typed;
+            fieldsCloseTextPanel();
+            renderPapyrusPanel();
+        }
+
+        function renderFieldsPanelBody(body, opt) {
+            const values = fieldsEnsure(opt);
+            const spec = fieldsPanelSpec(opt);
+            const applyOnly = spec.length > 0 && spec.every((f) => fieldApplyOnChange(f));
+            if (!applyOnly) {
+                const bar = document.createElement('div');
+                bar.className = 'bottom-bar top-bar';
+                const startBtn = document.createElement('div');
+                startBtn.className = 'action-btn';
+                startBtn.textContent = 'Start';
+                startBtn.onclick = () => {
+                    // Block Start while a fields text panel is open, or if any
+                    // opensText sentinel ("custom") is still the raw value.
+                    const textEl = document.getElementById('fields-text-panel');
+                    if (textEl && textEl.style.display === 'block')
+                        return;
+                    const blocked = spec.some((f) => {
+                        if (!f || !f.name) return false;
+                        const v = String(values[f.name] != null ? values[f.name] : '');
+                        if (!v) return false;
+                        const opts = Array.isArray(f.options) ? f.options : [];
+                        const match = opts.find((o) => o && String(o.value != null ? o.value : o.id) === v);
+                        return fieldOptionOpensText(match);
+                    });
+                    if (blocked) return;
+                    firePapyrusOption(opt, Object.assign({}, values));
+                };
+                bar.appendChild(startBtn);
+                body.appendChild(bar);
+            }
+
+            const fields = document.createElement('div');
+            fields.className = 'labeled-fields';
+            spec.forEach((f) => {
+                if (!f || !f.name) return;
+                const field = document.createElement('div');
+                field.className = 'dyn-field';
+                const lab = document.createElement('label');
+                lab.textContent = f.label || f.name;
+                field.appendChild(lab);
+                const opts = Array.isArray(f.options) ? f.options : [];
+                const labels = opts.map((o) => String((o && (o.label || o.value || o.id)) || ''));
+                const rawVals = opts.map((o) => String((o && (o.value != null ? o.value : (o.id != null ? o.id : o.label))) || ''));
+                const cur = String(values[f.name] != null ? values[f.name] : '');
+                let idx = rawVals.indexOf(cur);
+                if (idx < 0) idx = labels.indexOf(cur);
+                let curLabel = '';
+                if (idx >= 0) {
+                    curLabel = labels[idx] || labels[0] || '';
+                } else if (cur) {
+                    // Typed custom value: show it and inject into the pulldown list.
+                    curLabel = cur;
+                    if (labels.indexOf(cur) < 0) {
+                        labels.push(cur);
+                        rawVals.push(cur);
+                        idx = labels.length - 1;
+                    }
+                } else {
+                    idx = 0;
+                    curLabel = labels[0] || '';
+                }
+                field.appendChild(createPulldown(labels, curLabel, (picked, pickIdx) => {
+                    const o = (pickIdx != null && pickIdx >= 0 && pickIdx < opts.length)
+                        ? opts[pickIdx]
+                        : null;
+                    const v = (pickIdx != null && pickIdx >= 0 && pickIdx < rawVals.length)
+                        ? rawVals[pickIdx]
+                        : picked;
+                    const byVal = opts.find((x) => x && String(x.value != null ? x.value : (x.id != null ? x.id : x.label)) === String(v));
+                    if (fieldOptionOpensText(o) || fieldOptionOpensText(byVal)) {
+                        const st = fieldsTextState();
+                        st.before = String(values[f.name] != null ? values[f.name] : '');
+                        // Do not stash sentinel "custom"; Start must receive typed text only.
+                        values[f.name] = st.before;
+                        const seed = (st.before && rawVals.indexOf(st.before) < 0
+                            && String(st.before).toLowerCase() !== 'custom')
+                            ? st.before
+                            : '';
+                        fieldsOpenTextPanel(f.name, f.label || f.name, seed);
+                        return;
+                    }
+                    values[f.name] = v;
+                    if (fieldApplyOnChange(f))
+                        firePapyrusOption(opt, Object.assign({}, values));
+                }));
+                fields.appendChild(field);
+            });
+            body.appendChild(fields);
+        }
+
         function renderPapyrusPanel() {
             const host = document.getElementById('target-cascade-host');
             if (!host) return;
@@ -5745,7 +6129,8 @@
             panel.className = 'panel target-papyrus-panel';
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
-                || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop';
+                || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop'
+                || kind === 'fields';
             if (!skipHeader) {
                 const header = document.createElement('div');
                 header.className = 'section-header';
@@ -5757,6 +6142,13 @@
 
             if (kind === 'scene_start' || kind === 'cuddle') {
                 renderSceneStartPanelBody(body, opt);
+                panel.appendChild(body);
+                host.appendChild(panel);
+                return;
+            }
+
+            if (kind === 'fields') {
+                renderFieldsPanelBody(body, opt);
                 panel.appendChild(body);
                 host.appendChild(panel);
                 return;
@@ -5805,20 +6197,54 @@
             renderTargetMenu();
         }
 
+        function expandPulldownOptions(opt) {
+            const from = String((opt && opt.optionsFrom) || '').toLowerCase();
+            const opts = (opt && Array.isArray(opt.options)) ? opt.options.slice() : [];
+            if (from !== 'nearby_actors')
+                return opts;
+            const tmpl = opt.optionTemplate || {};
+            let curFid = 0;
+            try {
+                const cur = (typeof controlActorCurrentEntry === 'function') ? controlActorCurrentEntry() : null;
+                curFid = cur ? formIdU32(cur.formId) : 0;
+            } catch (e) { curFid = 0; }
+            const playerFid = (typeof playerActor !== 'undefined' && playerActor) ? formIdU32(playerActor.formId) : 0;
+            (nearbyActors || []).forEach((a) => {
+                if (!a) return;
+                const fid = formIdU32(a.formId);
+                if (!fid || fid === curFid || fid === playerFid) return;
+                if (a.selectable === false) return;
+                const cloned = JSON.parse(JSON.stringify(tmpl));
+                cloned.type = cloned.type || 'papyrus';
+                cloned.label = a.name || a.label || String(fid);
+                cloned.parameterMapping = (cloned.parameterMapping || []).map((p) => {
+                    if (p && p.type === 'optionActor')
+                        return { type: 'static', name: p.name, value: String(fid) };
+                    return p;
+                });
+                opts.push(cloned);
+            });
+            return opts;
+        }
+
         function fillPulldownPanelBody(listEl, opt, depthIndex) {
             listEl.innerHTML = '';
-            for (const entry of (opt.options || [])) {
+            const asButton = pulldownLayoutButtons(opt);
+            if (asButton)
+                listEl.className = 'pulldown-btn-list';
+            for (const raw of expandPulldownOptions(opt)) {
+                const entry = optionWithInheritedSource(raw, opt);
                 if (entry.type === 'pulldown') {
-                    listEl.appendChild(makeNestedPulldownRow(entry, depthIndex));
+                    listEl.appendChild(makeNestedPulldownRow(entry, depthIndex, asButton));
                     continue;
                 }
                 if (entry.type === 'papyrus') {
                     const row = document.createElement('div');
-                    row.className = 'option';
-                    row.textContent = displayLabel(entry);
+                    row.className = asButton ? 'action-btn' : 'option';
+                    decorateTargetOption(row, entry);
                     row.onclick = () => {
                         navStack = navStack.slice(0, depthIndex + 1);
-                        selectPapyrusOption(entry);
+                        selectPapyrusOption(entry, true);
                     };
                     listEl.appendChild(row);
                     continue;
@@ -5832,11 +6258,12 @@
                     entry.name,
                     selectedActionName === entry.name,
                     () => {
-                        // Keep panels up through this depth; drop deeper nestings.
                         navStack = navStack.slice(0, depthIndex + 1);
                         leftSelectedOpt = navStack[0] || leftSelectedOpt;
                     },
-                    entry.parameters || null
+                    entry.parameters || null,
+                    false,
+                    sourceOf(entry)
                 ));
             }
         }
@@ -5854,7 +6281,8 @@
                 if (!opt || opt.type !== 'pulldown') continue;
 
                 const panel = document.createElement('div');
-                panel.className = 'panel target-pulldown-panel';
+                panel.className = 'panel target-pulldown-panel'
+                    + (pulldownLayoutButtons(opt) ? ' layout-buttons' : '');
 
                 const header = document.createElement('div');
                 header.className = 'section-header';
@@ -6481,6 +6909,7 @@
                 this.scene_sid = -1;
                 this.creator_sid = 0;
                 this.from_target_menu = false;
+                this.menu_source = 'sexlab';
                 this.intent = '';
                 this.style = 'normally';
                 this.method = '';
@@ -6532,6 +6961,10 @@
                 this.scene_sid = state._scene_sid != null ? state._scene_sid : (this.mode === 'active' ? 0 : -1);
                 this.creator_sid = state._creator_sid != null ? state._creator_sid : 0;
                 if (state._from_target_menu != null) this.from_target_menu = !!state._from_target_menu;
+                if (state._source != null) {
+                    const s = String(state._source || '').trim().toLowerCase();
+                    this.menu_source = s === 'dom' ? 'dom' : 'sexlab';
+                }
                 if (state._intent != null) this.intent = state._intent || '';
                 if (state._style != null) this.style = state._style || 'normally';
                 if (state._method != null) this.method = state._method || '';
@@ -6587,6 +7020,7 @@
                     _scene_sid: this.scene_sid,
                     _creator_sid: this.creator_sid,
                     _from_target_menu: this.from_target_menu ? 1 : 0,
+                    _source: this.menu_source === 'dom' ? 'dom' : 'sexlab',
                     _intent: this.intent,
                     _style: this.style,
                     _method: this.method,
@@ -6691,6 +7125,7 @@
             SC.creator_sid = info.creator_sid;
             SC.scene_sid = info.scene_sid;
             SC.from_target_menu = !!info.from_target_menu;
+            SC.menu_source = info.menu_source === 'dom' ? 'dom' : 'sexlab';
             SC.intent = info.intent;
             SC.style = info.style || 'normally';
             SC.method = info.method;
@@ -6731,6 +7166,7 @@
             info.stages = sceneInfoClone(SC.stages || []);
             info.event_hook = SC.event_hook || '';
             info.from_target_menu = !!SC.from_target_menu;
+            info.menu_source = SC.menu_source === 'dom' ? 'dom' : 'sexlab';
             info.creator_sid = SC.creator_sid;
             info.scene_sid = SC.scene_sid;
             info.mode = SC.mode;
@@ -6826,6 +7262,7 @@
             scene_sid: -1,
             mode: 'creator',
             from_target_menu: false,
+            menu_source: 'sexlab',
             intent: '',
             style: 'normally',
             method: '',
@@ -6921,6 +7358,13 @@
             applySceneConnectionFromInfo(info);
             copySceneInfoToSC(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
+            if (state._source != null) {
+                const s = String(state._source || '').trim().toLowerCase();
+                SC.menu_source = s === 'dom' ? 'dom' : 'sexlab';
+            } else if (state._from_target_menu) {
+                // Root Custom / C++ seed without _source → sexlab
+                SC.menu_source = SC.menu_source || 'sexlab';
+            }
             SC.deselectedRegistries = [];
             SC.lastAnimRegistries = [];
             SC.tagType = 'any';
@@ -8029,6 +8473,7 @@
                 _action: action,
                 _creator_sid: SC.creator_sid,
                 _from_target_menu: !!SC.from_target_menu,
+                _source: SC.menu_source === 'dom' ? 'dom' : 'sexlab',
                 _intent: document.getElementById('sc-intent').value || SC.intent,
                 _style: SC.style,
                 _method: SC.method,

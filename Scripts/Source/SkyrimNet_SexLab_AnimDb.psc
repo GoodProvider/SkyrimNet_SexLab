@@ -14,6 +14,7 @@ String Function AnimDb_QueryTopNAnims(String filter_json, int n) global native
 String Function AnimDb_QueryTopNTags(String filter_json, int n) global native
 int Function AnimDb_TotalEnabled() global native
 int Function AnimDb_TotalCount() global native
+Bool Function AnimDb_NeedsEventBackfill() global native
 String Function AnimDb_GetByRegistry(String registry) global native
 String Function AnimDb_GetStageDescription(String registry, int stage) global native
 String Function AnimDb_GetTransition(String registry, int from_stage, int to_stage) global native
@@ -21,6 +22,7 @@ String Function AnimDb_SubstituteActors(String desc, String actors_json) global 
 Bool Function AnimDb_SaveAnimLocal(String registry, String json) global native
 String Function AnimDb_ResolveTags(String tags_csv, int actor_count) global native
 Bool Function AnimDb_CsvHasTag(String tags_csv, String tag) global native
+String Function AnimDb_DumpAniDescriber(String registry) global native
 
 int BATCH_SIZE = 48
 int walk_index = 0
@@ -100,6 +102,11 @@ Function PromptAlignmentIfNeeded()
     int sl_count = RefreshSlotCounts()
     int db_count = AnimDb_TotalCount()
     if db_count == sl_count
+        if AnimDb_NeedsEventBackfill()
+            Trace("PromptAlignmentIfNeeded", "anim_events missing — forcing AnimDB rebuild", True)
+            StartSync(True)
+            return
+        endif
         Trace("PromptAlignmentIfNeeded", "aligned db_count="+db_count+" registered="+sl_count)
         return
     endif
@@ -171,6 +178,10 @@ EndFunction
 Function BeginWalk()
     UnregisterForModEvent("SexLabEnabled")
     RefreshSlotCounts()
+    if AnimDb_NeedsEventBackfill()
+        walk_force = True
+        Trace("BeginWalk", "anim_events missing — forcing rebuild")
+    endif
     if !walk_force
         int db_count = AnimDb_TotalCount()
         if db_count == walk_slots_total
@@ -389,6 +400,30 @@ String Function BuildAnimJson(sslBaseAnimation anim, int source)
     endwhile
     tags_json += "]"
 
+    String events_json = "["
+    i = 0
+    while i < pos_count
+        if i > 0
+            events_json += ","
+        endif
+        events_json += "["
+        int s = 1
+        while s <= stage_count
+            if s > 1
+                events_json += ","
+            endif
+            String ev = anim.FetchPositionStage(i, s)
+            if !ev
+                ev = ""
+            endif
+            events_json += "\""+EscapeJson(ev)+"\""
+            s += 1
+        endwhile
+        events_json += "]"
+        i += 1
+    endwhile
+    events_json += "]"
+
     return "{\"_registry\":\""+EscapeJson(registry)+"\""\
         +",\"_name\":\""+EscapeJson(name)+"\""\
         +",\"_enabled\":"+enabled\
@@ -403,7 +438,8 @@ String Function BuildAnimJson(sslBaseAnimation anim, int source)
         +",\"_race_type\":\""+EscapeJson(race_type)+"\""\
         +",\"_pos_genders\":"+pos_genders\
         +",\"_pos_race_keys\":"+pos_race\
-        +",\"_tags\":"+tags_json+"}"
+        +",\"_tags\":"+tags_json\
+        +",\"_anim_events\":"+events_json+"}"
 EndFunction
 
 String Function EscapeJson(String s) global
@@ -470,6 +506,10 @@ Bool Function CsvHasTag(String tags_csv, String tag)
     return AnimDb_CsvHasTag(tags_csv, tag)
 EndFunction
 
+String Function DumpAniDescriber(String registry)
+    return AnimDb_DumpAniDescriber(registry)
+EndFunction
+
 ; ---- Replacements for former Stages APIs ----
 
 Bool Property hide_help = false Auto
@@ -485,14 +525,6 @@ String Function GetThreadStageDescription(sslThreadController thread, int stage_
     endif
     String reg = thread.animation.Registry
     String desc = AnimDb_GetStageDescription(reg, stage)
-    if desc == "" && stage > 1
-        ; fall back to earlier stages like old editor
-        int s = stage - 1
-        while s >= 1 && desc == ""
-            desc = AnimDb_GetStageDescription(reg, s)
-            s -= 1
-        endwhile
-    endif
     if desc == ""
         return ""
     endif

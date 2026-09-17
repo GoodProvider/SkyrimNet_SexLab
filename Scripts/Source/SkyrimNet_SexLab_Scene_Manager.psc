@@ -715,6 +715,22 @@ Function WebUI_OnSceneCreatorHandoff(String json)
         endif
     endif
     String style = JMap.getStr(obj, "_style", "normally")
+    String menu_source = JMap.getStr(obj, "_source", "sexlab")
+    Trace("WebUI_OnSceneCreatorHandoff", "source:"+menu_source+" actors:"+valid+" intent:"+intent)
+
+    if menu_source == "dom"
+        if Game.GetModByName("SkyrimNet_DOM.esp") != 255
+            Int gate = SkyrimNet_DOM_Obedience.TryOrderSexCast(Game.GetPlayer(), actors, tags)
+            if gate == 0
+                JValue.release(obj)
+                Trace("WebUI_OnSceneCreatorHandoff", "DomObedience refused")
+                return
+            endif
+        else
+            Trace("WebUI_OnSceneCreatorHandoff", "source=dom but SkyrimNet_DOM.esp missing — ungated")
+        endif
+    endif
+
     Actor speaker = actors[0]
     Actor target = None
     if actors.length >= 2

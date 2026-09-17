@@ -1,4 +1,5 @@
 #include "AnimationDB.h"
+#include "AniDescriber.h"
 #include "WebUI_Log.h"
 
 #include <Windows.h>
@@ -58,6 +59,37 @@ namespace AnimationDB
                 if (el.is_string())
                     out.push_back(ToLower(el.get<std::string>()));
             }
+            return out;
+        }
+
+        std::vector<std::string> JsonToVecStrRaw(const nlohmann::json& j)
+        {
+            std::vector<std::string> out;
+            if (!j.is_array())
+                return out;
+            for (const auto& el : j) {
+                if (el.is_string())
+                    out.push_back(el.get<std::string>());
+            }
+            return out;
+        }
+
+        std::vector<std::vector<std::string>> JsonToEvents(const nlohmann::json& j)
+        {
+            std::vector<std::vector<std::string>> out;
+            if (!j.is_array())
+                return out;
+            for (const auto& pos : j) {
+                out.push_back(JsonToVecStrRaw(pos));
+            }
+            return out;
+        }
+
+        nlohmann::json EventsToJson(const std::vector<std::vector<std::string>>& events)
+        {
+            nlohmann::json out = nlohmann::json::array();
+            for (const auto& pos : events)
+                out.push_back(pos);
             return out;
         }
 
@@ -195,6 +227,12 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             if (!EnsureColumn("animations", "file_tags", "TEXT"))
                 return false;
             if (!EnsureColumn("animations", "creator", "TEXT"))
+                return false;
+            if (!EnsureColumn("animations", "anim_events", "TEXT"))
+                return false;
+            if (!EnsureColumn("animations", "orgasm_authored", "INTEGER"))
+                return false;
+            if (!EnsureColumn("animations", "speaking_authored", "TEXT"))
                 return false;
             return true;
         }
@@ -376,7 +414,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 "SELECT registry,name,enabled,source,position_count,stage_count,males,females,"
                 "male_creatures,female_creatures,has_creature,race_type,pos_genders,pos_race_keys,"
                 "tags,pos_no_orgasm,pos_speaking_modifiers,stage_descriptions,stage_has_description,sync_gen,"
-                "pos_clothed,stage_speaking,stage_clothed,stage_tags,transitions,file_tags,creator "
+                "pos_clothed,stage_speaking,stage_clothed,stage_tags,transitions,file_tags,creator,"
+                "anim_events,orgasm_authored,speaking_authored "
                 "FROM animations";
             if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
                 return;
@@ -434,6 +473,13 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 } catch (...) {
                 }
                 row.creator = col(26);
+                try {
+                    row.anim_events = JsonToEvents(nlohmann::json::parse(col(27).empty() ? "[]" : col(27)));
+                    row.orgasm_authored = sqlite3_column_int(stmt, 28) != 0;
+                    row.speaking_authored =
+                        JsonToVecInt(nlohmann::json::parse(col(29).empty() ? "[]" : col(29)));
+                } catch (...) {
+                }
                 g_rows[row.registry] = std::move(row);
             }
             sqlite3_finalize(stmt);
@@ -447,8 +493,9 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 "INSERT INTO animations(registry,name,enabled,source,position_count,stage_count,males,females,"
                 "male_creatures,female_creatures,has_creature,race_type,pos_genders,pos_race_keys,tags,"
                 "pos_no_orgasm,pos_speaking_modifiers,stage_descriptions,stage_has_description,sync_gen,"
-                "pos_clothed,stage_speaking,stage_clothed,stage_tags,transitions,file_tags,creator) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "pos_clothed,stage_speaking,stage_clothed,stage_tags,transitions,file_tags,creator,"
+                "anim_events,orgasm_authored,speaking_authored) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(registry) DO UPDATE SET "
                 "name=excluded.name,enabled=excluded.enabled,source=excluded.source,"
                 "position_count=excluded.position_count,stage_count=excluded.stage_count,"
@@ -461,7 +508,9 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 "stage_has_description=excluded.stage_has_description,sync_gen=excluded.sync_gen,"
                 "pos_clothed=excluded.pos_clothed,stage_speaking=excluded.stage_speaking,"
                 "stage_clothed=excluded.stage_clothed,stage_tags=excluded.stage_tags,"
-                "transitions=excluded.transitions,file_tags=excluded.file_tags,creator=excluded.creator";
+                "transitions=excluded.transitions,file_tags=excluded.file_tags,creator=excluded.creator,"
+                "anim_events=excluded.anim_events,orgasm_authored=excluded.orgasm_authored,"
+                "speaking_authored=excluded.speaking_authored";
             if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
                 return;
 
@@ -500,6 +549,9 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             bind_text(JsonDump(row.transitions.is_object() ? row.transitions : nlohmann::json::object()));
             bind_text(JsonDump(VecStrToJson(row.file_tags)));
             bind_text(row.creator);
+            bind_text(JsonDump(EventsToJson(row.anim_events)));
+            sqlite3_bind_int(stmt, i++, row.orgasm_authored ? 1 : 0);
+            bind_text(JsonDump(VecIntToJson(row.speaking_authored)));
             sqlite3_step(stmt);
             sqlite3_finalize(stmt);
 
@@ -673,8 +725,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             row.stage_clothed.clear();
             row.stage_tags.clear();
 
-            // Resolved carry state (animation-level seeds like stage 0).
-            std::string last_desc;
+            // Resolved carry state for speaking/clothed/tags (animation-level seeds like stage 0).
+            // Descriptions do not carry forward — missing stages go to AniDescriber.
             bool have_speaking = anim_speaking_present;
             std::vector<std::string> cur_speaking = anim_speaking_present ? *anim_speaking : std::vector<std::string>{};
             bool have_clothed = anim_clothed_present;
@@ -689,9 +741,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 auto sit = stages.find(s);
                 if (sit != stages.end()) {
                     const StageRaw& r = sit->second;
-                    // description: empty string = absent
                     if (r.has_desc && !r.desc.empty())
-                        last_desc = r.desc;
+                        row.stage_descriptions[s] = r.desc;
                     if (r.has_speaking) {
                         have_speaking = true;
                         cur_speaking = r.speaking;
@@ -705,8 +756,6 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                         cur_tags = r.tags;
                     }
                 }
-                if (!last_desc.empty())
-                    row.stage_descriptions[s] = last_desc;
                 if (have_speaking)
                     row.stage_speaking[s] = cur_speaking;
                 if (have_clothed)
@@ -1081,6 +1130,60 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         return out;
     }
 
+    void ApplyGeneratedFill(const std::string& registry, const std::vector<int>& orgasm_expected,
+        const std::vector<std::string>& speaking_extra)
+    {
+        std::lock_guard lock(g_mutex);
+        auto it = g_rows.find(ToLower(registry));
+        if (it == g_rows.end())
+            return;
+        AnimRow& row = it->second;
+        bool changed = false;
+        if (!row.orgasm_authored && !orgasm_expected.empty() &&
+            static_cast<int>(orgasm_expected.size()) == row.position_count) {
+            if (row.pos_no_orgasm.size() != orgasm_expected.size())
+                row.pos_no_orgasm.assign(orgasm_expected.size(), 1);
+            for (size_t i = 0; i < orgasm_expected.size(); ++i) {
+                const int no = orgasm_expected[i] ? 0 : 1;
+                if (row.pos_no_orgasm[i] != no) {
+                    row.pos_no_orgasm[i] = no;
+                    changed = true;
+                }
+            }
+        }
+        auto merge_csv = [](const std::string& base, const std::string& extra) {
+            if (extra.empty())
+                return base;
+            auto have = SplitCsv(base);
+            auto add = SplitCsv(extra);
+            std::string out = base;
+            for (const auto& tok : add) {
+                if (std::find(have.begin(), have.end(), tok) != have.end())
+                    continue;
+                if (!out.empty())
+                    out += ',';
+                out += tok;
+                have.push_back(tok);
+            }
+            return out;
+        };
+        if (row.pos_speaking_modifiers.size() < static_cast<size_t>(row.position_count))
+            row.pos_speaking_modifiers.resize(static_cast<size_t>(row.position_count));
+        for (size_t i = 0; i < speaking_extra.size() && i < row.pos_speaking_modifiers.size(); ++i) {
+            if (i < row.speaking_authored.size() && row.speaking_authored[i])
+                continue;
+            auto merged = merge_csv(row.pos_speaking_modifiers[i], speaking_extra[i]);
+            if (merged != row.pos_speaking_modifiers[i]) {
+                row.pos_speaking_modifiers[i] = merged;
+                changed = true;
+            }
+        }
+        if (changed && row.stage_count >= 1)
+            row.stage_speaking[1] = row.pos_speaking_modifiers;
+        if (changed)
+            UpsertRowLocked(row);
+    }
+
     void InferSpeakingModifiers(const std::vector<int>& pos_no_orgasm,
         const std::unordered_set<std::string>& tags, std::vector<std::string>& out_csv_per_pos)
     {
@@ -1142,6 +1245,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         }
         g_rows.clear();
         g_tag_to_regs.clear();
+        AniDescriber::Close();
     }
 
     bool IsOpen()
@@ -1162,6 +1266,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             Exec("DELETE FROM animation_tags");
             g_rows.clear();
             g_tag_to_regs.clear();
+            AniDescriber::InvalidateAll();
         }
         webui_log::info("AnimationDB: BeginSync gen={} force={}", g_sync_gen, force_rebuild);
         return g_sync_gen;
@@ -1225,6 +1330,11 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         else if (anim.contains("pos_race_keys"))
             row.pos_race_keys = JsonToVecStr(anim["pos_race_keys"]);
 
+        if (anim.contains("_anim_events"))
+            row.anim_events = JsonToEvents(anim["_anim_events"]);
+        else if (anim.contains("anim_events"))
+            row.anim_events = JsonToEvents(anim["anim_events"]);
+
         if (anim.contains("_tags") && anim["_tags"].is_array())
             row.tags = JsonToVecStr(anim["_tags"]);
         else if (anim.contains("tags") && anim["tags"].is_array())
@@ -1232,27 +1342,17 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         else if (anim.contains("_tags") && anim["_tags"].is_string())
             row.tags = SplitCsv(anim["_tags"].get<std::string>());
 
-        // skip if unchanged and not force
-        if (!g_force_rebuild) {
-            auto it = g_rows.find(row.registry);
-            if (it != g_rows.end()) {
-                // still touch sync_gen
-                bool same = it->second.name == row.name && it->second.tags == row.tags &&
-                            it->second.pos_genders == row.pos_genders &&
-                            it->second.position_count == row.position_count &&
-                            it->second.enabled == row.enabled;
-                if (same) {
-                    it->second.sync_gen = g_sync_gen;
-                    UpsertRowLocked(it->second);
-                    return true;
-                }
-            }
+        if (auto old = g_rows.find(row.registry); old != g_rows.end()) {
+            if (old->second.anim_events != row.anim_events)
+                AniDescriber::Invalidate(row.registry);
         }
 
         std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
         std::optional<std::vector<int>> orgasm_file;
         std::vector<char> speaking_from_file;
         LoadAnimJson(row.registry, row.name, row, orgasm_file, &speaking_from_file);
+        row.orgasm_authored = orgasm_file.has_value();
+        row.speaking_authored.assign(speaking_from_file.begin(), speaking_from_file.end());
 
         auto orgasm = InferOrgasmExpected(row.position_count, row.pos_genders, tagset, orgasm_file);
         row.pos_no_orgasm.resize(orgasm.size());
@@ -1373,6 +1473,29 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         return static_cast<int>(g_rows.size());
     }
 
+    bool NeedsEventBackfill()
+    {
+        std::lock_guard lock(g_mutex);
+        auto events_missing = [](const AnimRow& row) -> bool {
+            if (row.position_count <= 0 || row.stage_count <= 0)
+                return false;
+            if (row.anim_events.empty())
+                return true;
+            if (static_cast<int>(row.anim_events.size()) < row.position_count)
+                return true;
+            for (int p = 0; p < row.position_count; ++p) {
+                if (row.anim_events[static_cast<size_t>(p)].empty())
+                    return true;
+            }
+            return false;
+        };
+        for (const auto& [_, row] : g_rows) {
+            if (events_missing(row))
+                return true;
+        }
+        return false;
+    }
+
     std::optional<AnimRow> GetByRegistry(const std::string& registry)
     {
         std::lock_guard lock(g_mutex);
@@ -1388,9 +1511,11 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         if (!row)
             return {};
         auto it = row->stage_descriptions.find(stage);
-        if (it == row->stage_descriptions.end())
-            return {};
-        return it->second;
+        if (it != row->stage_descriptions.end() && !it->second.empty()) {
+            AniDescriber::Ensure(*row);
+            return it->second;
+        }
+        return AniDescriber::Describe(registry, stage);
     }
 
     std::string GetTransition(const std::string& registry, int from_stage, int to_stage)
@@ -1540,6 +1665,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 row.pos_no_orgasm.resize(ov.size());
                 for (size_t i = 0; i < ov.size(); ++i)
                     row.pos_no_orgasm[i] = 1 - ov[i];
+                row.orgasm_authored = true;
             }
         }
         if (payload_l.contains("pos_no_orgasm") && payload_l["pos_no_orgasm"].is_array()) {
@@ -1548,6 +1674,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             for (int v : row.pos_no_orgasm)
                 ov.push_back(1 - v);
             file["orgasm_expected"] = ov;
+            row.orgasm_authored = true;
         }
 
         if (payload_l.contains("speaking_modifiers") && payload_l["speaking_modifiers"].is_array()) {
@@ -1555,6 +1682,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             if (parsed) {
                 file["speaking_modifiers"] = SpeakingCsvToNestedJson(*parsed);
                 row.pos_speaking_modifiers = *parsed;
+                row.speaking_authored.assign(parsed->size(), 1);
                 if (row.stage_count >= 1)
                     row.stage_speaking[1] = *parsed;
             }

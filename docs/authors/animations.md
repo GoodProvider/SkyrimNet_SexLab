@@ -24,7 +24,7 @@ ESC cancels cleanly. Save aborts if existing JSON fails to parse (avoids wiping 
 
 ## Fallback
 
-No stage description → tag-based. Current stage empty → last earlier stage with text.
+No authored stage description → [AniDescriber](../developers/anidescriber.md) (Havok pose/contacts). If that is empty (creature, missing clip) → tag-based. Missing stages are not copied from an earlier authored sentence.
 
 ## JSON format
 

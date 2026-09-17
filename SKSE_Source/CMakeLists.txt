@@ -57,7 +57,7 @@ include("${CommonLibPath}/cmake/CommonLibSSE.cmake")
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 # Collect all source files
-file(GLOB SOURCES
+file(GLOB SOURCES CONFIGURE_DEPENDS
     "src/*.cpp"
     "include/*.h"
     "version.rc"

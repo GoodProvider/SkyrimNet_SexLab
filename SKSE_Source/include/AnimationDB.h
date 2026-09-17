@@ -33,7 +33,7 @@ namespace AnimationDB
         std::vector<int> pos_no_orgasm;
         std::vector<std::string> pos_speaking_modifiers; // CSV-per-position (stage 1 resolved; Papyrus compat)
         std::vector<int> pos_clothed;                    // 0/1 per position (stage 1 resolved)
-        std::unordered_map<int, std::string> stage_descriptions; // resolved (carry-forward)
+        std::unordered_map<int, std::string> stage_descriptions; // authored non-empty only
         std::vector<int> stage_has_description;
         /// Per-stage resolved speaking: stage → vector of CSV strings (one per actor).
         std::unordered_map<int, std::vector<std::string>> stage_speaking;
@@ -41,6 +41,10 @@ namespace AnimationDB
         std::unordered_map<int, std::vector<int>> stage_clothed;
         /// Per-stage resolved SNSL tags: stage → tag list.
         std::unordered_map<int, std::vector<std::string>> stage_tags;
+        /// [position][stage-1] SexLab FetchPositionStage events.
+        std::vector<std::vector<std::string>> anim_events;
+        bool orgasm_authored = false;
+        std::vector<int> speaking_authored; // 0/1 per position
         nlohmann::json transitions = nlohmann::json::object();
         std::vector<std::string> file_tags; // SNSL animation-level tags (not SexLab registry tags)
         std::string creator;
@@ -85,6 +89,8 @@ namespace AnimationDB
     std::vector<TagCount> QueryTopNTags(const FilterSpec& spec, int n);
     int TotalEnabledCount();
     int TotalCount();
+    /// True if any row with positions/stages lacks SexLab anim event names (post-ALTER empty column).
+    bool NeedsEventBackfill();
 
     std::optional<AnimRow> GetByRegistry(const std::string& registry);
     std::string GetStageDescription(const std::string& registry, int stage);
@@ -95,6 +101,10 @@ namespace AnimationDB
     std::vector<int> InferOrgasmExpected(int position_count, const std::vector<int>& pos_genders,
         const std::unordered_set<std::string>& tags,
         const std::optional<std::vector<int>>& file_override);
+
+    /// HKX-inferred orgasm / mouth speaking extras. Skips fields the anidata file authored.
+    void ApplyGeneratedFill(const std::string& registry, const std::vector<int>& orgasm_expected,
+        const std::vector<std::string>& speaking_extra);
 
     void InferSpeakingModifiers(const std::vector<int>& pos_no_orgasm,
         const std::unordered_set<std::string>& tags,

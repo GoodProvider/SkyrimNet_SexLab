@@ -30,28 +30,6 @@ namespace ActionCatalog
         bool g_animationPanelPreferredOpen = false;
         bool g_loaded = false;
 
-        struct ControlModeDef {
-            std::string id;
-            std::string label;
-            std::string requiresPlugin;
-            std::string catalogRoot;
-            std::string plugin;
-            std::uint32_t questFormId = 0;
-            std::string scriptName;
-            std::string openFunction;
-            std::string closeFunction;
-            nlohmann::json sentinels = nlohmann::json::array();
-            std::string rowClickMainPanel;
-            bool hideFramework = false;
-            bool builtin = false;
-            nlohmann::json actorOptions = nlohmann::json::object();
-            nlohmann::json mainPanels = nlohmann::json::array();
-        };
-
-        std::vector<ControlModeDef> g_modes;
-        std::string g_currentModeId = "sexlab";
-        std::string g_rememberedModeId = "sexlab";
-
         bool EqualsIgnoreCase(std::string_view a, std::string_view b)
         {
             if (a.size() != b.size())
@@ -324,6 +302,8 @@ namespace ActionCatalog
                 return dh->LookupForm<RE::TESFaction>(0xE50F, "SexLab.esm");
             if (EqualsIgnoreCase(name, "OStimActorCountFaction") && dh->LookupModByName("Ostim.esp"))
                 return dh->LookupForm<RE::TESFaction>(0xECA, "Ostim.esp");
+            if (EqualsIgnoreCase(name, "LeashedFaction") && dh->LookupModByName("Leash.esm"))
+                return dh->LookupForm<RE::TESFaction>(0xD6A, "Leash.esm");
             return nullptr;
         }
 
@@ -565,41 +545,11 @@ namespace ActionCatalog
             return {};
         }
 
-        ControlModeDef* FindModeById(const std::string& id)
-        {
-            for (auto& mode : g_modes) {
-                if (EqualsIgnoreCase(mode.id, id))
-                    return &mode;
-            }
-            return nullptr;
-        }
-
-        ControlModeDef* CurrentMode()
-        {
-            if (auto* m = FindModeById(g_currentModeId))
-                return m;
-            return FindModeById("sexlab");
-        }
-
-        bool ModeIsSexLab(const ControlModeDef* mode)
-        {
-            return mode && EqualsIgnoreCase(mode->id, "sexlab");
-        }
-
-        nlohmann::json& ActiveMainPanels()
-        {
-            if (auto* mode = CurrentMode()) {
-                if (!ModeIsSexLab(mode) && mode->mainPanels.is_array())
-                    return mode->mainPanels;
-            }
-            return g_mainPanels;
-        }
-
         const nlohmann::json* FindMainPanelByKey(const std::string& key)
         {
             if (key.empty())
                 return nullptr;
-            auto& panels = ActiveMainPanels();
+            auto& panels = g_mainPanels;
             if (!panels.is_array())
                 return nullptr;
             for (auto& entry : panels) {
@@ -810,13 +760,6 @@ namespace ActionCatalog
             return PapyrusBindings_WebUI::IsSexLabAnimatingFocus(PapyrusBindings_WebUI::Target_Current);
         }
 
-        std::filesystem::path ResolveDataDir()
-        {
-            auto webui = ResolveWebUIDir();
-            // .../Data/SKSE/Plugins/SkyrimNet_SexLab/webui
-            return webui.parent_path().parent_path().parent_path().parent_path();
-        }
-
         nlohmann::json LoadMainPanelFiles(const std::filesystem::path& mainPanelsDir)
         {
             nlohmann::json panels = nlohmann::json::array();
@@ -840,98 +783,8 @@ namespace ActionCatalog
             return panels;
         }
 
-        void LoadForeignModeCatalog(ControlModeDef& mode)
-        {
-            if (mode.catalogRoot.empty())
-                return;
-            const auto root = ResolveDataDir() / mode.catalogRoot;
-            const auto actorDir = root / "TargetMenu" / "Actor";
-            const auto actorDefaultsPath = actorDir / "defaults.json";
-            const auto actorOptionsDir = actorDir / "options";
-            const auto mainPanelsDir = root / "MainPanels";
-            if (!std::filesystem::is_directory(actorOptionsDir)) {
-                webui_log::warn("ActionCatalog: mode '{}' missing {}", mode.id, actorOptionsDir.string());
-                return;
-            }
-            auto actorDefaults = LoadDefaultsParameters(actorDefaultsPath);
-            auto actorOptionsArr = LoadOptionFiles(actorOptionsDir);
-            WalkOptionsForSynthesis(actorOptionsArr);
-            mode.actorOptions = nlohmann::json::object();
-            mode.actorOptions["defaultsParameters"] = std::move(actorDefaults);
-            mode.actorOptions["options"] = std::move(actorOptionsArr);
-            mode.mainPanels = LoadMainPanelFiles(mainPanelsDir);
-            webui_log::info(
-                "ActionCatalog mode '{}' loaded {} actor options, {} main panels from {}",
-                mode.id,
-                mode.actorOptions["options"].size(),
-                mode.mainPanels.size(),
-                root.string());
-        }
-
-        void LoadControlModes()
-        {
-            g_modes.clear();
-
-            ControlModeDef sexlab;
-            sexlab.id = "sexlab";
-            sexlab.label = "SkyrimNet SexLab";
-            sexlab.builtin = true;
-            sexlab.hideFramework = false;
-            sexlab.actorOptions = g_actorOptions;
-            sexlab.mainPanels = g_mainPanels;
-            g_modes.push_back(std::move(sexlab));
-
-            const auto controlDir = ResolveWebUIDir() / "ControlPanel";
-            for (const auto& path : SortedJsonFiles(controlDir)) {
-                auto raw = ReadFile(path);
-                if (raw.empty())
-                    continue;
-                nlohmann::json node;
-                try {
-                    node = nlohmann::json::parse(raw);
-                } catch (const std::exception& e) {
-                    webui_log::warn("ActionCatalog: bad ControlPanel {}: {}", path.string(), e.what());
-                    continue;
-                }
-                if (!node.is_object())
-                    continue;
-                ControlModeDef mode;
-                mode.id = node.value("id", "");
-                mode.label = node.value("label", mode.id);
-                mode.requiresPlugin = node.value("requiresPlugin", "");
-                mode.catalogRoot = node.value("catalogRoot", "");
-                mode.plugin = node.value("plugin", "");
-                if (node.contains("questFormId"))
-                    mode.questFormId = ParseFormId(node["questFormId"]);
-                mode.scriptName = node.value("scriptName", "");
-                mode.openFunction = node.value("openFunction", "");
-                mode.closeFunction = node.value("closeFunction", "");
-                mode.hideFramework = node.value("hideFramework", false);
-                mode.rowClickMainPanel = node.value("rowClickMainPanel", "");
-                if (node.contains("sentinels") && node["sentinels"].is_array())
-                    mode.sentinels = node["sentinels"];
-                if (mode.id.empty() || EqualsIgnoreCase(mode.id, "sexlab"))
-                    continue;
-                if (!PassesRequiresPlugin(node)) {
-                    webui_log::info("ActionCatalog: omitting mode '{}' (requiresPlugin)", mode.id);
-                    continue;
-                }
-                LoadForeignModeCatalog(mode);
-                g_modes.push_back(std::move(mode));
-            }
-
-            if (!FindModeById(g_rememberedModeId))
-                g_rememberedModeId = "sexlab";
-            g_currentModeId = g_rememberedModeId;
-            webui_log::info("ActionCatalog loaded {} ControlPanel modes; current={}", g_modes.size(), g_currentModeId);
-        }
-
         const nlohmann::json& ActiveTargetOptions()
         {
-            auto* mode = CurrentMode();
-            if (mode && !ModeIsSexLab(mode) && mode->actorOptions.is_object() &&
-                mode->actorOptions.contains("options"))
-                return mode->actorOptions;
             return FocusIsInSexLabScene() ? g_sceneOptions : g_actorOptions;
         }
     }
@@ -1037,7 +890,6 @@ namespace ActionCatalog
                 webui_log::warn("ActionCatalog: no MainPanels loaded from {}", mainPanelsDir.string());
 
             g_sceneSettings = LoadSceneSettings(dir);
-            LoadControlModes();
 
             g_loaded = true;
             webui_log::info(
@@ -1115,7 +967,7 @@ namespace ActionCatalog
             actionsObj[def.name] = a;
         }
 
-        if (actorCatalog && IsSexLabControlMode()) {
+        if (actorCatalog) {
             for (auto& ext : TargetMenuRegistry::All()) {
                 nlohmann::json opt = nlohmann::json::object();
                 opt["type"] = "action";
@@ -1153,9 +1005,8 @@ namespace ActionCatalog
 
         nlohmann::json catalog;
         nlohmann::json panels = nlohmann::json::array();
-        auto& src = ActiveMainPanels();
-        if (src.is_array()) {
-            for (auto& entry : src) {
+        if (g_mainPanels.is_array()) {
+            for (auto& entry : g_mainPanels) {
                 if (!entry.is_object())
                     continue;
                 if (!PassesRequiresPlugin(entry))
@@ -1166,17 +1017,7 @@ namespace ActionCatalog
         catalog["panels"] = std::move(panels);
         catalog["selected"] = g_currentMainPanelKey;
         catalog["sceneSettings"] = g_sceneSettings;
-        catalog["mode"] = g_currentModeId;
-        catalog["hideFramework"] = CurrentModeHidesFramework();
         catalog["sentinels"] = CurrentSentinels();
-        nlohmann::json modes = nlohmann::json::array();
-        for (auto& mode : g_modes) {
-            nlohmann::json m;
-            m["id"] = mode.id;
-            m["label"] = mode.label;
-            modes.push_back(std::move(m));
-        }
-        catalog["modes"] = std::move(modes);
         return catalog;
     }
 
@@ -1244,38 +1085,43 @@ namespace ActionCatalog
         }
     }
 
-    bool IsSexLabControlMode()
-    {
-        auto* mode = CurrentMode();
-        return !mode || ModeIsSexLab(mode);
-    }
-
-    std::string CurrentControlModeId()
-    {
-        return g_currentModeId;
-    }
-
     nlohmann::json CurrentSentinels()
     {
-        if (auto* mode = CurrentMode()) {
-            if (mode->sentinels.is_array())
-                return mode->sentinels;
+        nlohmann::json out = nlohmann::json::array();
+        if (!g_mainPanels.is_array())
+            return out;
+        for (auto& entry : g_mainPanels) {
+            if (!entry.is_object())
+                continue;
+            if (!PassesRequiresPlugin(entry))
+                continue;
+            if (!entry.contains("sentinels") || !entry["sentinels"].is_array())
+                continue;
+            for (auto& sentinel : entry["sentinels"])
+                out.push_back(sentinel);
         }
-        return nlohmann::json::array();
-    }
-
-    bool CurrentModeHidesFramework()
-    {
-        auto* mode = CurrentMode();
-        return mode && mode->hideFramework;
+        return out;
     }
 
     std::string CurrentRowClickMainPanel()
     {
-        auto* mode = CurrentMode();
-        if (!mode)
+        if (auto* cur = FindMainPanelByKey(g_currentMainPanelKey)) {
+            const auto fromCurrent = cur->value("rowClickMainPanel", "");
+            if (!fromCurrent.empty())
+                return fromCurrent;
+        }
+        if (!g_mainPanels.is_array())
             return {};
-        return mode->rowClickMainPanel;
+        for (auto& entry : g_mainPanels) {
+            if (!entry.is_object())
+                continue;
+            if (!PassesRequiresPlugin(entry))
+                continue;
+            const auto value = entry.value("rowClickMainPanel", "");
+            if (!value.empty())
+                return value;
+        }
+        return {};
     }
 
     std::string SentinelMainPanel(const std::string& sentinelId)
@@ -1292,37 +1138,5 @@ namespace ActionCatalog
                 return entry.value("mainPanel", "");
         }
         return {};
-    }
-
-    bool SwitchControlMode(const std::string& modeId)
-    {
-        if (!g_loaded)
-            Load();
-        auto* next = FindModeById(modeId);
-        if (!next) {
-            webui_log::warn("SwitchControlMode: unknown '{}'", modeId);
-            return false;
-        }
-        if (EqualsIgnoreCase(g_currentModeId, next->id)) {
-            WebUI_Invoke("configureControlPanel(" + BuildMainPanelsCatalog().dump() + ");");
-            return true;
-        }
-
-        ClearMainPanelSelection();
-        if (auto* prev = CurrentMode()) {
-            if (!prev->closeFunction.empty())
-                DispatchPapyrusNoArg(prev->plugin, prev->questFormId, prev->scriptName, prev->closeFunction);
-        }
-
-        g_currentModeId = next->id;
-        g_rememberedModeId = next->id;
-        webui_log::info("SwitchControlMode: {}", g_currentModeId);
-
-        WebUI_Invoke("configureControlPanel(" + BuildMainPanelsCatalog().dump() + ");");
-        WebUI_Invoke("configureTargetMenu(" + BuildUICatalog(false).dump() + ");");
-
-        if (!next->openFunction.empty())
-            DispatchPapyrusNoArg(next->plugin, next->questFormId, next->scriptName, next->openFunction);
-        return true;
     }
 }

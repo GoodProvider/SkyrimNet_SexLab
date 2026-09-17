@@ -16,7 +16,7 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 | `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Canonical action YAML + prompts (`manifest.json`; no settings schema). Pre-0.25 copies: `config/actions/`, `prompts/` |
 | `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/` | Settings schema (`Plugin_SkyrimNet_SexLab`, `sexlab.*`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/` | Scenes, animations, threads |
-| `SKSE_Source/` | C++ WebUI plugin |
+| `SKSE_Source/` | C++ WebUI plugin, AnimationDB, AniDescriber |
 
 ## Compile
 

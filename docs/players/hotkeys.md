@@ -11,7 +11,7 @@ Enable the optional hot key in the SkyrimNet dashboard plugin settings (**Enable
 - **Player rapes** / **rapes player**
 - OstimNet installed: swap SexLab vs OStim framework
 - Domination slave (`SkyrimNet_DOM.esp`): starts route through DOM handler APIs
-- **Leash** (`SkyrimNet_Leashed.esp`): opens the SkyrimNet_Leashed PrismaUI leash panel (same as that mod’s panel hotkey). Shown only when Leashed is loaded. Does not require Leashed’s own hotkey to be enabled. On the PrismaUI Target Menu, **leash** closes this overlay first, then opens Leashed.
+- **Leash** (`SkyrimNet_Leashed.esp`): opens the SkyrimNet_Leashed PrismaUI leash panel (same as that mod’s panel hotkey). Shown only when Leashed is loaded. Does not require Leashed’s own hotkey to be enabled. On the PrismaUI Target Menu, **leash** (target not collared) or **unleash** (target collared) closes this overlay first, then opens Leashed’s vertical bar.
 
 ## In SexLab animation
 
@@ -23,4 +23,4 @@ Stage JSON format: [../authors/animations.md](../authors/animations.md).
 
 ## WebUI menus
 
-In-game PrismaUI target / sex menus (SKSE DLL). Build and paths: [../developers/webui.md](../developers/webui.md). Target Menu **leash** (when `SkyrimNet_Leashed.esp` is loaded) hides this overlay and opens Leashed’s bar.
+In-game PrismaUI target / sex menus (SKSE DLL). Build and paths: [../developers/webui.md](../developers/webui.md). Target Menu **leash** / **unleash** (when `SkyrimNet_Leashed.esp` is loaded) hide this overlay and open Leashed’s vertical bar. The option JSON lives in the Leashed zip.
