@@ -24,7 +24,7 @@ ESC cancels cleanly. Save aborts if existing JSON fails to parse (avoids wiping 
 
 ## Fallback
 
-No stage description → tag-based. Current stage empty → last earlier stage with text.
+Authored anidata for the current stage, then the nearest earlier authored stage if empty. If still empty → tag-based (`GetDescriptionFromTags`). AniDescriber HKX fill is on hold; see [../developers/anidescriber.md](../developers/anidescriber.md).
 
 ## JSON format
 

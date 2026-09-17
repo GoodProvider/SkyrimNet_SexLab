@@ -12,7 +12,7 @@ This document is the plan. Implementation of C++ is a later pass. Markdown contr
 | Writer | Hybrid: templates always produce a complete **SLAL-honest** draft; LLM refines (may imitate gold pose detail); template is fallback |
 | Join key | SLAL `id` (registrar) = gold filename stem, case-insensitive |
 | v1 emit | Description-first 3.0; see [emit.md](emit.md) |
-| HKX | Out of scope |
+| HKX | Out of scope (offline prototype). Runtime HKX AniDescriber in SkyrimNet_SexLab is **on hold** — tags fill missing stages. |
 | Few-shot | [animations-gold.md](animations-gold.md) only (complete Human labels + tokens). Currently 5 files; use all of them |
 | Broken gold | [animations-broken.md](animations-broken.md) handoff — do not delete in this pass |
 | Sparse gold | [animations-sparse.md](animations-sparse.md) — skip training; eval on present keys |

@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## AniDescriber HKX fill on hold (2026-09-17)
+
+Runtime missing-stage fill is **authored anidata → earlier authored stage (Papyrus) → `GetDescriptionFromTags`**. `AnimationDB::GetStageDescription` does not call AniDescriber. No `Debug.Notification("Missing descriptions, inferring")`. AniDescriber / `HkxAnim` source stays in tree for offline spline work.
+
+**Historical quirks (when HKX is resumed):** empty `anim_events` after schema ALTER → `AnimDb_NeedsEventBackfill` forces rebuild. XPMSE dual skeleton: pick NPC set (`bones_m` ≫ 18), not Ragdoll (~18). Debug `std::clamp` abort on inverted knot bounds in `ReadSplineVector` — guarded to fail clean (`hkx_sample_fail`). Spline decoder still returns `hkx_sample_fail`; tag narration expected until fixed offline.
+
 ## Start Sex hotkey DX 0 / unbound VkToDxScanCode (2026-09-15)
 
 Enabled hotkey did nothing after `main`→`skse` merge. Papyrus: `Unbound native function "VkToDxScanCode"`. SKSE: `WebUI_SetHotkey dx=0x0 enabled=true` then `WebUI menu hotkey disabled`. No `ProcessHotkey`.

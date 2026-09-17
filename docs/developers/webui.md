@@ -125,6 +125,8 @@ Starters in core: `0900_log_panel.json` (Log), `1000_settings.json` (Settings), 
 
 **Settings panel:** rebuild AnimationDB (then switches main panel to Log with follow-tail), version from `Data/SKSE/Plugins/SkyrimNet_SexLab/info.json` (fallback `Config::kPluginVersion`), docs URL shown as text (`https://github.com/GoodProvider/SkyrimNet_SexLab` — no `ShellExecute`), **Open SkyrimNet dashboard** hides this WebUI then `SkyrimNetApi.TriggerToggleDashboard()` (navigate Plugins → SkyrimNet_SexLab; no deep-link API). Plugin config schema: `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml`. C++ reads via `PublicGetPluginConfigValue("SkyrimNet_SexLab", …)`; Papyrus via `SkyrimNetApi.GetConfig*("Plugin_SkyrimNet_SexLab", …)`.
 
+**AnimationDB / stage descriptions:** rebuild syncs SexLab registry rows and loads authored anidata. Missing stage text is **not** HKX-inferred at runtime (AniDescriber on hold); Papyrus uses earlier authored stages, then SexLab tag fallback. See [anidescriber.md](anidescriber.md).
+
 **Log panel:** reads `SKSE::log::log_directory()` / `SkyrimNet_SexLab.log` (same sink as `webui_log` / Papyrus `TraceLog`). Regex filter in JS; follow-tail unless the user scrolls away. C++ tails by file offset; JS polls `onLogPoll` while visible.
 
 ### Optional integrations (FOMOD / third parties)

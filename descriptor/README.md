@@ -4,6 +4,8 @@ Offline work toward generating per-stage SexLab descriptions from SLAL animation
 
 **Status:** Markdown contracts and gold/SLAL lists are in this tree. C++ is specified, not built. No writes under `SKSE/Plugins/SkyrimNet_SexLab/animations/`.
 
+**Runtime status (SkyrimNet_SexLab):** missing stage descriptions use Papyrus tags (`GetDescriptionFromTags`) after authored anidata. HKX AniDescriber fill is **on hold** (source in `SKSE_Source/` but not wired into `GetStageDescription`). Offline SLAL→anidata prototype docs below are unchanged.
+
 Hybrid writer (locked): templates stay SLAL-honest; optional LLM refine may imitate gold style and pose detail; template draft is fallback. See [plan.md](plan.md) and [pipeline.md](pipeline.md).
 
 ## Read order
