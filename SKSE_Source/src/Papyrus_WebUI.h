@@ -4,6 +4,8 @@
 
 namespace PapyrusBindings_WebUI {
     extern RE::Actor* Target_Current;
+    /// Empty when focus is an actor; e.g. "all_slaves" for a ControlPanel sentinel.
+    extern std::string FocusKind;
 
     /// Papyrus native: open/toggle the WebUI target menu for an actor.
     /// hasStrippedItems: focus actor has skyrimnet_sexlab_storage_items (for actionSwitch).
@@ -95,6 +97,14 @@ namespace PapyrusBindings_WebUI {
 
     /// JS ControlPanel actor pick → set Target_Current + Papyrus sync.
     void ApplyControlActorFocus(std::uint32_t formId);
+    /// JS ControlPanel actor/sentinel pick (`formId`, optional `sentinel`).
+    void ApplyControlActorFocusJson(const std::string& payload);
+    /// JS data_table row click → focus FormID and open Status when present.
+    void ApplyMainPanelRow(const std::string& payload);
+
+    void WebUI_PushMainPanelData(RE::StaticFunctionTag*, RE::BSFixedString json);
+    RE::Actor* WebUI_GetFocusActor(RE::StaticFunctionTag*);
+    RE::BSFixedString WebUI_GetFocusKind(RE::StaticFunctionTag*);
 
     /// Pushes player + nearby actors into JS before showing the overlay.
     /// radius < 0 keeps the last range (default 100).

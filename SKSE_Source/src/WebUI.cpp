@@ -916,14 +916,29 @@ void InitWebUI()
         PrismaUI->RegisterJSListener(g_view, "onControlActorChange", [](const char* value) {
             if (!value)
                 return;
+            webui_log::info("onControlActorChange payload");
+            PapyrusBindings_WebUI::ApplyControlActorFocusJson(value);
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onControlModeChange", [](const char* value) {
+            if (!value)
+                return;
             try {
                 auto j = nlohmann::json::parse(value);
-                const std::uint32_t formId = j.value("formId", 0u);
-                webui_log::info("onControlActorChange formId={:08X}", formId);
-                PapyrusBindings_WebUI::ApplyControlActorFocus(formId);
+                const std::string id = j.value("id", "");
+                webui_log::info("onControlModeChange id={}", id);
+                ActionCatalog::SwitchControlMode(id);
             } catch (...) {
-                webui_log::warn("onControlActorChange: bad JSON");
+                webui_log::info("onControlModeChange id={}", value);
+                ActionCatalog::SwitchControlMode(value);
             }
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onMainPanelRow", [](const char* value) {
+            if (!value)
+                return;
+            webui_log::info("onMainPanelRow");
+            PapyrusBindings_WebUI::ApplyMainPanelRow(value);
         });
 
         PrismaUI->RegisterJSListener(g_view, "onMainPanelChange", [](const char* value) {

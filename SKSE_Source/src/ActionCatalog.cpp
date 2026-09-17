@@ -30,6 +30,28 @@ namespace ActionCatalog
         bool g_animationPanelPreferredOpen = false;
         bool g_loaded = false;
 
+        struct ControlModeDef {
+            std::string id;
+            std::string label;
+            std::string requiresPlugin;
+            std::string catalogRoot;
+            std::string plugin;
+            std::uint32_t questFormId = 0;
+            std::string scriptName;
+            std::string openFunction;
+            std::string closeFunction;
+            nlohmann::json sentinels = nlohmann::json::array();
+            std::string rowClickMainPanel;
+            bool hideFramework = false;
+            bool builtin = false;
+            nlohmann::json actorOptions = nlohmann::json::object();
+            nlohmann::json mainPanels = nlohmann::json::array();
+        };
+
+        std::vector<ControlModeDef> g_modes;
+        std::string g_currentModeId = "sexlab";
+        std::string g_rememberedModeId = "sexlab";
+
         bool EqualsIgnoreCase(std::string_view a, std::string_view b)
         {
             if (a.size() != b.size())
@@ -367,6 +389,18 @@ namespace ActionCatalog
                 return CompareValues(inCombat ? 1.0 : 0.0, op, expected);
             }
 
+            if (EqualsIgnoreCase(decorator, "webui_focus_kind")) {
+                std::string actual = PapyrusBindings_WebUI::FocusKind;
+                std::string exp;
+                if (expected.is_string())
+                    exp = expected.get<std::string>();
+                else if (expected.is_number() || expected.is_boolean())
+                    exp = expected.dump();
+                if (op == "!=")
+                    return !EqualsIgnoreCase(actual, exp);
+                return EqualsIgnoreCase(actual, exp);
+            }
+
             if (EqualsIgnoreCase(decorator, "papyrus_util")) {
                 if (args.size() < 3 || !args[0].is_string() || !ArgIsCurrentActor(args[1]) || !args[2].is_string())
                     return false;
@@ -504,6 +538,12 @@ namespace ActionCatalog
                 if (EqualsIgnoreCase(opt.value("type", ""), "pulldown") && opt.contains("options")) {
                     nlohmann::json copy = opt;
                     copy["options"] = ResolveOptionsArray(opt["options"], focusHasStrippedItems);
+                    if (!copy["options"].is_array() || copy["options"].empty()) {
+                        webui_log::info(
+                            "eligibility omit empty pulldown label={}",
+                            copy.value("label", copy.value("name", "")));
+                        continue;
+                    }
                     out.push_back(std::move(copy));
                     continue;
                 }
@@ -519,16 +559,50 @@ namespace ActionCatalog
             const std::string type = entry.value("type", "");
             if (EqualsIgnoreCase(type, "builtin"))
                 return entry.value("panel", "");
-            if (EqualsIgnoreCase(type, "papyrus"))
+            if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
+                EqualsIgnoreCase(type, "actor_detail"))
                 return entry.value("id", "");
             return {};
         }
 
+        ControlModeDef* FindModeById(const std::string& id)
+        {
+            for (auto& mode : g_modes) {
+                if (EqualsIgnoreCase(mode.id, id))
+                    return &mode;
+            }
+            return nullptr;
+        }
+
+        ControlModeDef* CurrentMode()
+        {
+            if (auto* m = FindModeById(g_currentModeId))
+                return m;
+            return FindModeById("sexlab");
+        }
+
+        bool ModeIsSexLab(const ControlModeDef* mode)
+        {
+            return mode && EqualsIgnoreCase(mode->id, "sexlab");
+        }
+
+        nlohmann::json& ActiveMainPanels()
+        {
+            if (auto* mode = CurrentMode()) {
+                if (!ModeIsSexLab(mode) && mode->mainPanels.is_array())
+                    return mode->mainPanels;
+            }
+            return g_mainPanels;
+        }
+
         const nlohmann::json* FindMainPanelByKey(const std::string& key)
         {
-            if (key.empty() || !g_mainPanels.is_array())
+            if (key.empty())
                 return nullptr;
-            for (auto& entry : g_mainPanels) {
+            auto& panels = ActiveMainPanels();
+            if (!panels.is_array())
+                return nullptr;
+            for (auto& entry : panels) {
                 if (!entry.is_object())
                     continue;
                 if (!PassesRequiresPlugin(entry))
@@ -596,7 +670,10 @@ namespace ActionCatalog
                 const std::string panel = entry.value("panel", "");
                 if (!panel.empty())
                     WebUI_Invoke("concealMainPanel('" + panel + "');");
-            } else if (EqualsIgnoreCase(type, "papyrus")) {
+            } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
+                       EqualsIgnoreCase(type, "actor_detail")) {
+                if (EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail"))
+                    WebUI_Invoke("concealForeignMainPanel('" + type + "');");
                 std::string plugin = entry.value("plugin", "");
                 if (plugin.empty())
                     plugin = entry.value("questPlugin", "");
@@ -620,7 +697,10 @@ namespace ActionCatalog
                     else if (panel == "log_panel")
                         SexLabNet::InvokeLogPanelOpen();
                 }
-            } else if (EqualsIgnoreCase(type, "papyrus")) {
+            } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
+                       EqualsIgnoreCase(type, "actor_detail")) {
+                if (EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail"))
+                    WebUI_Invoke("revealForeignMainPanel('" + type + "');");
                 std::string plugin = entry.value("plugin", "");
                 if (plugin.empty())
                     plugin = entry.value("questPlugin", "");
@@ -730,8 +810,128 @@ namespace ActionCatalog
             return PapyrusBindings_WebUI::IsSexLabAnimatingFocus(PapyrusBindings_WebUI::Target_Current);
         }
 
+        std::filesystem::path ResolveDataDir()
+        {
+            auto webui = ResolveWebUIDir();
+            // .../Data/SKSE/Plugins/SkyrimNet_SexLab/webui
+            return webui.parent_path().parent_path().parent_path().parent_path();
+        }
+
+        nlohmann::json LoadMainPanelFiles(const std::filesystem::path& mainPanelsDir)
+        {
+            nlohmann::json panels = nlohmann::json::array();
+            for (const auto& path : SortedJsonFiles(mainPanelsDir)) {
+                auto raw = ReadFile(path);
+                if (raw.empty()) {
+                    webui_log::warn("ActionCatalog: skipping empty main_panel {}", path.string());
+                    continue;
+                }
+                try {
+                    auto node = nlohmann::json::parse(raw);
+                    if (!node.is_object()) {
+                        webui_log::warn("ActionCatalog: skipping non-object main_panel {}", path.string());
+                        continue;
+                    }
+                    panels.push_back(std::move(node));
+                } catch (const std::exception& e) {
+                    webui_log::warn("ActionCatalog: bad main_panel {}: {}", path.string(), e.what());
+                }
+            }
+            return panels;
+        }
+
+        void LoadForeignModeCatalog(ControlModeDef& mode)
+        {
+            if (mode.catalogRoot.empty())
+                return;
+            const auto root = ResolveDataDir() / mode.catalogRoot;
+            const auto actorDir = root / "TargetMenu" / "Actor";
+            const auto actorDefaultsPath = actorDir / "defaults.json";
+            const auto actorOptionsDir = actorDir / "options";
+            const auto mainPanelsDir = root / "MainPanels";
+            if (!std::filesystem::is_directory(actorOptionsDir)) {
+                webui_log::warn("ActionCatalog: mode '{}' missing {}", mode.id, actorOptionsDir.string());
+                return;
+            }
+            auto actorDefaults = LoadDefaultsParameters(actorDefaultsPath);
+            auto actorOptionsArr = LoadOptionFiles(actorOptionsDir);
+            WalkOptionsForSynthesis(actorOptionsArr);
+            mode.actorOptions = nlohmann::json::object();
+            mode.actorOptions["defaultsParameters"] = std::move(actorDefaults);
+            mode.actorOptions["options"] = std::move(actorOptionsArr);
+            mode.mainPanels = LoadMainPanelFiles(mainPanelsDir);
+            webui_log::info(
+                "ActionCatalog mode '{}' loaded {} actor options, {} main panels from {}",
+                mode.id,
+                mode.actorOptions["options"].size(),
+                mode.mainPanels.size(),
+                root.string());
+        }
+
+        void LoadControlModes()
+        {
+            g_modes.clear();
+
+            ControlModeDef sexlab;
+            sexlab.id = "sexlab";
+            sexlab.label = "SkyrimNet SexLab";
+            sexlab.builtin = true;
+            sexlab.hideFramework = false;
+            sexlab.actorOptions = g_actorOptions;
+            sexlab.mainPanels = g_mainPanels;
+            g_modes.push_back(std::move(sexlab));
+
+            const auto controlDir = ResolveWebUIDir() / "ControlPanel";
+            for (const auto& path : SortedJsonFiles(controlDir)) {
+                auto raw = ReadFile(path);
+                if (raw.empty())
+                    continue;
+                nlohmann::json node;
+                try {
+                    node = nlohmann::json::parse(raw);
+                } catch (const std::exception& e) {
+                    webui_log::warn("ActionCatalog: bad ControlPanel {}: {}", path.string(), e.what());
+                    continue;
+                }
+                if (!node.is_object())
+                    continue;
+                ControlModeDef mode;
+                mode.id = node.value("id", "");
+                mode.label = node.value("label", mode.id);
+                mode.requiresPlugin = node.value("requiresPlugin", "");
+                mode.catalogRoot = node.value("catalogRoot", "");
+                mode.plugin = node.value("plugin", "");
+                if (node.contains("questFormId"))
+                    mode.questFormId = ParseFormId(node["questFormId"]);
+                mode.scriptName = node.value("scriptName", "");
+                mode.openFunction = node.value("openFunction", "");
+                mode.closeFunction = node.value("closeFunction", "");
+                mode.hideFramework = node.value("hideFramework", false);
+                mode.rowClickMainPanel = node.value("rowClickMainPanel", "");
+                if (node.contains("sentinels") && node["sentinels"].is_array())
+                    mode.sentinels = node["sentinels"];
+                if (mode.id.empty() || EqualsIgnoreCase(mode.id, "sexlab"))
+                    continue;
+                if (!PassesRequiresPlugin(node)) {
+                    webui_log::info("ActionCatalog: omitting mode '{}' (requiresPlugin)", mode.id);
+                    continue;
+                }
+                LoadForeignModeCatalog(mode);
+                g_modes.push_back(std::move(mode));
+            }
+
+            if (!FindModeById(g_rememberedModeId))
+                g_rememberedModeId = "sexlab";
+            g_currentModeId = g_rememberedModeId;
+            webui_log::info("ActionCatalog loaded {} ControlPanel modes; current={}", g_modes.size(), g_currentModeId);
+        }
+
         const nlohmann::json& ActiveTargetOptions()
         {
+            auto* mode = CurrentMode();
+            if (mode && !ModeIsSexLab(mode) && mode->actorOptions.is_object() &&
+                mode->actorOptions.contains("options"))
+                return mode->actorOptions;
             return FocusIsInSexLabScene() ? g_sceneOptions : g_actorOptions;
         }
     }
@@ -832,23 +1032,12 @@ namespace ActionCatalog
             g_sceneOptions["defaultsParameters"] = nlohmann::json::object();
             g_sceneOptions["options"] = std::move(sceneOptionsArr);
 
-            for (const auto& path : SortedJsonFiles(mainPanelsDir)) {
-                auto raw = ReadFile(path);
-                if (raw.empty()) {
-                    webui_log::warn("ActionCatalog: skipping empty main_panel {}", path.string());
-                    continue;
-                }
-                auto node = nlohmann::json::parse(raw);
-                if (!node.is_object()) {
-                    webui_log::warn("ActionCatalog: skipping non-object main_panel {}", path.string());
-                    continue;
-                }
-                g_mainPanels.push_back(std::move(node));
-            }
+            g_mainPanels = LoadMainPanelFiles(mainPanelsDir);
             if (g_mainPanels.empty())
                 webui_log::warn("ActionCatalog: no MainPanels loaded from {}", mainPanelsDir.string());
 
             g_sceneSettings = LoadSceneSettings(dir);
+            LoadControlModes();
 
             g_loaded = true;
             webui_log::info(
@@ -926,7 +1115,7 @@ namespace ActionCatalog
             actionsObj[def.name] = a;
         }
 
-        if (actorCatalog) {
+        if (actorCatalog && IsSexLabControlMode()) {
             for (auto& ext : TargetMenuRegistry::All()) {
                 nlohmann::json opt = nlohmann::json::object();
                 opt["type"] = "action";
@@ -964,8 +1153,9 @@ namespace ActionCatalog
 
         nlohmann::json catalog;
         nlohmann::json panels = nlohmann::json::array();
-        if (g_mainPanels.is_array()) {
-            for (auto& entry : g_mainPanels) {
+        auto& src = ActiveMainPanels();
+        if (src.is_array()) {
+            for (auto& entry : src) {
                 if (!entry.is_object())
                     continue;
                 if (!PassesRequiresPlugin(entry))
@@ -976,6 +1166,17 @@ namespace ActionCatalog
         catalog["panels"] = std::move(panels);
         catalog["selected"] = g_currentMainPanelKey;
         catalog["sceneSettings"] = g_sceneSettings;
+        catalog["mode"] = g_currentModeId;
+        catalog["hideFramework"] = CurrentModeHidesFramework();
+        catalog["sentinels"] = CurrentSentinels();
+        nlohmann::json modes = nlohmann::json::array();
+        for (auto& mode : g_modes) {
+            nlohmann::json m;
+            m["id"] = mode.id;
+            m["label"] = mode.label;
+            modes.push_back(std::move(m));
+        }
+        catalog["modes"] = std::move(modes);
         return catalog;
     }
 
@@ -1041,5 +1242,87 @@ namespace ActionCatalog
         if (panel == "scene_creator_panel" || panel == "animation_menu_panel") {
             WebUI_Invoke("mainPanelDidOpen();");
         }
+    }
+
+    bool IsSexLabControlMode()
+    {
+        auto* mode = CurrentMode();
+        return !mode || ModeIsSexLab(mode);
+    }
+
+    std::string CurrentControlModeId()
+    {
+        return g_currentModeId;
+    }
+
+    nlohmann::json CurrentSentinels()
+    {
+        if (auto* mode = CurrentMode()) {
+            if (mode->sentinels.is_array())
+                return mode->sentinels;
+        }
+        return nlohmann::json::array();
+    }
+
+    bool CurrentModeHidesFramework()
+    {
+        auto* mode = CurrentMode();
+        return mode && mode->hideFramework;
+    }
+
+    std::string CurrentRowClickMainPanel()
+    {
+        auto* mode = CurrentMode();
+        if (!mode)
+            return {};
+        return mode->rowClickMainPanel;
+    }
+
+    std::string SentinelMainPanel(const std::string& sentinelId)
+    {
+        if (sentinelId.empty())
+            return {};
+        auto sentinels = CurrentSentinels();
+        if (!sentinels.is_array())
+            return {};
+        for (const auto& entry : sentinels) {
+            if (!entry.is_object())
+                continue;
+            if (entry.value("id", "") == sentinelId)
+                return entry.value("mainPanel", "");
+        }
+        return {};
+    }
+
+    bool SwitchControlMode(const std::string& modeId)
+    {
+        if (!g_loaded)
+            Load();
+        auto* next = FindModeById(modeId);
+        if (!next) {
+            webui_log::warn("SwitchControlMode: unknown '{}'", modeId);
+            return false;
+        }
+        if (EqualsIgnoreCase(g_currentModeId, next->id)) {
+            WebUI_Invoke("configureControlPanel(" + BuildMainPanelsCatalog().dump() + ");");
+            return true;
+        }
+
+        ClearMainPanelSelection();
+        if (auto* prev = CurrentMode()) {
+            if (!prev->closeFunction.empty())
+                DispatchPapyrusNoArg(prev->plugin, prev->questFormId, prev->scriptName, prev->closeFunction);
+        }
+
+        g_currentModeId = next->id;
+        g_rememberedModeId = next->id;
+        webui_log::info("SwitchControlMode: {}", g_currentModeId);
+
+        WebUI_Invoke("configureControlPanel(" + BuildMainPanelsCatalog().dump() + ");");
+        WebUI_Invoke("configureTargetMenu(" + BuildUICatalog(false).dump() + ");");
+
+        if (!next->openFunction.empty())
+            DispatchPapyrusNoArg(next->plugin, next->questFormId, next->scriptName, next->openFunction);
+        return true;
     }
 }

@@ -109,13 +109,16 @@
             z-index: 6;
         }
 
-        #control-panel .control-panel-title {
+        #control-panel .control-panel-title,
+        #control-mode-pulldown {
             font-family: var(--font-ui);
             font-size: var(--text-xl);
             font-weight: 600;
             color: var(--accent-text);
             margin: 0;
             letter-spacing: 0.04em;
+            width: 100%;
+            min-width: 0;
         }
 
         #control-panel .control-section {
@@ -155,6 +158,7 @@
         }
 
         #control-panel-host .pulldown,
+        #control-mode-pulldown .pulldown,
         #control-actor-pulldown .pulldown,
         #framework-row .pulldown {
             width: 100%;
@@ -162,6 +166,7 @@
             box-sizing: border-box;
         }
 
+        #control-mode-pulldown .pulldown-value,
         #control-actor-pulldown .pulldown-value,
         #framework-row .pulldown-value {
             width: 100%;
@@ -171,6 +176,7 @@
         }
 
         #control-panel-host .pulldown-menu,
+        #control-mode-pulldown .pulldown-menu,
         #control-actor-pulldown .pulldown-menu,
         #framework-row .pulldown-menu {
             left: calc(100% + var(--space-md));
@@ -1459,7 +1465,7 @@
     <div id="ui-shell">
     <div id="left-column">
         <div id="control-panel" class="panel" style="display:none">
-            <div class="control-panel-title">SkyrimNet SexLab</div>
+            <div id="control-mode-pulldown" class="control-panel-title"></div>
             <div class="control-section">
                 <div class="control-section-label">views</div>
                 <div id="control-panel-host" class="control-section-indent"></div>
@@ -1616,6 +1622,18 @@
         </div>
         <div id="log-view" class="scroll-list" onscroll="logOnScroll()"></div>
     </div>
+    <div id="data-table-panel" class="panel" style="display:none">
+        <div class="target-row" id="data-table-title">Table</div>
+        <div id="data-table-wrap" style="overflow:auto; flex:1; min-height:0">
+            <table class="data-table" id="foreign-data-table"><thead></thead><tbody></tbody></table>
+        </div>
+        <div id="data-table-note" class="compact-row" style="opacity:0.75; display:none"></div>
+    </div>
+    <div id="actor-detail-panel" class="panel" style="display:none">
+        <div class="target-row" id="actor-detail-title">Status</div>
+        <div id="actor-detail-fields"></div>
+        <div id="actor-detail-controls"></div>
+    </div>
     </div><!-- #main-panel-host -->
 
     <div id="overlay-panels">
@@ -1749,7 +1767,7 @@
             const row = document.getElementById('framework-row');
             if (!row) return;
             row.innerHTML = '';
-            if (!enabled) {
+            if (!enabled || CONTROL_HIDE_FRAMEWORK) {
                 row.style.display = 'none';
                 return;
             }
@@ -1783,7 +1801,8 @@
         function mainPanelKeyOf(entry) {
             if (!entry) return '';
             if (entry.type === 'builtin') return entry.panel || '';
-            if (entry.type === 'papyrus') return entry.id || '';
+            if (entry.type === 'papyrus' || entry.type === 'data_table' || entry.type === 'actor_detail')
+                return entry.id || '';
             return '';
         }
 
@@ -1803,7 +1822,8 @@
         }
 
         function clearMainPanelHost() {
-            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel'];
+            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel',
+                'data-table-panel', 'actor-detail-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (el) el.style.display = 'none';
@@ -1814,6 +1834,7 @@
         function showControlPanel() {
             const el = document.getElementById('control-panel');
             if (el) el.style.display = 'flex';
+            renderControlModePulldown();
             renderControlPanelPulldown();
             if (typeof renderControlActorPulldown === 'function')
                 renderControlActorPulldown();
@@ -1894,6 +1915,41 @@
             }));
         }
 
+        let CONTROL_MODES = [{ id: 'sexlab', label: 'SkyrimNet SexLab' }];
+        let CONTROL_MODE_ID = 'sexlab';
+        let CONTROL_SENTINELS = [];
+        let CONTROL_HIDE_FRAMEWORK = false;
+        let CONTROL_FOCUS_KIND = '';
+        let FOREIGN_PANEL_DISPATCH = null;
+        let controlModePulldownBusy = false;
+
+        function renderControlModePulldown() {
+            const host = document.getElementById('control-mode-pulldown');
+            if (!host || typeof createPulldown !== 'function') return;
+            const modes = CONTROL_MODES.length ? CONTROL_MODES : [{ id: 'sexlab', label: 'SkyrimNet SexLab' }];
+            host.innerHTML = '';
+            const labels = modes.map(m => m.label || m.id);
+            const cur = modes.find(m => m.id === CONTROL_MODE_ID) || modes[0];
+            const seed = cur ? (cur.label || cur.id) : labels[0];
+            host.appendChild(createPulldown(labels, seed, (picked, idx) => {
+                if (controlModePulldownBusy) return;
+                const mode = (idx != null && idx >= 0 && idx < modes.length)
+                    ? modes[idx]
+                    : modes.find(m => (m.label || m.id) === picked);
+                if (!mode || mode.id === CONTROL_MODE_ID) return;
+                CONTROL_MODE_ID = mode.id;
+                if (typeof window.onControlModeChange === 'function')
+                    window.onControlModeChange(JSON.stringify({ id: mode.id }));
+            }));
+        }
+
+        function applyFrameworkVisibility() {
+            const row = document.getElementById('framework-row');
+            if (!row) return;
+            if (CONTROL_HIDE_FRAMEWORK)
+                row.style.display = 'none';
+        }
+
         function configureControlPanel(catalog) {
             const panels = (catalog && catalog.panels) ? catalog.panels.slice() : [];
             MAIN_PANELS = panels.length ? panels : DEFAULT_MAIN_PANELS.slice();
@@ -1901,9 +1957,19 @@
                 MAIN_SELECTED_KEY = catalog.selected || '';
             else if (MAIN_SELECTED_KEY && !findMainPanelByKey(MAIN_SELECTED_KEY))
                 MAIN_SELECTED_KEY = '';
+            if (catalog && catalog.modes && catalog.modes.length)
+                CONTROL_MODES = catalog.modes.slice();
+            if (catalog && catalog.mode)
+                CONTROL_MODE_ID = catalog.mode;
+            CONTROL_SENTINELS = (catalog && catalog.sentinels) ? catalog.sentinels.slice() : [];
+            CONTROL_HIDE_FRAMEWORK = !!(catalog && catalog.hideFramework);
+            applyFrameworkVisibility();
             if (typeof ssAdoptSceneSettings === 'function')
                 ssAdoptSceneSettings(ssCatalogSceneSettings(catalog));
+            renderControlModePulldown();
             renderControlPanelPulldown();
+            if (typeof renderControlActorPulldown === 'function')
+                renderControlActorPulldown();
         }
 
         function domIdForPanelKey(key) {
@@ -1928,7 +1994,8 @@
             mainPanelPulldownBusy = true;
             renderControlPanelPulldown();
             mainPanelPulldownBusy = false;
-            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel'];
+            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel',
+                'data-table-panel', 'actor-detail-panel'];
             const want = domIdForPanelKey(panelKey);
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -1956,6 +2023,173 @@
             if (el) el.style.display = 'none';
             if (panelKey === 'log_panel' || panelKey === 'log-panel')
                 logStopPolling();
+        }
+
+        function revealForeignMainPanel(type) {
+            showControlPanel();
+            const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
+            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel',
+                'data-table-panel', 'actor-detail-panel'];
+            for (const pid of builtins) {
+                const el = document.getElementById(pid);
+                if (!el) continue;
+                el.style.display = (pid === want) ? 'flex' : 'none';
+                if (pid === 'log-panel' && pid !== want)
+                    logStopPolling();
+            }
+            mainPanelPulldownBusy = true;
+            renderControlPanelPulldown();
+            mainPanelPulldownBusy = false;
+        }
+
+        function concealForeignMainPanel(type) {
+            const pid = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
+            const el = document.getElementById(pid);
+            if (el) el.style.display = 'none';
+        }
+
+        function setMainPanelData(payload) {
+            if (typeof payload === 'string') {
+                try { payload = JSON.parse(payload); } catch (e) { return; }
+            }
+            if (!payload || typeof payload !== 'object') return;
+            FOREIGN_PANEL_DISPATCH = {
+                plugin: payload.plugin || '',
+                questFormId: payload.questFormId || '',
+                scriptName: payload.scriptName || '',
+                applyFunction: payload.applyFunction || ''
+            };
+            if (payload.id)
+                MAIN_SELECTED_KEY = payload.id;
+            const panel = payload.panel || '';
+            if (panel === 'data_table')
+                renderForeignDataTable(payload);
+            else if (panel === 'actor_detail')
+                renderForeignActorDetail(payload);
+        }
+
+        function renderForeignDataTable(payload) {
+            revealForeignMainPanel('data_table');
+            const title = document.getElementById('data-table-title');
+            if (title) title.textContent = payload.label || '';
+            const table = document.getElementById('foreign-data-table');
+            if (!table) return;
+            const thead = table.querySelector('thead');
+            const tbody = table.querySelector('tbody');
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            const hr = document.createElement('tr');
+            (payload.columns || []).forEach(col => {
+                const th = document.createElement('th');
+                th.textContent = (col && (col.label || col.id)) || '';
+                hr.appendChild(th);
+            });
+            thead.appendChild(hr);
+            (payload.rows || []).forEach(row => {
+                const tr = document.createElement('tr');
+                const cells = row.cells || row;
+                (Array.isArray(cells) ? cells : []).forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell == null ? '' : String(cell);
+                    tr.appendChild(td);
+                });
+                const formId = formIdU32(row.formId || row.formid || 0);
+                if (formId) {
+                    tr.style.cursor = 'pointer';
+                    tr.onclick = () => {
+                        if (typeof window.onMainPanelRow === 'function')
+                            window.onMainPanelRow(JSON.stringify({ formId: formId }));
+                    };
+                }
+                tbody.appendChild(tr);
+            });
+            const note = document.getElementById('data-table-note');
+            if (note) {
+                if (payload.truncated) {
+                    note.style.display = '';
+                    note.textContent = 'Showing first ' + ((payload.rows && payload.rows.length) || 0) + ' rows.';
+                } else {
+                    note.style.display = 'none';
+                    note.textContent = '';
+                }
+            }
+        }
+
+        function fireStatusApply(controlId, value) {
+            if (typeof window.onAction !== 'function') return;
+            const d = FOREIGN_PANEL_DISPATCH || {};
+            if (!d.plugin || !d.scriptName || !d.applyFunction) return;
+            window.onAction(JSON.stringify({
+                action: 'papyrus',
+                label: controlId,
+                plugin: d.plugin,
+                questFormId: d.questFormId || '',
+                scriptName: d.scriptName,
+                executionFunctionName: d.applyFunction,
+                closeWebUI: false,
+                parameterMapping: [
+                    { type: 'speaker', name: 'speaker' },
+                    { type: 'target', name: 'target' },
+                    { type: 'static', name: 'control', value: String(controlId) },
+                    { type: 'static', name: 'value', value: String(value) }
+                ],
+                parameters: {}
+            }));
+        }
+
+        function renderForeignActorDetail(payload) {
+            revealForeignMainPanel('actor_detail');
+            const title = document.getElementById('actor-detail-title');
+            if (title) title.textContent = payload.label || '';
+            const fieldsHost = document.getElementById('actor-detail-fields');
+            const controlsHost = document.getElementById('actor-detail-controls');
+            if (fieldsHost) {
+                fieldsHost.innerHTML = '';
+                (payload.fields || []).forEach(f => {
+                    const row = document.createElement('div');
+                    row.className = 'compact-row';
+                    const lab = document.createElement('span');
+                    lab.textContent = (f.label || f.id || '') + ':';
+                    const val = document.createElement('span');
+                    val.textContent = f.value == null ? '' : String(f.value);
+                    row.appendChild(lab);
+                    row.appendChild(val);
+                    fieldsHost.appendChild(row);
+                });
+            }
+            if (controlsHost) {
+                controlsHost.innerHTML = '';
+                (payload.controls || []).forEach(c => {
+                    const row = document.createElement('div');
+                    row.className = 'compact-row';
+                    const lab = document.createElement('span');
+                    lab.textContent = c.label || c.id || '';
+                    row.appendChild(lab);
+                    const widget = c.widget || 'toggle';
+                    if (widget === 'toggle') {
+                        const on = c.value === true || c.value === 1 || c.value === '1' || c.value === 'true';
+                        const btn = document.createElement('div');
+                        btn.className = 'action-btn';
+                        btn.textContent = on ? 'on' : 'off';
+                        btn.onclick = () => fireStatusApply(c.id, on ? '0' : '1');
+                        row.appendChild(btn);
+                    } else if (widget === 'select' && c.options && c.options.length && typeof createPulldown === 'function') {
+                        const labels = c.options.map(o => o.label || o.id || String(o));
+                        const seed = c.value || labels[0];
+                        row.appendChild(createPulldown(labels, seed, (picked, idx) => {
+                            const opt = c.options[idx] || c.options.find(o => (o.label || o.id) === picked);
+                            fireStatusApply(c.id, opt ? (opt.id != null ? opt.id : picked) : picked);
+                        }));
+                    } else {
+                        const btn = document.createElement('div');
+                        btn.className = 'action-btn';
+                        btn.textContent = c.label || 'apply';
+                        btn.onclick = () => fireStatusApply(c.id, c.value != null ? c.value : '1');
+                        row.appendChild(btn);
+                    }
+                    controlsHost.appendChild(row);
+                });
+            }
         }
 
         function hideAllPanelsDom() {
@@ -5935,10 +6169,57 @@
             return (nearbyActors || []).find(a => formIdU32(a.formId) === fid) || null;
         }
 
+        function controlActorList() {
+            const list = (nearbyActors || []).slice();
+            const player = list.filter(a => a.isPlayer);
+            const rest = list.filter(a => !a.isPlayer);
+            const sent = (CONTROL_SENTINELS || []).map(s => ({
+                label: s.label || s.id,
+                name: s.label || s.id,
+                formId: 0,
+                sentinel: s.id,
+                selectable: true,
+                uuid: '',
+                dist: 0,
+                isPlayer: false
+            }));
+            return player.concat(sent).concat(rest);
+        }
+
         function controlActorCurrentEntry() {
+            if (CONTROL_FOCUS_KIND) {
+                const hit = controlActorList().find(a => a.sentinel === CONTROL_FOCUS_KIND);
+                if (hit) return hit;
+            }
             if (targetActor && formIdU32(targetActor.formId))
                 return controlActorByFormId(targetActor.formId);
             return null;
+        }
+
+        function renderControlActorPulldown() {
+            const host = document.getElementById('control-actor-pulldown');
+            if (!host || typeof createPulldown !== 'function') return;
+            const list = controlActorList();
+            host.innerHTML = '';
+            if (!list.length) {
+                host.textContent = '—';
+                return;
+            }
+            const labels = list.map(a => a.label || a.name || '?');
+            const disabled = new Set(list.filter(a => !a.selectable).map(a => a.label || a.name || '?'));
+            let cur = controlActorCurrentEntry();
+            if (!cur) cur = pickDefaultControlActor(0);
+            const curLabel = cur ? (cur.label || cur.name || '?') : (labels[0] || '—');
+            host.appendChild(createPulldown(labels, curLabel, (picked, idx) => {
+                if (controlActorSelectBusy) return;
+                const entry = (idx != null && idx >= 0 && idx < list.length)
+                    ? list[idx]
+                    : list.find(a => (a.label || a.name || '?') === picked);
+                if (!entry || !entry.selectable) return;
+                controlActorSelectBusy = true;
+                requestControlActorFocus(entry, { force: true });
+                controlActorSelectBusy = false;
+            }, disabled));
         }
 
         function pickDefaultControlActor(preferredFormId) {
@@ -5960,10 +6241,23 @@
         }
 
         function requestControlActorFocus(entry, opts) {
-            if (!entry || !formIdU32(entry.formId)) return;
+            if (!entry) return;
             const force = opts && opts.force;
+            if (entry.sentinel) {
+                CONTROL_FOCUS_KIND = entry.sentinel;
+                targetActor = { uuid: '', name: entry.label || entry.name, formId: 0, sentinel: entry.sentinel };
+                if (typeof window.onControlActorChange === 'function') {
+                    window.onControlActorChange(JSON.stringify({
+                        sentinel: entry.sentinel,
+                        formId: 0
+                    }));
+                }
+                return;
+            }
             const fid = formIdU32(entry.formId);
-            if (!force && targetActor && formIdU32(targetActor.formId) === fid)
+            if (!fid) return;
+            CONTROL_FOCUS_KIND = '';
+            if (!force && targetActor && formIdU32(targetActor.formId) === fid && !targetActor.sentinel)
                 return;
             setTargetActor(entry.uuid, entry.name, fid);
             bondageEnsureActor(fid);
@@ -5983,32 +6277,6 @@
             if (!entry) return;
             requestControlActorFocus(entry, { force: true });
             renderControlActorPulldown();
-        }
-
-        function renderControlActorPulldown() {
-            const host = document.getElementById('control-actor-pulldown');
-            if (!host || typeof createPulldown !== 'function') return;
-            const list = nearbyActors || [];
-            host.innerHTML = '';
-            if (!list.length) {
-                host.textContent = '—';
-                return;
-            }
-            const labels = list.map(a => a.label || a.name || '?');
-            const disabled = new Set(list.filter(a => !a.selectable).map(a => a.label || a.name || '?'));
-            let cur = controlActorCurrentEntry();
-            if (!cur) cur = pickDefaultControlActor(0);
-            const curLabel = cur ? (cur.label || cur.name || '?') : (labels[0] || '—');
-            host.appendChild(createPulldown(labels, curLabel, (picked, idx) => {
-                if (controlActorSelectBusy) return;
-                const entry = (idx != null && idx >= 0 && idx < list.length)
-                    ? list[idx]
-                    : list.find(a => (a.label || a.name || '?') === picked);
-                if (!entry || !entry.selectable) return;
-                controlActorSelectBusy = true;
-                requestControlActorFocus(entry, { force: true });
-                controlActorSelectBusy = false;
-            }, disabled));
         }
 
         function setPlayerActor(uuid, name, formId, gender) {

@@ -13,7 +13,7 @@
 | Stage descriptor prototype (Billyy / SLAL → anidata) | descriptor/README.md |
 | Anidata schema 3.0 | docs/developers/anidata-schema.md |
 | Develop Papyrus / ESP | docs/developers/papyrus.md, docs/reference/papyrus-rules.md |
-| Develop WebUI / SKSE | docs/developers/webui.md |
+| Develop WebUI / SKSE | docs/developers/webui.md (ControlPanel modes, target sentinels, foreign `data_table` / `actor_detail` hosts) |
 | Agent policy | AGENTS.md (safety, confidence, commits) |
 | Quirks | KNOWLEDGEBASE.md |
 | Portable doc-system template (copy to other repos) | documentation-guide.xml |

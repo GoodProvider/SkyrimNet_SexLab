@@ -153,6 +153,7 @@ namespace PapyrusBindings_WebUI
         }
     }
     RE::Actor* Target_Current = nullptr;
+    std::string FocusKind;
     std::int32_t YesNo_Creator_Sid = -1;
     bool EditTagsPlayer = true;
     bool EditTagsNonPlayer = false;
@@ -169,6 +170,7 @@ namespace PapyrusBindings_WebUI
     {
         TargetMenuSessionActive = false;
         Target_Current = nullptr;
+        FocusKind.clear();
     }
 
     bool ConsumeSkipSceneCreator(RE::StaticFunctionTag*)
@@ -415,7 +417,7 @@ namespace PapyrusBindings_WebUI
     /// Re-resolve actionSwitch while the target menu stays open on Target_Current.
     void Target_Menu_Refresh(RE::StaticFunctionTag*, bool hasStrippedItems)
     {
-        if (!Target_Current) {
+        if (!Target_Current && FocusKind.empty()) {
             // LLM / non-WebUI Outfit_* calls refresh harmlessly when menu is closed.
             return;
         }
@@ -1494,6 +1496,7 @@ namespace PapyrusBindings_WebUI
         }
 
         Target_Current = actor;
+        FocusKind.clear();
         TargetMenuSessionActive = true;
 
         const auto targetFormId = actor->GetFormID();
@@ -1509,6 +1512,86 @@ namespace PapyrusBindings_WebUI
             static_cast<unsigned>(targetFormId)));
 
         Call_ControlActorFocus(actor);
+        auto catalog = ActionCatalog::BuildUICatalog(false);
+        WebUI_Invoke(ConfigureTargetMenuScript(catalog));
+    }
+
+    void ApplyControlActorFocusJson(const std::string& payload)
+    {
+        nlohmann::json j;
+        try {
+            j = nlohmann::json::parse(payload);
+        } catch (...) {
+            webui_log::warn("ApplyControlActorFocusJson: bad JSON");
+            return;
+        }
+        const std::string sentinel = j.value("sentinel", "");
+        const std::uint32_t formId = j.value("formId", 0u);
+        if (!sentinel.empty()) {
+            Target_Current = nullptr;
+            FocusKind = sentinel;
+            TargetMenuSessionActive = true;
+            webui_log::info("ApplyControlActorFocus: sentinel={}", sentinel);
+            auto catalog = ActionCatalog::BuildUICatalog(false);
+            WebUI_Invoke(ConfigureTargetMenuScript(catalog));
+            const auto panel = ActionCatalog::SentinelMainPanel(sentinel);
+            if (!panel.empty())
+                ActionCatalog::SwitchMainPanel(panel);
+            return;
+        }
+        ApplyControlActorFocus(formId);
+    }
+
+    void ApplyMainPanelRow(const std::string& payload)
+    {
+        nlohmann::json j;
+        try {
+            j = nlohmann::json::parse(payload);
+        } catch (...) {
+            webui_log::warn("ApplyMainPanelRow: bad JSON");
+            return;
+        }
+        std::uint32_t formId = 0;
+        if (j.contains("formId")) {
+            const auto& v = j["formId"];
+            if (v.is_number_unsigned())
+                formId = v.get<std::uint32_t>();
+            else if (v.is_number_integer())
+                formId = static_cast<std::uint32_t>(v.get<std::int64_t>());
+            else if (v.is_string()) {
+                try {
+                    formId = static_cast<std::uint32_t>(std::stoul(v.get<std::string>(), nullptr, 0));
+                } catch (...) {
+                    formId = 0;
+                }
+            }
+        }
+        if (!formId) {
+            webui_log::warn("ApplyMainPanelRow: missing formId");
+            return;
+        }
+        ApplyControlActorFocus(formId);
+        const auto panel = ActionCatalog::CurrentRowClickMainPanel();
+        if (!panel.empty())
+            ActionCatalog::SwitchMainPanel(panel);
+    }
+
+    void WebUI_PushMainPanelData(RE::StaticFunctionTag*, RE::BSFixedString json)
+    {
+        const char* raw = json.c_str();
+        if (!raw || !raw[0])
+            return;
+        WebUI_Invoke(std::string("setMainPanelData(") + raw + ");");
+    }
+
+    RE::Actor* WebUI_GetFocusActor(RE::StaticFunctionTag*)
+    {
+        return Target_Current;
+    }
+
+    RE::BSFixedString WebUI_GetFocusKind(RE::StaticFunctionTag*)
+    {
+        return FocusKind.c_str();
     }
 
     void WebUI_AfterTargetOpen(RE::StaticFunctionTag*, RE::Actor* preferred, bool preferExplicit)
@@ -1560,6 +1643,9 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog);
         a_vm->RegisterFunction("SetNearbyActorsJson", scriptName, SetNearbyActorsJson);
         a_vm->RegisterFunction("IsAvailableActor", scriptName, IsAvailableActor_Native);
+        a_vm->RegisterFunction("WebUI_PushMainPanelData", scriptName, WebUI_PushMainPanelData);
+        a_vm->RegisterFunction("WebUI_GetFocusActor", scriptName, WebUI_GetFocusActor);
+        a_vm->RegisterFunction("WebUI_GetFocusKind", scriptName, WebUI_GetFocusKind);
 
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;

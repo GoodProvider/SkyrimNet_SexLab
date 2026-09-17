@@ -39,3 +39,6 @@ String Function TraceLog(String script_name, String func, String msg) global nat
 Bool Function IsAvailableActor(Actor akActor) global native
 ; Push filtered nearby actor list JSON [{name,formId},...] — C++ adds uuids and calls setNearbyActors.
 Function SetNearbyActorsJson(String json) global native
+Function WebUI_PushMainPanelData(String json) global native
+Actor Function WebUI_GetFocusActor() global native
+String Function WebUI_GetFocusKind() global native

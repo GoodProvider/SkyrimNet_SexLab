@@ -11,7 +11,7 @@ Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (PrismaUI view path, ac
 | `SKSE_Source/` | C++ → `SkyrimNet_SexLab.dll` |
 | `SKSE/Plugins/SkyrimNet_SexLab.dll` | Built plugin |
 | `PrismaUI/views/SkyrimNet_SexLab/index.html` | Overlay HTML under `Data/PrismaUI/views/` |
-| `SKSE/Plugins/SkyrimNet_SexLab/webui/` | `actions_index.json`, `TargetMenu/Actor/`, `TargetMenu/Scene/`, `MainPanels/` |
+| `SKSE/Plugins/SkyrimNet_SexLab/webui/` | `actions_index.json`, `TargetMenu/Actor/`, `TargetMenu/Scene/`, `MainPanels/`, `ControlPanel/` (drop-in mode JSON only; third-party catalogs stay under their own `catalogRoot`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/Actor/options/0600_sexlab_bondage.json` | Bondage TargetMenu option (live catalog; `make release` moves it into FOMOD `handler_udng/`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/Actor/options/0700_sexlab_leash.json` | Leash TargetMenu option (`panel: leash`; catalog omitted unless `SkyrimNet_Leash.esp` is loaded) |
 | `SKSE/Plugins/SkyrimNet_SexLab/bondage/group-devices.json` | BondagePanel file-first catalog (live; API `GetDatabase` overlays when ready; same release split) |
@@ -25,7 +25,7 @@ Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (PrismaUI view path, ac
 | TargetMenu (same width)     |                                     |
 ```
 
-- **ControlPanel** (`#control-panel`): row 1 title `SkyrimNet SexLab`; then **views** label (75% of `--text-base`) above an indented `main_panel` pulldown (from `webui/MainPanels/`, with JS builtin fallback); OStimNet-gated **framework** pulldown (`#framework-row`, `sexlab`/`ostim`, no label, hidden unless OStimNet, same indent); then **target** label (same 75% size) above an indented **actor focus** pulldown (`#control-actor-pulldown`). Main-panel list includes **None** (clears the right main-panel host). Pulldowns stay **vertically aligned with the trigger**; only the left offset uses `--space-md` from the ControlPanel box (same gap as TargetPanel → Parameter Panel). Menus stack above TargetPanel and the main panel and use an opaque background.
+- **ControlPanel** (`#control-panel`): row 1 **mode** pulldown (`#control-mode-pulldown`, same widget as views/target; built-in `SkyrimNet SexLab` plus `webui/ControlPanel/*.json`); then **views** label (75% of `--text-base`) above an indented `main_panel` pulldown (from the **active mode** `MainPanels/`, with JS builtin fallback in SexLab mode); OStimNet-gated **framework** pulldown (`#framework-row`, `sexlab`/`ostim`, no label, hidden unless OStimNet or the mode sets `hideFramework`); then **target** label (same 75% size) above an indented **actor focus** pulldown (`#control-actor-pulldown`, nearby actors plus mode **sentinels**). Main-panel list includes **None** (clears the right main-panel host). Pulldowns stay **vertically aligned with the trigger**; only the left offset uses `--space-md` from the ControlPanel box (same gap as TargetPanel → Parameter Panel). Menus stack above TargetPanel and the main panel and use an opaque background.
 - **Actor focus pulldown:** nearby actors (player pinned first), sorted sexlab → eligible → ineligible, then distance. Labels: name cropped to 10 chars; `(sexlab)` selectable; no suffix = eligible; `(reason)` greyed (`child`/`cmbt`/`ostim`/`dead`/`load`, ≤5 chars). Selection sets `Target_Current` and switches the selected **SceneInfo** to that actor’s thread if any, else the Scene Creator (`new`) SceneInfo. Default: crosshair if present, else nearest selectable non-player, else player.
 - **Always paused while open:** `Focus(view, true)` on Show. There is no pause/unpause toggle (it would let SexLab threads drift from SceneInfo drafts). Log tailing is file I/O and still works. AnimDB rebuild that needs `RegisterForSingleUpdate` waits until the overlay closes.
 - **TargetMenu:** stacked under ControlPanel in the left column (no actor name header — focus is the ControlPanel pulldown).
@@ -89,7 +89,7 @@ C++ loads **both** trees at `Load()` and `BuildUICatalog` picks one from Control
 | `scene_creator` | `label` | Actor-root toggle: open/close Scene Creator on creator SceneInfo `new` (no Papyrus). Highlighted while Scene Creator is the selected main panel. |
 | `papyrus` | `label` (no `name`), `plugin`, `questFormId`, `scriptName`, `executionFunctionName`, `parameterMapping`, optional `eligibilityRules`, optional `closeWebUI` / `confirmSave` / `explainPrompt` / `panel`, optional `panelDefaults` | TargetMenu-only Papyrus call via `onAction({action:"papyrus",...})` — no YAML / `actions_index`. Actor **`panel: scene_start`** is the shared sentence UI. Actor **`panel: outfit`**: sentence `position_1` / style (`forcefully|normally|gently|silently`) / undresses|dresses / `position_0`; **Start** only (no Custom); `TM_Outfit`; style `silently` skips SkyrimNet narration. Actor **`panel: bondage`**: speaker / style / `changes devices on` / target; per-group 75% body-area label above a 1em-indented pulldown (menus open **below** the widget); pulldowns edit JS `ActorBondage.current` only (no live apply); **Cancel** / hide discard the session; **Start** applies `currentJson` (`TM_BondageFinish`) then narrates unless `silently` and `WebUI_CloseOverlay`; no Custom. **BondagePanel requires Devious Devices NG**; core SkyrimNet_SexLab does not. Catalog: `requiresPlugin: Devious Devices - Assets.esm` + `requiresDll: DeviousDevices.dll`. Actor **`panel: leash`**: Subject / Leashed / style / action pulldown (`tie to`\|`give to`, plus `unleash` when already leashed); action-row control is location or holder; **Start** only; `requiresPlugin: SkyrimNet_Leash.esp`; dispatches `SkyrimNet_Leash_Actions` (no YAML). Scene panels: **`stop`** (speaker pulldown + silent/stop/explain → SceneInfo `pendingStop`), **`stage`** / **`position`** (edit draft; **Done** writes SceneInfo), **`animation`** (opens AnimationPanel; **Done** writes `activeRegistry`). Apply to SexLab on overlay commit. `panelDefaults` seeds SceneStartPanel (Subject, `andThird` none/and, Object `with`/`to victim`/`none`, intent, direction, method, style, setting). Intent **custom** opens IntentPanel (text, Cancel, Ok). Hug/cuddle/kiss giver is SexLab pos1 when intent is `show affection` / `comfort` (or the long Papyrus labels) or method is `cuddling|kissing|hug`. When Scene Creator is already open, clicking a `scene_start` / `cuddle` row applies `panelDefaults` to SceneInfo `new` instead of opening this panel. |
 
-| `pulldown` | `label`, `options[]`, optional `parameters`, optional `eligibilityRules` | Group; children are `action` and/or nested `pulldown`. Optional `eligibilityRules` evaluated at catalog build against `currentActor`; fail → option omitted |
+| `pulldown` | `label`, `options[]`, optional `parameters`, optional `eligibilityRules` | Group; children are `action` and/or nested `pulldown`. Optional `eligibilityRules` evaluated at catalog build against `currentActor`; fail **or** zero remaining children → option omitted |
 | `actionSwitch` | `label`, `options[]` of `action` + `eligibilityRules` | C++ picks first eligible child (or disabled fallback label) |
 
 Optional on any option node: `requiresPlugin` (ESP/ESL name) — omitted from the catalog when that mod is not loaded. Optional `requiresDll` (e.g. `DeviousDevices.dll`) — omitted when `GetModuleHandle` does not find that SKSE plugin.
@@ -118,8 +118,10 @@ One JSON object per file; **order = lexicographic filename**. Optional `requires
 |------|--------|------|
 | `builtin` | `label`, `panel` | Panel already in PrismaUI (`log_panel`, `settings_panel`, `scene_creator_panel` labeled Scene Menu, `animation_menu_panel`) |
 | `papyrus` | `label`, `id`, `plugin`, `questFormId`, `scriptName`, `openFunction`, `closeFunction` | Zero-arg Papyrus open/close on that quest script |
+| `data_table` | same quest fields as `papyrus`, plus `columns` (`id`/`label`) | Generic table host (`#data-table-panel`). Open still calls `openFunction`; rows arrive via `WebUI_PushMainPanelData`. |
+| `actor_detail` | same quest fields as `papyrus` | Generic key/value + control host (`#actor-detail-panel`). Payload `fields` + `controls`. |
 
-Starters in core: `0900_log_panel.json` (Log), `1000_settings.json` (Settings), `0100_scene_creator_panel.json`, `0200_animation_panel.json`. Foreign main panels are filesystem-only (no register native); DOM wiring is deferred.
+Starters in core: `0900_log_panel.json` (Log), `1000_settings.json` (Settings), `0100_scene_creator_panel.json`, `0200_animation_panel.json`. Third-party modes ship their own `MainPanels/` under `catalogRoot` (see **ControlPanel modes**).
 
 **Settings panel:** rebuild AnimationDB (then switches main panel to Log with follow-tail), version from `Data/SKSE/Plugins/SkyrimNet_SexLab/info.json` (fallback `Config::kPluginVersion`), docs URL shown as text (`https://github.com/GoodProvider/SkyrimNet_SexLab` — no `ShellExecute`), **Open SkyrimNet dashboard** hides this WebUI then `SkyrimNetApi.TriggerToggleDashboard()` (navigate Plugins → SkyrimNet_SexLab; no deep-link API). Plugin config schema: `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml`. C++ reads via `PublicGetPluginConfigValue("SkyrimNet_SexLab", …)`; Papyrus via `SkyrimNetApi.GetConfig*("Plugin_SkyrimNet_SexLab", …)`.
 
@@ -132,6 +134,80 @@ Drink your own champagne: official optional packages use the same filesystem JSO
 **Reference: bondage / DDNG** — BondagePanel requires Devious Devices NG (`DeviousDevices.dll` + Assets.esm + Integration.esm). Core SkyrimNet_SexLab does not. Live files are `webui/TargetMenu/Actor/options/0600_sexlab_bondage.json` (TargetMenu `bondage` → BondagePanel stacked body-area label + pulldown below widget → **Start** → `Handler_UDNG.TM_BondageFinish`) and `bondage/group-devices.json` (file-first catalog; `GetDatabase` overlays when ready; head-to-foot including Hood / Boots / Suit). FOMOD Recommended when Assets **and** Integration are active. `make release` moves both into FOMOD `handler_udng/` with the handler ESP (KNOWLEDGEBASE **Optional SKSE files / FOMOD split**). Handler `Setup` fails without DDNG (no BondagePanel) and does not call `RegisterTargetMenuOption` or depend on `SkyrimNetUDNG.esp`. Do not send the catalog through Papyrus `ObjectToLowerCaseKeyJson`.
 
 `RegisterTargetMenuOption` remains in the API for legacy callers but is not used by the bondage handler.
+
+### ControlPanel modes
+
+`Data/SKSE/Plugins/SkyrimNet_SexLab/webui/ControlPanel/*.json` (lexicographic) is the **only** mode registry. SexLab does not scan other plugin folders. Third parties work by deploying a JSON file **into this directory** (MO2 overlay, FOMOD copy, or a Data-path file in their own repo). TargetMenu and MainPanels stay under that plugin’s own `catalogRoot` — do not drop those trees into SexLab’s `webui/` (they would mix with SexLab’s built-in options). Same JSON loader as TargetMenu/MainPanels — no YAML parser.
+
+Built-in SexLab (no file required):
+
+- `id`: `sexlab`
+- `label`: `SkyrimNet SexLab`
+- catalog = this plugin’s `webui/TargetMenu` + `webui/MainPanels`
+
+Example drop-in (fields are generic; any plugin can use them):
+
+```json
+{
+  "id": "example_mode",
+  "label": "Example Mode",
+  "requiresPlugin": "Example.esp",
+  "catalogRoot": "SKSE/Plugins/Example/webui",
+  "plugin": "Example.esp",
+  "questFormId": "0x800",
+  "scriptName": "Example_Menu",
+  "openFunction": "TM_ModeOpened",
+  "closeFunction": "TM_ModeClosed",
+  "hideFramework": true,
+  "rowClickMainPanel": "detail",
+  "sentinels": [{ "id": "all_units", "label": "All Units", "mainPanel": "roster" }]
+}
+```
+
+| Field | Role |
+|-------|------|
+| `id` / `label` | Mode pulldown (replaces the old hardcoded `SkyrimNet SexLab` title) |
+| `requiresPlugin` | Omit the mode if that ESP is not loaded |
+| `catalogRoot` | Data-relative folder with that plugin’s `TargetMenu/Actor/` + `MainPanels/` |
+| `plugin` / `questFormId` / `scriptName` | Quest script for `openFunction` / `closeFunction` (zero-arg) |
+| `hideFramework` | Hide the OStim framework row while this mode is active |
+| `rowClickMainPanel` | MainPanel `id` to open after a `data_table` row click; omit to leave the current panel |
+| `sentinels` | Extra actor-pulldown entries (see **Target sentinels**) |
+
+JS `onControlModeChange` → C++ `SwitchControlMode`: close current main panel, call previous `closeFunction`, select the mode, `configureControlPanel` + `configureTargetMenu` from that catalog, call `openFunction`. Last mode is remembered for the overlay session (hide/show does not reset to SexLab). Actor focus is kept unless the new mode’s open path changes it.
+
+Foreign-mode views are whatever that `catalogRoot/MainPanels/` ships. SexLab Scene Menu / Animation / Log / Settings disappear when the active mode’s catalog does not include them. SexLab sex/scene TargetMenu rows are not on screen (different `catalogRoot`).
+
+### Target sentinels
+
+A mode may inject actor-pulldown entries that are not nearby FormIDs (`id` + `label`; optional `mainPanel`).
+
+Selecting a sentinel:
+
+- JS `onControlActorChange({ sentinel, formId: 0 })`
+- C++ sets `Target_Current` to null and `FocusKind` to the sentinel id, then rebuilds the TargetMenu catalog
+- `webui_focus_kind` eligibility decorator compares against `FocusKind` (`==` / `!=`)
+- `ExecutePapyrusOption` allows a missing `target` Actor when the mapping source is `target` (Papyrus receives `None`)
+- If the sentinel has `mainPanel`, C++ `SwitchMainPanel`s to that id; otherwise the current panel stays
+
+`WebUI_GetFocusActor` / `WebUI_GetFocusKind` expose the pair to Papyrus. `Target_Menu_Refresh` is allowed when `Target_Current` is null if `FocusKind` is set. Clearing the TargetMenu session clears `FocusKind`.
+
+Far-actor pin: a `data_table` row click still calls `ApplyControlActorFocus` with that FormID even if the actor is not nearby; SexLab already keeps the current focus actor in the nearby list. If the mode sets `rowClickMainPanel`, the overlay then opens that panel.
+
+### Foreign main panels
+
+`type: papyrus` MainPanels still only run zero-arg open/close and do not paint HTML. Use:
+
+| type | Host | Payload (`WebUI_PushMainPanelData`) |
+|------|------|-------------------------------------|
+| `data_table` | `#data-table-panel` | `{ "panel": "data_table", "id", "columns", "rows", "truncated" }` |
+| `actor_detail` | `#actor-detail-panel` | `{ "panel": "actor_detail", "id", "fields", "controls" }` |
+
+Do not mix table and detail in one object. Row: `{ "formId": 123, "cells": ["Name", ...] }` (unsigned FormID; ESL signed Papyrus ints are `>>> 0` in JS). Field: `{ "id", "label", "value" }`. Control: `{ "id", "label", "widget": "toggle"|"select"|"button", "value", "options" }`.
+
+`openFunction` should build and push the payload. Include `plugin`, `questFormId`, `scriptName`, and `applyFunction` in the JSON so toggles can dispatch Papyrus; the overlay has no hardcoded plugin/script fallbacks. Toggle/select/button → `onAction` papyrus `(speaker, target, control, value)` with `closeWebUI: false`. Row click → `onMainPanelRow` → focus that FormID, then `rowClickMainPanel` if the mode set it.
+
+Native: `SkyrimNet_SexLab_WebUI.WebUI_PushMainPanelData(String json)`. Cap roster/table size so PrismaUI is not stalled by a huge Invoke.
 
 ## Build
 

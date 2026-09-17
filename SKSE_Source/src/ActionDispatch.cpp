@@ -529,10 +529,16 @@ namespace ActionCatalog
                     actor = ResolveSource(source, player, focusTarget);
                 }
                 if (!actor) {
-                    webui_log::error(
-                        "ExecutePapyrusOption: missing Actor for '{}' (fn {}, source {})",
-                        pm.name, functionName, source);
-                    return false;
+                    if (source == "target") {
+                        webui_log::info(
+                            "ExecutePapyrusOption: None target for '{}' (fn {})",
+                            pm.name, functionName);
+                    } else {
+                        webui_log::error(
+                            "ExecutePapyrusOption: missing Actor for '{}' (fn {}, source {})",
+                            pm.name, functionName, source);
+                        return false;
+                    }
                 }
                 DynamicArgs::Item item;
                 item.kind = DynamicArgs::Kind::Actor;

@@ -45,11 +45,23 @@ namespace ActionCatalog
     // focusHasStrippedItems: StorageUtil strip-store on focus (currentActor) for actionSwitch.
     nlohmann::json BuildUICatalog(bool focusHasStrippedItems = false);
 
-    /// Catalog for JS configureControlPanel(...): { "panels": [ ... ] } with requiresPlugin filtered.
+    /// Catalog for JS configureControlPanel(...): panels, selected, modes, sentinels, hideFramework.
     nlohmann::json BuildMainPanelsCatalog();
 
     /// Apply main-panel selection from JS (id or panel key). Closes previous, opens next.
     void SwitchMainPanel(const std::string& key);
+
+    /// Swap ControlPanel mode (built-in sexlab or ControlPanel/*.json). Returns false if unknown/omitted.
+    bool SwitchControlMode(const std::string& modeId);
+
+    std::string CurrentControlModeId();
+    nlohmann::json CurrentSentinels();
+    bool CurrentModeHidesFramework();
+    bool IsSexLabControlMode();
+    /// MainPanel id to open after a data_table row click; empty = leave the current panel.
+    std::string CurrentRowClickMainPanel();
+    /// MainPanel id for a sentinel pulldown entry; empty = do not switch.
+    std::string SentinelMainPanel(const std::string& sentinelId);
 
     /// Clear current main-panel selection (papyrus close / hide builtins) without selecting another.
     void ClearMainPanelSelection();
