@@ -1110,6 +1110,32 @@
             opacity: 0.4;
         }
 
+        .option.has-source,
+        .action-btn.has-source {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .option-source {
+            font-size: 50%;
+            line-height: 1;
+            color: var(--text-secondary);
+            align-self: flex-start;
+        }
+
+        .option-label {
+            display: block;
+        }
+
+        .source-sup {
+            font-size: 50%;
+            vertical-align: super;
+            margin-right: 0.15em;
+            line-height: 0;
+        }
+
         .option-cancel {
             font-family: var(--font-ui);
             font-size: var(--text-base);
@@ -1912,7 +1938,7 @@
             host.appendChild(createPulldown(labels, seed, (label) => {
                 if (mainPanelPulldownBusy) return;
                 selectMainPanelByLabel(label);
-            }));
+            }, null, decorateMainPanelViewLabel));
         }
 
         let CONTROL_MODES = [{ id: 'sexlab', label: 'SkyrimNet SexLab' }];
@@ -2066,6 +2092,40 @@
                 renderForeignDataTable(payload);
             else if (panel === 'actor_detail')
                 renderForeignActorDetail(payload);
+        }
+
+        // Live TargetMenu cascades from Papyrus (praise buttons, punish/restrain fields).
+        function setCascadeChoices(payload) {
+            if (typeof payload === 'string') {
+                try { payload = JSON.parse(payload); } catch (e) { return; }
+            }
+            if (!payload || typeof payload !== 'object') return;
+            const host = document.getElementById('target-cascade-host');
+            if (!host) return;
+            host.querySelectorAll('.target-cascade-live').forEach(el => el.remove());
+            if (payload.panel === 'fields') {
+                papyrusSelectedOpt = payload;
+                renderTargetMenu();
+                return;
+            }
+            const panel = document.createElement('div');
+            panel.className = 'panel target-pulldown-panel target-cascade-live';
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.textContent = payload.label || payload.title || 'choices';
+            panel.appendChild(header);
+            const list = document.createElement('div');
+            list.className = 'option-list';
+            (payload.options || []).forEach(opt => {
+                if (!opt || opt.type !== 'papyrus') return;
+                const row = document.createElement('div');
+                row.className = 'option';
+                decorateTargetOption(row, opt);
+                row.onclick = () => firePapyrusOption(opt, {});
+                list.appendChild(row);
+            });
+            panel.appendChild(list);
+            host.appendChild(panel);
         }
 
         function renderForeignDataTable(payload) {
@@ -2626,6 +2686,70 @@
             return (obj.label && String(obj.label).length) ? obj.label : (obj.name || '');
         }
 
+        function sourceOf(obj) {
+            if (!obj || obj.source == null) return '';
+            return String(obj.source).trim();
+        }
+
+        function isForeignSource(src) {
+            const s = String(src || '').trim().toLowerCase();
+            return s.length > 0 && s !== 'sexlab';
+        }
+
+        function sourceDisplay(src) {
+            return String(src || '').toUpperCase();
+        }
+
+        function optionWithInheritedSource(entry, parent) {
+            if (!entry || typeof entry !== 'object') return entry;
+            if (sourceOf(entry) || !isForeignSource(sourceOf(parent)))
+                return entry;
+            const copy = Object.assign({}, entry);
+            copy.source = sourceOf(parent);
+            return copy;
+        }
+
+        function decorateTargetOption(el, opt) {
+            if (!el) return;
+            const label = (opt && typeof opt === 'object') ? displayLabel(opt) : String(opt || '');
+            const src = (opt && typeof opt === 'object') ? sourceOf(opt) : '';
+            el.textContent = '';
+            if (isForeignSource(src)) {
+                el.classList.add('has-source');
+                const badge = document.createElement('span');
+                badge.className = 'option-source';
+                badge.textContent = sourceDisplay(src);
+                const lab = document.createElement('span');
+                lab.className = 'option-label';
+                lab.textContent = label;
+                el.appendChild(badge);
+                el.appendChild(lab);
+            } else {
+                el.classList.remove('has-source');
+                el.textContent = label;
+            }
+        }
+
+        function decorateMainPanelViewLabel(el, label) {
+            if (!el) return;
+            el.textContent = '';
+            if (label === MAIN_PANEL_NONE_LABEL) {
+                el.textContent = label;
+                return;
+            }
+            const entry = MAIN_PANELS.find((p) => mainPanelLabelOf(p) === label);
+            const src = entry ? sourceOf(entry) : '';
+            if (!isForeignSource(src)) {
+                el.textContent = label;
+                return;
+            }
+            const sup = document.createElement('sup');
+            sup.className = 'source-sup';
+            sup.textContent = sourceDisplay(src);
+            el.appendChild(sup);
+            el.appendChild(document.createTextNode(label));
+        }
+
         function deepClone(o) {
             return JSON.parse(JSON.stringify(o || {}));
         }
@@ -3033,13 +3157,13 @@
             dyn.appendChild(field);
         }
 
-        function makeActionRow(label, name, selected, onBefore, optionParameters, disabled) {
+        function makeActionRow(label, name, selected, onBefore, optionParameters, disabled, source) {
             const row = document.createElement('div');
             row.className = 'option-row' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
 
             const main = document.createElement('div');
             main.className = 'option' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
-            main.textContent = label;
+            decorateTargetOption(main, { label: label, source: source });
             if (!disabled) {
                 main.onclick = (e) => {
                     e.stopPropagation();
@@ -3058,7 +3182,7 @@
 
             const main = document.createElement('div');
             main.className = 'option';
-            main.textContent = displayLabel(opt);
+            decorateTargetOption(main, opt);
             const drill = () => {
                 navStack = navStack.slice(0, depthIndex + 1);
                 navStack.push(opt);
@@ -3165,20 +3289,26 @@
             });
         }
 
-        function createPulldown(values, current, onChange, disabledValues) {
+        function createPulldown(values, current, onChange, disabledValues, decorateDisplay) {
             const root = document.createElement('div');
             root.className = 'pulldown';
             const valueEl = document.createElement('div');
             valueEl.className = 'pulldown-value';
-            valueEl.textContent = current || (values[0] || '');
+            const seed = current || (values[0] || '');
+            valueEl.textContent = seed;
             const menu = document.createElement('div');
             menu.className = 'pulldown-menu';
             const disabled = disabledValues instanceof Set
                 ? disabledValues
                 : new Set(Array.isArray(disabledValues) ? disabledValues : []);
 
+            const paintLabel = (el, text) => {
+                if (decorateDisplay) decorateDisplay(el, text);
+                else el.textContent = text;
+            };
+
             const paint = (selected) => {
-                valueEl.textContent = selected;
+                paintLabel(valueEl, selected);
                 menu.innerHTML = '';
                 for (let i = 0; i < values.length; i++) {
                     const v = values[i];
@@ -3187,7 +3317,7 @@
                     item.className = 'pulldown-option'
                         + (v === selected ? ' selected' : '')
                         + (isDisabled ? ' disabled' : '');
-                    item.textContent = v;
+                    paintLabel(item, v);
                     if (!isDisabled) {
                         item.onclick = (e) => {
                             e.stopPropagation();
@@ -3210,7 +3340,7 @@
                 else clearPulldownMenuPosition(menu);
             };
 
-            paint(valueEl.textContent);
+            paint(seed);
             root.appendChild(valueEl);
             root.appendChild(menu);
             return root;
@@ -3356,14 +3486,15 @@
                             navStack = [];
                         },
                         opt.parameters || null,
-                        !!opt.disabled
+                        !!opt.disabled,
+                        sourceOf(opt)
                     ));
                     continue;
                 }
                 if (opt.type === 'scene_creator') {
                     const row = document.createElement('div');
                     row.className = 'option' + (tmSceneCreatorIsOpen() ? ' selected' : '');
-                    row.textContent = displayLabel(opt);
+                    decorateTargetOption(row, opt);
                     row.onclick = () => tmToggleSceneCreator();
                     left.appendChild(row);
                     continue;
@@ -3371,7 +3502,7 @@
                 if (opt.type === 'papyrus') {
                     const row = document.createElement('div');
                     row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
-                    row.textContent = displayLabel(opt);
+                    decorateTargetOption(row, opt);
                     row.onclick = () => selectPapyrusOption(opt);
                     left.appendChild(row);
                     continue;
@@ -3379,7 +3510,7 @@
                 if (opt.type !== 'pulldown') continue;
                 const row = document.createElement('div');
                 row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
-                row.textContent = displayLabel(opt);
+                decorateTargetOption(row, opt);
                 row.onclick = () => selectLeftPulldown(opt);
                 left.appendChild(row);
             }
@@ -5807,7 +5938,8 @@
 
         function fillPulldownPanelBody(listEl, opt, depthIndex) {
             listEl.innerHTML = '';
-            for (const entry of (opt.options || [])) {
+            for (const raw of (opt.options || [])) {
+                const entry = optionWithInheritedSource(raw, opt);
                 if (entry.type === 'pulldown') {
                     listEl.appendChild(makeNestedPulldownRow(entry, depthIndex));
                     continue;
@@ -5815,7 +5947,7 @@
                 if (entry.type === 'papyrus') {
                     const row = document.createElement('div');
                     row.className = 'option';
-                    row.textContent = displayLabel(entry);
+                    decorateTargetOption(row, entry);
                     row.onclick = () => {
                         navStack = navStack.slice(0, depthIndex + 1);
                         selectPapyrusOption(entry);
@@ -5836,7 +5968,9 @@
                         navStack = navStack.slice(0, depthIndex + 1);
                         leftSelectedOpt = navStack[0] || leftSelectedOpt;
                     },
-                    entry.parameters || null
+                    entry.parameters || null,
+                    false,
+                    sourceOf(entry)
                 ));
             }
         }

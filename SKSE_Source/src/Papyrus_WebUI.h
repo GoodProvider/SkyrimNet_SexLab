@@ -103,6 +103,7 @@ namespace PapyrusBindings_WebUI {
     void ApplyMainPanelRow(const std::string& payload);
 
     void WebUI_PushMainPanelData(RE::StaticFunctionTag*, RE::BSFixedString json);
+    void WebUI_PushCascadeChoices(RE::StaticFunctionTag*, RE::BSFixedString json);
     RE::Actor* WebUI_GetFocusActor(RE::StaticFunctionTag*);
     RE::BSFixedString WebUI_GetFocusKind(RE::StaticFunctionTag*);
 

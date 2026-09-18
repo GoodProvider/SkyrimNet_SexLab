@@ -94,6 +94,8 @@ C++ loads **both** trees at `Load()` and `BuildUICatalog` picks one from Control
 
 Optional on any option node: `requiresPlugin` (ESP/ESL name) — omitted from the catalog when that mod is not loaded. Optional `requiresDll` (e.g. `DeviousDevices.dll`) — omitted when `GetModuleHandle` does not find that SKSE plugin.
 
+Optional `source` (string) on TargetMenu option roots and MainPanel entries: omit or `"sexlab"` is native (no decoration). Any other value (e.g. `"dom"`) paints a 50% badge in the upper left above TargetMenu option labels, and a leading superscript on the ControlPanel views pulldown. Nested cascade children inherit the parent pulldown’s `source` when they have none.
+
 **Filesystem dispatch actions** (optional handlers / third parties): an `action` option may carry `plugin`, `questFormId` (local, e.g. `"0x800"`), `scriptName`, `executionFunctionName`, and `parameterMapping`. C++ synthesizes an `ActionDef` so `ExecuteAction` works without an `actions_index` row. Prefer `plugin` + local FormID over EditorID for optional ESPs.
 
 Actor sources: `playerActor` / `currentActor` (aliases `player` / `target` / `focus` still work).
