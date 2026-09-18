@@ -2104,7 +2104,12 @@
             if (!host) return;
             host.querySelectorAll('.target-cascade-live').forEach(el => el.remove());
             if (payload.panel === 'fields') {
+                fieldsResetForOpt(payload);
                 papyrusSelectedOpt = payload;
+                leftSelectedOpt = payload;
+                navStack = [];
+                selectedActionName = null;
+                selectedActionLabel = null;
                 renderTargetMenu();
                 return;
             }
@@ -3597,6 +3602,15 @@
                 tmCastDraft = null;
                 if (opt.panel === 'position')
                     tmCastDraft = tmBuildCastDraft(true);
+                if (opt.panel === 'fields') {
+                    const staticFields = opt.panelFields || opt.panelfields;
+                    if (!staticFields || !staticFields.length) {
+                        // Live opener (punish / restrain variants): Papyrus pushes panelFields.
+                        firePapyrusOption(opt, { closeWebUI: false });
+                    } else {
+                        fieldsResetForOpt(opt);
+                    }
+                }
                 if (opt.panel === 'bondage') {
                     const pool = eligibleParamActors();
                     if (!outfitFindActor(pool, bondageUi.target))
@@ -4773,6 +4787,24 @@
                 notifyPlayer('No matching animations for those tags.');
                 return;
             }
+            // DOM punish method=rape: record mind state first, then SexLab scene.
+            if (pending.punishReason != null) {
+                firePapyrusOption({
+                    plugin: 'SkyrimNet_DOM.esp',
+                    questFormId: '0x800',
+                    scriptName: 'SkyrimNet_DOM_Menu',
+                    executionFunctionName: 'TM_PunishRapeRecord',
+                    parameterMapping: [
+                        { type: 'speaker', name: 'speaker' },
+                        { type: 'target', name: 'target' },
+                        { type: 'dynamic', name: 'reason' }
+                    ],
+                    closeWebUI: false
+                }, {
+                    reason: pending.punishReason,
+                    closeWebUI: false
+                });
+            }
             const params = {
                 speaker: ssActorDict(pending.cast.subject),
                 intent: pending.intent,
@@ -4790,7 +4822,17 @@
                 params.participate = ssActorDict(pending.cast.third);
             if (pending.toVictim && pending.cast.object)
                 params.victim = ssActorDict(pending.cast.object);
-            firePapyrusOption(pending.opt, params);
+            const sceneOpt = pending.punishReason != null
+                ? Object.assign({}, pending.opt, {
+                    plugin: 'SkyrimNet_SexLab.esp',
+                    questFormId: '0x800',
+                    scriptName: 'SkyrimNet_SexLab_Actions',
+                    executionFunctionName: pending.spec.executionFunctionName,
+                    parameterMapping: pending.spec.parameterMapping,
+                    closeWebUI: true
+                })
+                : pending.opt;
+            firePapyrusOption(sceneOpt, params);
             ssCloseIntentPanel();
             if (typeof hidePanel === 'function') {
                 hidePanel('target_menu_panel');
@@ -4877,7 +4919,9 @@
             }, new Set(pool.filter(a => !a.selectable).map(a => a.label)));
         }
 
-        function renderSceneStartPanelBody(body, opt) {
+        function renderSceneStartPanelBody(body, opt, embedOpts) {
+            const hideCustom = !!(embedOpts && embedOpts.hideCustom);
+            const omitStartBar = !!(embedOpts && embedOpts.omitStartBar);
             const pool = ssActorPool();
             ssApplyDefaults(opt, pool);
             ssApplyGates(pool);
@@ -5003,28 +5047,32 @@
                 ssUi.settingName = v;
             }));
 
-            const bar = document.createElement('div');
-            bar.className = 'bottom-bar top-bar';
-            const cast = ssResolveCast(pool);
-            const customBtn = document.createElement('div');
-            customBtn.className = 'action-btn';
-            customBtn.textContent = 'Custom';
-            if (!ssCanCustom(cast)) customBtn.classList.add('disabled');
-            customBtn.onclick = () => {
-                if (customBtn.classList.contains('disabled')) return;
-                ssCustom(opt);
-            };
-            const startBtn = document.createElement('div');
-            startBtn.className = 'action-btn';
-            startBtn.textContent = 'Start';
-            if (!ssCanStart(pool, cast)) startBtn.classList.add('disabled');
-            startBtn.onclick = () => {
-                if (startBtn.classList.contains('disabled')) return;
-                ssStart(opt);
-            };
-            bar.appendChild(customBtn);
-            bar.appendChild(startBtn);
-            body.appendChild(bar);
+            if (!omitStartBar) {
+                const bar = document.createElement('div');
+                bar.className = 'bottom-bar top-bar';
+                const cast = ssResolveCast(pool);
+                if (!hideCustom) {
+                    const customBtn = document.createElement('div');
+                    customBtn.className = 'action-btn';
+                    customBtn.textContent = 'Custom';
+                    if (!ssCanCustom(cast)) customBtn.classList.add('disabled');
+                    customBtn.onclick = () => {
+                        if (customBtn.classList.contains('disabled')) return;
+                        ssCustom(opt);
+                    };
+                    bar.appendChild(customBtn);
+                }
+                const startBtn = document.createElement('div');
+                startBtn.className = 'action-btn';
+                startBtn.textContent = 'Start';
+                if (!ssCanStart(pool, cast)) startBtn.classList.add('disabled');
+                startBtn.onclick = () => {
+                    if (startBtn.classList.contains('disabled')) return;
+                    ssStart(opt);
+                };
+                bar.appendChild(startBtn);
+                body.appendChild(bar);
+            }
             body.appendChild(fields);
         }
 
@@ -5865,6 +5913,310 @@
             body.appendChild(fields);
         }
 
+        // --- panel: fields (DOM follow / walking / punish / restrain variants) ---
+        let fieldsUi = {
+            seededKey: '',
+            values: {},
+            fieldOptions: {},
+            showTextFor: null,
+            textDraft: '',
+            rapeSeeded: false
+        };
+
+        const FIELDS_RAPE_DEFAULTS = {
+            subject: 'player',
+            object: 'currentActor',
+            objectRelation: 'to victim',
+            andThird: 'none',
+            intent: 'sexual assault',
+            direction: 'fucking',
+            method: 'pussy',
+            style: 'forcefully',
+            settingName: 'punish_pleasure_pain_rape'
+        };
+
+        function fieldsOptKey(opt) {
+            return [
+                displayLabel(opt) || '',
+                opt.executionFunctionName || '',
+                (opt.panelFields || opt.panelfields || []).map(f => f && f.name).join(',')
+            ].join('|');
+        }
+
+        function fieldsResetForOpt(opt) {
+            const key = fieldsOptKey(opt);
+            const defs = (opt && (opt.panelDefaults || opt.paneldefaults)) || {};
+            const list = opt.panelFields || opt.panelfields || [];
+            fieldsUi.seededKey = key;
+            fieldsUi.values = {};
+            fieldsUi.fieldOptions = {};
+            fieldsUi.showTextFor = null;
+            fieldsUi.textDraft = '';
+            fieldsUi.rapeSeeded = false;
+            list.forEach(f => {
+                if (!f || !f.name) return;
+                const name = String(f.name);
+                const opts = (f.options || []).map(o => ({
+                    value: String(o.value != null ? o.value : (o.label || '')),
+                    label: String(o.label != null ? o.label : (o.value || '')),
+                    opensText: !!(o.opensText || o.openstext)
+                }));
+                fieldsUi.fieldOptions[name] = opts;
+                let seed = defs[name];
+                if (seed == null || seed === '')
+                    seed = opts.length ? opts[0].value : '';
+                // Never leave the opensText sentinel as the Start value.
+                const seedOpt = opts.find(o => o.value === seed);
+                if (seedOpt && seedOpt.opensText) {
+                    const alt = opts.find(o => !o.opensText);
+                    seed = alt ? alt.value : '';
+                }
+                fieldsUi.values[name] = String(seed != null ? seed : '');
+            });
+        }
+
+        function fieldsEnsureSeeded(opt) {
+            const key = fieldsOptKey(opt);
+            if (fieldsUi.seededKey !== key)
+                fieldsResetForOpt(opt);
+        }
+
+        function fieldsFindOption(fieldName, value) {
+            const opts = fieldsUi.fieldOptions[fieldName] || [];
+            return opts.find(o => o.value === value) || null;
+        }
+
+        function fieldsIsRapeMethod() {
+            return String(fieldsUi.values.type || '').toLowerCase() === 'rape';
+        }
+
+        function fieldsSeedRapeScene() {
+            const pool = ssActorPool();
+            const fake = { label: 'punish-rape', panelDefaults: FIELDS_RAPE_DEFAULTS };
+            ssApplyDefaults(fake, pool, true);
+            fieldsUi.rapeSeeded = true;
+        }
+
+        function fieldsAllApplyOnChange(opt) {
+            const list = opt.panelFields || opt.panelfields || [];
+            return list.length > 0 && list.every(f => f && (f.applyOnChange || f.applyonchange));
+        }
+
+        function fieldsCloseFlag(opt) {
+            if (opt.closeWebUI === false || opt.closeWebUI === 0) return false;
+            return true;
+        }
+
+        function fieldsFireStart(opt) {
+            const reason = fieldsUi.values.reason;
+            if (reason === 'custom' || fieldsUi.showTextFor === 'reason') {
+                notifyPlayer('Enter a custom punish reason first.');
+                return;
+            }
+            if (fieldsIsRapeMethod()) {
+                fieldsFireRapeStart(opt);
+                return;
+            }
+            const params = Object.assign({}, fieldsUi.values, {
+                closeWebUI: fieldsCloseFlag(opt)
+            });
+            firePapyrusOption(opt, params);
+            if (params.closeWebUI && typeof hidePanel === 'function') {
+                hidePanel('target_menu_panel');
+                hidePanel('control_panel');
+            }
+        }
+
+        function fieldsFireRapeStart(opt) {
+            if (!fieldsUi.rapeSeeded)
+                fieldsSeedRapeScene();
+            const pool = ssActorPool();
+            const cast = ssResolveCast(pool);
+            if (!ssCanStart(pool, cast)) {
+                notifyPlayer('Pick valid scene actors before starting.');
+                return;
+            }
+            const reason = fieldsUi.values.reason || 'being a bad slave';
+            const tag = ssRemapMethod(ssUi.method);
+            const reqId = 'ss' + Date.now();
+            const spec = ssFireSpec(cast);
+            ssResolvePending = {
+                id: reqId,
+                opt,
+                cast,
+                spec,
+                direction: ssUi.direction,
+                intent: ssPapyrusIntent(),
+                style: ssUi.style || 'forcefully',
+                settingName: ssUi.settingName || 'punish_pleasure_pain_rape',
+                toVictim: ssUi.objectRelation === 'to victim',
+                punishReason: reason
+            };
+            if (typeof window.onAnimDbResolveTags !== 'function') {
+                notifyPlayer('No matching animations for those tags.');
+                ssResolvePending = null;
+                return;
+            }
+            window.onAnimDbResolveTags(JSON.stringify({
+                _request_id: reqId,
+                _tags: tag,
+                _actor_count: ssActorCount(cast)
+            }));
+        }
+
+        function fieldsOnSelectChange(opt, field, value) {
+            const name = String(field.name);
+            const picked = fieldsFindOption(name, value)
+                || (fieldsUi.fieldOptions[name] || []).find(o => o.label === value);
+            const val = picked ? picked.value : value;
+            if (picked && picked.opensText) {
+                fieldsUi.showTextFor = name;
+                fieldsUi.textDraft = '';
+                // Keep prior non-custom value until Ok; do not set Start value to "custom".
+                renderPapyrusPanel();
+                return;
+            }
+            fieldsUi.showTextFor = null;
+            fieldsUi.values[name] = val;
+            if (name === 'type' && String(val).toLowerCase() === 'rape') {
+                fieldsSeedRapeScene();
+            }
+            if (field.applyOnChange || field.applyonchange) {
+                const params = Object.assign({}, fieldsUi.values, {
+                    closeWebUI: fieldsCloseFlag(opt)
+                });
+                firePapyrusOption(opt, params);
+                if (params.closeWebUI && typeof hidePanel === 'function') {
+                    hidePanel('target_menu_panel');
+                    hidePanel('control_panel');
+                }
+                return;
+            }
+            renderPapyrusPanel();
+        }
+
+        function fieldsCommitCustomText(opt, fieldName) {
+            const text = String(fieldsUi.textDraft || '').trim();
+            if (!text) {
+                fieldsUi.showTextFor = null;
+                renderPapyrusPanel();
+                return;
+            }
+            const opts = fieldsUi.fieldOptions[fieldName] || [];
+            if (!opts.some(o => o.value === text)) {
+                // Insert before trailing "custom" / "no reason" sentinels when present.
+                let insertAt = opts.length;
+                for (let i = opts.length - 1; i >= 0; i--) {
+                    const v = String(opts[i].value || '').toLowerCase();
+                    if (v === 'custom' || v === 'no reason' || opts[i].opensText)
+                        insertAt = i;
+                    else
+                        break;
+                }
+                opts.splice(insertAt, 0, { value: text, label: text, opensText: false });
+                fieldsUi.fieldOptions[fieldName] = opts;
+            }
+            fieldsUi.values[fieldName] = text;
+            fieldsUi.showTextFor = null;
+            fieldsUi.textDraft = '';
+            renderPapyrusPanel();
+        }
+
+        function renderFieldsPanelBody(body, opt) {
+            fieldsEnsureSeeded(opt);
+            const list = opt.panelFields || opt.panelfields || [];
+            const showStart = !fieldsAllApplyOnChange(opt);
+
+            if (showStart) {
+                const bar = document.createElement('div');
+                bar.className = 'bottom-bar top-bar';
+                const startBtn = document.createElement('div');
+                startBtn.className = 'action-btn';
+                startBtn.textContent = 'Start';
+                if (fieldsIsRapeMethod()) {
+                    const pool = ssActorPool();
+                    if (!fieldsUi.rapeSeeded)
+                        fieldsSeedRapeScene();
+                    const cast = ssResolveCast(pool);
+                    if (!ssCanStart(pool, cast))
+                        startBtn.classList.add('disabled');
+                }
+                startBtn.onclick = () => {
+                    if (startBtn.classList.contains('disabled')) return;
+                    fieldsFireStart(opt);
+                };
+                bar.appendChild(startBtn);
+                body.appendChild(bar);
+            }
+
+            const fields = document.createElement('div');
+            fields.className = 'labeled-fields';
+            const addField = (labelText, node) => {
+                const field = document.createElement('div');
+                field.className = 'dyn-field';
+                const lab = document.createElement('label');
+                lab.textContent = labelText || '\u00a0';
+                field.appendChild(lab);
+                if (node) field.appendChild(node);
+                fields.appendChild(field);
+            };
+
+            list.forEach(f => {
+                if (!f || !f.name) return;
+                const name = String(f.name);
+                const opts = fieldsUi.fieldOptions[name] || [];
+                const labels = opts.map(o => o.label || o.value);
+                const curVal = fieldsUi.values[name] || '';
+                const curOpt = fieldsFindOption(name, curVal);
+                const seedLabel = (curOpt && (curOpt.label || curOpt.value))
+                    || (fieldsUi.showTextFor === name ? 'custom' : curVal)
+                    || (labels[0] || '—');
+                const pd = createPulldown(labels, seedLabel, (picked) => {
+                    fieldsOnSelectChange(opt, f, picked);
+                });
+                addField(f.label || name, pd);
+
+                if (fieldsUi.showTextFor === name) {
+                    const wrap = document.createElement('div');
+                    wrap.style.display = 'flex';
+                    wrap.style.gap = '0.4em';
+                    wrap.style.alignItems = 'center';
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = fieldsUi.textDraft || '';
+                    input.placeholder = 'custom reason';
+                    input.style.flex = '1';
+                    input.oninput = () => { fieldsUi.textDraft = input.value; };
+                    input.onkeydown = (ev) => {
+                        if (ev.key === 'Enter') {
+                            ev.preventDefault();
+                            fieldsCommitCustomText(opt, name);
+                        }
+                    };
+                    const ok = document.createElement('div');
+                    ok.className = 'action-btn';
+                    ok.textContent = 'Ok';
+                    ok.onclick = () => fieldsCommitCustomText(opt, name);
+                    wrap.appendChild(input);
+                    wrap.appendChild(ok);
+                    addField('', wrap);
+                    setTimeout(() => input.focus(), 0);
+                }
+            });
+            body.appendChild(fields);
+
+            if (fieldsIsRapeMethod()) {
+                if (!fieldsUi.rapeSeeded)
+                    fieldsSeedRapeScene();
+                const rapeOpt = Object.assign({}, opt, {
+                    label: 'punish-rape',
+                    panel: 'scene_start',
+                    panelDefaults: FIELDS_RAPE_DEFAULTS
+                });
+                renderSceneStartPanelBody(body, rapeOpt, { hideCustom: true, omitStartBar: true });
+            }
+        }
+
         function renderPapyrusPanel() {
             const host = document.getElementById('target-cascade-host');
             if (!host) return;
@@ -5876,7 +6228,8 @@
             panel.className = 'panel target-papyrus-panel';
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
-                || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop';
+                || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop'
+                || kind === 'fields';
             if (!skipHeader) {
                 const header = document.createElement('div');
                 header.className = 'section-header';
@@ -5893,7 +6246,9 @@
                 return;
             }
 
-            if (kind === 'stop') {
+            if (kind === 'fields') {
+                renderFieldsPanelBody(body, opt);
+            } else if (kind === 'stop') {
                 tmRenderStopPanel(body, opt);
             } else if (kind === 'stage') {
                 tmRenderStagePanel(body, opt);

@@ -2,7 +2,7 @@
 
 ## AniDescriber HKX fill on hold (2026-09-17)
 
-Runtime missing-stage fill is **authored anidata → earlier authored stage (Papyrus) → `GetDescriptionFromTags`**. `AnimationDB::GetStageDescription` does not call AniDescriber. No `Debug.Notification("Missing descriptions, inferring")`. AniDescriber / `HkxAnim` source stays in tree for offline spline work.
+Runtime missing-stage fill is **authored anidata → earlier authored stage (Papyrus) → `GetDescriptionFromTags`**. `AnimationDB::GetStageDescription` does not call AniDescriber. No `Debug.Notification("Missing descriptions, inferring")`. AniDescriber / `HkxAnim` compile into the DLL with `SKYRIMNET_ANIDESCRIBER_HKX=0` (does not restore `anim_events`). Source stays in tree for offline spline work.
 
 **Historical quirks (when HKX is resumed):** empty `anim_events` after schema ALTER → `AnimDb_NeedsEventBackfill` forces rebuild. XPMSE dual skeleton: pick NPC set (`bones_m` ≫ 18), not Ragdoll (~18). Debug `std::clamp` abort on inverted knot bounds in `ReadSplineVector` — guarded to fail clean (`hkx_sample_fail`). Spline decoder still returns `hkx_sample_fail`; tag narration expected until fixed offline.
 
@@ -268,6 +268,7 @@ Left column: ControlPanel (`#control-panel`: **mode pulldown** + **views** label
 - **Pause:** overlay still `Focus(view, true)`. TargetMenu execute must `closeWebUI: true` or SexLab `StartThread` / other-mod packages stall. Foreign panel `openFunction` and config toggles stay `closeWebUI: false`.
 - **Sentinel target:** pulldown entries with `id` and no FormID. Optional sentinel `mainPanel` / mode `rowClickMainPanel` drive `SwitchMainPanel`; omit them to leave the current panel. `Target_Current` is null; `FocusKind` holds the id. `webui_focus_kind` eligibility; `ExecutePapyrusOption` allows None target. `Target_Menu_Refresh` is valid with a sentinel. Do not treat player focus as group.
 - **Foreign panels:** `data_table` / `actor_detail` paint HTML from `WebUI_PushMainPanelData`. Payload must include `plugin` / `scriptName` / `applyFunction` — JS has no plugin-name fallbacks. Cap table rows — a huge Invoke stalls PrismaUI. ESL FormIDs from Papyrus are signed; JS `formIdU32` / C++ accept signed-or-string `formId` on row click. Do not mix table and detail in one payload.
+- **TargetMenu `panel: fields` (2026-09-18):** Start + labeled selects from `panelFields`/`panelDefaults`. `applyOnChange` fires on pick. `opensText` options show inline text; Ok adds to the pulldown (session-only). Live Push: `WebUI_PushCascadeChoices` → `setCascadeChoices` (`panel:"fields"` or button `options[]`). Catalog openers without static `panelFields` fire Papyrus first. DOM punish method `rape` embeds `scene_start` without Custom; Start → mind record then SexLab Nonconsensual.
 
 - **SceneInfo (2026-08-22):** JS class + `sceneInfoByKey` (`'new'` + `scene:<sid>`). Seed on Show. Panel drafts copy SceneInfo on open. Start/Done/Update/Stop write into SceneInfo; Cancel does not. Overlay Cancel/Escape → `WebUI_Visibility_HideWithoutCommit` (drop dirty). Hotkey / Scene Start / TargetMenu Start → `flushSceneInfos` → `WebUI_OnSceneInfoCommit` then Hide. Do not live-call `TM_*` from Scene panels during the session.
 

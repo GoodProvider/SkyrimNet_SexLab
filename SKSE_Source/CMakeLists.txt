@@ -79,7 +79,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 # Silence Microsoft STL deprecation warnings
-target_compile_definitions(${PROJECT_NAME} PRIVATE _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+# HKX fill is on hold: AniDescriber compiles but does not sample clips or use stripped AnimRow fields.
+# Flip to 1 only after AnimationDB restores anim_events / speaking_authored / ApplyGeneratedFill and the offline harness passes.
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING
+    SKYRIMNET_ANIDESCRIBER_HKX=0
+)
 
 # Workaround for MSBuild 17.14 bug: create props file to override ATL_KeyFile
 if(MSVC)

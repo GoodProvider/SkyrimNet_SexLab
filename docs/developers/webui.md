@@ -213,6 +213,14 @@ Do not mix table and detail in one object. Row: `{ "formId": 123, "cells": ["Nam
 
 Native: `SkyrimNet_SexLab_WebUI.WebUI_PushMainPanelData(String json)`. Cap roster/table size so PrismaUI is not stalled by a huge Invoke.
 
+### TargetMenu `panel: fields` + live cascades
+
+Actor **`panel: fields`**: Start (unless every field has `applyOnChange`) then labeled selects from `panelFields` / `panelDefaults`. Dynamic params are field `name`s. `applyOnChange: true` fires Papyrus on pick (Order walking). Option `opensText: true` (e.g. punish **custom**): picking it shows an inline text field; Ok inserts the string into that select’s options and selects it (session-only; never Start with bare `"custom"`).
+
+Live lists: `SkyrimNet_SexLab_WebUI.WebUI_PushCascadeChoices(String json)` → JS `setCascadeChoices`. Button cascades use `{ title, options:[{type:papyrus,…}] }`. Fields cascades use `{ panel:"fields", panelFields, panelDefaults, plugin, questFormId, scriptName, executionFunctionName, parameterMapping, closeWebUI }`. Catalog rows without static `panelFields` fire the opener Papyrus (closeWebUI false) so Push can fill the panel.
+
+DOM punish: method field `type === "rape"` expands the full `scene_start` controls under the reason/method row **without** Custom. Start records via DOM `TM_PunishRapeRecord` then fires SexLab `StartScene_Nonconsensual_*` (AnimDb tag probe first).
+
 ## Build
 
 CMake tasks in `.vscode/tasks.json` with `cwd` = `SKSE_Source`. Needs VS 2022, `VCPKG_ROOT`, `x64-windows-static`.

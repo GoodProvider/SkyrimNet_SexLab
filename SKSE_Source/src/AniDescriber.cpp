@@ -882,6 +882,10 @@ CREATE TABLE IF NOT EXISTS animinfo (
             if (!HumanRow(row) || npos <= 0 || nstages <= 0)
                 return payload;
 
+#if !SKYRIMNET_ANIDESCRIBER_HKX
+            payload["fail_reason"] = "hkx_on_hold";
+            return payload;
+#else
             bool events_missing = row.anim_events.empty() ||
                 static_cast<int>(row.anim_events.size()) < npos;
             if (!events_missing) {
@@ -1129,10 +1133,16 @@ CREATE TABLE IF NOT EXISTS animinfo (
                     packs.empty() ? "" : packs[0].desc, payload["orgasm_expected"].dump());
             }
             return payload;
+#endif
         }
 
         void ApplyFill(const AnimationDB::AnimRow& row, const nlohmann::json& payload)
         {
+#if !SKYRIMNET_ANIDESCRIBER_HKX
+            (void)row;
+            (void)payload;
+            return;
+#else
             if (!payload.is_object() || !payload.value("sampled", false))
                 return;
             std::vector<int> orgasm;
@@ -1164,10 +1174,19 @@ CREATE TABLE IF NOT EXISTS animinfo (
                 }
             }
             AnimationDB::ApplyGeneratedFill(row.registry, orgasm, extra);
+#endif
         }
 
         nlohmann::json EnsurePayload(const AnimationDB::AnimRow& row)
         {
+#if !SKYRIMNET_ANIDESCRIBER_HKX
+            (void)row;
+            nlohmann::json empty = nlohmann::json::object();
+            empty["sampled"] = false;
+            empty["stages"] = nlohmann::json::object();
+            empty["fail_reason"] = "hkx_on_hold";
+            return empty;
+#else
             const std::string reg = Lower(row.registry);
             const std::string hash = EventsHash(row.anim_events);
             const std::string fail_key = reg + "|" + hash;
@@ -1201,6 +1220,7 @@ CREATE TABLE IF NOT EXISTS animinfo (
             }
             ApplyFill(row, payload);
             return payload;
+#endif
         }
     }
 
