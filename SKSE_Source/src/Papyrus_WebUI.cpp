@@ -1285,18 +1285,26 @@ namespace PapyrusBindings_WebUI
                         const std::string reg = el.get<std::string>();
                         if (reg.empty() || seen.contains(reg))
                             continue;
-                        if (auto row = AnimationDB::GetByRegistry(reg))
+                        if (auto row = AnimationDB::GetByRegistry(reg)) {
+                            if (spec.has_description != 0) {
+                                const bool any = AnimationDB::RowHasAnyDescription(*row);
+                                if (spec.has_description == 1 && !any)
+                                    continue;
+                                if (spec.has_description == 2 && any)
+                                    continue;
+                            }
                             rows.push_back(AnimRowToJson(*row));
-                        else
+                        } else if (spec.has_description == 0)
                             rows.push_back(nlohmann::json{ { "_registry", reg } });
                         seen.insert(reg);
                     }
                 }
                 webui_log::info(
-                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} results={} total={}",
+                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} has_description={} results={} total={}",
                     request_id,
                     spec.actor_count ? *spec.actor_count : -1,
                     spec.gender_match,
+                    spec.has_description,
                     rows.size(),
                     AnimationDB::TotalEnabledCount());
                 nlohmann::json payload;

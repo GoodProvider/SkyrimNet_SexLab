@@ -102,6 +102,7 @@ namespace AnimationDB
 
     std::string ToLower(std::string s);
     int ParseHasDescriptionMode(const nlohmann::json& j);
+    bool RowHasAnyDescription(const AnimRow& row);
     /// Sanitize aliases + lowercase; empty if blank after trim.
     std::string SanitizeTag(std::string tag);
     /// Split CSV, sanitize each, dedupe preserving order.

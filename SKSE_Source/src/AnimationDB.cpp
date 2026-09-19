@@ -810,19 +810,6 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             return tags.contains(t);
         }
 
-        bool RowHasAnyDescription(const AnimRow& row)
-        {
-            for (int v : row.stage_has_description) {
-                if (v != 0)
-                    return true;
-            }
-            for (const auto& [_, desc] : row.stage_descriptions) {
-                if (!desc.empty())
-                    return true;
-            }
-            return false;
-        }
-
         bool MatchesFilter(const AnimRow& row, const FilterSpec& spec)
         {
             if (spec.enabled_only && !row.enabled)
@@ -888,7 +875,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
 
             if (spec.has_description != 0) {
-                const bool any = RowHasAnyDescription(row);
+                const bool any = AnimationDB::RowHasAnyDescription(row);
                 if (spec.has_description == 1 && !any)
                     return false;
                 if (spec.has_description == 2 && any)
@@ -907,6 +894,19 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
             return nlohmann::json();
         }
+    }
+
+    bool RowHasAnyDescription(const AnimRow& row)
+    {
+        for (int v : row.stage_has_description) {
+            if (v != 0)
+                return true;
+        }
+        for (const auto& [_, desc] : row.stage_descriptions) {
+            if (!desc.empty())
+                return true;
+        }
+        return false;
     }
 
     int ParseHasDescriptionMode(const nlohmann::json& j)

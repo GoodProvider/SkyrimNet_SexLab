@@ -1663,8 +1663,9 @@
                     </div>
                     <div id="sc-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
-                        <span>filter by</span>
+                        <span>filter by gender:</span>
                         <div id="sc-filter-by-pulldown"></div>
+                        <span>description:</span>
                         <div id="sc-filter-has-description"></div>
                     </div>
                 </div>
@@ -1724,8 +1725,9 @@
                 </div>
                 <div id="de-available-tags" class="scroll-list"></div>
                 <div class="compact-row">
-                    <span>filter by</span>
+                    <span>filter by gender:</span>
                     <div id="de-filter-by-pulldown"></div>
+                    <span>description:</span>
                     <div id="de-filter-has-description"></div>
                 </div>
             </div>
@@ -7618,8 +7620,8 @@
         function scRenderHasDescriptionPulldown() {
             if (!SC.hasDescription) SC.hasDescription = 'any';
             const onPick = v => {
+                if (v === SC.hasDescription) return;
                 SC.hasDescription = v;
-                scRenderHasDescriptionPulldown();
                 scRefreshAnims();
                 scRefreshTags();
             };
@@ -8461,6 +8463,15 @@
             return false;
         }
 
+        function scFilterAnimsByHasDescription(anims) {
+            const mode = SC.hasDescription || 'any';
+            if (mode === 'described')
+                return (anims || []).filter(scAnimHasDescription);
+            if (mode === 'undescribed')
+                return (anims || []).filter(a => !scAnimHasDescription(a));
+            return anims || [];
+        }
+
         function scGenderPosKey(a) {
             return (a._pos_genders || []).map(g =>
                 ((g | 0) === 0 || (g | 0) === 2) ? 'M' : 'F'
@@ -8576,8 +8587,8 @@
             const rid = payload._request_id || '';
             if (String(rid).startsWith('a')) {
                 if (String(rid) !== 'a' + SC.animQueryId) return;
-                const anims = payload._anims || [];
-                if (!anims.length && SC.filterChain.length) {
+                let anims = scFilterAnimsByHasDescription(payload._anims || []);
+                if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any') {
                     SC.filterBy = SC.filterChain.shift();
                     scRenderFilterByPulldown();
                     scRefreshTags();
