@@ -470,16 +470,33 @@
             margin-bottom: var(--space-sm);
         }
 
+        #de-names-row {
+            font-size: var(--text-sm);
+            opacity: 0.85;
+            margin-bottom: var(--space-xs);
+        }
+
         #de-stages-host {
-            max-height: 12em;
+            max-height: 14em;
             overflow-y: auto;
         }
 
-        .de-stage-row {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            margin-bottom: var(--space-xs);
+        .de-stages-table .de-stage-num {
+            width: 3em;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        .de-stages-table .de-stage-text,
+        .de-stages-table .de-stage-desc {
+            width: 50%;
+            vertical-align: top;
+        }
+
+        .de-stages-table .de-stage-desc {
+            opacity: 0.9;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .de-stage-input {
@@ -804,13 +821,6 @@
             width: 1.5em;
             text-align: center;
             font-weight: 600;
-        }
-
-        #sc-filter-has-description,
-        #de-filter-has-description {
-            transform: scale(1.4);
-            transform-origin: left center;
-            margin-right: var(--space-sm);
         }
 
         .sc-col-positions > .section-header,
@@ -1655,7 +1665,7 @@
                     <div class="compact-row">
                         <span>filter by</span>
                         <div id="sc-filter-by-pulldown"></div>
-                        <label><input id="sc-filter-has-description" type="checkbox" onchange="scOnHasDescriptionChange()" /> has description</label>
+                        <div id="sc-filter-has-description"></div>
                     </div>
                 </div>
             </div>
@@ -1688,6 +1698,7 @@
         </div>
         <div class="de-section">
             <div class="section-header">Description</div>
+            <div id="de-names-row" style="display:none"></div>
             <div id="de-stages-host"></div>
         </div>
         <div class="de-section">
@@ -1715,7 +1726,7 @@
                 <div class="compact-row">
                     <span>filter by</span>
                     <div id="de-filter-by-pulldown"></div>
-                    <label><input id="de-filter-has-description" type="checkbox" onchange="scOnHasDescriptionChange()" /> has description</label>
+                    <div id="de-filter-has-description"></div>
                 </div>
             </div>
         </div>
@@ -7526,6 +7537,7 @@
         const SC_FILTER_ORDER = ['positions', 'gender', 'none'];
         const SC_FILTER_DEFAULT = 'gender';
         const SC_FILTER_OPTIONS = ['gender', 'none', 'positions'];
+        const SC_HAS_DESCRIPTION_OPTIONS = ['any', 'described', 'undescribed'];
 
         let SC = {
             creator_sid: 0,
@@ -7564,7 +7576,8 @@
             filterStart: SC_FILTER_DEFAULT,
             filterChain: [],
             filterAuto: true,
-            filterByOnce: ''
+            filterByOnce: '',
+            hasDescription: 'any'
         };
 
         const SC_NEARBY_RANGES = [100, 200, 400, 800, 1600];
@@ -7599,6 +7612,22 @@
                 if (!host) continue;
                 host.innerHTML = '';
                 host.appendChild(createPulldown(SC_FILTER_OPTIONS, SC.filterBy, onPick));
+            }
+        }
+
+        function scRenderHasDescriptionPulldown() {
+            if (!SC.hasDescription) SC.hasDescription = 'any';
+            const onPick = v => {
+                SC.hasDescription = v;
+                scRenderHasDescriptionPulldown();
+                scRefreshAnims();
+                scRefreshTags();
+            };
+            for (const hostId of ['sc-filter-has-description', 'de-filter-has-description']) {
+                const host = document.getElementById(hostId);
+                if (!host) continue;
+                host.innerHTML = '';
+                host.appendChild(createPulldown(SC_HAS_DESCRIPTION_OPTIONS, SC.hasDescription, onPick));
             }
         }
 
@@ -7668,6 +7697,7 @@
             const forcedFilterBy = SC.filterByOnce || SC_FILTER_DEFAULT;
             SC.filterByOnce = '';
             scArmFilterDowngrade(forcedFilterBy);
+            scRenderHasDescriptionPulldown();
             scApplyModeChrome();
             scEnsurePositionSeed();
             scRenderPositions();
@@ -8280,22 +8310,10 @@
                 filter._male_creatures = maleCreatures;
                 filter._female_creatures = femaleCreatures;
             }
-            const descEl = document.getElementById('sc-filter-has-description');
-            const deDescEl = document.getElementById('de-filter-has-description');
-            if ((descEl && descEl.checked) || (deDescEl && deDescEl.checked)) {
-                filter._has_description = true;
+            if (SC.hasDescription && SC.hasDescription !== 'any') {
+                filter._has_description = SC.hasDescription;
             }
             return filter;
-        }
-
-        function scOnHasDescriptionChange() {
-            const scEl = document.getElementById('sc-filter-has-description');
-            const deEl = document.getElementById('de-filter-has-description');
-            const checked = (scEl && scEl.checked) || (deEl && deEl.checked);
-            if (scEl) scEl.checked = checked;
-            if (deEl) deEl.checked = checked;
-            scRefreshAnims();
-            scRefreshTags();
         }
 
         function scRefreshTags() {
@@ -8366,6 +8384,55 @@
             return parts.join(' ');
         }
 
+        const DE_FALLBACK_NAMES = [
+            'Alice', 'Bob', 'Carl', 'David', 'Ed', 'Frank', 'Greg', 'Hawk',
+            'Id', 'Jack', 'Kim', 'Lam', 'Mary', 'Ned', 'Op', 'Pat'
+        ];
+
+        function deAnimActorCount(a) {
+            if (!a) return 0;
+            const pg = (a._pos_genders || []).length;
+            const pc = (a._position_count | 0) || 0;
+            return Math.max(pg, pc);
+        }
+
+        function deUseSceneNamesFor(a) {
+            if (!a || !a._registry) return false;
+            if (!isSceneConnectionActive() && SC.mode !== 'active') return false;
+            const inThread = SC.inThreadRegistries || [];
+            return inThread.includes(a._registry);
+        }
+
+        function dePreviewNamesFor(a) {
+            const n = deAnimActorCount(a);
+            if (n <= 0) return [];
+            const names = [];
+            const useScene = deUseSceneNamesFor(a);
+            const positions = SC.positions || [];
+            for (let i = 0; i < n; i++) {
+                let name = '';
+                if (useScene && i < positions.length)
+                    name = positions[i]._name || positions[i].name || '';
+                else if (!useScene) {
+                    if (i === 0) name = (targetActor && targetActor.name) || '';
+                    else if (i === 1) name = playerName || (playerActor && playerActor.name) || '';
+                }
+                if (!name)
+                    name = DE_FALLBACK_NAMES[i] || ('Actor' + i);
+                names.push(name);
+            }
+            return names;
+        }
+
+        function deSubstitute(text, names) {
+            let out = String(text || '');
+            for (let i = 0; i < names.length; i++) {
+                const token = '{{sl.actors.' + i + '}}';
+                if (names[i]) out = out.split(token).join(names[i]);
+            }
+            return out;
+        }
+
         function previewDescription(a) {
             const sd = a._stage_descriptions || {};
             const keys = Object.keys(sd).sort((x, y) => Number(x) - Number(y));
@@ -8378,13 +8445,7 @@
                 }
             }
             if (!text) return '';
-            const names = (SC.positions || []).map(p => p._name || p.name || '');
-            for (let i = 0; i < names.length; i++) {
-                const token = '{{sl.actors.' + i + '}}';
-                if (!names[i]) continue;
-                text = text.split(token).join(names[i]);
-            }
-            return text;
+            return deSubstitute(text, dePreviewNamesFor(a));
         }
 
         function scAnimHasDescription(a) {
@@ -8876,20 +8937,45 @@
             deRenderAnimList();
         }
 
+        function deRenderNames() {
+            const host = document.getElementById('de-names-row');
+            if (!host) return;
+            const a = deFindAnim(DE.focusRegistry);
+            const names = dePreviewNamesFor(a);
+            if (!names.length) {
+                host.textContent = '';
+                host.style.display = 'none';
+                return;
+            }
+            host.style.display = '';
+            host.textContent = 'names: ' + names.join(', ');
+        }
+
         function deRenderStages() {
             const host = document.getElementById('de-stages-host');
             if (!host) return;
+            deRenderNames();
             if (!DE.stagesDraft.length) {
                 host.innerHTML = '<span style="opacity:0.6">(no stages)</span>';
                 return;
             }
-            host.innerHTML = DE.stagesDraft.map(st =>
-                `<div class="de-stage-row compact-row">` +
-                `<label>stage ${st._stage}</label>` +
-                `<textarea class="de-stage-input" rows="2" data-stage="${st._stage}" ` +
-                `oninput="deStageEdit(${st._stage}, this.value)">${escapeHtml(st._template || '')}</textarea>` +
-                `</div>`
-            ).join('');
+            const a = deFindAnim(DE.focusRegistry);
+            const names = dePreviewNamesFor(a);
+            const rows = DE.stagesDraft.map(st => {
+                const preview = deSubstitute(st._template || '', names);
+                return `<tr data-stage="${st._stage}">` +
+                    `<td class="de-stage-num">${st._stage}</td>` +
+                    `<td class="de-stage-text"><textarea class="de-stage-input" rows="2" data-stage="${st._stage}" ` +
+                    `oninput="deStageEdit(${st._stage}, this.value)">${escapeHtml(st._template || '')}</textarea></td>` +
+                    `<td class="de-stage-desc" data-stage="${st._stage}">${escapeHtml(preview)}</td>` +
+                    `</tr>`;
+            }).join('');
+            host.innerHTML =
+                `<table class="data-table de-stages-table"><thead><tr>` +
+                `<th class="de-stage-num">stage</th>` +
+                `<th class="de-stage-text">text</th>` +
+                `<th class="de-stage-desc">description</th>` +
+                `</tr></thead><tbody>${rows}</tbody></table>`;
         }
 
         function deStageEdit(stage, val) {
@@ -8898,6 +8984,10 @@
                 st._template = val;
                 DE.dirty = true;
             }
+            const a = deFindAnim(DE.focusRegistry);
+            const preview = deSubstitute(val, dePreviewNamesFor(a));
+            const cell = document.querySelector('#de-stages-host .de-stage-desc[data-stage="' + stage + '"]');
+            if (cell) cell.textContent = preview;
         }
 
         function deRenderAnimTags() {
@@ -9030,9 +9120,7 @@
             }
             scRenderTagChips();
             scSetTagMode(SC.tagMode || 'include');
-            const descEl = document.getElementById('de-filter-has-description');
-            const scDescEl = document.getElementById('sc-filter-has-description');
-            if (descEl && scDescEl) descEl.checked = scDescEl.checked;
+            scRenderHasDescriptionPulldown();
             scRefreshTags();
             scRefreshAnims();
             deEnsureFocus();

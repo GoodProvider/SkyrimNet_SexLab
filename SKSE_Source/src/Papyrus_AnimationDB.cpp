@@ -66,10 +66,8 @@ namespace PapyrusBindings_AnimationDB
                             spec.pos_race_keys.push_back(AnimationDB::ToLower(el.get<std::string>()));
                     }
                 }
-                if (j.contains("_has_description") && j["_has_description"].is_boolean())
-                    spec.has_description = j["_has_description"].get<bool>();
-                else if (j.contains("has_description") && j["has_description"].is_boolean())
-                    spec.has_description = j["has_description"].get<bool>();
+                if (j.contains("_has_description") || j.contains("has_description"))
+                    spec.has_description = AnimationDB::ParseHasDescriptionMode(j);
                 if (j.contains("_gender_match") && j["_gender_match"].is_boolean())
                     spec.gender_match = j["_gender_match"].get<bool>();
                 if (j.contains("_males") && j["_males"].is_number_integer())

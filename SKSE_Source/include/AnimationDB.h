@@ -58,7 +58,7 @@ namespace AnimationDB
         bool position_match = false;
         std::vector<int> pos_genders;
         std::vector<std::string> pos_race_keys;
-        bool has_description = false;
+        int has_description = 0;
         bool gender_match = false;
         int males = -1;
         int females = -1;
@@ -101,6 +101,7 @@ namespace AnimationDB
         std::vector<std::string>& out_csv_per_pos);
 
     std::string ToLower(std::string s);
+    int ParseHasDescriptionMode(const nlohmann::json& j);
     /// Sanitize aliases + lowercase; empty if blank after trim.
     std::string SanitizeTag(std::string tag);
     /// Split CSV, sanitize each, dedupe preserving order.

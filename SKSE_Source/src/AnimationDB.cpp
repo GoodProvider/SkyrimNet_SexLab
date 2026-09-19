@@ -810,6 +810,19 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             return tags.contains(t);
         }
 
+        bool RowHasAnyDescription(const AnimRow& row)
+        {
+            for (int v : row.stage_has_description) {
+                if (v != 0)
+                    return true;
+            }
+            for (const auto& [_, desc] : row.stage_descriptions) {
+                if (!desc.empty())
+                    return true;
+            }
+            return false;
+        }
+
         bool MatchesFilter(const AnimRow& row, const FilterSpec& spec)
         {
             if (spec.enabled_only && !row.enabled)
@@ -874,23 +887,11 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                     return false;
             }
 
-            if (spec.has_description) {
-                bool any = false;
-                for (int v : row.stage_has_description) {
-                    if (v != 0) {
-                        any = true;
-                        break;
-                    }
-                }
-                if (!any) {
-                    for (const auto& [_, desc] : row.stage_descriptions) {
-                        if (!desc.empty()) {
-                            any = true;
-                            break;
-                        }
-                    }
-                }
-                if (!any)
+            if (spec.has_description != 0) {
+                const bool any = RowHasAnyDescription(row);
+                if (spec.has_description == 1 && !any)
+                    return false;
+                if (spec.has_description == 2 && any)
                     return false;
             }
             return true;
@@ -906,6 +907,25 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
             return nlohmann::json();
         }
+    }
+
+    int ParseHasDescriptionMode(const nlohmann::json& j)
+    {
+        if (j.contains("_has_description")) {
+            const auto& v = j["_has_description"];
+            if (v.is_boolean())
+                return v.get<bool>() ? 1 : 0;
+            if (v.is_string()) {
+                const auto s = ToLower(v.get<std::string>());
+                if (s == "described" || s == "has")
+                    return 1;
+                if (s == "undescribed" || s == "none")
+                    return 2;
+            }
+        }
+        if (j.contains("has_description") && j["has_description"].is_boolean())
+            return j["has_description"].get<bool>() ? 1 : 0;
+        return 0;
     }
 
     std::string ToLower(std::string s)
