@@ -4437,7 +4437,7 @@
                 window.onMainPanelChange(JSON.stringify({ key: 'scene_creator_panel' }));
             // Refresh nearby so Scene Creator Include lists everyone in range.
             if (typeof window.onNearbyRangeChange === 'function')
-                window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 100 }));
+                window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 1600 }));
             ssApplyPendingSettingToCreator();
             if (typeof renderTargetMenu === 'function')
                 renderTargetMenu();
@@ -7440,7 +7440,7 @@
             stage: 1,
             stageCount: 0,
             stages: [],
-            nearbyRange: 100,
+            nearbyRange: 1600,
             settingName: 'none',
             filterBy: SC_FILTER_DEFAULT,
             filterStart: SC_FILTER_DEFAULT,
@@ -7455,7 +7455,7 @@
             const host = document.getElementById('sc-range-pulldown');
             if (!host) return;
             const labels = SC_NEARBY_RANGES.map(String);
-            const cur = String(SC.nearbyRange || 100);
+            const cur = String(SC.nearbyRange || 1600);
             host.innerHTML = '';
             host.appendChild(createPulldown(labels, cur, v => {
                 const n = parseInt(v, 10);

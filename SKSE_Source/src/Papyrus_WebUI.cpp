@@ -621,10 +621,10 @@ namespace PapyrusBindings_WebUI
 
     namespace
     {
-        constexpr float kDefaultNearbyRadius = 100.f;
+        constexpr float kDefaultNearbyRadius = 1600.f;
         float g_nearbyRadius = kDefaultNearbyRadius;
 
-        constexpr float kAllowedRadii[] = { 100.f, 200.f, 400.f, 800.f, 1600.f };
+        constexpr float kAllowedRadii[] = { 1600.f, 2400.f, 3200.f, 4000.f, 4800.f };
 
         RE::TESFaction* ResolveSexLabAnimatingFaction()
         {
@@ -992,6 +992,8 @@ namespace PapyrusBindings_WebUI
         std::vector<RE::Actor*> scanned;
         scanned.reserve(64);
         int considered = 0;
+        int distSkip = 0;
+        std::vector<std::string> distSkipSamples;
 
         auto addUnique = [&](RE::Actor* actor) {
             if (!actor || actor->IsDeleted())
@@ -1015,8 +1017,15 @@ namespace PapyrusBindings_WebUI
                     return RE::BSContainer::ForEachResult::kContinue;
                 ++considered;
                 const float distSq = actor->GetPosition().GetSquaredDistance(playerPos);
-                if (distSq > radiusSq)
+                if (distSq > radiusSq) {
+                    ++distSkip;
+                    if (distSkipSamples.size() < 8) {
+                        const float dist = std::sqrt(distSq);
+                        distSkipSamples.push_back(
+                            std::format("{}@{:.0f}", ActorDisplayNameLocal(actor), dist));
+                    }
                     return RE::BSContainer::ForEachResult::kContinue;
+                }
                 addUnique(actor);
                 return RE::BSContainer::ForEachResult::kContinue;
             });
@@ -1042,9 +1051,27 @@ namespace PapyrusBindings_WebUI
             return a.value("dist", 0.f) < b.value("dist", 0.f);
         });
 
-        webui_log::info(
-            "PopulateNearbyActors: radius={} considered={} listed={}",
-            g_nearbyRadius, considered, scanned.size());
+        std::string distSkipDetail;
+        for (std::size_t i = 0; i < distSkipSamples.size(); ++i) {
+            if (i)
+                distSkipDetail += ", ";
+            distSkipDetail += distSkipSamples[i];
+        }
+        if (distSkip > 0) {
+            webui_log::info(
+                "PopulateNearbyActors: radius={} considered={} listed={} distSkip={}{}",
+                g_nearbyRadius,
+                considered,
+                scanned.size(),
+                distSkip,
+                distSkipDetail.empty() ? "" : std::format(" [{}]", distSkipDetail));
+        } else {
+            webui_log::info(
+                "PopulateNearbyActors: radius={} considered={} listed={} distSkip=0",
+                g_nearbyRadius,
+                considered,
+                scanned.size());
+        }
 
         WebUI_Invoke("setNearbyActors(" + nearby.dump() + ");");
     }
