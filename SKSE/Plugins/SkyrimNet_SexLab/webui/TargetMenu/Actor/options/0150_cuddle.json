@@ -56,7 +56,10 @@
     {
       "conditions": [
         {
-          "decoratorName": "sexlab_ostim_player",
+          "decoratorName": "get_global_value",
+          "arguments": [
+            "SkyrimNet_SexLab_ostim_player"
+          ],
           "comparisonOperator": "==",
           "expectedValue": 0
         },
