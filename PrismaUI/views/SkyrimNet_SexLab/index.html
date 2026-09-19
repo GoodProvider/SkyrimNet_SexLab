@@ -268,19 +268,21 @@
             min-height: 0;
         }
 
-        #main-panel-host > #animation-menu-panel {
+        #main-panel-host > #description-editor-panel {
             overflow: hidden;
             display: none;
             flex-direction: column;
             min-height: 0;
+            height: 100%;
+            max-height: 100%;
         }
 
-        #main-panel-host > #animation-menu-panel > .target-row,
-        #main-panel-host > #animation-menu-panel > .compact-row {
+        #main-panel-host > #description-editor-panel > .de-section:not(.de-anims-section),
+        #main-panel-host > #description-editor-panel > #de-header-row {
             flex: 0 0 auto;
         }
 
-        #animation-menu-panel #am-anims-list {
+        #description-editor-panel #de-anims-list {
             flex: 1 1 auto;
             min-height: 0;
             overflow-y: auto;
@@ -435,10 +437,91 @@
             min-height: 0;
         }
 
-        #animation-menu-panel {
+        #description-editor-panel {
             width: auto;
             max-height: none;
+            overflow: hidden;
+        }
+
+        #de-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xs);
+            flex-shrink: 0;
+        }
+
+        #de-header-row .target-row {
+            margin: 0;
+            flex: 1;
+            min-width: 0;
+        }
+
+        #de-header-row #de-action-bar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            flex-shrink: 0;
+        }
+
+        .de-section {
+            flex-shrink: 0;
+            margin-bottom: var(--space-sm);
+        }
+
+        #de-stages-host {
+            max-height: 12em;
             overflow-y: auto;
+        }
+
+        .de-stage-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-bottom: var(--space-xs);
+        }
+
+        .de-stage-input {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 3em;
+            resize: vertical;
+            font-family: var(--font-ui);
+            font-size: var(--text-sm);
+            background: rgba(28, 28, 33, 0.9);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: var(--space-xs) var(--space-sm);
+        }
+
+        #de-anim-tags .tag-chip.de-tag-readonly {
+            pointer-events: none;
+            opacity: 0.9;
+        }
+
+        .de-filter-section {
+            width: 100%;
+            border-top: 1px solid var(--border);
+            padding-top: var(--space-sm);
+        }
+
+        .de-anims-section {
+            flex: 0 0 50%;
+            height: 50%;
+            max-height: 50%;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-top: 1px solid var(--border);
+            padding-top: var(--space-sm);
+        }
+
+        .de-anims-section > .section-header,
+        .de-anims-section > .compact-row {
+            flex-shrink: 0;
         }
 
         #log-panel {
@@ -717,17 +800,14 @@
         }
 
         #sc-anims-list .col-an,
-        #am-anims-list .col-an {
+        #de-anims-list .col-an {
             width: 1.5em;
             text-align: center;
             font-weight: 600;
         }
 
-        #am-anims-list {
-            overflow-y: auto;
-        }
-
-        #sc-filter-has-description {
+        #sc-filter-has-description,
+        #de-filter-has-description {
             transform: scale(1.4);
             transform-origin: left center;
             margin-right: var(--space-sm);
@@ -1568,7 +1648,7 @@
                 </div>
                 <div class="sc-available-block">
                     <div class="compact-row">
-                        <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="scRenderAvailableTags()" />
+                        <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
                         <div id="sc-type-pulldown"></div>
                     </div>
                     <div id="sc-available-tags" class="scroll-list"></div>
@@ -1598,14 +1678,51 @@
         </div>
     </div>
 
-    <div id="animation-menu-panel" class="panel" style="display:none">
-        <div id="am-title" class="target-row">Animation</div>
-        <div class="compact-row">
-            <input id="am-name-filter" type="text" placeholder="filter name" oninput="amRenderAnimList()" />
+    <div id="description-editor-panel" class="panel" style="display:none">
+        <div id="de-header-row">
+            <div class="target-row">Description Editor</div>
+            <div id="de-action-bar">
+                <div class="action-btn" id="de-btn-save" onclick="deSave()">Save</div>
+                <div class="option-cancel" id="de-btn-cancel" onclick="deCancel()">Cancel</div>
+            </div>
         </div>
-        <div id="am-anims-list" class="scroll-list"></div>
-        <div class="bottom-bar">
-            <div class="action-btn" id="am-btn-done" onclick="amApplyToSceneInfo()">Done</div>
+        <div class="de-section">
+            <div class="section-header">Description</div>
+            <div id="de-stages-host"></div>
+        </div>
+        <div class="de-section">
+            <div class="section-header">Tags</div>
+            <div id="de-anim-tags" class="de-readonly-tags"></div>
+        </div>
+        <div class="de-section de-filter-section">
+            <div class="section-header">Filter</div>
+            <div class="sc-selected-tags">
+                <div class="tag-mode-row">
+                    <span class="tag-mode-btn active" id="de-btn-include" onclick="scSetTagMode('include')">tags</span>
+                    <div id="de-include-tags" class="active-tag-list"></div>
+                </div>
+                <div class="tag-mode-row">
+                    <span class="tag-mode-btn" id="de-btn-exclude" onclick="scSetTagMode('exclude')">suppress</span>
+                    <div id="de-exclude-tags" class="active-tag-list"></div>
+                </div>
+            </div>
+            <div class="sc-available-block">
+                <div class="compact-row">
+                    <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
+                    <div id="de-type-pulldown"></div>
+                </div>
+                <div id="de-available-tags" class="scroll-list"></div>
+                <div class="compact-row">
+                    <span>filter by</span>
+                    <div id="de-filter-by-pulldown"></div>
+                    <label><input id="de-filter-has-description" type="checkbox" onchange="scOnHasDescriptionChange()" /> has description</label>
+                </div>
+            </div>
+        </div>
+        <div class="de-section de-anims-section">
+            <div class="section-header">Animations</div>
+            <div class="compact-row"><span id="de-anim-count"></span></div>
+            <div id="de-anims-list" class="scroll-list"></div>
         </div>
     </div>
 
@@ -1808,7 +1925,7 @@
         // C++ Invoke adapters (Papyrus_WebUI / WebUI.cpp panel names)
         const PANEL_IDS = [
             'control-panel', 'target-menu-row', 'sex-menu-panel', 'yesno-panel',
-            'scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel'
+            'scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel'
         ];
 
         // Fallback when C++ configureControlPanel has not run / main_panels/*.json missing from Data.
@@ -1817,7 +1934,7 @@
             { type: 'builtin', label: 'Log', panel: 'log_panel' },
             { type: 'builtin', label: 'Settings', panel: 'settings_panel' },
             { type: 'builtin', label: 'Scene Menu', panel: 'scene_creator_panel' },
-            { type: 'builtin', label: 'Animation', panel: 'animation_menu_panel' }
+            { type: 'builtin', label: 'Description Editor', panel: 'description_editor_panel' }
         ];
         let MAIN_PANELS = DEFAULT_MAIN_PANELS.slice();
         // Empty key = None (no panel in main_panel host).
@@ -1848,7 +1965,7 @@
         }
 
         function clearMainPanelHost() {
-            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel',
+            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -2000,7 +2117,7 @@
 
         function domIdForPanelKey(key) {
             if (key === 'scene_creator_panel') return 'scene-creator-panel';
-            if (key === 'animation_menu_panel') return 'animation-menu-panel';
+            if (key === 'description_editor_panel') return 'description-editor-panel';
             if (key === 'settings_panel') return 'settings-panel';
             if (key === 'log_panel') return 'log-panel';
             return key;
@@ -2020,14 +2137,14 @@
             mainPanelPulldownBusy = true;
             renderControlPanelPulldown();
             mainPanelPulldownBusy = false;
-            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel',
+            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel'];
             const want = domIdForPanelKey(panelKey);
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (!el) continue;
                 if (pid === want) {
-                    el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'animation-menu-panel') ? 'flex' : 'block';
+                    el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel') ? 'flex' : 'block';
                     if (pid === 'settings-panel' && typeof window.onSettingsRefresh === 'function')
                         window.onSettingsRefresh('{}');
                     if (pid === 'log-panel')
@@ -2054,7 +2171,7 @@
         function revealForeignMainPanel(type) {
             showControlPanel();
             const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
-            const builtins = ['scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel',
+            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -2295,7 +2412,7 @@
                 id === 'yesno_panel' || id === 'yesno-panel';
             const isMainBuiltin =
                 id === 'scene_creator_panel' || id === 'scene-creator-panel' ||
-                id === 'animation_menu_panel' || id === 'animation-menu-panel' ||
+                id === 'description_editor_panel' || id === 'description-editor-panel' ||
                 id === 'settings_panel' || id === 'settings-panel' ||
                 id === 'log_panel' || id === 'log-panel';
 
@@ -2324,14 +2441,14 @@
                 } else {
                     revealMainPanel('scene_creator_panel');
                 }
-            } else if (id === 'animation_menu_panel' || id === 'animation-menu-panel') {
+            } else if (id === 'description_editor_panel' || id === 'description-editor-panel') {
                 showControlPanel();
-                if (MAIN_SELECTED_KEY === 'animation_menu_panel' || MAIN_SELECTED_KEY === 'animation-menu-panel') {
-                    revealMainPanel('animation_menu_panel');
+                if (MAIN_SELECTED_KEY === 'description_editor_panel' || MAIN_SELECTED_KEY === 'description-editor-panel') {
+                    revealMainPanel('description_editor_panel');
                 } else if (typeof window.onMainPanelChange === 'function') {
-                    window.onMainPanelChange(JSON.stringify({ key: 'animation_menu_panel' }));
+                    window.onMainPanelChange(JSON.stringify({ key: 'description_editor_panel' }));
                 } else {
-                    revealMainPanel('animation_menu_panel');
+                    revealMainPanel('description_editor_panel');
                 }
             } else if (id === 'settings_panel' || id === 'settings-panel') {
                 showControlPanel();
@@ -2363,8 +2480,8 @@
                 document.getElementById('yesno-panel').style.display = 'none';
             } else if (id === 'scene_creator_panel' || id === 'scene-creator-panel') {
                 concealMainPanel('scene_creator_panel');
-            } else if (id === 'animation_menu_panel' || id === 'animation-menu-panel') {
-                concealMainPanel('animation_menu_panel');
+            } else if (id === 'description_editor_panel' || id === 'description-editor-panel') {
+                concealMainPanel('description_editor_panel');
             } else if (id === 'settings_panel' || id === 'settings-panel') {
                 concealMainPanel('settings_panel');
             } else if (id === 'log_panel' || id === 'log-panel') {
@@ -2382,7 +2499,7 @@
         }
 
         function visiblePanelId() {
-            for (const pid of ['yesno-panel', 'scene-creator-panel', 'animation-menu-panel', 'settings-panel', 'log-panel', 'target-menu-row', 'sex-menu-panel']) {
+            for (const pid of ['yesno-panel', 'scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel', 'target-menu-row', 'sex-menu-panel']) {
                 const el = document.getElementById(pid);
                 if (!el) continue;
                 const d = el.style.display;
@@ -3606,7 +3723,7 @@
                 selectedActionLabel = null;
                 papyrusSelectedOpt = null;
                 if (typeof window.onMainPanelChange === 'function')
-                    window.onMainPanelChange(JSON.stringify({ key: 'animation_menu_panel' }));
+                    window.onMainPanelChange(JSON.stringify({ key: 'description_editor_panel' }));
                 renderTargetMenu();
                 return;
             }
@@ -7034,7 +7151,7 @@
         hideTargetMenuRow();
         hidePanel('yesno_panel');
         hidePanel('scene_creator_panel');
-        hidePanel('animation_menu_panel');
+        hidePanel('description_editor_panel');
 
         // ── Yes / No ─────────────────────────────────────────────
         let YESNO = { question: '', creator_sid: 0 };
@@ -7164,9 +7281,10 @@
                 this.seeded = true;
             }
             hasActor(formId) {
-                const fid = Number(formId) || 0;
+                const fid = formIdU32(formId);
                 if (!fid) return false;
-                return (this.positions || []).some(p => Number(p._form_id != null ? p._form_id : p.formId) === fid);
+                return (this.positions || []).some(p =>
+                    formIdU32(p._form_id != null ? p._form_id : p.formId) === fid);
             }
             toCommitJson() {
                 return {
@@ -7345,9 +7463,9 @@
                 configureSceneCreator(payload);
                 return;
             }
-            const amEl = document.getElementById('animation-menu-panel');
-            if (amEl && amEl.style.display !== 'none' && typeof configureAnimationMenuFromSceneInfo === 'function')
-                configureAnimationMenuFromSceneInfo(info);
+            const deEl = document.getElementById('description-editor-panel');
+            if (deEl && deEl.style.display !== 'none' && typeof configureDescriptionEditorFromSceneInfo === 'function')
+                configureDescriptionEditorFromSceneInfo(info);
             if (typeof papyrusSelectedOpt !== 'undefined' && papyrusSelectedOpt && papyrusSelectedOpt.panel
                 && typeof renderPapyrusPanel === 'function')
                 renderPapyrusPanel();
@@ -7468,17 +7586,20 @@
         }
 
         function scRenderFilterByPulldown() {
-            const host = document.getElementById('sc-filter-by-pulldown');
-            if (!host) return;
-            host.innerHTML = '';
             if (!SC.filterBy) SC.filterBy = SC_FILTER_DEFAULT;
-            host.appendChild(createPulldown(SC_FILTER_OPTIONS, SC.filterBy, v => {
+            const onPick = v => {
                 SC.filterBy = v;
                 SC.filterAuto = false;
                 SC.filterChain = [];
                 scRefreshAnims();
                 scRefreshTags();
-            }));
+            };
+            for (const hostId of ['sc-filter-by-pulldown', 'de-filter-by-pulldown']) {
+                const host = document.getElementById(hostId);
+                if (!host) continue;
+                host.innerHTML = '';
+                host.appendChild(createPulldown(SC_FILTER_OPTIONS, SC.filterBy, onPick));
+            }
         }
 
         // Arms the open-time downgrade: start at startMode (default gender) and keep the
@@ -8082,15 +8203,32 @@
 
         function scSetTagMode(mode) {
             SC.tagMode = mode;
-            document.getElementById('sc-btn-include').classList.toggle('active', mode === 'include');
-            document.getElementById('sc-btn-exclude').classList.toggle('active', mode === 'exclude');
+            for (const p of ['sc', 'de']) {
+                const inc = document.getElementById(p + '-btn-include');
+                const exc = document.getElementById(p + '-btn-exclude');
+                if (inc) inc.classList.toggle('active', mode === 'include');
+                if (exc) exc.classList.toggle('active', mode === 'exclude');
+            }
+        }
+
+        function deSyncTagFilter(value) {
+            const scEl = document.getElementById('sc-tag-filter');
+            const deEl = document.getElementById('de-tag-filter');
+            if (scEl) scEl.value = value;
+            if (deEl) deEl.value = value;
         }
 
         function scRenderTagChips() {
-            document.getElementById('sc-include-tags').innerHTML = SC.tags.map(t =>
-                `<span class="tag-chip" onclick="scRemoveTag('include','${t}')">${t}</span>`).join('');
-            document.getElementById('sc-exclude-tags').innerHTML = SC.suppress.map(t =>
-                `<span class="tag-chip" onclick="scRemoveTag('exclude','${t}')">${t}</span>`).join('');
+            const incHtml = SC.tags.map(t =>
+                `<span class="tag-chip" onclick="scRemoveTag('include','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</span>`).join('');
+            const excHtml = SC.suppress.map(t =>
+                `<span class="tag-chip" onclick="scRemoveTag('exclude','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</span>`).join('');
+            for (const p of ['sc', 'de']) {
+                const incEl = document.getElementById(p + '-include-tags');
+                const excEl = document.getElementById(p + '-exclude-tags');
+                if (incEl) incEl.innerHTML = incHtml;
+                if (excEl) excEl.innerHTML = excHtml;
+            }
         }
 
         function scRemoveTag(list, tag) {
@@ -8110,7 +8248,10 @@
         }
 
         function scBuildFilter() {
-            const filter = { _actor_count: SC.positions.length, _must_tags: SC.tags, _suppress_tags: SC.suppress, _require_all: SC.tags.length > 0 };
+            const posCount = (SC.positions || []).length;
+            const filter = { _must_tags: SC.tags, _suppress_tags: SC.suppress, _require_all: SC.tags.length > 0 };
+            if (posCount > 0)
+                filter._actor_count = posCount;
             const mode = SC.filterBy || SC_FILTER_DEFAULT;
             const gendersReady = scPositionsGendersReady();
             const hasCreature = SC.positions.some(p => {
@@ -8118,13 +8259,13 @@
                 return (g != null && g >= 2) || (p._race_key || '');
             });
             filter._creature = hasCreature ? 'require' : 'exclude';
-            if (mode === 'positions' && gendersReady) {
+            if (mode === 'positions' && gendersReady && posCount > 0) {
                 filter._position_match = true;
                 filter._pos_genders = SC.positions.map(p => scPosGender(p));
                 if (hasCreature) {
                     filter._pos_race_keys = SC.positions.map(p => (p._race_key || '').toLowerCase());
                 }
-            } else if (mode === 'gender' && gendersReady) {
+            } else if (mode === 'gender' && gendersReady && posCount > 0) {
                 let males = 0, females = 0, maleCreatures = 0, femaleCreatures = 0;
                 SC.positions.forEach(p => {
                     const g = scPosGender(p);
@@ -8140,13 +8281,19 @@
                 filter._female_creatures = femaleCreatures;
             }
             const descEl = document.getElementById('sc-filter-has-description');
-            if (descEl && descEl.checked) {
+            const deDescEl = document.getElementById('de-filter-has-description');
+            if ((descEl && descEl.checked) || (deDescEl && deDescEl.checked)) {
                 filter._has_description = true;
             }
             return filter;
         }
 
         function scOnHasDescriptionChange() {
+            const scEl = document.getElementById('sc-filter-has-description');
+            const deEl = document.getElementById('de-filter-has-description');
+            const checked = (scEl && scEl.checked) || (deEl && deEl.checked);
+            if (scEl) scEl.checked = checked;
+            if (deEl) deEl.checked = checked;
             scRefreshAnims();
             scRefreshTags();
         }
@@ -8167,15 +8314,21 @@
                 const set = new Set(Array.isArray(members) ? members : Object.keys(members || {}));
                 tags = tags.filter(t => set.has(t._tag));
             }
-            const q = (document.getElementById('sc-tag-filter').value || '').toLowerCase();
+            const scQ = document.getElementById('sc-tag-filter');
+            const deQ = document.getElementById('de-tag-filter');
+            const q = ((scQ && scQ.value) || (deQ && deQ.value) || '').toLowerCase();
             if (q) {
                 tags = tags.filter(t => (t._tag || '').toLowerCase().startsWith(q));
             } else {
                 tags = tags.slice(0, 30);
             }
-            document.getElementById('sc-available-tags').innerHTML = tags.map(t =>
-                `<span class="tag-member" onclick="scAddTag('${t._tag}', SC.tagMode)">${t._tag} (${t._count})</span>`
+            const html = tags.map(t =>
+                `<span class="tag-member" onclick="scAddTag('${String(t._tag).replace(/'/g, "\\'")}', SC.tagMode)">${escapeHtml(t._tag)} (${t._count})</span>`
             ).join(' ');
+            for (const id of ['sc-available-tags', 'de-available-tags']) {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = html;
+            }
         }
 
         function scSelectedRegistries() {
@@ -8339,7 +8492,7 @@
                 `<th class="col-stages">num stages</th>` +
                 `<th class="col-desc">description</th>` +
                 `</tr></thead><tbody>${rows}</tbody></table>`;
-            amSyncAnimListFromScene();
+            deOnAnimsUpdated();
         }
 
         function scRefreshAnims() {
@@ -8351,7 +8504,11 @@
                 return;
             }
             const id = ++SC.animQueryId;
-            window.onAnimDbQuery(JSON.stringify({ _request_id: 'a' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 }));
+            const payload = { _request_id: 'a' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 };
+            const also = (SC.inThreadRegistries || []).filter(Boolean);
+            if (also.length)
+                payload._also_registries = also;
+            window.onAnimDbQuery(JSON.stringify(payload));
         }
 
         function animDbQueryResult(payload) {
@@ -8658,123 +8815,231 @@
             }
         }
 
-        // ── Animation Menu (registry editor + live controls) ──────
-        let AM = {
+        // ── Description Editor ────────────────────────────────────
+        let DE = {
             scene_sid: -1,
-            dirty: false,
-            registry: '',
             focusRegistry: '',
-            style: 'normally',
-            positions: [],
-            stages: [],
-            tags: '',
-            live: false
+            stagesDraft: [],
+            loadedStages: [],
+            dirty: false
         };
 
-        /// In-thread (active) or selected (new) anims for AnimationPanel. No 10-cap.
-        function amCandidateAnims() {
-            const byReg = new Map();
-            (SC.lastAnims || []).forEach(a => {
-                if (a && a._registry) byReg.set(a._registry, a);
-            });
+        function deFindAnim(reg) {
+            return (SC.lastAnims || []).find(x => x._registry === reg) || null;
+        }
+
+        function deSortedAnims() {
+            const anims = SC.lastAnims || [];
             const active = isSceneConnectionActive() || SC.mode === 'active';
-            const regs = active
-                ? (SC.inThreadRegistries || []).filter(Boolean)
-                : scSelectedRegistries();
-            const anims = regs.map(reg => byReg.get(reg) || { _registry: reg, _name: reg });
             const indices = sortAnimListRows(anims, {
                 active: active,
                 inThread: SC.inThreadRegistries,
                 activeRegistry: SC.activeRegistry,
-                isSelected: (reg) => active
-                    ? (SC.inThreadRegistries || []).includes(reg)
-                    : !SC.deselectedRegistries.includes(reg)
+                isSelected: () => true
             });
             return indices.map(i => anims[i]);
         }
 
-        function amSyncAnimListFromScene() {
-            amRenderAnimList();
-            amEnsureFocus();
-        }
-
-        function amEnsureFocus() {
-            const anims = amCandidateAnims();
-            if (!anims.length) {
-                AM.focusRegistry = '';
+        function deEnsureFocus() {
+            const sorted = deSortedAnims();
+            if (!sorted.length) {
+                DE.focusRegistry = '';
                 return;
             }
-            const regs = anims.map(a => a._registry).filter(Boolean);
-            const current = SC.activeRegistry || AM.focusRegistry;
-            if (current && regs.includes(current))
-                AM.focusRegistry = current;
-            else if (!AM.focusRegistry || !regs.includes(AM.focusRegistry))
-                AM.focusRegistry = (anims[0] && anims[0]._registry) || regs[0];
+            const regs = sorted.map(a => a._registry).filter(Boolean);
+            const active = isSceneConnectionActive() || SC.mode === 'active';
+            if (active && SC.activeRegistry && regs.includes(SC.activeRegistry)) {
+                DE.focusRegistry = SC.activeRegistry;
+            } else if (DE.focusRegistry && regs.includes(DE.focusRegistry)) {
+                // keep current selection
+            } else {
+                DE.focusRegistry = regs[0] || '';
+            }
+            SC.activeRegistry = DE.focusRegistry;
+            const info = selectedSceneInfo();
+            if (info) info.activeRegistry = DE.focusRegistry;
         }
 
-        function amNameFilter() {
-            const el = document.getElementById('am-name-filter');
-            return ((el && el.value) || '').trim().toLowerCase();
+        function deLoadFocusAnim() {
+            const a = deFindAnim(DE.focusRegistry);
+            const stageCount = (a && a._stage_count) ? (a._stage_count | 0) : 0;
+            const sd = (a && a._stage_descriptions) || {};
+            DE.stagesDraft = [];
+            for (let n = 1; n <= stageCount; n++) {
+                const text = sd[String(n)] != null ? String(sd[String(n)]) : '';
+                DE.stagesDraft.push({ _stage: n, _template: text });
+            }
+            DE.loadedStages = sceneInfoClone(DE.stagesDraft);
+            DE.dirty = false;
+            deRenderStages();
+            deRenderAnimTags();
+            deRenderAnimList();
         }
 
-        function amRenderAnimList() {
-            const host = document.getElementById('am-anims-list');
+        function deRenderStages() {
+            const host = document.getElementById('de-stages-host');
             if (!host) return;
-            const filter = amNameFilter();
-            const current = SC.activeRegistry || AM.focusRegistry || '';
-            const anims = amCandidateAnims().filter(a => {
-                if (!filter) return true;
-                const name = String(a._name || '');
-                const reg = String(a._registry || '');
-                return name.toLowerCase().includes(filter) || reg.toLowerCase().includes(filter);
-            });
+            if (!DE.stagesDraft.length) {
+                host.innerHTML = '<span style="opacity:0.6">(no stages)</span>';
+                return;
+            }
+            host.innerHTML = DE.stagesDraft.map(st =>
+                `<div class="de-stage-row compact-row">` +
+                `<label>stage ${st._stage}</label>` +
+                `<textarea class="de-stage-input" rows="2" data-stage="${st._stage}" ` +
+                `oninput="deStageEdit(${st._stage}, this.value)">${escapeHtml(st._template || '')}</textarea>` +
+                `</div>`
+            ).join('');
+        }
+
+        function deStageEdit(stage, val) {
+            const st = DE.stagesDraft.find(s => s._stage === stage);
+            if (st) {
+                st._template = val;
+                DE.dirty = true;
+            }
+        }
+
+        function deRenderAnimTags() {
+            const host = document.getElementById('de-anim-tags');
+            if (!host) return;
+            const a = deFindAnim(DE.focusRegistry);
+            const tags = (a && a._tags) || [];
+            const list = Array.isArray(tags) ? tags : [];
+            host.innerHTML = list.length
+                ? list.map(t => `<span class="tag-chip de-tag-readonly">${escapeHtml(String(t))}</span>`).join(' ')
+                : '<span style="opacity:0.6">(none)</span>';
+        }
+
+        function deRenderAnimList() {
+            const host = document.getElementById('de-anims-list');
+            if (!host) return;
+            const anims = deSortedAnims();
+            const current = DE.focusRegistry || '';
             const rows = anims.map((a) => {
                 const reg = a._registry || '';
-                const focus = reg === current;
-                const name = a._name || reg || '(unnamed)';
-                return `<tr class="${focus ? 'selected' : ''}" onclick="amSelectAnim('${String(reg).replace(/'/g, "\\'")}')">` +
+                const sel = reg === current;
+                const an = scAnimAnLetter(reg);
+                const genders = (a._pos_genders || []).map((g, gi) => {
+                    const letter = (g === 0 || g === 2) ? 'm' : 'f';
+                    const no = (a._pos_no_orgasm || [])[gi];
+                    return no ? letter : letter.toUpperCase();
+                }).join(' ');
+                const mods = formatMods(a);
+                const name = a._name || '(unnamed)';
+                const stages = (a._stage_count != null) ? a._stage_count : '';
+                const desc = previewDescription(a);
+                return `<tr class="${sel ? 'selected' : ''}" onclick="deSelectAnim('${String(reg).replace(/'/g, "\\'")}')">` +
+                    `<td class="col-an">${escapeHtml(an)}</td>` +
+                    `<td class="col-genders">${escapeHtml(genders)}</td>` +
+                    `<td class="col-mods">${escapeHtml(mods)}</td>` +
                     `<td class="col-name">${escapeHtml(name)}</td>` +
+                    `<td class="col-stages">${escapeHtml(stages)}</td>` +
+                    `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>` +
                     `</tr>`;
             }).join('');
             host.innerHTML =
                 `<table class="data-table anim-table"><thead><tr>` +
+                `<th class="col-an"></th>` +
+                `<th class="col-genders">genders</th>` +
+                `<th class="col-mods">modifiers</th>` +
                 `<th class="col-name">name</th>` +
+                `<th class="col-stages">num stages</th>` +
+                `<th class="col-desc">description</th>` +
                 `</tr></thead><tbody>${rows}</tbody></table>`;
         }
 
-        function amSelectAnim(reg) {
-            AM.focusRegistry = reg;
+        function deSelectAnim(reg) {
+            if (!reg || reg === DE.focusRegistry) return;
+            DE.focusRegistry = reg;
             SC.activeRegistry = reg;
-            AM.dirty = true;
-            amLoadFocusRegistry();
-            amRenderAnimList();
+            const info = selectedSceneInfo();
+            if (info) info.activeRegistry = reg;
+            deLoadFocusAnim();
         }
 
-        function amLoadFocusRegistry() {
-            const title = document.getElementById('am-title');
-            const a = (SC.lastAnims || []).find(x => x._registry === AM.focusRegistry)
-                || amCandidateAnims().find(x => x._registry === AM.focusRegistry);
-            if (title)
-                title.textContent = (a && (a._name || a._registry)) || 'Animation';
+        function deOnAnimsUpdated() {
+            const el = document.getElementById('description-editor-panel');
+            if (!el || el.style.display === 'none') return;
+            const prev = DE.focusRegistry;
+            deEnsureFocus();
+            const countEl = document.getElementById('de-anim-count');
+            if (countEl) {
+                const n = (SC.lastAnims || []).length;
+                countEl.textContent = `animations ${n}`;
+            }
+            if (DE.focusRegistry !== prev || !DE.stagesDraft.length)
+                deLoadFocusAnim();
+            else {
+                deRenderAnimList();
+                deRenderAnimTags();
+            }
         }
 
-        function configureAnimationMenuFromSceneInfo(info) {
+        function deSave() {
+            if (!DE.focusRegistry) return;
+            const payload = {
+                _registry: DE.focusRegistry,
+                _stages: sceneInfoClone(DE.stagesDraft)
+            };
+            if (typeof window.onAnimRegistrySave === 'function')
+                window.onAnimRegistrySave(JSON.stringify(payload));
+            DE.loadedStages = sceneInfoClone(DE.stagesDraft);
+            DE.dirty = false;
+            const a = deFindAnim(DE.focusRegistry);
+            if (a) {
+                const sd = {};
+                const sh = [];
+                DE.stagesDraft.forEach(st => {
+                    sd[String(st._stage)] = st._template || '';
+                    sh.push(!!(st._template && String(st._template).trim()));
+                });
+                a._stage_descriptions = sd;
+                a._stage_has_description = sh;
+            }
+            deRenderAnimList();
+        }
+
+        function deCancel() {
+            DE.stagesDraft = sceneInfoClone(DE.loadedStages);
+            DE.dirty = false;
+            deRenderStages();
+        }
+
+        function configureDescriptionEditorFromSceneInfo(info) {
             if (!info) info = selectedSceneInfo();
-            AM.scene_sid = info.scene_sid;
-            AM._scene_sid = info.scene_sid;
-            AM.live = info.mode === 'active';
-            AM.dirty = false;
-            AM.style = info.style || 'normally';
-            AM.positions = sceneInfoClone(info.positions || []);
-            AM.stages = sceneInfoClone(info.stages || []);
-            AM.focusRegistry = info.activeRegistry || AM.focusRegistry || '';
+            DE.scene_sid = info.scene_sid;
+            DE.dirty = false;
             copySceneInfoToSC(info);
-            amRenderAnimList();
-            amEnsureFocus();
-            amLoadFocusRegistry();
+            const typeHost = document.getElementById('de-type-pulldown');
+            if (typeHost) {
+                typeHost.innerHTML = '';
+                const typeValues = ['any'].concat(SC.groupOrder || []);
+                typeHost.appendChild(createPulldown(typeValues, SC.tagType || 'any', v => {
+                    SC.tagType = v;
+                    scRefreshTags();
+                }));
+            }
+            const forcedFilterBy = SC.filterByOnce || SC_FILTER_DEFAULT;
+            SC.filterByOnce = '';
+            scArmFilterDowngrade(forcedFilterBy);
+            if (SC.mode !== 'active') {
+                scEnsurePositionSeed();
+                if (SC.mode === 'creator')
+                    scEnrichActorMeta();
+            }
+            scRenderTagChips();
+            scSetTagMode(SC.tagMode || 'include');
+            const descEl = document.getElementById('de-filter-has-description');
+            const scDescEl = document.getElementById('sc-filter-has-description');
+            if (descEl && scDescEl) descEl.checked = scDescEl.checked;
+            scRefreshTags();
+            scRefreshAnims();
+            deEnsureFocus();
+            deLoadFocusAnim();
         }
 
-        function configureAnimationMenu(state) {
+        function configureDescriptionEditor(state) {
             state = state || {};
             const key = SceneInfo.keyFromState(Object.assign({ _mode: 'active' }, state));
             let info = sceneInfoByKey.get(key);
@@ -8786,111 +9051,16 @@
             }
             selectedSceneInfoKey = key;
             sceneInfosSessionActive = true;
-            configureAnimationMenuFromSceneInfo(info);
+            configureDescriptionEditorFromSceneInfo(info);
         }
 
-        function amApplyToSceneInfo() {
-            const info = selectedSceneInfo();
-            if (AM.focusRegistry) {
-                info.activeRegistry = AM.focusRegistry;
-                SC.activeRegistry = AM.focusRegistry;
-            }
-            if (AM.positions && AM.positions.length)
-                info.positions = sceneInfoClone(AM.positions);
-            else
-                info.positions = sceneInfoClone(SC.positions || []);
-            if (AM.stages && AM.stages.length)
-                info.stages = sceneInfoClone(AM.stages);
-            info.style = AM.style || SC.style;
-            info.dirty = true;
+        // Papyrus Animation_Menu_* still calls configureAnimationMenu.
+        function configureAnimationMenu(state) {
+            configureDescriptionEditor(state);
         }
 
-        function amApplyLiveChrome() {
-            const live = isSceneConnectionActive();
-            AM.live = live;
-            ['am-btn-prev', 'am-btn-next', 'am-btn-stop'].forEach(id => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                el.classList.toggle('disabled', !live);
-                el.style.opacity = live ? '' : '0.4';
-                el.style.pointerEvents = live ? '' : 'none';
-            });
-        }
-
-        function amRenderPositions() {
-            const tbody = document.querySelector('#am-positions-table tbody');
-            if (!tbody) return;
-            tbody.innerHTML = AM.positions.map((p, i) => `<tr>
-                <td>${i}</td><td>slot ${i}</td>
-                <td><span class="cell-toggle ${p._dressed ? 'on' : ''}" onclick="amTogglePos(${i}, 'dressed')">${p._dressed ? 'Y' : '—'}</span></td>
-                <td><span class="cell-toggle ${p._no_orgasm ? 'on' : ''}" onclick="amTogglePos(${i}, 'no_orgasm')">O</span></td>
-                <td><span class="cell-toggle" onclick="amCycleSpeaking(${i})">${p._speaking || '—'}</span></td>
-            </tr>`).join('');
-        }
-
-        function amTogglePos(i, key) {
-            const p = AM.positions[i];
-            if (!p) return;
-            if (key === 'dressed') p._dressed = p._dressed ? 0 : 1;
-            if (key === 'no_orgasm') {
-                p._no_orgasm = p._no_orgasm ? 0 : 1;
-                AM.dirty = true;
-            }
-            amRenderPositions();
-        }
-
-        function amCycleSpeaking(i) {
-            const mods = ['_pleasure_', '_pain_', '_gagged_', '_kissing_'];
-            const p = AM.positions[i];
-            if (!p) return;
-            const cur = p._speaking || '_pleasure_';
-            p._speaking = mods[(mods.indexOf(cur) + 1) % mods.length];
-            AM.dirty = true;
-            amRenderPositions();
-        }
-
-        function amLiveUpdate() {}
-
-        function amRenderStages() {
-            const tbody = document.querySelector('#am-stages-table tbody');
-            if (!tbody) return;
-            tbody.innerHTML = AM.stages.map(st => {
-                const n = st._stage;
-                const cur = st._current ? ' current' : '';
-                return `<tr class="${cur}">
-                    <td>${n}</td>
-                    <td><input type="text" value="${(st._template || '').replace(/"/g, '&quot;')}" style="width:100%" oninput="amStageEdit(${n}, this.value)" /></td>
-                    <td>${st._preview || ''}</td>
-                </tr>`;
-            }).join('');
-        }
-
-        function amStageEdit(stage, val) {
-            const st = AM.stages.find(s => s._stage === stage);
-            if (st) {
-                st._template = val;
-                AM.dirty = true;
-            }
-        }
-
-        function amPrevNext(dir) {
-            if (!isSceneConnectionActive()) return;
-            const max = SC.stageCount || 1;
-            let next = (SC.stage || 1) + (dir < 0 ? -1 : 1);
-            if (next < 1) next = 1;
-            if (next > max) next = max;
-            SC.stage = next;
-        }
-
-        function amDone(markDirty) {
-            if (markDirty !== false)
-                amApplyToSceneInfo();
-        }
-
-        function amStop() {
-            if (!isSceneConnectionActive()) return;
-            amApplyToSceneInfo();
-            applySceneMenuDraftToSceneInfo({ pendingStop: true, stopStyle: 'stop' });
+        function configureAnimationMenuFromSceneInfo(info) {
+            configureDescriptionEditorFromSceneInfo(info);
         }
     </script>
 </body>

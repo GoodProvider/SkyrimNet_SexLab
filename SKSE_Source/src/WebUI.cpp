@@ -521,7 +521,7 @@ void WebUI_Reset()
     WebUI_Invoke("hidePanel('sex_menu_panel');");
     WebUI_Invoke("hidePanel('yesno_panel');");
     WebUI_Invoke("hidePanel('scene_creator_panel');");
-    WebUI_Invoke("hidePanel('animation_menu_panel');");
+    WebUI_Invoke("hidePanel('description_editor_panel');");
     WebUI_Visibility_Hide();
 }
 
@@ -669,7 +669,7 @@ void InitWebUI()
                 auto j = nlohmann::json::parse(value);
                 const int scene_sid = j.value("_scene_sid", -1);
                 webui_log::info("onAnimationMenuClose scene_sid={}", scene_sid);
-                WebUI_Invoke("hidePanel('animation_menu_panel');");
+                WebUI_Invoke("hidePanel('description_editor_panel');");
                 WebUI_Visibility_Hide();
                 PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnAnimationMenuClose", scene_sid, j.dump());
             } catch (...) {
@@ -711,7 +711,7 @@ void InitWebUI()
                 auto j = nlohmann::json::parse(value);
                 const int scene_sid = j.value("_scene_sid", -1);
                 webui_log::info("onAnimationMenuStop scene_sid={}", scene_sid);
-                WebUI_Invoke("hidePanel('animation_menu_panel');");
+                WebUI_Invoke("hidePanel('description_editor_panel');");
                 WebUI_Visibility_Hide();
                 PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnAnimationMenuStop", scene_sid, 0);
             } catch (...) {

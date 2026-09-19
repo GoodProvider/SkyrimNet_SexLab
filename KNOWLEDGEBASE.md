@@ -1,5 +1,13 @@
 # Knowledgebase
 
+## Description Editor empty animation list (2026-09-19)
+
+**Symptom:** Description Editor opens but the Animations table is empty (or clipped below the filter).
+
+**Cause:** DE open did not arm filter downgrade or seed positions like Scene Menu. Default `gender` filter with `_actor_count: 0` and 0/0 gender totals matched no AnimationDB rows (`actor_count` optional treated `0` as set). `SC.filterBy` was already `gender`, so `scArmFilterDowngrade` never ran. In-thread stub rows were wiped on 0-result queries. CSS gave every `.de-section` `flex: 0 0 auto` inside `overflow: hidden`, clipping the anim list. In-scene hotkey only restored DE when `g_animationPanelPreferredOpen` (last selected main panel).
+
+**Fix:** DE open calls `scArmFilterDowngrade`, seeds/enriches positions on creator/`new`, omits `_actor_count`/gender match when no positions. `MatchesFilter` ignores `actor_count ≤ 0`. Anim queries merge `_also_registries` via `GetByRegistry`. DE anim section fixed 50% height. `WebUI_MaybeRestoreAnimationPanel` always opens DE when focus is SexLab-animating. `SceneInfo.hasActor` uses `formIdU32` for ESL FormIDs.
+
 ## AniDescriber HKX fill on hold (2026-09-17)
 
 Runtime missing-stage fill is **authored anidata → earlier authored stage (Papyrus) → `GetDescriptionFromTags`**. `AnimationDB::GetStageDescription` does not call AniDescriber. No `Debug.Notification("Missing descriptions, inferring")`. AniDescriber / `HkxAnim` compile into the DLL with `SKYRIMNET_ANIDESCRIBER_HKX=0` (does not restore `anim_events`). Source stays in tree for offline spline work.
@@ -188,7 +196,7 @@ Always **ignore** files matching `z-*.*` (e.g. `z-plan.md`). Local scratch / not
 
 - ControlPanel bottom `#control-actor-pulldown` owns focus for TargetMenu / Scene Menu / AnimationPanel. `#target-name` and Scene/Animation **scene** pulldowns removed. OStimNet framework pulldown (`#framework-row`) sits on ControlPanel above the actor row.
 - Nearby list (C++ `PopulateNearbyActors`): default radius **1600** game units (~22 m; pulldown 100–1600). Only actors inside radius are listed; `Target_Current` is pinned even outside radius. Scene Menu Positions reads this JSON — not “everyone in the cell.” Log line includes `distSkip` + first 8 skipped names/distances when actors fail the radius check. Sort: player first; then status `sexlab` → `ok` → ineligible (`child`/`cmbt`/`ostim`/`dead`/`load`); then distance. Labels crop name to 10 + status suffix. Scene Menu Positions unselected rows = `selectable` and status `ok|sexlab` (ineligible stay off that table). Soft Sex Menu pool = `selectable && status==ok`.
-- Hotkey **always toggles** overlay visibility: visible → C++ `WebUI_Visibility_Hide` (no Papyrus); hidden → `Open_WebUI_Target` (+ `WebUI_AfterTargetOpen` default pick). Close does not require the same focus actor. MultiTarget retired for this path. Animation main-panel preference persists across hide; restore via `WebUI_MaybeRestoreAnimationPanel` only when focus is SexLab-animating **and** preference true.
+- Hotkey **always toggles** overlay visibility: visible → C++ `WebUI_Visibility_Hide` (no Papyrus); hidden → `Open_WebUI_Target` (+ `WebUI_AfterTargetOpen` default pick). Close does not require the same focus actor. MultiTarget retired for this path. When focus is SexLab-animating, `WebUI_MaybeRestoreAnimationPanel` always opens Description Editor (not gated on last main-panel choice).
 - Active panels: `stop` (speaker + silent/stop/explain → SceneInfo), `stage` / `position` (**Done** → SceneInfo), `animation` (AnimationPanel name picker; **Done** → SceneInfo).
 
 ## Active TargetMenu `type: papyrus` (2026-08-06, Actor/Scene split 2026-08-16)

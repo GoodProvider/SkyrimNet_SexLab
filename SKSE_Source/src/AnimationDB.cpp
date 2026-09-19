@@ -814,7 +814,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         {
             if (spec.enabled_only && !row.enabled)
                 return false;
-            if (spec.actor_count && row.position_count != *spec.actor_count)
+            if (spec.actor_count && *spec.actor_count > 0 && row.position_count != *spec.actor_count)
                 return false;
             if (spec.creature == 1 && !row.has_creature)
                 return false;

@@ -1236,10 +1236,10 @@ namespace ActionCatalog
         webui_log::info("SwitchMainPanel: selected '{}'", key);
 
         const std::string panel = next->value("panel", "");
-        g_animationPanelPreferredOpen = (panel == "animation_menu_panel");
+        g_animationPanelPreferredOpen = (panel == "description_editor_panel");
 
-        // One-shot soft connection load when switching TO Scene Menu / Animation.
-        if (panel == "scene_creator_panel" || panel == "animation_menu_panel") {
+        // One-shot soft connection load when switching TO Scene Menu / Description Editor.
+        if (panel == "scene_creator_panel" || panel == "description_editor_panel") {
             WebUI_Invoke("mainPanelDidOpen();");
         }
     }

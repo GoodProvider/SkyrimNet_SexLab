@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 // Defined in PublicAPI.h (included once from Config.cpp).
@@ -296,7 +297,7 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke("hidePanel('sex_menu_panel');");
         WebUI_Invoke("hidePanel('yesno_panel');");
         WebUI_Invoke("hidePanel('scene_creator_panel');");
-        WebUI_Invoke("hidePanel('animation_menu_panel');");
+        WebUI_Invoke("hidePanel('description_editor_panel');");
         WebUI_Invoke("hidePanel('settings_panel');");
         WebUI_Invoke("hidePanel('log_panel');");
     }
@@ -310,7 +311,7 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke("hidePanel('sex_menu_panel');");
         WebUI_Invoke("hidePanel('yesno_panel');");
         WebUI_Invoke("hidePanel('scene_creator_panel');");
-        WebUI_Invoke("hidePanel('animation_menu_panel');");
+        WebUI_Invoke("hidePanel('description_editor_panel');");
         WebUI_Invoke("hidePanel('settings_panel');");
         WebUI_Invoke("hidePanel('log_panel');");
         WebUI_Visibility_Hide();
@@ -567,7 +568,7 @@ namespace PapyrusBindings_WebUI
             webui_log::warn("Animation_Menu_Show: bad state_json");
         }
         WebUI_Invoke(std::string("configureAnimationMenu(") + dumped + ");");
-        WebUI_Invoke("showPanel('animation_menu_panel');");
+        WebUI_Invoke("showPanel('description_editor_panel');");
         WebUI_Visibility_Show();
     }
 
@@ -1272,8 +1273,32 @@ namespace PapyrusBindings_WebUI
 
             if (query_type == "anims") {
                 nlohmann::json rows = nlohmann::json::array();
-                for (const auto& row : AnimationDB::QueryTopNAnims(spec, n))
+                std::unordered_set<std::string> seen;
+                for (const auto& row : AnimationDB::QueryTopNAnims(spec, n)) {
                     rows.push_back(AnimRowToJson(row));
+                    seen.insert(row.registry);
+                }
+                if (j.contains("_also_registries") && j["_also_registries"].is_array()) {
+                    for (const auto& el : j["_also_registries"]) {
+                        if (!el.is_string())
+                            continue;
+                        const std::string reg = el.get<std::string>();
+                        if (reg.empty() || seen.contains(reg))
+                            continue;
+                        if (auto row = AnimationDB::GetByRegistry(reg))
+                            rows.push_back(AnimRowToJson(*row));
+                        else
+                            rows.push_back(nlohmann::json{ { "_registry", reg } });
+                        seen.insert(reg);
+                    }
+                }
+                webui_log::info(
+                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} results={} total={}",
+                    request_id,
+                    spec.actor_count ? *spec.actor_count : -1,
+                    spec.gender_match,
+                    rows.size(),
+                    AnimationDB::TotalEnabledCount());
                 nlohmann::json payload;
                 payload["_anims"] = rows;
                 payload["_total_enabled"] = AnimationDB::TotalEnabledCount();
@@ -1645,10 +1670,8 @@ namespace PapyrusBindings_WebUI
     {
         if (!Target_Current || !IsSexLabAnimatingActor(Target_Current))
             return;
-        if (!ActionCatalog::IsAnimationPanelPreferredOpen())
-            return;
-        webui_log::info("WebUI_MaybeRestoreAnimationPanel: restoring Animation panel");
-        ActionCatalog::SwitchMainPanel("animation_menu_panel");
+        webui_log::info("WebUI_MaybeRestoreAnimationPanel: opening Description Editor for animating focus");
+        ActionCatalog::SwitchMainPanel("description_editor_panel");
     }
 
     bool Register_WebUI_Functions(RE::BSScript::IVirtualMachine* a_vm)

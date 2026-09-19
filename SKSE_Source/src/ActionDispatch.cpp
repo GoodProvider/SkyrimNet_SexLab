@@ -996,7 +996,7 @@ namespace ActionCatalog
         // Keep TargetMenu open so the user can push more presets via Custom.
         WebUI_Invoke("hidePanel('sex_menu_panel');");
         WebUI_Invoke("hidePanel('yesno_panel');");
-        WebUI_Invoke("hidePanel('animation_menu_panel');");
+        WebUI_Invoke("hidePanel('description_editor_panel');");
         WebUI_Invoke(std::string("configureSceneCreator(") + state.dump() + ");");
         WebUI_Invoke("showPanel('scene_creator_panel');");
         // Show refreshes nearby (sync soft list → unselected Positions rows).
