@@ -1589,7 +1589,12 @@ namespace PapyrusBindings_WebUI
         const char* raw = json.c_str();
         if (!raw || !raw[0])
             return;
-        WebUI_Invoke(std::string("setCascadeChoices(") + raw + ");");
+        const std::string payload(raw);
+        const std::string preview =
+            payload.size() > 80 ? payload.substr(0, 80) + "..." : payload;
+        webui_log::info("WebUI_PushCascadeChoices: {} bytes preview={}", payload.size(), preview);
+        // JSON.parse path — raw object-literal Invoke can silently no-op.
+        WebUI_InteropCall("setCascadeChoices", payload);
     }
 
     RE::Actor* WebUI_GetFocusActor(RE::StaticFunctionTag*)

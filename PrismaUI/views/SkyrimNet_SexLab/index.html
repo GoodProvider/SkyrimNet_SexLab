@@ -2104,7 +2104,14 @@
             if (!host) return;
             host.querySelectorAll('.target-cascade-live').forEach(el => el.remove());
             if (payload.panel === 'fields') {
-                fieldsResetForOpt(payload);
+                try {
+                    fieldsResetForOpt(payload);
+                } catch (e) {
+                    notifyPlayer('Failed to load panel fields.');
+                    return;
+                }
+                if (payload._fieldsPending)
+                    delete payload._fieldsPending;
                 papyrusSelectedOpt = payload;
                 leftSelectedOpt = payload;
                 navStack = [];
@@ -2132,6 +2139,7 @@
             panel.appendChild(list);
             host.appendChild(panel);
         }
+        window.setCascadeChoices = setCascadeChoices;
 
         function renderForeignDataTable(payload) {
             revealForeignMainPanel('data_table');
@@ -3528,22 +3536,32 @@
         function firePapyrusOption(opt, extraParams) {
             if (!opt || typeof window.onAction !== 'function') return;
             const parameters = Object.assign({}, extraParams || {});
-            const closeWebUI = parameters.closeWebUI != null
-                ? !!parameters.closeWebUI
-                : !!opt.closeWebUI;
+            const closeRaw = parameters.closeWebUI != null ? parameters.closeWebUI
+                : (parameters.closewebui != null ? parameters.closewebui
+                    : (opt.closeWebUI != null ? opt.closeWebUI : opt.closewebui));
+            const closeWebUI = closeRaw != null ? !!closeRaw : true;
             delete parameters.closeWebUI;
+            delete parameters.closewebui;
             const executionFunctionName = parameters.executionFunctionName
-                || opt.executionFunctionName || '';
+                || parameters.executionfunctionname
+                || opt.executionFunctionName
+                || opt.executionfunctionname
+                || '';
             delete parameters.executionFunctionName;
+            delete parameters.executionfunctionname;
             const parameterMapping = parameters.parameterMapping
-                || opt.parameterMapping || [];
+                || parameters.parametermapping
+                || opt.parameterMapping
+                || opt.parametermapping
+                || [];
             delete parameters.parameterMapping;
+            delete parameters.parametermapping;
             const payload = {
                 action: 'papyrus',
-                label: opt.label || '',
+                label: opt.label || opt.Label || '',
                 plugin: opt.plugin || opt.questPlugin || 'SkyrimNet_SexLab.esp',
-                questFormId: opt.questFormId || '0x800',
-                scriptName: opt.scriptName || 'SkyrimNet_SexLab_Actions',
+                questFormId: opt.questFormId || opt.questformid || '0x800',
+                scriptName: opt.scriptName || opt.scriptname || 'SkyrimNet_SexLab_Actions',
                 executionFunctionName,
                 parameterMapping,
                 parameters,
@@ -3606,7 +3624,12 @@
                     const staticFields = opt.panelFields || opt.panelfields;
                     if (!staticFields || !staticFields.length) {
                         // Live opener (punish / restrain variants): Papyrus pushes panelFields.
+                        // Pending stub avoids Start-only until setCascadeChoices arrives.
                         firePapyrusOption(opt, { closeWebUI: false });
+                        papyrusSelectedOpt = Object.assign({}, opt, {
+                            panelFields: [],
+                            _fieldsPending: true
+                        });
                     } else {
                         fieldsResetForOpt(opt);
                     }
@@ -5935,11 +5958,40 @@
             settingName: 'punish_pleasure_pain_rape'
         };
 
+        function fieldsFieldId(f) {
+            if (!f) return '';
+            return String(f.fieldId || f.fieldid || f.name || f.Name || '');
+        }
+
+        function fieldsFieldCaption(f) {
+            if (!f) return '';
+            return String(f.caption || f.label || f.Label || fieldsFieldId(f) || '');
+        }
+
+        function fieldsFieldChoices(f) {
+            if (!f) return [];
+            const c = f.choices || f.options || f.Options;
+            return Array.isArray(c) ? c : [];
+        }
+
+        function fieldsChoiceVal(o) {
+            if (!o) return '';
+            if (o.val != null) return String(o.val);
+            if (o.value != null) return String(o.value);
+            if (o.Value != null) return String(o.Value);
+            return String(o.caption || o.label || o.Label || '');
+        }
+
+        function fieldsChoiceCaption(o) {
+            if (!o) return '';
+            return String(o.caption || o.label || o.Label || fieldsChoiceVal(o) || '');
+        }
+
         function fieldsOptKey(opt) {
             return [
                 displayLabel(opt) || '',
-                opt.executionFunctionName || '',
-                (opt.panelFields || opt.panelfields || []).map(f => f && f.name).join(',')
+                opt.executionFunctionName || opt.executionfunctionname || '',
+                (opt.panelFields || opt.panelfields || []).map(f => fieldsFieldId(f)).join(',')
             ].join('|');
         }
 
@@ -5954,12 +6006,12 @@
             fieldsUi.textDraft = '';
             fieldsUi.rapeSeeded = false;
             list.forEach(f => {
-                if (!f || !f.name) return;
-                const name = String(f.name);
-                const opts = (f.options || []).map(o => ({
-                    value: String(o.value != null ? o.value : (o.label || '')),
-                    label: String(o.label != null ? o.label : (o.value || '')),
-                    opensText: !!(o.opensText || o.openstext)
+                const name = fieldsFieldId(f);
+                if (!name) return;
+                const opts = fieldsFieldChoices(f).map(o => ({
+                    value: fieldsChoiceVal(o),
+                    label: fieldsChoiceCaption(o),
+                    opensText: !!(o.opensText || o.openstext || o.OpensText)
                 }));
                 fieldsUi.fieldOptions[name] = opts;
                 let seed = defs[name];
@@ -6004,6 +6056,7 @@
 
         function fieldsCloseFlag(opt) {
             if (opt.closeWebUI === false || opt.closeWebUI === 0) return false;
+            if (opt.closewebui === false || opt.closewebui === 0) return false;
             return true;
         }
 
@@ -6065,7 +6118,7 @@
         }
 
         function fieldsOnSelectChange(opt, field, value) {
-            const name = String(field.name);
+            const name = fieldsFieldId(field);
             const picked = fieldsFindOption(name, value)
                 || (fieldsUi.fieldOptions[name] || []).find(o => o.label === value);
             const val = picked ? picked.value : value;
@@ -6123,8 +6176,18 @@
         }
 
         function renderFieldsPanelBody(body, opt) {
-            fieldsEnsureSeeded(opt);
             const list = opt.panelFields || opt.panelfields || [];
+            const pending = !!opt._fieldsPending;
+            if (pending || !list.length) {
+                if (pending) {
+                    const msg = document.createElement('div');
+                    msg.className = 'dyn-field';
+                    msg.textContent = 'loading\u2026';
+                    body.appendChild(msg);
+                }
+                return;
+            }
+            fieldsEnsureSeeded(opt);
             const showStart = !fieldsAllApplyOnChange(opt);
 
             if (showStart) {
@@ -6162,8 +6225,8 @@
             };
 
             list.forEach(f => {
-                if (!f || !f.name) return;
-                const name = String(f.name);
+                const name = fieldsFieldId(f);
+                if (!name) return;
                 const opts = fieldsUi.fieldOptions[name] || [];
                 const labels = opts.map(o => o.label || o.value);
                 const curVal = fieldsUi.values[name] || '';
@@ -6174,7 +6237,7 @@
                 const pd = createPulldown(labels, seedLabel, (picked) => {
                     fieldsOnSelectChange(opt, f, picked);
                 });
-                addField(f.label || name, pd);
+                addField(fieldsFieldCaption(f) || name, pd);
 
                 if (fieldsUi.showTextFor === name) {
                     const wrap = document.createElement('div');
@@ -6604,6 +6667,42 @@
 
         function softNearbyActors() {
             return (nearbyActors || []).filter(a => a && a.selectable && a.status === 'ok');
+        }
+
+        /// ControlPanel-selectable nearby: status ok or already in SexLab. Ineligible
+        /// (child / cmbt / ostim / dead / load) stay off Scene Menu Positions.
+        function scActorSexLabEligible(a) {
+            if (!a || a.selectable === false) return false;
+            const st = String(a.status || 'ok');
+            return st === 'ok' || st === 'sexlab';
+        }
+
+        function scEligibleNearbyActors() {
+            const out = [];
+            const seenFid = new Set();
+            const seenUuid = new Set();
+            (nearbyActors || []).forEach(a => {
+                if (!scActorSexLabEligible(a)) return;
+                const fid = formIdU32(a.formId != null ? a.formId : a._form_id);
+                let u = String(a.uuid != null ? a.uuid : (a._uuid != null ? a._uuid : ''));
+                if ((!u || u === '0') && fid) u = String(fid);
+                if (fid && seenFid.has(fid)) return;
+                if (u && u !== '0' && seenUuid.has(u)) return;
+                if (!fid && (!u || u === '0')) return;
+                if (fid) seenFid.add(fid);
+                if (u && u !== '0') seenUuid.add(u);
+                const dist = a.dist != null ? Number(a.dist) : Number.POSITIVE_INFINITY;
+                out.push({
+                    name: a.name || a.label || (u && actorNames[u]) || '?',
+                    uuid: u,
+                    formId: fid,
+                    dist: Number.isFinite(dist) ? dist : Number.POSITIVE_INFINITY,
+                    gender: scActorGender(a),
+                    status: a.status || 'ok',
+                    selectable: true
+                });
+            });
+            return out;
         }
 
         function setNearbyActors(actors) {
@@ -7543,7 +7642,7 @@
         function scSelectedFormIdSet() {
             const set = new Set();
             (SC.positions || []).forEach(p => {
-                const fid = Number((p && (p._form_id != null ? p._form_id : p.formId)) || 0);
+                const fid = formIdU32(p && (p._form_id != null ? p._form_id : p.formId));
                 if (fid) set.add(fid);
             });
             return set;
@@ -7686,7 +7785,9 @@
         function scSelectNearby(uuid) {
             const u = String(uuid || '');
             if (!u || scSelectedUuidSet().has(u)) return;
-            const pool = scNearbyPool().find(a => a.uuid === u);
+            if ((SC.positions || []).length >= 5) return;
+            const pool = scEligibleNearbyActors().find(a => a.uuid === u)
+                || scNearbyPool().find(a => a.uuid === u);
             if (!pool) return;
             const formId = pool.formId || 0;
             SC.pendingNearby = {
@@ -7811,7 +7912,8 @@
             }
             let u = String(uuid || '');
             if ((!u || u === '0') && formId) {
-                const pool = scNearbyPool().find(a => Number(a.formId) === Number(formId));
+                const pool = scEligibleNearbyActors().find(a => Number(a.formId) === Number(formId))
+                    || scNearbyPool().find(a => Number(a.formId) === Number(formId));
                 if (pool) u = pool.uuid;
             }
             scSelectNearby(u);
@@ -7909,13 +8011,20 @@
                 tbody.appendChild(tr);
             });
 
-            const excluded = scNearbyPool()
+            const excluded = scEligibleNearbyActors()
                 .filter(a => {
-                    if (selectedSet.has(a.uuid)) return false;
-                    if (a.formId && selectedFormIds.has(Number(a.formId))) return false;
+                    const u = String(a.uuid || '');
+                    const fid = formIdU32(a.formId);
+                    if (u && u !== '0' && selectedSet.has(u)) return false;
+                    if (fid && selectedFormIds.has(fid)) return false;
                     return true;
                 })
-                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                .sort((a, b) => {
+                    const da = Number.isFinite(a.dist) ? a.dist : Number.POSITIVE_INFINITY;
+                    const db = Number.isFinite(b.dist) ? b.dist : Number.POSITIVE_INFINITY;
+                    if (da !== db) return da - db;
+                    return (a.name || '').localeCompare(b.name || '');
+                });
 
             excluded.forEach(a => {
                 const tr = document.createElement('tr');
