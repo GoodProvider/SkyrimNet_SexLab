@@ -1679,8 +1679,14 @@ namespace PapyrusBindings_WebUI
         if (!Target_Current || !IsSexLabAnimatingActor(Target_Current))
             return;
         webui_log::info("WebUI_MaybeRestoreAnimationPanel: opening Description Editor for animating focus");
-        DispatchMenuNoArg("WebUI_ConfigureFocusScene");
+        // No WebUI_ConfigureFocusScene here: WebUI_SeedSceneInfos already sent this scene's full state
+        // (stages included) on overlay Show, and mainPanelDidOpen binds the panel from that cache.
         ActionCatalog::SwitchMainPanel("description_editor_panel");
+    }
+
+    bool WebUI_IsMainPanelOpen(RE::StaticFunctionTag*, RE::BSFixedString panel)
+    {
+        return ActionCatalog::IsMainPanelOpen(panel.c_str() ? panel.c_str() : "");
     }
 
     bool WebUI_IsOverlayVisible(RE::StaticFunctionTag*)
@@ -1715,6 +1721,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("WebUI_AfterTargetOpen", scriptName, WebUI_AfterTargetOpen);
         a_vm->RegisterFunction("WebUI_MaybeRestoreAnimationPanel", scriptName, WebUI_MaybeRestoreAnimationPanel);
         a_vm->RegisterFunction("WebUI_IsOverlayVisible", scriptName, WebUI_IsOverlayVisible);
+        a_vm->RegisterFunction("WebUI_IsMainPanelOpen", scriptName, WebUI_IsMainPanelOpen);
         a_vm->RegisterFunction("WebUI_SetLastRebuildTimestamp", scriptName, WebUI_SetLastRebuildTimestamp);
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);

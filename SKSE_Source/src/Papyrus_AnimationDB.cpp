@@ -229,6 +229,38 @@ namespace PapyrusBindings_AnimationDB
             AnimationDB::SubstituteActors(desc.c_str() ? desc.c_str() : "", names));
     }
 
+    RE::BSFixedString AnimDb_GetStagesJson(RE::StaticFunctionTag*, RE::BSFixedString registry,
+        std::int32_t stage_count, RE::BSFixedString actors_json, std::int32_t current_stage)
+    {
+        std::vector<std::string> names;
+        try {
+            auto j = nlohmann::json::parse(actors_json.c_str() ? actors_json.c_str() : "[]");
+            if (j.is_array()) {
+                for (const auto& el : j) {
+                    if (el.is_string())
+                        names.push_back(el.get<std::string>());
+                }
+            }
+        } catch (...) {
+        }
+        const auto templates = AnimationDB::GetAllStageDescriptions(
+            registry.c_str() ? registry.c_str() : "", stage_count);
+        nlohmann::json arr = nlohmann::json::array();
+        std::string carried; // _preview falls back to the nearest earlier stage, as GetThreadStageDescription did
+        for (size_t i = 0; i < templates.size(); ++i) {
+            const int stage = static_cast<int>(i) + 1;
+            if (!templates[i].empty())
+                carried = templates[i];
+            nlohmann::json st;
+            st["_stage"] = stage;
+            st["_template"] = templates[i];
+            st["_preview"] = AnimationDB::SubstituteActors(carried, names);
+            st["_current"] = (stage == current_stage) ? 1 : 0;
+            arr.push_back(std::move(st));
+        }
+        return RE::BSFixedString(arr.dump());
+    }
+
     bool AnimDb_SaveAnimLocal(RE::StaticFunctionTag*, RE::BSFixedString registry, RE::BSFixedString json)
     {
         try {
@@ -273,6 +305,7 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_GetStageDescription", scriptName, AnimDb_GetStageDescription);
         a_vm->RegisterFunction("AnimDb_GetTransition", scriptName, AnimDb_GetTransition);
         a_vm->RegisterFunction("AnimDb_SubstituteActors", scriptName, AnimDb_SubstituteActors);
+        a_vm->RegisterFunction("AnimDb_GetStagesJson", scriptName, AnimDb_GetStagesJson);
         a_vm->RegisterFunction("AnimDb_SaveAnimLocal", scriptName, AnimDb_SaveAnimLocal);
         a_vm->RegisterFunction("AnimDb_ResolveTags", scriptName, AnimDb_ResolveTags);
         a_vm->RegisterFunction("AnimDb_CsvHasTag", scriptName, AnimDb_CsvHasTag);

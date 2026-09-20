@@ -68,6 +68,8 @@ namespace ActionCatalog
 
     /// Last hotkey/session preference: Animation main panel was left open.
     bool IsAnimationPanelPreferredOpen();
+    /// True when the selected main panel maps to `panel` (e.g. "description_editor_panel").
+    bool IsMainPanelOpen(const std::string& panel);
     void SetAnimationPanelPreferredOpen(bool open);
 
     // Assembled TargetMenu Actor or Scene defaultsParameters + options (matches ControlPanel focus)

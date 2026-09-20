@@ -124,36 +124,6 @@ void ReadLogTailUnlocked(bool resetFromStart)
     PushLogChunk(true, lines, path.string());
 }
 
-void DispatchMenuNoArg(const char* functionName)
-{
-    SKSE::GetTaskInterface()->AddTask([functionName]() {
-        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-        if (!vm) {
-            webui_log::error("DispatchMenuNoArg: no VM");
-            return;
-        }
-        RE::TESQuest* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SkyrimNet_SexLab");
-        if (!quest)
-            quest = RE::TESDataHandler::GetSingleton()->LookupForm<RE::TESQuest>(0x800, "SkyrimNet_SexLab.esp");
-        if (!quest) {
-            webui_log::error("DispatchMenuNoArg: quest not found");
-            return;
-        }
-        auto handle = vm->GetObjectHandlePolicy()->GetHandleForObject(
-            static_cast<RE::VMTypeID>(quest->GetFormType()), quest);
-        RE::BSTSmartPointer<RE::BSScript::Object> scriptObject;
-        vm->FindBoundObject(handle, "SkyrimNet_SexLab_Menu", scriptObject);
-        if (!scriptObject) {
-            webui_log::error("DispatchMenuNoArg: Menu script not bound");
-            return;
-        }
-        auto* raw = new EmptyArgs();
-        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
-        vm->DispatchMethodCall(scriptObject, RE::BSFixedString(functionName), raw, callback);
-        webui_log::info("DispatchMenuNoArg: {}", functionName);
-    });
-}
-
 void DispatchHandlerBondageClosed()
 {
     SKSE::GetTaskInterface()->AddTask([]() {
@@ -225,6 +195,37 @@ void Call_OpenSkyrimNetDashboard()
 }
 
 }  // namespace
+
+// Declared in WebUI.h (external linkage) — must live outside the anonymous namespace.
+void DispatchMenuNoArg(const char* functionName)
+{
+    SKSE::GetTaskInterface()->AddTask([functionName]() {
+        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        if (!vm) {
+            webui_log::error("DispatchMenuNoArg: no VM");
+            return;
+        }
+        RE::TESQuest* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SkyrimNet_SexLab");
+        if (!quest)
+            quest = RE::TESDataHandler::GetSingleton()->LookupForm<RE::TESQuest>(0x800, "SkyrimNet_SexLab.esp");
+        if (!quest) {
+            webui_log::error("DispatchMenuNoArg: quest not found");
+            return;
+        }
+        auto handle = vm->GetObjectHandlePolicy()->GetHandleForObject(
+            static_cast<RE::VMTypeID>(quest->GetFormType()), quest);
+        RE::BSTSmartPointer<RE::BSScript::Object> scriptObject;
+        vm->FindBoundObject(handle, "SkyrimNet_SexLab_Menu", scriptObject);
+        if (!scriptObject) {
+            webui_log::error("DispatchMenuNoArg: Menu script not bound");
+            return;
+        }
+        auto* raw = new EmptyArgs();
+        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+        vm->DispatchMethodCall(scriptObject, RE::BSFixedString(functionName), raw, callback);
+        webui_log::info("DispatchMenuNoArg: {}", functionName);
+    });
+}
 
 namespace SexLabNet {
 

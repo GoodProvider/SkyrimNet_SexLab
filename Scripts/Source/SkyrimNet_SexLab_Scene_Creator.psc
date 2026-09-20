@@ -1314,7 +1314,8 @@ Function ContinueAfterSceneCreator(String json)
     DbgEnd("ContinueAfterSceneCreator")
 EndFunction
 
-String Function BuildWebUIState()
+; Builds the creator state as a JC handle (caller serializes or embeds it).
+int Function BuildWebUIObject()
     int obj = JMap.object()
     JMap.setStr(obj, "_mode", "creator")
     JMap.setStr(obj, "_connection", "new")
@@ -1361,6 +1362,11 @@ String Function BuildWebUIState()
             JMap.setObj(obj, "_group_order", groups)
         endif
     endif
+    return obj
+EndFunction
+
+String Function BuildWebUIState()
+    int obj = BuildWebUIObject()
     String json = ObjectToLowerCaseKeyJson(obj)
     JValue.release(obj)
     return json

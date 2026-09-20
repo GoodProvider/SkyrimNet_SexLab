@@ -4,6 +4,10 @@
 #include <Windows.h>
 #include <algorithm>
 #include <cctype>
+#include <cstring>
+#include <string>
+#include <string_view>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 namespace PapyrusBindings_Utilities
@@ -55,6 +59,88 @@ namespace PapyrusBindings_Utilities
         }
     }
 
+    /// JSON string literal: wraps in quotes, escapes " \ \n \r \t, other bytes < 0x20 as \u00XX.
+    /// Bytes >= 0x80 pass through verbatim (payload is already UTF-8).
+    static void AppendQuoted(std::string& out, const char* raw, std::size_t len)
+    {
+        static constexpr char kHex[] = "0123456789abcdef";
+        out.push_back('"');
+        for (std::size_t i = 0; i < len; ++i) {
+            const auto c = static_cast<unsigned char>(raw[i]);
+            switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if (c < 0x20) {
+                    out += "\\u00";
+                    out.push_back(kHex[c >> 4]);
+                    out.push_back(kHex[c & 0xF]);
+                } else {
+                    out.push_back(static_cast<char>(c));
+                }
+            }
+        }
+        out.push_back('"');
+    }
+
+    RE::BSFixedString JsonQuote(RE::StaticFunctionTag*, RE::BSFixedString s)
+    {
+        const char* raw = s.c_str() ? s.c_str() : "";
+        std::string out;
+        const std::size_t len = std::strlen(raw);
+        out.reserve(len + 2);
+        AppendQuoted(out, raw, len);
+        return RE::BSFixedString(out);
+    }
+
+    /// Hex entity UUID -> arbitrary-precision decimal string. Strings with no a-f/A-F letter are
+    /// already decimal and returned unchanged. A leading 0x/0X is stripped and non-hex characters
+    /// are skipped, matching the former Papyrus implementation.
+    RE::BSFixedString UuidToDecimalString(RE::StaticFunctionTag*, RE::BSFixedString entityUuid)
+    {
+        const char* raw = entityUuid.c_str() ? entityUuid.c_str() : "";
+        std::string_view in(raw);
+        if (in.empty()) {
+            return RE::BSFixedString("");
+        }
+        const bool isHex = std::any_of(in.begin(), in.end(), [](char c) {
+            return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        });
+        if (!isHex) {
+            return entityUuid;
+        }
+        if (in.size() >= 2 && in[0] == '0' && (in[1] == 'x' || in[1] == 'X')) {
+            in.remove_prefix(2);
+        }
+        std::vector<std::uint8_t> dec{ 0 };  // little-endian decimal digits
+        for (const char c : in) {
+            int digit;
+            if (c >= '0' && c <= '9') digit = c - '0';
+            else if (c >= 'a' && c <= 'f') digit = c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F') digit = c - 'A' + 10;
+            else continue;
+            int carry = digit;
+            for (auto& d : dec) {
+                const int v = d * 16 + carry;
+                d = static_cast<std::uint8_t>(v % 10);
+                carry = v / 10;
+            }
+            while (carry > 0) {
+                dec.push_back(static_cast<std::uint8_t>(carry % 10));
+                carry /= 10;
+            }
+        }
+        std::string out;
+        out.reserve(dec.size());
+        for (auto it = dec.rbegin(); it != dec.rend(); ++it) {
+            out.push_back(static_cast<char>('0' + *it));
+        }
+        return RE::BSFixedString(out);
+    }
+
     std::int32_t VkToDxScanCode(RE::StaticFunctionTag*, std::int32_t vk)
     {
         if (vk < 1 || vk > 255) {
@@ -76,7 +162,8 @@ namespace PapyrusBindings_Utilities
 
         a_vm->RegisterFunction("JsonLowerCaseKeys", scriptName, JsonLowerCaseKeys);
         a_vm->RegisterFunction("VkToDxScanCode", scriptName, VkToDxScanCode);
-
+        a_vm->RegisterFunction("JsonQuote", scriptName, JsonQuote);
+        a_vm->RegisterFunction("UuidToDecimalString", scriptName, UuidToDecimalString);
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;
     }

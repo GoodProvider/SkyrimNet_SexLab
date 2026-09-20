@@ -1,5 +1,13 @@
 # Knowledgebase
 
+## WebUI script aborts at load: TDZ from hidePanel (2026-09-20)
+
+**Symptom:** TargetMenu **Custom** no longer opened the Scene Selector; no panel logic after ~line 7286 of `index.html` existed.
+
+**Cause:** `hidePanel('description_editor_panel')` runs **during script load**. `concealMainPanel` called `deSetLocked`, which read `let deLockTimer` declared ~1800 lines later → `ReferenceError` (temporal dead zone) → the whole inline script aborted, so `ssCustom`, `configureSceneCreator`, DE code and the `window.on*` handlers were never defined. A parse-only check (`new Function`) does not catch this.
+
+**Fix / rule:** Anything reachable from load-time `hidePanel` / `concealMainPanel` / `revealMainPanel` must not touch `let`/`const` declared later in the script (use `var` or function declarations). Verify by *executing* the page (headless Chrome with `window.onerror` capture), not just parsing it.
+
 ## Description Editor scene pulldown anim-only / empty names (2026-09-19)
 
 **Symptom:** Live Nina+Bob AP Anal scene; DE **scene:** option showed only **AP Anal**; names row hidden.

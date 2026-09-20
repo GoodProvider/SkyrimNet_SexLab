@@ -45,3 +45,5 @@ Function WebUI_PushMainPanelData(String json) global native
 Function WebUI_PushCascadeChoices(String json) global native
 Actor Function WebUI_GetFocusActor() global native
 String Function WebUI_GetFocusKind() global native
+; True when the selected main panel is `panel` (e.g. "description_editor_panel").
+Bool Function WebUI_IsMainPanelOpen(String panel) global native

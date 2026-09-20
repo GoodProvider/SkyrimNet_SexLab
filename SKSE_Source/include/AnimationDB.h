@@ -88,6 +88,8 @@ namespace AnimationDB
 
     std::optional<AnimRow> GetByRegistry(const std::string& registry);
     std::string GetStageDescription(const std::string& registry, int stage);
+    /// Raw templates for stages 1..stage_count in one lock/lookup (empty string where a stage has none).
+    std::vector<std::string> GetAllStageDescriptions(const std::string& registry, int stage_count);
     std::string GetTransition(const std::string& registry, int from_stage, int to_stage);
     std::string SubstituteActors(const std::string& desc, const std::vector<std::string>& actor_names);
     bool SaveAnimLocal(const std::string& registry, const nlohmann::json& payload);

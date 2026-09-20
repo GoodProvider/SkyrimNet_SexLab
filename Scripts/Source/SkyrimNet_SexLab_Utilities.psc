@@ -71,79 +71,8 @@ String Function IntToHex(int value) global
     return s
 EndFunction
 
-int Function HexCharToInt(String c) global
-    int i = StringUtil.Find("0123456789abcdef", c)
-    if i < 0
-        i = StringUtil.Find("0123456789ABCDEF", c)
-    endif
-    return i
-EndFunction
-
-String Function DecimalStringMultiplyAdd(String decimal, int multiplier, int addend) global
-    int carry = addend
-    String result = ""
-    int i = StringUtil.GetLength(decimal) - 1
-    while i >= 0
-        int digit = StringUtil.AsOrd(StringUtil.GetNthChar(decimal, i)) - 48
-        int value = digit * multiplier + carry
-        result = StringUtil.GetNthChar("0123456789", value % 10) + result
-        carry = value / 10
-        i -= 1
-    endwhile
-    while carry > 0
-        result = StringUtil.GetNthChar("0123456789", carry % 10) + result
-        carry = carry / 10
-    endwhile
-    if result == ""
-        return "0"
-    endif
-    return result
-EndFunction
-
-String Function HexToDecimalString(String hex) global
-    if hex == ""
-        return ""
-    endif
-    if StringUtil.GetLength(hex) >= 2
-        String prefix = StringUtil.Substring(hex, 0, 2)
-        if prefix == "0x" || prefix == "0X"
-            hex = StringUtil.Substring(hex, 2, StringUtil.GetLength(hex) - 2)
-        endif
-    endif
-    String result = "0"
-    int i = 0
-    int len = StringUtil.GetLength(hex)
-    while i < len
-        int digit = HexCharToInt(StringUtil.GetNthChar(hex, i))
-        if digit >= 0
-            result = DecimalStringMultiplyAdd(result, 16, digit)
-        endif
-        i += 1
-    endwhile
-    return result
-EndFunction
-
-bool Function IsHexUuid(String entityUuid) global
-    int i = 0
-    while i < StringUtil.GetLength(entityUuid)
-        int o = StringUtil.AsOrd(StringUtil.GetNthChar(entityUuid, i))
-        if (o >= 65 && o <= 70) || (o >= 97 && o <= 102)
-            return true
-        endif
-        i += 1
-    endwhile
-    return false
-EndFunction
-
-String Function UuidToDecimalString(String entityUuid) global
-    if entityUuid == ""
-        return ""
-    endif
-    if IsHexUuid(entityUuid)
-        return HexToDecimalString(entityUuid)
-    endif
-    return entityUuid
-EndFunction
+; Hex entity UUID -> decimal string (SKSE native). Decimal input returned unchanged.
+String Function UuidToDecimalString(String entityUuid) global native
 
 
 ; ------------------------------------------------------------
@@ -659,68 +588,8 @@ String Function JsonLowerCaseKeys(String json) global native
 ; Invalid/unmapped VK -> DX backslash (0x2B).
 int Function VkToDxScanCode(int vk) global native
 
-; JSON string literal. Fast path keeps the interned string (GetNthChar would fold case).
-String Function JsonQuote(String s) global
-    int n = StringUtil.GetLength(s)
-    int i = 0
-    int first_special = -1
-    while i < n
-        String ch = StringUtil.GetNthChar(s, i)
-        int o = StringUtil.AsOrd(ch)
-        if o < 32 || ch == "\"" || ch == "\\"
-            first_special = i
-            i = n
-        else
-            i += 1
-        endif
-    endwhile
-    if first_special < 0
-        return "\"" + s + "\""
-    endif
-    String out = "\""
-    int start = 0
-    i = 0
-    while i < n
-        String ch = StringUtil.GetNthChar(s, i)
-        int o = StringUtil.AsOrd(ch)
-        if o < 32 || ch == "\"" || ch == "\\"
-            if i > start
-                out += StringUtil.Substring(s, start, i - start)
-            endif
-            if ch == "\""
-                out += "\\\""
-            elseif ch == "\\"
-                out += "\\\\"
-            elseif o == 10
-                out += "\\n"
-            elseif o == 13
-                out += "\\r"
-            elseif o == 9
-                out += "\\t"
-            else
-                out += "\\u00" + JsonHexByte(o)
-            endif
-            start = i + 1
-        endif
-        i += 1
-    endwhile
-    if start < n
-        out += StringUtil.Substring(s, start, n - start)
-    endif
-    return out + "\""
-EndFunction
-
-String Function JsonHexByte(int o) global
-    if o < 0
-        o = 0
-    elseif o > 255
-        o = 255
-    endif
-    String hex = "0123456789abcdef"
-    int hi = o / 16
-    int lo = o - (hi * 16)
-    return StringUtil.GetNthChar(hex, hi) + StringUtil.GetNthChar(hex, lo)
-EndFunction
+; JSON string literal (SKSE native): quoted and escaped; control bytes become unicode escapes.
+String Function JsonQuote(String s) global native
 
 ; JC writeToFile form token, or null.
 String Function JsonForm(Form akForm) global

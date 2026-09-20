@@ -95,6 +95,9 @@ namespace PapyrusBindings_WebUI {
     /// Restore Animation main panel when preferred-open and focus is in SexLab.
     void WebUI_MaybeRestoreAnimationPanel(RE::StaticFunctionTag*);
 
+    /// True when the selected main panel is `panel` (e.g. "description_editor_panel").
+    bool WebUI_IsMainPanelOpen(RE::StaticFunctionTag*, RE::BSFixedString panel);
+
     /// JS ControlPanel actor pick → set Target_Current + Papyrus sync.
     void ApplyControlActorFocus(std::uint32_t formId);
     /// JS ControlPanel actor/sentinel pick (`formId`, optional `sentinel`).

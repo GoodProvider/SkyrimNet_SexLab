@@ -269,6 +269,7 @@
         }
 
         #main-panel-host > #description-editor-panel {
+            position: relative;
             overflow: hidden;
             display: none;
             flex-direction: column;
@@ -518,15 +519,34 @@
             gap: var(--space-xs);
         }
 
-        #de-names-row .de-tags-group {
-            margin-left: auto;
+        #de-stage-nav {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-xs);
+        }
+
+        #de-stage-nav .action-btn.de-disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        #de-names-row .de-name-hint {
+            opacity: 0.7;
+        }
+
+        #de-tags-row {
+            font-size: var(--text-sm);
+            opacity: 0.85;
+            margin-bottom: var(--space-xs);
             display: flex;
             flex-wrap: wrap;
             align-items: center;
+            justify-content: flex-end;
             gap: var(--space-xs);
         }
 
-        #de-names-row .tag-chip.de-tag-readonly {
+        #de-tags-row .tag-chip.de-tag-readonly {
             pointer-events: none;
             opacity: 0.9;
         }
@@ -1083,6 +1103,30 @@
         @keyframes panelIn {
             from { opacity: 0; transform: translateY(10px); }
             to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Covers the Description Editor ("loading...") until the scene pulldown is bound. */
+        #de-lock-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 10% 0 0 20%;
+            box-sizing: border-box;
+            background: var(--bg);
+            cursor: progress;
+        }
+
+        #description-editor-panel.de-locked #de-lock-overlay {
+            display: flex;
+        }
+
+        .de-lock-text {
+            font-family: var(--font-ui);
+            font-size: var(--text-xl);
+            color: var(--accent-text);
         }
 
         .target-row {
@@ -1759,7 +1803,13 @@
         </div>
         <div class="de-section de-desc-section">
             <div class="section-header" id="de-desc-header">Description</div>
+            <div id="de-stage-nav" style="display:none">
+                <div class="action-btn" id="de-btn-prev" onmousedown="event.preventDefault()" onclick="deStageStep(-1)">&#9664; previous</div>
+                <div class="action-btn" id="de-btn-next" onmousedown="event.preventDefault()" onclick="deStageStep(1)">next &#9654;</div>
+                <div class="action-btn" id="de-btn-copyprev" onmousedown="event.preventDefault()" onclick="deCopyPrevious()">copy previous</div>
+            </div>
             <div id="de-names-row" style="display:none"></div>
+            <div id="de-tags-row" style="display:none"></div>
             <div id="de-stages-host"></div>
         </div>
         <div class="de-section de-filter-section">
@@ -1793,6 +1843,7 @@
             <div class="compact-row"><span id="de-anim-count"></span></div>
             <div id="de-anims-list" class="scroll-list"></div>
         </div>
+        <div id="de-lock-overlay"><div class="de-lock-text">loading...</div></div>
     </div>
 
     <div id="settings-panel" class="panel" style="display:none">
@@ -2213,6 +2264,11 @@
                 const el = document.getElementById(pid);
                 if (!el) continue;
                 if (pid === want) {
+                    // Description Editor always opens on None behind "loading..." until the scene pick is bound.
+                    if (pid === 'description-editor-panel' && el.style.display === 'none') {
+                        DE.scenePick = 'none';
+                        deSetLocked(true);
+                    }
                     el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel') ? 'flex' : 'block';
                     if (pid === 'settings-panel' && typeof window.onSettingsRefresh === 'function')
                         window.onSettingsRefresh('{}');
@@ -2220,6 +2276,8 @@
                         logStartPolling(true);
                 } else {
                     el.style.display = 'none';
+                    if (pid === 'description-editor-panel')
+                        deSetLocked(false);
                     if (pid === 'log-panel')
                         logStopPolling();
                 }
@@ -2233,6 +2291,8 @@
             }
             const el = document.getElementById(domIdForPanelKey(panelKey));
             if (el) el.style.display = 'none';
+            if (panelKey === 'description_editor_panel' || panelKey === 'description-editor-panel')
+                deSetLocked(false);
             if (panelKey === 'log_panel' || panelKey === 'log-panel')
                 logStopPolling();
         }
@@ -7442,6 +7502,11 @@
             selectSceneInfoForActor(targetActor);
             if (typeof deRenderScenePulldown === 'function')
                 deRenderScenePulldown();
+            // The panel opens before the seed lands ("loading..." on None); now that scenes exist, bind it.
+            const deEl = document.getElementById('description-editor-panel');
+            if (deEl && deEl.style.display !== 'none'
+                && (deIsLocked() || (DE.scenePick === 'none' && deListActiveSceneKeys().length)))
+                deApplyScenePick(deResolveDefaultScenePick());
         }
 
         function discardSceneInfos() {
@@ -8977,8 +9042,34 @@
             currentAnimation: '',
             stagesDraft: [],
             loadedStages: [],
+            lastEditStage: 0,
             dirty: false
         };
+
+        // `var`, not let/const: hidePanel() runs during script load and reaches deSetLocked before this line executes.
+        var DE_LOCK_TIMEOUT_MS = 3000;
+        var deLockTimer = null;
+
+        // "loading..." overlay over the whole panel. If the seed never lands, the timer binds the default pick anyway.
+        function deSetLocked(on) {
+            if (deLockTimer) {
+                clearTimeout(deLockTimer);
+                deLockTimer = null;
+            }
+            const panel = document.getElementById('description-editor-panel');
+            if (panel) panel.classList.toggle('de-locked', !!on);
+            if (on) deLockTimer = setTimeout(() => {
+                deLockTimer = null;
+                sceneInfosSessionActive = true;
+                deApplyScenePick(deResolveDefaultScenePick());
+                deSetLocked(false);
+            }, DE_LOCK_TIMEOUT_MS);
+        }
+
+        function deIsLocked() {
+            const panel = document.getElementById('description-editor-panel');
+            return !!(panel && panel.classList.contains('de-locked'));
+        }
 
         function deIsSceneBound() {
             return !!(DE.scenePick && DE.scenePick !== 'none' && DE.scenePick !== 'any');
@@ -9081,9 +9172,11 @@
             return [];
         }
 
+        // Default pick: an active scene (the one playing the last animation, then the target's, then the first).
+        // With no active scene: Any when an animation was last edited (deEnsureFocus reselects it), else None.
         function deResolveDefaultScenePick() {
             const keys = deListActiveSceneKeys();
-            if (!keys.length) return 'any';
+            if (!keys.length) return DE.currentAnimation ? 'any' : 'none';
             const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
             const infos = keys.map(key => ({ key, info: sceneInfoByKey.get(key) })).filter(e => e.info);
             const playing = DE.currentAnimation
@@ -9091,7 +9184,6 @@
             const withTarget = list => fid ? list.find(e => e.info.hasActor(fid)) : null;
             const hit = withTarget(playing) || playing[0];
             if (hit) return hit.key;
-            if (DE.currentAnimation) return 'any';
             const mine = withTarget(infos);
             return mine ? mine.key : keys[0];
         }
@@ -9113,11 +9205,11 @@
             const labelByKey = new Map(entries.map(e => [e.key, e.label]));
             const values = entries.map(e => e.key);
             if (DE.scenePick && !values.includes(DE.scenePick)) {
-                // Picked scene ended; fall back to browsing (re-renders this pulldown).
-                deApplyScenePick('any');
+                // Picked scene ended; fall back to the default pick (re-renders this pulldown).
+                deApplyScenePick(deResolveDefaultScenePick());
                 return;
             }
-            const current = DE.scenePick || 'any';
+            const current = DE.scenePick || 'none';
             DE.scenePick = current;
             host.innerHTML = '';
             host.appendChild(createPulldown(values, current, (key) => {
@@ -9175,7 +9267,7 @@
             opts = opts || {};
             if (DE.dirty && opts.userInitiated)
                 deCancel();
-            DE.scenePick = pick || 'any';
+            DE.scenePick = pick || 'none';
             deUpdateBrowseVisibility();
             if (DE.scenePick === 'none') {
                 DE.focusRegistry = '';
@@ -9209,7 +9301,7 @@
             } else {
                 const info = sceneInfoByKey.get(DE.scenePick);
                 if (!info) {
-                    deApplyScenePick('any', opts);
+                    deApplyScenePick(deResolveDefaultScenePick(), opts);
                     return;
                 }
                 DE.scene_sid = info.scene_sid;
@@ -9218,6 +9310,8 @@
                 deLoadFocusAnimFromScene();
             }
             deRenderScenePulldown();
+            // Before the seed lands the pick is a placeholder: keep "loading..." up until real scene data exists.
+            if (sceneInfosSessionActive) deSetLocked(false);
         }
 
         function deOnControlFocusChanged() {
@@ -9298,19 +9392,117 @@
             deUpdateDescHeader();
             const a = deFindAnim(DE.focusRegistry);
             const names = dePreviewNamesFor(a);
+            const nav = document.getElementById('de-stage-nav');
+            if (nav) nav.style.display = deIsSceneBound() ? '' : 'none';
+            deUpdateStageNavButtons();
+            const tagsHost = document.getElementById('de-tags-row');
+            const tags = deAnimTagsList(a);
+            if (tagsHost) {
+                if (tags.length) {
+                    tagsHost.style.display = '';
+                    tagsHost.innerHTML = `<b>tags:</b> ` + tags.map(t =>
+                        `<span class="tag-chip de-tag-readonly">${escapeHtml(String(t))}</span>`
+                    ).join(' ');
+                } else {
+                    tagsHost.textContent = '';
+                    tagsHost.style.display = 'none';
+                }
+            }
             if (!names.length && !deIsSceneBound()) {
                 host.textContent = '';
                 host.style.display = 'none';
                 return;
             }
-            const tags = deAnimTagsList(a);
-            const chips = tags.map(t =>
-                `<span class="tag-chip de-tag-readonly">${escapeHtml(String(t))}</span>`
-            ).join(' ');
             host.style.display = '';
-            host.innerHTML =
-                `<span class="de-names-group"><b>names:</b> ${escapeHtml(names.join(', '))}</span>` +
-                `<span class="de-tags-group"><b>tags:</b> ${chips}</span>`;
+            host.innerHTML = `<b>names:</b> ` + names.map((n, i) =>
+                `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(n)}</div>`
+            ).join('') +
+                `<span class="de-name-hint">Click on a name to add it to the description</span>`;
+        }
+
+        // Stage the name / copy buttons act on: the scene's active stage, else the last edited one.
+        function deActiveStage() {
+            const active = deIsSceneBound() ? deActiveStageForFocus() : 0;
+            if (active > 0) return active;
+            const last = DE.lastEditStage | 0;
+            if (last > 0 && DE.stagesDraft.some(s => s._stage === last)) return last;
+            return DE.stagesDraft.length ? DE.stagesDraft[0]._stage : 1;
+        }
+
+        function deStageMax() {
+            const info = deSceneInfoForPick();
+            return (info && info.stageCount) || DE.stagesDraft.length || 1;
+        }
+
+        function deUpdateStageNavButtons() {
+            const stage = deActiveStage();
+            const set = (id, off) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('de-disabled', off);
+            };
+            set('de-btn-prev', stage <= 1);
+            set('de-btn-next', stage >= deStageMax());
+            set('de-btn-copyprev', stage <= 1);
+        }
+
+        function deStageStep(dir) {
+            const info = deSceneInfoForPick();
+            if (!info) return;
+            const cur = deActiveStage();
+            const next = Math.max(1, Math.min(deStageMax(), cur + (dir < 0 ? -1 : 1)));
+            if (next === cur) return;
+            info.stage = next;
+            SC.stage = next;
+            DE.lastEditStage = next;
+            deUpdateActiveStageRow();
+            deUpdateStageNavButtons();
+            const row = document.querySelector('#de-stages-host tr[data-stage="' + next + '"]');
+            if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+            // Stage-only commit: Papyrus ApplyWebUICommit just runs GoToStage for this payload.
+            if (info.scene_sid >= 0 && typeof window.onSceneInfoCommit === 'function') {
+                window.onSceneInfoCommit(JSON.stringify({ _scenes: [{
+                    _key: info.key,
+                    _mode: 'active',
+                    _scene_sid: info.scene_sid,
+                    _stage: next
+                }] }));
+            }
+        }
+
+        function deSetStageText(stage, text) {
+            const ta = document.querySelector('#de-stages-host textarea.de-stage-input[data-stage="' + stage + '"]');
+            if (ta) ta.value = text;
+            deStageEdit(stage, text);
+            return ta;
+        }
+
+        function deCopyPrevious() {
+            const target = deActiveStage();
+            if (target <= 1) return;
+            const prev = DE.stagesDraft.find(s => s._stage === target - 1);
+            if (!prev) return;
+            deSetStageText(target, prev._template || '');
+        }
+
+        function deInsertActor(i) {
+            const stage = deActiveStage();
+            const st = DE.stagesDraft.find(s => s._stage === stage);
+            if (!st) return;
+            const token = '{{sl.actors.' + i + '}}';
+            const ta = document.querySelector('#de-stages-host textarea.de-stage-input[data-stage="' + stage + '"]');
+            const text = ta ? ta.value : (st._template || '');
+            let start = text.length, end = text.length;
+            if (ta && DE.lastEditStage === stage && ta.selectionStart != null) {
+                start = ta.selectionStart;
+                end = ta.selectionEnd;
+            }
+            const out = text.slice(0, start) + token + text.slice(end);
+            deSetStageText(stage, out);
+            if (ta) {
+                ta.focus();
+                const pos = start + token.length;
+                ta.setSelectionRange(pos, pos);
+            }
         }
 
         function deRenderStages() {
@@ -9328,7 +9520,7 @@
                 return `<tr data-stage="${st._stage}">` +
                     `<td class="de-stage-num">${st._stage}</td>` +
                     `<td class="de-stage-text"><textarea class="de-stage-input" rows="2" data-stage="${st._stage}" ` +
-                    `oninput="deStageEdit(${st._stage}, this.value)">${escapeHtml(st._template || '')}</textarea></td>` +
+                    `onfocus="DE.lastEditStage=${st._stage}; deUpdateStageNavButtons()" oninput="deStageEdit(${st._stage}, this.value)">${escapeHtml(st._template || '')}</textarea></td>` +
                     `<td class="de-stage-desc" data-stage="${st._stage}">${escapeHtml(preview)}</td>` +
                     `</tr>`;
             }).join('');
@@ -9446,6 +9638,7 @@
                 a._stage_has_description = sh;
             }
             deRenderAnimList();
+            requestWebUIHide(true);
         }
 
         function deCancel() {
@@ -9499,6 +9692,7 @@
                     deApplyScenePick(DE.scenePick);
                 else
                     deUpdateActiveStageRow();
+                deSetLocked(false);
             } else {
                 configureDescriptionEditorFromSceneInfo(info);
             }

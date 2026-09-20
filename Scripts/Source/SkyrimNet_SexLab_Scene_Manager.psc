@@ -927,7 +927,7 @@ String Function BuildAllSceneInfosJson()
         i += 1
     endwhile
     if creator
-        int st = JValue.objectFromPrototype(creator.BuildWebUIState())
+        int st = creator.BuildWebUIObject()
         if st
             JArray.addObj(arr, st)
         endif
@@ -944,7 +944,7 @@ String Function BuildAllSceneInfosJson()
     while i < sl_scenes.length
         SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
         if sl_scene != None && sl_scene.GetThreadActive()
-            int st = JValue.objectFromPrototype(sl_scene.BuildWebUISceneMenuState())
+            int st = sl_scene.BuildWebUISceneMenuObject()
             if st
                 JArray.addObj(arr, st)
             endif
@@ -1008,7 +1008,7 @@ Function WebUI_OnSceneConnectionChange(String json)
             i += 1
         endwhile
         if creator
-            int st = JValue.objectFromPrototype(creator.BuildWebUIState())
+            int st = creator.BuildWebUIObject()
             if st
                 JMap.setStr(st, "_mode", "creator")
                 JMap.setStr(st, "_connection", "new")

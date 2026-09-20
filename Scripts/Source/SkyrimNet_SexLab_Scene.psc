@@ -725,14 +725,10 @@ bool Function SetActor(int i, Actor akActor)
 EndFunction
 
 String Function GetUUID(Actor akActor)
-    DbgEnter("GetUUID", "akActor:"+GetDisplayName(akActor))
     if akActor == None
-        DbgReturn("GetUUID", "")
         return ""
     endif
-    String uuid = UuidToDecimalString(SkyrimNetApi.GetEntityUUID(akActor))
-    DbgReturn("GetUUID", uuid)
-    return uuid
+    return UuidToDecimalString(SkyrimNetApi.GetEntityUUID(akActor))
 EndFunction
 
 int Function GetObjFromActor(Actor akActor) 
@@ -2136,20 +2132,10 @@ String Function BuildWebUIAnimationMenuState()
     JMap.setObj(obj, "_positions", pos_arr)
     if anim != None
         int stage_count = anim.StageCount()
-        int stages_arr = JArray.object()
-        i = 1
-        while i <= stage_count
-            int st = JMap.object()
-            JMap.setInt(st, "_stage", i)
-            String template = animdb.GetStageDescription(anim.Registry, i)
-            JMap.setStr(st, "_template", template)
-            String preview = animdb.GetThreadStageDescription(thread, i)
-            JMap.setStr(st, "_preview", preview)
-            JMap.setInt(st, "_current", (i == thread.stage) as int)
-            JArray.addObj(stages_arr, st)
-            i += 1
-        endwhile
-        JMap.setObj(obj, "_stages", stages_arr)
+        int stages_arr = JValue.objectFromPrototype(animdb.GetThreadStagesJson(thread, stage_count))
+        if stages_arr
+            JMap.setObj(obj, "_stages", stages_arr)
+        endif
     endif
     String json = ObjectToLowerCaseKeyJson(obj)
     JValue.release(obj)
@@ -2346,7 +2332,8 @@ Bool Function WasRegistryPlayed(String registry)
     return false
 EndFunction
 
-String Function BuildWebUISceneMenuState()
+; Builds the scene state as a JC handle (caller serializes or embeds it, and owns release if standalone).
+int Function BuildWebUISceneMenuObject()
     int obj = JMap.object()
     JMap.setStr(obj, "_mode", "active")
     JMap.setInt(obj, "_scene_sid", sid)
@@ -2451,20 +2438,11 @@ String Function BuildWebUISceneMenuState()
         if thread.animation
             JMap.setInt(obj, "_stage_count", thread.animation.StageCount())
             int stage_count = thread.animation.StageCount()
-            int stages_arr = JArray.object()
-            i = 1
-            while i <= stage_count
-                int st = JMap.object()
-                JMap.setInt(st, "_stage", i)
-                String template = animdb.GetStageDescription(thread.animation.Registry, i)
-                JMap.setStr(st, "_template", template)
-                String preview = animdb.GetThreadStageDescription(thread, i)
-                JMap.setStr(st, "_preview", preview)
-                JMap.setInt(st, "_current", (i == thread.stage) as int)
-                JArray.addObj(stages_arr, st)
-                i += 1
-            endwhile
-            JMap.setObj(obj, "_stages", stages_arr)
+            ; One native call builds every stage row (was 2+ natives per stage).
+            int stages_arr = JValue.objectFromPrototype(animdb.GetThreadStagesJson(thread, stage_count))
+            if stages_arr
+                JMap.setObj(obj, "_stages", stages_arr)
+            endif
         endif
     endif
     JMap.setObj(obj, "_in_thread_registries", in_thread)
@@ -2487,6 +2465,11 @@ String Function BuildWebUISceneMenuState()
         endif
     endif
     Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg)
+    return obj
+EndFunction
+
+String Function BuildWebUISceneMenuState()
+    int obj = BuildWebUISceneMenuObject()
     String json = ObjectToLowerCaseKeyJson(obj)
     JValue.release(obj)
     return json
@@ -3064,7 +3047,10 @@ Function WebUI_ConfigureIfOverlayVisible()
         return
     endif
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
+    ; The Animation state only feeds the Description Editor; the Scene state above already refreshes SceneInfo.
+    if SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("description_editor_panel")
+        SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
+    endif
 EndFunction
 
 Function TM_SetStageDescription(String stageStr, String description)

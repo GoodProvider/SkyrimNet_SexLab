@@ -10,6 +10,10 @@
 - Ship `PrismaUI/views/SkyrimNet_SexLab/index.html` in the FOMOD zip (`make release` copies `PrismaUI/` into `core`)
 - Do not Show/Focus the overlay until DomReady; Escape Unfocus/Hide if the view never loaded (missing HTML no longer pauses the game with a blank overlay)
 
+- Description Editor: with an active scene picked, ◀ previous / next ▶ move the live scene stage and `copy previous` copies the prior stage text; names are buttons that insert `{{sl.actors.N}}` into the active stage; tags on their own right-aligned row; Save now closes the WebUI
+- Description Editor: the **scene:** pulldown now defaults to an active scene (last-edited animation's scene, then the target's, then the first); with no active scene it defaults to **Any** with the last-edited animation focused, else **None** (was **Any**)
+- Description Editor: always opens on **None** behind "loading..." text until the scene pulldown is bound (3 s safety fallback), so it no longer flashes **Any** first
+- Description Editor: opening on an active scene no longer rebuilds the scene state up to three times. Stage rows come from one `AnimDb_GetStagesJson` native call instead of 2+ natives per stage (with an O(stages²) backward walk), `AnimationDB::GetStageDescription` / `GetTransition` no longer copy the whole `AnimRow`, and the hotkey open no longer dispatches `WebUI_ConfigureFocusScene` (the overlay-Show seed already carries the scene)
 ### Actions
 - LLM outfit actions remain `outfit_dress` / `outfit_undress` (`Outfit_Dress` / `Outfit_Undress`) as Beta 25 files `outfit_dress.yaml` / `outfit_undress.yaml` in `external/goodprovider.sexlab/actions/`; not combined `change_outfit`
 - Dual-ship LLM actions and prompts: canonical `external/goodprovider.sexlab/` plus pre-0.25 copies at `config/actions/` and `prompts/` (`tools/sync_legacy_skyrimnet_content.py`)

@@ -1404,23 +1404,46 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     std::string GetStageDescription(const std::string& registry, int stage)
     {
-        auto row = GetByRegistry(registry);
-        if (!row)
+        // Look up under the lock without copying the whole AnimRow (4 maps + 6 vectors).
+        std::lock_guard lock(g_mutex);
+        auto row = g_rows.find(ToLower(registry));
+        if (row == g_rows.end())
             return {};
-        auto it = row->stage_descriptions.find(stage);
-        if (it == row->stage_descriptions.end())
+        auto it = row->second.stage_descriptions.find(stage);
+        if (it == row->second.stage_descriptions.end())
             return {};
         return it->second;
     }
 
+    std::vector<std::string> GetAllStageDescriptions(const std::string& registry, int stage_count)
+    {
+        std::vector<std::string> out;
+        if (stage_count < 1)
+            return out;
+        out.resize(static_cast<size_t>(stage_count));
+        std::lock_guard lock(g_mutex);
+        auto row = g_rows.find(ToLower(registry));
+        if (row == g_rows.end())
+            return out;
+        const auto& sd = row->second.stage_descriptions;
+        // Raw per-stage templates, exactly what GetStageDescription returns (no carry-forward).
+        for (int s = 1; s <= stage_count; ++s) {
+            auto it = sd.find(s);
+            if (it != sd.end())
+                out[static_cast<size_t>(s - 1)] = it->second;
+        }
+        return out;
+    }
+
     std::string GetTransition(const std::string& registry, int from_stage, int to_stage)
     {
-        auto row = GetByRegistry(registry);
-        if (!row || !row->transitions.is_object())
+        std::lock_guard lock(g_mutex);
+        auto row = g_rows.find(ToLower(registry));
+        if (row == g_rows.end() || !row->second.transitions.is_object())
             return {};
         const std::string key = std::to_string(from_stage) + "-" + std::to_string(to_stage);
-        auto it = row->transitions.find(key);
-        if (it == row->transitions.end() || !it->is_string())
+        auto it = row->second.transitions.find(key);
+        if (it == row->second.transitions.end() || !it->is_string())
             return {};
         return it->get<std::string>();
     }

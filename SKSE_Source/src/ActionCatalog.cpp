@@ -1194,6 +1194,14 @@ namespace ActionCatalog
         return g_animationPanelPreferredOpen;
     }
 
+    bool IsMainPanelOpen(const std::string& panel)
+    {
+        if (g_currentMainPanelKey.empty())
+            return false;
+        auto* cur = FindMainPanelByKey(g_currentMainPanelKey);
+        return cur && cur->value("panel", "") == panel;
+    }
+
     void SetAnimationPanelPreferredOpen(bool open)
     {
         g_animationPanelPreferredOpen = open;

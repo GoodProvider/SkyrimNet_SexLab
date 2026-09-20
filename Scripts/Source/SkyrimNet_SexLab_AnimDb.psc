@@ -18,6 +18,7 @@ String Function AnimDb_GetByRegistry(String registry) global native
 String Function AnimDb_GetStageDescription(String registry, int stage) global native
 String Function AnimDb_GetTransition(String registry, int from_stage, int to_stage) global native
 String Function AnimDb_SubstituteActors(String desc, String actors_json) global native
+String Function AnimDb_GetStagesJson(String registry, int stage_count, String actors_json, int current_stage) global native
 Bool Function AnimDb_SaveAnimLocal(String registry, String json) global native
 String Function AnimDb_ResolveTags(String tags_csv, int actor_count) global native
 Bool Function AnimDb_CsvHasTag(String tags_csv, String tag) global native
@@ -508,6 +509,26 @@ String Function GetThreadStageDescription(sslThreadController thread, int stage_
     endwhile
     actors_json += "]"
     return AnimDb_SubstituteActors(desc, actors_json)
+EndFunction
+
+; All stages of the thread's animation as a JSON array [{_stage,_template,_preview,_current}].
+; One native call replaces the per-stage GetStageDescription + GetThreadStageDescription loop.
+String Function GetThreadStagesJson(sslThreadController thread, int stage_count)
+    if !thread || !thread.animation || stage_count < 1
+        return "[]"
+    endif
+    Actor[] actors = thread.Positions
+    String actors_json = "["
+    int i = 0
+    while actors && i < actors.length
+        if i > 0
+            actors_json += ","
+        endif
+        actors_json += "\""+EscapeJson(actors[i].GetDisplayName())+"\""
+        i += 1
+    endwhile
+    actors_json += "]"
+    return AnimDb_GetStagesJson(thread.animation.Registry, stage_count, actors_json, thread.stage)
 EndFunction
 
 String Function GetThreadTransition(sslThreadController thread, int from_stage, int to_stage)
