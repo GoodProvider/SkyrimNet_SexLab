@@ -950,7 +950,8 @@
         }
 
         #sc-positions-table,
-        #tm-positions-table {
+        #tm-positions-table,
+        #de-actors-table {
             table-layout: auto;
             width: 100%;
         }
@@ -974,13 +975,17 @@
         #tm-positions-table .col-name,
         #tm-positions-table .col-dressed,
         #tm-positions-table .col-o,
-        #tm-positions-table .col-v {
+        #tm-positions-table .col-v,
+        #de-actors-table .col-idx,
+        #de-actors-table .col-name,
+        #de-actors-table .col-o {
             width: 1%;
             white-space: nowrap;
         }
 
         #sc-positions-table .col-mods,
-        #tm-positions-table .col-mods {
+        #tm-positions-table .col-mods,
+        #de-actors-table .col-mods {
             width: auto;
         }
 
@@ -1034,19 +1039,22 @@
             align-items: center;
         }
 
-        #sc-positions-table .mod-chip-list .pulldown {
+        #sc-positions-table .mod-chip-list .pulldown,
+        #de-actors-table .mod-chip-list .pulldown {
             min-width: auto;
             font-size: var(--text-sm);
         }
 
-        #sc-positions-table .mod-chip-list .pulldown-value {
+        #sc-positions-table .mod-chip-list .pulldown-value,
+        #de-actors-table .mod-chip-list .pulldown-value {
             padding: 1px var(--space-sm);
             color: var(--accent);
             border-color: rgba(201, 168, 76, 0.45);
             border-radius: var(--radius);
         }
 
-        #sc-positions-table .mod-chip-list .pulldown-option {
+        #sc-positions-table .mod-chip-list .pulldown-option,
+        #de-actors-table .mod-chip-list .pulldown-option {
             font-size: var(--text-sm);
         }
 
@@ -1801,6 +1809,12 @@
                 <div id="de-scene-pulldown"></div>
             </div>
         </div>
+        <div class="de-section de-actors-section" id="de-actors-section" style="display:none">
+            <table class="data-table" id="de-actors-table"><thead><tr>
+                <th class="col-idx">#</th><th class="col-name">name</th>
+                <th class="col-o">O</th><th class="col-mods">modifiers</th>
+            </tr></thead><tbody></tbody></table>
+        </div>
         <div class="de-section de-desc-section">
             <div class="section-header" id="de-desc-header">Description</div>
             <div id="de-stage-nav" style="display:none">
@@ -1808,8 +1822,8 @@
                 <div class="action-btn" id="de-btn-next" onmousedown="event.preventDefault()" onclick="deStageStep(1)">next &#9654;</div>
                 <div class="action-btn" id="de-btn-copyprev" onmousedown="event.preventDefault()" onclick="deCopyPrevious()">copy previous</div>
             </div>
-            <div id="de-names-row" style="display:none"></div>
             <div id="de-tags-row" style="display:none"></div>
+            <div id="de-names-row" style="display:none"></div>
             <div id="de-stages-host"></div>
         </div>
         <div class="de-section de-filter-section">
@@ -2264,12 +2278,15 @@
                 const el = document.getElementById(pid);
                 if (!el) continue;
                 if (pid === want) {
-                    // Description Editor always opens on None behind "loading..." until the scene pick is bound.
-                    if (pid === 'description-editor-panel' && el.style.display === 'none') {
+                    // Description Editor opens behind "loading..." until the seed lands, then binds the final pick directly.
+                    const deOpening = pid === 'description-editor-panel' && el.style.display === 'none';
+                    if (deOpening) {
                         DE.scenePick = 'none';
-                        deSetLocked(true);
+                        if (!sceneInfosSeeded) deSetLocked(true);
                     }
                     el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel') ? 'flex' : 'block';
+                    if (deOpening && sceneInfosSeeded)
+                        deApplyScenePick(deResolveDefaultScenePick());
                     if (pid === 'settings-panel' && typeof window.onSettingsRefresh === 'function')
                         window.onSettingsRefresh('{}');
                     if (pid === 'log-panel')
@@ -7302,6 +7319,9 @@
         const sceneInfoByKey = new Map();
         let selectedSceneInfoKey = 'new';
         let sceneInfosSessionActive = false;
+        // True only once seedSceneInfos has landed for this WebUI show (configure* also set SessionActive early).
+        // `var`: revealMainPanel / deApplyScenePick can run before this line during script load.
+        var sceneInfosSeeded = false;
 
         function sceneInfoClone(v) {
             try { return JSON.parse(JSON.stringify(v)); }
@@ -7499,6 +7519,7 @@
                 sceneInfoByKey.set(key, SceneInfo.fromState(st));
             });
             sceneInfosSessionActive = true;
+            sceneInfosSeeded = true;
             selectSceneInfoForActor(targetActor);
             if (typeof deRenderScenePulldown === 'function')
                 deRenderScenePulldown();
@@ -7513,6 +7534,7 @@
             sceneInfoByKey.clear();
             selectedSceneInfoKey = 'new';
             sceneInfosSessionActive = false;
+            sceneInfosSeeded = false;
         }
 
         function flushSceneInfos() {
@@ -8730,6 +8752,10 @@
 
         function animDbQueryResult(payload) {
             const rid = payload._request_id || '';
+            if (String(rid).startsWith('r')) {
+                deOnAnimRowResult(payload, String(rid));
+                return;
+            }
             if (String(rid).startsWith('a')) {
                 if (String(rid) !== 'a' + SC.animQueryId) return;
                 let anims = scFilterAnimsByHasDescription(payload._anims || []);
@@ -9042,15 +9068,20 @@
             currentAnimation: '',
             stagesDraft: [],
             loadedStages: [],
+            // Per-actor animation defaults: [{_no_orgasm, _speaking}]; only sent on Save when posDirty.
+            posDraft: [],
+            loadedPos: [],
+            posDirty: false,
+            rowQueryId: 0,
             lastEditStage: 0,
             dirty: false
         };
 
         // `var`, not let/const: hidePanel() runs during script load and reaches deSetLocked before this line executes.
-        var DE_LOCK_TIMEOUT_MS = 3000;
+        var DE_LOCK_TIMEOUT_MS = 10000;
         var deLockTimer = null;
 
-        // "loading..." overlay over the whole panel. If the seed never lands, the timer binds the default pick anyway.
+        // "loading..." overlay over the whole panel. Only the seed (or this long safety timer) lifts it.
         function deSetLocked(on) {
             if (deLockTimer) {
                 clearTimeout(deLockTimer);
@@ -9061,6 +9092,7 @@
             if (on) deLockTimer = setTimeout(() => {
                 deLockTimer = null;
                 sceneInfosSessionActive = true;
+                sceneInfosSeeded = true;
                 deApplyScenePick(deResolveDefaultScenePick());
                 deSetLocked(false);
             }, DE_LOCK_TIMEOUT_MS);
@@ -9259,6 +9291,7 @@
             }
             DE.loadedStages = sceneInfoClone(DE.stagesDraft);
             DE.dirty = false;
+            deLoadPosDraft();
             deRenderStages();
             deRenderAnimTags();
         }
@@ -9311,7 +9344,7 @@
             }
             deRenderScenePulldown();
             // Before the seed lands the pick is a placeholder: keep "loading..." up until real scene data exists.
-            if (sceneInfosSessionActive) deSetLocked(false);
+            if (sceneInfosSeeded) deSetLocked(false);
         }
 
         function deOnControlFocusChanged() {
@@ -9381,15 +9414,137 @@
             }
             DE.loadedStages = sceneInfoClone(DE.stagesDraft);
             DE.dirty = false;
+            deLoadPosDraft();
             deRenderStages();
             deRenderAnimTags();
             deRenderAnimList();
+        }
+
+        function deNormSpeaking(v) {
+            if (Array.isArray(v)) return v.map(s => String(s).trim()).filter(Boolean).join(',');
+            return v == null ? '' : String(v).split(',').map(s => s.trim()).filter(Boolean).join(',');
+        }
+
+        // Draft of the focused animation's per-actor defaults. Scene-pick anim rows are stubs (no _position_count):
+        // those fetch the DB row and stay hidden until it lands.
+        function deLoadPosDraft() {
+            DE.posDirty = false;
+            DE.posDraft = [];
+            const reg = DE.focusRegistry;
+            const a = reg ? deFindAnim(reg) : null;
+            if (a && a._position_count == null) {
+                deRequestAnimRow(reg);
+            } else if (a) {
+                const no = a._pos_no_orgasm || [];
+                const sp = a._pos_speaking_modifiers || [];
+                const n = deAnimActorCount(a);
+                for (let i = 0; i < n; i++)
+                    DE.posDraft.push({ _no_orgasm: no[i] ? 1 : 0, _speaking: deNormSpeaking(sp[i]) });
+            }
+            DE.loadedPos = sceneInfoClone(DE.posDraft);
+        }
+
+        function deRequestAnimRow(reg) {
+            if (typeof window.onAnimDbQuery !== 'function') return;
+            window.onAnimDbQuery(JSON.stringify({ _request_id: 'r' + (++DE.rowQueryId), _type: 'anim', _registry: reg }));
+        }
+
+        // AnimationDB returns registries lowercase; scene-derived registries keep SexLab casing.
+        function deRegEq(a, b) {
+            return String(a || '').toLowerCase() === String(b || '').toLowerCase();
+        }
+
+        function deOnAnimRowResult(payload, rid) {
+            if (DE.posDirty || !DE.focusRegistry) return;
+            const anims = payload._anims || [];
+            const row = anims.find(x => deRegEq(x._registry, DE.focusRegistry));
+            const a = deFindAnim(DE.focusRegistry);
+            if (!row || !a || row._position_count == null) return;
+            a._position_count = row._position_count;
+            a._pos_genders = row._pos_genders;
+            a._pos_no_orgasm = row._pos_no_orgasm;
+            a._pos_speaking_modifiers = row._pos_speaking_modifiers;
+            deLoadPosDraft();
+            deRenderActors();
+        }
+
+        function deRenderActors() {
+            const section = document.getElementById('de-actors-section');
+            const tbody = document.querySelector('#de-actors-table tbody');
+            if (!section || !tbody) return;
+            tbody.innerHTML = '';
+            section.style.display = DE.posDraft.length ? '' : 'none';
+            const names = dePreviewNamesFor(deFindAnim(DE.focusRegistry));
+            DE.posDraft.forEach((p, i) => {
+                const mods = scParseMods(p);
+                const tr = document.createElement('tr');
+                const tdIdx = document.createElement('td');
+                tdIdx.className = 'col-idx';
+                tdIdx.textContent = String(i);
+                const tdName = document.createElement('td');
+                tdName.className = 'col-name';
+                tdName.textContent = names[i] || '';
+                const tdO = document.createElement('td');
+                tdO.className = 'col-o';
+                tdO.innerHTML = `<span class="cell-toggle ${p._no_orgasm ? 'on' : ''}" onclick="deTogglePosO(${i})">O</span>`;
+                const tdMods = document.createElement('td');
+                tdMods.className = 'col-mods';
+                const list = document.createElement('div');
+                list.className = 'mod-chip-list';
+                mods.forEach(m => {
+                    const chip = document.createElement('span');
+                    chip.className = 'tag-chip';
+                    chip.textContent = m;
+                    chip.onclick = () => deRemovePosMod(i, m);
+                    list.appendChild(chip);
+                });
+                const available = SC_SPEAKING_MODS.filter(m => !mods.includes(m));
+                if (available.length)
+                    list.appendChild(createPulldown(available, 'add', v => deAddPosMod(i, v)));
+                tdMods.appendChild(list);
+                tr.appendChild(tdIdx);
+                tr.appendChild(tdName);
+                tr.appendChild(tdO);
+                tr.appendChild(tdMods);
+                tbody.appendChild(tr);
+            });
+        }
+
+        function dePosEdited() {
+            DE.posDirty = true;
+            DE.dirty = true;
+            deRenderActors();
+        }
+
+        function deTogglePosO(i) {
+            const p = DE.posDraft[i];
+            if (!p) return;
+            p._no_orgasm = p._no_orgasm ? 0 : 1;
+            dePosEdited();
+        }
+
+        function deRemovePosMod(i, token) {
+            const p = DE.posDraft[i];
+            if (!p) return;
+            scSetMods(p, scParseMods(p).filter(m => m !== token));
+            dePosEdited();
+        }
+
+        function deAddPosMod(i, token) {
+            const p = DE.posDraft[i];
+            if (!p || !token) return;
+            const mods = scParseMods(p);
+            if (mods.includes(token)) return;
+            mods.push(token);
+            scSetMods(p, mods);
+            dePosEdited();
         }
 
         function deRenderNames() {
             const host = document.getElementById('de-names-row');
             if (!host) return;
             deUpdateDescHeader();
+            deRenderActors();
             const a = deFindAnim(DE.focusRegistry);
             const names = dePreviewNamesFor(a);
             const nav = document.getElementById('de-stage-nav');
@@ -9622,6 +9777,8 @@
                 _registry: DE.focusRegistry,
                 _stages: sceneInfoClone(DE.stagesDraft)
             };
+            if (DE.posDirty)
+                payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '' }));
             if (typeof window.onAnimRegistrySave === 'function')
                 window.onAnimRegistrySave(JSON.stringify(payload));
             DE.loadedStages = sceneInfoClone(DE.stagesDraft);
@@ -9636,13 +9793,21 @@
                 });
                 a._stage_descriptions = sd;
                 a._stage_has_description = sh;
+                if (DE.posDirty) {
+                    a._pos_no_orgasm = DE.posDraft.map(p => (p._no_orgasm ? 1 : 0));
+                    a._pos_speaking_modifiers = DE.posDraft.map(p => p._speaking || '');
+                }
             }
+            DE.loadedPos = sceneInfoClone(DE.posDraft);
+            DE.posDirty = false;
             deRenderAnimList();
             requestWebUIHide(true);
         }
 
         function deCancel() {
             DE.stagesDraft = sceneInfoClone(DE.loadedStages);
+            DE.posDraft = sceneInfoClone(DE.loadedPos);
+            DE.posDirty = false;
             DE.dirty = false;
             deRenderStages();
         }
@@ -9692,7 +9857,7 @@
                     deApplyScenePick(DE.scenePick);
                 else
                     deUpdateActiveStageRow();
-                deSetLocked(false);
+                if (sceneInfosSeeded) deSetLocked(false);
             } else {
                 configureDescriptionEditorFromSceneInfo(info);
             }

@@ -1311,6 +1311,18 @@ namespace PapyrusBindings_WebUI
                 payload["_anims"] = rows;
                 payload["_total_enabled"] = AnimationDB::TotalEnabledCount();
                 InvokeAnimDbQueryResult(request_id.c_str(), payload);
+            } else if (query_type == "anim") {
+                const std::string reg = j.value("_registry", "");
+                nlohmann::json rows = nlohmann::json::array();
+                if (!reg.empty()) {
+                    if (auto row = AnimationDB::GetByRegistry(reg))
+                        rows.push_back(AnimRowToJson(*row));
+                }
+                webui_log::info("HandleAnimDbQuery anim id={} registry={} found={}", request_id, reg, !rows.empty());
+                nlohmann::json payload;
+                payload["_anims"] = rows;
+                payload["_total_enabled"] = AnimationDB::TotalEnabledCount();
+                InvokeAnimDbQueryResult(request_id.c_str(), payload);
             } else {
                 nlohmann::json tags = nlohmann::json::array();
                 for (const auto& tc : AnimationDB::QueryTopNTags(spec, n)) {

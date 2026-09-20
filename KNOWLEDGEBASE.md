@@ -502,3 +502,9 @@ Upstream schema: [WORKFLOW_ACTIONS.md](https://github.com/MinLL/SkyrimNet-GamePl
 ## Scene narration prompts (2026-09-09)
 
 Only afterglow and cum go through `RenderSlPrompt` (`helpers/sexlab/afterglow.prompt`, `helpers/sexlab/cum.prompt`). That helper is `SkyrimNetApi.RenderTemplate` then `ParseString` with namespace `sl` JSON (same as Stages `ParseString`). Empty, error-looking, or leftover-`{{` renders fall back to the previous Papyrus sentence. A single name is string `sl.name` (`{{sl.name}}`), not a one-element array. All other scene DirectNarration strings are inline Papyrus. The `" is orgasming."` 0550 gate is still emitted by `GetIsOrgasming`; that function still bumps totals before wording.
+
+## Description Editor actor table (2026-09-20)
+
+Scene-pick anim rows are stubs: `_in_thread_anims` (`Scene.psc`) carries only `_registry/_name/_tags`, so `_pos_no_orgasm` / `_pos_speaking_modifiers` / `_position_count` are absent. The Description Editor fetches the DB row with `onAnimDbQuery {_type:"anim", _registry}` (stub detected by `_position_count == null`). `info.positions[i]._no_orgasm/_speaking` are live scene values, not anim defaults.
+
+**Registry casing**: `AnimationDB` stores and returns registries lowercase (`_registry` in `onAnimDbQuery` replies), while scene-derived registries (`info.activeRegistry`, `_in_thread_anims`) keep SexLab casing (`B_B_3pFFMMis`). Joining a DB reply to a scene row must compare case-insensitively (`deRegEq`); a strict `===` silently dropped the row and the actor table never rendered.
