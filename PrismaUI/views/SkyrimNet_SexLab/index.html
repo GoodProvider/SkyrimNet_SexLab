@@ -509,6 +509,26 @@
             margin-bottom: var(--space-sm);
         }
 
+        .de-actors-layout {
+            display: flex;
+            gap: var(--space-sm);
+            align-items: flex-start;
+        }
+
+        #de-actors-table-wrap {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        #de-side-panel {
+            flex: 0 0 40%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border);
+            padding-left: var(--space-sm);
+        }
+
         #de-names-row {
             font-size: var(--text-sm);
             opacity: 0.85;
@@ -542,7 +562,7 @@
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: flex-start;
             gap: var(--space-xs);
         }
 
@@ -1809,21 +1829,27 @@
                 <div id="de-scene-pulldown"></div>
             </div>
         </div>
-        <div class="de-section de-actors-section" id="de-actors-section" style="display:none">
-            <table class="data-table" id="de-actors-table"><thead><tr>
-                <th class="col-idx">#</th><th class="col-name">name</th>
-                <th class="col-o">O</th><th class="col-mods">modifiers</th>
-            </tr></thead><tbody></tbody></table>
+        <div class="de-section de-actors-section" id="de-actors-section">
+            <div class="de-actors-layout">
+                <div id="de-actors-table-wrap" style="display:none">
+                    <table class="data-table" id="de-actors-table"><thead><tr>
+                        <th class="col-idx">#</th><th class="col-name">name</th>
+                        <th class="col-o">O</th><th class="col-mods">modifiers</th>
+                    </tr></thead><tbody></tbody></table>
+                </div>
+                <div id="de-side-panel">
+                    <div id="de-stage-nav" style="display:none">
+                        <div class="action-btn" id="de-btn-prev" onmousedown="event.preventDefault()" onclick="deStageStep(-1)">&#9664; previous</div>
+                        <div class="action-btn" id="de-btn-next" onmousedown="event.preventDefault()" onclick="deStageStep(1)">next &#9654;</div>
+                        <div class="action-btn" id="de-btn-copyprev" onmousedown="event.preventDefault()" onclick="deCopyPrevious()">copy previous</div>
+                    </div>
+                    <div id="de-tags-row" style="display:none"></div>
+                    <div id="de-names-row" style="display:none"></div>
+                </div>
+            </div>
         </div>
         <div class="de-section de-desc-section">
             <div class="section-header" id="de-desc-header">Description</div>
-            <div id="de-stage-nav" style="display:none">
-                <div class="action-btn" id="de-btn-prev" onmousedown="event.preventDefault()" onclick="deStageStep(-1)">&#9664; previous</div>
-                <div class="action-btn" id="de-btn-next" onmousedown="event.preventDefault()" onclick="deStageStep(1)">next &#9654;</div>
-                <div class="action-btn" id="de-btn-copyprev" onmousedown="event.preventDefault()" onclick="deCopyPrevious()">copy previous</div>
-            </div>
-            <div id="de-tags-row" style="display:none"></div>
-            <div id="de-names-row" style="display:none"></div>
             <div id="de-stages-host"></div>
         </div>
         <div class="de-section de-filter-section">
@@ -9469,11 +9495,11 @@
         }
 
         function deRenderActors() {
-            const section = document.getElementById('de-actors-section');
+            const wrap = document.getElementById('de-actors-table-wrap');
             const tbody = document.querySelector('#de-actors-table tbody');
-            if (!section || !tbody) return;
+            if (!wrap || !tbody) return;
             tbody.innerHTML = '';
-            section.style.display = DE.posDraft.length ? '' : 'none';
+            wrap.style.display = DE.posDraft.length ? '' : 'none';
             const names = dePreviewNamesFor(deFindAnim(DE.focusRegistry));
             DE.posDraft.forEach((p, i) => {
                 const mods = scParseMods(p);
@@ -9486,7 +9512,8 @@
                 tdName.textContent = names[i] || '';
                 const tdO = document.createElement('td');
                 tdO.className = 'col-o';
-                tdO.innerHTML = `<span class="cell-toggle ${p._no_orgasm ? 'on' : ''}" onclick="deTogglePosO(${i})">O</span>`;
+                const expected = !p._no_orgasm;
+                tdO.innerHTML = `<span class="cell-toggle ${expected ? 'on' : ''}" title="${expected ? 'orgasm expected' : 'orgasm not expected'}" onclick="deTogglePosO(${i})">${expected ? 'O' : '-'}</span>`;
                 const tdMods = document.createElement('td');
                 tdMods.className = 'col-mods';
                 const list = document.createElement('div');
