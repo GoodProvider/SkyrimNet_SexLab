@@ -1054,6 +1054,7 @@ Function AnimationStart()
     manager.SaveThreadsJson() 
     String msg = GetIntentMessage(INTENT_STAGE_START) + GetDescription()
     RegisterEvent("sexlab update", msg, sender, receiver) 
+    WebUI_ConfigureIfOverlayVisible()
     DbgEnd("AnimationStart", "msg:"+msg+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
 EndFunction
 
@@ -1193,6 +1194,7 @@ Function StageStart()
         endif
         Debug.Notification("stage "+thread.stage+" of "+ thread.animation.StageCount()+" "+msg)
     endif  
+    WebUI_ConfigureIfOverlayVisible()
     DbgEnd("StageStart")
 EndFunction
 
@@ -2075,6 +2077,7 @@ String Function BuildWebUIAnimationMenuState()
             int ao = JMap.object()
             JMap.setStr(ao, "_registry", anims[ai].Registry)
             JMap.setStr(ao, "_name", anims[ai].name)
+            JMap.setStr(ao, "_tags", GetTagsString(anims[ai]))
             JArray.addObj(in_thread_anims, ao)
         endif
         ai += 1
@@ -2097,6 +2100,7 @@ String Function BuildWebUIAnimationMenuState()
         Actor ak = positions[i]
         JMap.setStr(po, "_name", ak.GetDisplayName())
         JMap.setStr(po, "_uuid", GetUUID(ak))
+        JMap.setInt(po, "_form_id", ak.GetFormID())
         int no_org = 0
         int dressed = 0
         String speaking = ""
@@ -2351,21 +2355,52 @@ String Function BuildWebUISceneMenuState()
     JMap.setStr(obj, "_intent", intent)
     JMap.setStr(obj, "_style", style)
     int pos_arr = JArray.object()
-    Actor[] positions = None
-    if thread
-        positions = thread.Positions
-    endif
     int n = 0
-    if positions
-        n = positions.length
+    if thread && thread.Positions
+        n = thread.Positions.length
     endif
+    if n == 0 && position_objs
+        n = position_objs.length
+    endif
+    String pos_names_dbg = ""
     int i = 0
     while i < n
         int po = JMap.object()
-        Actor ak = positions[i]
-        JMap.setStr(po, "_name", ak.GetDisplayName())
-        JMap.setStr(po, "_uuid", GetUUID(ak))
-        JMap.setInt(po, "_form_id", ak.GetFormID())
+        Actor ak = None
+        if thread && thread.Positions && i < thread.Positions.length
+            ak = thread.Positions[i]
+        endif
+        String name = ""
+        String uuid = ""
+        int form_id = 0
+        int victim = 0
+        int gender = -1
+        if ak
+            name = ak.GetDisplayName()
+            uuid = GetUUID(ak)
+            form_id = ak.GetFormID()
+            victim = ak.IsInFaction(SkyrimNet_SexLab_Faction_Victim) as int
+            gender = sexlab.GetGender(ak)
+        elseif position_objs && i < position_objs.length && position_objs[i] > 0
+            name = JMap.getStr(position_objs[i], "name")
+            uuid = JMap.getStr(position_objs[i], "uuid")
+            form_id = JMap.getInt(position_objs[i], "formid", 0)
+            if form_id == 0
+                String form_str = JMap.getStr(position_objs[i], "formid")
+                if form_str != ""
+                    form_id = form_str as int
+                endif
+            endif
+        endif
+        if name != ""
+            if pos_names_dbg != ""
+                pos_names_dbg += ", "
+            endif
+            pos_names_dbg += name
+        endif
+        JMap.setStr(po, "_name", name)
+        JMap.setStr(po, "_uuid", uuid)
+        JMap.setInt(po, "_form_id", form_id)
         int no_org = 0
         int dressed = 0
         String speaking = ""
@@ -2381,9 +2416,11 @@ String Function BuildWebUISceneMenuState()
             deny = JMap.getInt(position_objs[i], "deny_orgasm", 0)
         endif
         JMap.setInt(po, "_deny_orgasm", deny)
-        JMap.setInt(po, "_victim", ak.IsInFaction(SkyrimNet_SexLab_Faction_Victim) as int)
+        JMap.setInt(po, "_victim", victim)
         JMap.setStr(po, "_speaking", speaking)
-        JMap.setInt(po, "_gender", sexlab.GetGender(ak))
+        if gender >= 0
+            JMap.setInt(po, "_gender", gender)
+        endif
         JArray.addObj(pos_arr, po)
         i += 1
     endwhile
@@ -2405,6 +2442,7 @@ String Function BuildWebUISceneMenuState()
                 int ao = JMap.object()
                 JMap.setStr(ao, "_registry", anims[ai].Registry)
                 JMap.setStr(ao, "_name", anims[ai].name)
+                JMap.setStr(ao, "_tags", GetTagsString(anims[ai]))
                 JArray.addObj(in_thread_anims, ao)
             endif
             ai += 1
@@ -2448,6 +2486,7 @@ String Function BuildWebUISceneMenuState()
             JMap.setObj(obj, "_group_order", groups)
         endif
     endif
+    Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg)
     String json = ObjectToLowerCaseKeyJson(obj)
     JValue.release(obj)
     return json
@@ -3018,6 +3057,14 @@ Function TM_SaveAnimationSettings()
     JValue.release(payload)
     animdb.SaveAnimLocal(registry, save_json)
     ClearUserAnimDefaults(registry)
+EndFunction
+
+Function WebUI_ConfigureIfOverlayVisible()
+    if !SkyrimNet_SexLab_WebUI.WebUI_IsOverlayVisible()
+        return
+    endif
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
 EndFunction
 
 Function TM_SetStageDescription(String stageStr, String description)

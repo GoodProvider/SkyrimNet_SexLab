@@ -15,6 +15,8 @@ class KeyHandler : public RE::BSTEventSink<RE::InputEvent*>
 public:
     static KeyHandler* GetSingleton();
     static void RegisterSink();
+    /// Move this sink to the front of BSInputDeviceManager so we run before Papyrus/other plugins.
+    static void PromoteSink();
     void Register(uint32_t dxScanCode, KeyCallback callback);
     void Unregister(uint32_t dxScanCode);
 
@@ -45,6 +47,8 @@ bool WebUI_IsHidden();
 /// True when the PrismaUI view exists and DomReady has fired (safe to Show/Focus).
 bool WebUI_IsReady();
 void WebUI_Invoke(const std::string& script);
+/// Dispatch a no-arg function on SkyrimNet_SexLab_Menu (Papyrus VM).
+void DispatchMenuNoArg(const char* functionName);
 /// C++ → JS: Invoke(fn(JSON.parse("..."))). Do not use PrismaUI InteropCall
 /// (empty/bad args after a good parse wiped BondagePanel groups to []).
 void WebUI_InteropCall(const char* functionName, const std::string& jsonArgument);

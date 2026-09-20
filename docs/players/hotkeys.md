@@ -24,3 +24,5 @@ Stage JSON format: [../authors/animations.md](../authors/animations.md).
 ## WebUI menus
 
 In-game PrismaUI target / sex menus (SKSE DLL). Build and paths: [../developers/webui.md](../developers/webui.md). Target Menu **leash** (when `SkyrimNet_Leashed.esp` is loaded) hides this overlay and opens Leashed’s bar.
+
+While this overlay is open, other mods’ hotkeys (including SexLab stage/adjust keys) are ignored so you can type in description fields. The mouse still moves and WebUI text fields accept typing. Escape and this mod’s menu hotkey still work.

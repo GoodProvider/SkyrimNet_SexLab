@@ -277,9 +277,29 @@
             max-height: 100%;
         }
 
-        #main-panel-host > #description-editor-panel > .de-section:not(.de-anims-section),
-        #main-panel-host > #description-editor-panel > #de-header-row {
+        #main-panel-host > #description-editor-panel > .de-section:not(.de-anims-section):not(.de-desc-section),
+        #main-panel-host > #description-editor-panel > #de-header-row,
+        #main-panel-host > #description-editor-panel > .de-scene-section {
             flex: 0 0 auto;
+        }
+
+        #description-editor-panel.de-no-browse .de-filter-section,
+        #description-editor-panel.de-no-browse .de-anims-section {
+            display: none !important;
+        }
+
+        #description-editor-panel.de-no-browse .de-desc-section {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0;
+        }
+
+        #description-editor-panel.de-no-browse #de-stages-host {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
         }
 
         #description-editor-panel #de-anims-list {
@@ -465,6 +485,24 @@
             flex-shrink: 0;
         }
 
+        .de-scene-section {
+            margin-bottom: var(--space-xs);
+        }
+
+        .de-scene-section .compact-row {
+            align-items: center;
+        }
+
+        #de-scene-pulldown {
+            flex: 1 1 auto;
+            min-width: 12em;
+        }
+
+        #de-scene-pulldown .pulldown,
+        #de-scene-pulldown .pulldown-value {
+            max-width: 100%;
+        }
+
         .de-section {
             flex-shrink: 0;
             margin-bottom: var(--space-sm);
@@ -474,6 +512,23 @@
             font-size: var(--text-sm);
             opacity: 0.85;
             margin-bottom: var(--space-xs);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        #de-names-row .de-tags-group {
+            margin-left: auto;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        #de-names-row .tag-chip.de-tag-readonly {
+            pointer-events: none;
+            opacity: 0.9;
         }
 
         #de-stages-host {
@@ -499,6 +554,10 @@
             word-break: break-word;
         }
 
+        .de-stages-table tr.de-stage-active td {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
         .de-stage-input {
             width: 100%;
             box-sizing: border-box;
@@ -511,11 +570,6 @@
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: var(--space-xs) var(--space-sm);
-        }
-
-        #de-anim-tags .tag-chip.de-tag-readonly {
-            pointer-events: none;
-            opacity: 0.9;
         }
 
         .de-filter-section {
@@ -1697,14 +1751,16 @@
                 <div class="option-cancel" id="de-btn-cancel" onclick="deCancel()">Cancel</div>
             </div>
         </div>
-        <div class="de-section">
-            <div class="section-header">Description</div>
+        <div class="de-section de-scene-section">
+            <div class="compact-row">
+                <span>scene:</span>
+                <div id="de-scene-pulldown"></div>
+            </div>
+        </div>
+        <div class="de-section de-desc-section">
+            <div class="section-header" id="de-desc-header">Description</div>
             <div id="de-names-row" style="display:none"></div>
             <div id="de-stages-host"></div>
-        </div>
-        <div class="de-section">
-            <div class="section-header">Tags</div>
-            <div id="de-anim-tags" class="de-readonly-tags"></div>
         </div>
         <div class="de-section de-filter-section">
             <div class="section-header">Filter</div>
@@ -7359,6 +7415,8 @@
             selectedSceneInfoKey = found || 'new';
             ensureCreatorSceneInfo();
             bindVisiblePanelsFromSceneInfo();
+            if (typeof deOnControlFocusChanged === 'function')
+                deOnControlFocusChanged();
         }
 
         function seedSceneInfos(payload) {
@@ -7373,13 +7431,17 @@
                 if (existing && !replace) {
                     if (key === 'new' && existing.seeded && !st._from_target_menu)
                         return;
-                    if (key !== 'new')
+                    if (key !== 'new') {
+                        existing.mergeFromState(st);
                         return;
+                    }
                 }
                 sceneInfoByKey.set(key, SceneInfo.fromState(st));
             });
             sceneInfosSessionActive = true;
             selectSceneInfoForActor(targetActor);
+            if (typeof deRenderScenePulldown === 'function')
+                deRenderScenePulldown();
         }
 
         function discardSceneInfos() {
@@ -8398,29 +8460,47 @@
             return Math.max(pg, pc);
         }
 
-        function deUseSceneNamesFor(a) {
-            if (!a || !a._registry) return false;
-            if (!isSceneConnectionActive() && SC.mode !== 'active') return false;
-            const inThread = SC.inThreadRegistries || [];
-            return inThread.includes(a._registry);
+        function deHasValidTarget() {
+            if (!targetActor || targetActor.sentinel) return false;
+            const fid = formIdU32(targetActor.formId);
+            const uuid = String(targetActor.uuid || '');
+            return !!(fid || uuid);
+        }
+
+        function deNextFallbackName(usedNames, startIndex) {
+            const used = usedNames instanceof Set ? usedNames : new Set(usedNames || []);
+            for (let i = startIndex | 0; i < DE_FALLBACK_NAMES.length; i++) {
+                const n = DE_FALLBACK_NAMES[i];
+                if (n && !used.has(n)) return n;
+            }
+            for (let i = 0; i < DE_FALLBACK_NAMES.length; i++) {
+                const n = DE_FALLBACK_NAMES[i];
+                if (n && !used.has(n)) return n;
+            }
+            return 'Actor' + used.size;
         }
 
         function dePreviewNamesFor(a) {
-            const n = deAnimActorCount(a);
+            const sceneInfo = deSceneInfoForPick();
+            let n = deAnimActorCount(a);
+            if (sceneInfo && (sceneInfo.positions || []).length > n)
+                n = sceneInfo.positions.length;
             if (n <= 0) return [];
             const names = [];
-            const useScene = deUseSceneNamesFor(a);
-            const positions = SC.positions || [];
+            const used = new Set();
             for (let i = 0; i < n; i++) {
                 let name = '';
-                if (useScene && i < positions.length)
-                    name = positions[i]._name || positions[i].name || '';
-                else if (!useScene) {
+                if (sceneInfo) {
+                    const p = (sceneInfo.positions || [])[i];
+                    name = (p && (p._name || p.name)) || '';
+                } else if (deHasValidTarget()) {
                     if (i === 0) name = (targetActor && targetActor.name) || '';
                     else if (i === 1) name = playerName || (playerActor && playerActor.name) || '';
                 }
+                if (name) used.add(name);
                 if (!name)
-                    name = DE_FALLBACK_NAMES[i] || ('Actor' + i);
+                    name = deNextFallbackName(used, i);
+                if (name) used.add(name);
                 names.push(name);
             }
             return names;
@@ -8890,11 +8970,261 @@
         // ── Description Editor ────────────────────────────────────
         let DE = {
             scene_sid: -1,
+            // scenePick: 'none' (nothing shown), 'any' (filter + animation list), or a scene key.
+            scenePick: 'none',
             focusRegistry: '',
+            // Last animation the editor was bound to; the scene pulldown defaults to it on open.
+            currentAnimation: '',
             stagesDraft: [],
             loadedStages: [],
             dirty: false
         };
+
+        function deIsSceneBound() {
+            return !!(DE.scenePick && DE.scenePick !== 'none' && DE.scenePick !== 'any');
+        }
+
+        function deSetCurrentAnimation(reg) {
+            if (reg) DE.currentAnimation = String(reg);
+        }
+
+        // Active scene playing `reg`, preferring the picked scene, then one containing the target actor.
+        function deActiveSceneForRegistry(reg) {
+            if (!reg) return null;
+            if (deIsSceneBound()) {
+                const picked = sceneInfoByKey.get(DE.scenePick);
+                return picked && picked.activeRegistry === reg ? picked : null;
+            }
+            const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
+            let found = null;
+            for (const key of deListActiveSceneKeys()) {
+                const info = sceneInfoByKey.get(key);
+                if (!info || info.activeRegistry !== reg) continue;
+                if (fid && info.hasActor(fid)) return info;
+                if (!found) found = info;
+            }
+            return found;
+        }
+
+        // Stage number of the focused animation when it is playing in an active scene, else 0.
+        function deActiveStageForFocus() {
+            const info = deActiveSceneForRegistry(DE.focusRegistry);
+            return info ? (info.stage | 0) : 0;
+        }
+
+        function deUpdateActiveStageRow() {
+            const active = deActiveStageForFocus();
+            document.querySelectorAll('#de-stages-host tr[data-stage]').forEach(tr => {
+                tr.classList.toggle('de-stage-active', active > 0 && Number(tr.dataset.stage) === active);
+            });
+        }
+
+        function deSceneInfoForPick() {
+            if (!deIsSceneBound()) return null;
+            return sceneInfoByKey.get(DE.scenePick) || null;
+        }
+
+        function deListActiveSceneKeys() {
+            const keys = [];
+            sceneInfoByKey.forEach((info, key) => {
+                if (key !== 'new' && info && info.mode === 'active')
+                    keys.push(key);
+            });
+            return keys;
+        }
+
+        function dePosDisplayName(p) {
+            return (p && (p._name || p.name)) || '';
+        }
+
+        function deSceneCastLabel(info) {
+            return (info.positions || []).map(dePosDisplayName).filter(Boolean).join(', ');
+        }
+
+        function deSceneAnimName(info) {
+            const reg = info.activeRegistry || '';
+            let name = reg;
+            const inThread = (info.lastAnims || []).find(a => a._registry === reg);
+            if (inThread && inThread._name) name = inThread._name;
+            return name || '(unnamed)';
+        }
+
+        function deSceneOptionLabel(info) {
+            const cast = deSceneCastLabel(info);
+            const anim = deSceneAnimName(info);
+            if (cast) return cast + ': ' + anim;
+            return anim;
+        }
+
+        function deFocusedAnimName() {
+            const a = deFindAnim(DE.focusRegistry);
+            if (a && a._name) return String(a._name);
+            if (deIsSceneBound()) {
+                const info = deSceneInfoForPick();
+                if (info) return deSceneAnimName(info);
+            }
+            return '';
+        }
+
+        function deUpdateDescHeader() {
+            const el = document.getElementById('de-desc-header');
+            if (!el) return;
+            const name = deFocusedAnimName();
+            el.textContent = name ? ('Description: ' + name) : 'Description';
+        }
+
+        function deAnimTagsList(a) {
+            const tags = a && a._tags;
+            if (Array.isArray(tags)) return tags.map(String).filter(Boolean);
+            if (typeof tags === 'string')
+                return tags.split(',').map(s => s.trim()).filter(Boolean);
+            return [];
+        }
+
+        function deResolveDefaultScenePick() {
+            const keys = deListActiveSceneKeys();
+            if (!keys.length) return 'any';
+            const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
+            const infos = keys.map(key => ({ key, info: sceneInfoByKey.get(key) })).filter(e => e.info);
+            const playing = DE.currentAnimation
+                ? infos.filter(e => e.info.activeRegistry === DE.currentAnimation) : [];
+            const withTarget = list => fid ? list.find(e => e.info.hasActor(fid)) : null;
+            const hit = withTarget(playing) || playing[0];
+            if (hit) return hit.key;
+            if (DE.currentAnimation) return 'any';
+            const mine = withTarget(infos);
+            return mine ? mine.key : keys[0];
+        }
+
+        function deUpdateBrowseVisibility() {
+            const panel = document.getElementById('description-editor-panel');
+            if (panel)
+                panel.classList.toggle('de-no-browse', DE.scenePick !== 'any');
+        }
+
+        function deRenderScenePulldown() {
+            const host = document.getElementById('de-scene-pulldown');
+            if (!host || typeof createPulldown !== 'function') return;
+            const entries = [{ key: 'none', label: 'None' }, { key: 'any', label: 'Any' }];
+            deListActiveSceneKeys().forEach(key => {
+                const info = sceneInfoByKey.get(key);
+                if (info) entries.push({ key, label: deSceneOptionLabel(info) });
+            });
+            const labelByKey = new Map(entries.map(e => [e.key, e.label]));
+            const values = entries.map(e => e.key);
+            if (DE.scenePick && !values.includes(DE.scenePick)) {
+                // Picked scene ended; fall back to browsing (re-renders this pulldown).
+                deApplyScenePick('any');
+                return;
+            }
+            const current = DE.scenePick || 'any';
+            DE.scenePick = current;
+            host.innerHTML = '';
+            host.appendChild(createPulldown(values, current, (key) => {
+                deApplyScenePick(key, { userInitiated: true });
+            }, null, (el, key) => {
+                el.textContent = labelByKey.get(key) || key;
+            }));
+        }
+
+        function deEnsureSceneAnimRow() {
+            const info = deSceneInfoForPick();
+            if (!info) return;
+            const reg = info.activeRegistry || DE.focusRegistry || '';
+            DE.focusRegistry = reg;
+            SC.activeRegistry = reg;
+            if (!reg) return;
+            deSetCurrentAnimation(reg);
+            if (deFindAnim(reg)) return;
+            const stub = (info.lastAnims || []).find(x => x._registry === reg);
+            if (stub) {
+                SC.lastAnims = [Object.assign({}, stub, {
+                    _stage_count: stub._stage_count || info.stageCount || 0
+                })];
+                return;
+            }
+            SC.lastAnims = [{
+                _registry: reg,
+                _name: deSceneAnimName(info),
+                _stage_count: info.stageCount || (SC.stages || []).length || 0,
+                _tags: [],
+                _pos_genders: (info.positions || []).map(p => p._gender).filter(g => g != null)
+            }];
+        }
+
+        function deLoadFocusAnimFromScene() {
+            deEnsureSceneAnimRow();
+            const stages = SC.stages || [];
+            DE.stagesDraft = stages.map(st => ({
+                _stage: st._stage,
+                _template: st._template != null ? String(st._template) : ''
+            }));
+            if (!DE.stagesDraft.length) {
+                const a = deFindAnim(DE.focusRegistry);
+                const stageCount = (a && a._stage_count) ? (a._stage_count | 0) : (SC.stageCount | 0);
+                for (let n = 1; n <= stageCount; n++)
+                    DE.stagesDraft.push({ _stage: n, _template: '' });
+            }
+            DE.loadedStages = sceneInfoClone(DE.stagesDraft);
+            DE.dirty = false;
+            deRenderStages();
+            deRenderAnimTags();
+        }
+
+        function deApplyScenePick(pick, opts) {
+            opts = opts || {};
+            if (DE.dirty && opts.userInitiated)
+                deCancel();
+            DE.scenePick = pick || 'any';
+            deUpdateBrowseVisibility();
+            if (DE.scenePick === 'none') {
+                DE.focusRegistry = '';
+                deLoadFocusAnim();
+            } else if (DE.scenePick === 'any') {
+                copySceneInfoToSC(selectedSceneInfo());
+                const forcedFilterBy = SC.filterByOnce || SC.filterBy || SC_FILTER_DEFAULT;
+                SC.filterByOnce = '';
+                scArmFilterDowngrade(forcedFilterBy);
+                if (SC.mode !== 'active') {
+                    scEnsurePositionSeed();
+                    if (SC.mode === 'creator')
+                        scEnrichActorMeta();
+                }
+                scRenderTagChips();
+                scSetTagMode(SC.tagMode || 'include');
+                scRenderHasDescriptionPulldown();
+                const typeHost = document.getElementById('de-type-pulldown');
+                if (typeHost) {
+                    typeHost.innerHTML = '';
+                    const typeValues = ['any'].concat(SC.groupOrder || []);
+                    typeHost.appendChild(createPulldown(typeValues, SC.tagType || 'any', v => {
+                        SC.tagType = v;
+                        scRefreshTags();
+                    }));
+                }
+                scRefreshTags();
+                scRefreshAnims();
+                deEnsureFocus();
+                deLoadFocusAnim();
+            } else {
+                const info = sceneInfoByKey.get(DE.scenePick);
+                if (!info) {
+                    deApplyScenePick('any', opts);
+                    return;
+                }
+                DE.scene_sid = info.scene_sid;
+                copySceneInfoToSC(info);
+                deEnsureSceneAnimRow();
+                deLoadFocusAnimFromScene();
+            }
+            deRenderScenePulldown();
+        }
+
+        function deOnControlFocusChanged() {
+            const deEl = document.getElementById('description-editor-panel');
+            if (!deEl || deEl.style.display === 'none') return;
+            deApplyScenePick(deResolveDefaultScenePick(), { focusChange: true });
+        }
 
         function deFindAnim(reg) {
             return (SC.lastAnims || []).find(x => x._registry === reg) || null;
@@ -8913,6 +9243,14 @@
         }
 
         function deEnsureFocus() {
+            if (deIsSceneBound()) {
+                const info = deSceneInfoForPick();
+                if (info && info.activeRegistry) {
+                    DE.focusRegistry = info.activeRegistry;
+                    SC.activeRegistry = DE.focusRegistry;
+                }
+                return;
+            }
             const sorted = deSortedAnims();
             if (!sorted.length) {
                 DE.focusRegistry = '';
@@ -8920,7 +9258,9 @@
             }
             const regs = sorted.map(a => a._registry).filter(Boolean);
             const active = isSceneConnectionActive() || SC.mode === 'active';
-            if (active && SC.activeRegistry && regs.includes(SC.activeRegistry)) {
+            if (DE.currentAnimation && regs.includes(DE.currentAnimation)) {
+                DE.focusRegistry = DE.currentAnimation;
+            } else if (active && SC.activeRegistry && regs.includes(SC.activeRegistry)) {
                 DE.focusRegistry = SC.activeRegistry;
             } else if (DE.focusRegistry && regs.includes(DE.focusRegistry)) {
                 // keep current selection
@@ -8933,6 +9273,10 @@
         }
 
         function deLoadFocusAnim() {
+            if (deIsSceneBound()) {
+                deLoadFocusAnimFromScene();
+                return;
+            }
             const a = deFindAnim(DE.focusRegistry);
             const stageCount = (a && a._stage_count) ? (a._stage_count | 0) : 0;
             const sd = (a && a._stage_descriptions) || {};
@@ -8951,15 +9295,22 @@
         function deRenderNames() {
             const host = document.getElementById('de-names-row');
             if (!host) return;
+            deUpdateDescHeader();
             const a = deFindAnim(DE.focusRegistry);
             const names = dePreviewNamesFor(a);
-            if (!names.length) {
+            if (!names.length && !deIsSceneBound()) {
                 host.textContent = '';
                 host.style.display = 'none';
                 return;
             }
+            const tags = deAnimTagsList(a);
+            const chips = tags.map(t =>
+                `<span class="tag-chip de-tag-readonly">${escapeHtml(String(t))}</span>`
+            ).join(' ');
             host.style.display = '';
-            host.textContent = 'names: ' + names.join(', ');
+            host.innerHTML =
+                `<span class="de-names-group"><b>names:</b> ${escapeHtml(names.join(', '))}</span>` +
+                `<span class="de-tags-group"><b>tags:</b> ${chips}</span>`;
         }
 
         function deRenderStages() {
@@ -8987,6 +9338,7 @@
                 `<th class="de-stage-text">text</th>` +
                 `<th class="de-stage-desc">description</th>` +
                 `</tr></thead><tbody>${rows}</tbody></table>`;
+            deUpdateActiveStageRow();
         }
 
         function deStageEdit(stage, val) {
@@ -9002,14 +9354,7 @@
         }
 
         function deRenderAnimTags() {
-            const host = document.getElementById('de-anim-tags');
-            if (!host) return;
-            const a = deFindAnim(DE.focusRegistry);
-            const tags = (a && a._tags) || [];
-            const list = Array.isArray(tags) ? tags : [];
-            host.innerHTML = list.length
-                ? list.map(t => `<span class="tag-chip de-tag-readonly">${escapeHtml(String(t))}</span>`).join(' ')
-                : '<span style="opacity:0.6">(none)</span>';
+            deRenderNames();
         }
 
         function deRenderAnimList() {
@@ -9053,6 +9398,7 @@
         function deSelectAnim(reg) {
             if (!reg || reg === DE.focusRegistry) return;
             DE.focusRegistry = reg;
+            deSetCurrentAnimation(reg);
             SC.activeRegistry = reg;
             const info = selectedSceneInfo();
             if (info) info.activeRegistry = reg;
@@ -9062,6 +9408,7 @@
         function deOnAnimsUpdated() {
             const el = document.getElementById('description-editor-panel');
             if (!el || el.style.display === 'none') return;
+            if (DE.scenePick !== 'any') return;
             const prev = DE.focusRegistry;
             deEnsureFocus();
             const countEl = document.getElementById('de-anim-count');
@@ -9111,31 +9458,8 @@
             if (!info) info = selectedSceneInfo();
             DE.scene_sid = info.scene_sid;
             DE.dirty = false;
-            copySceneInfoToSC(info);
-            const typeHost = document.getElementById('de-type-pulldown');
-            if (typeHost) {
-                typeHost.innerHTML = '';
-                const typeValues = ['any'].concat(SC.groupOrder || []);
-                typeHost.appendChild(createPulldown(typeValues, SC.tagType || 'any', v => {
-                    SC.tagType = v;
-                    scRefreshTags();
-                }));
-            }
-            const forcedFilterBy = SC.filterByOnce || SC_FILTER_DEFAULT;
-            SC.filterByOnce = '';
-            scArmFilterDowngrade(forcedFilterBy);
-            if (SC.mode !== 'active') {
-                scEnsurePositionSeed();
-                if (SC.mode === 'creator')
-                    scEnrichActorMeta();
-            }
-            scRenderTagChips();
-            scSetTagMode(SC.tagMode || 'include');
-            scRenderHasDescriptionPulldown();
-            scRefreshTags();
-            scRefreshAnims();
-            deEnsureFocus();
-            deLoadFocusAnim();
+            deRenderScenePulldown();
+            deApplyScenePick(deResolveDefaultScenePick());
         }
 
         function configureDescriptionEditor(state) {
@@ -9148,9 +9472,36 @@
             } else {
                 info.mergeFromState(state);
             }
+            if (state._tags != null && info.activeRegistry) {
+                const tags = typeof state._tags === 'string'
+                    ? state._tags.split(',').map(s => s.trim()).filter(Boolean)
+                    : (Array.isArray(state._tags) ? state._tags.slice() : []);
+                let row = (info.lastAnims || []).find(a => a._registry === info.activeRegistry);
+                if (!row) {
+                    row = {
+                        _registry: info.activeRegistry,
+                        _name: state._anim_name || state._subtitle || info.activeRegistry,
+                        _tags: tags
+                    };
+                    info.lastAnims = (info.lastAnims || []).concat([row]);
+                } else {
+                    row._tags = tags;
+                    if (state._anim_name) row._name = state._anim_name;
+                }
+            }
             selectedSceneInfoKey = key;
             sceneInfosSessionActive = true;
-            configureDescriptionEditorFromSceneInfo(info);
+            const deEl = document.getElementById('description-editor-panel');
+            const deVisible = deEl && deEl.style.display !== 'none';
+            if (deVisible) {
+                deRenderScenePulldown();
+                if (deIsSceneBound() && DE.scenePick === key)
+                    deApplyScenePick(DE.scenePick);
+                else
+                    deUpdateActiveStageRow();
+            } else {
+                configureDescriptionEditorFromSceneInfo(info);
+            }
         }
 
         // Papyrus Animation_Menu_* still calls configureAnimationMenu.

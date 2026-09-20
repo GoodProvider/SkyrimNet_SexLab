@@ -1679,7 +1679,13 @@ namespace PapyrusBindings_WebUI
         if (!Target_Current || !IsSexLabAnimatingActor(Target_Current))
             return;
         webui_log::info("WebUI_MaybeRestoreAnimationPanel: opening Description Editor for animating focus");
+        DispatchMenuNoArg("WebUI_ConfigureFocusScene");
         ActionCatalog::SwitchMainPanel("description_editor_panel");
+    }
+
+    bool WebUI_IsOverlayVisible(RE::StaticFunctionTag*)
+    {
+        return !WebUI_IsHidden();
     }
 
     bool Register_WebUI_Functions(RE::BSScript::IVirtualMachine* a_vm)
@@ -1708,6 +1714,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("WebUI_SetHotkey", scriptName, WebUI_SetHotkey);
         a_vm->RegisterFunction("WebUI_AfterTargetOpen", scriptName, WebUI_AfterTargetOpen);
         a_vm->RegisterFunction("WebUI_MaybeRestoreAnimationPanel", scriptName, WebUI_MaybeRestoreAnimationPanel);
+        a_vm->RegisterFunction("WebUI_IsOverlayVisible", scriptName, WebUI_IsOverlayVisible);
         a_vm->RegisterFunction("WebUI_SetLastRebuildTimestamp", scriptName, WebUI_SetLastRebuildTimestamp);
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);

@@ -1,5 +1,21 @@
 # Knowledgebase
 
+## Description Editor scene pulldown anim-only / empty names (2026-09-19)
+
+**Symptom:** Live Nina+Bob AP Anal scene; DE **scene:** option showed only **AP Anal**; names row hidden.
+
+**Cause:** `BuildWebUISceneMenuState` used `Actor[] positions = None` then `positions = thread.Positions`. Papyrus cannot assign `None` to `Actor[]` (`Cannot cast from None to Actor[]` / mismatched `::temp410`). Seed still returned `_mode: active` with anim name and **empty `_positions`**. JS `deSceneOptionLabel` fell back to anim-only; `deRenderNames` hid the row.
+
+**Fix:** Do not initialize `Actor[]` to `None`. Read `thread.Positions` only when truthy; if empty, still emit slots from `position_objs` (`name` / uuid / formid). Trace `positions` count + names on seed. Overlay: option label `Nina, Bob: AP Anal`; header `Description: AP Anal`; names row `names: … tags: ` chips (Tags section removed). Pyro-compile Scene (+ Menu for `WebUI_ConfigureFocusScene`).
+
+## WebUI mouse freeze / text fields (2026-09-19)
+
+**Symptom:** WebUI open blocks the mouse cursor; hard to click or type in Description Editor textareas.
+
+**Cause:** `KeyHandler::ProcessEvent` returned `kStop` for the whole `InputEvent` batch while the overlay was visible. Skyrim delivers keyboard, mouse-move, and mouse buttons in one linked list per frame; `kStop` prevented downstream sinks (including cursor handling) from seeing mouse events.
+
+**Fix:** While visible, run Escape/menu callbacks, **unlink** SKSE keyboard `kButton` and `kChar` only (block mod `RegisterForKey`), always return `kContinue`. PrismaUI mouse and text input use Win32; stripping SKSE keyboard does not block HTML field typing.
+
 ## Description Editor empty animation list (2026-09-19)
 
 **Symptom:** Description Editor opens but the Animations table is empty (or clipped below the filter).
@@ -7,6 +23,14 @@
 **Cause:** DE open did not arm filter downgrade or seed positions like Scene Menu. Default `gender` filter with `_actor_count: 0` and 0/0 gender totals matched no AnimationDB rows (`actor_count` optional treated `0` as set). `SC.filterBy` was already `gender`, so `scArmFilterDowngrade` never ran. In-thread stub rows were wiped on 0-result queries. CSS gave every `.de-section` `flex: 0 0 auto` inside `overflow: hidden`, clipping the anim list. In-scene hotkey only restored DE when `g_animationPanelPreferredOpen` (last selected main panel).
 
 **Fix:** DE open calls `scArmFilterDowngrade`, seeds/enriches positions on creator/`new`, omits `_actor_count`/gender match when no positions. `MatchesFilter` ignores `actor_count ≤ 0`. Anim queries merge `_also_registries` via `GetByRegistry`. DE anim section fixed 50% height. `WebUI_MaybeRestoreAnimationPanel` always opens DE when focus is SexLab-animating. `SceneInfo.hasActor` uses `formIdU32` for ESL FormIDs.
+
+## Description Editor Bob, Bob names / scene pulldown (2026-09-19)
+
+**Symptom:** Names row showed **Bob, Bob** for a Nina+Bob scene, or Target+Player when browsing with no target.
+
+**Cause:** DE used Target/Player fallbacks without live `thread.Positions`; `DE_FALLBACK_NAMES[1]` is literally `"Bob"`. Stale SceneInfo when overlay stayed open through AnimationStart (no Papyrus configure). No explicit scene pick — focus-based SceneInfo bind alone did not lock the in-thread animation.
+
+**Fix:** DE **scene:** pulldown (None + active scenes labeled `pos0, pos1: anim`). Scene selected → hide Filter/Animations, names from scene positions, current = `activeRegistry`. None → show browse list; names Target+Player only with valid target, else Alice–Pat only. `WebUI_ConfigureFocusScene` before DE hotkey restore; `WebUI_ConfigureIfOverlayVisible` on AnimationStart/StageStart; `seedSceneInfos` merges live fields into existing `scene:sid` entries; animation-menu positions include `_form_id`. Placeholder names skip collisions with already-used names.
 
 ## AniDescriber HKX fill on hold (2026-09-17)
 

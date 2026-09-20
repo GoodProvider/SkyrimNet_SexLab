@@ -116,6 +116,22 @@ Function WebUI_OnControlActorFocus(Actor target)
     SkyrimNet_SexLab_WebUI.WebUI_MaybeRestoreAnimationPanel()
 EndFunction
 
+Function WebUI_ConfigureFocusScene()
+    if !manager
+        return
+    endif
+    Actor target = SkyrimNet_SexLab_WebUI.WebUI_GetFocusActor()
+    if target == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(target)
+    if sl == None || !sl.GetThreadActive()
+        return
+    endif
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl.BuildWebUISceneMenuState())
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl.BuildWebUIAnimationMenuState())
+EndFunction
+
 Function WebUI_SeedSceneInfos()
     if !manager
         return

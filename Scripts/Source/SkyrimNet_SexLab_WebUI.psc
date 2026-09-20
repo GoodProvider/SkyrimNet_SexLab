@@ -28,6 +28,8 @@ Function WebUI_SetHotkey(int dxScanCode, bool enabled) global native
 Function WebUI_AfterTargetOpen(Actor preferred, Bool preferExplicit) global native
 ; Hotkey reopen: show Animation main panel when preferred-open and focus is in SexLab.
 Function WebUI_MaybeRestoreAnimationPanel() global native
+; True when PrismaUI overlay is visible (inverse of WebUI_IsHidden).
+Bool Function WebUI_IsOverlayVisible() global native
 ; Push last AnimDb rebuild timestamp into C++ for Settings panel.
 Function WebUI_SetLastRebuildTimestamp(String timestamp) global native
 ; Push SexLab gender + race_key enrich result to Scene Creator JS (actorAnimMetaResult).

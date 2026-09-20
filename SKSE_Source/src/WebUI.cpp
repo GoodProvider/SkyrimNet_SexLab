@@ -301,14 +301,25 @@ KeyHandler* KeyHandler::GetSingleton()
     return &singleton;
 }
 
+/// Move this sink to index 0 of BSInputDeviceManager (Remove + Prepend; Prepend alone is a no-op if already registered).
+void KeyHandler::PromoteSink()
+{
+    auto* inputMgr = RE::BSInputDeviceManager::GetSingleton();
+    if (!inputMgr)
+        return;
+    auto* self = GetSingleton();
+    inputMgr->RemoveEventSink(self);
+    inputMgr->PrependEventSink(self);
+}
+
 /// Registers this KeyHandler as a BSInputDeviceManager event sink.
 /// Required before Escape / backslash (and other) hotkeys can fire.
 void KeyHandler::RegisterSink()
 {
     auto inputMgr = RE::BSInputDeviceManager::GetSingleton();
     if (inputMgr) {
-        inputMgr->AddEventSink(GetSingleton());
-        webui_log::info("KeyHandler sink registered.");
+        PromoteSink();
+        webui_log::info("KeyHandler sink registered (prepended).");
     } else {
         webui_log::critical("Failed to get InputDeviceManager.");
     }
@@ -328,6 +339,46 @@ void KeyHandler::Unregister(uint32_t dxScanCode)
     std::unique_lock lock(_mutex);
     _callbacks.erase(dxScanCode);
 }
+
+namespace {
+
+bool ShouldSwallowSkseInputEvent(const RE::InputEvent* event)
+{
+    switch (event->GetEventType()) {
+    case RE::INPUT_EVENT_TYPE::kChar:
+        return true;
+    case RE::INPUT_EVENT_TYPE::kButton:
+        {
+            const auto device = event->GetDevice();
+            return device == RE::INPUT_DEVICE::kKeyboard ||
+                   device == RE::INPUT_DEVICES::VirtualKeyboard();
+        }
+    default:
+        return false;
+    }
+}
+
+/// Remove keyboard/char events from the SKSE input list so downstream sinks (Papyrus RegisterForKey) do not see them.
+void StripSwallowedInputEvents(RE::InputEvent* const* a_eventList)
+{
+    auto*& head = const_cast<RE::InputEvent*&>(*a_eventList);
+    RE::InputEvent* prev = nullptr;
+    for (auto* cur = head; cur;) {
+        if (!ShouldSwallowSkseInputEvent(cur)) {
+            prev = cur;
+            cur = cur->next;
+            continue;
+        }
+        auto* next = cur->next;
+        if (prev)
+            prev->next = next;
+        else
+            head = next;
+        cur = next;
+    }
+}
+
+}  // namespace
 
 /// Input sink: on keyboard key-down, runs any registered WebUI hotkey callbacks.
 /// Callbacks run outside the shared lock so they may mutate handler state safely.
@@ -355,6 +406,11 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
 
     for (const auto& cb : toRun)
         cb();
+
+    // Overlay visible: strip keyboard/char from the SKSE list (block mod hotkeys) but always kContinue
+    // so mouse-move and mouse clicks still reach PrismaUI. PrismaUI text fields use Win32 directly.
+    if (!WebUI_IsHidden())
+        StripSwallowedInputEvents(a_eventList);
 
     return RE::BSEventNotifyControl::kContinue;
 }
@@ -418,6 +474,7 @@ void WebUI_Visibility_Show()
     webui_log::info("WebUI Show + Focus.");
     PrismaUI->Show(g_view);
     PrismaUI->Focus(g_view, true);
+    KeyHandler::PromoteSink();
     g_webuiGamePaused = true;
     // Start / Cancel hide ControlPanel in JS. Show must restore it — same-actor
     // Target_Menu_Open used to skip showPanel and left a blank left column.
