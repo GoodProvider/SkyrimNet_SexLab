@@ -2475,6 +2475,20 @@ String Function BuildWebUISceneMenuState()
     return json
 EndFunction
 
+; Description Editor "continue scene": narrate the (already rendered) active-stage description.
+Function WebUI_OnNarrate(String json)
+    int obj = JValue.objectFromPrototype(json)
+    if obj == 0
+        return
+    endif
+    String text = JMap.getStr(obj, "_text", "")
+    JValue.release(obj)
+    if text == ""
+        return
+    endif
+    DirectNarration("The scene changes to "+text, sender, receiver)
+EndFunction
+
 Function WebUI_OnAnimUpdate(String json)
     if thread == None
         return

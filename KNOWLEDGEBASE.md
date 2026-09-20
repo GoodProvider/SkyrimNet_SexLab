@@ -314,7 +314,7 @@ Left column: ControlPanel (`#control-panel`: **mode pulldown** + **views** label
 
 - **Escape peel (2026-08-23):** Escape closes the highest UI layer first (open pulldowns → IntentPanel Cancel → YesNo silent → Sex menu → TargetMenu cascade/Parameters → main panel to ControlPanel **None**). Leftover TargetMenu/ControlPanel hides the overlay without SceneInfo commit. Scene Creator without TargetMenu (YesNo) still Cancel. Root Custom closes an open Parameter panel before toggling Scene Creator.
 
-- **No pause toggle (2026-08-22):** Overlay always `Focus(view, true)`. Removed ControlPanel pause/unpause so live threads cannot drift from SceneInfo. Log tail is file I/O. AnimDB rebuild that needs Papyrus updates waits until close.
+- **Pause toggle (2026-08-22, revised 2026-09-20):** Overlay opens `Focus(view, true)`. The ControlPanel toggle was removed so live threads cannot drift from SceneInfo; the Description Editor play/pause button now unpauses on purpose (actors must move to test a stage). It re-focuses via `Unfocus` + `Focus(view, paused)`; a repeat `Focus` alone did not unpause. Log tail is file I/O. AnimDB rebuild that needs Papyrus updates waits until close.
 
 - **ControlPanel missing after Start (2026-08-16):** Scene Creator / papyrus Start hide `#control-panel`. Same-actor `Target_Menu_Open` used to only `configureTargetMenu` + Show, skipping `showPanel`. Overlay came back with TargetMenu/ControlPanel still `display:none`. Fix: `WebUI_Visibility_Show` invokes `showControlPanel()`; same-actor open also `showPanel('target_menu_panel')`.
 

@@ -512,7 +512,7 @@
         .de-actors-layout {
             display: flex;
             gap: var(--space-sm);
-            align-items: flex-start;
+            align-items: stretch;
         }
 
         #de-actors-table-wrap {
@@ -525,25 +525,15 @@
             min-width: 0;
             display: flex;
             flex-direction: column;
-            border-left: 1px solid var(--border);
-            padding-left: var(--space-sm);
-        }
-
-        #de-names-row {
-            font-size: var(--text-sm);
-            opacity: 0.85;
-            margin-bottom: var(--space-xs);
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: var(--space-xs);
+            justify-content: flex-end;
+            border-right: 1px solid var(--border);
+            padding-right: var(--space-sm);
         }
 
         #de-stage-nav {
             display: flex;
             align-items: center;
             gap: var(--space-xs);
-            margin-bottom: var(--space-xs);
         }
 
         #de-stage-nav .action-btn.de-disabled {
@@ -551,7 +541,8 @@
             pointer-events: none;
         }
 
-        #de-names-row .de-name-hint {
+        .de-name-hint {
+            font-size: var(--text-sm);
             opacity: 0.7;
         }
 
@@ -1831,20 +1822,22 @@
         </div>
         <div class="de-section de-actors-section" id="de-actors-section">
             <div class="de-actors-layout">
+                <div id="de-side-panel">
+                    <div id="de-tags-row" style="display:none"></div>
+                    <div id="de-stage-nav" style="display:none">
+                        <div class="action-btn" id="de-btn-prev" onmousedown="event.preventDefault()" onclick="deStageStep(-1)">&#9664; previous</div>
+                        <div class="action-btn" id="de-btn-pause" onmousedown="event.preventDefault()" onclick="deTogglePause()">play</div>
+                        <div class="action-btn" id="de-btn-next" onmousedown="event.preventDefault()" onclick="deStageStep(1)">next &#9654;</div>
+                        <div class="action-btn" id="de-btn-copyprev" onmousedown="event.preventDefault()" onclick="deCopyPrevious()">copy previous</div>
+                        <div class="action-btn" id="de-btn-continue" onmousedown="event.preventDefault()" onclick="deContinueScene()">continue scene</div>
+                    </div>
+                </div>
                 <div id="de-actors-table-wrap" style="display:none">
                     <table class="data-table" id="de-actors-table"><thead><tr>
                         <th class="col-idx">#</th><th class="col-name">name</th>
                         <th class="col-o">O</th><th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
-                </div>
-                <div id="de-side-panel">
-                    <div id="de-stage-nav" style="display:none">
-                        <div class="action-btn" id="de-btn-prev" onmousedown="event.preventDefault()" onclick="deStageStep(-1)">&#9664; previous</div>
-                        <div class="action-btn" id="de-btn-next" onmousedown="event.preventDefault()" onclick="deStageStep(1)">next &#9654;</div>
-                        <div class="action-btn" id="de-btn-copyprev" onmousedown="event.preventDefault()" onclick="deCopyPrevious()">copy previous</div>
-                    </div>
-                    <div id="de-tags-row" style="display:none"></div>
-                    <div id="de-names-row" style="display:none"></div>
+                    <div class="de-name-hint">Clicking a name adds it to the description</div>
                 </div>
             </div>
         </div>
@@ -7574,6 +7567,22 @@
             discardSceneInfos();
         }
 
+        // The overlay pauses the game while focused (PrismaUI Focus pauseGame). Show/Hide reset it to paused.
+        let gamePaused = true;
+
+        function setGamePaused(paused) {
+            gamePaused = !!paused;
+            const btn = document.getElementById('de-btn-pause');
+            if (btn) btn.textContent = gamePaused ? 'play' : 'pause';
+        }
+
+        function deTogglePause() {
+            deAutoSave();
+            setGamePaused(!gamePaused);
+            if (typeof window.onGamePauseSet === 'function')
+                window.onGamePauseSet(gamePaused ? '1' : '0');
+        }
+
         function requestWebUIHide(commit) {
             if (typeof window.onWebUIHide === 'function')
                 window.onWebUIHide(JSON.stringify({ commit: !!commit }));
@@ -9509,7 +9518,7 @@
                 tdIdx.textContent = String(i);
                 const tdName = document.createElement('td');
                 tdName.className = 'col-name';
-                tdName.textContent = names[i] || '';
+                tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(names[i] || 'actor ' + i)}</div>`;
                 const tdO = document.createElement('td');
                 tdO.className = 'col-o';
                 const expected = !p._no_orgasm;
@@ -9568,12 +9577,9 @@
         }
 
         function deRenderNames() {
-            const host = document.getElementById('de-names-row');
-            if (!host) return;
             deUpdateDescHeader();
             deRenderActors();
             const a = deFindAnim(DE.focusRegistry);
-            const names = dePreviewNamesFor(a);
             const nav = document.getElementById('de-stage-nav');
             if (nav) nav.style.display = deIsSceneBound() ? '' : 'none';
             deUpdateStageNavButtons();
@@ -9590,16 +9596,6 @@
                     tagsHost.style.display = 'none';
                 }
             }
-            if (!names.length && !deIsSceneBound()) {
-                host.textContent = '';
-                host.style.display = 'none';
-                return;
-            }
-            host.style.display = '';
-            host.innerHTML = `<b>names:</b> ` + names.map((n, i) =>
-                `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(n)}</div>`
-            ).join('') +
-                `<span class="de-name-hint">Click on a name to add it to the description</span>`;
         }
 
         // Stage the name / copy buttons act on: the scene's active stage, else the last edited one.
@@ -9628,6 +9624,7 @@
         }
 
         function deStageStep(dir) {
+            deAutoSave();
             const info = deSceneInfoForPick();
             if (!info) return;
             const cur = deActiveStage();
@@ -9664,6 +9661,19 @@
             const prev = DE.stagesDraft.find(s => s._stage === target - 1);
             if (!prev) return;
             deSetStageText(target, prev._template || '');
+            deAutoSave();
+        }
+
+        // Send the active stage's rendered description to SkyrimNet as "The scene changes to ...".
+        function deContinueScene() {
+            deAutoSave();
+            const info = deSceneInfoForPick();
+            if (!info || info.scene_sid < 0) return;
+            const st = DE.stagesDraft.find(s => s._stage === deActiveStage());
+            const text = st ? deSubstitute(st._template || '', dePreviewNamesFor(deFindAnim(DE.focusRegistry))).trim() : '';
+            if (!text) return;
+            if (typeof window.onSceneNarrate === 'function')
+                window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _text: text }));
         }
 
         function deInsertActor(i) {
@@ -9685,6 +9695,7 @@
                 const pos = start + token.length;
                 ta.setSelectionRange(pos, pos);
             }
+            deAutoSave();
         }
 
         function deRenderStages() {
@@ -9798,7 +9809,19 @@
             }
         }
 
+        // Save to disk without closing; skipped when nothing changed.
+        function deAutoSave() {
+            if (DE.focusRegistry && (DE.dirty || DE.posDirty))
+                deSaveToDisk();
+        }
+
         function deSave() {
+            if (!DE.focusRegistry) return;
+            deSaveToDisk();
+            requestWebUIHide(true);
+        }
+
+        function deSaveToDisk() {
             if (!DE.focusRegistry) return;
             const payload = {
                 _registry: DE.focusRegistry,
@@ -9828,7 +9851,6 @@
             DE.loadedPos = sceneInfoClone(DE.posDraft);
             DE.posDirty = false;
             deRenderAnimList();
-            requestWebUIHide(true);
         }
 
         function deCancel() {

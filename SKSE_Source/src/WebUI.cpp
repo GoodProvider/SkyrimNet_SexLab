@@ -477,6 +477,7 @@ void WebUI_Visibility_Show()
     PrismaUI->Focus(g_view, true);
     KeyHandler::PromoteSink();
     g_webuiGamePaused = true;
+    WebUI_Invoke("setGamePaused(true);");
     // Start / Cancel hide ControlPanel in JS. Show must restore it — same-actor
     // Target_Menu_Open used to skip showPanel and left a blank left column.
     WebUI_Invoke("showControlPanel();");
@@ -495,6 +496,7 @@ static void WebUI_Visibility_HideImpl(bool commit)
     PrismaUI->Unfocus(g_view);
     PrismaUI->Hide(g_view);
     g_webuiGamePaused = true;
+    WebUI_Invoke("setGamePaused(true);");
 }
 
 /// Unfocuses and hides the PrismaUI overlay without clearing Target_Current.
@@ -969,6 +971,33 @@ void InitWebUI()
                 WebUI_Visibility_Hide();
             else
                 WebUI_Visibility_HideWithoutCommit();
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onGamePauseSet", [](const char* value) {
+            const bool paused = !value || value[0] != '0';
+            webui_log::info("onGamePauseSet paused={}", paused);
+            g_webuiGamePaused = paused;
+            if (PrismaUI && PrismaUI->IsValid(g_view) && !PrismaUI->IsHidden(g_view)) {
+                // A repeat Focus while already focused does not change the pause state; re-focus from scratch.
+                PrismaUI->Unfocus(g_view);
+                const bool ok = PrismaUI->Focus(g_view, paused);
+                KeyHandler::PromoteSink();
+                webui_log::info("onGamePauseSet Focus(pause={}) ok={} hasFocus={}", paused, ok,
+                                PrismaUI->HasFocus(g_view));
+            }
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onSceneNarrate", [](const char* value) {
+            if (!value)
+                return;
+            try {
+                auto j = nlohmann::json::parse(value);
+                const int scene_sid = j.value("_scene_sid", -1);
+                webui_log::info("onSceneNarrate scene_sid={}", scene_sid);
+                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneNarrate", scene_sid, j.dump());
+            } catch (...) {
+                webui_log::warn("onSceneNarrate: bad JSON");
+            }
         });
 
         PrismaUI->RegisterJSListener(g_view, "onControlActorChange", [](const char* value) {

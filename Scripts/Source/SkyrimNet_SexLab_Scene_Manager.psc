@@ -1052,6 +1052,13 @@ Function WebUI_OnSceneAnimUpdate(int scene_sid, String json)
     endif
 EndFunction
 
+Function WebUI_OnSceneNarrate(int scene_sid, String json)
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
+    if sl_scene
+        sl_scene.WebUI_OnNarrate(json)
+    endif
+EndFunction
+
 Function WebUI_OnAnimRegistrySave(String json)
     int obj = JValue.objectFromPrototype(json)
     if obj == 0
