@@ -18,6 +18,7 @@ The substring `" is orgasming."` must stay exact on the whole direct-narration s
 | Denied / non-orgasming | **No** — Combined and Separate: `name+" is not orgasming right now. "`; Dom denied / afterglow: “did not orgasm” / “failed to orgasm” |
 
 - Dom: `Handler_DOM.DOMSlave_Orgasmed` → `Scene_Manager.OrgasmCustom` appends `". "+name+" is orgasming."` on purpose — do not strip without updating the prompt.
+- `Scene.OrgasmCustom` returns without stash / total bump / DN when the actor's `no_orgasm==1` (`orgasm_expected` 0, scene-creator or `not_expected`/`deny`). DOM rolls its own orgasm (`DOM_Mind.IsOrgasmingAfterArousal`) and ignores SexLab `DisableOrgasm`; its `should_be_noorgasm` only shifts the odds, so the bridge must gate what it reports.
 - Dom player-orgasm tease (`squirms under your grasp` / `your orgasm submerges you`) is **not** a slave climax. `DOMSlave_Orgasmed` must return without `OrgasmCustom` or DN. Combined then names the slave `" is not orgasming right now."` unless a real melt bumped totals that have not been narrated yet (`orgasm_narrated`).
 - Combined / `GetIsOrgasming`: Papyrus emits `name+" is orgasming. "` (and `. again.` / tentacles append). Do not strip that substring without updating the prompt.
 - Dom Combined fallback: if orgasm expected and totals increased since last orgasm DN (`orgasm_narrated`) but custom text raced empty, still append `name+" is orgasming. "` (same gate). Already-spoken totals (`GetTotalOrgasms == orgasm_narrated`) use `" is not orgasming right now."`, not denied.

@@ -124,6 +124,14 @@ Unquoted `comparisonOperator: >` is a YAML folded block scalar, so SkyrimNet sto
 
 `DOM_Mind` sends `{name} squirms under your grasp as your orgasm submerges you` when the **player** climaxes. That is not a Dom slave orgasm. `Handler_DOM.DOMSlave_Orgasmed` must refuse it (no `OrgasmCustom` / DN). Sibling Dom Events skips it in `OnNotifcationSkip` and only routes melt phrasing to the handler. Oral `orgasm_expected [0, 1]` plus Combined skip of `dom_slave` already omit the giver; do not let the tease override that.
 
+## Dom slave orgasms despite orgasm_expected 0 (2026-09-20)
+
+**Symptom:** `B_B_FFMLaySrv` (`orgasm_expected [0,1,1]`, Nina `no_orgasm:1`): log `DOMSlave_Orgasmed --- OrgasmCustom for Nina`, flush `Nina is orgasming.`, `total_orgasm` 0→1.
+
+**Cause:** DOM registers `HookOrgasmStart_DOM<id>ORGASM` / `SexLabOrgasmSeparate` and rolls its own orgasm (`DOM_Mind.handleSexOrgasm` → `IsOrgasmingAfterArousal`). SexLab `DisableOrgasm` does not apply, and DOM has no per-scene disable; `should_be_noorgasm` only shifts the chance (can raise it). `Scene.OrgasmCombined` / `OrgasmIndividual` honored `no_orgasm`, `OrgasmCustom` did not.
+
+**Fix:** `Scene.OrgasmCustom` returns early when `no_orgasm==1`. DOM's internal state still counts the orgasm.
+
 ## Start Sex hotkey live-reload (2026-09-13)
 
 Dashboard `sexlab.editor.hotkey_enabled` / `sexlab.editor.hotkey` used to apply only from `MCM.Setup` (load) and `OnConfigOpen`. Enabling the hotkey in the SkyrimNet dashboard did not `RegisterForKey`, so SkyMessage never opened until MCM or reload. `SkyrimNet_OnPluginConfigSaved` (SKSE `SendModEvent`: `eventName`, `strArg`, `numArg`, `sender`) now calls `ApplyPluginConfig`. Pre-VK saves stored DX `43` for backslash; `ApplyHotkey` treats `43` as VK `220`. Do not enable this hotkey on the same key as SkyrimNet_Leashed’s panel (both default `\\`).

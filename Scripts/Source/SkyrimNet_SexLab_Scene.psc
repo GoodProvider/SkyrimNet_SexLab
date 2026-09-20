@@ -1363,7 +1363,15 @@ Function OrgasmCustom(Actor akActor, String msg)
     DbgEnter("OrgasmCustom", "akActor:"+GetDisplayName(akActor)+" msg:"+msg)
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
 
-    if StringUtil.Find(msg, " is orgasming.") < 0 
+    ; DOM rolls its own orgasm and ignores SexLab DisableOrgasm; honor orgasm_expected (no_orgasm = 1 - expected).
+    int obj = GetObjFromActor(akActor)
+    if obj > 0 && JMap.getInt(obj, "no_orgasm") == 1
+        Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" shouldn't orgasm, dropping")
+        DbgEnd("OrgasmCustom")
+        return
+    endif
+
+    if StringUtil.Find(msg, " is orgasming.") < 0
         msg += GetIsOrgasming(akActor)
     else
         ; Manager/DOM already appended the substring; still count this orgasm.
