@@ -517,3 +517,11 @@ Only afterglow and cum go through `RenderSlPrompt` (`helpers/sexlab/afterglow.pr
 Scene-pick anim rows are stubs: `_in_thread_anims` (`Scene.psc`) carries only `_registry/_name/_tags`, so `_pos_no_orgasm` / `_pos_speaking_modifiers` / `_position_count` are absent. The Description Editor fetches the DB row with `onAnimDbQuery {_type:"anim", _registry}` (stub detected by `_position_count == null`). `info.positions[i]._no_orgasm/_speaking` are live scene values, not anim defaults.
 
 **Registry casing**: `AnimationDB` stores and returns registries lowercase (`_registry` in `onAnimDbQuery` replies), while scene-derived registries (`info.activeRegistry`, `_in_thread_anims`) keep SexLab casing (`B_B_3pFFMMis`). Joining a DB reply to a scene row must compare case-insensitively (`deRegEq`); a strict `===` silently dropped the row and the actor table never rendered.
+
+## Description Editor stage step vs game pause (2026-09-20)
+
+**Symptom**: after ◀/▶ while the overlay pauses the game, later steps show the notification `dropped (thread not active)`; `SkyrimNet_SexLab.log` has `GetThreadActive: thread is not animating or prepare 'Advancing'`.
+
+**Cause**: vanilla SexLab `GoToStage` sets `Stage` and enters state `Advancing`, which finishes via `RegisterForSingleUpdate` (game time) → `Animating` + `StageStart`. With `Focus(view, pauseGame=true)` game time is frozen, so the thread stays `Advancing` and `GetThreadActive()` rejects every commit. `thread.stage` changes synchronously, so a push right after `GoToStage` looks like the thread reported back but it has not.
+
+**Fix**: JS auto-unpauses for a step and re-pauses on the `_stage_started` push sent from `Scene.StageStart`; the `ApplyWebUICommit` push only moves the row.

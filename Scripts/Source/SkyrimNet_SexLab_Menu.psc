@@ -70,6 +70,11 @@ Function ProcessHotkey(int key_code)
         preferExplicit = true
     elseif target != None
         preferExplicit = true
+        ; Crosshair on a non-participant (e.g. DOM mistress) mid-scene: focus the player so the
+        ; Description Editor opens for the player's scene. Others stay reachable via the pulldown.
+        if !main.sexlab.IsActorActive(target) && main.sexlab.IsActorActive(player)
+            target = player
+        endif
     else
         target = player
         preferExplicit = false

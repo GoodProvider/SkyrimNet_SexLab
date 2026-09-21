@@ -7385,6 +7385,7 @@
                 if (!state) return 'new';
                 const mode = state._mode || state.mode;
                 const sid = state._scene_sid != null ? state._scene_sid : state.scene_sid;
+                if (mode === 'ended') return 'last';
                 if (mode === 'active' || (sid != null && sid >= 0 && mode !== 'creator'))
                     return 'scene:' + sid;
                 return 'new';
@@ -7401,7 +7402,8 @@
             mergeFromState(state) {
                 if (!state) return;
                 this.key = SceneInfo.keyFromState(state);
-                this.mode = (state._mode === 'active' || this.key !== 'new') ? 'active' : 'creator';
+                this.mode = state._mode === 'ended' ? 'ended'
+                    : ((state._mode === 'active' || this.key !== 'new') ? 'active' : 'creator');
                 this.scene_sid = state._scene_sid != null ? state._scene_sid : (this.mode === 'active' ? 0 : -1);
                 this.creator_sid = state._creator_sid != null ? state._creator_sid : 0;
                 if (state._from_target_menu != null) this.from_target_menu = !!state._from_target_menu;
@@ -7508,7 +7510,7 @@
                 : formIdU32(actorOrFormId);
             let found = '';
             sceneInfoByKey.forEach((info, key) => {
-                if (!found && key !== 'new' && info.hasActor(fid))
+                if (!found && key !== 'new' && info.mode === 'active' && info.hasActor(fid))
                     found = key;
             });
             selectedSceneInfoKey = found || 'new';
@@ -7545,7 +7547,7 @@
             // The panel opens before the seed lands ("loading..." on None); now that scenes exist, bind it.
             const deEl = document.getElementById('description-editor-panel');
             if (deEl && deEl.style.display !== 'none'
-                && (deIsLocked() || (DE.scenePick === 'none' && deListActiveSceneKeys().length)))
+                && (deIsLocked() || (DE.scenePick === 'none' && (deListActiveSceneKeys().length || deEndedSceneInfo()))))
                 deApplyScenePick(deResolveDefaultScenePick());
         }
 
@@ -7844,6 +7846,7 @@
             sceneInfosSessionActive = true;
             applySceneConnectionFromInfo(info);
             copySceneInfoToSC(info);
+            if (state._stage != null && typeof deOnThreadStage === 'function') deOnThreadStage(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
             SC.deselectedRegistries = [];
             SC.lastAnimRegistries = [];
@@ -9151,7 +9154,7 @@
             if (!reg) return null;
             if (deIsSceneBound()) {
                 const picked = sceneInfoByKey.get(DE.scenePick);
-                return picked && picked.activeRegistry === reg ? picked : null;
+                return picked && picked.mode === 'active' && picked.activeRegistry === reg ? picked : null;
             }
             const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
             let found = null;
@@ -9180,6 +9183,12 @@
         function deSceneInfoForPick() {
             if (!deIsSceneBound()) return null;
             return sceneInfoByKey.get(DE.scenePick) || null;
+        }
+
+        // Snapshot of the scene that last ended (seeded with _mode "ended"); listed after live scenes, never live.
+        function deEndedSceneInfo() {
+            const info = sceneInfoByKey.get('last');
+            return info && info.mode === 'ended' ? info : null;
         }
 
         function deListActiveSceneKeys() {
@@ -9243,7 +9252,11 @@
         // With no active scene: Any when an animation was last edited (deEnsureFocus reselects it), else None.
         function deResolveDefaultScenePick() {
             const keys = deListActiveSceneKeys();
-            if (!keys.length) return DE.currentAnimation ? 'any' : 'none';
+            if (!keys.length) {
+                const ended = deEndedSceneInfo();
+                if (ended && (!DE.currentAnimation || DE.currentAnimation === ended.activeRegistry)) return 'last';
+                return DE.currentAnimation ? 'any' : 'none';
+            }
             const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
             const infos = keys.map(key => ({ key, info: sceneInfoByKey.get(key) })).filter(e => e.info);
             const playing = DE.currentAnimation
@@ -9269,6 +9282,8 @@
                 const info = sceneInfoByKey.get(key);
                 if (info) entries.push({ key, label: deSceneOptionLabel(info) });
             });
+            const endedInfo = deEndedSceneInfo();
+            if (endedInfo) entries.push({ key: 'last', label: deSceneOptionLabel(endedInfo) + ' (ended)' });
             const labelByKey = new Map(entries.map(e => [e.key, e.label]));
             const values = entries.map(e => e.key);
             if (DE.scenePick && !values.includes(DE.scenePick)) {
@@ -9618,8 +9633,8 @@
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('de-disabled', off);
             };
-            set('de-btn-prev', stage <= 1);
-            set('de-btn-next', stage >= deStageMax());
+            set('de-btn-prev', stage <= 1 || !!DE.stagePending);
+            set('de-btn-next', stage >= deStageMax() || !!DE.stagePending);
             set('de-btn-copyprev', stage <= 1);
         }
 
@@ -9627,25 +9642,67 @@
             deAutoSave();
             const info = deSceneInfoForPick();
             if (!info) return;
+            if (DE.stagePending) return;
             const cur = deActiveStage();
-            const next = Math.max(1, Math.min(deStageMax(), cur + (dir < 0 ? -1 : 1)));
-            if (next === cur) return;
-            info.stage = next;
-            SC.stage = next;
-            DE.lastEditStage = next;
-            deUpdateActiveStageRow();
-            deUpdateStageNavButtons();
-            const row = document.querySelector('#de-stages-host tr[data-stage="' + next + '"]');
-            if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
-            // Stage-only commit: Papyrus ApplyWebUICommit just runs GoToStage for this payload.
-            if (info.scene_sid >= 0 && typeof window.onSceneInfoCommit === 'function') {
+            const step = dir < 0 ? -1 : 1;
+            if (cur + step < 1 || cur + step > deStageMax()) return;
+            // The SexLab thread owns the stage: send a relative step and wait for its stage push (no local write).
+            if (info.mode === 'active' && info.scene_sid >= 0 && typeof window.onSceneInfoCommit === 'function') {
+                deSetStagePending(true);
+                // GoToStage -> Advancing only completes with game time running: unpause for the step, re-pause at StageStart.
+                if (gamePaused) {
+                    DE.repauseAfterStep = true;
+                    setGamePaused(false);
+                    if (typeof window.onGamePauseSet === 'function') window.onGamePauseSet('0');
+                }
                 window.onSceneInfoCommit(JSON.stringify({ _scenes: [{
                     _key: info.key,
                     _mode: 'active',
                     _scene_sid: info.scene_sid,
-                    _stage: next
+                    _stage_step: step
                 }] }));
             }
+        }
+
+        // Prev/next stay greyed until the thread reports its stage (bounded so a lost click can't lock the nav).
+        function deRepauseAfterStep() {
+            if (!DE.repauseAfterStep) return;
+            DE.repauseAfterStep = false;
+            if (gamePaused) return;
+            setGamePaused(true);
+            if (typeof window.onGamePauseSet === 'function') window.onGamePauseSet('1');
+        }
+
+        function deSetStagePending(on) {
+            DE.stagePending = !!on;
+            if (DE.stagePendingTimer) { clearTimeout(DE.stagePendingTimer); DE.stagePendingTimer = 0; }
+            if (on) {
+                // SexLab's own Advancing sync timeout is 15 s.
+                DE.stagePendingTimer = setTimeout(() => {
+                    DE.stagePendingTimer = 0;
+                    DE.stagePending = false;
+                    deRepauseAfterStep();
+                    deUpdateStageNavButtons();
+                }, 20000);
+            }
+            deUpdateStageNavButtons();
+        }
+
+        // The thread's stage arrived (stage-only or full push): show it and release the nav.
+        // started=false: GoToStage issued but the thread is still Advancing (needs unpaused game time); keep the nav greyed.
+        function deOnThreadStage(info, started) {
+            if (started !== false) {
+                DE.stagePending = false;
+                if (DE.stagePendingTimer) { clearTimeout(DE.stagePendingTimer); DE.stagePendingTimer = 0; }
+                deRepauseAfterStep();
+            }
+            const el = document.getElementById('description-editor-panel');
+            if (!el || el.style.display === 'none') return;
+            deUpdateActiveStageRow();
+            deUpdateStageNavButtons();
+            const stage = deActiveStageForFocus();
+            const row = stage > 0 && document.querySelector('#de-stages-host tr[data-stage="' + stage + '"]');
+            if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
         }
 
         function deSetStageText(stage, text) {
@@ -9668,7 +9725,7 @@
         function deContinueScene() {
             deAutoSave();
             const info = deSceneInfoForPick();
-            if (!info || info.scene_sid < 0) return;
+            if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
             const st = DE.stagesDraft.find(s => s._stage === deActiveStage());
             const text = st ? deSubstitute(st._template || '', dePreviewNamesFor(deFindAnim(DE.focusRegistry))).trim() : '';
             if (!text) return;
@@ -9873,6 +9930,15 @@
             state = state || {};
             const key = SceneInfo.keyFromState(Object.assign({ _mode: 'active' }, state));
             let info = sceneInfoByKey.get(key);
+            if (state._stage_only) {
+                // thread.stage push (also the game advancing on its own): move the row/nav, never reload stage text.
+                if (info && state._stage != null) {
+                    info.stage = state._stage || 1;
+                    if (selectedSceneInfoKey === key) SC.stage = info.stage;
+                    deOnThreadStage(info, !!state._stage_started);
+                }
+                return;
+            }
             if (!info) {
                 info = SceneInfo.fromState(Object.assign({ _mode: 'active' }, state));
                 sceneInfoByKey.set(key, info);
@@ -9906,6 +9972,7 @@
                     deApplyScenePick(DE.scenePick);
                 else
                     deUpdateActiveStageRow();
+                deOnThreadStage(info);
                 if (sceneInfosSeeded) deSetLocked(false);
             } else {
                 configureDescriptionEditorFromSceneInfo(info);

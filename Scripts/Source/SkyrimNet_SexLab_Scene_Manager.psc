@@ -915,6 +915,16 @@ String Function BuildSceneConnectionsJson()
     return json
 EndFunction
 
+; Snapshot (JMap, _mode "ended") of the most recently ended scene; the Description Editor lists it after the thread is gone.
+int last_ended_obj = 0
+
+Function SetLastEndedScene(int obj)
+    if last_ended_obj > 0
+        JValue.release(last_ended_obj)
+    endif
+    last_ended_obj = JValue.retain(obj)
+EndFunction
+
 String Function BuildAllSceneInfosJson()
     int root = JMap.object()
     int arr = JArray.object()
@@ -951,6 +961,9 @@ String Function BuildAllSceneInfosJson()
         endif
         i += 1
     endwhile
+    if last_ended_obj > 0
+        JArray.addObj(arr, last_ended_obj)
+    endif
     JMap.setObj(root, "_scenes", arr)
     String json = ObjectToLowerCaseKeyJson(root)
     JValue.release(root)
@@ -978,6 +991,10 @@ Function WebUI_OnSceneInfoCommit(String json)
                 SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
                 if sl_scene && sl_scene.GetThreadActive()
                     sl_scene.ApplyWebUICommit(info)
+                elseif sl_scene
+                    ; Thread mid-transition: commit dropped; resync the editor to thread.stage.
+                    Trace("WebUI_OnSceneInfoCommit", "dropped (thread not active) sid:"+scene_sid)
+                    sl_scene.WebUI_PushStage(true)
                 endif
             endif
         endif

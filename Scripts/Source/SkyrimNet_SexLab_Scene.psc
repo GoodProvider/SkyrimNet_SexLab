@@ -1089,8 +1089,10 @@ Function StageStart()
     if thread == None 
         Trace("StageStart","thread is None | actors:"+actor_names)
         DbgReturn("StageStart", "void")
-        return 
+        return
     endif
+    ; thread.stage is the truth (also covers the game advancing on its own): tell the editor before the slow narration work.
+    WebUI_PushStage(true)
     if IsSexLabPPlus() && animating_started_at > 0.0
         float elapsed = Utility.GetCurrentRealTime() - animating_started_at
         if elapsed >= DURATION_CAP_SECONDS
@@ -1299,9 +1301,18 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
                 DirectNarration_optional("end", end_message, sender, receiver)
             endif
         endif 
-    endif 
+    endif
 
-    Release() 
+    ; Keep the scene visible to the Description Editor after the thread is gone (snapshot before Release clears position_objs).
+    if thread != None && manager != None
+        int ended_obj = BuildWebUISceneMenuObject()
+        if ended_obj > 0
+            JMap.setStr(ended_obj, "_mode", "ended")
+            manager.SetLastEndedScene(ended_obj)
+        endif
+    endif
+
+    Release()
     DbgEnd("AnimationEnd")
 EndFunction 
 
@@ -2498,7 +2509,7 @@ int Function BuildWebUISceneMenuObject()
             JMap.setObj(obj, "_group_order", groups)
         endif
     endif
-    Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg)
+    Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg+" stage:"+JMap.getInt(obj, "_stage", 0)+"/"+JMap.getInt(obj, "_stage_count", 0))
     return obj
 EndFunction
 
@@ -2754,11 +2765,26 @@ Function ApplyWebUICommit(int obj)
         i += 1
     endwhile
     int want_stage = JMap.getInt(obj, "_stage", 0)
+    int stage_step = JMap.getInt(obj, "_stage_step", 0)
+    if stage_step != 0 && thread.animation
+        ; Relative step resolved on the thread, so a stale editor stage can't misdirect it.
+        want_stage = thread.stage + stage_step
+        if want_stage < 1
+            want_stage = 1
+        endif
+    endif
     if want_stage >= 1 && thread.animation
         int maxStage = thread.animation.StageCount()
+        if want_stage > maxStage && stage_step != 0
+            want_stage = maxStage
+        endif
+        Trace("ApplyWebUICommit", "stage thread:"+thread.stage+" want:"+want_stage+" step:"+stage_step+" max:"+maxStage)
         if want_stage <= maxStage && want_stage != thread.stage
             thread.GoToStage(want_stage)
+            Trace("ApplyWebUICommit", "stage now:"+thread.stage)
         endif
+        ; GoToStage sets thread.stage synchronously: show it in the editor now, not at StageStart.
+        WebUI_PushStage()
     endif
     String active_reg = JMap.getStr(obj, "_active_registry", "")
     if active_reg == ""
@@ -3109,6 +3135,22 @@ Function WebUI_ConfigureIfOverlayVisible()
     if SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("description_editor_panel")
         SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
     endif
+EndFunction
+
+; Stage-only push straight from thread.stage; the Description Editor moves its row/nav without reloading stage text.
+; started=true only from StageStart (thread reached Animating); GoToStage alone leaves the thread in Advancing.
+Function WebUI_PushStage(Bool started = false)
+    if thread == None || !SkyrimNet_SexLab_WebUI.WebUI_IsOverlayVisible()
+        return
+    endif
+    if !SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("description_editor_panel")
+        return
+    endif
+    String tail = "}"
+    if started
+        tail = ",\"_stage_started\":1}"
+    endif
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure("{\"_mode\":\"active\",\"_scene_sid\":"+sid+",\"_stage\":"+thread.stage+",\"_stage_only\":1"+tail)
 EndFunction
 
 Function TM_SetStageDescription(String stageStr, String description)
