@@ -547,6 +547,22 @@ Function RegisterEvent(String event_name, String msg, Actor source=None, Actor t
     Trace("RegisterEvent", "event_name:"+event_name+" msg:"+msg)
 EndFunction
 
+; Like RegisterEvent but skips CheckDuplicate — for scene changes that must never be dropped.
+Function RegisterEventForce(String event_name, String msg, Actor source=None, Actor target=None) global
+    if msg == ""
+        return
+    endif
+    SkyrimNetApi.RegisterEvent(event_name, msg, source, target)
+
+    if source != None
+        msg += " source:"+source.GetDisplayName()
+    endif
+    if target != None
+        msg += " target:"+target.GetDisplayName()
+    endif
+    Trace("RegisterEventForce", "event_name:"+event_name+" msg:"+msg)
+EndFunction
+
 String Function CheckDuplicate(String func, Actor source, String msg, Bool allow_continue_fallback=True, Actor target=None) global
     if msg == ""
         return msg

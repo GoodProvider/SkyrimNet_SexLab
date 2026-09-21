@@ -575,9 +575,16 @@ Function SetPosition(int index, Actor akActor, int no_orgasm, String speaking_mo
     EnsureActorArraysLargeEnough(index + 1)
 
     int obj = position_objs[index]
-    JMap.setInt(obj, "no_orgasm", no_orgasm) 
+    JMap.setInt(obj, "no_orgasm", no_orgasm)
+    int speaking_obj = SetSpeakingObj(index, speaking_modifiers)
+    SetActor(index, akActor)
+    Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+JoinJArrayStrToJson(speaking_obj))
+Endfunction
 
-    ; Split up speaking modifiers 
+; Writes the CSV tokens into position_objs[index].speaking_modifiers; returns the JArray.
+int Function SetSpeakingObj(int index, String speaking_modifiers)
+    int obj = position_objs[index]
+    ; Split up speaking modifiers
     String[] strings = StringUtil.Split(speaking_modifiers,",")
     int count = strings.length 
     int num_strings = 0 
@@ -605,11 +612,26 @@ Function SetPosition(int index, Actor akActor, int no_orgasm, String speaking_mo
             JArray.setStr(speaking_obj, w, strings[i]) 
             w += 1 
         endif
-        i += 1 
+        i += 1
     endwhile
-    SetActor(index, akActor)
-    Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+JoinJArrayStrToJson(speaking_obj))
-Endfunction
+    return speaking_obj
+EndFunction
+
+; Push the animation's speaking (as shown in the Description Editor, stage-aware) into the
+; live overlay. Positions with a live edit (speaking_locked) are left alone.
+Function ApplyAnimDbSpeaking()
+    if thread == None || thread.animation == None || !position_objs
+        return
+    endif
+    String[] speaking = animdb.GetSpeakingModifiers(thread)
+    int i = 0
+    while i < speaking.length && i < position_objs.length
+        if position_objs[i] > 0 && JMap.getInt(position_objs[i], "speaking_locked", 0) != 1
+            SetSpeakingObj(i, speaking[i])
+        endif
+        i += 1
+    endwhile
+EndFunction
 
 String Function SpeakingCsvFromIndex(int i)
     String speaking = ""
@@ -1056,8 +1078,9 @@ EndFunction
 
 Function StageStart() 
     DbgEnter("StageStart")
-    AlignActors() 
-    manager.SaveThreadsJson() 
+    AlignActors()
+    ApplyAnimDbSpeaking()
+    manager.SaveThreadsJson()
     if SexLab == None 
         Trace("StageStart","sexlab is None | actors:"+actor_names)
         DbgReturn("StageStart", "void")
@@ -1139,18 +1162,21 @@ Function StageStart()
         endif 
         if orgasm_window_open && orgasm_messages_set
             if change_scene
-                RegisterEvent("change", narration, sender, receiver)
+                RegisterEventForce("change", narration, sender, receiver)
             endif
         elseif orgasm_narration != ""
-            if change_scene 
-                RegisterEvent("change", narration, sender, receiver)
-            endif 
-        else 
+            if change_scene
+                RegisterEventForce("change", narration, sender, receiver)
+            endif
+        else
             if !change_scene
                 ContinueActivity(sender, receiver, True)
             else
-                DirectNarration_optional("ChangePosition", narration, sender, receiver) 
-            endif 
+                ; A scene change must always yield a DN or an event (dedupe may drop the DN)
+                if !DirectNarration_optional("ChangePosition", narration, sender, receiver)
+                    RegisterEventForce("change", narration, sender, receiver)
+                endif
+            endif
         endif 
     endif 
 
@@ -2907,6 +2933,7 @@ Function SeedOverlayFromAnimDb()
                     JMap.setInt(position_objs[i], "orgasm_mode", expected)
                     JMap.setInt(position_objs[i], "dressed", dressed)
                     JMap.setInt(position_objs[i], "deny_orgasm", 0)
+                    JMap.setInt(position_objs[i], "speaking_locked", 0)
                 endif
             endif
             i += 1
@@ -2936,6 +2963,7 @@ Function SeedOverlayFromAnimDb()
                 JMap.setInt(position_objs[i], "orgasm_mode", expected)
                 JMap.setInt(position_objs[i], "dressed", dressed)
                 JMap.setInt(position_objs[i], "deny_orgasm", 0)
+                JMap.setInt(position_objs[i], "speaking_locked", 0)
             endif
         endif
         i += 1
@@ -2996,6 +3024,7 @@ Function TM_ApplySpeaking(Actor akActor, String speaking)
         if positions[i] == akActor
             int no_org = JMap.getInt(position_objs[i], "no_orgasm", 0)
             SetPosition(i, positions[i], no_org, speaking)
+            JMap.setInt(position_objs[i], "speaking_locked", 1)
             MarkUserDefaultsDirty()
             return
         endif
@@ -3062,6 +3091,13 @@ Function TM_SaveAnimationSettings()
     JValue.release(payload)
     animdb.SaveAnimLocal(registry, save_json)
     ClearUserAnimDefaults(registry)
+    i = 0
+    while position_objs && i < n && i < position_objs.length
+        if position_objs[i] > 0
+            JMap.setInt(position_objs[i], "speaking_locked", 0)
+        endif
+        i += 1
+    endwhile
 EndFunction
 
 Function WebUI_ConfigureIfOverlayVisible()

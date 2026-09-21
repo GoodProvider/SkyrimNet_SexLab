@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### AnimDB
+- Live scenes now apply the animation's speaking modifiers (as shown in the Description Editor, per stage) at every `StageStart`, so a position with orgasm not expected / empty speaking no longer keeps the creator's `_pleasure_`. Live speaking edits stay until Save or an animation switch
 - Stop auto-rebuilding AnimDB on load. If counts differ from SexLab after SexLab is ready, notify `SkyrimNet SexLab # animations doesn't match` and show a SkyMessage (empty → Build/Close; mismatch → Rebuild/Close)
 
 ### SKSE / WebUI
