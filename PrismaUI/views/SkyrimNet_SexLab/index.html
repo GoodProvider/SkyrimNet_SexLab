@@ -9939,6 +9939,9 @@
                 }
                 return;
             }
+            const hadInfo = !!info;
+            const prevReg = info ? info.activeRegistry : '';
+            const prevStage = info ? (info.stage | 0) : 0;
             if (!info) {
                 info = SceneInfo.fromState(Object.assign({ _mode: 'active' }, state));
                 sceneInfoByKey.set(key, info);
@@ -9968,7 +9971,12 @@
             const deVisible = deEl && deEl.style.display !== 'none';
             if (deVisible) {
                 deRenderScenePulldown();
-                if (deIsSceneBound() && DE.scenePick === key)
+                // Same scene + animation and the editor is already on the thread's stage (or has unsaved edits):
+                // a full push must not reload drafts, or it erases what the user is typing.
+                const sameScene = hadInfo && deIsSceneBound() && DE.scenePick === key;
+                const sameAnim = sameScene && deRegEq(prevReg, info.activeRegistry) && DE.stagesDraft.length > 0;
+                const keepDrafts = sameAnim && ((info.stage | 0) === prevStage || DE.dirty || DE.posDirty);
+                if (sameScene && !keepDrafts)
                     deApplyScenePick(DE.scenePick);
                 else
                     deUpdateActiveStageRow();
