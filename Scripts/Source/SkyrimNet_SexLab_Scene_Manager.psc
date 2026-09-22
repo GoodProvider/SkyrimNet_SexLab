@@ -1110,21 +1110,26 @@ Function WebUI_OnAnimRegistrySave(String json)
         int count = JArray.count(pos_arr)
         int orgasm_arr = JArray.objectWithSize(count)
         int speak_arr = JArray.objectWithSize(count)
+        int clothed_arr = JArray.objectWithSize(count)
         int i = 0
         while i < count
             int po = JArray.getObj(pos_arr, i)
             int no_org = 0
             String speaking = ""
+            int dressed = 0
             if po > 0
                 no_org = JMap.getInt(po, "_no_orgasm", 0)
                 speaking = JMap.getStr(po, "_speaking", "")
+                dressed = JMap.getInt(po, "_dressed", 0)
             endif
             JArray.setInt(orgasm_arr, i, 1 - no_org)
             JArray.setStr(speak_arr, i, speaking)
+            JArray.setInt(clothed_arr, i, dressed)
             i += 1
         endwhile
         JMap.setObj(payload, "orgasm_expected", orgasm_arr)
         JMap.setObj(payload, "speaking_modifiers", speak_arr)
+        JMap.setObj(payload, "clothed", clothed_arr)
     endif
     String save_json = ObjectToLowerCaseKeyJson(payload)
     JValue.release(payload)
