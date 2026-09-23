@@ -9898,8 +9898,11 @@
                 _registry: DE.focusRegistry,
                 _stages: sceneInfoClone(DE.stagesDraft)
             };
-            if (DE.posDirty)
+            if (DE.posDirty) {
                 payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '', _dressed: p._dressed ? 1 : 0 }));
+                const boundScene = deActiveSceneForRegistry(DE.focusRegistry);
+                if (boundScene) payload._scene_sid = boundScene.scene_sid;
+            }
             if (typeof window.onAnimRegistrySave === 'function')
                 window.onAnimRegistrySave(JSON.stringify(payload));
             DE.loadedStages = sceneInfoClone(DE.stagesDraft);

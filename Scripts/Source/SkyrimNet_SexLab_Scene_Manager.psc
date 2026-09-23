@@ -915,19 +915,21 @@ String Function BuildSceneConnectionsJson()
     return json
 EndFunction
 
-; Snapshot (JMap, _mode "ended") of the most recently ended scene; the Description Editor lists it after the thread is gone.
+; Snapshot (SNSL_JMap, _mode "ended") of the most recently ended scene; the Description Editor
+; lists it after the thread is gone. Handle comes from SkyrimNet_SexLab_Scene.BuildWebUISceneMenuObject,
+; which is SNSL_JValue-backed (C++ JSON store, not JContainers).
 int last_ended_obj = 0
 
 Function SetLastEndedScene(int obj)
     if last_ended_obj > 0
-        JValue.release(last_ended_obj)
+        SNSL_JValue.release(last_ended_obj)
     endif
-    last_ended_obj = JValue.retain(obj)
+    last_ended_obj = SNSL_JValue.retain(obj)
 EndFunction
 
 String Function BuildAllSceneInfosJson()
-    int root = JMap.object()
-    int arr = JArray.object()
+    int root = SNSL_JMap.object()
+    int arr = SNSL_JArray.object()
     SkyrimNet_SexLab_Scene_Creator creator = None
     int i = 0
     while i < creators.length && creator == None
@@ -937,18 +939,23 @@ String Function BuildAllSceneInfosJson()
         i += 1
     endwhile
     if creator
+        ; creator.BuildWebUIObject() is still a JContainers handle (Scene_Creator.psc not
+        ; migrated this stage) -- bridge it across with a JSON round-trip.
         int st = creator.BuildWebUIObject()
         if st
-            JArray.addObj(arr, st)
+            int st_snsl = SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(st))
+            if st_snsl
+                SNSL_JArray.addObj(arr, st_snsl)
+            endif
         endif
     else
-        int provisional = JMap.object()
-        JMap.setStr(provisional, "_mode", "creator")
-        JMap.setStr(provisional, "_connection", "new")
-        JMap.setInt(provisional, "_creator_sid", 0)
-        JMap.setInt(provisional, "_from_target_menu", 0)
-        JMap.setObj(provisional, "_positions", JArray.object())
-        JArray.addObj(arr, provisional)
+        int provisional = SNSL_JMap.object()
+        SNSL_JMap.setStr(provisional, "_mode", "creator")
+        SNSL_JMap.setStr(provisional, "_connection", "new")
+        SNSL_JMap.setInt(provisional, "_creator_sid", 0)
+        SNSL_JMap.setInt(provisional, "_from_target_menu", 0)
+        SNSL_JMap.setObj(provisional, "_positions", SNSL_JArray.object())
+        SNSL_JArray.addObj(arr, provisional)
     endif
     i = 0
     while i < sl_scenes.length
@@ -956,17 +963,17 @@ String Function BuildAllSceneInfosJson()
         if sl_scene != None && sl_scene.GetThreadActive()
             int st = sl_scene.BuildWebUISceneMenuObject()
             if st
-                JArray.addObj(arr, st)
+                SNSL_JArray.addObj(arr, st)
             endif
         endif
         i += 1
     endwhile
     if last_ended_obj > 0
-        JArray.addObj(arr, last_ended_obj)
+        SNSL_JArray.addObj(arr, last_ended_obj)
     endif
-    JMap.setObj(root, "_scenes", arr)
-    String json = ObjectToLowerCaseKeyJson(root)
-    JValue.release(root)
+    SNSL_JMap.setObj(root, "_scenes", arr)
+    String json = SNSL_JValue.dump(root)
+    SNSL_JValue.release(root)
     return json
 EndFunction
 
@@ -1085,6 +1092,13 @@ Function WebUI_OnAnimRegistrySave(String json)
     if registry == ""
         JValue.release(obj)
         return
+    endif
+    int scene_sid = JMap.getInt(obj, "_scene_sid", -1)
+    if scene_sid >= 0 && JMap.hasKey(obj, "_positions")
+        SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
+        if sl_scene && sl_scene.GetThreadActive()
+            sl_scene.WebUI_ApplyLivePositions(obj)
+        endif
     endif
     int payload = JMap.object()
     if JMap.hasKey(obj, "_stages")

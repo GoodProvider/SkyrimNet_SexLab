@@ -1304,10 +1304,11 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
     endif
 
     ; Keep the scene visible to the Description Editor after the thread is gone (snapshot before Release clears position_objs).
+    ; ended_obj is an SNSL_JValue handle (BuildWebUISceneMenuObject's own store).
     if thread != None && manager != None
         int ended_obj = BuildWebUISceneMenuObject()
         if ended_obj > 0
-            JMap.setStr(ended_obj, "_mode", "ended")
+            SNSL_JMap.setStr(ended_obj, "_mode", "ended")
             manager.SetLastEndedScene(ended_obj)
         endif
     endif
@@ -1959,18 +1960,56 @@ endFunction
 
 String Function GetTagsString(sslBaseAnimation anim) global
     String[] _tags = anim.GetRawTags()
-    int num_tags = _tags.length 
-    int i = 0 
+    int num_tags = _tags.length
+    int i = 0
     String tags_string = ""
     while i < num_tags
         tags_string += _tags[i]
         if i < num_tags - 1
             tags_string += ", "
-        endif 
+        endif
         i += 1
-    endwhile 
+    endwhile
     return tags_string
-EndFunction 
+EndFunction
+
+; Fills in_thread (registry strings) and in_thread_anims (registry/name/tags objects) from
+; thread.Animations. Entries whose Registry reads back empty are skipped rather than emitted
+; half-built -- see KNOWLEDGEBASE "Papyrus VM returns None under overlay pause (2026-09-22)".
+; in_thread/in_thread_anims are SNSL_JArray handles (C++ JSON store, not JContainers) -- this
+; loop can run ~500 VM calls for a live scene, and JContainers garbage-collects unowned temporary
+; objects on a ~10s timer, which used to corrupt this exact payload mid-build.
+Function BuildInThreadAnims(sslThreadController _thread, int in_thread, int in_thread_anims)
+    if !_thread
+        return
+    endif
+    sslBaseAnimation[] anims = _thread.Animations
+    int ai = 0
+    int skipped = 0
+    int first_skipped = -1
+    while anims && ai < anims.length
+        if anims[ai]
+            String registry = anims[ai].Registry
+            if registry != ""
+                SNSL_JArray.addStr(in_thread, registry)
+                int ao = SNSL_JMap.object()
+                SNSL_JMap.setStr(ao, "_registry", registry)
+                SNSL_JMap.setStr(ao, "_name", anims[ai].name)
+                SNSL_JMap.setStr(ao, "_tags", GetTagsString(anims[ai]))
+                SNSL_JArray.addObj(in_thread_anims, ao)
+            else
+                skipped += 1
+                if first_skipped < 0
+                    first_skipped = ai
+                endif
+            endif
+        endif
+        ai += 1
+    endwhile
+    if skipped > 0
+        Trace("BuildInThreadAnims", "skipped "+skipped+"/"+anims.length+" anims, first at index "+first_skipped)
+    endif
+EndFunction
 
 
 String Function GetDescriptionFromTags()
@@ -2108,23 +2147,16 @@ String Function BuildWebUIAnimationMenuState()
         JMap.setInt(obj, "_stage_count", anim.StageCount())
         JMap.setStr(obj, "_tags", GetTagsString(anim))
     endif
-    int in_thread = JArray.object()
-    int in_thread_anims = JArray.object()
-    sslBaseAnimation[] anims = thread.Animations
-    int ai = 0
-    while anims && ai < anims.length
-        if anims[ai]
-            JArray.addStr(in_thread, anims[ai].Registry)
-            int ao = JMap.object()
-            JMap.setStr(ao, "_registry", anims[ai].Registry)
-            JMap.setStr(ao, "_name", anims[ai].name)
-            JMap.setStr(ao, "_tags", GetTagsString(anims[ai]))
-            JArray.addObj(in_thread_anims, ao)
-        endif
-        ai += 1
-    endwhile
-    JMap.setObj(obj, "_in_thread_registries", in_thread)
-    JMap.setObj(obj, "_in_thread_anims", in_thread_anims)
+    ; obj (this function) is still a JContainers map -- BuildInThreadAnims now builds its two
+    ; arrays in the C++ store, so bridge them across with a JSON round-trip (one native dump,
+    ; one native parse; not the slow Papyrus walker this whole change exists to avoid).
+    int in_thread = SNSL_JArray.object()
+    int in_thread_anims = SNSL_JArray.object()
+    BuildInThreadAnims(thread, in_thread, in_thread_anims)
+    JMap.setObj(obj, "_in_thread_registries", JValue.objectFromPrototype(SNSL_JValue.dump(in_thread)))
+    JMap.setObj(obj, "_in_thread_anims", JValue.objectFromPrototype(SNSL_JValue.dump(in_thread_anims)))
+    SNSL_JValue.release(in_thread)
+    SNSL_JValue.release(in_thread_anims)
     JMap.setStr(obj, "_intent", intent)
     JMap.setStr(obj, "_style", style)
     JMap.setStr(obj, "_activity", intent)
@@ -2248,6 +2280,21 @@ Function WebUI_ApplyLivePositions(int obj)
             SetPosition(i, positions[i], no_org, speaking)
             JMap.setInt(position_objs[i], "dressed", dressed)
             thread.DisableOrgasm(positions[i], no_org == 1)
+            Bool clothed = dressed == 1
+            ; Use the thread's own tracked strip state (sslActorAlias.Strip/UnStrip), not
+            ; main.Store/UnStoreStrippedItems -- that cache is only ever populated by the
+            ; standalone Outfit_Dress/Outfit_Undress actions, never by the scene's own
+            ; automatic per-thread stripping. See KNOWLEDGEBASE "Description Editor dressed
+            ; toggle used wrong strip API (2026-09-22)".
+            sslActorAlias slot = thread.ActorAlias(positions[i])
+            if slot
+                if clothed
+                    slot.UnStrip()
+                else
+                    slot.Strip()
+                endif
+            endif
+            TM_ApplyClothed(positions[i], clothed)
         endif
         i += 1
     endwhile
@@ -2377,16 +2424,18 @@ Bool Function WasRegistryPlayed(String registry)
     return false
 EndFunction
 
-; Builds the scene state as a JC handle (caller serializes or embeds it, and owns release if standalone).
+; Builds the scene state as an SNSL_JValue handle (C++ JSON store, not JContainers -- see
+; KNOWLEDGEBASE "Papyrus VM silently returns None under overlay pause"). Caller serializes via
+; SNSL_JValue.dump() or embeds it, and owns release if standalone.
 int Function BuildWebUISceneMenuObject()
-    int obj = JMap.object()
-    JMap.setStr(obj, "_mode", "active")
-    JMap.setInt(obj, "_scene_sid", sid)
-    JMap.setStr(obj, "_connection", "scene:"+sid)
-    JMap.setStr(obj, "_connection_label", GetIntentMessage(INTENT_STAGE_ONGOING))
-    JMap.setStr(obj, "_intent", intent)
-    JMap.setStr(obj, "_style", style)
-    int pos_arr = JArray.object()
+    int obj = SNSL_JMap.object()
+    SNSL_JMap.setStr(obj, "_mode", "active")
+    SNSL_JMap.setInt(obj, "_scene_sid", sid)
+    SNSL_JMap.setStr(obj, "_connection", "scene:"+sid)
+    SNSL_JMap.setStr(obj, "_connection_label", GetIntentMessage(INTENT_STAGE_ONGOING))
+    SNSL_JMap.setStr(obj, "_intent", intent)
+    SNSL_JMap.setStr(obj, "_style", style)
+    int pos_arr = SNSL_JArray.object()
     int n = 0
     if thread && thread.Positions
         n = thread.Positions.length
@@ -2397,7 +2446,7 @@ int Function BuildWebUISceneMenuObject()
     String pos_names_dbg = ""
     int i = 0
     while i < n
-        int po = JMap.object()
+        int po = SNSL_JMap.object()
         Actor ak = None
         if thread && thread.Positions && i < thread.Positions.length
             ak = thread.Positions[i]
@@ -2414,6 +2463,7 @@ int Function BuildWebUISceneMenuObject()
             victim = ak.IsInFaction(SkyrimNet_SexLab_Faction_Victim) as int
             gender = sexlab.GetGender(ak)
         elseif position_objs && i < position_objs.length && position_objs[i] > 0
+            ; position_objs is still a JContainers map (not migrated this stage).
             name = JMap.getStr(position_objs[i], "name")
             uuid = JMap.getStr(position_objs[i], "uuid")
             form_id = JMap.getInt(position_objs[i], "formid", 0)
@@ -2430,9 +2480,9 @@ int Function BuildWebUISceneMenuObject()
             endif
             pos_names_dbg += name
         endif
-        JMap.setStr(po, "_name", name)
-        JMap.setStr(po, "_uuid", uuid)
-        JMap.setInt(po, "_form_id", form_id)
+        SNSL_JMap.setStr(po, "_name", name)
+        SNSL_JMap.setStr(po, "_uuid", uuid)
+        SNSL_JMap.setInt(po, "_form_id", form_id)
         int no_org = 0
         int dressed = 0
         String speaking = ""
@@ -2441,82 +2491,79 @@ int Function BuildWebUISceneMenuObject()
             dressed = JMap.getInt(position_objs[i], "dressed", 0)
             speaking = SpeakingCsvFromIndex(i)
         endif
-        JMap.setInt(po, "_dressed", dressed)
-        JMap.setInt(po, "_no_orgasm", no_org)
+        SNSL_JMap.setInt(po, "_dressed", dressed)
+        SNSL_JMap.setInt(po, "_no_orgasm", no_org)
         int deny = 0
         if position_objs && i < position_objs.length && position_objs[i] > 0
             deny = JMap.getInt(position_objs[i], "deny_orgasm", 0)
         endif
-        JMap.setInt(po, "_deny_orgasm", deny)
-        JMap.setInt(po, "_victim", victim)
-        JMap.setStr(po, "_speaking", speaking)
+        SNSL_JMap.setInt(po, "_deny_orgasm", deny)
+        SNSL_JMap.setInt(po, "_victim", victim)
+        SNSL_JMap.setStr(po, "_speaking", speaking)
         if gender >= 0
-            JMap.setInt(po, "_gender", gender)
+            SNSL_JMap.setInt(po, "_gender", gender)
         endif
-        JArray.addObj(pos_arr, po)
+        SNSL_JArray.addObj(pos_arr, po)
         i += 1
     endwhile
-    JMap.setObj(obj, "_positions", pos_arr)
-    int in_thread = JArray.object()
+    SNSL_JMap.setObj(obj, "_positions", pos_arr)
+    int in_thread = SNSL_JArray.object()
     String active_reg = ""
     if thread && thread.animation
         active_reg = thread.animation.Registry
         NotePlayedRegistry(active_reg)
     endif
-    JMap.setStr(obj, "_active_registry", active_reg)
-    int in_thread_anims = JArray.object()
+    SNSL_JMap.setStr(obj, "_active_registry", active_reg)
+    int in_thread_anims = SNSL_JArray.object()
     if thread
-        sslBaseAnimation[] anims = thread.Animations
-        int ai = 0
-        while anims && ai < anims.length
-            if anims[ai]
-                JArray.addStr(in_thread, anims[ai].Registry)
-                int ao = JMap.object()
-                JMap.setStr(ao, "_registry", anims[ai].Registry)
-                JMap.setStr(ao, "_name", anims[ai].name)
-                JMap.setStr(ao, "_tags", GetTagsString(anims[ai]))
-                JArray.addObj(in_thread_anims, ao)
-            endif
-            ai += 1
-        endwhile
-        JMap.setInt(obj, "_stage", thread.stage)
+        BuildInThreadAnims(thread, in_thread, in_thread_anims)
+        SNSL_JMap.setInt(obj, "_stage", thread.stage)
         if thread.animation
-            JMap.setInt(obj, "_stage_count", thread.animation.StageCount())
+            SNSL_JMap.setInt(obj, "_stage_count", thread.animation.StageCount())
             int stage_count = thread.animation.StageCount()
-            ; One native call builds every stage row (was 2+ natives per stage).
-            int stages_arr = JValue.objectFromPrototype(animdb.GetThreadStagesJson(thread, stage_count))
+            ; One native call builds every stage row (was 2+ natives per stage). Already a plain
+            ; JSON string, so no bridge needed -- straight into the SNSL store.
+            int stages_arr = SNSL_JValue.objectFromPrototype(animdb.GetThreadStagesJson(thread, stage_count))
             if stages_arr
-                JMap.setObj(obj, "_stages", stages_arr)
+                SNSL_JMap.setObj(obj, "_stages", stages_arr)
             endif
         endif
     endif
-    JMap.setObj(obj, "_in_thread_registries", in_thread)
-    JMap.setObj(obj, "_in_thread_anims", in_thread_anims)
-    int played = JArray.object()
+    SNSL_JMap.setObj(obj, "_in_thread_registries", in_thread)
+    SNSL_JMap.setObj(obj, "_in_thread_anims", in_thread_anims)
+    int played = SNSL_JArray.object()
     i = 0
     while i < played_registries_count
-        JArray.addStr(played, played_registries[i])
+        SNSL_JArray.addStr(played, played_registries[i])
         i += 1
     endwhile
-    JMap.setObj(obj, "_played_registries", played)
+    SNSL_JMap.setObj(obj, "_played_registries", played)
     if manager && manager.group_info > 0
+        ; manager.group_info is still a JContainers map (Scene_Manager.psc not migrated this
+        ; stage) -- bridge these two small subtrees across with a JSON round-trip.
         int group_tags = JMap.getObj(manager.group_info, "group_tags", 0)
         if group_tags > 0
-            JMap.setObj(obj, "_group_tags", group_tags)
+            int group_tags_snsl = SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(group_tags))
+            if group_tags_snsl
+                SNSL_JMap.setObj(obj, "_group_tags", group_tags_snsl)
+            endif
         endif
         int groups = JMap.getObj(manager.group_info, "groups", 0)
         if groups > 0
-            JMap.setObj(obj, "_group_order", groups)
+            int groups_snsl = SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(groups))
+            if groups_snsl
+                SNSL_JMap.setObj(obj, "_group_order", groups_snsl)
+            endif
         endif
     endif
-    Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg+" stage:"+JMap.getInt(obj, "_stage", 0)+"/"+JMap.getInt(obj, "_stage_count", 0))
+    Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg+" stage:"+SNSL_JMap.getInt(obj, "_stage", 0)+"/"+SNSL_JMap.getInt(obj, "_stage_count", 0))
     return obj
 EndFunction
 
 String Function BuildWebUISceneMenuState()
     int obj = BuildWebUISceneMenuObject()
-    String json = ObjectToLowerCaseKeyJson(obj)
-    JValue.release(obj)
+    String json = SNSL_JValue.dump(obj)
+    SNSL_JValue.release(obj)
     return json
 EndFunction
 
@@ -2750,16 +2797,6 @@ Function ApplyWebUICommit(int obj)
                     mode = "not_expected"
                 endif
                 TM_ApplyOrgasmMode(a, mode)
-                Bool clothed = JMap.getInt(po, "_dressed", 0) == 1
-                SkyrimNet_SexLab_Actions actions = (manager as Quest) as SkyrimNet_SexLab_Actions
-                if actions
-                    if clothed
-                        actions.Outfit_Dress(Game.GetPlayer(), a, "silently", "silent")
-                    else
-                        actions.Outfit_Undress(Game.GetPlayer(), a, "silently", "silent")
-                    endif
-                endif
-                TM_ApplyClothed(a, clothed)
             endif
         endif
         i += 1

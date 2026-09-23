@@ -14,7 +14,12 @@ project(SkyrimNet_SexLab VERSION 0.0.1 LANGUAGES CXX)
 #
 # To do this automatically, set the `SKYRIM_FOLDER` environment variable
 # to the path of your Skyrim Special Edition folder
-set(MOD_FOLDER_NAME "SkyrimNet SexLab")
+#
+# MUST match this dev repo's own mod folder name exactly (no space) -- it is the ENABLED mod in
+# the active MO2 profile. "SkyrimNet SexLab" (with a space) is a stale, DISABLED release copy;
+# building to it silently never reaches the game. See KNOWLEDGEBASE.md "The .pex and the .dll
+# deploy in opposite directions".
+set(MOD_FOLDER_NAME "SkyrimNet_SexLab")
 # set(SKYRIM_MODS_FOLDER "C:\\path\\to\\your\\mods\\folder")
 
 # If you're using Mod Organizer 2 or Vortex, you might want this to go inside

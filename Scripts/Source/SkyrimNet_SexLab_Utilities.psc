@@ -641,7 +641,11 @@ String Function JMapToJson(int obj) global
             json += ","
         endif
         first = false
-        json += JsonQuote(map_key) + ":" + JMapValueToJson(obj, map_key)
+        String piece = JMapValueToJson(obj, map_key)
+        if piece == ""        ; a None return from a VM-aborted call
+            piece = "null"
+        endif
+        json += JsonQuote(map_key) + ":" + piece
         map_key = JMap.nextKey(obj, map_key, "")
     endwhile
     return json + "}"
@@ -667,13 +671,22 @@ String Function JArrayToJson(int obj) global
     String json = "["
     int n = JArray.count(obj)
     int i = 0
+    int null_count = 0
     while i < n
         if i > 0
             json += ","
         endif
-        json += JArrayValueToJson(obj, i)
+        String piece = JArrayValueToJson(obj, i)
+        if piece == ""        ; a None return from a VM-aborted call
+            piece = "null"
+            null_count += 1
+        endif
+        json += piece
         i += 1
     endwhile
+    if null_count > 0
+        Trace("JArrayToJson", "substituted null for "+null_count+" of "+n+" elements (VM-aborted call)")
+    endif
     return json + "]"
 EndFunction
 
@@ -702,7 +715,11 @@ String Function JFormMapToJson(int obj) global
             json += ","
         endif
         first = false
-        json += JsonForm(map_key) + ":" + JFormMapValueToJson(obj, map_key)
+        String piece = JFormMapValueToJson(obj, map_key)
+        if piece == ""        ; a None return from a VM-aborted call
+            piece = "null"
+        endif
+        json += JsonForm(map_key) + ":" + piece
         map_key = JFormMap.nextKey(obj, map_key, None)
     endwhile
     return json + "}"
@@ -735,7 +752,11 @@ String Function JIntMapToJson(int obj) global
                 json += ","
             endif
             int map_key = keys[i]
-            json += JsonQuote(map_key) + ":" + JIntMapValueToJson(obj, map_key)
+            String piece = JIntMapValueToJson(obj, map_key)
+            if piece == ""        ; a None return from a VM-aborted call
+                piece = "null"
+            endif
+            json += JsonQuote(map_key) + ":" + piece
             i += 1
         endwhile
     endif
@@ -765,11 +786,12 @@ String Function ObjectToLowerCaseKeyJson(int obj) global
     if json == "" || json == "null"
         return "{}"
     endif
-    json = JsonLowerCaseKeys(json)
-    if !json
+    String lowered = JsonLowerCaseKeys(json)
+    if !lowered
+        Trace("ObjectToLowerCaseKeyJson", "JsonLowerCaseKeys failed, raw="+json)
         return "{}"
     endif
-    return json
+    return lowered
 EndFunction
 
 ; Load helpers/sexlab/*.prompt via RenderTemplate, then bind sl JSON with ParseString

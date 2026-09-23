@@ -1,5 +1,128 @@
 # Knowledgebase
 
+## The .pex and the .dll deploy in opposite directions (2026-09-23)
+
+**Symptom:** the C++ JSON store (`SNSL_JMap`/`SNSL_JArray`/`SNSL_JValue`/`SNSL_JFormMap`,
+`SKSE_Source/src/JsonStore.cpp`) compiled clean, the Papyrus side compiled clean and called the new
+natives, but in-game the Description Editor **scene:** pulldown was still empty and
+`BuildWebUISceneMenuState`'s trace showed `stage:0/0` — a value that can only come from a native
+call silently returning its default. No `JsonLowerCaseKeys: parse failed` at all this time (the old
+slow walker wasn't even on the path anymore), and the build finished in 83ms, not ~9s — both signs
+the *new* code was running, just with dead natives underneath it.
+
+**Cause:** this repo's `Scripts/Source/` compiles (`compile: pyro`) **into** the repo itself
+(`skyrimse.ppj`'s `Output="Scripts"`), which is the git-tracked, MO2-**enabled** mod — so every
+Papyrus change reaches the game immediately. But `SKSE_Source/CMakeLists.txt`'s
+`MOD_FOLDER_NAME` was `"SkyrimNet SexLab"` (with a space) — a different, MO2-**disabled** release
+mod (see the entry below). The DLL build was deploying **out** to a folder nothing loads, while the
+`.pex` files were deploying **in** to the folder that does. `SkyrimNet_SexLab.log`'s boot block
+only ever registered four Papyrus modules (WebUI/Utilities/API/AnimationDB) — no `Json Papyrus
+functions registered` line — because the stale, three-day-old DLL checked into
+`SKSE/Plugins/SkyrimNet_SexLab.dll` was what actually loaded. A binary grep confirmed it: the fresh
+build artifact contained `SNSL_JMap`; the checked-in one didn't.
+
+**Fix:** `MOD_FOLDER_NAME` is now `"SkyrimNet_SexLab"` (no space) — this repo's own folder, same
+place `.pex` files land. `SKSE/Plugins/SkyrimNet_SexLab.dll` is therefore both the live path and
+the checked-in shipping copy; expect it to show as modified after every C++ rebuild, exactly like
+the `.pex` files do after a Papyrus recompile.
+
+**Rule:** if a change to `SKSE_Source/` doesn't seem to take effect in-game, don't assume the logic
+is wrong before checking deployment. Count the `... Papyrus functions registered` lines at the top
+of `SkyrimNet_SexLab.log`'s boot block — there is one per `papyrus->Register(...)` call in
+`plugin.cpp`; if one is missing, the loaded DLL predates that registration and no amount of C++
+logic fixing will help until the deploy target is right. A binary grep for a distinctive string
+from the new code (`grep -c "SomeNewSymbol" SKSE/Plugins/SkyrimNet_SexLab.dll`) confirms which
+build actually loaded.
+
+## Recompiled Papyrus scripts did not reach the live game — theory refuted (2026-09-22)
+
+**Original (wrong) theory, kept here so a future session doesn't re-chase it:** it looked like the
+game was loading a stale, disabled release mod (`C:\Skyrim\dev\mods\SkyrimNet SexLab`, with a
+space) instead of this dev repo, because two rounds of fixes retested identically broken.
+
+**Refuted:** checked every `+` (enabled) line in the active profile's
+`C:\Skyrim\dev\profiles\SkyrimNet SexLab\modlist.txt` — only `+SkyrimNet_SexLab` (this repo, no
+space) ships `Scripts/SkyrimNet_SexLab_Scene.pex`; `-SkyrimNet SexLab` (with space) is **disabled**
+and not loaded at all. `C:\Skyrim\dev\overwrite\` (MO2's always-highest-priority folder) had no
+stale copy either. The game session that reproduced the bug again booted (`SkyrimNet_SexLab.log`)
+**after** the last relevant `compile: pyro` run, so the freshly compiled, actually-fixed script was
+what the game loaded — and the bug still reproduced. The fix that round was genuinely live and
+still wrong; see "JContainers garbage-collects mid-serialization" below for the real cause.
+
+**MO2 layout reference** (still accurate, kept for any future deployment question):
+- MO2 instance root: `C:\Skyrim\dev\`. Mods: `C:\Skyrim\dev\mods\<mod name>\` (dev repo is
+  `SkyrimNet_SexLab`, no space).
+- Active profile: `SkyrimNet SexLab`, modlist at
+  `C:\Skyrim\dev\profiles\SkyrimNet SexLab\modlist.txt` — `+` = enabled, `-` = disabled.
+- `C:\Skyrim\dev\overwrite\` — MO2's always-highest-priority virtual mod folder.
+
+## Description Editor dressed toggle used wrong strip API (2026-09-22)
+
+**Symptom:** Toggling **dressed** on a live scene position in the Description Editor and saving
+did not change the actor's clothing in-game. `SkyrimNet_SexLab.log` showed
+`Outfit_Dress ... style:silently narration:silent` immediately followed by
+`UnStoreStrippedItems ... attempting to get stripped items: found none` and
+`Outfit_Dress ... has no stripped items` — no error, just a clean no-op.
+
+**Cause:** This mod has **two independent, non-interoperable dress/undress mechanisms**:
+1. `main.StoreStrippedItems`/`UnStoreStrippedItems` (`SkyrimNet_SexLab_Main.psc`) +
+   `Outfit_Dress`/`Outfit_Undress` (`SkyrimNet_SexLab_Actions.psc:356-387`), which call
+   `sexlab.StripActor`/`UnStripActor` and cache the removed forms under our own `StorageUtil`
+   key. This pair is for **out-of-scene** actions (Target Menu, chat-triggered "undress me")
+   where no SexLab thread is managing the actor.
+2. SexLab's own per-thread stripping: `sslActorAlias.Strip()`/`UnStrip()`
+   (`SexLabFrameworkAE_v166b/scripts/Source/sslActorAlias.psc:1656-1764`), called automatically
+   when a thread's animation starts, storing removed items in the alias's own private
+   `Equipment` array. This is what actually undressed the actor for the scene.
+`WebUI_ApplyLivePositions` (`Scripts/Source/SkyrimNet_SexLab_Scene.psc`) called mechanism (1)
+for a **live scene actor**, whose clothes were stripped by mechanism (2) — mechanism (1)'s cache
+was empty by construction, so it correctly detected "nothing to restore" and did nothing.
+
+**Fix / rule:** Code that touches a live scene's clothing must go through
+`thread.ActorAlias(actor).Strip()`/`.UnStrip()` (already used elsewhere in `Scene.psc`, e.g.
+`:725`, `sslActorAlias actorAlias = thread.ActorAlias(akActor)`) — the same object that owns the
+actor's current stripped state — not the standalone `main`/`Outfit_Dress`/`Outfit_Undress` pair,
+which stays correct only for actors with no active thread. Note `sslActorAlias.UnStrip()` is a
+no-op if `DoRedress` is false for that actor (victim + SexLab MCM "redress victim" off, or
+`NoRedress` explicitly set) — that's existing SexLab MCM behavior, not a bug in this mod.
+
+## JContainers garbage-collects mid-serialization, not a VM fault (2026-09-22, corrected 2026-09-23)
+
+An earlier version of this entry ("Papyrus VM silently returns None under overlay pause") blamed
+the Papyrus VM itself degrading under load/pause and shipped two guards
+(`piece == ""` substitution in the JSON walkers, an empty-`Registry` skip in `BuildInThreadAnims`)
+that **never fired across 5 fresh repros** and did not fix the bug. The real cause, found by
+reading `JContainers64.log` instead of guessing further:
+
+**Symptom:** Description Editor **scene:** pulldown never offered the live scene.
+`SkyrimNet_SexLab.log` showed `JsonLowerCaseKeys: parse failed`, and the raw payload it was fed
+contained an uppercase, unquoted `NULL` token repeated dozens of times as bare array elements —
+and, in the worst captures, whole keys (`_in_thread_registries`, `_mode`, `_positions`) missing
+from the object entirely.
+
+**Cause:** the Papyrus JSON walker (`SkyrimNet_SexLab_Utilities.psc`'s `JMapToJson`/`JArrayToJson`/
+`JFormMapToJson`/`JIntMapToJson`) took **~9 seconds** to serialize a ~65-animation scene payload —
+hundreds of Papyrus↔native round trips plus repeated string `+=`. JContainers garbage-collects
+**unowned** temporary objects on a ~10 second lifetime, and nothing on this build path was ever
+retained (`BuildAllSceneInfosJson` even called `JValue.release(root)` with no matching retain). So
+JC destroyed the object tree **while the walker was still reading it**. Proof:
+`…\SKSE\JContainers64.log` showed `Warning: access to non-existing object with id 0x3064`
+repeated (331 times across one session), and the per-object-id warning counts (59, 63, 57, 131)
+matched the per-repro count of corrupt elements exactly. A call on a dead JC handle returns a
+*None string*, which the Papyrus VM renders as the literal 4-character text `NULL` — which is
+**not** `== ""`, so the existing "substitute null for an empty piece" guards could never catch it.
+The same dead-handle failure made `JMap.nextKey` return a None string too, silently truncating the
+enclosing map — hence the missing keys in the worst captures.
+
+**Fix:** replaced JContainers with a C++ JSON store in this mod's own SKSE plugin
+(`SKSE_Source/src/JsonStore.{h,cpp}`, Papyrus-facing as `SNSL_JMap`/`SNSL_JArray`/`SNSL_JValue`/
+`SNSL_JFormMap`) for the scene-menu build path. No garbage collector — a node lives until its
+owning root is explicitly released — and serialization is one native call (`SNSL_JValue.dump`)
+instead of the Papyrus walker, so there is no multi-second window for anything to collect. See
+`checkpoints/skse-scene/` for the staged migration (this fixes the reported pulldown bug; the rest
+of this mod's ~870 remaining JContainers call sites migrate in later stages, with JContainers and
+the new store coexisting via small JSON-string bridges until the last file moves over).
+
 ## WebUI script aborts at load: TDZ from hidePanel (2026-09-20)
 
 **Symptom:** TargetMenu **Custom** no longer opened the Scene Selector; no panel logic after ~line 7286 of `index.html` existed.
@@ -525,3 +648,21 @@ Scene-pick anim rows are stubs: `_in_thread_anims` (`Scene.psc`) carries only `_
 **Cause**: vanilla SexLab `GoToStage` sets `Stage` and enters state `Advancing`, which finishes via `RegisterForSingleUpdate` (game time) → `Animating` + `StageStart`. With `Focus(view, pauseGame=true)` game time is frozen, so the thread stays `Advancing` and `GetThreadActive()` rejects every commit. `thread.stage` changes synchronously, so a push right after `GoToStage` looks like the thread reported back but it has not.
 
 **Fix**: JS auto-unpauses for a step and re-pauses on the `_stage_started` push sent from `Scene.StageStart`; the `ApplyWebUICommit` push only moves the row.
+
+## WebUI click-lockout from timer-driven pause toggle (2026-09-22)
+
+**Symptom**: after a Description Editor autosave, the whole overlay stopped responding to clicks — cursor still moved, Escape still closed the overlay — but nothing was clickable. `SkyrimNet_SexLab.log` showed zero entries for the rest of that session: no click ever reached a native JS listener again.
+
+**Cause**: a `deSaveToDisk()` change unpaused the game for a live "dressed" toggle save, then re-paused via a bare `setTimeout(deRepauseAfterStep, 500)`. Every other caller of the `onGamePauseSet` → C++ `Unfocus(g_view)` + `Focus(g_view, paused)` pair (`WebUI.cpp:976-988`) fires it from a real click (the pause button) or from a real click whose re-pause then waits on an actual completion push (`deStageStep` → `_stage_started`, see the entry above) — the 20s timer there is only ever a fallback, expected to be pre-empted by the push almost every time. This new call site had no completion signal to wait on (`Outfit_Dress`/`Outfit_Undress`/`WebUI_ApplyLivePositions` push nothing back to JS — `Target_Menu_Refresh` is unrelated and gated on TargetMenu focus, not Description Editor state) and no antecedent user-input-event in the timer callback's JS turn. That untested combination — native `Unfocus`+`Focus` fired from a bare timer with nothing else in flight — is the prime suspect for PrismaUI/CEF losing click hit-testing while OS-level cursor movement and the separate `KeyHandler` Escape sink kept working.
+
+**Fix / rule**: reverted — `deSaveToDisk()` no longer touches pause state; the dressed-toggle live-apply just attaches `_scene_sid`, same as before. Going forward: never call `onGamePauseSet` from a bare timer. Either gate the re-pause on a real completion push (mirror `_stage_started`), or don't automate the pause toggle for an action that has no completion signal — let the user drive the existing manual pause button instead.
+
+## Description Editor scene pulldown empty: `_in_thread_anims` JSON corruption (2026-09-22)
+
+**Symptom**: a live scene (confirmed valid server-side — `BuildWebUISceneMenuObject` reports correct `positions`/`names`/`stage`) is not offered as an option in the Description Editor's "scene:" pulldown. Pre-existing, intermittent/data-dependent; unrelated to any change made the same day.
+
+**Cause**: `WebUI_SeedSceneInfos` (`Menu.psc:140`) → `manager.BuildAllSceneInfosJson()` (`Scene_Manager.psc:928`, loop at `:954-963`) → `ObjectToLowerCaseKeyJson(root)` (`Scene_Manager.psc:968`) → native `JsonLowerCaseKeys` fails to parse the aggregate JSON it was handed → `ObjectToLowerCaseKeyJson` (`Utilities.psc:763-773`) downgrades **the entire payload**, not just the bad field, to `"{}"` on any parse failure → JS `seedSceneInfos({})` → `sceneInfoByKey` gets zero active entries → `deListActiveSceneKeys()` returns `[]` → pulldown never lists the scene. This also silently defeats live-apply saves that resolve their scene via `deActiveSceneForRegistry`'s no-pick fallback, since it iterates the same empty list.
+
+A diagnostic `Trace` added to `ObjectToLowerCaseKeyJson` (dumping the raw pre-lowercase JSON on failure instead of swallowing it) captured an exact repro: the `_in_thread_anims` array (built in `BuildWebUISceneMenuObject`, `Scene.psc:2477-2504`, from `thread.Animations`) has a well-formed run of anim entries, then one entry missing its `_registry`/`_tags` fields (only `_name` present), then ~48 literal unquoted **uppercase** `NULL` tokens as raw array elements — not valid JSON, and not a string this codebase's own manual JSON walker (`Utilities.psc:635-694`) ever writes (audited: every path there returns valid JSON or lowercase `"null"`; grepping `Scripts/Source` for `"NULL"` finds nothing). Root mechanism not yet confirmed — leading theory is `thread.Animations` (SexLab's own array) containing trailing invalid/`None` entries past a real count, with some property getter on them (`.Registry`, `GetTagsString`) failing in a way that isn't going through this codebase's `JsonQuote`/`JsonForm`. See `checkpoints/skse-scene/v3-checkpoint.md` §0 for the full capture and suggested next instrumentation step.
+
+**Fix**: not yet fixed — diagnostic only, landed to unblock the next debugging session with a precise repro instead of a guess.
