@@ -81,6 +81,11 @@ namespace SexLabNet::Json
     std::string MapNextKey(Handle h, const std::string& previousKey, const std::string& endKey);
     std::vector<std::string> MapAllKeysPArray(Handle h);
     Handle MapAllKeys(Handle h);
+    bool MapHasKey(Handle h, const std::string& key);
+    /// Removes @key if present. Frees the value if it's an owned object (matches JMap.removeKey).
+    void MapRemoveKey(Handle h, const std::string& key);
+    /// Empties the map in place (handle stays valid/attached). Frees every owned value.
+    void MapClear(Handle h);
 
     // --- Array (index-keyed) ops --------------------------------------------------------------
     std::int64_t ArrayGetInt(Handle h, std::int32_t index, std::int64_t def);
@@ -103,6 +108,13 @@ namespace SexLabNet::Json
     void ArrayAddForm(Handle h, RE::TESForm* v, std::int32_t addToIndex);
 
     std::int32_t ArrayValueType(Handle h, std::int32_t index);
+    /// Removes the item at @index, shifting later items down (matches JArray.eraseIndex).
+    /// Negative index counts from the end. Frees the item if it's an owned object.
+    void ArrayEraseIndex(Handle h, std::int32_t index);
+    /// Returns the index of the first Form-typed item equal to @form, or -1 (matches JArray.findForm).
+    std::int32_t ArrayFindForm(Handle h, RE::TESForm* form);
+    /// Empties the array in place (handle stays valid/attached). Frees every owned item.
+    void ArrayClear(Handle h);
 
     // --- FormMap (form-keyed) ops --------------------------------------------------------------
     Handle FormMapGetObj(Handle h, RE::TESForm* key, Handle def);

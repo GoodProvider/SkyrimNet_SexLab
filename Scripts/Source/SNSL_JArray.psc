@@ -44,3 +44,15 @@ Int function count(Int object) global native
 ;/  0 - no value, 1 - none, 2 - int, 3 - float, 4 - form, 5 - object, 6 - string.
 /;
 Int function valueType(Int object, Int index) global native
+
+;/  Removes the item at @index, shifting later items down. Negative index counts from the end.
+/;
+function eraseIndex(Int object, Int index) global native
+
+;/  Returns the index of the first Form-typed item equal to @form, or -1 if not found.
+/;
+Int function findForm(Int object, Form form) global native
+
+;/  Empties the container in place. The handle stays valid and attached wherever it was.
+/;
+function clear(Int object) global native

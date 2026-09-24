@@ -59,6 +59,9 @@ namespace PapyrusBindings_Json
         }
         std::int32_t Map_allKeys(RE::StaticFunctionTag*, std::int32_t object) { return SexLabNet::Json::MapAllKeys(object); }
         std::int32_t Map_count(RE::StaticFunctionTag*, std::int32_t object) { return SexLabNet::Json::Count(object); }
+        bool Map_hasKey(RE::StaticFunctionTag*, std::int32_t object, RE::BSFixedString key) { return SexLabNet::Json::MapHasKey(object, Str(key)); }
+        void Map_removeKey(RE::StaticFunctionTag*, std::int32_t object, RE::BSFixedString key) { SexLabNet::Json::MapRemoveKey(object, Str(key)); }
+        void Map_clear(RE::StaticFunctionTag*, std::int32_t object) { SexLabNet::Json::MapClear(object); }
 
         // --- SNSL_JArray ---
 
@@ -91,6 +94,9 @@ namespace PapyrusBindings_Json
         void Array_addForm(RE::StaticFunctionTag*, std::int32_t object, RE::TESForm* value, std::int32_t addToIndex) { SexLabNet::Json::ArrayAddForm(object, value, addToIndex); }
         std::int32_t Array_count(RE::StaticFunctionTag*, std::int32_t object) { return SexLabNet::Json::Count(object); }
         std::int32_t Array_valueType(RE::StaticFunctionTag*, std::int32_t object, std::int32_t index) { return SexLabNet::Json::ArrayValueType(object, index); }
+        void Array_eraseIndex(RE::StaticFunctionTag*, std::int32_t object, std::int32_t index) { SexLabNet::Json::ArrayEraseIndex(object, index); }
+        std::int32_t Array_findForm(RE::StaticFunctionTag*, std::int32_t object, RE::TESForm* form) { return SexLabNet::Json::ArrayFindForm(object, form); }
+        void Array_clear(RE::StaticFunctionTag*, std::int32_t object) { SexLabNet::Json::ArrayClear(object); }
 
         // --- SNSL_JFormMap ---
 
@@ -144,6 +150,9 @@ namespace PapyrusBindings_Json
         a_vm->RegisterFunction("nextKey", jmap, Map_nextKey);
         a_vm->RegisterFunction("allKeys", jmap, Map_allKeys);
         a_vm->RegisterFunction("count", jmap, Map_count);
+        a_vm->RegisterFunction("hasKey", jmap, Map_hasKey);
+        a_vm->RegisterFunction("removeKey", jmap, Map_removeKey);
+        a_vm->RegisterFunction("clear", jmap, Map_clear);
 
         constexpr std::string_view jarray = "SNSL_JArray";
         a_vm->RegisterFunction("object", jarray, Array_object);
@@ -165,6 +174,9 @@ namespace PapyrusBindings_Json
         a_vm->RegisterFunction("addForm", jarray, Array_addForm);
         a_vm->RegisterFunction("count", jarray, Array_count);
         a_vm->RegisterFunction("valueType", jarray, Array_valueType);
+        a_vm->RegisterFunction("eraseIndex", jarray, Array_eraseIndex);
+        a_vm->RegisterFunction("findForm", jarray, Array_findForm);
+        a_vm->RegisterFunction("clear", jarray, Array_clear);
 
         constexpr std::string_view jformmap = "SNSL_JFormMap";
         a_vm->RegisterFunction("object", jformmap, FormMap_object);

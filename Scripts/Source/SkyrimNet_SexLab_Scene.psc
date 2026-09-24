@@ -176,12 +176,12 @@ Function Initialize(int _sid, SkyrimNet_SexLab_Scene_Manager _manager, bool _is_
     if !JMap.HasKey(thread_obj, "actors")
         JMap.setObj(thread_obj, "actors", actors_objs)
     endif 
-    if victim_faction_forms < 1 
-        victim_faction_forms = JArray.object()
-        JValue.retain(victim_faction_forms)
-    endif 
+    if victim_faction_forms < 1 || !SNSL_JValue.isExists(victim_faction_forms)
+        victim_faction_forms = SNSL_JArray.object()
+        SNSL_JValue.retain(victim_faction_forms)
+    endif
     DbgEnd("Initialize")
-EndFunction 
+EndFunction
 
 ; -----------------------------
 
@@ -391,18 +391,18 @@ Function ReconcileVictimFactions()
         DbgEnd("ReconcileVictimFactions")
         return 
     endif 
-    if victim_faction_forms < 1 
-        victim_faction_forms = JArray.object()
-        JValue.retain(victim_faction_forms)
-    endif 
+    if victim_faction_forms < 1 || !SNSL_JValue.isExists(victim_faction_forms)
+        victim_faction_forms = SNSL_JArray.object()
+        SNSL_JValue.retain(victim_faction_forms)
+    endif
 
     Actor[] positions = thread.positions
     int num_actors = positions.length
 
     ; Drop tracked actors who are no longer a current victim (departed or role changed).
-    int t = JArray.count(victim_faction_forms) - 1
-    while 0 <= t 
-        Actor tracked = JArray.getForm(victim_faction_forms, t) as Actor
+    int t = SNSL_JArray.count(victim_faction_forms) - 1
+    while 0 <= t
+        Actor tracked = SNSL_JArray.getForm(victim_faction_forms, t) as Actor
         bool still_victim = false 
         if tracked != None 
             int p = 0 
@@ -417,10 +417,10 @@ Function ReconcileVictimFactions()
             if tracked != None && tracked.IsInFaction(SkyrimNet_SexLab_Faction_Victim) 
                 tracked.RemoveFromFaction(SkyrimNet_SexLab_Faction_Victim) 
             endif 
-            JArray.eraseIndex(victim_faction_forms, t) 
-        endif 
-        t -= 1 
-    endwhile 
+            SNSL_JArray.eraseIndex(victim_faction_forms, t)
+        endif
+        t -= 1
+    endwhile
 
     ; Apply faction to current actors and track new victims.
     num_victims = 0 
@@ -432,9 +432,9 @@ Function ReconcileVictimFactions()
             if thread.IsVictim(akActor) 
                 num_victims += 1 
                 akActor.AddToFaction(SkyrimNet_SexLab_Faction_Victim) 
-                if JArray.findForm(victim_faction_forms, akActor) < 0 
-                    JArray.addForm(victim_faction_forms, akActor) 
-                endif 
+                if SNSL_JArray.findForm(victim_faction_forms, akActor) < 0
+                    SNSL_JArray.addForm(victim_faction_forms, akActor)
+                endif
             else 
                 if akActor.IsInFaction(SkyrimNet_SexLab_Faction_Victim) 
                     akActor.RemoveFromFaction(SkyrimNet_SexLab_Faction_Victim) 
@@ -478,17 +478,17 @@ Function Release()
     endwhile
     ; Clear the victim faction from every tracked grant (covers actors who left the
     ; scene and so are no longer in thread.positions), then empty the tracker.
-    if victim_faction_forms > 0
-        int vf = JArray.count(victim_faction_forms) - 1
+    if victim_faction_forms > 0 && SNSL_JValue.isExists(victim_faction_forms)
+        int vf = SNSL_JArray.count(victim_faction_forms) - 1
         while 0 <= vf
-            Actor va = JArray.getForm(victim_faction_forms, vf) as Actor
+            Actor va = SNSL_JArray.getForm(victim_faction_forms, vf) as Actor
             if va != None && va.IsInFaction(SkyrimNet_SexLab_Faction_Victim)
                 va.RemoveFromFaction(SkyrimNet_SexLab_Faction_Victim)
-            endif 
+            endif
             vf -= 1
-        endwhile 
-        JArray.clear(victim_faction_forms)
-    endif 
+        endwhile
+        SNSL_JArray.clear(victim_faction_forms)
+    endif
     ; Also clear leftover position_objs slots beyond current thread size
     if position_objs
         while i < position_objs.length
@@ -1825,23 +1825,6 @@ int Function GetThreadObj(Actor speaker)
     return thread_obj
 EndFunction
 
-int Function GetVictimsNamesJsonObj()
-    DbgEnter("GetVictimsNamesJsonObj")
-    int victimNamesMap = JMap.object()
-    int i = 0
-    int num_actors = thread.positions.length
-    while i < num_actors
-        Actor akActor = thread.positions[i]
-        if thread.IsVictim(akActor)
-            JMap.setStr(victimNamesMap, akActor.GetDisplayName(), akActor.GetDisplayName())
-        endif
-        i += 1
-    endwhile
-
-    DbgReturn("GetVictimsNamesJsonObj", "victimNamesMap")
-    return victimNamesMap
-EndFunction
-
 String Function GetLocation()
 
     DbgEnter("GetLocation")
@@ -2198,7 +2181,7 @@ String Function BuildWebUIAnimationMenuState()
         endif
         JMap.setInt(po, "_no_orgasm", no_org)
         JMap.setInt(po, "_dressed", dressed)
-        JMap.setInt(po, "_victim", ak.IsInFaction(SkyrimNet_SexLab_Faction_Victim) as int)
+        JMap.setInt(po, "_victim", thread.IsVictim(ak) as int)
         JMap.setStr(po, "_speaking", speaking)
         if i < orgasm.length
             JMap.setInt(po, "_orgasm_expected", orgasm[i])
@@ -2270,6 +2253,8 @@ Function WebUI_ApplyLivePositions(int obj)
         n = count
     endif
     EnsureActorArraysLargeEnough(n)
+    ; -1 = unchanged this call; 0/1 = new victim value, for the post-loop narration pass below.
+    int[] victim_changed_new = Utility.CreateIntArray(n, -1)
     int i = 0
     while i < n
         int po = JArray.getObj(pos_arr, i)
@@ -2295,10 +2280,61 @@ Function WebUI_ApplyLivePositions(int obj)
                 endif
             endif
             TM_ApplyClothed(positions[i], clothed)
+            if JMap.hasKey(po, "_victim")
+                Bool newVictim = JMap.getInt(po, "_victim", 0) == 1
+                Bool wasVictim = thread.IsVictim(positions[i])
+                thread.SetVictim(positions[i], newVictim)
+                if newVictim != wasVictim
+                    victim_changed_new[i] = newVictim as int
+                endif
+            endif
+        endif
+        i += 1
+    endwhile
+    ; Narrate victim changes only after every SetVictim above has landed, so the aggressor lookup
+    ; (the first other non-victim position) sees the fully-applied state, not a partial one.
+    i = 0
+    while i < n
+        if victim_changed_new[i] >= 0
+            NarrateVictimToggle(positions[i], victim_changed_new[i] == 1)
         endif
         i += 1
     endwhile
     MarkUserDefaultsDirty()
+EndFunction
+
+; Fired by WebUI_ApplyLivePositions when a live victim toggle (Description Editor's V column)
+; actually flips a position's victim status. Aggressor is the first other position that is not
+; itself a victim (thread.IsVictim), read fresh -- does not touch the separate `initiator` field,
+; which has its own lifecycle and is explicitly not recomputed on a live SetVictim (see
+; PickNonVictimInitiator's own doc comment).
+Function NarrateVictimToggle(Actor victim, Bool becameVictim)
+    if thread == None || victim == None
+        return
+    endif
+    Actor aggressor = None
+    Actor[] positions = thread.Positions
+    if positions
+        int i = 0
+        while i < positions.length && aggressor == None
+            Actor a = positions[i]
+            if a != None && a != victim && !thread.IsVictim(a)
+                aggressor = a
+            endif
+            i += 1
+        endwhile
+    endif
+    if aggressor == None
+        Trace("NarrateVictimToggle", "no non-victim aggressor found, skipping narration for "+GetDisplayName(victim))
+        return
+    endif
+    String msg = ""
+    if becameVictim
+        msg = aggressor.GetDisplayName()+" starts sexually assaulting "+victim.GetDisplayName()+"."
+    else
+        msg = aggressor.GetDisplayName()+" switches from sexual assault to sex with "+victim.GetDisplayName()+"."
+    endif
+    DirectNarration(msg, aggressor, victim)
 EndFunction
 
 Function WebUI_SaveMenuState(int obj)
@@ -2460,7 +2496,7 @@ int Function BuildWebUISceneMenuObject()
             name = ak.GetDisplayName()
             uuid = GetUUID(ak)
             form_id = ak.GetFormID()
-            victim = ak.IsInFaction(SkyrimNet_SexLab_Faction_Victim) as int
+            victim = thread.IsVictim(ak) as int
             gender = sexlab.GetGender(ak)
         elseif position_objs && i < position_objs.length && position_objs[i] > 0
             ; position_objs is still a JContainers map (not migrated this stage).

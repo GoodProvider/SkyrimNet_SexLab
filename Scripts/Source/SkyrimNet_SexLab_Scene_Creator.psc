@@ -1477,7 +1477,9 @@ Function ApplyWebUIState(int obj)
             speaking_modifiers[i] = new_speaking[i]
             i += 1
         endwhile
-        SetNames()
+        ; Do not SetNames() here -- it calls SetMasks(), which would recompute victim_mask from
+        ; the stale victims[] array and clobber the value just committed above from the WebUI.
+        ; RebuildVictimsFromMask() below refreshes the same name strings without that side effect.
     endif
     if JMap.hasKey(obj, "_event_hook")
         String hook = JMap.getStr(obj, "_event_hook", "")

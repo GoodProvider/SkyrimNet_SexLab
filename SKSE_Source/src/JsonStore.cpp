@@ -667,6 +667,40 @@ namespace SexLabNet::Json
         return arr;
     }
 
+    bool MapHasKey(Handle h, const std::string& key)
+    {
+        std::lock_guard lock(g_mutex);
+        auto* n = Resolve(h);
+        if (!n || n->isArray || n->isFormMap) return false;
+        std::string k = key; ToLowerAscii(k);
+        for (auto& kv : n->map) if (kv.first == k) return true;
+        return false;
+    }
+
+    void MapRemoveKey(Handle h, const std::string& key)
+    {
+        std::lock_guard lock(g_mutex);
+        auto* n = Resolve(h);
+        if (!n || n->isArray || n->isFormMap) return;
+        std::string k = key; ToLowerAscii(k);
+        for (auto it = n->map.begin(); it != n->map.end(); ++it) {
+            if (it->first == k) {
+                FreeValueChild(it->second);
+                n->map.erase(it);
+                return;
+            }
+        }
+    }
+
+    void MapClear(Handle h)
+    {
+        std::lock_guard lock(g_mutex);
+        auto* n = Resolve(h);
+        if (!n || n->isArray || n->isFormMap) return;
+        for (auto& kv : n->map) FreeValueChild(kv.second);
+        n->map.clear();
+    }
+
     // --- Array ---
 
     namespace
@@ -816,6 +850,38 @@ namespace SexLabNet::Json
         index = NormalizeIndex(index, n->arr.size());
         if (index < 0 || static_cast<std::size_t>(index) >= n->arr.size()) return 0;
         return static_cast<std::int32_t>(n->arr[index].type);
+    }
+
+    void ArrayEraseIndex(Handle h, std::int32_t index)
+    {
+        std::lock_guard lock(g_mutex);
+        auto* n = Resolve(h);
+        if (!n || !n->isArray) return;
+        index = NormalizeIndex(index, n->arr.size());
+        if (index < 0 || static_cast<std::size_t>(index) >= n->arr.size()) return;
+        FreeValueChild(n->arr[static_cast<std::size_t>(index)]);
+        n->arr.erase(n->arr.begin() + index);
+    }
+
+    std::int32_t ArrayFindForm(Handle h, RE::TESForm* form)
+    {
+        std::lock_guard lock(g_mutex);
+        auto* n = Resolve(h);
+        if (!n || !n->isArray) return -1;
+        const auto k = MakeFormRef(form);
+        for (std::size_t i = 0; i < n->arr.size(); ++i) {
+            if (n->arr[i].type == ValueType::kForm && n->arr[i].form == k) return static_cast<std::int32_t>(i);
+        }
+        return -1;
+    }
+
+    void ArrayClear(Handle h)
+    {
+        std::lock_guard lock(g_mutex);
+        auto* n = Resolve(h);
+        if (!n || !n->isArray) return;
+        for (auto& v : n->arr) FreeValueChild(v);
+        n->arr.clear();
     }
 
     // --- FormMap ---

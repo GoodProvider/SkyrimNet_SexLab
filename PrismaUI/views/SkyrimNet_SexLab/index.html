@@ -990,7 +990,8 @@
         #de-actors-table .col-idx,
         #de-actors-table .col-name,
         #de-actors-table .col-o,
-        #de-actors-table .col-dressed {
+        #de-actors-table .col-dressed,
+        #de-actors-table .col-v {
             width: 1%;
             white-space: nowrap;
         }
@@ -1836,7 +1837,7 @@
                 <div id="de-actors-table-wrap" style="display:none">
                     <table class="data-table" id="de-actors-table"><thead><tr>
                         <th class="col-idx">#</th><th class="col-name">name</th>
-                        <th class="col-o">O</th><th class="col-dressed">dressed</th><th class="col-mods">modifiers</th>
+                        <th class="col-o">O</th><th class="col-dressed">dressed</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
                     <div class="de-name-hint">Clicking a name adds it to the description</div>
                 </div>
@@ -9476,11 +9477,27 @@
             return v == null ? '' : String(v).split(',').map(s => s.trim()).filter(Boolean).join(',');
         }
 
-        // Draft of the focused animation's per-actor defaults. Scene-pick anim rows are stubs (no _position_count):
-        // those fetch the DB row and stay hidden until it lands.
+        // Draft of the focused animation's per-actor state. Scene-bound: live state from
+        // SC.positions (real dressed/no_orgasm/speaking for this running scene instance, not the
+        // registry's generic template). Unbound: AnimDB registry-template defaults, whose anim
+        // rows are stubs (no _position_count) that fetch the DB row and stay hidden until it lands.
         function deLoadPosDraft() {
             DE.posDirty = false;
             DE.posDraft = [];
+            if (deIsSceneBound()) {
+                const positions = SC.positions || [];
+                for (let i = 0; i < positions.length; i++) {
+                    const p = positions[i] || {};
+                    DE.posDraft.push({
+                        _no_orgasm: p._no_orgasm ? 1 : 0,
+                        _speaking: deNormSpeaking(p._speaking),
+                        _dressed: p._dressed ? 1 : 0,
+                        _victim: p._victim ? 1 : 0
+                    });
+                }
+                DE.loadedPos = sceneInfoClone(DE.posDraft);
+                return;
+            }
             const reg = DE.focusRegistry;
             const a = reg ? deFindAnim(reg) : null;
             if (a && a._position_count == null) {
@@ -9490,8 +9507,10 @@
                 const sp = a._pos_speaking_modifiers || [];
                 const cl = a._pos_clothed || [];
                 const n = deAnimActorCount(a);
+                // Victim is a per-scene role, not an animation template property -- no AnimDB
+                // default to seed from here (matches: not scene-bound = no victim to show).
                 for (let i = 0; i < n; i++)
-                    DE.posDraft.push({ _no_orgasm: no[i] ? 1 : 0, _speaking: deNormSpeaking(sp[i]), _dressed: cl[i] ? 1 : 0 });
+                    DE.posDraft.push({ _no_orgasm: no[i] ? 1 : 0, _speaking: deNormSpeaking(sp[i]), _dressed: cl[i] ? 1 : 0, _victim: 0 });
             }
             DE.loadedPos = sceneInfoClone(DE.posDraft);
         }
@@ -9544,6 +9563,9 @@
                 const tdDressed = document.createElement('td');
                 tdDressed.className = 'col-dressed';
                 tdDressed.innerHTML = `<span class="cell-toggle ${p._dressed ? 'on' : ''}" title="${p._dressed ? 'clothed' : 'unclothed'}" onclick="deTogglePosDressed(${i})">${p._dressed ? '\u{1F455}' : '—'}</span>`;
+                const tdVictim = document.createElement('td');
+                tdVictim.className = 'col-v';
+                tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}" title="${p._victim ? 'victim' : 'not victim'}" onclick="deTogglePosVictim(${i})">${p._victim ? 'V' : '—'}</span>`;
                 const tdMods = document.createElement('td');
                 tdMods.className = 'col-mods';
                 const list = document.createElement('div');
@@ -9563,6 +9585,7 @@
                 tr.appendChild(tdName);
                 tr.appendChild(tdO);
                 tr.appendChild(tdDressed);
+                tr.appendChild(tdVictim);
                 tr.appendChild(tdMods);
                 tbody.appendChild(tr);
             });
@@ -9585,6 +9608,13 @@
             const p = DE.posDraft[i];
             if (!p) return;
             p._dressed = p._dressed ? 0 : 1;
+            dePosEdited();
+        }
+
+        function deTogglePosVictim(i) {
+            const p = DE.posDraft[i];
+            if (!p) return;
+            p._victim = p._victim ? 0 : 1;
             dePosEdited();
         }
 
@@ -9899,7 +9929,7 @@
                 _stages: sceneInfoClone(DE.stagesDraft)
             };
             if (DE.posDirty) {
-                payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '', _dressed: p._dressed ? 1 : 0 }));
+                payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '', _dressed: p._dressed ? 1 : 0, _victim: p._victim ? 1 : 0 }));
                 const boundScene = deActiveSceneForRegistry(DE.focusRegistry);
                 if (boundScene) payload._scene_sid = boundScene.scene_sid;
             }

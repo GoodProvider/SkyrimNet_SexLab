@@ -45,3 +45,15 @@ Int function allKeys(Int object) global native
 ;/  Returns count of pairs in the container.
 /;
 Int function count(Int object) global native
+
+;/  Returns True if @key (lowercased) is present.
+/;
+Bool function hasKey(Int object, String key) global native
+
+;/  Removes @key if present. No-op if absent.
+/;
+function removeKey(Int object, String key) global native
+
+;/  Empties the container in place. The handle stays valid and attached wherever it was.
+/;
+function clear(Int object) global native

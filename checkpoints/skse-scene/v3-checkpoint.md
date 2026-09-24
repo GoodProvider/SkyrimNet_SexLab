@@ -30,6 +30,14 @@ Supersedes [v2-checkpoint.md](v2-checkpoint.md). Written from
 HEAD is still `41cd7cb` (matches v2's stated baseline — nothing committed since). All Papyrus
 changes compile clean (`compile: pyro`, verified twice).
 
+### Stage 0 — CONFIRMED IN-GAME 2026-09-23 (see `v6-checkpoint.md` §4)
+
+The blocking pulldown bug below is fixed (root cause: JContainers garbage-collecting the scene
+payload mid-serialization, plus a DLL deploy misconfiguration — see `v5-checkpoint.md` and
+`v6-checkpoint.md`). With the pulldown populating, Stage 0's dressed-toggle fix was retested
+end-to-end in-game and **the toggle live-applies clothing to a live scene actor, confirmed working
+in the UI.** The description below (as of v3, before the fix) is kept for history.
+
 ### Stage 0 — code complete and correct by inspection + compile, NOT YET confirmed in-game
 
 Stage 0 (§ below, "Clothing-sync bug fix") is fully implemented as originally specified in v2,
@@ -337,7 +345,7 @@ double-implementing.
 
 | # | Stage | Mode | Status |
 |---|---|---|---|
-| 0 | Clothing-sync bug fix | direct | ☐ (code written, compiled, uncommitted — blocked on unrelated pulldown bug for in-game confirmation, see §0) |
+| 0 | Clothing-sync bug fix | direct | ☑ confirmed in-game 2026-09-23 (dressed toggle live-applies clothing) — see `v6-checkpoint.md` §4 |
 | 1 | Infrastructure: `SceneCore` + parity harness | direct | ☐ |
 | 2 | **SexLabBridge spike (gating)** | parity | ☐ |
 | 3 | Leaf helpers | direct | ☐ |
