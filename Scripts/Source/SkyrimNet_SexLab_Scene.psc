@@ -2903,20 +2903,16 @@ EndFunction
 ; -------------------------------------------------
 
 Function EnsureUserAnimDefaultsMap()
-    if user_anim_defaults < 1
-        user_anim_defaults = JMap.object()
-        JValue.retain(user_anim_defaults)
+    if user_anim_defaults < 1 || !SNSL_JValue.isExists(user_anim_defaults)
+        user_anim_defaults = SNSL_JMap.object()
+        SNSL_JValue.retain(user_anim_defaults)
     endif
 EndFunction
 
 Function ClearUserAnimDefaults(String registry)
     EnsureUserAnimDefaultsMap()
-    if registry != "" && JMap.hasKey(user_anim_defaults, registry)
-        int old = JMap.getObj(user_anim_defaults, registry)
-        JMap.removeKey(user_anim_defaults, registry)
-        if old > 0
-            JValue.release(old)
-        endif
+    if registry != ""
+        SNSL_JMap.removeKey(user_anim_defaults, registry)
     endif
 EndFunction
 
@@ -2934,10 +2930,10 @@ Function CacheUserDefaultsForRegistry(String registry)
         return
     endif
     EnsureUserAnimDefaultsMap()
-    int payload = JMap.object()
-    int orgasm_arr = JArray.objectWithSize(n)
-    int speak_arr = JArray.objectWithSize(n)
-    int clothed_arr = JArray.objectWithSize(n)
+    int payload = SNSL_JMap.object()
+    int orgasm_arr = SNSL_JArray.objectWithSize(n)
+    int speak_arr = SNSL_JArray.objectWithSize(n)
+    int clothed_arr = SNSL_JArray.objectWithSize(n)
     int i = 0
     while i < n
         int no_org = 0
@@ -2954,22 +2950,15 @@ Function CacheUserDefaultsForRegistry(String registry)
                 no_org = 0
             endif
         endif
-        JArray.setInt(orgasm_arr, i, 1 - no_org)
-        JArray.setStr(speak_arr, i, speaking)
-        JArray.setInt(clothed_arr, i, dressed)
+        SNSL_JArray.setInt(orgasm_arr, i, 1 - no_org)
+        SNSL_JArray.setStr(speak_arr, i, speaking)
+        SNSL_JArray.setInt(clothed_arr, i, dressed)
         i += 1
     endwhile
-    JMap.setObj(payload, "orgasm_expected", orgasm_arr)
-    JMap.setObj(payload, "speaking_modifiers", speak_arr)
-    JMap.setObj(payload, "clothed", clothed_arr)
-    JValue.retain(payload)
-    if JMap.hasKey(user_anim_defaults, registry)
-        int old = JMap.getObj(user_anim_defaults, registry)
-        if old > 0
-            JValue.release(old)
-        endif
-    endif
-    JMap.setObj(user_anim_defaults, registry, payload)
+    SNSL_JMap.setObj(payload, "orgasm_expected", orgasm_arr)
+    SNSL_JMap.setObj(payload, "speaking_modifiers", speak_arr)
+    SNSL_JMap.setObj(payload, "clothed", clothed_arr)
+    SNSL_JMap.setObj(user_anim_defaults, registry, payload)
 EndFunction
 
 Function MarkUserDefaultsDirty()
@@ -2992,8 +2981,8 @@ Function SeedOverlayFromAnimDb()
 
     EnsureUserAnimDefaultsMap()
     int cached = 0
-    if JMap.hasKey(user_anim_defaults, registry)
-        cached = JMap.getObj(user_anim_defaults, registry)
+    if SNSL_JMap.hasKey(user_anim_defaults, registry)
+        cached = SNSL_JMap.getObj(user_anim_defaults, registry)
     endif
 
     int[] orgasm = animdb.GetOrgasmExpected(thread)
@@ -3001,27 +2990,27 @@ Function SeedOverlayFromAnimDb()
     int[] clothed_arr = animdb.GetClothed(thread)
 
     if cached > 0
-        int c_org = JMap.getObj(cached, "orgasm_expected")
-        int c_spk = JMap.getObj(cached, "speaking_modifiers")
-        int c_cl = JMap.getObj(cached, "clothed")
+        int c_org = SNSL_JMap.getObj(cached, "orgasm_expected")
+        int c_spk = SNSL_JMap.getObj(cached, "speaking_modifiers")
+        int c_cl = SNSL_JMap.getObj(cached, "clothed")
         int i = 0
         while i < n
             int expected = 1
-            if c_org > 0 && i < JArray.count(c_org)
-                expected = JArray.getInt(c_org, i, 1)
+            if c_org > 0 && i < SNSL_JArray.count(c_org)
+                expected = SNSL_JArray.getInt(c_org, i, 1)
             elseif orgasm && i < orgasm.length
                 expected = orgasm[i]
             endif
             int no_org = 1 - expected
             String speaking = SkyrimNet_SexLab_AnimDb.SpeakingDefaultFromOrgasmExpected(expected)
-            if c_spk > 0 && i < JArray.count(c_spk)
-                speaking = JArray.getStr(c_spk, i, speaking)
+            if c_spk > 0 && i < SNSL_JArray.count(c_spk)
+                speaking = SNSL_JArray.getStr(c_spk, i, speaking)
             elseif speaking_arr && i < speaking_arr.length
                 speaking = speaking_arr[i]
             endif
             int dressed = 0
-            if c_cl > 0 && i < JArray.count(c_cl)
-                dressed = JArray.getInt(c_cl, i, 0)
+            if c_cl > 0 && i < SNSL_JArray.count(c_cl)
+                dressed = SNSL_JArray.getInt(c_cl, i, 0)
             elseif clothed_arr && i < clothed_arr.length
                 dressed = clothed_arr[i]
             endif

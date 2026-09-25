@@ -7548,8 +7548,15 @@
                 deRenderScenePulldown();
             // The panel opens before the seed lands ("loading..." on None); now that scenes exist, bind it.
             const deEl = document.getElementById('description-editor-panel');
-            if (deEl && deEl.style.display !== 'none'
-                && (deIsLocked() || (DE.scenePick === 'none' && (deListActiveSceneKeys().length || deEndedSceneInfo()))))
+            // Also upgrade a wrong automatic 'any'/'last' fallback (opened before the real live
+            // scene was seeded, e.g. via the hotkey's C++/Papyrus timing race) once a live scene
+            // actually exists -- never overrides a deliberate user pick (scenePickAuto is only
+            // true for automatic applies; see deApplyScenePick).
+            const shouldAutoResolve = deIsLocked()
+                || (DE.scenePick === 'none' && (deListActiveSceneKeys().length || deEndedSceneInfo()))
+                || (DE.scenePickAuto && (DE.scenePick === 'any' || DE.scenePick === 'last')
+                    && deListActiveSceneKeys().length);
+            if (deEl && deEl.style.display !== 'none' && shouldAutoResolve)
                 deApplyScenePick(deResolveDefaultScenePick());
         }
 
@@ -9103,6 +9110,10 @@
             scene_sid: -1,
             // scenePick: 'none' (nothing shown), 'any' (filter + animation list), or a scene key.
             scenePick: 'none',
+            // True when scenePick was set by automatic fallback (not a user pulldown click) --
+            // lets seedSceneInfos() silently upgrade a wrong 'any'/'last' guess once the real
+            // live scene is seeded, without ever overriding a deliberate user pick.
+            scenePickAuto: false,
             focusRegistry: '',
             // Last animation the editor was bound to; the scene pulldown defaults to it on open.
             currentAnimation: '',
@@ -9353,6 +9364,7 @@
             if (DE.dirty && opts.userInitiated)
                 deCancel();
             DE.scenePick = pick || 'none';
+            DE.scenePickAuto = !opts.userInitiated;
             deUpdateBrowseVisibility();
             if (DE.scenePick === 'none') {
                 DE.focusRegistry = '';
