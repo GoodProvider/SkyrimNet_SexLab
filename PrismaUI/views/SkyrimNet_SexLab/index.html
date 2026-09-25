@@ -7565,6 +7565,11 @@
             selectedSceneInfoKey = 'new';
             sceneInfosSessionActive = false;
             sceneInfosSeeded = false;
+            // A deliberate 'Any' pick (scenePickAuto=false) must not outlive this overlay session --
+            // otherwise seedSceneInfos()'s auto-resolve guard stays permanently blocked on reopen,
+            // even against a scene that started after the overlay was closed.
+            DE.scenePick = 'any';
+            DE.scenePickAuto = true;
         }
 
         function flushSceneInfos() {
@@ -8322,7 +8327,7 @@
 
                 const tdO = document.createElement('td');
                 tdO.className = 'col-o';
-                tdO.innerHTML = `<span class="cell-toggle ${p._no_orgasm ? 'on' : ''}" onclick="event.stopPropagation(); scTogglePos(${i}, 'no_orgasm')">O</span>`;
+                tdO.innerHTML = `<span class="cell-toggle ${p._no_orgasm ? 'on' : ''}" title="${p._no_orgasm ? 'orgasm not expected' : 'orgasm expected'}" onclick="event.stopPropagation(); scTogglePos(${i}, 'no_orgasm')">${p._no_orgasm ? '-' : 'O'}</span>`;
 
                 const tdV = document.createElement('td');
                 tdV.className = 'col-v';
@@ -8624,9 +8629,15 @@
             const used = new Set();
             for (let i = 0; i < n; i++) {
                 let name = '';
+                const scPos = (SC.positions || [])[i];
                 if (sceneInfo) {
                     const p = (sceneInfo.positions || [])[i];
                     name = (p && (p._name || p.name)) || '';
+                } else if (scPos && (scPos._name || scPos.name)) {
+                    // Scene Creator's own live position array -- not gated on the Description
+                    // Editor's scene-bound state, so an actor swap here regenerates the name
+                    // instead of falling through to the stale target/player snapshot below.
+                    name = scPos._name || scPos.name || '';
                 } else if (deHasValidTarget()) {
                     if (i === 0) name = (targetActor && targetActor.name) || '';
                     else if (i === 1) name = playerName || (playerActor && playerActor.name) || '';

@@ -1223,6 +1223,15 @@ namespace ActionCatalog
             if (auto* cur = FindMainPanelByKey(key)) {
                 if (EqualsIgnoreCase(cur->value("type", ""), "builtin"))
                     OpenMainPanelEntry(*cur);
+                // Reopening (hotkey toggle, or reselecting from the panel pulldown) while this
+                // panel was already selected used to skip mainPanelDidOpen() entirely, so the
+                // Description Editor's scene pulldown never re-resolved which scene is active --
+                // it just kept whatever DE.scenePick it had from before. Mirror the full-switch
+                // path's own call below so reopen re-resolves it too.
+                const std::string panel = cur ? cur->value("panel", "") : std::string();
+                if (panel == "scene_creator_panel" || panel == "description_editor_panel") {
+                    WebUI_Invoke("mainPanelDidOpen();");
+                }
             }
             return;
         }

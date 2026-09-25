@@ -1,5 +1,44 @@
 # Knowledgebase
 
+## JSON store handles die on every save load (2026-09-25)
+
+**Symptom:** Scene Creator sets an explicit speaking modifier / orgasm choice (visible correct in the
+Scene Creator's own setup trace), but it never reaches the Description Editor — `SetPosition` traces
+right after show the value already lost (`speaking_modifiers: {}`). `SkyrimNet_SexLab.log` around the
+same timestamps is full of `dead handle 0x.. (slot N out of range)` and `AttachChild: attaching a
+dead handle .., storing no-value instead`. The LLM thread JSON shows `"Actors":[NULL,NULL]` and
+`Get_Threads json:{}`. Three separate lock-flag fixes for this bug (`speaking_locked`, then
+`orgasm_locked`) landed and compiled clean but never actually took effect in-game, because the writes
+they guarded were themselves landing on dead handles.
+
+**Cause:** the C++ JSON store (`SKSE_Source/src/JsonStore.cpp`, `12c0ca4`) is in-memory only, with no
+save-game serialization of its own. `OnNewSession()` (`JsonStore.h:138-141`) runs on every
+`kPostLoadGame`/`kNewGame` and deliberately invalidates every handle that a Papyrus member variable
+carried through the save (that member variable *is* serialized — it's just an int — so it survives as
+a stale, now-meaningless handle). Most retained members in `SkyrimNet_SexLab_Scene.psc` /
+`_Scene_Manager.psc` already re-check `SNSL_JValue.isExists(...)` before use and recreate on failure
+(`thread_obj`, `actors_objs`, `victim_faction_forms`, `user_anim_defaults`). `position_objs[]` had the
+same per-slot `isExists` recreate loop, but it lived inside `EnsureActorArraysLargeEnough()` behind an
+early-return: `if position_objs && orgasm_messages && size <= position_objs.length && ...` — true
+again as soon as a save reloads into a scene slot that's already the right length, so the recreate
+loop never ran and every subsequent write silently no-op'd onto a dead handle for the rest of that
+scene's life. `Scene_Manager.psc`'s `last_ended_obj` had no `isExists` check at all, so after a load
+it could attach a dead handle into `BuildAllSceneInfosJson()`'s `_scenes` array as a `null` entry —
+on the JS side `SceneInfo.keyFromState(null)` resolves to `'new'`, clobbering or corrupting the Scene
+Creator draft.
+
+**Fix:** `EnsureActorArraysLargeEnough()` no longer early-returns past the per-slot `isExists` loop —
+only the *resize* step is skipped when the arrays are already long enough; the recreate loop always
+runs. `last_ended_obj` now checks `isExists` before being attached, and resets to `0` when dead.
+
+**Rule:** any handle a Papyrus **member variable** (something that survives across a save/load, not a
+local built and consumed within one function call) holds from this JSON store must be re-validated
+with `SNSL_JValue.isExists(...)` immediately before every use, and recreated if dead — never gated
+behind a "we already have one of the right shape/size" shortcut, because "already have one" is exactly
+the case a stale post-load handle satisfies. Grep `dead handle` / `attaching a dead handle` in
+`SkyrimNet_SexLab.log` to confirm this class of bug; it only reproduces after a save load, not on a
+fresh game, so always test lock/persistence fixes against a loaded save.
+
 ## The .pex and the .dll deploy in opposite directions (2026-09-23)
 
 **Symptom:** the C++ JSON store (`SNSL_JMap`/`SNSL_JArray`/`SNSL_JValue`/`SNSL_JFormMap`,

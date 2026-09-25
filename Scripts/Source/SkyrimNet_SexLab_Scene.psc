@@ -159,23 +159,28 @@ Function Initialize(int _sid, SkyrimNet_SexLab_Scene_Manager _manager, bool _is_
     animating_started_at = 0.0
     StorageUtil.ClearAllPrefix(storage_prefix)
 
-    if thread_obj < 1
-        thread_obj = JMap.object() 
-        JValue.retain(thread_obj)
-    endif 
-
-    ; Legacy name->position map removed; scrub so retained thread_obj does not emit it
-    if JMap.hasKey(thread_obj, "actors")
-        JMap.removeKey(thread_obj, "actors")
+    if thread_obj < 1 || !SNSL_JValue.isExists(thread_obj)
+        thread_obj = SNSL_JMap.object()
+        SNSL_JValue.retain(thread_obj)
     endif
 
-    if actors_objs < 1 
-        actors_objs = JArray.object()
-        JValue.retain(actors_objs)
-    endif 
-    if !JMap.HasKey(thread_obj, "actors")
-        JMap.setObj(thread_obj, "actors", actors_objs)
-    endif 
+    ; Legacy name->position map removed; scrub so retained thread_obj does not emit it
+    if SNSL_JMap.hasKey(thread_obj, "actors")
+        SNSL_JMap.removeKey(thread_obj, "actors")
+    endif
+
+    if actors_objs < 1 || !SNSL_JValue.isExists(actors_objs)
+        actors_objs = SNSL_JArray.object()
+        ; Attach BEFORE retain (see SetSpeakingObj's identical fix for why): a fresh, unretained
+        ; array attaches by reference; retaining first would make this setObj below deep-copy it
+        ; instead, silently detaching actors_objs from thread_obj.actors forever. Matches the
+        ; already-correct setObj-then-retain order used by this same field's two resize sites
+        ; below (~line 225, ~line 810).
+        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
+        SNSL_JValue.retain(actors_objs)
+    elseif !SNSL_JMap.HasKey(thread_obj, "actors")
+        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
+    endif
     if victim_faction_forms < 1 || !SNSL_JValue.isExists(victim_faction_forms)
         victim_faction_forms = SNSL_JArray.object()
         SNSL_JValue.retain(victim_faction_forms)
@@ -218,11 +223,11 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     int i = 0 
     ; Assign interface property (not a local) before SetPosition/SetActor so assailant flags work.
     num_victims = 0 
-    if num_actors != JArray.count(actors_objs)
-        JValue.release(actors_objs)
-        actors_objs = JArray.objectWithSize(num_actors)
-        JMap.setObj(thread_obj, "actors", actors_objs)
-        JValue.retain(actors_objs)
+    if num_actors != SNSL_JArray.count(actors_objs)
+        SNSL_JValue.release(actors_objs)
+        actors_objs = SNSL_JArray.objectWithSize(num_actors)
+        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
+        SNSL_JValue.retain(actors_objs)
     endif
 
     ReconcileVictimFactions()
@@ -248,11 +253,19 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
         i = 0 
         while i < num_actors 
             if i < creator.num_actors
-                SetPosition(i, positions[i], creator.no_orgasm_mask[i], creator.speaking_modifiers[i]) 
-                JMap.setInt(position_objs[i], "dressed", creator.no_stripping_mask[i])
-            else 
+                SetPosition(i, positions[i], creator.no_orgasm_mask[i], creator.speaking_modifiers[i])
+                SNSL_JMap.setInt(position_objs[i], "dressed", creator.no_stripping_mask[i])
+                ; Scene Creator's explicit choice must stick for the whole scene, matching
+                ; TM_ApplySpeaking's own lock semantics -- otherwise StageStart's
+                ; ApplyAnimDbSpeaking() clobbers it from the registry's own per-stage default on
+                ; the very next stage transition, before the user can ever see it applied.
+                SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
+                ; Same protection for the orgasm choice -- SeedOverlayFromAnimDb() otherwise
+                ; clobbers no_orgasm/deny_orgasm from AnimDB on the next animation change too.
+                SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
+            else
                 SetPosition(i, positions[i], 0, creator.speaking_modifiers_default_current)
-                JMap.setInt(position_objs[i], "dressed", 0)
+                SNSL_JMap.setInt(position_objs[i], "dressed", 0)
             endif 
             i += 1 
         endwhile 
@@ -468,12 +481,12 @@ Function Release()
             StorageUtil.UnsetIntValue(akActor, storage_total_orgasms_key)
         endif 
         if position_objs && i < position_objs.length && position_objs[i] > 0
-            int speaking_obj = JMap.getObj(position_objs[i], "speaking_modifiers")
+            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
             if speaking_obj > 0
-                JValue.release(speaking_obj)
-            endif 
-            JMap.clear(position_objs[i])
-        endif 
+                SNSL_JValue.release(speaking_obj)
+            endif
+            SNSL_JMap.clear(position_objs[i])
+        endif
         i += 1
     endwhile
     ; Clear the victim faction from every tracked grant (covers actors who left the
@@ -493,12 +506,12 @@ Function Release()
     if position_objs
         while i < position_objs.length
             if position_objs[i] > 0
-                int speaking_obj = JMap.getObj(position_objs[i], "speaking_modifiers")
+                int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
                 if speaking_obj > 0
-                    JValue.release(speaking_obj)
-                endif 
-                JMap.clear(position_objs[i])
-            endif 
+                    SNSL_JValue.release(speaking_obj)
+                endif
+                SNSL_JMap.clear(position_objs[i])
+            endif
             i += 1
         endwhile
     endif
@@ -523,10 +536,10 @@ Function Release()
     scene_creator_menu_called = False
 
     if thread_obj > 0
-        JMap.clear(thread_obj)
+        SNSL_JMap.clear(thread_obj)
         if actors_objs > 0
-            JArray.clear(actors_objs)
-            JMap.setObj(thread_obj, "actors", actors_objs)
+            SNSL_JArray.clear(actors_objs)
+            SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
         endif
     endif
 
@@ -543,25 +556,27 @@ Function Release()
     DbgEnd("Release")
 EndFunction
 
-Function EnsureActorArraysLargeEnough(int size) 
+Function EnsureActorArraysLargeEnough(int size)
     DbgEnter("EnsureActorArraysLargeEnough", "size:"+size)
-    ; Both arrays must be present and large enough. position_objs alone is not
-    ; enough: save/load (or older code) can restore position_objs while
-    ; orgasm_messages stays None — early-return then leaves Combined crashing.
-    if position_objs && orgasm_messages && size <= position_objs.length && size <= orgasm_messages.length
-        DbgReturn("EnsureActorArraysLargeEnough", "void")
-        return 
-    endif 
-    position_objs = EnsureIntsLargeEnough(position_objs, size, 0 ) 
-    orgasm_messages = EnsureStringsLargeEnough(orgasm_messages, size, "")
+    ; Resize only when too small (orgasm_messages must also be present -- save/load or older code
+    ; can restore position_objs while orgasm_messages stays None, leaving Combined crashing). Do
+    ; NOT early-return past the per-slot isExists loop below just because both arrays are already
+    ; the right length: the JSON store invalidates every SNSL handle held in a Papyrus member
+    ; variable on every save load (JsonStore.h OnNewSession), so a same-length position_objs loaded
+    ; from a save is full of dead handles that must be recreated here, not skipped. See
+    ; KNOWLEDGEBASE "JSON store handles die on every save load".
+    if !position_objs || !orgasm_messages || size > position_objs.length || size > orgasm_messages.length
+        position_objs = EnsureIntsLargeEnough(position_objs, size, 0 )
+        orgasm_messages = EnsureStringsLargeEnough(orgasm_messages, size, "")
+    endif
     int i = 0
-    while i < size 
-        if position_objs[i] < 1
-            position_objs[i] = JMap.object() 
-            JValue.retain(position_objs[i])
-        endif 
-        i += 1 
-    endwhile 
+    while i < size
+        if position_objs[i] < 1 || !SNSL_JValue.isExists(position_objs[i])
+            position_objs[i] = SNSL_JMap.object()
+            SNSL_JValue.retain(position_objs[i])
+        endif
+        i += 1
+    endwhile
     DbgEnd("EnsureActorArraysLargeEnough")
 EndFunction
 
@@ -575,10 +590,10 @@ Function SetPosition(int index, Actor akActor, int no_orgasm, String speaking_mo
     EnsureActorArraysLargeEnough(index + 1)
 
     int obj = position_objs[index]
-    JMap.setInt(obj, "no_orgasm", no_orgasm)
+    SNSL_JMap.setInt(obj, "no_orgasm", no_orgasm)
     int speaking_obj = SetSpeakingObj(index, speaking_modifiers)
     SetActor(index, akActor)
-    Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+JoinJArrayStrToJson(speaking_obj))
+    Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+SNSL_JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+JoinJArrayStrToJson(speaking_obj))
 Endfunction
 
 ; Writes the CSV tokens into position_objs[index].speaking_modifiers; returns the JArray.
@@ -586,9 +601,9 @@ int Function SetSpeakingObj(int index, String speaking_modifiers)
     int obj = position_objs[index]
     ; Split up speaking modifiers
     String[] strings = StringUtil.Split(speaking_modifiers,",")
-    int count = strings.length 
-    int num_strings = 0 
-    int i = 0 
+    int count = strings.length
+    int num_strings = 0
+    int i = 0
     while i < count
         if strings[i] != ""
             num_strings += 1
@@ -596,21 +611,28 @@ int Function SetSpeakingObj(int index, String speaking_modifiers)
         i += 1
     endwhile
 
-    int speaking_obj = JMap.getObj(obj, "speaking_modifiers") 
-    if speaking_obj < 1 || JArray.count(speaking_obj) != num_strings 
-        if speaking_obj > 0 
-            JValue.release(speaking_obj) 
-        endif 
-        speaking_obj = JArray.objectWithSize(num_strings) 
-        JValue.retain(speaking_obj)
-        JMap.setObj(obj, "speaking_modifiers",speaking_obj) 
-    endif 
-    i = 0 
-    int w = 0 
-    while i < count 
+    int speaking_obj = SNSL_JMap.getObj(obj, "speaking_modifiers")
+    if speaking_obj < 1 || SNSL_JArray.count(speaking_obj) != num_strings
+        if speaking_obj > 0
+            SNSL_JValue.release(speaking_obj)
+        endif
+        speaking_obj = SNSL_JArray.objectWithSize(num_strings)
+        ; Attach BEFORE retain: a freshly-created, unretained array is attached by reference
+        ; (fast path). Retaining first would make MapSetObj see it as "unowned but explicitly
+        ; retained" and deep-copy it on attach instead -- the string writes below would then land
+        ; on the orphaned original, leaving the copy actually embedded in `obj` permanently empty.
+        ; This is exactly what silently dropped Scene Creator's speaking modifiers before the
+        ; Description Editor ever saw them. See KNOWLEDGEBASE "JSON store handles die on every
+        ; save load" for the related class of store-migration bug.
+        SNSL_JMap.setObj(obj, "speaking_modifiers",speaking_obj)
+        SNSL_JValue.retain(speaking_obj)
+    endif
+    i = 0
+    int w = 0
+    while i < count
         if strings[i] != ""
-            JArray.setStr(speaking_obj, w, strings[i]) 
-            w += 1 
+            SNSL_JArray.setStr(speaking_obj, w, strings[i])
+            w += 1
         endif
         i += 1
     endwhile
@@ -626,7 +648,7 @@ Function ApplyAnimDbSpeaking()
     String[] speaking = animdb.GetSpeakingModifiers(thread)
     int i = 0
     while i < speaking.length && i < position_objs.length
-        if position_objs[i] > 0 && JMap.getInt(position_objs[i], "speaking_locked", 0) != 1
+        if position_objs[i] > 0 && SNSL_JMap.getInt(position_objs[i], "speaking_locked", 0) != 1
             SetSpeakingObj(i, speaking[i])
         endif
         i += 1
@@ -638,14 +660,14 @@ String Function SpeakingCsvFromIndex(int i)
     if !position_objs || i < 0 || i >= position_objs.length || position_objs[i] < 1
         return speaking
     endif
-    int speaking_obj = JMap.getObj(position_objs[i], "speaking_modifiers")
+    int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
     if speaking_obj < 1
         return speaking
     endif
-    int sc = JArray.count(speaking_obj)
+    int sc = SNSL_JArray.count(speaking_obj)
     int si = 0
     while si < sc
-        String tok = JArray.getStr(speaking_obj, si, "")
+        String tok = SNSL_JArray.getStr(speaking_obj, si, "")
         if tok != ""
             if speaking != ""
                 speaking += ","
@@ -668,13 +690,13 @@ bool Function SetActor(int i, Actor akActor)
         return False 
     endif
     int obj = position_objs[i]
-    JArray.setObj(actors_objs, i, obj)
+    SNSL_JArray.setObj(actors_objs, i, obj)
 
-    StorageUtil.SetIntValue(akActor, storage_obj_key, obj) 
+    StorageUtil.SetIntValue(akActor, storage_obj_key, obj)
     StorageUtil.SetIntValue(akActor, storage_total_orgasms_key, 0)
-    JMap.setStr(obj, "uuid", GetUUID(akActor))
-    JMap.setStr(obj, "formid", akActor.GetFormID())
-    JMap.setStr(obj, "name", akActor.GetDisplayName())
+    SNSL_JMap.setStr(obj, "uuid", GetUUID(akActor))
+    SNSL_JMap.setStr(obj, "formid", akActor.GetFormID())
+    SNSL_JMap.setStr(obj, "name", akActor.GetDisplayName())
 
     int gender = akActor.GetLeveledActorBase().GetSex() ; actorLib.GetGender(akActor)
     DbgMsg("SetActor", "sexlab.GetGender "+akActor.GetDisplayName())
@@ -695,29 +717,29 @@ bool Function SetActor(int i, Actor akActor)
     endif 
 
 
-    JMap.setInt(obj, "has_penis", has_penis)
-    JMap.setInt(obj, "has_pussy", has_pussy)
-    JMap.setInt(obj, "is_hermaphrodiate", is_hermaphrodiate)
-    JMap.setStr(obj, "creature_description", GetCreatureDescriptions(akActor))
+    SNSL_JMap.setInt(obj, "has_penis", has_penis)
+    SNSL_JMap.setInt(obj, "has_pussy", has_pussy)
+    SNSL_JMap.setInt(obj, "is_hermaphrodiate", is_hermaphrodiate)
+    SNSL_JMap.setStr(obj, "creature_description", GetCreatureDescriptions(akActor))
 
-    JMap.setStr(obj,"notice_level","nothing")
+    SNSL_JMap.setStr(obj,"notice_level","nothing")
     if status == STATUS_ACTIVE
-        JMap.setStr(obj,"notice_level","active")
+        SNSL_JMap.setStr(obj,"notice_level","active")
     endif
-    JMap.setInt(obj,"total_orgasm",0)
-    JMap.setInt(obj,"orgasm_narrated",0)
-    JMap.setInt(obj,"arousal", -1) 
+    SNSL_JMap.setInt(obj,"total_orgasm",0)
+    SNSL_JMap.setInt(obj,"orgasm_narrated",0)
+    SNSL_JMap.setInt(obj,"arousal", -1)
     DbgMsg("SetActor", "thread.IsVictim "+akActor.GetDisplayName())
-    if thread.IsVictim(akActor) 
-        JMap.setInt(obj, "victim", 1) 
-        JMap.setInt(obj, "assailant", 0) 
-    elseif num_victims > 0 
-        JMap.setInt(obj, "victim", 0) 
-        JMap.setInt(obj, "assailant", 1) 
-    else 
-        JMap.setInt(obj, "victim", 0) 
-        JMap.setInt(obj, "assailant", 0) 
-    endif 
+    if thread.IsVictim(akActor)
+        SNSL_JMap.setInt(obj, "victim", 1)
+        SNSL_JMap.setInt(obj, "assailant", 0)
+    elseif num_victims > 0
+        SNSL_JMap.setInt(obj, "victim", 0)
+        SNSL_JMap.setInt(obj, "assailant", 1)
+    else
+        SNSL_JMap.setInt(obj, "victim", 0)
+        SNSL_JMap.setInt(obj, "assailant", 0)
+    endif
 
     DbgMsg("SetActor", "thread.ActorAlias "+akActor.GetDisplayName())
     int enjoyment = 0
@@ -733,12 +755,12 @@ bool Function SetActor(int i, Actor akActor)
             enjoyment = actorAlias.GetEnjoyment() 
         endif 
     endif 
-    JMap.setInt(obj, "enjoyment", enjoyment)
+    SNSL_JMap.setInt(obj, "enjoyment", enjoyment)
 
     if main.handler_dom.IsDOMSlave(akActor)
-        JMap.setInt(obj, "dom_slave", 1)
+        SNSL_JMap.setInt(obj, "dom_slave", 1)
     else
-        JMap.setInt(obj, "dom_slave", 0)
+        SNSL_JMap.setInt(obj, "dom_slave", 0)
     endif
 
 
@@ -771,14 +793,14 @@ bool Function UpdateActor(int i , Actor akActor)
         SetTotalOrgasms(akActor, total_orgasms)
         obj = position_objs[i]
     elseif status == STATUS_ACTIVE && obj > 0
-        JMap.setStr(obj, "notice_level", "active")
+        SNSL_JMap.setStr(obj, "notice_level", "active")
     endif
     int wearing_strapon = 0
     if thread.IsUsingStrapon(akActor)
         wearing_strapon = 1
-    endif 
+    endif
     if obj > 0
-        JMap.setInt(obj, "wearing_strapon", wearing_strapon)
+        SNSL_JMap.setInt(obj, "wearing_strapon", wearing_strapon)
     endif
 
     DbgReturn("UpdateActor", "changed")
@@ -792,26 +814,26 @@ Function AlignActors()
     EnsureActorArraysLargeEnough(size) 
     int i = 0 
     bool changed = False 
-    if size != JArray.count(actors_objs)
-        JValue.release(actors_objs)
-        actors_objs = JArray.objectWithSize(size)
-        JMap.setObj(thread_obj, "actors", actors_objs)
-        JValue.retain(actors_objs)
+    if size != SNSL_JArray.count(actors_objs)
+        SNSL_JValue.release(actors_objs)
+        actors_objs = SNSL_JArray.objectWithSize(size)
+        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
+        SNSL_JValue.retain(actors_objs)
         changed = True
     endif
     while i < size
-        if UpdateActor(i, thread.positions[i]) 
-            changed = True 
-        endif 
-        i += 1 
-    endwhile 
+        if UpdateActor(i, thread.positions[i])
+            changed = True
+        endif
+        i += 1
+    endwhile
     ; Relink every slot: UpdateActor only writes actors_objs when an actor's binding
     ; changes, so after a resize (recreated array) unchanged slots would stay null.
-    i = 0 
-    while i < size 
-        JArray.setObj(actors_objs, i, position_objs[i]) 
-        i += 1 
-    endwhile 
+    i = 0
+    while i < size
+        SNSL_JArray.setObj(actors_objs, i, position_objs[i])
+        i += 1
+    endwhile
     ; Do not tear down leftover slots here — only Release owns teardown.
 
     ; Positions may have changed; reconcile victim faction so departed actors are cleared.
@@ -844,25 +866,25 @@ String Function GetNames(String key_)
     int matched = 0
     int i = 0 
     int num_actors = thread.positions.length
-    while i < num_actors 
-        if JMap.getInt(position_objs[i], key_, 0) == 1 
+    while i < num_actors
+        if SNSL_JMap.getInt(position_objs[i], key_, 0) == 1
             matched += 1
-        endif 
-        i += 1 
-    endwhile 
+        endif
+        i += 1
+    endwhile
 
-    i = 0 
+    i = 0
     int seen = 0
-    while i < num_actors 
-        if JMap.getInt(position_objs[i], key_, 0) == 1 
-            if seen > 0 
+    while i < num_actors
+        if SNSL_JMap.getInt(position_objs[i], key_, 0) == 1
+            if seen > 0
                 if seen + 1 == matched
                     names += " and "
-                else 
+                else
                     names += ", "
-                endif 
-            endif 
-            names += JMap.getStr(position_objs[i], "name") 
+                endif
+            endif
+            names += SNSL_JMap.getStr(position_objs[i], "name")
             seen += 1
         endif 
         i += 1 
@@ -915,8 +937,8 @@ Function SetTotalOrgasms(Actor akActor, int total_orgasms)
     StorageUtil.SetIntValue(akActor, storage_total_orgasms_key, total_orgasms) 
     int obj = GetObjFromActor(akActor)
     if obj > 0
-        JMap.setInt(obj, "total_orgasm", total_orgasms)
-    endif 
+        SNSL_JMap.setInt(obj, "total_orgasm", total_orgasms)
+    endif
     DbgEnd("SetTotalOrgasms")
 EndFunction 
 
@@ -1247,8 +1269,8 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
             int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
             int j = thread.positions.length - 1 
             while 0 <= j 
-                String name = JMap.getStr(position_objs[j], "name") 
-                int total_orgasms = JMap.getInt(position_objs[j], "total_orgasm")
+                String name = SNSL_JMap.getStr(position_objs[j], "name")
+                int total_orgasms = SNSL_JMap.getInt(position_objs[j], "total_orgasm")
                 int expected = 0
                 if orgasm_expected.length > j && orgasm_expected[j] == 1
                     expected = 1
@@ -1288,8 +1310,8 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         endif
         int d = 0
         while d < thread.positions.length
-            String dbg_name = JMap.getStr(position_objs[d], "name")
-            int dbg_total = JMap.getInt(position_objs[d], "total_orgasm")
+            String dbg_name = SNSL_JMap.getStr(position_objs[d], "name")
+            int dbg_total = SNSL_JMap.getInt(position_objs[d], "total_orgasm")
             DbgMsg("AnimationEnd", dbg_name+" total_orgasms:"+dbg_total) ; debug-total_orgasms
             d += 1
         endwhile
@@ -1340,9 +1362,9 @@ Function OrgasmCombined()
     EnsureActorArraysLargeEnough(num_actors)
     bool has_dom_slave = ThreadHasDomSlave()
     while i < num_actors
-        int obj = position_objs[i] 
-        bool no_orgasm = JMap.getInt(obj, "no_orgasm") == 1
-        bool is_dom_slave = JMap.getInt(obj,"dom_slave") == 1
+        int obj = position_objs[i]
+        bool no_orgasm = SNSL_JMap.getInt(obj, "no_orgasm") == 1
+        bool is_dom_slave = SNSL_JMap.getInt(obj,"dom_slave") == 1
 
         if orgasm_expected[i] == 1 && !no_orgasm && !is_dom_slave && orgasm_messages[i] == ""
             orgasm_messages_set = true
@@ -1372,15 +1394,15 @@ Function OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms)
     endif 
 
     String name = GetDisplayName(akActor) 
-    int obj = GetObjFromActor(akActor) 
-    if obj > 0 
-        if JMap.getInt(obj, "no_orgasm") == 1 
+    int obj = GetObjFromActor(akActor)
+    if obj > 0
+        if SNSL_JMap.getInt(obj, "no_orgasm") == 1
             Trace("OrgasmIndividual",name+" shouldn't orgasm")
             DbgReturn("OrgasmIndividual", "void")
-            return 
-        endif 
-        JMap.setInt(obj, "enjoyment", full_enjoyment) 
-    endif 
+            return
+        endif
+        SNSL_JMap.setInt(obj, "enjoyment", full_enjoyment)
+    endif
 
     ; Prompt gate + total via GetIsOrgasming (SLSO absolute count).
     String msg = GetIsOrgasming(akActor, num_orgasms)
@@ -1403,7 +1425,7 @@ Function OrgasmCustom(Actor akActor, String msg)
 
     ; DOM rolls its own orgasm and ignores SexLab DisableOrgasm; honor orgasm_expected (no_orgasm = 1 - expected).
     int obj = GetObjFromActor(akActor)
-    if obj > 0 && JMap.getInt(obj, "no_orgasm") == 1
+    if obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
         Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" shouldn't orgasm, dropping")
         DbgEnd("OrgasmCustom")
         return
@@ -1484,27 +1506,27 @@ String Function OrgasmMessagesToNarration()
         int k = 0
         int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
         while k < num_actors && k < orgasm_messages.length
-            int obj = JArray.getObj(actors_objs, k)
-            String name = JMap.getStr(obj, "name")
+            int obj = SNSL_JArray.getObj(actors_objs, k)
+            String name = SNSL_JMap.getStr(obj, "name")
             if orgasm_messages[k] != ""
                 orgasm_happened = true
                 ; Totals already bumped when GetIsOrgasming built the stashed clause.
-                if JMap.getInt(obj, "has_penis") == 1 
+                if SNSL_JMap.getInt(obj, "has_penis") == 1
                     ejaculation_happened = true
                 endif 
                 narration += orgasm_messages[k]
                 orgasm_messages[k] = ""
                 MarkOrgasmNarrated(obj, thread.positions[k])
-            elseif orgasm_expected.length > k && orgasm_expected[k] == 1 && JMap.getInt(obj, "dom_slave") == 1
+            elseif orgasm_expected.length > k && orgasm_expected[k] == 1 && SNSL_JMap.getInt(obj, "dom_slave") == 1
                 ; Dom Combined fallback: custom raced empty this window (unspoken total bump).
                 int total = GetTotalOrgasms(thread.positions[k])
                 if total < 1
-                    total = JMap.getInt(obj, "total_orgasm")
+                    total = SNSL_JMap.getInt(obj, "total_orgasm")
                 endif
-                int narrated = JMap.getInt(obj, "orgasm_narrated")
+                int narrated = SNSL_JMap.getInt(obj, "orgasm_narrated")
                 if total > narrated
                     orgasm_happened = true
-                    if JMap.getInt(obj, "has_penis") == 1
+                    if SNSL_JMap.getInt(obj, "has_penis") == 1
                         ejaculation_happened = true
                     endif
                     narration += name+" is orgasming. "
@@ -1551,9 +1573,9 @@ Function MarkOrgasmNarrated(int obj, Actor akActor)
         spoken = GetTotalOrgasms(akActor)
     endif
     if spoken < 1
-        spoken = JMap.getInt(obj, "total_orgasm")
+        spoken = SNSL_JMap.getInt(obj, "total_orgasm")
     endif
-    JMap.setInt(obj, "orgasm_narrated", spoken)
+    SNSL_JMap.setInt(obj, "orgasm_narrated", spoken)
 EndFunction
 
 bool Function ThreadHasDomSlave()
@@ -1563,7 +1585,7 @@ bool Function ThreadHasDomSlave()
     int i = 0
     int n = thread.positions.length
     while i < n && i < position_objs.length
-        if JMap.getInt(position_objs[i], "dom_slave") == 1
+        if SNSL_JMap.getInt(position_objs[i], "dom_slave") == 1
             return true
         endif
         i += 1
@@ -1746,8 +1768,8 @@ EndFunction
 
 String Function GetThreadJson(Actor speaker) 
     DbgEnter("GetThreadJson", "speaker:"+GetDisplayName(speaker))
-    GetThreadObj(speaker) 
-    String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(thread_obj) 
+    GetThreadObj(speaker)
+    String json = SNSL_JValue.dump(thread_obj)
     DbgReturn("GetThreadJson", "json")
     return json 
 EndFunction 
@@ -1797,29 +1819,29 @@ int Function GetThreadObj(Actor speaker)
     endif 
 
 
-    jmap.setint(thread_obj, "active", getthreadactive() as int ) 
-    jmap.SetStr(thread_obj, "status",status) 
-    jmap.SetStr(thread_obj, "description", getdescription())
-    jmap.SetStr(thread_obj, "style", style)
-    jmap.setStr(thread_obj, "speaker_name", speaker_name)
-    jmap.SetFlt(thread_obj, "speaker_distance", distance)
-    jmap.setint(thread_obj, "speaker_los", los as int)
+    SNSL_JMap.setint(thread_obj, "active", getthreadactive() as int )
+    SNSL_JMap.SetStr(thread_obj, "status",status)
+    SNSL_JMap.SetStr(thread_obj, "description", getdescription())
+    SNSL_JMap.SetStr(thread_obj, "style", style)
+    SNSL_JMap.setStr(thread_obj, "speaker_name", speaker_name)
+    SNSL_JMap.SetFlt(thread_obj, "speaker_distance", distance)
+    SNSL_JMap.setint(thread_obj, "speaker_los", los as int)
 
-    int names_arr = jarray.object()
-    int victims_arr = jarray.object()
+    int names_arr = SNSL_JArray.object()
+    int victims_arr = SNSL_JArray.object()
     i = 0
     while i < num_actors
         Actor akActor = thread.positions[i]
-        jarray.addstr(names_arr, akActor.getdisplayname())
+        SNSL_JArray.addstr(names_arr, akActor.getdisplayname())
         dbgmsg("GetThreadObj", "thread.isvictim "+akActor.getdisplayname())
         if thread.isvictim(akActor)
-            jarray.addstr(victims_arr, akActor.getdisplayname())
+            SNSL_JArray.addstr(victims_arr, akActor.getdisplayname())
         endif
         i += 1
     endwhile
-    jmap.setobj(thread_obj, "names", names_arr)
-    jmap.setobj(thread_obj, "victims", victims_arr)
-    jmap.SetStr(thread_obj, "location", getlocation())
+    SNSL_JMap.setobj(thread_obj, "names", names_arr)
+    SNSL_JMap.setobj(thread_obj, "victims", victims_arr)
+    SNSL_JMap.SetStr(thread_obj, "location", getlocation())
 
     dbgreturn("getThreadobj", "thread_obj")
     return thread_obj
@@ -2161,14 +2183,14 @@ String Function BuildWebUIAnimationMenuState()
         int dressed = 0
         String speaking = ""
         if i < position_objs.length && position_objs[i] > 0
-            no_org = JMap.getInt(position_objs[i], "no_orgasm", 0)
-            dressed = JMap.getInt(position_objs[i], "dressed", 0)
-            int speaking_obj = JMap.getObj(position_objs[i], "speaking_modifiers")
+            no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
+            dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0)
+            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
             if speaking_obj > 0
-                int sc = JArray.count(speaking_obj)
+                int sc = SNSL_JArray.count(speaking_obj)
                 int si = 0
                 while si < sc
-                    String tok = JArray.getStr(speaking_obj, si, "")
+                    String tok = SNSL_JArray.getStr(speaking_obj, si, "")
                     if tok != ""
                         if speaking != ""
                             speaking += ","
@@ -2263,7 +2285,12 @@ Function WebUI_ApplyLivePositions(int obj)
             int dressed = JMap.getInt(po, "_dressed", 0)
             String speaking = JMap.getStr(po, "_speaking", "")
             SetPosition(i, positions[i], no_org, speaking)
-            JMap.setInt(position_objs[i], "dressed", dressed)
+            SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+            ; A live WebUI commit is an explicit user choice, same as Setup()'s Scene-Creator
+            ; hand-off and TM_ApplySpeaking -- lock it so StageStart's ApplyAnimDbSpeaking() never
+            ; silently reverts it to the registry default on the next stage transition.
+            SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
+            SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
             thread.DisableOrgasm(positions[i], no_org == 1)
             Bool clothed = dressed == 1
             ; Use the thread's own tracked strip state (sslActorAlias.Strip/UnStrip), not
@@ -2499,12 +2526,11 @@ int Function BuildWebUISceneMenuObject()
             victim = thread.IsVictim(ak) as int
             gender = sexlab.GetGender(ak)
         elseif position_objs && i < position_objs.length && position_objs[i] > 0
-            ; position_objs is still a JContainers map (not migrated this stage).
-            name = JMap.getStr(position_objs[i], "name")
-            uuid = JMap.getStr(position_objs[i], "uuid")
-            form_id = JMap.getInt(position_objs[i], "formid", 0)
+            name = SNSL_JMap.getStr(position_objs[i], "name")
+            uuid = SNSL_JMap.getStr(position_objs[i], "uuid")
+            form_id = SNSL_JMap.getInt(position_objs[i], "formid", 0)
             if form_id == 0
-                String form_str = JMap.getStr(position_objs[i], "formid")
+                String form_str = SNSL_JMap.getStr(position_objs[i], "formid")
                 if form_str != ""
                     form_id = form_str as int
                 endif
@@ -2523,15 +2549,15 @@ int Function BuildWebUISceneMenuObject()
         int dressed = 0
         String speaking = ""
         if position_objs && i < position_objs.length && position_objs[i] > 0
-            no_org = JMap.getInt(position_objs[i], "no_orgasm", 0)
-            dressed = JMap.getInt(position_objs[i], "dressed", 0)
+            no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
+            dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0)
             speaking = SpeakingCsvFromIndex(i)
         endif
         SNSL_JMap.setInt(po, "_dressed", dressed)
         SNSL_JMap.setInt(po, "_no_orgasm", no_org)
         int deny = 0
         if position_objs && i < position_objs.length && position_objs[i] > 0
-            deny = JMap.getInt(position_objs[i], "deny_orgasm", 0)
+            deny = SNSL_JMap.getInt(position_objs[i], "deny_orgasm", 0)
         endif
         SNSL_JMap.setInt(po, "_deny_orgasm", deny)
         SNSL_JMap.setInt(po, "_victim", victim)
@@ -2940,13 +2966,13 @@ Function CacheUserDefaultsForRegistry(String registry)
         int dressed = 0
         String speaking = ""
         if position_objs && i < position_objs.length && position_objs[i] > 0
-            no_org = JMap.getInt(position_objs[i], "no_orgasm", 0)
-            dressed = JMap.getInt(position_objs[i], "dressed", 0)
-            int speaking_obj = JMap.getObj(position_objs[i], "speaking_modifiers")
-            if speaking_obj > 0 && JArray.count(speaking_obj) > 0
-                speaking = JArray.getStr(speaking_obj, 0)
+            no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
+            dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0)
+            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
+            if speaking_obj > 0 && SNSL_JArray.count(speaking_obj) > 0
+                speaking = SNSL_JArray.getStr(speaking_obj, 0)
             endif
-            if JMap.getInt(position_objs[i], "deny_orgasm", 0) == 1
+            if SNSL_JMap.getInt(position_objs[i], "deny_orgasm", 0) == 1
                 no_org = 0
             endif
         endif
@@ -3015,13 +3041,31 @@ Function SeedOverlayFromAnimDb()
                 dressed = clothed_arr[i]
             endif
             if positions[i]
-                SetPosition(i, positions[i], no_org, speaking)
-                thread.DisableOrgasm(positions[i], no_org == 1)
+                ; An explicit speaking choice (Setup()/WebUI) must survive an animation change --
+                ; only re-derive from AnimDB when nothing has locked this position yet.
+                bool locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
+                    && SNSL_JMap.getInt(position_objs[i], "speaking_locked", 0) == 1
+                bool orgasm_locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
+                    && SNSL_JMap.getInt(position_objs[i], "orgasm_locked", 0) == 1
+                String applied_speaking = speaking
+                if locked
+                    applied_speaking = SpeakingCsvFromIndex(i)
+                endif
+                int applied_no_org = no_org
+                if orgasm_locked && position_objs[i] > 0
+                    applied_no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", no_org)
+                endif
+                SetPosition(i, positions[i], applied_no_org, applied_speaking)
+                thread.DisableOrgasm(positions[i], applied_no_org == 1)
                 if position_objs && i < position_objs.length && position_objs[i] > 0
-                    JMap.setInt(position_objs[i], "orgasm_mode", expected)
-                    JMap.setInt(position_objs[i], "dressed", dressed)
-                    JMap.setInt(position_objs[i], "deny_orgasm", 0)
-                    JMap.setInt(position_objs[i], "speaking_locked", 0)
+                    SNSL_JMap.setInt(position_objs[i], "orgasm_mode", expected)
+                    SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+                    if !orgasm_locked
+                        SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
+                    endif
+                    if !locked
+                        SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
+                    endif
                 endif
             endif
             i += 1
@@ -3045,13 +3089,29 @@ Function SeedOverlayFromAnimDb()
             dressed = clothed_arr[i]
         endif
         if positions[i]
-            SetPosition(i, positions[i], no_org, speaking)
-            thread.DisableOrgasm(positions[i], no_org == 1)
+            bool locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
+                && SNSL_JMap.getInt(position_objs[i], "speaking_locked", 0) == 1
+            bool orgasm_locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
+                && SNSL_JMap.getInt(position_objs[i], "orgasm_locked", 0) == 1
+            String applied_speaking = speaking
+            if locked
+                applied_speaking = SpeakingCsvFromIndex(i)
+            endif
+            int applied_no_org = no_org
+            if orgasm_locked && position_objs[i] > 0
+                applied_no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", no_org)
+            endif
+            SetPosition(i, positions[i], applied_no_org, applied_speaking)
+            thread.DisableOrgasm(positions[i], applied_no_org == 1)
             if position_objs && i < position_objs.length && position_objs[i] > 0
-                JMap.setInt(position_objs[i], "orgasm_mode", expected)
-                JMap.setInt(position_objs[i], "dressed", dressed)
-                JMap.setInt(position_objs[i], "deny_orgasm", 0)
-                JMap.setInt(position_objs[i], "speaking_locked", 0)
+                SNSL_JMap.setInt(position_objs[i], "orgasm_mode", expected)
+                SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+                if !orgasm_locked
+                    SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
+                endif
+                if !locked
+                    SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
+                endif
             endif
         endif
         i += 1
@@ -3079,9 +3139,9 @@ Function TM_ApplyOrgasmMode(Actor akActor, String mode)
                 deny = 1
             endif
             String speaking = ""
-            int speaking_obj = JMap.getObj(position_objs[i], "speaking_modifiers")
-            if speaking_obj > 0 && JArray.count(speaking_obj) > 0
-                speaking = JArray.getStr(speaking_obj, 0)
+            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
+            if speaking_obj > 0 && SNSL_JArray.count(speaking_obj) > 0
+                speaking = SNSL_JArray.getStr(speaking_obj, 0)
             endif
             if speaking == "" && mode != "not_expected"
                 speaking = SkyrimNet_SexLab_AnimDb.SpeakingDefaultFromOrgasmExpected(1)
@@ -3089,7 +3149,8 @@ Function TM_ApplyOrgasmMode(Actor akActor, String mode)
                 speaking = SkyrimNet_SexLab_AnimDb.SpeakingDefaultFromOrgasmExpected(0)
             endif
             SetPosition(i, positions[i], no_org, speaking)
-            JMap.setInt(position_objs[i], "deny_orgasm", deny)
+            SNSL_JMap.setInt(position_objs[i], "deny_orgasm", deny)
+            SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
             thread.DisableOrgasm(akActor, no_org == 1 || deny == 1)
             MarkUserDefaultsDirty()
             return
@@ -3110,9 +3171,9 @@ Function TM_ApplySpeaking(Actor akActor, String speaking)
     int i = 0
     while i < n
         if positions[i] == akActor
-            int no_org = JMap.getInt(position_objs[i], "no_orgasm", 0)
+            int no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
             SetPosition(i, positions[i], no_org, speaking)
-            JMap.setInt(position_objs[i], "speaking_locked", 1)
+            SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
             MarkUserDefaultsDirty()
             return
         endif
@@ -3132,7 +3193,7 @@ Function TM_ApplyClothed(Actor akActor, Bool clothed)
     int i = 0
     while i < n
         if positions[i] == akActor
-            JMap.setInt(position_objs[i], "dressed", clothed as int)
+            SNSL_JMap.setInt(position_objs[i], "dressed", clothed as int)
             MarkUserDefaultsDirty()
             return
         endif
@@ -3160,10 +3221,10 @@ Function TM_SaveAnimationSettings()
         int dressed = 0
         String speaking = ""
         if position_objs && i < position_objs.length && position_objs[i] > 0
-            no_org = JMap.getInt(position_objs[i], "no_orgasm", 0)
-            dressed = JMap.getInt(position_objs[i], "dressed", 0)
+            no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
+            dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0)
             speaking = SpeakingCsvFromIndex(i)
-            if JMap.getInt(position_objs[i], "deny_orgasm", 0) == 1
+            if SNSL_JMap.getInt(position_objs[i], "deny_orgasm", 0) == 1
                 no_org = 0
             endif
         endif
@@ -3182,7 +3243,8 @@ Function TM_SaveAnimationSettings()
     i = 0
     while position_objs && i < n && i < position_objs.length
         if position_objs[i] > 0
-            JMap.setInt(position_objs[i], "speaking_locked", 0)
+            SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
+            SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 0)
         endif
         i += 1
     endwhile

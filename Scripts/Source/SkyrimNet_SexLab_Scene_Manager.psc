@@ -968,8 +968,15 @@ String Function BuildAllSceneInfosJson()
         endif
         i += 1
     endwhile
-    if last_ended_obj > 0
+    ; last_ended_obj is a retained handle held across save/load; the JSON store invalidates it on
+    ; load (JsonStore.h OnNewSession) same as any other retained Papyrus member -- re-check isExists
+    ; or a dead handle gets attached as a null "_scenes" entry (SceneInfo.keyFromState(null) -> 'new'
+    ; on the JS side, clobbering or crashing the Scene Creator draft). See KNOWLEDGEBASE "JSON store
+    ; handles die on every save load".
+    if last_ended_obj > 0 && SNSL_JValue.isExists(last_ended_obj)
         SNSL_JArray.addObj(arr, last_ended_obj)
+    elseif last_ended_obj > 0
+        last_ended_obj = 0
     endif
     SNSL_JMap.setObj(root, "_scenes", arr)
     String json = SNSL_JValue.dump(root)
@@ -1591,9 +1598,13 @@ String Function GetThreadsJson(Actor speaker = None)
         ; Read-only: do not allocate/Setup scenes while dumping JSON
         SkyrimNet_SexLab_Scene sl_scene = GetSceneByThread(threads[i], False, False)
         if sl_scene != None 
-            if sl_scene.GetThreadActive() 
-                JArray.addObj(threads_array, sl_scene.GetThreadObj(speaker))
-            endif 
+            if sl_scene.GetThreadActive()
+                ; sl_scene.GetThreadObj() returns an SNSL_JValue handle (Scene.psc's thread_obj is
+                ; now JsonStore-backed); this array is still a legacy JContainers structure, so
+                ; bridge via a JSON round-trip rather than embedding the raw handle (see
+                ; BuildWebUIAnimationMenuState's identical bridge for group_info's subtrees).
+                JArray.addObj(threads_array, JValue.objectFromPrototype(SNSL_JValue.dump(sl_scene.GetThreadObj(speaker))))
+            endif
         endif 
         i += 1
     endwhile
