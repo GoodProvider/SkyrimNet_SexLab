@@ -1104,7 +1104,7 @@ Function WebUI_OnAnimRegistrySave(String json)
     if scene_sid >= 0 && JMap.hasKey(obj, "_positions")
         SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
         if sl_scene && sl_scene.GetThreadActive()
-            sl_scene.WebUI_ApplyLivePositions(obj)
+            sl_scene.WebUI_ApplyLivePositions(obj, true)
         endif
     endif
     ; obj stays JContainers until Scene.WebUI_ApplyLivePositions migrates (S3b); payload is SNSL.
