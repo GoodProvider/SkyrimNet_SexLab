@@ -103,7 +103,7 @@ C++ loads **both** trees at `Load()` and `BuildUICatalog` picks one from Control
 
 Optional on any option node: `requiresPlugin` (ESP/ESL name) — omitted from the catalog when that mod is not loaded. Optional `requiresDll` (e.g. `DeviousDevices.dll`) — omitted when `GetModuleHandle` does not find that SKSE plugin.
 
-Optional `source` (string) on TargetMenu option roots and MainPanel entries: omit or `"sexlab"` is native (no decoration). Any other value (e.g. `"dom"`) paints a 50% badge in the upper left above TargetMenu option labels, and a leading superscript on the ControlPanel views pulldown. Nested cascade children inherit the parent pulldown’s `source` when they have none.
+Optional `source` (string) on TargetMenu option roots and MainPanel entries: omit or `"sexlab"` is native (no decoration). Any other value (e.g. `"dom"`) paints a 50% badge in the upper left above TargetMenu option labels, and a leading superscript on the ControlPanel views pulldown. Nested cascade children inherit the parent pulldown’s `source` when they have none. Each foreign source also gets a stable color hashed from its (lowercased) string — FNV-1a + murmur3 `fmix32` → hue, saturation area-uniform on 45–90% (`sourceColor` in `index.html`) — that tints its cascade / Parameters / papyrus / live-cascade panels, foreign main panels, and its badge. Same string, same color every run; no stored state.
 
 **Filesystem dispatch actions** (optional handlers / third parties): an `action` option may carry `plugin`, `questFormId` (local, e.g. `"0x800"`), `scriptName`, `executionFunctionName`, and `parameterMapping`. C++ synthesizes an `ActionDef` so `ExecuteAction` works without an `actions_index` row. Prefer `plugin` + local FormID over EditorID for optional ESPs.
 

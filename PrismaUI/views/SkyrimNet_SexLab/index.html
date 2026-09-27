@@ -443,6 +443,17 @@
             animation: panelIn 0.25s ease-out;
         }
 
+        /* Foreign `source` panels: hue/saturation from sourceColor(); lightness fixed. */
+        .panel.source-tinted {
+            --src-tint: hsla(var(--src-h), var(--src-s), 55%, 0.16);
+            background: linear-gradient(var(--src-tint), var(--src-tint)), var(--bg);
+            border-color: hsla(var(--src-h), var(--src-s), 60%, 0.55);
+        }
+
+        .panel.source-tinted > .section-header {
+            color: hsl(var(--src-h), var(--src-s), 70%);
+        }
+
         #sex-menu-panel {
             width: min(720px, 90vw);
             max-height: 80vh;
@@ -1307,6 +1318,11 @@
             line-height: 1;
             color: var(--text-secondary);
             align-self: flex-start;
+        }
+
+        .option-source.source-tinted,
+        .source-sup.source-tinted {
+            color: hsl(var(--src-h), var(--src-s), 70%);
         }
 
         .option-label {
@@ -2239,9 +2255,11 @@
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel'];
             const want = domIdForPanelKey(panelKey);
+            const wantSrc = sourceOf(findMainPanelByKey(panelKey));
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (!el) continue;
+                applySourceTint(el, pid === want ? wantSrc : '');
                 if (pid === want) {
                     // Description Editor opens behind "loading..." until the seed lands, then binds the final pick directly.
                     const deOpening = pid === 'description-editor-panel' && el.style.display === 'none';
@@ -2286,9 +2304,11 @@
             const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel'];
+            const wantSrc = sourceOf(findMainPanelByKey(MAIN_SELECTED_KEY));
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (!el) continue;
+                applySourceTint(el, pid === want ? wantSrc : '');
                 el.style.display = (pid === want) ? 'flex' : 'none';
                 if (pid === 'log-panel' && pid !== want)
                     logStopPolling();
@@ -2342,6 +2362,11 @@
                 }
                 if (payload._fieldsPending)
                     delete payload._fieldsPending;
+                // Keep the opener's source so the fields panel stays tinted after navStack resets.
+                if (!sourceOf(payload)) {
+                    const inherited = navEffectiveSource(papyrusSelectedOpt);
+                    if (inherited) payload.source = inherited;
+                }
                 papyrusSelectedOpt = payload;
                 leftSelectedOpt = payload;
                 navStack = [];
@@ -2352,6 +2377,7 @@
             }
             const panel = document.createElement('div');
             panel.className = 'panel target-pulldown-panel target-cascade-live';
+            applySourceTint(panel, navEffectiveSource([payload, papyrusSelectedOpt]));
             const header = document.createElement('div');
             header.className = 'section-header';
             header.textContent = payload.label || payload.title || 'choices';
@@ -2924,6 +2950,74 @@
             return String(src || '').toUpperCase();
         }
 
+        // FNV-1a 32-bit + murmur3 fmix32 avalanche: same string → same color every run,
+        // near-identical names ("dom" / "dom2") land far apart.
+        function sourceHash32(src) {
+            const s = String(src || '').trim().toLowerCase();
+            let h = 0x811c9dc5;
+            for (let i = 0; i < s.length; i++) {
+                h ^= s.charCodeAt(i);
+                h = Math.imul(h, 0x01000193);
+            }
+            h ^= h >>> 16;
+            h = Math.imul(h, 0x85ebca6b);
+            h ^= h >>> 13;
+            h = Math.imul(h, 0xc2b2ae35);
+            h ^= h >>> 16;
+            return h >>> 0;
+        }
+
+        // Hue/saturation as polar coords on an annulus of the HS disc (s in [0.45, 0.90]).
+        // Sampling uniform by *area* (sqrt) rather than uniform in s keeps points from
+        // crowding the low-saturation center, where hue differences collapse — the best
+        // expected pairwise spread a per-string hash can give without knowing the other sources.
+        const SOURCE_S_MIN = 0.45;
+        const SOURCE_S_MAX = 0.90;
+        const sourceColorCache = new Map();
+        function sourceColor(src) {
+            const key = String(src || '').trim().toLowerCase();
+            let c = sourceColorCache.get(key);
+            if (c) return c;
+            const h32 = sourceHash32(key);
+            const u1 = (h32 >>> 16) / 65536;
+            const u2 = (h32 & 0xffff) / 65535;
+            const s = Math.sqrt(SOURCE_S_MIN * SOURCE_S_MIN
+                + u2 * (SOURCE_S_MAX * SOURCE_S_MAX - SOURCE_S_MIN * SOURCE_S_MIN));
+            c = { h: Math.round(u1 * 3600) / 10, s: Math.round(s * 1000) / 10 };
+            sourceColorCache.set(key, c);
+            return c;
+        }
+
+        function applySourceTint(el, src) {
+            if (!el) return;
+            if (isForeignSource(src)) {
+                const c = sourceColor(src);
+                el.classList.add('source-tinted');
+                el.style.setProperty('--src-h', String(c.h));
+                el.style.setProperty('--src-s', c.s + '%');
+            } else {
+                el.classList.remove('source-tinted');
+                el.style.removeProperty('--src-h');
+                el.style.removeProperty('--src-s');
+            }
+        }
+
+        // First foreign source among `extra`, then navStack[0..depth] deepest→root
+        // (same inheritance as optionWithInheritedSource).
+        function navEffectiveSource(extra, depth) {
+            for (const o of (Array.isArray(extra) ? extra : [extra])) {
+                const s = sourceOf(o);
+                if (isForeignSource(s)) return s;
+            }
+            const stack = Array.isArray(navStack) ? navStack : [];
+            const top = (depth == null) ? stack.length - 1 : Math.min(depth, stack.length - 1);
+            for (let i = top; i >= 0; i--) {
+                const s = sourceOf(stack[i]);
+                if (isForeignSource(s)) return s;
+            }
+            return '';
+        }
+
         function optionWithInheritedSource(entry, parent) {
             if (!entry || typeof entry !== 'object') return entry;
             if (sourceOf(entry) || !isForeignSource(sourceOf(parent)))
@@ -2943,6 +3037,7 @@
                 const badge = document.createElement('span');
                 badge.className = 'option-source';
                 badge.textContent = sourceDisplay(src);
+                applySourceTint(badge, src);
                 const lab = document.createElement('span');
                 lab.className = 'option-label';
                 lab.textContent = label;
@@ -2970,6 +3065,7 @@
             const sup = document.createElement('sup');
             sup.className = 'source-sup';
             sup.textContent = sourceDisplay(src);
+            applySourceTint(sup, src);
             el.appendChild(sup);
             el.appendChild(document.createTextNode(label));
         }
@@ -6884,6 +6980,7 @@
 
             const panel = document.createElement('div');
             panel.className = 'panel target-papyrus-panel';
+            applySourceTint(panel, navEffectiveSource(opt));
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
                 || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop'
@@ -7008,6 +7105,7 @@
 
                 const panel = document.createElement('div');
                 panel.className = 'panel target-pulldown-panel';
+                applySourceTint(panel, navEffectiveSource(null, i));
 
                 const header = document.createElement('div');
                 header.className = 'section-header';
@@ -7052,6 +7150,7 @@
 
             const action = TARGET_CATALOG.actions[selectedActionName];
             const actionNode = findActionNode(selectedActionName);
+            applySourceTint(panel, navEffectiveSource(actionNode));
             if (actionNode) ensureActionParams(actionNode);
 
             const bar = document.createElement('div');
