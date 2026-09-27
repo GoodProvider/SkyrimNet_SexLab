@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Voice
+- SexLab moans now follow speaking modifiers: an actor moans only while its modifiers include `_pleasure_` or `_pain_`; no modifiers, `_gagged_`, or `_kissing_` force the actor silent (`thread.SetVoice(..., ForceSilent)`). Re-applied at scene setup, every `StageStart`, live speaking edits, and after a load. Dashboard toggle **SexLab moans follow speaking modifiers** (`sexlab.voice.follow_speaking`, default on). See [docs/reference/protocol-tokens.md](docs/reference/protocol-tokens.md#sexlab-voice)
+
 ### AnimDB
 - Live scenes now apply the animation's speaking modifiers (as shown in the Description Editor, per stage) at every `StageStart`, so a position with orgasm not expected / empty speaking no longer keeps the creator's `_pleasure_`. Live speaking edits stay until Save or an animation switch
 - Scenes started without "override animation settings" now begin each actor in the clothed state most candidate animations share (new `AnimDb_ClothedMajority` native; tie → undressed), so an all-dressed animation set (hug, kiss) no longer strips then re-dresses at the first stage

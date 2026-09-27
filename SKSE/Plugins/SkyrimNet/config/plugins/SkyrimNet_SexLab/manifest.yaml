@@ -75,6 +75,13 @@ schema:
       defaultValue: 5.0
       category: "Narration"
 
+    - name: "SexLab moans follow speaking modifiers"
+      path: "sexlab.voice.follow_speaking"
+      type: "bool"
+      description: "SexLab moans only for actors with _pleasure_ or _pain_ speaking modifiers; actors with none, _gagged_, or _kissing_ are silent. Off = normal SexLab voices."
+      defaultValue: true
+      category: "Voice"
+
     - name: "Narration cooldown (sec)"
       path: "sexlab.narration.cooldown"
       type: "float"

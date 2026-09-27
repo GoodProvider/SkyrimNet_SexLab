@@ -63,6 +63,8 @@ bool Property rape_allowed = true Auto
 bool Property sex_edit_tags_player = true Auto 
 bool Property sex_edit_tags_nonplayer = False Auto
 float Property orgasm_delay = 5.0 Auto
+; SexLab moans only for _pleasure_ / _pain_ speaking modifiers (Scene.ApplySexLabVoice).
+bool Property voice_follows_speaking = true Auto
 
 String Property storage_actor_lock_key = "skyrimnet_sexlab_scene_actor_lock" AutoReadOnly 
 String Property storage_items_key = "skyrimnet_sexlab_storage_items" AutoReadOnly

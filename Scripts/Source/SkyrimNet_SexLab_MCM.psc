@@ -143,6 +143,7 @@ Function ApplyPluginConfig()
     main.sex_edit_tags_player = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.tags.player", true)
     main.sex_edit_tags_nonplayer = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.tags.nonplayer", false)
     main.orgasm_delay = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.orgasm.delay", 5.0)
+    main.voice_follows_speaking = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.voice.follow_speaking", true)
     main.direct_narration_cool_off = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.narration.cooldown", 20.0)
     main.direct_narration_max_distance = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.narration.max_distance", 15.0)
     main.direct_narration_max_distance_default = 15.0

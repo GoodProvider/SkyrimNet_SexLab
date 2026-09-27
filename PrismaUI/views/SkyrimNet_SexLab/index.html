@@ -8285,6 +8285,7 @@
         function scToggleOverride() {
             SC.positionOverride = SC.positionOverride === false;
             scRenderPositions();
+            scSyncPositionsToLastAnim();
         }
 
         function scRenderPositions() {
@@ -8857,6 +8858,7 @@
                         scAddAnimToSelection(top);
                         return;
                     }
+                    scSyncPositionsToLastAnim();
                 }
                 scRenderAnimList();
                 return;
@@ -8880,6 +8882,7 @@
             }
             if (scIsAnimSelected(reg)) {
                 SC.selectedRegistries = SC.selectedRegistries.filter(r => r !== reg);
+                scSyncPositionsToLastAnim();
                 scRenderAnimList();
                 return;
             }
@@ -8897,19 +8900,43 @@
             if (!reg) return;
             if (!scIsAnimSelected(reg)) SC.selectedRegistries.push(reg);
             const reordered = scReorderPositionsForAnim(a);
-            const no = a._pos_no_orgasm || [];
-            const sp = a._pos_speaking_modifiers || [];
-            const cl = a._clothed || [];
-            (SC.positions || []).forEach((p, i) => {
-                if (i < no.length) p._no_orgasm = no[i] ? 1 : 0;
-                if (i < sp.length && sp[i]) p._speaking = Array.isArray(sp[i]) ? sp[i].join(',') : String(sp[i]);
-                if (i < cl.length) p._dressed = cl[i] ? 1 : 0;
-            });
+            scApplyAnimToPositions(a);
             scPersistPositionsToSceneInfo();
             scRenderPositions();
             scRenderAnimList();
             // Position-match queries depend on actor order, so requery after a swap.
             if (reordered && SC.filterBy === 'positions') scRefreshAnims();
+        }
+
+        // Copies an animation's per-position dressed / orgasm / speaking defaults into the Actor table.
+        // Victim is a per-scene role, not an animation setting, so it is left alone.
+        function scApplyAnimToPositions(a) {
+            const no = a._pos_no_orgasm || [];
+            const sp = a._pos_speaking_modifiers || [];
+            const cl = a._clothed || a._pos_clothed || [];
+            (SC.positions || []).forEach((p, i) => {
+                if (i < no.length) p._no_orgasm = no[i] ? 1 : 0;
+                if (i < sp.length) p._speaking = Array.isArray(sp[i]) ? sp[i].join(',') : String(sp[i] || '');
+                if (i < cl.length) p._dressed = cl[i] ? 1 : 0;
+            });
+        }
+
+        // The most recently selected animation still in the list, or null.
+        function scLastSelectedAnim() {
+            const regs = scSelectedRegistries();
+            if (!regs.length) return null;
+            const reg = regs[regs.length - 1];
+            return (SC.lastAnims || []).find(x => x._registry === reg) || null;
+        }
+
+        // With override off the Actor table mirrors the last-selected animation's settings.
+        function scSyncPositionsToLastAnim() {
+            if (SC.mode === 'active' || SC.positionOverride !== false) return;
+            const a = scLastSelectedAnim();
+            if (!a) return;
+            scApplyAnimToPositions(a);
+            scPersistPositionsToSceneInfo();
+            scRenderPositions();
         }
 
         // Reorders SC.positions so each actor's gender matches the animation's slot gender.
@@ -8944,11 +8971,13 @@
 
         function scClearAnims() {
             SC.selectedRegistries = (SC.lastAnimRegistries || []).slice();
+            scSyncPositionsToLastAnim();
             scRenderAnimList();
         }
 
         function scNoneAnims() {
             SC.selectedRegistries = [];
+            scSyncPositionsToLastAnim();
             scRenderAnimList();
         }
 

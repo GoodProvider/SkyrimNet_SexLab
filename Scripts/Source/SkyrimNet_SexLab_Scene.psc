@@ -275,10 +275,11 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
             sender = positions[0]
             receiver = None 
         else 
-            sender = positions[1] 
-            receiver = positions[0] 
-        endif 
-    endif 
+            sender = positions[1]
+            receiver = positions[0]
+        endif
+    endif
+    ApplySexLabVoices()
     if num_actors > 1 && num_victims > 0
         DbgMsg("Setup", "thread.GetVictim()")
         Actor victim = thread.GetVictim()
@@ -590,6 +591,7 @@ Function EnsureActorArraysLargeEnough(int size)
             ; After a load: restore before anything (SeedOverlayFromAnimDb, SetPosition) reads it.
             if thread != None && i < thread.positions.length
                 RestorePosition(i, thread.positions[i])
+                ApplySexLabVoice(i)
             endif
         endif
         i += 1
@@ -909,7 +911,41 @@ String Function SpeakingCsvFromIndex(int i)
         si += 1
     endwhile
     return speaking
-EndFunction 
+EndFunction
+
+; SexLab moans only for _pleasure_ / _pain_; every other speaking state (empty, _gagged_,
+; _kissing_) is ForceSilent. Call after the speaking overlay is written.
+Function ApplySexLabVoice(int i)
+    if main == None || !main.voice_follows_speaking || thread == None
+        return
+    endif
+    Actor[] positions = thread.positions
+    if !positions || i < 0 || i >= positions.length || positions[i] == None
+        return
+    endif
+    Actor a = positions[i]
+    String csv = SpeakingCsvFromIndex(i)
+    bool voiced = StringUtil.Find(csv, "_pleasure_") >= 0 || StringUtil.Find(csv, "_pain_") >= 0
+    sslBaseVoice v = thread.GetVoice(a)
+    ; Silenced before SexLab picked a voice leaves Voice none; pick one when un-silencing.
+    if voiced && v == None && sexlab != None
+        v = sexlab.PickVoice(a)
+    endif
+    thread.SetVoice(a, v, !voiced)
+    Trace("ApplySexLabVoice", GetDisplayName(a)+" speaking:"+csv+" voiced:"+voiced)
+EndFunction
+
+Function ApplySexLabVoices()
+    if thread == None
+        return
+    endif
+    int n = thread.positions.length
+    int i = 0
+    while i < n
+        ApplySexLabVoice(i)
+        i += 1
+    endwhile
+EndFunction
 
 bool Function SetActor(int i, Actor akActor)
     DbgEnter("SetActor", "i:"+i+" "+GetDisplayName(akActor))
@@ -1347,8 +1383,9 @@ Function StageStart()
         animation_change_from = from_desc
     endif
     ApplyAnimDbSpeaking()
+    ApplySexLabVoices()
     manager.SaveThreadsJson()
-    if SexLab == None 
+    if SexLab == None
         Trace("StageStart","sexlab is None | actors:"+actor_names)
         DbgReturn("StageStart", "void")
         return 
@@ -3459,6 +3496,7 @@ Function TM_ApplySpeaking(Actor akActor, String speaking)
             int no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
             SetPosition(i, positions[i], no_org, speaking)
             SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
+            ApplySexLabVoice(i)
             MarkUserDefaultsDirty()
             return
         endif
