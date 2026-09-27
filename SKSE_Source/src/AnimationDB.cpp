@@ -1,4 +1,5 @@
 #include "AnimationDB.h"
+#include "JsonUtil.h"
 #include "WebUI_Log.h"
 
 #include <Windows.h>
@@ -22,7 +23,7 @@ namespace AnimationDB
 
         std::string JsonDump(const nlohmann::json& j)
         {
-            return j.dump();
+            return SafeDump(j);
         }
 
         nlohmann::json VecIntToJson(const std::vector<int>& v)
@@ -1670,7 +1671,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
         try {
             std::ofstream out(path);
-            out << file.dump(2);
+            out << SafeDump(file, 2);
         } catch (...) {
             return false;
         }

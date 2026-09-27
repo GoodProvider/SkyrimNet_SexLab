@@ -1,8 +1,11 @@
 #include "JsonStore.h"
+#include "JsonUtil.h"
 #include "WebUI_Log.h"
 
+#include <Windows.h>
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <fstream>
 #include <mutex>
 #include <sstream>
@@ -528,6 +531,8 @@ namespace SexLabNet::Json
 
     Handle ReleaseAndRetain(Handle previous, Handle next)
     {
+        if (previous == next)
+            return next;  // Release first would free the object the caller keeps
         Release(previous);
         return Retain(next);
     }
@@ -808,7 +813,7 @@ namespace SexLabNet::Json
         const Handle attached = AttachChild(parentSlot, child, "ArraySetObj");
         n = Resolve(h);
         if (!n || static_cast<std::size_t>(index) >= n->arr.size()) return;
-        FreeValueChild(n->arr[index]);
+        if (n->arr[index].type != ValueType::kObject || n->arr[index].obj != attached) FreeValueChild(n->arr[index]);
         n->arr[index] = Value{ ValueType::kObject };
         n->arr[index].obj = attached;
     }
@@ -1024,7 +1029,7 @@ namespace SexLabNet::Json
             return "";
         }
         try {
-            return NodeToJson(*n).dump();
+            return SafeDump(NodeToJson(*n));
         } catch (const std::exception& e) {
             webui_log::error("Dump failed for handle 0x{:X}: {}", static_cast<std::uint32_t>(h), e.what());
             return "";
@@ -1043,15 +1048,35 @@ namespace SexLabNet::Json
         return FromJsonPrototype(buf.str());
     }
 
+    /// Writes path + ".tmp" and moves it over path, so a failed write never leaves a truncated file.
     void WriteToFile(Handle h, const std::string& path)
     {
         const std::string json = Dump(h);
-        std::ofstream f(path, std::ios::binary | std::ios::trunc);
-        if (!f) {
-            webui_log::error("WriteToFile: could not open {} for writing", path);
+        if (json.empty()) {
+            webui_log::error("WriteToFile: nothing to write for handle 0x{:X}; {} left unchanged",
+                static_cast<std::uint32_t>(h), path);
             return;
         }
-        f << json;
+        const std::string tmp = path + ".tmp";
+        {
+            std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+            if (!f) {
+                webui_log::error("WriteToFile: could not open {} for writing", tmp);
+                return;
+            }
+            f << json;
+            f.flush();
+            if (!f) {
+                webui_log::error("WriteToFile: write to {} failed", tmp);
+                f.close();
+                std::remove(tmp.c_str());
+                return;
+            }
+        }
+        if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            webui_log::error("WriteToFile: could not replace {} (error {})", path, GetLastError());
+            std::remove(tmp.c_str());
+        }
     }
 
     // --- Lifecycle ---

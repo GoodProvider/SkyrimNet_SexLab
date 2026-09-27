@@ -1,4 +1,5 @@
 #include "WebUI.h"
+#include "JsonUtil.h"
 #include "Papyrus_WebUI.h"
 #include "WebUI_Log.h"
 #include "ActionCatalog.h"
@@ -43,6 +44,20 @@ public:
         return true;
     }
 };
+
+/// Runs a PrismaUI listener body. An exception escaping a listener ends the game, so any throw
+/// (bad payload type, json::value() mismatch, ...) is logged and the call is dropped.
+template <class Body>
+void RunGuarded(const char* listener, Body&& body) noexcept
+{
+    try {
+        body();
+    } catch (const std::exception& e) {
+        webui_log::error("{}: {}", listener, e.what());
+    } catch (...) {
+        webui_log::error("{}: unknown exception", listener);
+    }
+}
 
 std::string ReadPluginVersionFromInfoJson()
 {
@@ -92,7 +107,7 @@ void PushLogChunk(bool reset, const std::vector<std::string>& lines, const std::
     j["reset"] = reset;
     j["lines"] = lines;
     j["path"] = pathHint;
-    WebUI_Invoke("appendLogLines(" + j.dump() + ");");
+    WebUI_Invoke("appendLogLines(" + SafeDump(j) + ");");
 }
 
 /// Caller must hold g_logFileMutex.
@@ -251,7 +266,7 @@ void InvokeConfigureSettingsPanel()
         std::lock_guard lock(g_rebuildTsMutex);
         j["lastRebuild"] = g_lastRebuildTimestamp.empty() ? "never" : g_lastRebuildTimestamp;
     }
-    WebUI_Invoke("configureSettingsPanel(" + j.dump() + ");");
+    WebUI_Invoke("configureSettingsPanel(" + SafeDump(j) + ");");
 }
 
 void InvokeLogPanelOpen()
@@ -427,7 +442,7 @@ void WebUI_SetGameReady()
     } else {
         webui_log::info("Game ready — WebUI input enabled; ActionCatalog reloaded.");
         auto panels = ActionCatalog::BuildMainPanelsCatalog();
-        WebUI_Invoke("configureControlPanel(" + panels.dump() + ");");
+        WebUI_Invoke("configureControlPanel(" + SafeDump(panels) + ");");
     }
 }
 
@@ -500,7 +515,7 @@ static void WebUI_Visibility_HideImpl(bool commit)
     WebUI_Invoke("setGamePaused(true);");
 }
 
-/// Unfocuses and hides the PrismaUI overlay without clearing Target_Current.
+/// Unfocuses and hides the PrismaUI overlay without clearing the focus actor.
 /// Commits confirmed SceneInfos, restores uncommitted ActorBondage on the handler, then drops the JS map.
 void WebUI_Visibility_Hide()
 {
@@ -557,7 +572,7 @@ void WebUI_InteropCall(const char* functionName, const std::string& jsonArgument
 {
     if (!functionName || !*functionName)
         return;
-    const std::string quoted = nlohmann::json(jsonArgument).dump();
+    const std::string quoted = SafeDump(nlohmann::json(jsonArgument));
     WebUI_Invoke(std::string(functionName) + "(JSON.parse(" + quoted + "));");
 }
 
@@ -624,10 +639,12 @@ void InitWebUI()
             g_domReady = true;
             webui_log::info("WebUI DomReady.");
             FlushPendingInvokes();
-            if (ActionCatalog::IsLoaded()) {
-                auto panels = ActionCatalog::BuildMainPanelsCatalog();
-                WebUI_Invoke("configureControlPanel(" + panels.dump() + ");");
-            }
+            RunGuarded("DomReady", [] {
+                if (ActionCatalog::IsLoaded()) {
+                    auto panels = ActionCatalog::BuildMainPanelsCatalog();
+                    WebUI_Invoke("configureControlPanel(" + SafeDump(panels) + ");");
+                }
+            });
         });
 
         if (!PrismaUI->IsValid(g_view)) {
@@ -638,457 +655,525 @@ void InitWebUI()
         PrismaUI->Hide(g_view);
 
         PrismaUI->RegisterJSListener(g_view, "onCancel", [](const char*) {
-            WebUI_Invoke("hidePanel('target_menu_panel');");
-            PapyrusBindings_WebUI::ClearTargetMenuSession();
-            WebUI_Visibility_HideWithoutCommit();
+            RunGuarded("onCancel", [&] {
+                WebUI_Invoke("hidePanel('target_menu_panel');");
+                PapyrusBindings_WebUI::ClearTargetMenuSession();
+                WebUI_Visibility_HideWithoutCommit();
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onYesNoResult", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int button = j.value("button", 2);
-                const int creator_sid = j.value("creator_sid", PapyrusBindings_WebUI::YesNo_Creator_Sid);
-                webui_log::info("onYesNoResult button={} creator_sid={}", button, creator_sid);
-                WebUI_Invoke("hidePanel('yesno_panel');");
-                // Yes (0) opens SceneCreator next — keep overlay focused. Random/No hide unless TargetMenu stays.
-                if (button != 0 && !PapyrusBindings_WebUI::TargetMenuSessionActive)
-                    WebUI_Visibility_HideWithoutCommit();
-                PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnYesNoResult", creator_sid, button);
-            } catch (...) {
-                webui_log::warn("onYesNoResult: bad JSON");
-            }
+            RunGuarded("onYesNoResult", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int button = j.value("button", 2);
+                    const int creator_sid = j.value("creator_sid", PapyrusBindings_WebUI::YesNo_Creator_Sid);
+                    webui_log::info("onYesNoResult button={} creator_sid={}", button, creator_sid);
+                    WebUI_Invoke("hidePanel('yesno_panel');");
+                    // Yes (0) opens SceneCreator next — keep overlay focused. Random/No hide unless TargetMenu stays.
+                    if (button != 0 && !PapyrusBindings_WebUI::TargetMenuSessionActive)
+                        WebUI_Visibility_HideWithoutCommit();
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnYesNoResult", creator_sid, button);
+                } catch (...) {
+                    webui_log::warn("onYesNoResult: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneCreatorResult", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const std::string action = j.value("_action", "cancel");
-                const int creator_sid = j.value("_creator_sid", -1);
-                // creator_sid 0 is a valid pool slot — only _from_target_menu marks the C++ provisional path.
-                const bool fromTargetMenu = j.value("_from_target_menu", false);
-                webui_log::info("onSceneCreatorResult action={} creator_sid={} fromTargetMenu={}", action,
-                    creator_sid, fromTargetMenu);
-                WebUI_Invoke("hidePanel('scene_creator_panel');");
-                PapyrusBindings_WebUI::ClearSceneCreatorPending();
-                if (action == "start") {
-                    WebUI_Invoke("hidePanel('target_menu_panel');");
-                    WebUI_Invoke("hidePanel('control_panel');");
-                    PapyrusBindings_WebUI::ClearTargetMenuSession();
-                    WebUI_Visibility_Hide();
-                    if (fromTargetMenu) {
-                        j["_from_target_menu"] = true;
-                        PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneCreatorHandoff", j.dump());
+            RunGuarded("onSceneCreatorResult", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const std::string action = j.value("_action", "cancel");
+                    const int creator_sid = j.value("_creator_sid", -1);
+                    // creator_sid 0 is a valid pool slot — only _from_target_menu marks the C++ provisional path.
+                    const bool fromTargetMenu = j.value("_from_target_menu", false);
+                    webui_log::info("onSceneCreatorResult action={} creator_sid={} fromTargetMenu={}", action,
+                        creator_sid, fromTargetMenu);
+                    WebUI_Invoke("hidePanel('scene_creator_panel');");
+                    PapyrusBindings_WebUI::ClearSceneCreatorPending();
+                    if (action == "start") {
+                        WebUI_Invoke("hidePanel('target_menu_panel');");
+                        WebUI_Invoke("hidePanel('control_panel');");
+                        PapyrusBindings_WebUI::ClearTargetMenuSession();
+                        WebUI_Visibility_Hide();
+                        if (fromTargetMenu) {
+                            j["_from_target_menu"] = true;
+                            PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneCreatorHandoff", SafeDump(j));
+                        } else {
+                            PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorResult", creator_sid,
+                                SafeDump(j));
+                        }
                     } else {
-                        PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorResult", creator_sid,
-                            j.dump());
+                        // "close" = Scene Menu Close button; "cancel" (Escape on a Papyrus creator) keeps the flag.
+                        if (action == "close")
+                            ActionCatalog::SetShowSceneCreator(false);
+                        if (!PapyrusBindings_WebUI::TargetMenuSessionActive)
+                            WebUI_Visibility_HideWithoutCommit();
+                        if (fromTargetMenu) {
+                            webui_log::info("onSceneCreatorResult: target-menu cancel");
+                        } else {
+                            PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorResult", creator_sid,
+                                "{\"_action\":\"cancel\"}");
+                        }
                     }
-                } else {
-                    // "close" = Scene Menu Close button; "cancel" (Escape on a Papyrus creator) keeps the flag.
-                    if (action == "close")
-                        ActionCatalog::SetShowSceneCreator(false);
-                    if (!PapyrusBindings_WebUI::TargetMenuSessionActive)
-                        WebUI_Visibility_HideWithoutCommit();
-                    if (fromTargetMenu) {
-                        webui_log::info("onSceneCreatorResult: target-menu cancel");
-                    } else {
-                        PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorResult", creator_sid,
-                            "{\"_action\":\"cancel\"}");
-                    }
+                } catch (...) {
+                    webui_log::warn("onSceneCreatorResult: bad JSON");
                 }
-            } catch (...) {
-                webui_log::warn("onSceneCreatorResult: bad JSON");
-            }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneCreatorLoad", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int creator_sid = j.value("_creator_sid", -1);
-                const std::string name = j.value("_scene_preset", "");
-                webui_log::info("onSceneCreatorLoad creator_sid={} preset={}", creator_sid, name);
-                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorLoad", creator_sid, name);
-            } catch (...) {
-                webui_log::warn("onSceneCreatorLoad: bad JSON");
-            }
+            RunGuarded("onSceneCreatorLoad", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int creator_sid = j.value("_creator_sid", -1);
+                    const std::string name = j.value("_scene_preset", "");
+                    webui_log::info("onSceneCreatorLoad creator_sid={} preset={}", creator_sid, name);
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorLoad", creator_sid, name);
+                } catch (...) {
+                    webui_log::warn("onSceneCreatorLoad: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneCreatorSave", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int creator_sid = j.value("_creator_sid", -1);
-                webui_log::info("onSceneCreatorSave creator_sid={}", creator_sid);
-                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorSave", creator_sid, j.dump());
-            } catch (...) {
-                webui_log::warn("onSceneCreatorSave: bad JSON");
-            }
+            RunGuarded("onSceneCreatorSave", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int creator_sid = j.value("_creator_sid", -1);
+                    webui_log::info("onSceneCreatorSave creator_sid={}", creator_sid);
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneCreatorSave", creator_sid, SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onSceneCreatorSave: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimationMenuClose", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int scene_sid = j.value("_scene_sid", -1);
-                webui_log::info("onAnimationMenuClose scene_sid={}", scene_sid);
-                WebUI_Invoke("hidePanel('description_editor_panel');");
-                WebUI_Visibility_Hide();
-                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnAnimationMenuClose", scene_sid, j.dump());
-            } catch (...) {
-                webui_log::warn("onAnimationMenuClose: bad JSON");
-            }
+            RunGuarded("onAnimationMenuClose", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int scene_sid = j.value("_scene_sid", -1);
+                    webui_log::info("onAnimationMenuClose scene_sid={}", scene_sid);
+                    WebUI_Invoke("hidePanel('description_editor_panel');");
+                    WebUI_Visibility_Hide();
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnAnimationMenuClose", scene_sid, SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onAnimationMenuClose: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimationMenuLiveUpdate", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int scene_sid = j.value("_scene_sid", -1);
-                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnAnimationMenuLiveUpdate", scene_sid, j.dump());
-            } catch (...) {
-                webui_log::warn("onAnimationMenuLiveUpdate: bad JSON");
-            }
+            RunGuarded("onAnimationMenuLiveUpdate", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int scene_sid = j.value("_scene_sid", -1);
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnAnimationMenuLiveUpdate", scene_sid, SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onAnimationMenuLiveUpdate: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimationMenuPrevNext", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int scene_sid = j.value("_scene_sid", -1);
-                const int direction = j.value("_direction", 0);
-                webui_log::info("onAnimationMenuPrevNext scene_sid={} direction={}", scene_sid, direction);
-                PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnAnimationMenuPrevNext", scene_sid,
-                    direction);
-            } catch (...) {
-                webui_log::warn("onAnimationMenuPrevNext: bad JSON");
-            }
+            RunGuarded("onAnimationMenuPrevNext", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int scene_sid = j.value("_scene_sid", -1);
+                    const int direction = j.value("_direction", 0);
+                    webui_log::info("onAnimationMenuPrevNext scene_sid={} direction={}", scene_sid, direction);
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnAnimationMenuPrevNext", scene_sid,
+                        direction);
+                } catch (...) {
+                    webui_log::warn("onAnimationMenuPrevNext: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimationMenuStop", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int scene_sid = j.value("_scene_sid", -1);
-                webui_log::info("onAnimationMenuStop scene_sid={}", scene_sid);
-                WebUI_Invoke("hidePanel('description_editor_panel');");
-                WebUI_Visibility_Hide();
-                PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnAnimationMenuStop", scene_sid, 0);
-            } catch (...) {
-                webui_log::warn("onAnimationMenuStop: bad JSON");
-            }
+            RunGuarded("onAnimationMenuStop", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int scene_sid = j.value("_scene_sid", -1);
+                    webui_log::info("onAnimationMenuStop scene_sid={}", scene_sid);
+                    WebUI_Invoke("hidePanel('description_editor_panel');");
+                    WebUI_Visibility_Hide();
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnAnimationMenuStop", scene_sid, 0);
+                } catch (...) {
+                    webui_log::warn("onAnimationMenuStop: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneConnectionChange", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                webui_log::info("onSceneConnectionChange {}", j.dump());
-                PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneConnectionChange", j.dump());
-            } catch (...) {
-                webui_log::warn("onSceneConnectionChange: bad JSON");
-            }
+            RunGuarded("onSceneConnectionChange", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    webui_log::info("onSceneConnectionChange {}", SafeDump(j));
+                    PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneConnectionChange", SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onSceneConnectionChange: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneConnectionsRefresh", [](const char* value) {
-            PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneConnectionsRefresh",
-                value ? value : "{}");
+            RunGuarded("onSceneConnectionsRefresh", [&] {
+                PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneConnectionsRefresh",
+                    value ? value : "{}");
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneAnimUpdate", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int scene_sid = j.value("_scene_sid", -1);
-                webui_log::info("onSceneAnimUpdate scene_sid={}", scene_sid);
-                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneAnimUpdate", scene_sid, j.dump());
-            } catch (...) {
-                webui_log::warn("onSceneAnimUpdate: bad JSON");
-            }
+            RunGuarded("onSceneAnimUpdate", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int scene_sid = j.value("_scene_sid", -1);
+                    webui_log::info("onSceneAnimUpdate scene_sid={}", scene_sid);
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneAnimUpdate", scene_sid, SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onSceneAnimUpdate: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimRegistrySave", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                webui_log::info("onAnimRegistrySave registry={}", j.value("_registry", ""));
-                PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnAnimRegistrySave", j.dump());
-            } catch (...) {
-                webui_log::warn("onAnimRegistrySave: bad JSON");
-            }
+            RunGuarded("onAnimRegistrySave", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    webui_log::info("onAnimRegistrySave registry={}", j.value("_registry", ""));
+                    PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnAnimRegistrySave", SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onAnimRegistrySave: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimDbQuery", [](const char* value) {
-            PapyrusBindings_WebUI::HandleAnimDbQuery(value);
+            RunGuarded("onAnimDbQuery", [&] {
+                PapyrusBindings_WebUI::HandleAnimDbQuery(value);
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onAnimDbResolveTags", [](const char* value) {
-            PapyrusBindings_WebUI::HandleAnimDbResolveTags(value);
+            RunGuarded("onAnimDbResolveTags", [&] {
+                PapyrusBindings_WebUI::HandleAnimDbResolveTags(value);
+            });
         });
         PrismaUI->RegisterJSListener(g_view, "onNotify", [](const char* value) {
-            PapyrusBindings_WebUI::HandleNotify(value);
+            RunGuarded("onNotify", [&] {
+                PapyrusBindings_WebUI::HandleNotify(value);
+            });
         });
         PrismaUI->RegisterJSListener(g_view, "onLeashStatus", [](const char* value) {
-            PapyrusBindings_WebUI::HandleLeashStatus(value);
+            RunGuarded("onLeashStatus", [&] {
+                PapyrusBindings_WebUI::HandleLeashStatus(value);
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onNearbyRangeChange", [](const char* value) {
-            if (!value)
-                return;
-            float range = 100.f;
-            try {
-                auto j = nlohmann::json::parse(value);
-                if (j.is_object() && j.contains("_range") && j["_range"].is_number())
-                    range = j["_range"].get<float>();
-                else if (j.is_number())
-                    range = j.get<float>();
-            } catch (...) {
+            RunGuarded("onNearbyRangeChange", [&] {
+                if (!value)
+                    return;
+                float range = 100.f;
                 try {
-                    range = std::stof(value);
+                    auto j = nlohmann::json::parse(value);
+                    if (j.is_object() && j.contains("_range") && j["_range"].is_number())
+                        range = j["_range"].get<float>();
+                    else if (j.is_number())
+                        range = j.get<float>();
                 } catch (...) {
-                    webui_log::warn("onNearbyRangeChange: bad payload {}", value);
+                    try {
+                        range = std::stof(value);
+                    } catch (...) {
+                        webui_log::warn("onNearbyRangeChange: bad payload {}", value);
+                        return;
+                    }
+                }
+                if (!PapyrusBindings_WebUI::SetNearbyRadius(range)) {
+                    webui_log::warn("onNearbyRangeChange: invalid range {}", range);
                     return;
                 }
-            }
-            if (!PapyrusBindings_WebUI::SetNearbyRadius(range)) {
-                webui_log::warn("onNearbyRangeChange: invalid range {}", range);
-                return;
-            }
-            webui_log::info("onNearbyRangeChange range={}", PapyrusBindings_WebUI::GetNearbyRadius());
-            PapyrusBindings_WebUI::PopulateNearbyActors(PapyrusBindings_WebUI::GetNearbyRadius());
+                webui_log::info("onNearbyRangeChange range={}", PapyrusBindings_WebUI::GetNearbyRadius());
+                PapyrusBindings_WebUI::PopulateNearbyActors(PapyrusBindings_WebUI::GetNearbyRadius());
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onResolveActorMeta", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnResolveActorMeta", j.dump());
-            } catch (...) {
-                webui_log::warn("onResolveActorMeta: bad JSON");
-            }
+            RunGuarded("onResolveActorMeta", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnResolveActorMeta", SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onResolveActorMeta: bad JSON");
+                }
+            });
         });
 
         // JS "start" → Scene Creator (Tag Edit) or ActionCatalog::ExecuteAction.
         PrismaUI->RegisterJSListener(g_view, "onAction", [](const char* value) {
-            if (!value) return;
+            RunGuarded("onAction", [&] {
+                if (!value) return;
 
-            auto* target = PapyrusBindings_WebUI::Target_Current;
-            auto* player = RE::PlayerCharacter::GetSingleton();
-            std::string payloadStr(value);
+                auto* target = PapyrusBindings_WebUI::TargetCurrent();
+                auto* player = RE::PlayerCharacter::GetSingleton();
+                std::string payloadStr(value);
 
-            nlohmann::json payload;
-            try {
-                payload = nlohmann::json::parse(payloadStr);
-            } catch (...) {
-                webui_log::warn("onAction: non-JSON payload ignored: {}", payloadStr);
-                return;
-            }
-
-            const std::string action = payload.value("action", "");
-            const std::string name = payload.value("name", "");
-            nlohmann::json params = payload.value("parameters", nlohmann::json::object());
-
-            if (action == "custom") {
-                webui_log::info("onAction custom name={}", name);
-                if (!ActionCatalog::OpenSceneCreatorFromTargetMenu(name, params, player, target)) {
-                    webui_log::error("onAction: OpenSceneCreatorFromTargetMenu failed for {}", name);
+                nlohmann::json payload;
+                try {
+                    payload = nlohmann::json::parse(payloadStr);
+                } catch (...) {
+                    webui_log::warn("onAction: non-JSON payload ignored: {}", payloadStr);
+                    return;
                 }
-                return;
-            }
 
-            if (action == "papyrus") {
-                webui_log::info("onAction papyrus label={}", payload.value("label", ""));
-                nlohmann::json opt = payload;
-                if (!opt.contains("parameters"))
-                    opt["parameters"] = params;
-                // SceneStartPanel Start: player already clicked Start — skip YesNo / Scene Creator.
-                const std::string papyrusFn = payload.value("executionFunctionName", "");
-                const bool skipSceneCreator = payload.value("closeWebUI", false)
-                    && ActionCatalog::IsSceneStartExecution(papyrusFn);
-                if (skipSceneCreator)
+                const std::string action = payload.value("action", "");
+                const std::string name = payload.value("name", "");
+                nlohmann::json params = payload.value("parameters", nlohmann::json::object());
+
+                if (action == "custom") {
+                    webui_log::info("onAction custom name={}", name);
+                    if (!ActionCatalog::OpenSceneCreatorFromTargetMenu(name, params, player, target)) {
+                        webui_log::error("onAction: OpenSceneCreatorFromTargetMenu failed for {}", name);
+                    }
+                    return;
+                }
+
+                if (action == "papyrus") {
+                    webui_log::info("onAction papyrus label={}", payload.value("label", ""));
+                    nlohmann::json opt = payload;
+                    if (!opt.contains("parameters"))
+                        opt["parameters"] = params;
+                    // SceneStartPanel Start: player already clicked Start — skip YesNo / Scene Creator.
+                    const std::string papyrusFn = payload.value("executionFunctionName", "");
+                    const bool skipSceneCreator = payload.value("closeWebUI", false)
+                        && ActionCatalog::IsSceneStartExecution(papyrusFn);
+                    if (skipSceneCreator)
+                        PapyrusBindings_WebUI::SkipSceneCreatorOnce = true;
+                    bool ok = ActionCatalog::ExecutePapyrusOption(opt, player, target);
+                    if (!ok) {
+                        webui_log::error("onAction: ExecutePapyrusOption failed");
+                        PapyrusBindings_WebUI::SkipSceneCreatorOnce = false;
+                    }
+                    // Stay open for live panels unless payload requests close.
+                    if (payload.value("closeWebUI", false)) {
+                        WebUI_Invoke("hidePanel('target_menu_panel');");
+                        WebUI_Invoke("hidePanel('control_panel');");
+                        PapyrusBindings_WebUI::ClearTargetMenuSession();
+                        WebUI_Visibility_Hide();
+                    }
+                    return;
+                }
+
+                if (action != "start") {
+                    webui_log::info("onAction: ignoring action={}", action);
+                    return;
+                }
+
+                webui_log::info("onAction start name={}", name);
+
+                // TargetMenu Start always ExecuteAction; skip Scene Creator only for scene-start actions.
+                if (ActionCatalog::ShouldOpenSceneCreatorFromTargetMenu(
+                        name, params, player, target, true, true)) {
                     PapyrusBindings_WebUI::SkipSceneCreatorOnce = true;
-                bool ok = ActionCatalog::ExecutePapyrusOption(opt, player, target);
+                }
+
+                // Commit SceneInfos first (queued), then close overlay so StartThread runs unpaused.
+                WebUI_Invoke("hidePanel('target_menu_panel');");
+                PapyrusBindings_WebUI::ClearTargetMenuSession();
+                WebUI_Visibility_Hide();
+                bool ok = ActionCatalog::ExecuteAction(name, params, player, target);
                 if (!ok) {
-                    webui_log::error("onAction: ExecutePapyrusOption failed");
+                    webui_log::error("onAction: ExecuteAction failed for {}", name);
                     PapyrusBindings_WebUI::SkipSceneCreatorOnce = false;
                 }
-                // Stay open for live panels unless payload requests close.
-                if (payload.value("closeWebUI", false)) {
-                    WebUI_Invoke("hidePanel('target_menu_panel');");
-                    WebUI_Invoke("hidePanel('control_panel');");
-                    PapyrusBindings_WebUI::ClearTargetMenuSession();
-                    WebUI_Visibility_Hide();
-                }
-                return;
-            }
-
-            if (action != "start") {
-                webui_log::info("onAction: ignoring action={}", action);
-                return;
-            }
-
-            webui_log::info("onAction start name={}", name);
-
-            // TargetMenu Start always ExecuteAction; skip Scene Creator only for scene-start actions.
-            if (ActionCatalog::ShouldOpenSceneCreatorFromTargetMenu(
-                    name, params, player, target, true, true)) {
-                PapyrusBindings_WebUI::SkipSceneCreatorOnce = true;
-            }
-
-            // Commit SceneInfos first (queued), then close overlay so StartThread runs unpaused.
-            WebUI_Invoke("hidePanel('target_menu_panel');");
-            PapyrusBindings_WebUI::ClearTargetMenuSession();
-            WebUI_Visibility_Hide();
-            bool ok = ActionCatalog::ExecuteAction(name, params, player, target);
-            if (!ok) {
-                webui_log::error("onAction: ExecuteAction failed for {}", name);
-                PapyrusBindings_WebUI::SkipSceneCreatorOnce = false;
-            }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneInfoCommit", [](const char* value) {
-            if (!value)
-                return;
-            webui_log::info("onSceneInfoCommit bytes={}", std::strlen(value));
-            PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneInfoCommit", value);
+            RunGuarded("onSceneInfoCommit", [&] {
+                if (!value)
+                    return;
+                webui_log::info("onSceneInfoCommit bytes={}", std::strlen(value));
+                PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneInfoCommit", value);
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onWebUIHide", [](const char* value) {
-            bool commit = true;
-            if (value) {
-                try {
-                    auto j = nlohmann::json::parse(value);
-                    commit = j.value("commit", true);
-                } catch (...) {
+            RunGuarded("onWebUIHide", [&] {
+                bool commit = true;
+                if (value) {
+                    try {
+                        auto j = nlohmann::json::parse(value);
+                        commit = j.value("commit", true);
+                    } catch (...) {
+                    }
                 }
-            }
-            webui_log::info("onWebUIHide commit={}", commit);
-            if (commit)
-                WebUI_Visibility_Hide();
-            else
-                WebUI_Visibility_HideWithoutCommit();
+                webui_log::info("onWebUIHide commit={}", commit);
+                if (commit)
+                    WebUI_Visibility_Hide();
+                else
+                    WebUI_Visibility_HideWithoutCommit();
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onGamePauseSet", [](const char* value) {
-            const bool paused = !value || value[0] != '0';
-            webui_log::info("onGamePauseSet paused={}", paused);
-            g_webuiGamePaused = paused;
-            if (PrismaUI && PrismaUI->IsValid(g_view) && !PrismaUI->IsHidden(g_view)) {
-                // A repeat Focus while already focused does not change the pause state; re-focus from scratch.
-                PrismaUI->Unfocus(g_view);
-                const bool ok = PrismaUI->Focus(g_view, paused);
-                KeyHandler::PromoteSink();
-                webui_log::info("onGamePauseSet Focus(pause={}) ok={} hasFocus={}", paused, ok,
-                                PrismaUI->HasFocus(g_view));
-            }
+            RunGuarded("onGamePauseSet", [&] {
+                const bool paused = !value || value[0] != '0';
+                webui_log::info("onGamePauseSet paused={}", paused);
+                g_webuiGamePaused = paused;
+                if (PrismaUI && PrismaUI->IsValid(g_view) && !PrismaUI->IsHidden(g_view)) {
+                    // A repeat Focus while already focused does not change the pause state; re-focus from scratch.
+                    PrismaUI->Unfocus(g_view);
+                    const bool ok = PrismaUI->Focus(g_view, paused);
+                    KeyHandler::PromoteSink();
+                    webui_log::info("onGamePauseSet Focus(pause={}) ok={} hasFocus={}", paused, ok,
+                                    PrismaUI->HasFocus(g_view));
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSceneNarrate", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const int scene_sid = j.value("_scene_sid", -1);
-                webui_log::info("onSceneNarrate scene_sid={}", scene_sid);
-                PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneNarrate", scene_sid, j.dump());
-            } catch (...) {
-                webui_log::warn("onSceneNarrate: bad JSON");
-            }
+            RunGuarded("onSceneNarrate", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const int scene_sid = j.value("_scene_sid", -1);
+                    webui_log::info("onSceneNarrate scene_sid={}", scene_sid);
+                    PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnSceneNarrate", scene_sid, SafeDump(j));
+                } catch (...) {
+                    webui_log::warn("onSceneNarrate: bad JSON");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onControlActorChange", [](const char* value) {
-            if (!value)
-                return;
-            webui_log::info("onControlActorChange payload");
-            PapyrusBindings_WebUI::ApplyControlActorFocusJson(value);
+            RunGuarded("onControlActorChange", [&] {
+                if (!value)
+                    return;
+                webui_log::info("onControlActorChange payload");
+                PapyrusBindings_WebUI::ApplyControlActorFocusJson(value);
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onControlModeChange", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const std::string id = j.value("id", "");
-                webui_log::info("onControlModeChange id={}", id);
-                ActionCatalog::SwitchControlMode(id);
-            } catch (...) {
-                webui_log::info("onControlModeChange id={}", value);
-                ActionCatalog::SwitchControlMode(value);
-            }
+            RunGuarded("onControlModeChange", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const std::string id = j.value("id", "");
+                    webui_log::info("onControlModeChange id={}", id);
+                    ActionCatalog::SwitchControlMode(id);
+                } catch (...) {
+                    webui_log::info("onControlModeChange id={}", value);
+                    ActionCatalog::SwitchControlMode(value);
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onMainPanelRow", [](const char* value) {
-            if (!value)
-                return;
-            webui_log::info("onMainPanelRow");
-            PapyrusBindings_WebUI::ApplyMainPanelRow(value);
+            RunGuarded("onMainPanelRow", [&] {
+                if (!value)
+                    return;
+                webui_log::info("onMainPanelRow");
+                PapyrusBindings_WebUI::ApplyMainPanelRow(value);
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onMainPanelChange", [](const char* value) {
-            if (!value)
-                return;
-            try {
-                auto j = nlohmann::json::parse(value);
-                const std::string key = j.value("key", "");
-                webui_log::info("onMainPanelChange key={}", key);
-                ActionCatalog::SwitchMainPanel(key);
-            } catch (...) {
-                // Plain string key
-                webui_log::info("onMainPanelChange key={}", value);
-                ActionCatalog::SwitchMainPanel(value);
-            }
+            RunGuarded("onMainPanelChange", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const std::string key = j.value("key", "");
+                    webui_log::info("onMainPanelChange key={}", key);
+                    ActionCatalog::SwitchMainPanel(key);
+                } catch (...) {
+                    // Plain string key
+                    webui_log::info("onMainPanelChange key={}", value);
+                    ActionCatalog::SwitchMainPanel(value);
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onFrameworkChange", [](const char* value) {
-            if (!value) return;
-            auto* global = RE::TESForm::LookupByEditorID<RE::TESGlobal>("skyrimnet_sexlab_ostim_player");
-            if (!global) {
-                webui_log::error("Could not find global skyrimnet_sexlab_ostim_player");
-                return;
-            }
-            if (std::string_view(value) == "ostim") {
-                global->value = 1.0f;
-                webui_log::info("Framework set to OStim");
-            } else {
-                global->value = 0.0f;
-                webui_log::info("Framework set to SexLab");
-            }
+            RunGuarded("onFrameworkChange", [&] {
+                if (!value) return;
+                auto* global = RE::TESForm::LookupByEditorID<RE::TESGlobal>("skyrimnet_sexlab_ostim_player");
+                if (!global) {
+                    webui_log::error("Could not find global skyrimnet_sexlab_ostim_player");
+                    return;
+                }
+                if (std::string_view(value) == "ostim") {
+                    global->value = 1.0f;
+                    webui_log::info("Framework set to OStim");
+                } else {
+                    global->value = 0.0f;
+                    webui_log::info("Framework set to SexLab");
+                }
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSettingsRebuild", [](const char*) {
-            webui_log::info("onSettingsRebuild");
-            Call_RebuildAnimDb();
-            ActionCatalog::SwitchMainPanel("log_panel");
+            RunGuarded("onSettingsRebuild", [&] {
+                webui_log::info("onSettingsRebuild");
+                Call_RebuildAnimDb();
+                ActionCatalog::SwitchMainPanel("log_panel");
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSettingsOpenSkyrimNet", [](const char*) {
-            webui_log::info("onSettingsOpenSkyrimNet");
-            Call_OpenSkyrimNetDashboard();
+            RunGuarded("onSettingsOpenSkyrimNet", [&] {
+                webui_log::info("onSettingsOpenSkyrimNet");
+                Call_OpenSkyrimNetDashboard();
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onSettingsRefresh", [](const char*) {
-            SexLabNet::InvokeConfigureSettingsPanel();
+            RunGuarded("onSettingsRefresh", [&] {
+                SexLabNet::InvokeConfigureSettingsPanel();
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onLogPanelOpen", [](const char*) {
-            SexLabNet::InvokeLogPanelOpen();
+            RunGuarded("onLogPanelOpen", [&] {
+                SexLabNet::InvokeLogPanelOpen();
+            });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onLogPoll", [](const char*) {
-            SexLabNet::PushLogPanelPoll();
+            RunGuarded("onLogPoll", [&] {
+                SexLabNet::PushLogPanelPoll();
+            });
         });
 
         KeyHandler::RegisterSink();
@@ -1134,6 +1219,7 @@ void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled)
             webui_log::critical(
                 "WebUI hotkey: overlay not ready (missing PrismaUI/views/SkyrimNet_SexLab/index.html?).");
             WebUI_Visibility_Hide();
+            return;
         }
         PapyrusBindings_WebUI::Call_ProcessHotkey(static_cast<std::int32_t>(dxScanCode));
     });

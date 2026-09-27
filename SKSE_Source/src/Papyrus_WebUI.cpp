@@ -1,4 +1,5 @@
 #include "RE/Skyrim.h"
+#include "JsonUtil.h"
 #include "SKSE/SKSE.h"
 #include "WebUI_Log.h"
 #include "WebUI.h"
@@ -29,7 +30,7 @@ namespace PapyrusBindings_WebUI
         /// PrismaUI cannot fetch ../../../SKSE/... from the overlay HTML.
         std::string ConfigureTargetMenuScript(const nlohmann::json& catalog)
         {
-            return "configureTargetMenu(" + catalog.dump() + ");"
+            return "configureTargetMenu(" + SafeDump(catalog) + ");"
                    "(function(){"
                    "var S=(typeof TARGET_CATALOG!=='undefined'&&TARGET_CATALOG&&(TARGET_CATALOG.sceneSettings||TARGET_CATALOG.scenesettings))||{};"
                    "window.SCENE_SETTINGS=S;"
@@ -133,7 +134,7 @@ namespace PapyrusBindings_WebUI
                     device_n += g["devices"].size();
             }
             header["groups"] = std::move(headerGroups);
-            const auto headerDump = header.dump();
+            const auto headerDump = SafeDump(header);
             const auto tid = target ? target->GetFormID() : 0u;
             webui_log::info("Bondage_Configure {} target={:08X} groups={} devices={} bytes={}", source ? source : "",
                 tid, header["groups"].size(), device_n, headerDump.size());
@@ -146,14 +147,18 @@ namespace PapyrusBindings_WebUI
                 chunk["devices"] = (g.is_object() && g.contains("devices") && g["devices"].is_array())
                     ? g["devices"]
                     : nlohmann::json::array();
-                const auto dumped = chunk.dump();
+                const auto dumped = SafeDump(chunk);
                 webui_log::info("Bondage_Configure {} chunk {}/{} devices={} bytes={}", source ? source : "",
                     i + 1, groups.size(), chunk["devices"].size(), dumped.size());
                 WebUI_Invoke(std::string("bondageConfigureDevices(") + dumped + ");");
             }
         }
     }
-    RE::Actor* Target_Current = nullptr;
+    namespace
+    {
+        /// Handle, not RE::Actor*: the actor can be unloaded or deleted while the overlay is closed.
+        RE::ActorHandle Target_Current;
+    }
     std::string FocusKind;
     std::int32_t YesNo_Creator_Sid = -1;
     bool EditTagsPlayer = true;
@@ -167,11 +172,30 @@ namespace PapyrusBindings_WebUI
         SceneCreatorOpenedForPending = false;
     }
 
+    RE::Actor* TargetCurrent()
+    {
+        auto* actor = Target_Current.get().get();
+        return (actor && !actor->IsDeleted()) ? actor : nullptr;
+    }
+
+    void SetTargetCurrent(RE::Actor* actor)
+    {
+        Target_Current = actor ? actor->GetHandle() : RE::ActorHandle{};
+    }
+
     void ClearTargetMenuSession()
     {
         TargetMenuSessionActive = false;
-        Target_Current = nullptr;
+        Target_Current.reset();
         FocusKind.clear();
+    }
+
+    void ClearOnGameLoad()
+    {
+        ClearTargetMenuSession();
+        SceneCreatorOpenedForPending = false;
+        SkipSceneCreatorOnce = false;
+        YesNo_Creator_Sid = -1;
     }
 
     bool ConsumeSkipSceneCreator(RE::StaticFunctionTag*)
@@ -286,7 +310,7 @@ namespace PapyrusBindings_WebUI
     {
         nlohmann::json out = payload;
         out["_request_id"] = request_id ? request_id : "";
-        WebUI_Invoke("animDbQueryResult(" + out.dump() + ");");
+        WebUI_Invoke("animDbQueryResult(" + SafeDump(out) + ");");
     }
 
     void WebUI_HideAllPanels(RE::StaticFunctionTag*)
@@ -315,19 +339,6 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke("hidePanel('settings_panel');");
         WebUI_Invoke("hidePanel('log_panel');");
         WebUI_Visibility_Hide();
-    }
-
-    /// Escapes backslash and single quote so actor names are safe inside JS string literals.
-    static std::string EscapeJsString(std::string_view s)
-    {
-        std::string out;
-        out.reserve(s.size() + 8);
-        for (char c : s) {
-            if (c == '\\' || c == '\'')
-                out.push_back('\\');
-            out.push_back(c);
-        }
-        return out;
     }
 
     static RE::TESQuest* FindMainQuest()
@@ -368,31 +379,31 @@ namespace PapyrusBindings_WebUI
             return true;
         }
 
-        if (Target_Current == Target_Input) {
+        if (TargetCurrent() == Target_Input) {
             // Rebuild catalog so eligibilityRules re-evaluate against live focus state.
             if (!ActionCatalog::IsLoaded())
                 ActionCatalog::Load();
             auto catalog = ActionCatalog::BuildUICatalog(hasStrippedItems);
             WebUI_Invoke(ConfigureTargetMenuScript(catalog));
-            WebUI_Invoke("configureControlPanel(" + ActionCatalog::BuildMainPanelsCatalog().dump() + ");");
+            WebUI_Invoke("configureControlPanel(" + SafeDump(ActionCatalog::BuildMainPanelsCatalog()) + ");");
             WebUI_Invoke("showPanel('target_menu_panel');");
             WebUI_Visibility_Show();
             return true;
         }
 
         Reset_To_Default();
-        Target_Current = Target_Input;
+        SetTargetCurrent(Target_Input);
         TargetMenuSessionActive = true;
 
         if (!ActionCatalog::IsLoaded())
             ActionCatalog::Load();
 
-        const auto targetFormId = Target_Current->GetFormID();
+        const auto targetFormId = Target_Input->GetFormID();
         uint64_t uuid = (PublicFormIDToUUID) ? PublicFormIDToUUID(targetFormId) : 0;
         std::string skyrimNetName = (uuid && SexLabNet::CrossDllStdStringSafe() && PublicGetActorNameByUUID)
             ? PublicGetActorNameByUUID(uuid)
             : "";
-        const char* targetName = !skyrimNetName.empty() ? skyrimNetName.c_str() : Target_Current->GetName();
+        const char* targetName = !skyrimNetName.empty() ? skyrimNetName.c_str() : Target_Input->GetName();
         const char* name = (targetName && targetName[0]) ? targetName : "Unknown";
 
         webui_log::info(
@@ -404,10 +415,10 @@ namespace PapyrusBindings_WebUI
 
         auto catalog = ActionCatalog::BuildUICatalog(hasStrippedItems);
         WebUI_Invoke(ConfigureTargetMenuScript(catalog));
-        WebUI_Invoke("configureControlPanel(" + ActionCatalog::BuildMainPanelsCatalog().dump() + ");");
+        WebUI_Invoke("configureControlPanel(" + SafeDump(ActionCatalog::BuildMainPanelsCatalog()) + ");");
         const std::string uuidStr =
             uuid ? std::to_string(uuid) : std::to_string(static_cast<unsigned>(targetFormId));
-        WebUI_Invoke(std::format("setTargetActor('{}', '{}', {});", uuidStr, EscapeJsString(name),
+        WebUI_Invoke(std::format("setTargetActor('{}', {}, {});", uuidStr, SafeDump(nlohmann::json(name)),
             static_cast<unsigned>(targetFormId)));
 
         WebUI_Invoke("showPanel('target_menu_panel');");
@@ -418,7 +429,7 @@ namespace PapyrusBindings_WebUI
     /// Re-resolve actionSwitch while the target menu stays open on Target_Current.
     void Target_Menu_Refresh(RE::StaticFunctionTag*, bool hasStrippedItems)
     {
-        if (!Target_Current && FocusKind.empty()) {
+        if (!TargetCurrent() && FocusKind.empty()) {
             // LLM / non-WebUI Outfit_* calls refresh harmlessly when menu is closed.
             return;
         }
@@ -447,7 +458,7 @@ namespace PapyrusBindings_WebUI
         nlohmann::json cfg;
         cfg["_question"] = question.c_str() ? question.c_str() : "";
         cfg["_creator_sid"] = creator_sid;
-        WebUI_Invoke("configureYesNo(" + cfg.dump() + ");");
+        WebUI_Invoke("configureYesNo(" + SafeDump(cfg) + ");");
         WebUI_Invoke("showPanel('yesno_panel');");
         WebUI_Visibility_Show();
     }
@@ -460,7 +471,7 @@ namespace PapyrusBindings_WebUI
         std::string dumped = "{}";
         try {
             auto parsed = nlohmann::json::parse(raw);
-            dumped = parsed.dump();
+            dumped = SafeDump(parsed);
             webui_log::info("SceneCreator_Open state bytes={}", dumped.size());
         } catch (const std::exception& e) {
             webui_log::error("SceneCreator_Open: bad state_json ({}); using {{}}", e.what());
@@ -478,7 +489,7 @@ namespace PapyrusBindings_WebUI
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
         std::string dumped = "{}";
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            dumped = SafeDump(nlohmann::json::parse(raw));
         } catch (const std::exception& e) {
             webui_log::error("SceneCreator_Configure: bad state_json ({}); using {{}}", e.what());
         } catch (...) {
@@ -508,7 +519,7 @@ namespace PapyrusBindings_WebUI
                 target = form->As<RE::Actor>();
         }
         webui_log::info("Bondage_Configure hint target={:08X} actor={} json={}", fid, target ? "ok" : "null",
-            hint.dump());
+            SafeDump(hint));
 
         if (BondageCatalog::ApiCatalogReady()) {
             SendBondageChunks(target, hint, BondageCatalog::ApiGroups(), true, "api");
@@ -526,7 +537,7 @@ namespace PapyrusBindings_WebUI
         const char* raw = json.c_str() ? json.c_str() : "{}";
         std::string dumped = "{}";
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            dumped = SafeDump(nlohmann::json::parse(raw));
         } catch (...) {
             webui_log::warn("ActorAnimMeta_Result: bad json");
         }
@@ -565,7 +576,7 @@ namespace PapyrusBindings_WebUI
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
         std::string dumped = "{}";
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            dumped = SafeDump(nlohmann::json::parse(raw));
         } catch (...) {
             webui_log::warn("Animation_Menu_Show: bad state_json");
         }
@@ -579,7 +590,7 @@ namespace PapyrusBindings_WebUI
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
         std::string dumped = "{}";
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            dumped = SafeDump(nlohmann::json::parse(raw));
         } catch (...) {
             webui_log::warn("Animation_Menu_Configure: bad state_json");
         }
@@ -591,7 +602,7 @@ namespace PapyrusBindings_WebUI
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
         std::string dumped = "{}";
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            dumped = SafeDump(nlohmann::json::parse(raw));
         } catch (...) {
             webui_log::warn("SceneConnections_Show: bad state_json");
         }
@@ -603,7 +614,7 @@ namespace PapyrusBindings_WebUI
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
         std::string dumped = "{}";
         try {
-            dumped = nlohmann::json::parse(raw).dump();
+            dumped = SafeDump(nlohmann::json::parse(raw));
         } catch (...) {
             webui_log::warn("SceneInfos_Seed: bad state_json");
         }
@@ -960,7 +971,7 @@ namespace PapyrusBindings_WebUI
                 return a.value("dist", 0.f) < b.value("dist", 0.f);
             });
             webui_log::info("SetNearbyActorsJson: tightened count={}", nearby.size());
-            WebUI_Invoke("setNearbyActors(" + nearby.dump() + ");");
+            WebUI_Invoke("setNearbyActors(" + SafeDump(nearby) + ");");
         } catch (...) {
             webui_log::warn("SetNearbyActorsJson: bad JSON — keeping prior nearby list");
         }
@@ -981,7 +992,7 @@ namespace PapyrusBindings_WebUI
             const std::string uuidStr =
                 playerUUID ? std::to_string(playerUUID) : std::to_string(static_cast<unsigned>(formId));
             std::string playerName = ActorDisplayNameLocal(player);
-            WebUI_Invoke(std::format("setPlayerActor('{}', '{}', {}, {});", uuidStr, EscapeJsString(playerName),
+            WebUI_Invoke(std::format("setPlayerActor('{}', {}, {}, {});", uuidStr, SafeDump(nlohmann::json(playerName)),
                 static_cast<unsigned>(formId), ActorSex(player)));
         }
 
@@ -1035,8 +1046,8 @@ namespace PapyrusBindings_WebUI
         }
 
         // Keep current focus in the list even outside radius.
-        if (Target_Current && Target_Current != player && !Target_Current->IsDeleted())
-            addUnique(Target_Current);
+        if (auto* focus = TargetCurrent(); focus && focus != player)
+            addUnique(focus);
 
         nlohmann::json nearby = nlohmann::json::array();
         for (auto* ak : scanned)
@@ -1076,7 +1087,7 @@ namespace PapyrusBindings_WebUI
                 scanned.size());
         }
 
-        WebUI_Invoke("setNearbyActors(" + nearby.dump() + ");");
+        WebUI_Invoke("setNearbyActors(" + SafeDump(nearby) + ");");
     }
 
     void Call_MultiTarget_Menu_Selection()
@@ -1269,7 +1280,7 @@ namespace PapyrusBindings_WebUI
             auto j = nlohmann::json::parse(value);
             const std::string request_id = j.value("_request_id", "");
             const std::string query_type = j.value("_type", "tags");
-            const std::string filter_raw = j.contains("_filter") ? j["_filter"].dump() : "{}";
+            const std::string filter_raw = j.contains("_filter") ? SafeDump(j["_filter"]) : "{}";
             const int n = j.value("_n", 20);
             auto spec = ParseFilterJson(filter_raw.c_str());
 
@@ -1354,7 +1365,7 @@ namespace PapyrusBindings_WebUI
             payload["_request_id"] = request_id;
             payload["_resolved"] = resolved;
             payload["_ok"] = !resolved.empty() || tags.empty();
-            std::string js = "animDbResolveTagsResult(" + payload.dump() + ");";
+            std::string js = "animDbResolveTagsResult(" + SafeDump(payload) + ");";
             WebUI_Invoke(js);
         } catch (...) {
             webui_log::warn("HandleAnimDbResolveTags: parse failed");
@@ -1443,7 +1454,7 @@ namespace PapyrusBindings_WebUI
                     }
                 }
             }
-            WebUI_Invoke(std::string("leashStatusResult(") + out.dump() + ");");
+            WebUI_Invoke(std::string("leashStatusResult(") + SafeDump(out) + ");");
         });
     }
 
@@ -1600,7 +1611,7 @@ namespace PapyrusBindings_WebUI
             return;
         }
 
-        Target_Current = actor;
+        SetTargetCurrent(actor);
         FocusKind.clear();
         TargetMenuSessionActive = true;
 
@@ -1613,7 +1624,7 @@ namespace PapyrusBindings_WebUI
         const char* name = (targetName && targetName[0]) ? targetName : "Unknown";
         const std::string uuidStr =
             uuid ? std::to_string(uuid) : std::to_string(static_cast<unsigned>(targetFormId));
-        WebUI_Invoke(std::format("setTargetActor('{}', '{}', {});", uuidStr, EscapeJsString(name),
+        WebUI_Invoke(std::format("setTargetActor('{}', {}, {});", uuidStr, SafeDump(nlohmann::json(name)),
             static_cast<unsigned>(targetFormId)));
 
         Call_ControlActorFocus(actor);
@@ -1630,10 +1641,11 @@ namespace PapyrusBindings_WebUI
             webui_log::warn("ApplyControlActorFocusJson: bad JSON");
             return;
         }
-        const std::string sentinel = j.value("sentinel", "");
-        const std::uint32_t formId = j.value("formId", 0u);
+        const std::string sentinel =
+            j.contains("sentinel") && j["sentinel"].is_string() ? j["sentinel"].get<std::string>() : "";
+        const std::uint32_t formId = j.contains("formId") ? ParseFormIdJson(j["formId"]) : 0u;
         if (!sentinel.empty()) {
-            Target_Current = nullptr;
+            SetTargetCurrent(nullptr);
             FocusKind = sentinel;
             TargetMenuSessionActive = true;
             webui_log::info("ApplyControlActorFocus: sentinel={}", sentinel);
@@ -1704,7 +1716,7 @@ namespace PapyrusBindings_WebUI
 
     RE::Actor* WebUI_GetFocusActor(RE::StaticFunctionTag*)
     {
-        return Target_Current;
+        return TargetCurrent();
     }
 
     RE::BSFixedString WebUI_GetFocusKind(RE::StaticFunctionTag*)
@@ -1721,9 +1733,10 @@ namespace PapyrusBindings_WebUI
 
     void WebUI_MaybeRestoreAnimationPanel(RE::StaticFunctionTag*)
     {
-        if (!Target_Current)
+        auto* focus = TargetCurrent();
+        if (!focus)
             return;
-        if (!IsSexLabAnimatingActor(Target_Current)) {
+        if (!IsSexLabAnimatingActor(focus)) {
             if (ActionCatalog::IsShowSceneCreator() && !ActionCatalog::IsMainPanelOpen("scene_creator_panel")) {
                 webui_log::info("WebUI_MaybeRestoreAnimationPanel: show_scene_creator -> Scene Menu");
                 ActionCatalog::SwitchMainPanel("scene_creator_panel");

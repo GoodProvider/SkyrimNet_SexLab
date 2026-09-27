@@ -1,4 +1,5 @@
 #include "ActionDispatch.h"
+#include "JsonUtil.h"
 #include "Config.h"
 #include "WebUI_Log.h"
 #include "WebUI.h"
@@ -497,7 +498,7 @@ namespace ActionCatalog
                     if (entry["value"].is_string())
                         pm.value = entry["value"].get<std::string>();
                     else
-                        pm.value = entry["value"].dump();
+                        pm.value = SafeDump(entry["value"]);
                 }
                 if (entry.contains("description") && entry["description"].is_string())
                     pm.description = entry["description"].get<std::string>();
@@ -997,7 +998,7 @@ namespace ActionCatalog
         WebUI_Invoke("hidePanel('sex_menu_panel');");
         WebUI_Invoke("hidePanel('yesno_panel');");
         WebUI_Invoke("hidePanel('description_editor_panel');");
-        WebUI_Invoke(std::string("configureSceneCreator(") + state.dump() + ");");
+        WebUI_Invoke(std::string("configureSceneCreator(") + SafeDump(state) + ");");
         WebUI_Invoke("showPanel('scene_creator_panel');");
         // Show refreshes nearby (sync soft list → unselected Positions rows).
         WebUI_Visibility_Show();

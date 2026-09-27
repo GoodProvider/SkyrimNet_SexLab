@@ -1,4 +1,5 @@
 #include "AniDescriber.h"
+#include "JsonUtil.h"
 #include "HkxAnim.h"
 #include "WebUI_Log.h"
 
@@ -144,7 +145,7 @@ CREATE TABLE IF NOT EXISTS animinfo (
                     "ON CONFLICT(registry) DO UPDATE SET events_hash=excluded.events_hash,payload=excluded.payload",
                     -1, &stmt, nullptr) != SQLITE_OK)
                 return;
-            const std::string dump = payload.dump();
+            const std::string dump = SafeDump(payload);
             sqlite3_bind_text(stmt, 1, registry.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(stmt, 2, hash.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(stmt, 3, dump.c_str(), -1, SQLITE_TRANSIENT);
@@ -1130,7 +1131,7 @@ CREATE TABLE IF NOT EXISTS animinfo (
                 Lower(row.registry).find("cganal") != std::string::npos) {
                 webui_log::info("AniDescriber spike {}: sampled={} stage1='{}' orgasm={}", row.registry,
                     payload["sampled"].get<bool>(),
-                    packs.empty() ? "" : packs[0].desc, payload["orgasm_expected"].dump());
+                    packs.empty() ? "" : packs[0].desc, SafeDump(payload["orgasm_expected"]));
             }
             return payload;
 #endif
@@ -1251,7 +1252,7 @@ CREATE TABLE IF NOT EXISTS animinfo (
         auto row = AnimationDB::GetByRegistry(registry);
         if (!row)
             return "{}";
-        return EnsurePayload(*row).dump(2);
+        return SafeDump(EnsurePayload(*row), 2);
     }
 
     void Invalidate(const std::string& registry)

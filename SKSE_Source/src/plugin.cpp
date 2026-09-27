@@ -36,10 +36,33 @@ void JsonStore_SelfTest() {
     const bool lowered = json.find("\"_mode\":\"creator\"") != std::string::npos && json.find("_Mode") == std::string::npos;
     const bool hasArr = json.find("\"items\":[\"a\",\"b\"]") != std::string::npos;
     Release(root);
-    if (lowered && hasArr) {
+
+    // ReleaseAndRetain(h, h) must keep h alive.
+    const Handle kept = Retain(NewMap());
+    ReleaseAndRetain(kept, kept);
+    const bool sameRetain = IsValid(kept);
+    Release(kept);
+
+    // Setting an array element to the object already there must keep it alive.
+    const Handle outer = NewArray();
+    ArrayAddObj(outer, NewMap(), -1);
+    const Handle inner = ArrayGetObj(outer, 0, kInvalidHandle);
+    ArraySetObj(outer, 0, inner);
+    const bool sameArraySet = inner != kInvalidHandle && IsValid(inner) &&
+                              ArrayGetObj(outer, 0, kInvalidHandle) == inner;
+    Release(outer);
+
+    // A cp1252 byte (not UTF-8) must still dump, as U+FFFD.
+    const Handle ansi = NewMap();
+    MapSetStr(ansi, "name", "J\xF6rgen");
+    const bool ansiDumps = !Dump(ansi).empty();
+    Release(ansi);
+
+    if (lowered && hasArr && sameRetain && sameArraySet && ansiDumps) {
         webui_log::info("JsonStore self-test passed: {}", json);
     } else {
-        webui_log::error("JsonStore self-test FAILED: {}", json);
+        webui_log::error("JsonStore self-test FAILED: {} sameRetain={} sameArraySet={} ansiDumps={}", json,
+            sameRetain, sameArraySet, ansiDumps);
     }
     webui_log::info("JsonStore {}", Stats());
 }
@@ -97,6 +120,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
             TargetMenuRegistry::Clear();
+            PapyrusBindings_WebUI::ClearOnGameLoad();
             AnimSpeed::ClearAll();
             NarrationQueue::Clear();
             WebUI_SetGameReady();

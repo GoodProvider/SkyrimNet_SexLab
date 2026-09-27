@@ -1,4 +1,5 @@
 #include "Papyrus_Utilities.h"
+#include "JsonUtil.h"
 #include "AnimSpeed.h"
 #include "NarrationQueue.h"
 #include "WebUI_Log.h"
@@ -51,7 +52,7 @@ namespace PapyrusBindings_Utilities
         try {
             auto parsed = nlohmann::json::parse(raw);
             auto lowered = LowerCaseKeys(parsed);
-            return RE::BSFixedString(lowered.dump());
+            return RE::BSFixedString(SafeDump(lowered));
         } catch (const nlohmann::json::exception& e) {
             webui_log::warn("JsonLowerCaseKeys: parse failed: {}", e.what());
             return RE::BSFixedString("");

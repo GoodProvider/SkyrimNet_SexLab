@@ -1,4 +1,5 @@
 #include "ActionCatalog.h"
+#include "JsonUtil.h"
 #include "TargetMenuRegistry.h"
 #include "WebUI_Log.h"
 #include "Papyrus_WebUI.h"
@@ -141,7 +142,7 @@ namespace ActionCatalog
                     else if (m["value"].is_boolean())
                         pm.value = m["value"].get<bool>() ? "true" : "false";
                     else
-                        pm.value = m["value"].dump();
+                        pm.value = SafeDump(m["value"]);
                 }
                 def.parameterMapping.push_back(std::move(pm));
             }
@@ -246,6 +247,28 @@ namespace ActionCatalog
             return 0.0;
         }
 
+        /// json::value() for option files, which throws when the key holds another type.
+        /// Missing or non-string → def.
+        std::string StrField(const nlohmann::json& j, const char* key, const std::string& def)
+        {
+            if (!j.is_object() || !j.contains(key) || !j[key].is_string())
+                return def;
+            return j[key].get<std::string>();
+        }
+
+        /// Missing → def; bool, number, or "true"/"false"/"1"/"0" string are all accepted.
+        bool BoolField(const nlohmann::json& j, const char* key, bool def)
+        {
+            if (!j.is_object() || !j.contains(key))
+                return def;
+            const auto& v = j[key];
+            if (v.is_boolean())
+                return v.get<bool>();
+            if (v.is_number() || v.is_string())
+                return AsNumber(v) != 0.0;
+            return def;
+        }
+
         bool CompareValues(double actual, std::string_view op, const nlohmann::json& expected)
         {
             const double exp = AsNumber(expected);
@@ -331,7 +354,7 @@ namespace ActionCatalog
 
         RE::Actor* FocusActor()
         {
-            return PapyrusBindings_WebUI::Target_Current;
+            return PapyrusBindings_WebUI::TargetCurrent();
         }
 
         bool ArgIsCurrentActor(const nlohmann::json& arg)
@@ -346,8 +369,8 @@ namespace ActionCatalog
         {
             if (!cond.is_object())
                 return false;
-            const std::string decorator = cond.value("decoratorName", "");
-            const std::string op = cond.value("comparisonOperator", "==");
+            const std::string decorator = StrField(cond, "decoratorName", "");
+            const std::string op = StrField(cond, "comparisonOperator", "==");
             const nlohmann::json& expected =
                 cond.contains("expectedValue") ? cond["expectedValue"] : nlohmann::json(0);
             const auto& args =
@@ -397,7 +420,7 @@ namespace ActionCatalog
                 if (expected.is_string())
                     exp = expected.get<std::string>();
                 else if (expected.is_number() || expected.is_boolean())
-                    exp = expected.dump();
+                    exp = SafeDump(expected);
                 if (op == "!=")
                     return !EqualsIgnoreCase(actual, exp);
                 return EqualsIgnoreCase(actual, exp);
@@ -434,7 +457,7 @@ namespace ActionCatalog
             for (auto& group : rules) {
                 if (!group.is_object())
                     continue;
-                const bool required = group.value("required", true);
+                const bool required = BoolField(group, "required", true);
                 if (!required)
                     continue;
                 if (!group.contains("conditions") || !group["conditions"].is_array()) {
@@ -442,7 +465,7 @@ namespace ActionCatalog
                         return false;
                     continue;
                 }
-                const std::string logic = group.value("logicalOperator", "AND");
+                const std::string logic = StrField(group, "logicalOperator", "AND");
                 bool andOk = true;
                 bool orOk = false;
                 bool any = false;
@@ -521,35 +544,41 @@ namespace ActionCatalog
                     out.push_back(opt);
                     continue;
                 }
-                if (!PassesRequiresPlugin(opt))
-                    continue;
-                if (opt.contains("eligibilityRules")) {
-                    const auto& rules = opt["eligibilityRules"];
-                    if (!EvalEligibilityRules(rules, focusHasStrippedItems)) {
-                        webui_log::info(
-                            "eligibility omit type={} label={}",
-                            opt.value("type", ""),
-                            opt.value("label", opt.value("name", "")));
+                // One malformed option (a field of the wrong type) drops that option, not the menu.
+                try {
+                    if (!PassesRequiresPlugin(opt))
+                        continue;
+                    if (opt.contains("eligibilityRules")) {
+                        const auto& rules = opt["eligibilityRules"];
+                        if (!EvalEligibilityRules(rules, focusHasStrippedItems)) {
+                            webui_log::info(
+                                "eligibility omit type={} label={}",
+                                opt.value("type", ""),
+                                opt.value("label", opt.value("name", "")));
+                            continue;
+                        }
+                    }
+                    if (EqualsIgnoreCase(opt.value("type", ""), "actionSwitch")) {
+                        out.push_back(ResolveActionSwitch(opt, focusHasStrippedItems));
                         continue;
                     }
-                }
-                if (EqualsIgnoreCase(opt.value("type", ""), "actionSwitch")) {
-                    out.push_back(ResolveActionSwitch(opt, focusHasStrippedItems));
-                    continue;
-                }
-                if (EqualsIgnoreCase(opt.value("type", ""), "pulldown") && opt.contains("options")) {
-                    nlohmann::json copy = opt;
-                    copy["options"] = ResolveOptionsArray(opt["options"], focusHasStrippedItems);
-                    if (!copy["options"].is_array() || copy["options"].empty()) {
-                        webui_log::info(
-                            "eligibility omit empty pulldown label={}",
-                            copy.value("label", copy.value("name", "")));
+                    if (EqualsIgnoreCase(opt.value("type", ""), "pulldown") && opt.contains("options")) {
+                        nlohmann::json copy = opt;
+                        copy["options"] = ResolveOptionsArray(opt["options"], focusHasStrippedItems);
+                        if (!copy["options"].is_array() || copy["options"].empty()) {
+                            webui_log::info(
+                                "eligibility omit empty pulldown label={}",
+                                copy.value("label", copy.value("name", "")));
+                            continue;
+                        }
+                        out.push_back(std::move(copy));
                         continue;
                     }
-                    out.push_back(std::move(copy));
-                    continue;
+                    out.push_back(opt);
+                } catch (const std::exception& e) {
+                    webui_log::error("ActionCatalog: skipping option label={}: {}",
+                        StrField(opt, "label", StrField(opt, "name", "?")), e.what());
                 }
-                out.push_back(opt);
             }
             return out;
         }
@@ -745,12 +774,16 @@ namespace ActionCatalog
                     webui_log::warn("ActionCatalog: skipping empty option file {}", path.string());
                     continue;
                 }
-                auto node = nlohmann::json::parse(raw);
-                if (!node.is_object()) {
-                    webui_log::warn("ActionCatalog: skipping non-object option file {}", path.string());
-                    continue;
+                try {
+                    auto node = nlohmann::json::parse(raw);
+                    if (!node.is_object()) {
+                        webui_log::warn("ActionCatalog: skipping non-object option file {}", path.string());
+                        continue;
+                    }
+                    optionsArr.push_back(std::move(node));
+                } catch (const std::exception& e) {
+                    webui_log::error("ActionCatalog: skipping bad option file {}: {}", path.string(), e.what());
                 }
-                optionsArr.push_back(std::move(node));
             }
             if (optionsArr.empty())
                 webui_log::warn("ActionCatalog: no option files loaded from {}", optionsDir.string());
@@ -809,7 +842,7 @@ namespace ActionCatalog
 
         bool FocusIsInSexLabScene()
         {
-            return PapyrusBindings_WebUI::IsSexLabAnimatingFocus(PapyrusBindings_WebUI::Target_Current);
+            return PapyrusBindings_WebUI::IsSexLabAnimatingFocus(PapyrusBindings_WebUI::TargetCurrent());
         }
 
         std::filesystem::path ResolveDataDir()
@@ -1339,7 +1372,7 @@ namespace ActionCatalog
             return false;
         }
         if (EqualsIgnoreCase(g_currentModeId, next->id)) {
-            WebUI_Invoke("configureControlPanel(" + BuildMainPanelsCatalog().dump() + ");");
+            WebUI_Invoke("configureControlPanel(" + SafeDump(BuildMainPanelsCatalog()) + ");");
             return true;
         }
 
@@ -1353,8 +1386,8 @@ namespace ActionCatalog
         g_rememberedModeId = next->id;
         webui_log::info("SwitchControlMode: {}", g_currentModeId);
 
-        WebUI_Invoke("configureControlPanel(" + BuildMainPanelsCatalog().dump() + ");");
-        WebUI_Invoke("configureTargetMenu(" + BuildUICatalog(false).dump() + ");");
+        WebUI_Invoke("configureControlPanel(" + SafeDump(BuildMainPanelsCatalog()) + ");");
+        WebUI_Invoke("configureTargetMenu(" + SafeDump(BuildUICatalog(false)) + ");");
 
         if (!next->openFunction.empty())
             DispatchPapyrusNoArg(next->plugin, next->questFormId, next->scriptName, next->openFunction);

@@ -1,4 +1,5 @@
 #include "Papyrus_AnimationDB.h"
+#include "JsonUtil.h"
 #include "AnimationDB.h"
 #include "WebUI_Log.h"
 
@@ -161,7 +162,7 @@ namespace PapyrusBindings_AnimationDB
         nlohmann::json arr = nlohmann::json::array();
         for (const auto& row : rows)
             arr.push_back(RowToJson(row));
-        return RE::BSFixedString(arr.dump());
+        return RE::BSFixedString(SafeDump(arr));
     }
 
     RE::BSFixedString AnimDb_QueryTopNTags(RE::StaticFunctionTag*, RE::BSFixedString filter_json,
@@ -176,7 +177,7 @@ namespace PapyrusBindings_AnimationDB
             o["_count"] = t.count;
             arr.push_back(o);
         }
-        return RE::BSFixedString(arr.dump());
+        return RE::BSFixedString(SafeDump(arr));
     }
 
     std::int32_t AnimDb_TotalEnabled(RE::StaticFunctionTag*)
@@ -194,7 +195,7 @@ namespace PapyrusBindings_AnimationDB
         auto row = AnimationDB::GetByRegistry(registry.c_str() ? registry.c_str() : "");
         if (!row)
             return RE::BSFixedString("");
-        return RE::BSFixedString(RowToJson(*row).dump());
+        return RE::BSFixedString(SafeDump(RowToJson(*row)));
     }
 
     RE::BSFixedString AnimDb_GetStageDescription(RE::StaticFunctionTag*, RE::BSFixedString registry,
@@ -258,7 +259,7 @@ namespace PapyrusBindings_AnimationDB
             st["_current"] = (stage == current_stage) ? 1 : 0;
             arr.push_back(std::move(st));
         }
-        return RE::BSFixedString(arr.dump());
+        return RE::BSFixedString(SafeDump(arr));
     }
 
     bool AnimDb_SaveAnimLocal(RE::StaticFunctionTag*, RE::BSFixedString registry, RE::BSFixedString json)

@@ -3,7 +3,9 @@
 #include "PCH.h"
 
 namespace PapyrusBindings_WebUI {
-    extern RE::Actor* Target_Current;
+    /// ControlPanel / TargetMenu focus actor; nullptr when unset, unloaded or deleted.
+    RE::Actor* TargetCurrent();
+    void SetTargetCurrent(RE::Actor* actor);
     /// Empty when focus is an actor; e.g. "all_slaves" for a ControlPanel sentinel.
     extern std::string FocusKind;
 
@@ -29,6 +31,8 @@ namespace PapyrusBindings_WebUI {
 
     void ClearSceneCreatorPending();
     void ClearTargetMenuSession();
+    /// kPostLoadGame / kNewGame: ClearTargetMenuSession plus the one-shot Scene Creator / YesNo state.
+    void ClearOnGameLoad();
     /// Reads and clears SkipSceneCreatorOnce (Papyrus native).
     bool ConsumeSkipSceneCreator(RE::StaticFunctionTag*);
     void DispatchManagerMethodStrOnly(const char* method, const std::string& b);
@@ -98,7 +102,7 @@ namespace PapyrusBindings_WebUI {
     /// True when the selected main panel is `panel` (e.g. "description_editor_panel").
     bool WebUI_IsMainPanelOpen(RE::StaticFunctionTag*, RE::BSFixedString panel);
 
-    /// JS ControlPanel actor pick → set Target_Current + Papyrus sync.
+    /// JS ControlPanel actor pick → set the focus actor + Papyrus sync.
     void ApplyControlActorFocus(std::uint32_t formId);
     /// JS ControlPanel actor/sentinel pick (`formId`, optional `sentinel`).
     void ApplyControlActorFocusJson(const std::string& payload);
