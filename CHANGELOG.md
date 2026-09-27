@@ -4,6 +4,7 @@
 
 ### AnimDB
 - Live scenes now apply the animation's speaking modifiers (as shown in the Description Editor, per stage) at every `StageStart`, so a position with orgasm not expected / empty speaking no longer keeps the creator's `_pleasure_`. Live speaking edits stay until Save or an animation switch
+- Scenes started without "override animation settings" now begin each actor in the clothed state most candidate animations share (new `AnimDb_ClothedMajority` native; tie → undressed), so an all-dressed animation set (hug, kiss) no longer strips then re-dresses at the first stage
 - Stop auto-rebuilding AnimDB on load. If counts differ from SexLab after SexLab is ready, notify `SkyrimNet SexLab # animations doesn't match` and show a SkyMessage (empty → Build/Close; mismatch → Rebuild/Close)
 
 ### SKSE / WebUI

@@ -14,6 +14,8 @@ Files under `SKSE/Plugins/SkyrimNet_SexLab/scenes/(setting_name).json`, loaded w
 | `tags_suppress` | Animation must not include these tags |
 | `method` | Optional description when tags are not enough |
 
+`no_orgasm` / `no_stripping` / `speaking_modifiers` only apply when the Scene Creator's "override animation settings" is on. When it is off, each position starts clothed if a strict majority of the candidate animations default that position to clothed in AnimDB (`_clothed`); a tie starts undressed. The chosen animation's own defaults then take over at its first stage.
+
 ## Built-in scenes
 
 `default`, `pleasure_pain`, `no_penis`, `nonsexual`, `nonsexual_kissing`, `nonsexual_male_position_0`–`2`, `punish_spanking`, `punish_spanking_victim_nude`, `punish_whipping_oral`, `punish_pleasure_pain_rape`.

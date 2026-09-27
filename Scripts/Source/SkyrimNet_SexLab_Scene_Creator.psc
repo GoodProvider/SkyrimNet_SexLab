@@ -419,6 +419,12 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     ; Realign parallel masks if SexLab reordered positions
     RealignActorMasksFromPositions(model.positions)
 
+    ; Override off: start each actor in the clothed state most candidates share, so SexLab does not
+    ; strip only for the first animation's defaults (Scene.SyncAnimationDefaults) to re-dress them.
+    if !position_override && animations != manager.empty && animations.length > 0
+        ApplyMajorityClothed(model, animations)
+    endif
+
     if num_actors == 1
         DbgMsg("StartScene", "sexlab.GetGender "+actors[0].GetDisplayName())
         int gender = sexlab.GetGender(actors[0])
@@ -472,6 +478,28 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     Release() 
     DbgReturn("FinishStartScene", "sl_scene")
     return sl_scene 
+EndFunction
+
+; Per position, counts candidate animations whose AnimDB default is clothed vs undressed; clothed
+; wins only on a strict majority (tie -> undressed, i.e. SexLab strips as usual).
+Function ApplyMajorityClothed(sslThreadModel model, sslBaseAnimation[] animations)
+    String[] regs = Utility.CreateStringArray(animations.length)
+    int j = 0
+    while j < animations.length
+        if animations[j]
+            regs[j] = animations[j].Registry
+        endif
+        j += 1
+    endwhile
+    int[] majority = SkyrimNet_SexLab_AnimDb.AnimDb_ClothedMajority(regs, num_actors)
+    int i = 0
+    while i < num_actors && majority && i < majority.length
+        Trace("ApplyMajorityClothed", actors[i].GetDisplayName()+" clothed_majority:"+majority[i]+" candidates:"+animations.length)
+        if majority[i] == 1
+            model.SetNoStripping(actors[i])
+        endif
+        i += 1
+    endwhile
 EndFunction
 
 ; Snapshot per-actor masks, then rewrite actors[] and masks to match SexLab positions order.

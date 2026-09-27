@@ -285,6 +285,33 @@ namespace PapyrusBindings_AnimationDB
             tag.c_str() ? tag.c_str() : "");
     }
 
+    // Per position: 1 when strictly more of the registries default that position to clothed than
+    // not, else 0 (tie -> undressed). Missing rows / positions count as undressed, matching
+    // SkyrimNet_SexLab_AnimDb.GetClothed's default.
+    std::vector<std::int32_t> AnimDb_ClothedMajority(RE::StaticFunctionTag*,
+        std::vector<RE::BSFixedString> registries, std::int32_t position_count)
+    {
+        const auto n = position_count > 0 ? static_cast<std::size_t>(position_count) : 0;
+        std::vector<std::int32_t> dressed(n, 0);
+        std::int32_t total = 0;
+        for (const auto& reg : registries) {
+            if (!reg.c_str() || !reg.c_str()[0])
+                continue;
+            ++total;
+            auto row = AnimationDB::GetByRegistry(reg.c_str());
+            if (!row)
+                continue;
+            for (std::size_t i = 0; i < n && i < row->pos_clothed.size(); ++i) {
+                if (row->pos_clothed[i] == 1)
+                    ++dressed[i];
+            }
+        }
+        std::vector<std::int32_t> out(n, 0);
+        for (std::size_t i = 0; i < n; ++i)
+            out[i] = dressed[i] * 2 > total ? 1 : 0;
+        return out;
+    }
+
     bool Register_AnimationDB_Functions(RE::BSScript::IVirtualMachine* a_vm)
     {
         if (!a_vm) {
@@ -309,6 +336,7 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_SaveAnimLocal", scriptName, AnimDb_SaveAnimLocal);
         a_vm->RegisterFunction("AnimDb_ResolveTags", scriptName, AnimDb_ResolveTags);
         a_vm->RegisterFunction("AnimDb_CsvHasTag", scriptName, AnimDb_CsvHasTag);
+        a_vm->RegisterFunction("AnimDb_ClothedMajority", scriptName, AnimDb_ClothedMajority);
 
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;

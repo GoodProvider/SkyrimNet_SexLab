@@ -22,6 +22,8 @@ String Function AnimDb_GetStagesJson(String registry, int stage_count, String ac
 Bool Function AnimDb_SaveAnimLocal(String registry, String json) global native
 String Function AnimDb_ResolveTags(String tags_csv, int actor_count) global native
 Bool Function AnimDb_CsvHasTag(String tags_csv, String tag) global native
+; Per position 1 when most registries default it to clothed (tie -> 0). See Scene_Creator.ApplyMajorityClothed.
+int[] Function AnimDb_ClothedMajority(String[] registries, int position_count) global native
 
 int BATCH_SIZE = 48
 int walk_index = 0
