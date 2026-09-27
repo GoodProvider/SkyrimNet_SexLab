@@ -711,83 +711,19 @@
             flex-shrink: 0;
         }
 
-        #sc-header-row2 {
-            display: flex;
-            align-items: center;
-            gap: var(--space-sm);
-            flex-wrap: wrap;
-            margin: 0 0 var(--space-sm);
+        #sc-range-row {
+            flex-shrink: 0;
+            margin-top: var(--space-xs);
             font-size: var(--text-sm);
-            flex-shrink: 0;
         }
 
-        #sc-header-row2 .compact-row {
-            margin: 0;
-            gap: var(--space-xs);
-            flex-wrap: nowrap;
+        #sc-override-row #sc-btn-save-anim {
+            margin-left: auto;
         }
 
-        #sc-header-row2 #sc-range-style-cluster {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-xs);
-            flex-wrap: nowrap;
-            flex-shrink: 0;
-        }
-
-        #sc-header-row2 #sc-intent {
-            min-width: 120px;
-            flex: 1;
-            font-size: inherit;
-        }
-
-        #sc-header-row2 #sc-setting-cluster {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-xs);
-            flex-wrap: nowrap;
-            flex-shrink: 0;
-        }
-
-        #sc-save-confirm-panel,
-        #sc-save-setting-panel,
-        #sc-save-overwrite-panel {
-            position: fixed;
-            left: 50%;
-            top: 40%;
-            transform: translate(-50%, -50%);
-            z-index: 50;
-            min-width: min(320px, 40vw);
-            max-width: min(420px, 70vw);
-        }
-
-        #sc-save-setting-name {
-            width: 100%;
-            box-sizing: border-box;
-            background: rgba(28, 28, 33, 0.9);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            font-family: var(--font-ui);
-            font-size: var(--text-base);
-            padding: var(--space-xs) var(--space-sm);
-            min-height: var(--target-min);
-            outline: none;
-            margin: var(--space-sm) 0;
-        }
-
-        #sc-save-setting-list {
-            max-height: 12em;
-            margin-top: var(--space-sm);
-        }
-
-        #sc-save-setting-list .sc-save-file {
-            cursor: pointer;
-            padding: var(--space-xs) var(--space-sm);
-        }
-
-        #sc-save-setting-list .sc-save-file:hover {
-            background: rgba(255, 255, 255, 0.08);
+        #sc-btn-save-anim.disabled {
+            opacity: 0.4;
+            pointer-events: none;
         }
 
         .sc-anims-section {
@@ -1739,27 +1675,13 @@
     <div id="main-panel-host">
     <div id="scene-creator-panel" class="panel" style="display:none">
         <div id="sc-header-row1">
-            <div class="target-row">Scene Menu</div>
+            <div class="target-row">Scene Creator</div>
             <div class="bottom-bar" id="sc-action-bar">
+                <div id="sc-style-pulldown"></div>
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
                 <div class="option-cancel" id="sc-btn-cancel" onclick="scCancel()">Cancel</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
             </div>
-        </div>
-        <div id="sc-header-row2" class="compact-row">
-            <span id="sc-range-style-cluster">
-                <span>style</span>
-                <div id="sc-style-pulldown"></div>
-                <span>range</span>
-                <div id="sc-range-pulldown"></div>
-            </span>
-            <span>activity</span>
-            <input id="sc-intent" type="text" />
-            <span id="sc-setting-cluster">
-                <span>setting</span>
-                <div id="sc-setting-pulldown"></div>
-                <div class="action-btn" id="sc-btn-save" onclick="scSaveSetting()">Save</div>
-            </span>
         </div>
         <div class="sc-split-row">
             <div class="sc-col-positions">
@@ -1767,6 +1689,7 @@
                 <div class="compact-row" id="sc-override-row">
                     <span id="sc-override-toggle" class="cell-toggle" onclick="scToggleOverride()">—</span>
                     <span id="sc-override-label" onclick="scToggleOverride()">override animation settings</span>
+                    <div class="action-btn" id="sc-btn-save-anim" onclick="scSaveAnimSettings()">Save</div>
                 </div>
                 <div class="sc-positions-scroll">
                     <table class="data-table" id="sc-positions-table"><thead><tr>
@@ -1778,6 +1701,10 @@
                         <th class="col-v">V</th>
                         <th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
+                </div>
+                <div class="compact-row" id="sc-range-row">
+                    <span>range</span>
+                    <div id="sc-range-pulldown"></div>
                 </div>
             </div>
             <div class="sc-col-tags">
@@ -1993,30 +1920,6 @@
             <div class="action-btn" onclick="yesNoClick(1)">Yes (Random)</div>
             <div class="option-cancel" onclick="yesNoClick(2)">No (Silent)</div>
             <div class="option-cancel" onclick="yesNoClick(3)">No</div>
-        </div>
-    </div>
-    <div id="sc-save-confirm-panel" class="panel" style="display:none">
-        <div class="target-row">Save SceneSetting</div>
-        <div class="yesno-question">Do you want to save the current scene as a setting?</div>
-        <div class="btn-row">
-            <div class="action-btn" onclick="scSaveConfirmYes()">Yes</div>
-            <div class="option-cancel" onclick="scSaveConfirmNo()">No</div>
-        </div>
-    </div>
-    <div id="sc-save-setting-panel" class="panel" style="display:none">
-        <div class="target-row">Save SceneSetting</div>
-        <input id="sc-save-setting-name" type="text" placeholder="name" />
-        <div class="bottom-bar">
-            <div class="action-btn" onclick="scSaveSettingWrite()">Save</div>
-        </div>
-        <div id="sc-save-setting-list" class="scroll-list"></div>
-    </div>
-    <div id="sc-save-overwrite-panel" class="panel" style="display:none">
-        <div class="target-row">Save SceneSetting</div>
-        <div id="sc-save-overwrite-question" class="yesno-question">filename already exists, do you want to overwrite?</div>
-        <div class="btn-row">
-            <div class="action-btn" onclick="scSaveOverwriteYes()">Yes</div>
-            <div class="option-cancel" onclick="scSaveOverwriteNo()">No</div>
         </div>
     </div>
     </div><!-- #overlay-panels -->
@@ -2794,18 +2697,6 @@
                 closeAllPulldowns();
                 return;
             }
-            if (overlayElIsOpen('sc-save-overwrite-panel')) {
-                if (typeof scSaveOverwriteNo === 'function') scSaveOverwriteNo();
-                return;
-            }
-            if (overlayElIsOpen('sc-save-setting-panel')) {
-                if (typeof scCloseSaveSettingPanel === 'function') scCloseSaveSettingPanel();
-                return;
-            }
-            if (overlayElIsOpen('sc-save-confirm-panel')) {
-                if (typeof scSaveConfirmNo === 'function') scSaveConfirmNo();
-                return;
-            }
             if (overlayElIsOpen('intent-panel')) {
                 if (typeof ssIntentCancel === 'function')
                     ssIntentCancel();
@@ -2889,9 +2780,6 @@
                 window.SCENE_SETTINGS = obj;
             if (typeof TARGET_CATALOG === 'object' && TARGET_CATALOG)
                 TARGET_CATALOG.sceneSettings = obj;
-            if (typeof scRenderSettingPulldown === 'function'
-                && document.getElementById('sc-setting-pulldown'))
-                scRenderSettingPulldown((typeof SC !== 'undefined' && SC.settingName) || 'none');
         }
 
         let paramDict = {};           // typed parameter dictionary (mutable)
@@ -5033,8 +4921,6 @@
                 if (!state._tags_suppress && fallback)
                     state._tags_suppress = fallback;
                 ssApplySceneCreator(state);
-                if (typeof scRenderSettingPulldown === 'function')
-                    scRenderSettingPulldown('none');
                 const info = sceneInfoByKey.get('new');
                 if (info) info.dirty = true;
             };
@@ -7654,8 +7540,7 @@
 
         function applySceneMenuDraftToSceneInfo(extra) {
             const info = selectedSceneInfo();
-            const intentEl = document.getElementById('sc-intent');
-            info.intent = (intentEl && intentEl.value) || SC.intent || '';
+            info.intent = SC.intent || '';
             info.style = SC.style || 'normally';
             info.method = SC.method || '';
             info.positions = sceneInfoClone(SC.positions || []);
@@ -7795,7 +7680,6 @@
             stageCount: 0,
             stages: [],
             nearbyRange: 1600,
-            settingName: 'none',
             filterBy: SC_FILTER_DEFAULT,
             filterStart: SC_FILTER_DEFAULT,
             filterChain: [],
@@ -7904,9 +7788,6 @@
                     ? state._group_order.map(String)
                     : Object.keys(SC.groupTags);
             }
-            const intentEl = document.getElementById('sc-intent');
-            if (intentEl) intentEl.value = SC.intent;
-            scRenderSettingPulldown('none');
             const styleHost = document.getElementById('sc-style-pulldown');
             if (styleHost) {
                 styleHost.innerHTML = '';
@@ -7952,14 +7833,11 @@
             setDisp('sc-btn-start', !active);
             setDisp('sc-btn-cancel', !active);
             setDisp('sc-btn-stop', active);
-            setDisp('sc-setting-cluster', !active);
-            setDisp('sc-btn-save', !active);
+            setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
             setDisp('sc-btn-none', !active);
             setDisp('sc-btn-update', active);
             setDisp('sc-stage-row', active);
-            const settingPull = document.getElementById('sc-setting-pulldown');
-            if (settingPull) settingPull.style.opacity = active ? '0.5' : '';
             const stageLabel = document.getElementById('sc-stage-label');
             if (stageLabel) stageLabel.textContent = active ? `stage ${SC.stage}/${SC.stageCount || '?'}` : '';
         }
@@ -8306,6 +8184,43 @@
             }
             const table = document.getElementById('sc-positions-table');
             if (table) table.classList.toggle('override-off', !on);
+            scUpdateSaveAnimButton();
+        }
+
+        // The one selected animation the Save button writes to, or null when Save is unavailable.
+        function scSaveAnimTarget() {
+            if (SC.mode === 'active' || SC.positionOverride === false) return null;
+            const regs = scSelectedRegistries();
+            if (regs.length !== 1) return null;
+            const a = (SC.lastAnims || []).find(x => x._registry === regs[0]);
+            if (!a || deAnimActorCount(a) !== (SC.positions || []).length) return null;
+            return a;
+        }
+
+        function scUpdateSaveAnimButton() {
+            const btn = document.getElementById('sc-btn-save-anim');
+            if (btn) btn.classList.toggle('disabled', !scSaveAnimTarget());
+        }
+
+        // Writes the actor table's dressed / O / modifiers columns to the selected animation.
+        function scSaveAnimSettings() {
+            const a = scSaveAnimTarget();
+            if (!a) return;
+            const positions = SC.positions.map(p => ({
+                _no_orgasm: p._no_orgasm ? 1 : 0,
+                _speaking: p._speaking || '',
+                _dressed: p._dressed ? 1 : 0,
+                _victim: p._victim ? 1 : 0
+            }));
+            if (typeof window.onAnimRegistrySave === 'function')
+                window.onAnimRegistrySave(JSON.stringify({ _registry: a._registry, _positions: positions }));
+            a._pos_no_orgasm = positions.map(p => p._no_orgasm);
+            a._pos_speaking_modifiers = positions.map(p => p._speaking);
+            a._pos_clothed = positions.map(p => p._dressed);
+            a._clothed = a._pos_clothed.slice();
+            scRenderAnimList();
+            if (typeof notifyPlayer === 'function')
+                notifyPlayer('Saved to ' + (a._name || a._registry));
         }
 
         function scToggleOverride() {
@@ -8835,6 +8750,7 @@
                 `<th class="col-stages">num stages</th>` +
                 `<th class="col-desc">description</th>` +
                 `</tr></thead><tbody>${rows}</tbody></table>`;
+            scUpdateSaveAnimButton();
             deOnAnimsUpdated();
         }
 
@@ -8982,215 +8898,12 @@
             scRenderAnimList();
         }
 
-        function scCurrentPresetName() {
-            return (SC && SC.settingName && SC.settingName !== 'none') ? SC.settingName : '';
-        }
-
-        function scSceneSettingNames() {
-            const keys = Object.keys(ssSceneSettingsCatalog() || {})
-                .filter(k => k && String(k).toLowerCase() !== 'none');
-            keys.sort((a, b) => String(a).localeCompare(String(b)));
-            return ['none'].concat(keys);
-        }
-
-        function scRenderSettingPulldown(selected) {
-            const host = document.getElementById('sc-setting-pulldown');
-            if (!host) return;
-            const cur = selected || 'none';
-            SC.settingName = cur;
-            host.innerHTML = '';
-            host.appendChild(createPulldown(scSceneSettingNames(), cur, v => {
-                scOnSettingPulldown(v);
-            }));
-        }
-
-        function scOnSettingPulldown(name) {
-            ssPendingSettingData = null;
-            const v = String(name || 'none');
-            SC.settingName = v;
-            if (!v || v === 'none') return;
-            scApplySceneSettingName(v);
-        }
-
-        function scApplyLoadedSettingsToCreator(defData, selData) {
-            const state = {
-                _positions: SC.positions || [],
-                _tags: (SC.tags || []).join(','),
-                _tags_suppress: (SC.suppress || []).join(','),
-                _style: SC.style,
-                _method: SC.method,
-                _event_hook: SC.event_hook || ''
-            };
-            if (defData) ssApplySettingToState(state, defData);
-            if (selData) ssApplySettingToState(state, selData);
-            SC.tags = String(state._tags || '').split(',').map(s => s.trim()).filter(Boolean);
-            SC.suppress = String(state._tags_suppress || '').split(',').map(s => s.trim()).filter(Boolean);
-            if (state._style) SC.style = state._style;
-            if (state._method) SC.method = state._method;
-            if (state._event_hook != null) SC.event_hook = state._event_hook;
-            const styleHost = document.getElementById('sc-style-pulldown');
-            if (styleHost) {
-                styleHost.innerHTML = '';
-                styleHost.appendChild(createPulldown(['forcefully', 'normally', 'gently'], SC.style, v => {
-                    SC.style = v;
-                }));
-            }
-            if (typeof applySceneMenuDraftToSceneInfo === 'function')
-                applySceneMenuDraftToSceneInfo({});
-            else if (typeof scPersistPositionsToSceneInfo === 'function')
-                scPersistPositionsToSceneInfo();
-            if (typeof scRenderPositions === 'function') scRenderPositions();
-            if (typeof scRenderTagChips === 'function') scRenderTagChips();
-            if (typeof scRefreshTags === 'function') scRefreshTags();
-            if (typeof scRefreshAnims === 'function') scRefreshAnims();
-        }
-
-        function scApplySceneSettingName(name) {
-            const n = String(name || '').trim();
-            if (!n || n === 'none') return;
-            ssLoadSetting('default').then(defData => {
-                if (n === 'default') {
-                    scApplyLoadedSettingsToCreator(defData, null);
-                    return;
-                }
-                ssLoadSetting(n).then(sel => {
-                    scApplyLoadedSettingsToCreator(defData, sel);
-                }).catch(() => {
-                    scApplyLoadedSettingsToCreator(defData, null);
-                });
-            }).catch(() => {
-                if (n === 'default') return;
-                ssLoadSetting(n).then(sel => {
-                    scApplyLoadedSettingsToCreator(null, sel);
-                }).catch(() => {});
-            });
-        }
-
-        function scPanelShow(id, show) {
-            const el = document.getElementById(id);
-            if (el) el.style.display = show ? 'block' : 'none';
-        }
-
-        function scCloseSaveOverwritePanel() {
-            scPanelShow('sc-save-overwrite-panel', false);
-        }
-
-        function scCloseSaveSettingPanel() {
-            scCloseSaveOverwritePanel();
-            scPanelShow('sc-save-setting-panel', false);
-        }
-
-        function scCloseSaveConfirmPanel() {
-            scPanelShow('sc-save-confirm-panel', false);
-        }
-
-        function scSaveSetting() {
-            if (SC.mode === 'active') return;
-            scCloseSaveSettingPanel();
-            scPanelShow('sc-save-confirm-panel', true);
-        }
-
-        function scSaveConfirmYes() {
-            scCloseSaveConfirmPanel();
-            const input = document.getElementById('sc-save-setting-name');
-            if (input) input.value = (SC.settingName && SC.settingName !== 'none') ? SC.settingName : '';
-            const list = document.getElementById('sc-save-setting-list');
-            if (list) {
-                const names = scSceneSettingNames().filter(n => n !== 'none');
-                list.innerHTML = names.map(n =>
-                    `<div class="sc-save-file" onclick="scSaveSettingPickName(${JSON.stringify(n)})">${n}</div>`
-                ).join('');
-            }
-            scPanelShow('sc-save-setting-panel', true);
-        }
-
-        function scSaveConfirmNo() {
-            scCloseSaveConfirmPanel();
-        }
-
-        function scSaveSettingPickName(name) {
-            const input = document.getElementById('sc-save-setting-name');
-            if (input) input.value = String(name || '');
-        }
-
-        function scSanitizeSettingName(raw) {
-            const n = String(raw || '').trim();
-            if (!n || n.toLowerCase() === 'none') return '';
-            if (/[\\/:*?"<>|]/.test(n) || n.indexOf('..') >= 0) return '';
-            return n;
-        }
-
-        function scBuildSceneSettingObject() {
-            const positions = SC.positions || [];
-            const out = {};
-            if (SC.style && SC.style !== 'normally') out.style = SC.style;
-            if (SC.method) out.method = SC.method;
-            if (SC.event_hook) out.event_hook = SC.event_hook;
-            const tags = (SC.tags || []).join(',');
-            if (tags) out.tags = tags;
-            const suppress = (SC.suppress || []).join(',');
-            if (suppress) out.tags_suppress = suppress;
-            out.no_stripping = positions.map(p => p && p._dressed ? 1 : 0);
-            out.no_orgasm = positions.map(p => p && p._no_orgasm ? 1 : 0);
-            out.speaking_modifiers = positions.map(p => (p && p._speaking != null) ? p._speaking : '');
-            out.victim = positions.map(p => p && p._victim ? 1 : 0);
-            return out;
-        }
-
-        function scRememberSceneSetting(name, obj) {
-            if (!name || !obj) return;
-            const cat = Object.assign({}, ssSceneSettingsCatalog());
-            cat[name] = obj;
-            ssAdoptSceneSettings(cat);
-        }
-
-        function scWriteSceneSetting(name) {
-            const obj = scBuildSceneSettingObject();
-            const payload = scBuildResult('save');
-            payload._scene_preset = name;
-            if (typeof window.onSceneCreatorSave === 'function')
-                window.onSceneCreatorSave(JSON.stringify(payload));
-            scRememberSceneSetting(name, obj);
-            scCloseSaveSettingPanel();
-            scRenderSettingPulldown(SC.settingName || 'none');
-        }
-
-        function scSaveSettingWrite() {
-            const input = document.getElementById('sc-save-setting-name');
-            const name = scSanitizeSettingName(input && input.value);
-            if (!name) {
-                if (typeof notifyPlayer === 'function')
-                    notifyPlayer('Enter a valid setting name.');
-                return;
-            }
-            const exists = !!(SCENE_SETTINGS && Object.prototype.hasOwnProperty.call(SCENE_SETTINGS, name));
-            if (exists) {
-                const q = document.getElementById('sc-save-overwrite-question');
-                if (q) q.textContent = 'filename already exists, do you want to overwrite?';
-                scPanelShow('sc-save-overwrite-panel', true);
-                return;
-            }
-            scWriteSceneSetting(name);
-        }
-
-        function scSaveOverwriteYes() {
-            const input = document.getElementById('sc-save-setting-name');
-            const name = scSanitizeSettingName(input && input.value);
-            scCloseSaveOverwritePanel();
-            if (!name) return;
-            scWriteSceneSetting(name);
-        }
-
-        function scSaveOverwriteNo() {
-            scCloseSaveOverwritePanel();
-        }
-
         function scBuildResult(action) {
             return {
                 _action: action,
                 _creator_sid: SC.creator_sid,
                 _from_target_menu: !!SC.from_target_menu,
-                _intent: document.getElementById('sc-intent').value || SC.intent,
+                _intent: SC.intent || '',
                 _style: SC.style,
                 _method: SC.method,
                 _tags: SC.tags.join(','),
