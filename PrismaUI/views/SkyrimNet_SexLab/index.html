@@ -721,6 +721,22 @@
             margin-left: auto;
         }
 
+        #sc-save-anim-unsaved {
+            display: none;
+            margin-left: auto;
+            font-size: var(--text-sm);
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        #sc-save-anim-unsaved.show {
+            display: inline;
+        }
+
+        #sc-override-row #sc-save-anim-unsaved.show + #sc-btn-save-anim {
+            margin-left: 0;
+        }
+
         #sc-btn-save-anim.disabled {
             opacity: 0.4;
             pointer-events: none;
@@ -1689,6 +1705,7 @@
                 <div class="compact-row" id="sc-override-row">
                     <span id="sc-override-toggle" class="cell-toggle" onclick="scToggleOverride()">—</span>
                     <span id="sc-override-label" onclick="scToggleOverride()">override animation settings</span>
+                    <span id="sc-save-anim-unsaved">unsaved</span>
                     <div class="action-btn" id="sc-btn-save-anim" onclick="scSaveAnimSettings()">Save</div>
                 </div>
                 <div class="sc-positions-scroll">
@@ -1741,6 +1758,7 @@
                 <span id="sc-selected-count"></span>
                 <div class="action-btn" id="sc-btn-all" onclick="scClearAnims()">All</div>
                 <div class="action-btn" id="sc-btn-none" onclick="scNoneAnims()">None</div>
+                <div id="sc-anim-show-pulldown"></div>
                 <div class="action-btn" id="sc-btn-update" onclick="scAnimUpdate()" style="display:none">Update</div>
             </div>
             <div id="sc-anims-list" class="scroll-list"></div>
@@ -7687,7 +7705,10 @@
             filterByOnce: '',
             hasDescription: 'any',
             // "override animation settings": off = dressed/O/modifiers come from the animation.
-            positionOverride: false
+            positionOverride: false,
+            // Anim table view filter: true = show every listed animation, false = show only
+            // currently-selected registries. Client-side only, not persisted or sent to Papyrus.
+            show_all_selected_unselected_pulldown: true
         };
 
         const SC_NEARBY_RANGES = [100, 200, 400, 800, 1600];
@@ -7739,6 +7760,24 @@
                 host.innerHTML = '';
                 host.appendChild(createPulldown(SC_HAS_DESCRIPTION_OPTIONS, SC.hasDescription, onPick));
             }
+        }
+
+        const SC_ANIM_SHOW_OPTIONS = ['all', 'selected'];
+        const SC_ANIM_SHOW_LABELS = { all: 'All', selected: 'Selected only' };
+
+        function scRenderAnimShowPulldown() {
+            const host = document.getElementById('sc-anim-show-pulldown');
+            if (!host) return;
+            const cur = SC.show_all_selected_unselected_pulldown ? 'all' : 'selected';
+            const onPick = v => {
+                const show = v === 'all';
+                if (show === SC.show_all_selected_unselected_pulldown) return;
+                SC.show_all_selected_unselected_pulldown = show;
+                scRenderAnimList();
+            };
+            host.innerHTML = '';
+            host.appendChild(createPulldown(SC_ANIM_SHOW_OPTIONS, cur, onPick, null,
+                (el, v) => { el.textContent = SC_ANIM_SHOW_LABELS[v] || v; }));
         }
 
         // Arms the open-time downgrade: start at startMode (default gender) and keep the
@@ -7806,6 +7845,7 @@
             SC.filterByOnce = '';
             scArmFilterDowngrade(forcedFilterBy);
             scRenderHasDescriptionPulldown();
+            scRenderAnimShowPulldown();
             scApplyModeChrome();
             scEnsurePositionSeed();
             scRenderPositions();
@@ -7836,6 +7876,7 @@
             setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
             setDisp('sc-btn-none', !active);
+            setDisp('sc-anim-show-pulldown', !active);
             setDisp('sc-btn-update', active);
             setDisp('sc-stage-row', active);
             const stageLabel = document.getElementById('sc-stage-label');
@@ -8187,40 +8228,58 @@
             scUpdateSaveAnimButton();
         }
 
-        // The one selected animation the Save button writes to, or null when Save is unavailable.
-        function scSaveAnimTarget() {
-            if (SC.mode === 'active' || SC.positionOverride === false) return null;
-            const regs = scSelectedRegistries();
-            if (regs.length !== 1) return null;
-            const a = (SC.lastAnims || []).find(x => x._registry === regs[0]);
-            if (!a || deAnimActorCount(a) !== (SC.positions || []).length) return null;
-            return a;
+        // Selected animations the Save button writes to (those whose actor count matches the table).
+        function scSaveAnimTargets() {
+            if (SC.mode === 'active' || SC.positionOverride === false) return [];
+            const n = (SC.positions || []).length;
+            return scSelectedRegistries()
+                .map(reg => (SC.lastAnims || []).find(x => x._registry === reg))
+                .filter(a => a && deAnimActorCount(a) === n);
+        }
+
+        // True when the actor table's dressed / O / modifiers columns equal the animation's settings.
+        // Victim is a per-scene role, not an animation setting, so it is not compared.
+        function scActorTableMatchesAnim(a) {
+            const cl = a._clothed || a._pos_clothed || [];
+            const no = a._pos_no_orgasm || [];
+            const sp = a._pos_speaking_modifiers || [];
+            return (SC.positions || []).every((p, i) =>
+                (p._dressed ? 1 : 0) === (cl[i] ? 1 : 0) &&
+                (p._no_orgasm ? 1 : 0) === (no[i] ? 1 : 0) &&
+                deNormSpeaking(p._speaking) === deNormSpeaking(sp[i]));
         }
 
         function scUpdateSaveAnimButton() {
+            const dirty = scSaveAnimTargets().some(a => !scActorTableMatchesAnim(a));
             const btn = document.getElementById('sc-btn-save-anim');
-            if (btn) btn.classList.toggle('disabled', !scSaveAnimTarget());
+            if (btn) btn.classList.toggle('disabled', !dirty);
+            const label = document.getElementById('sc-save-anim-unsaved');
+            if (label) label.classList.toggle('show', dirty);
         }
 
-        // Writes the actor table's dressed / O / modifiers columns to the selected animation.
+        // Writes the actor table's dressed / O / modifiers columns to every selected animation that differs.
         function scSaveAnimSettings() {
-            const a = scSaveAnimTarget();
-            if (!a) return;
+            const targets = scSaveAnimTargets().filter(a => !scActorTableMatchesAnim(a));
+            if (!targets.length) return;
             const positions = SC.positions.map(p => ({
                 _no_orgasm: p._no_orgasm ? 1 : 0,
                 _speaking: p._speaking || '',
                 _dressed: p._dressed ? 1 : 0,
                 _victim: p._victim ? 1 : 0
             }));
-            if (typeof window.onAnimRegistrySave === 'function')
-                window.onAnimRegistrySave(JSON.stringify({ _registry: a._registry, _positions: positions }));
-            a._pos_no_orgasm = positions.map(p => p._no_orgasm);
-            a._pos_speaking_modifiers = positions.map(p => p._speaking);
-            a._pos_clothed = positions.map(p => p._dressed);
-            a._clothed = a._pos_clothed.slice();
+            targets.forEach(a => {
+                if (typeof window.onAnimRegistrySave === 'function')
+                    window.onAnimRegistrySave(JSON.stringify({ _registry: a._registry, _positions: positions }));
+                a._pos_no_orgasm = positions.map(p => p._no_orgasm);
+                a._pos_speaking_modifiers = positions.map(p => p._speaking);
+                a._pos_clothed = positions.map(p => p._dressed);
+                a._clothed = a._pos_clothed.slice();
+            });
             scRenderAnimList();
             if (typeof notifyPlayer === 'function')
-                notifyPlayer('Saved to ' + (a._name || a._registry));
+                notifyPlayer(targets.length === 1
+                    ? 'Saved to ' + (targets[0]._name || targets[0]._registry)
+                    : 'Saved to ' + targets.length + ' animations');
         }
 
         function scToggleOverride() {
@@ -8668,9 +8727,6 @@
             const active = opts && opts.active;
             const inThread = new Set((opts && opts.inThread) || []);
             const activeReg = (opts && opts.activeRegistry) || '';
-            const isSelected = opts && opts.isSelected
-                ? opts.isSelected
-                : scIsAnimSelected;
             const indices = anims.map((_, i) => i);
             indices.sort((ia, ib) => {
                 const a = anims[ia];
@@ -8681,10 +8737,6 @@
                     const aa = ra === activeReg ? 2 : (inThread.has(ra) ? 1 : 0);
                     const ab = rb === activeReg ? 2 : (inThread.has(rb) ? 1 : 0);
                     if (ab !== aa) return ab - aa;
-                } else {
-                    const sa = isSelected(ra) ? 1 : 0;
-                    const sb = isSelected(rb) ? 1 : 0;
-                    if (sb !== sa) return sb - sa;
                 }
                 const da = scAnimHasDescription(a) ? 1 : 0;
                 const db = scAnimHasDescription(b) ? 1 : 0;
@@ -8712,12 +8764,14 @@
             document.getElementById('sc-selected-count').textContent =
                 SC.mode === 'active' ? `in-thread ${selectedCount}` : `selected ${selectedCount}`;
             const inThread = new Set(SC.inThreadRegistries || []);
-            const indices = sortAnimListRows(anims, {
+            let indices = sortAnimListRows(anims, {
                 active: SC.mode === 'active',
                 inThread: SC.inThreadRegistries,
-                activeRegistry: SC.activeRegistry,
-                isSelected: (reg) => SC.mode === 'active' ? inThread.has(reg) : scIsAnimSelected(reg)
+                activeRegistry: SC.activeRegistry
             });
+            if (SC.mode !== 'active' && !SC.show_all_selected_unselected_pulldown) {
+                indices = indices.filter(i => scIsAnimSelected(anims[i]._registry || ''));
+            }
             const rows = indices.map((i) => {
                 const a = anims[i];
                 const reg = a._registry || '';
@@ -8799,7 +8853,7 @@
                     SC.selectedRegistries = (SC.selectedRegistries || [])
                         .filter(r => SC.lastAnimRegistries.includes(r));
                     if (!SC.selectedRegistries.length && anims.length) {
-                        const top = sortAnimListRows(anims, { isSelected: () => false })[0];
+                        const top = sortAnimListRows(anims, {})[0];
                         scAddAnimToSelection(top);
                         return;
                     }
@@ -9261,8 +9315,7 @@
             const indices = sortAnimListRows(anims, {
                 active: active,
                 inThread: SC.inThreadRegistries,
-                activeRegistry: SC.activeRegistry,
-                isSelected: () => true
+                activeRegistry: SC.activeRegistry
             });
             return indices.map(i => anims[i]);
         }
