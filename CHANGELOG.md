@@ -8,6 +8,7 @@
 - Stop auto-rebuilding AnimDB on load. If counts differ from SexLab after SexLab is ready, notify `SkyrimNet SexLab # animations doesn't match` and show a SkyMessage (empty → Build/Close; mismatch → Rebuild/Close)
 
 ### SKSE / WebUI
+- Scene Creator: the animation list starts with one animation selected; click selects just that row (click again to deselect), Ctrl+click adds rows. Each added animation reorders actors to match its position genders when possible and sets the dressed / O / modifiers columns from its defaults
 - Description Editor lists the scene that just ended (`… (ended)`) in the scene pulldown and selects it by default when no scene is active, so its animation is the current animation and editable after the scene stops
 - Menu hotkey mid-scene with the crosshair on a non-participant (e.g. a DOM mistress) now focuses the player, so the Description Editor opens instead of staying on TargetMenu
 - Menu hotkey always toggles ControlPanel: hide immediately when the overlay is visible (any focus actor); open TargetMenu only when hidden

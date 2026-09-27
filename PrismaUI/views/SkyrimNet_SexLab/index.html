@@ -7774,7 +7774,7 @@
             positions: [],
             tags: [],
             suppress: [],
-            deselectedRegistries: [],
+            selectedRegistries: [],
             lastAnimRegistries: [],
             lastAnims: [],
             lastTags: [],
@@ -7886,12 +7886,12 @@
             copySceneInfoToSC(info);
             if (state._stage != null && typeof deOnThreadStage === 'function') deOnThreadStage(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
-            SC.deselectedRegistries = [];
+            SC.selectedRegistries = [];
             SC.lastAnimRegistries = [];
             SC.tagType = 'any';
             SC.pendingNearby = null;
             if (SC.mode === 'active' && SC.inThreadRegistries.length)
-                SC.deselectedRegistries = [];
+                SC.selectedRegistries = [];
             if (state._scene_presets) {
                 const presetsRaw = state._scene_presets;
                 SC.presets = Array.isArray(presetsRaw)
@@ -8136,7 +8136,7 @@
         }
 
         function scOnActorCountChanged() {
-            SC.deselectedRegistries = [];
+            SC.selectedRegistries = [];
             scPersistPositionsToSceneInfo();
             scRefreshTags();
             scRefreshAnims();
@@ -8595,7 +8595,11 @@
         }
 
         function scSelectedRegistries() {
-            return SC.lastAnimRegistries.filter(r => !SC.deselectedRegistries.includes(r));
+            return (SC.selectedRegistries || []).filter(r => SC.lastAnimRegistries.includes(r));
+        }
+
+        function scIsAnimSelected(reg) {
+            return (SC.selectedRegistries || []).includes(reg);
         }
 
         function escapeHtml(s) {
@@ -8751,7 +8755,7 @@
             const activeReg = (opts && opts.activeRegistry) || '';
             const isSelected = opts && opts.isSelected
                 ? opts.isSelected
-                : (reg) => !SC.deselectedRegistries.includes(reg);
+                : scIsAnimSelected;
             const indices = anims.map((_, i) => i);
             indices.sort((ia, ib) => {
                 const a = anims[ia];
@@ -8797,12 +8801,12 @@
                 active: SC.mode === 'active',
                 inThread: SC.inThreadRegistries,
                 activeRegistry: SC.activeRegistry,
-                isSelected: (reg) => SC.mode === 'active' ? inThread.has(reg) : !SC.deselectedRegistries.includes(reg)
+                isSelected: (reg) => SC.mode === 'active' ? inThread.has(reg) : scIsAnimSelected(reg)
             });
             const rows = indices.map((i) => {
                 const a = anims[i];
                 const reg = a._registry || '';
-                const sel = SC.mode === 'active' ? inThread.has(reg) : !SC.deselectedRegistries.includes(reg);
+                const sel = SC.mode === 'active' ? inThread.has(reg) : scIsAnimSelected(reg);
                 const an = scAnimAnLetter(reg);
                 const genders = (a._pos_genders || []).map((g, gi) => {
                     const letter = (g === 0 || g === 2) ? 'm' : 'f';
@@ -8813,7 +8817,7 @@
                 const name = a._name || '(unnamed)';
                 const stages = (a._stage_count != null) ? a._stage_count : '';
                 const desc = previewDescription(a);
-                return `<tr class="${sel ? 'selected' : ''}" onclick="scToggleAnim(${i})">` +
+                return `<tr class="${sel ? 'selected' : ''}" onclick="scClickAnim(${i}, event)">` +
                     `<td class="col-an">${escapeHtml(an)}</td>` +
                     `<td class="col-genders">${escapeHtml(genders)}</td>` +
                     `<td class="col-mods">${escapeHtml(mods)}</td>` +
@@ -8875,6 +8879,15 @@
                     countEl.textContent = `animations ${anims.length}/${payload._total_enabled || '?'}`
                         + (cast ? ` (${cast})` : '');
                 }
+                if (SC.mode !== 'active') {
+                    SC.selectedRegistries = (SC.selectedRegistries || [])
+                        .filter(r => SC.lastAnimRegistries.includes(r));
+                    if (!SC.selectedRegistries.length && anims.length) {
+                        const top = sortAnimListRows(anims, { isSelected: () => false })[0];
+                        scAddAnimToSelection(top);
+                        return;
+                    }
+                }
                 scRenderAnimList();
                 return;
             }
@@ -8883,39 +8896,89 @@
             scRenderAvailableTags();
         }
 
-        function scToggleAnim(idx) {
+        // Plain click on an unselected row selects only it; Ctrl+click adds it. Clicking a
+        // selected row (with or without Ctrl) removes it from the selection.
+        function scClickAnim(idx, ev) {
             const a = SC.lastAnims[idx];
             const reg = a && a._registry;
             if (!reg) return;
             if (SC.mode === 'active') {
                 if (reg === SC.activeRegistry) return;
-                if (reg === SC.nextRegistry) SC.nextRegistry = '';
-                else SC.nextRegistry = reg;
+                SC.nextRegistry = (reg === SC.nextRegistry) ? '' : reg;
                 scRenderAnimList();
                 return;
             }
-            if (SC.deselectedRegistries.includes(reg)) {
-                SC.deselectedRegistries = SC.deselectedRegistries.filter(r => r !== reg);
-                const no = a._pos_no_orgasm || [];
-                const sp = a._pos_speaking_modifiers || [];
-                SC.positions.forEach((p, i) => {
-                    if (i < no.length) p._no_orgasm = no[i] ? 1 : 0;
-                    if (i < sp.length && sp[i]) p._speaking = Array.isArray(sp[i]) ? sp[i].join(',') : String(sp[i]);
-                });
-                scRenderPositions();
-            } else {
-                SC.deselectedRegistries.push(reg);
+            if (scIsAnimSelected(reg)) {
+                SC.selectedRegistries = SC.selectedRegistries.filter(r => r !== reg);
+                scRenderAnimList();
+                return;
             }
+            const ctrl = !!(ev && (ev.ctrlKey || ev.metaKey));
+            if (!ctrl) SC.selectedRegistries = [];
+            scAddAnimToSelection(idx);
+        }
+
+        // Adds an animation to the selection and makes the Actor table follow it: actors are
+        // reordered to match its position genders (when a full match exists), then dressed /
+        // orgasm / speaking columns take its per-position defaults.
+        function scAddAnimToSelection(idx) {
+            const a = SC.lastAnims[idx];
+            const reg = a && a._registry;
+            if (!reg) return;
+            if (!scIsAnimSelected(reg)) SC.selectedRegistries.push(reg);
+            const reordered = scReorderPositionsForAnim(a);
+            const no = a._pos_no_orgasm || [];
+            const sp = a._pos_speaking_modifiers || [];
+            const cl = a._clothed || [];
+            (SC.positions || []).forEach((p, i) => {
+                if (i < no.length) p._no_orgasm = no[i] ? 1 : 0;
+                if (i < sp.length && sp[i]) p._speaking = Array.isArray(sp[i]) ? sp[i].join(',') : String(sp[i]);
+                if (i < cl.length) p._dressed = cl[i] ? 1 : 0;
+            });
+            scPersistPositionsToSceneInfo();
+            scRenderPositions();
             scRenderAnimList();
+            // Position-match queries depend on actor order, so requery after a swap.
+            if (reordered && SC.filterBy === 'positions') scRefreshAnims();
+        }
+
+        // Reorders SC.positions so each actor's gender matches the animation's slot gender.
+        // Exact gender first, then same sex (creature ↔ humanoid). Returns true if order changed.
+        function scReorderPositionsForAnim(a) {
+            const want = (a && a._pos_genders) || [];
+            const pos = SC.positions || [];
+            if (!pos.length || want.length !== pos.length) return false;
+            if (pos.some(p => scPosGender(p) == null)) return false;
+            const sex = g => ((g | 0) === 0 || (g | 0) === 2) ? 0 : 1;
+            const out = new Array(pos.length).fill(null);
+            const used = new Set();
+            const fill = (match) => {
+                for (let i = 0; i < want.length; i++) {
+                    if (out[i]) continue;
+                    const w = Number(want[i]);
+                    // Prefer the actor already in this slot so a matching order stays put.
+                    let j = (!used.has(i) && match(scPosGender(pos[i]), w)) ? i : -1;
+                    if (j < 0) j = pos.findIndex((p, k) => !used.has(k) && match(scPosGender(p), w));
+                    if (j < 0) continue;
+                    out[i] = pos[j];
+                    used.add(j);
+                }
+            };
+            fill((g, w) => g === w);
+            fill((g, w) => sex(g) === sex(w));
+            if (out.some(p => !p)) return false;
+            if (out.every((p, i) => p === pos[i])) return false;
+            SC.positions = out;
+            return true;
         }
 
         function scClearAnims() {
-            SC.deselectedRegistries = [];
+            SC.selectedRegistries = (SC.lastAnimRegistries || []).slice();
             scRenderAnimList();
         }
 
         function scNoneAnims() {
-            SC.deselectedRegistries = (SC.lastAnimRegistries || []).slice();
+            SC.selectedRegistries = [];
             scRenderAnimList();
         }
 
