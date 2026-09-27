@@ -7,12 +7,11 @@
   "scriptName": "SkyrimNet_SexLab_Actions",
   "executionFunctionName": "StartScene_Consensual_One",
   "panelDefaults": {
-    "subject": "currentActor",
-    "object": "currentActor",
-    "objectRelation": "none",
-    "andThird": "none",
+    "participant2": "none",
+    "participant3": "none",
+    "victim": "none",
     "intent": "sexual activities",
-    "direction": "giving",
+    "direction": "random",
     "method": "masturbation",
     "style": "normally",
     "settingName": "default"

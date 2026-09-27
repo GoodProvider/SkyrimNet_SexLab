@@ -462,7 +462,7 @@ Bool Function NarrationCoolOffAllows(Actor source, Actor target) global
     float time_current = Utility.GetCurrentRealTime() 
     float time_delta = time_current - main.direct_narration_last_time 
     float cool_off = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.cooldown", 20.0)
-    float max_distance = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.maxDistance", 15.0)
+    float max_distance = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.max_distance", 15.0)
     return time_delta > cool_off && queue_size == 0 && (last_audio >= cool_off && distance <= max_distance)
 EndFunction
 

@@ -30,6 +30,7 @@ float orgasm_window_started_at = 0.0
 String storage_prefix = "skyrimnet_sexlab_scene"
 String storage_obj_key = "skyrimnet_sexlab_scene_actor_position_obj"
 String storage_total_orgasms_key = "skyrimnet_sexlab_scene_total_orgasms"
+String storage_orgasm_narrated_key = "skyrimnet_sexlab_scene_orgasm_narrated"
 int thread_obj = 0 ; Thread_obj will be reused 
 String[] played_registries
 int played_registries_count = 0
@@ -485,6 +486,7 @@ Function Release()
             endif 
             StorageUtil.UnsetIntValue(akActor, storage_obj_key)
             StorageUtil.UnsetIntValue(akActor, storage_total_orgasms_key)
+            StorageUtil.UnsetIntValue(akActor, storage_orgasm_narrated_key)
             ClearPersistedPosition(akActor)
         endif
         if position_objs && i < position_objs.length && position_objs[i] > 0
@@ -535,6 +537,12 @@ Function Release()
     orgasm_window_open = false
     orgasm_window_started_at = 0.0
     animating_started_at = 0.0
+
+    ; A reused pool scene must not apply the previous cast's per-registry edits or played list.
+    if user_anim_defaults > 0 && SNSL_JValue.isExists(user_anim_defaults)
+        SNSL_JMap.clear(user_anim_defaults)
+    endif
+    played_registries_count = 0
 
     sender = None 
     receiver = None 
@@ -719,6 +727,9 @@ EndFunction
 ; automatic per-thread stripping. See KNOWLEDGEBASE "Description Editor dressed toggle used wrong
 ; strip API (2026-09-22)".
 Function ApplyDressedToActor(Actor akActor, Bool clothed)
+    if thread == None || akActor == None
+        return
+    endif
     sslActorAlias slot = thread.ActorAlias(akActor)
     if slot
         if clothed
@@ -828,7 +839,7 @@ Function SetPosition(int index, Actor akActor, int no_orgasm, String speaking_mo
     SNSL_JMap.setInt(obj, "no_orgasm", no_orgasm)
     int speaking_obj = SetSpeakingObj(index, speaking_modifiers)
     SetActor(index, akActor)
-    Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+SNSL_JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+JoinJArrayStrToJson(speaking_obj))
+    Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+SNSL_JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+SNSL_JValue.dump(speaking_obj))
 Endfunction
 
 ; Writes the CSV tokens into position_objs[index].speaking_modifiers; returns the JArray.
@@ -961,8 +972,19 @@ bool Function SetActor(int i, Actor akActor)
     int obj = position_objs[i]
     ; actors_objs is refreshed by RelinkActorsObjs (AlignActors / GetThreadObj), not here.
 
+    ; SetPosition re-runs SetActor on anim change / WebUI / TargetMenu edits. Keep the orgasm counts
+    ; when the actor is already bound to this scene (same or moved slot). Read them per actor from
+    ; StorageUtil, not the old obj: in a slot swap the other actor may already have overwritten it.
+    int total_orgasms = 0
+    int orgasm_narrated = 0
+    int prev_obj = StorageUtil.GetIntValue(akActor, storage_obj_key, 0)
+    if prev_obj > 0 && position_objs.Find(prev_obj) >= 0
+        total_orgasms = StorageUtil.GetIntValue(akActor, storage_total_orgasms_key, 0)
+        orgasm_narrated = StorageUtil.GetIntValue(akActor, storage_orgasm_narrated_key, 0)
+    endif
     StorageUtil.SetIntValue(akActor, storage_obj_key, obj)
-    StorageUtil.SetIntValue(akActor, storage_total_orgasms_key, 0)
+    StorageUtil.SetIntValue(akActor, storage_total_orgasms_key, total_orgasms)
+    StorageUtil.SetIntValue(akActor, storage_orgasm_narrated_key, orgasm_narrated)
     SNSL_JMap.setStr(obj, "uuid", GetUUID(akActor))
     SNSL_JMap.setStr(obj, "formid", akActor.GetFormID())
     SNSL_JMap.setStr(obj, "name", akActor.GetDisplayName())
@@ -995,8 +1017,8 @@ bool Function SetActor(int i, Actor akActor)
     if status == STATUS_ACTIVE
         SNSL_JMap.setStr(obj,"notice_level","active")
     endif
-    SNSL_JMap.setInt(obj,"total_orgasm",0)
-    SNSL_JMap.setInt(obj,"orgasm_narrated",0)
+    SNSL_JMap.setInt(obj,"total_orgasm",total_orgasms)
+    SNSL_JMap.setInt(obj,"orgasm_narrated",orgasm_narrated)
     SNSL_JMap.setInt(obj,"arousal", -1)
     DbgMsg("SetActor", "thread.IsVictim "+akActor.GetDisplayName())
     if thread.IsVictim(akActor)
@@ -1284,12 +1306,9 @@ String Function GetIntentMessage(int intent_stage = -1)
     endif
     ; DOM / empty-intent creators must not emit "Nina and Bob finish ."
     String fallback = ""
-    if num_victims > 0
-        if intent != ""
-            fallback = assailant_names+" "+verb+" "+intent+" "+victim_names+"."
-        else
-            fallback = assailant_names+" "+verb+" "+victim_names+"."
-        endif
+    ; Empty intent with victims: "Bob finish Camilla." read wrong, so fall through to "Camilla and Bob finish."
+    if num_victims > 0 && intent != ""
+        fallback = assailant_names+" "+verb+" "+intent+" "+victim_names+"."
         DbgReturn("GetIntentMessage", "with victims")
     else
         if intent != ""
@@ -1539,8 +1558,28 @@ Function StageStart()
     DbgEnd("StageStart")
 EndFunction
 
-Function AnimationEnd(Actor speaker=None, String style="silently") 
-    DbgEnter("AnimationEnd", "speaker:"+GetDisplayName(speaker)+" style:"+style)
+; "<speaker> [forcefully|gently] stops <intent>[, because <reason>]. " (no adverb for normally / stop).
+; Parameters are stop_style, not style: `style` resolves to the Scene_Interface property (scene style).
+String Function StopMessage(Actor speaker, String stop_style, String reason="")
+    String how = ""
+    if stop_style == "forcefully" || stop_style == "gently"
+        how = stop_style+" "
+    endif
+    String what = intent
+    if what == ""
+        what = "the scene"
+    endif
+    String msg = GetDisplayName(speaker)+" "+how+"stops "+what
+    if reason != ""
+        msg += ", because "+reason
+    endif
+    return msg+". "
+EndFunction
+
+; stop_style (from Action_Stop): silently|silent → no DirectNarration; explain:<reason> → stop text with the
+; reason; else stop text. "" (SexLab end event) → finish text only.
+Function AnimationEnd(Actor speaker=None, String stop_style="")
+    DbgEnter("AnimationEnd", "speaker:"+GetDisplayName(speaker)+" stop_style:"+stop_style)
     AlignActors() 
     manager.SaveThreadsJson()
 
@@ -1591,7 +1630,6 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         endif 
 
         ; Mirror AnimationStart: "A and B finish <intent>."
-        ; style: silently|silent → no DirectNarration; explain:<text> → custom end text; else default end_message.
         String end_message = GetIntentMessage(INTENT_STAGE_END)
         if orgasm_narration != ""
             end_message = orgasm_narration + " " + end_message
@@ -1599,10 +1637,14 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         if afterglow != ""
             end_message += " "+afterglow
         endif
-        Bool skip_narration = (style == "silently" || style == "silent")
-        if StringUtil.GetLength(style) > 8 && StringUtil.Substring(style, 0, 8) == "explain:"
-            end_message = StringUtil.Substring(style, 8, StringUtil.GetLength(style) - 8)
-            skip_narration = False
+        Bool skip_narration = (stop_style == "silently" || stop_style == "silent")
+        if speaker != None && !skip_narration
+            ; Stopped by someone (Action_Stop): "Bob gently stops <intent>[, because <reason>]. " + finish text.
+            String reason = ""
+            if StringUtil.GetLength(stop_style) > 8 && StringUtil.Substring(stop_style, 0, 8) == "explain:"
+                reason = StringUtil.Substring(stop_style, 8, StringUtil.GetLength(stop_style) - 8)
+            endif
+            end_message = StopMessage(speaker, stop_style, reason) + end_message
         endif
         int d = 0
         while d < thread.positions.length
@@ -1715,13 +1757,14 @@ Function OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms)
     DbgEnd("OrgasmIndividual")
 EndFunction
 
-Function OrgasmCustom(Actor akActor, String msg)
-    DbgEnter("OrgasmCustom", "akActor:"+GetDisplayName(akActor)+" msg:"+msg)
+; ignore_no_orgasm: manual trigger (Description Editor orgasm button) narrates even when not expected.
+Function OrgasmCustom(Actor akActor, String msg, bool ignore_no_orgasm = false)
+    DbgEnter("OrgasmCustom", "akActor:"+GetDisplayName(akActor)+" msg:"+msg+" ignore_no_orgasm:"+ignore_no_orgasm)
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
 
     ; DOM rolls its own orgasm and ignores SexLab DisableOrgasm; honor orgasm_expected (no_orgasm = 1 - expected).
     int obj = GetObjFromActor(akActor)
-    if obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
+    if !ignore_no_orgasm && obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
         Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" shouldn't orgasm, dropping")
         DbgEnd("OrgasmCustom")
         return
@@ -1877,6 +1920,9 @@ Function MarkOrgasmNarrated(int obj, Actor akActor)
         spoken = SNSL_JMap.getInt(obj, "total_orgasm")
     endif
     SNSL_JMap.setInt(obj, "orgasm_narrated", spoken)
+    if akActor != None
+        StorageUtil.SetIntValue(akActor, storage_orgasm_narrated_key, spoken)
+    endif
 EndFunction
 
 bool Function ThreadHasDomSlave()
@@ -2652,6 +2698,7 @@ Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
     EnsureActorArraysLargeEnough(n)
     ; -1 = unchanged this call; 0/1 = new victim value, for the post-loop narration pass below.
     int[] victim_changed_new = Utility.CreateIntArray(n, -1)
+    Bool any_victim_change = false
     int i = 0
     while i < n
         int po = JArray.getObj(pos_arr, i)
@@ -2678,10 +2725,15 @@ Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
             thread.SetVictim(positions[i], newVictim)
             if newVictim != wasVictim
                 victim_changed_new[i] = newVictim as int
+                any_victim_change = true
             endif
         endif
         i += 1
     endwhile
+    ; SetPosition above ran SetActor before this call's SetVictim, so victim/assailant are stale.
+    if any_victim_change
+        RefreshVictimRoles()
+    endif
     ; Narrate victim changes only after every SetVictim above has landed, so the aggressor lookup
     ; (the first other non-victim position) sees the fully-applied state, not a partial one.
     i = 0
@@ -2693,6 +2745,47 @@ Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
     endwhile
     if apply_values
         MarkUserDefaultsDirty()
+    endif
+EndFunction
+
+; After a live thread.SetVictim: victim faction + num_victims, per-position victim/assailant
+; (same rule as SetActor), and the victim/assailant name strings. Does not touch `initiator`.
+Function RefreshVictimRoles()
+    if thread == None
+        return
+    endif
+    ReconcileVictimFactions()
+    Actor[] positions = thread.Positions
+    int i = 0
+    while positions && i < positions.length && i < position_objs.length
+        int obj = position_objs[i]
+        if positions[i] != None && obj > 0
+            if thread.IsVictim(positions[i])
+                SNSL_JMap.setInt(obj, "victim", 1)
+                SNSL_JMap.setInt(obj, "assailant", 0)
+            elseif num_victims > 0
+                SNSL_JMap.setInt(obj, "victim", 0)
+                SNSL_JMap.setInt(obj, "assailant", 1)
+            else
+                SNSL_JMap.setInt(obj, "victim", 0)
+                SNSL_JMap.setInt(obj, "assailant", 0)
+            endif
+        endif
+        i += 1
+    endwhile
+    SetNames()
+EndFunction
+
+; TargetMenu victim toggle on a live scene actor.
+Function TM_ApplyVictim(Actor akActor, Bool isVictim)
+    if thread == None || akActor == None || thread.Positions.Find(akActor) < 0
+        return
+    endif
+    Bool wasVictim = thread.IsVictim(akActor)
+    thread.SetVictim(akActor, isVictim)
+    RefreshVictimRoles()
+    if wasVictim != isVictim
+        NarrateVictimToggle(akActor, isVictim)
     endif
 EndFunction
 
@@ -3006,7 +3099,13 @@ Function WebUI_OnNarrate(String json)
     String text = JMap.getStr(obj, "_text", "")
     ; Description Editor style pulldown: style + speed + one style-change DirectNarration.
     String new_style = JMap.getStr(obj, "_style", "")
+    ; Description Editor orgasm button: thread position index.
+    int orgasm_pos = JMap.getInt(obj, "_orgasm_pos", -1)
     JValue.release(obj)
+    if orgasm_pos >= 0
+        WebUI_ForceOrgasm(orgasm_pos)
+        return
+    endif
     if new_style != ""
         Actor who = sender
         if has_player
@@ -3019,6 +3118,31 @@ Function WebUI_OnNarrate(String json)
         return
     endif
     DirectNarration("The scene changes to "+text, sender, receiver)
+EndFunction
+
+; SexLab ForceOrgasm only sends SexLabOrgasm (never HookOrgasmStart), so the event path narrates only
+; with SeparateOrgasms on, a non-DOM-slave actor and no_orgasm off. Otherwise narrate via OrgasmCustom.
+Function WebUI_ForceOrgasm(int pos)
+    if thread == None || pos < 0 || pos >= thread.Positions.length
+        Trace("WebUI_ForceOrgasm", "no thread or bad pos:"+pos)
+        return
+    endif
+    Actor a = thread.Positions[pos]
+    if a == None
+        Trace("WebUI_ForceOrgasm", "no actor at pos:"+pos)
+        return
+    endif
+    thread.ForceOrgasm(a)
+    sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
+    int obj = GetObjFromActor(a)
+    bool no_org = obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
+    bool dom_slave = obj > 0 && SNSL_JMap.getInt(obj, "dom_slave") == 1
+    if config.SeparateOrgasms && !no_org && !dom_slave
+        Trace("WebUI_ForceOrgasm", GetDisplayName(a)+" pos:"+pos+" narrated by SexLabOrgasm event")
+    else
+        Trace("WebUI_ForceOrgasm", GetDisplayName(a)+" pos:"+pos+" OrgasmCustom separate:"+config.SeparateOrgasms+" no_orgasm:"+no_org+" dom_slave:"+dom_slave)
+        OrgasmCustom(a, "", true)
+    endif
 EndFunction
 
 Function WebUI_OnAnimUpdate(String json)
@@ -3145,7 +3269,7 @@ Function ApplyWebUICommit(int obj)
         if target
             String stop_style = JMap.getStr(obj, "_stop_style", "stop")
             String narration = JMap.getStr(obj, "_stop_narration", "")
-            if narration != "" && StringUtil.Find(stop_style, "explain") != 0
+            if narration != "" && StringUtil.Find(stop_style, "explain:") != 0
                 stop_style = "explain:"+narration
             endif
             SkyrimNet_SexLab_Actions actions = (manager as Quest) as SkyrimNet_SexLab_Actions
@@ -3358,10 +3482,7 @@ Function CacheUserDefaultsForRegistry(String registry)
         if position_objs && i < position_objs.length && position_objs[i] > 0
             no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
             dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0)
-            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
-            if speaking_obj > 0 && SNSL_JArray.count(speaking_obj) > 0
-                speaking = SNSL_JArray.getStr(speaking_obj, 0)
-            endif
+            speaking = SpeakingCsvFromIndex(i)
             if SNSL_JMap.getInt(position_objs[i], "deny_orgasm", 0) == 1
                 no_org = 0
             endif
@@ -3540,11 +3661,7 @@ Function TM_ApplyOrgasmMode(Actor akActor, String mode)
                 no_org = 1
                 deny = 1
             endif
-            String speaking = ""
-            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
-            if speaking_obj > 0 && SNSL_JArray.count(speaking_obj) > 0
-                speaking = SNSL_JArray.getStr(speaking_obj, 0)
-            endif
+            String speaking = SpeakingCsvFromIndex(i)
             if speaking == "" && mode != "not_expected"
                 speaking = SkyrimNet_SexLab_AnimDb.SpeakingDefaultFromOrgasmExpected(1)
             elseif mode == "not_expected"

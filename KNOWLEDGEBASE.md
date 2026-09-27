@@ -1,5 +1,26 @@
 # Knowledgebase
 
+## `style` parameter shadowed by Scene_Interface property (2026-09-27)
+
+**Symptom:** custom stop reason never narrated ("Bob stops the scene." instead of the reason); `silent` stops still narrated. Log showed `Action_Stop … style: explain:<reason>` reaching `AnimationEnd`.
+
+**Cause:** `Scene_Interface` has `String Property style Auto`. In `Scene.AnimationEnd(Actor speaker, String style)`, `style` resolved to the property (scene style `normally`), not the parameter — pyro compiles it without a warning.
+
+**Rule:** in `SkyrimNet_SexLab_Scene` (and anything extending `Scene_Interface`) never name a parameter/local `style`, `intent`, or another parent property; use e.g. `stop_style`. `AnimationEnd` now takes `stop_style` (default `""` = SexLab end event, finish text only).
+
+## Duplicate intent-less scene on a WebUI-started thread (2026-09-27)
+
+**Symptom:** Cuddle started from TargetMenu; a later stop narrated "Bob and Camilla Valerius finish." (no intent). Log: `CreateCreator intent:  … speaker: None` right after `Scene_Creator.StartScene sid:0`, then `Setup sid:1` and both sid:0 / sid:1 doing `SetPosition` for thread 0; `Action_Stop` → `AnimationEnd sid:1`.
+
+**Cause:** `Creator.StartScene` → `model.StartThread()` takes ~1 s before `CreateSceneByCreator` sets `thread_scene[tid]`. Any `GetSceneByActor` / `GetSceneByThread` in that window saw an animating/prepare thread with no bound scene and adopted it via `CreateCreator("", …)`.
+
+**Fix:** `GetSceneByThread` create branch returns None while any thread actor still has the creator lock (`main.storage_actor_lock_key`, held until `Creator.Release()` after `CreateSceneByCreator`) — `ThreadHasCreatorLockedActor`.
+
+## TargetMenu stop did nothing / explain never opened (2026-09-27)
+
+- **explain:** `window.prompt` (and likely `window.confirm`) does not show anything in PrismaUI (Ultralight), so the handler returned as if cancelled. Text entry goes through the shared `#stop-dialog-overlay` (`stopDialogOpen(owner, onPick, explainOnly)`).
+- **stop / silent:** `tmFireStop` used `applySceneMenuDraftToSceneInfo`, which copies the SC draft (`mode`, `scene_sid`) into `selectedSceneInfo()`. When SC was a creator draft, the commit carried `_scene_sid:-1` and `WebUI_OnSceneInfoCommit` silently skipped it. Stops now set `pendingStop` directly on the target actor's live SceneInfo (`tmLiveSceneInfo`).
+
 ## Scene Menu sticky `show_scene_creator` (2026-09-27)
 
 - C++ `ActionCatalog` `g_showSceneCreator` is set by every `SwitchMainPanel` to `scene_creator_panel` and cleared **only** by `onSceneCreatorResult` `_action:"close"` (Scene Menu **Close** button or TargetMenu Scene Creator toggle). `"cancel"` (Escape release of a Papyrus creator) and overlay hide/reset leave it set. In-memory only — resets on game restart, not saved.
@@ -465,7 +486,7 @@ MCM workaround: Climax type End/Legacy, or disable High Enj Orgasm Wait / Player
 - Papyrus `StartScene_*` take **`tags`** (comma-separated), return **`Bool`**. Empty tags → skip AnimDB, still start. Non-empty → `AnimDb_ResolveTags` (sanitize + largest front-preferring subset, always lowercase); fail → False, no ModEvent.
 - `AnimDb_CsvHasTag(csv, tag)` for membership checks (kissing → setting, etc.).
 - YAML AI params stay named **`method`** (single value); ActionDispatch maps `method`↔`tags` positionally.
-- TargetMenu inactive start rows share **`panel: scene_start`** (cuddle, punish, sex, masturbation, raped by, rapes). `panelDefaults` seed Subject / Object / `andThird` / intent / direction / method / style / setting. Root **Custom** (`type: scene_creator`, `0100_custom.json`) toggles Scene Creator on the creator SceneInfo (`new`) without applying a preset. **Start** probes `AnimDb_ResolveTags` — hit → close WebUI + existing `StartScene_One/Two/Three` (JS picks; Object `to victim` → TargetVictim / Nonconsensual_Three); miss → `onNotify`, stay open. Action-panel **Custom** closes SceneStartPanel, applies **`default` then** C++-shipped `scenes/{setting}.json` from the TargetMenu catalog (`sceneSettings`; PrismaUI cannot fetch `../../../SKSE/...`) (`tags_suppress`, `tags`, `array_defaults` / per-position `no_stripping`/`no_orgasm`/`speaking_modifiers`) onto creator SceneInfo `new`, shows Scene Creator with the setting pulldown on **`none`** (`SC.filterByOnce = 'none'` only for nonsexual/affection methods, otherwise `gender`). When Scene Creator is already visible, clicking cuddle/sex/etc. reapplies that row's `panelDefaults` (including default-then-setting overlay) to SceneInfo `new` instead of opening the Parameters panel. Nearby refresh still fills Include with all in-range actors except `child`/`dead`.
+- TargetMenu inactive start rows share **`panel: scene_start`** (cuddle, punish, sex, masturbation, rapes). `panelDefaults` seed `participant2` / `participant3` / `victim` (player | currentActor | none) / intent / direction (default `random`) / method / style / setting; Target is always cast and the subject is the player only when **with** is the player. Root **Custom** (`type: scene_creator`, `0100_custom.json`) toggles Scene Creator on the creator SceneInfo (`new`) without applying a preset. **Start** probes `AnimDb_ResolveTags` — hit → close WebUI + existing `StartScene_One/Two/Three` (JS picks; Object `to victim` → TargetVictim / Nonconsensual_Three); miss → `onNotify`, stay open. Action-panel **Custom** closes SceneStartPanel, applies **`default` then** C++-shipped `scenes/{setting}.json` from the TargetMenu catalog (`sceneSettings`; PrismaUI cannot fetch `../../../SKSE/...`) (`tags_suppress`, `tags`, `array_defaults` / per-position `no_stripping`/`no_orgasm`/`speaking_modifiers`) onto creator SceneInfo `new`, shows Scene Creator with the setting pulldown on **`none`** (`SC.filterByOnce = 'none'` only for nonsexual/affection methods, otherwise `gender`). When Scene Creator is already visible, clicking cuddle/sex/etc. reapplies that row's `panelDefaults` (including default-then-setting overlay) to SceneInfo `new` instead of opening the Parameters panel. Nearby refresh still fills Include with all in-range actors except `child`/`dead`.
 - Layout: Subject; `none|and` + optional third actor; direction (giving/getting vs fucking/fucked in filters method); Object relation `with|to victim|none` + Object actor; intent (custom opens IntentPanel); style; Scene Setting. UI intents `show affection` / `comfort` map to Papyrus `showing affection` / `comforting`. Hug-giver @ SexLab pos1 when intent is those labels **or** method is `cuddling|kissing|hug` (`StartScene_Event` + Custom JS). Selectable pool gates: only player → Object disabled; player+one → `and`/third disabled. **Custom** stays enabled whenever Subject is set (missing Object / third / duplicates still open Scene Creator); **Start** keeps the stricter cast gates.
 - Third is `participate` only (never a second victim). Solo + assault/punish uses `StartScene_Nonconsensual_One`.
 

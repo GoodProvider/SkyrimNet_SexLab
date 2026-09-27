@@ -7,12 +7,11 @@
   "scriptName": "SkyrimNet_SexLab_Actions",
   "executionFunctionName": "StartScene_Consensual_Two",
   "panelDefaults": {
-    "subject": "player",
-    "object": "currentActor",
-    "objectRelation": "with",
-    "andThird": "none",
+    "participant2": "player",
+    "participant3": "none",
+    "victim": "none",
     "intent": "sexual activities",
-    "direction": "fucking",
+    "direction": "random",
     "method": "pussy",
     "style": "normally",
     "settingName": "default"

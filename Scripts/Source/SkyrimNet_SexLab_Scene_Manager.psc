@@ -269,6 +269,13 @@ SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread, Boo
         return None
     endif
 
+    ; A creator is still inside StartThread for these actors and binds the thread itself
+    ; (CreateSceneByCreator). Adopting it here made a second, intent-less scene on the same thread.
+    if ThreadHasCreatorLockedActor(thread)
+        Trace("GetSceneByThread", "tid:"+tid+" actors creator-locked (scene starting), not adopting")
+        return None
+    endif
+
     SkyrimNet_SexLab_Scene_Creator creator = CreateCreator("", thread.Positions, None, None, "", "")
     if creator == None
         Trace("GetSceneByThread", "CreateCreator returned None, aborting")
@@ -284,6 +291,21 @@ SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread, Boo
     return sl_scene
 EndFunction
 
+
+Bool Function ThreadHasCreatorLockedActor(sslThreadController thread)
+    if thread == None || main == None
+        return False
+    endif
+    Actor[] actors = thread.Positions
+    int i = 0
+    while i < actors.length
+        if actors[i] && StorageUtil.HasIntValue(actors[i], main.storage_actor_lock_key)
+            return True
+        endif
+        i += 1
+    endwhile
+    return False
+EndFunction
 
 SkyrimNet_SexLab_Scene Function GetSceneByThreadId(int tid, bool any_state=False, Bool create_if_missing=True)
     if sexlab == None 
@@ -944,6 +966,7 @@ String Function BuildAllSceneInfosJson()
         int st = creator.BuildWebUIObject()
         if st
             int st_snsl = SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(st))
+            JValue.release(st)
             if st_snsl
                 SNSL_JArray.addObj(arr, st_snsl)
             endif
@@ -1118,11 +1141,10 @@ Function WebUI_OnAnimRegistrySave(String json)
             if st > 0
                 int stage_no = JMap.getInt(st, "_stage", i + 1)
                 String template = JMap.getStr(st, "_template", "")
-                if template != ""
-                    int stage_obj = SNSL_JMap.object()
-                    SNSL_JMap.setStr(stage_obj, "description", template)
-                    SNSL_JMap.setObj(payload, "stage "+stage_no, stage_obj)
-                endif
+                ; Always send the key: an empty description clears the stage (SaveAnimLocal writes "").
+                int stage_obj = SNSL_JMap.object()
+                SNSL_JMap.setStr(stage_obj, "description", template)
+                SNSL_JMap.setObj(payload, "stage "+stage_no, stage_obj)
             endif
             i += 1
         endwhile

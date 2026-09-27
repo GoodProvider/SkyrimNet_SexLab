@@ -49,7 +49,7 @@
                     {% set speaker.notice_level = 2 %}
                {% endif %}
                {% if actor_record.creature_description != "" %} 
-                    {% set _includes_creatures = True %} 
+                    {% set _includes_creatures = true %} 
                {% endif %} 
           {% endfor %} 
 

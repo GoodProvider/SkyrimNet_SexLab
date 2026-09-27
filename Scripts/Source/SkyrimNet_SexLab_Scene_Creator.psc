@@ -930,7 +930,7 @@ Function LoadSetting(String setting_name)
     endif  
 
     int setting_id = JValue.readFromFile(filename)
-    if setting_id < 0 
+    if setting_id < 1
         Trace("LoadSetting",filename+" couldn't be parsed, aborting")
         return 
     endif  
@@ -1877,7 +1877,11 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     endif
 
     int arr = JValue.objectFromPrototype(result)
-    if arr == 0 || JArray.count(arr) <= 0
+    if arr == 0
+        return manager.empty
+    endif
+    if JArray.count(arr) <= 0
+        JValue.release(arr)
         return manager.empty
     endif
 
@@ -1898,6 +1902,7 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
         endif
         i += 1
     endwhile
+    JValue.release(arr)
 
     if !animations || animations.length == 0
         return manager.empty

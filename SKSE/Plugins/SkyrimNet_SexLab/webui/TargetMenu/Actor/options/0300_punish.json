@@ -7,12 +7,11 @@
   "scriptName": "SkyrimNet_SexLab_Actions",
   "executionFunctionName": "StartScene_Nonconsensual_Two_TargetVictim",
   "panelDefaults": {
-    "subject": "player",
-    "object": "currentActor",
-    "objectRelation": "to victim",
-    "andThird": "none",
+    "participant2": "player",
+    "participant3": "none",
+    "victim": "currentActor",
     "intent": "punish",
-    "direction": "giving",
+    "direction": "random",
     "method": "spanking",
     "style": "forcefully",
     "settingName": "punish_spanking"

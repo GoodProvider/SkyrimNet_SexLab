@@ -952,6 +952,7 @@
         #tm-positions-table .col-dressed,
         #tm-positions-table .col-o,
         #tm-positions-table .col-v,
+        #de-actors-table .col-orgasm,
         #de-actors-table .col-idx,
         #de-actors-table .col-name,
         #de-actors-table .col-o,
@@ -965,6 +966,10 @@
         #tm-positions-table .col-mods,
         #de-actors-table .col-mods {
             width: auto;
+        }
+
+        #de-actors-table .orgasm_button {
+            padding: 1px 6px;
         }
 
         #sc-positions-table .pos-move,
@@ -1120,6 +1125,51 @@
 
         #description-editor-panel.de-locked #de-lock-overlay {
             display: flex;
+        }
+
+        /* Stop dialog (Description Editor stop, TargetMenu stop explain): "Stop scene" / "Explain why" over the whole UI. */
+        #stop-dialog-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #stop-dialog-overlay.open {
+            display: flex;
+        }
+
+        .stop-dialog {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            min-width: 320px;
+            max-width: 80%;
+            padding: var(--space-lg);
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+        }
+
+        #stop-dialog-text {
+            width: 100%;
+            min-height: 80px;
+            box-sizing: border-box;
+            resize: vertical;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            padding: var(--space-sm);
+            font-family: var(--font-ui);
+        }
+
+        #stop-dialog-submit.de-disabled {
+            opacity: 0.4;
+            pointer-events: none;
         }
 
         .de-lock-text {
@@ -1802,6 +1852,7 @@
             <div id="de-action-bar">
                 <div id="de-style-pulldown"></div>
                 <div class="action-btn" id="de-btn-save" onclick="deSave()">Save</div>
+                <div class="action-btn" id="de-btn-stop" style="display:none" onmousedown="event.preventDefault()" onclick="deStopScene()">Stop</div>
                 <div class="option-cancel" id="de-btn-cancel" onclick="deCancel()">Cancel</div>
             </div>
         </div>
@@ -1825,7 +1876,7 @@
                 </div>
                 <div id="de-actors-table-wrap" style="display:none">
                     <table class="data-table" id="de-actors-table"><thead><tr>
-                        <th class="col-idx">#</th><th class="col-name">name</th>
+                        <th class="col-orgasm"></th><th class="col-idx">#</th><th class="col-name">name</th>
                         <th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
                     <div class="de-name-hint">Clicking a name adds it to the description</div>
@@ -1968,6 +2019,28 @@
         </div>
     </div>
     </div><!-- #overlay-panels -->
+    <!-- Stop dialog (Description Editor stop, TargetMenu stop explain): "Stop scene" choices / "Explain why". -->
+    <div id="stop-dialog-overlay">
+        <div class="stop-dialog" id="stop-dialog-choices">
+            <div class="target-row">Stop scene</div>
+            <div class="btn-row">
+                <div class="action-btn" onmousedown="event.preventDefault()" onclick="stopDialogPick('forcefully')">forcefully</div>
+                <div class="action-btn" onmousedown="event.preventDefault()" onclick="stopDialogPick('normally')">normally</div>
+                <div class="action-btn" onmousedown="event.preventDefault()" onclick="stopDialogPick('gently')">gently</div>
+                <div class="action-btn" onmousedown="event.preventDefault()" onclick="stopDialogShowExplain()">custom</div>
+                <div class="action-btn" onmousedown="event.preventDefault()" onclick="stopDialogPick('silent')">silently</div>
+                <div class="option-cancel" onmousedown="event.preventDefault()" onclick="stopDialogClose()">Cancel</div>
+            </div>
+        </div>
+        <div class="stop-dialog" id="stop-dialog-explain" style="display:none">
+            <div class="target-row">Explain why</div>
+            <textarea id="stop-dialog-text" oninput="stopDialogUpdateSubmit()"></textarea>
+            <div class="btn-row">
+                <div class="action-btn de-disabled" id="stop-dialog-submit" onmousedown="event.preventDefault()" onclick="stopDialogSubmit()">Submit</div>
+                <div class="option-cancel" onmousedown="event.preventDefault()" onclick="stopDialogClose()">Cancel</div>
+            </div>
+        </div>
+    </div>
     </div><!-- #ui-shell -->
 
     <script>
@@ -3993,9 +4066,7 @@
                 return;
             }
             if (opt.explainPrompt) {
-                const msg = window.prompt('Stop narration (Enter to apply, Cancel to abort):', '');
-                if (msg === null) return;
-                firePapyrusOption(opt, { narration: msg });
+                stopDialogOpen('tm', (style, narration) => firePapyrusOption(opt, { narration }), true);
                 return;
             }
             if (opt.panel) {
@@ -4191,13 +4262,32 @@
             let style = 'stop';
             if (fn === 'TM_StopSilent') style = 'silent';
             if (fn === 'TM_StopExplain') style = 'explain';
-            applySceneMenuDraftToSceneInfo({
-                pendingStop: true,
-                stopStyle: style,
-                stopNarration: (extra && extra.narration) || '',
-                stopSpeakerFormId: speakerFid
-            });
+            // Write straight to the target's live SceneInfo: copying the SC draft (applySceneMenuDraftToSceneInfo)
+            // committed _scene_sid -1 whenever SC was not bound to the live scene, and Papyrus dropped it.
+            const info = tmLiveSceneInfo();
+            if (!info) {
+                notifyPlayer('No active scene to stop');
+                return;
+            }
+            info.pendingStop = true;
+            info.stopStyle = style;
+            info.stopNarration = (extra && extra.narration) || '';
+            info.stopSpeakerFormId = speakerFid;
+            info.dirty = true;
             requestWebUIHide(true);
+        }
+
+        // Live scene for the TargetMenu stop: the one with the target actor, else the one SC is bound to.
+        function tmLiveSceneInfo() {
+            const fids = [Number((targetActor && targetActor.formId) || 0), tmSceneTargetFormId()];
+            let found = null;
+            fids.forEach(fid => sceneInfoByKey.forEach((info, key) => {
+                if (!found && fid && key !== 'new' && info && info.mode === 'active' && info.scene_sid >= 0 && info.hasActor(fid))
+                    found = info;
+            }));
+            if (found) return found;
+            const bound = SC.scene_sid >= 0 ? sceneInfoByKey.get('scene:' + SC.scene_sid) : null;
+            return bound && bound.mode === 'active' ? bound : null;
         }
 
         function tmRenderStopPanel(body, opt) {
@@ -4229,11 +4319,8 @@
             const explain = document.createElement('div');
             explain.className = 'action-btn';
             explain.textContent = 'explain';
-            explain.onclick = () => {
-                const msg = window.prompt('Stop narration (Enter to apply, Cancel to abort):', '');
-                if (msg === null) return;
-                tmFireStop(opt, 'TM_StopExplain', { narration: msg });
-            };
+            explain.onclick = () => stopDialogOpen('tm', (style, narration) =>
+                tmFireStop(opt, 'TM_StopExplain', { narration }), true);
             btns.appendChild(silent);
             btns.appendChild(stop);
             btns.appendChild(explain);
@@ -4550,13 +4637,51 @@
             body.appendChild(tmPapyrusConfirmBar(() => applySceneMenuDraftToSceneInfo({})));
         }
 
-        const SS_METHODS_GIVING = [
-            'handjob', 'boobjob', 'fisting', 'dildo', 'fingering', 'footjob', 'oral', 'thighjob',
-            'cuddling', 'kissing', 'hug', 'sitting', 'laying', 'standing', 'spooning', 'headpat',
-            'spanking', 'whip', 'masturbation'
+        // Each leaf: display key/label, the AnimDB tag it fires (wire), and which legacy
+        // direction string ("giving family" vs "fucking family") reproduces today's SexLab
+        // cast-position behavior for a "giving" vs "receiving" pick.
+        const SS_SEX_LEAVES = [
+            { key: 'vaginal',      label: 'vaginal',      wire: 'vaginal',      giving: 'fucking', receiving: 'fucked in' },
+            { key: 'anal',         label: 'anal',         wire: 'anal',         giving: 'fucking', receiving: 'fucked in' },
+            { key: 'oral',         label: 'oral',         wire: 'oral',         giving: 'fucking', receiving: 'fucked in' },
+            { key: 'blowjob',      label: 'blowjob',      wire: 'blowjob',      giving: 'fucking', receiving: 'fucked in' },
+            { key: 'cunnilingus',  label: 'cunnilingus',  wire: 'cunnilingus',  giving: 'fucking', receiving: 'fucked in' },
+            { key: 'assjob',       label: 'assjob',       wire: 'assjob',       giving: 'giving',  receiving: 'getting' },
+            { key: 'boobjob',      label: 'boobjob',      wire: 'boobjob',      giving: 'giving',  receiving: 'getting' },
+            { key: 'thighjob',     label: 'thighjob',     wire: 'thighjob',     giving: 'giving',  receiving: 'getting' },
+            { key: 'fisting',      label: 'fisting',      wire: 'fisting',      giving: 'giving',  receiving: 'getting' },
+            { key: 'fingering',    label: 'fingering',    wire: 'fingering',    giving: 'giving',  receiving: 'getting' },
+            { key: 'dildo',        label: 'dildo',        wire: 'dildo',        giving: 'giving',  receiving: 'getting' },
+            { key: 'handjob',      label: 'handjob',      wire: 'handjob',      giving: 'giving',  receiving: 'getting' },
+            { key: 'footjob',      label: 'footjob',      wire: 'footjob',      giving: 'giving',  receiving: 'getting' },
+            { key: 'masturbation', label: 'masturbation', wire: 'masturbation', giving: 'giving',  receiving: 'getting' }
         ];
-        const SS_METHODS_FUCKING = ['pussy', 'ass', 'mouth'];
-        const SS_DIRECTIONS = ['giving', 'getting', 'fucked in', 'fucking'];
+        const SS_AFFECTION_LEAVES = [
+            { key: 'kissing',  label: 'kissing',  wire: 'kissing',  giving: 'giving', receiving: 'getting' },
+            { key: 'headpat',  label: 'headpat',  wire: 'headpat',  giving: 'giving', receiving: 'getting' },
+            { key: 'hugging',  label: 'hugging',  wire: 'hugging',  giving: 'giving', receiving: 'getting' },
+            { key: 'cuddling', label: 'cuddling', wire: 'cuddling', giving: 'giving', receiving: 'getting' },
+            { key: 'spooning', label: 'spooning', wire: 'spooning', giving: 'giving', receiving: 'getting' },
+            { key: 'sitting',  label: 'sitting',  wire: 'sitting',  giving: 'giving', receiving: 'getting' },
+            { key: 'laying',   label: 'laying',   wire: 'laying',   giving: 'giving', receiving: 'getting' },
+            { key: 'standing', label: 'standing', wire: 'standing', giving: 'giving', receiving: 'getting' }
+        ];
+        const SS_PUNISH_LEAVES = [
+            { key: 'spanking',  label: 'spanking',  wire: 'spanking',  giving: 'giving', receiving: 'getting' },
+            { key: 'whip',      label: 'whip',      wire: 'whip',      giving: 'giving', receiving: 'getting' },
+            { key: 'slapping',  label: 'slapping',  wire: 'slapping',  giving: 'giving', receiving: 'getting' },
+            { key: 'pussyslap', label: 'pussyslap', wire: 'pussyslap', giving: 'giving', receiving: 'getting' }
+        ];
+        // milking has no sub-leaves of its own; it sits flat, beside sex/affection/punish.
+        const SS_MILKING_LEAF =
+            { key: 'milking', label: 'milking', wire: 'milking', giving: 'giving', receiving: 'getting' };
+
+        const SS_CATEGORIES = [
+            { key: 'sex', label: 'sex', leaves: SS_SEX_LEAVES },
+            { key: 'affection', label: 'affection', leaves: SS_AFFECTION_LEAVES },
+            { key: 'punish', label: 'punish', leaves: SS_PUNISH_LEAVES }
+        ];
+
         const SS_INTENTS = ['show affection', 'comfort', 'sexual activities', 'sexual assault', 'punish', 'custom'];
         const SS_INTENT_TO_PAPYRUS = {
             'show affection': 'showing affection',
@@ -4567,13 +4692,16 @@
             'nonsexual_male_position_2', 'default', 'no_penis', 'pleasure_pain',
             'punish_spanking', 'punish_spanking_victim_nude', 'punish_whipping_oral', 'punish_pleasure_pain_rape'
         ];
-        const SS_AFFECTION_METHODS = {
-            cuddling: 1, kissing: 1, hug: 1, sitting: 1, laying: 1, standing: 1, spooning: 1, headpat: 1
-        };
+        const SS_AFFECTION_METHODS = SS_AFFECTION_LEAVES.reduce((acc, l) => (acc[l.wire] = 1, acc), {});
+        // p2 ("with") / p3 ("and") / victim are what the panel edits; subject / object /
+        // third / objectRelation / andThird are derived from them by ssDeriveCast.
         let ssUi = {
             seededForLabel: '',
             seedObjectRelation: 'with',
-            seedAndThird: 'none',
+            p2FormId: 0,
+            p3FormId: 0,
+            victimFormId: 0,
+            victimDefault: 'none',
             subjectFormId: 0,
             objectFormId: 0,
             thirdFormId: 0,
@@ -4639,33 +4767,51 @@
             return sel[0] || pool[0] || null;
         }
 
-        function ssPickOther(pool, excludeFids) {
-            const skip = new Set((excludeFids || []).map(formIdU32).filter(Boolean));
-            const playerFid = formIdU32(playerActor && playerActor.formId);
-            const others = ssSelectable(pool).filter(a => !skip.has(formIdU32(a.formId)));
-            const npc = others.find(a => formIdU32(a.formId) !== playerFid);
-            if (npc) return npc;
-            return others[0] || null;
+        function ssFindLeaf(key) {
+            const all = SS_CATEGORIES.reduce((a, c) => a.concat(c.leaves), []).concat([SS_MILKING_LEAF]);
+            return all.find(l => l.key === key) || null;
         }
 
-        function ssGivingFamily(direction) {
+        // leaf key -> AnimDB tag string sent as _tags/tags (replaces ssRemapMethod).
+        function ssWireMethod(method) {
+            const leaf = ssFindLeaf(String(method || '').toLowerCase());
+            return leaf ? leaf.wire : String(method || '');
+        }
+
+        // (uiDirection "giving"|"receiving"|"random", leaf key) -> legacy wire direction
+        // string ("giving"/"getting"/"fucking"/"fucked in") consumed by StartScene_Event's
+        // speaker_position logic (replaces ssResolveDirection).
+        function ssWireDirection(direction, method) {
+            const leaf = ssFindLeaf(String(method || '').toLowerCase());
+            const isRandomDir = String(direction || '').toLowerCase() === 'random';
+            if (!leaf) {
+                // method sentinel "random" (no leaf picked yet): fall back to the giving
+                // family's pair, matching prior default behavior.
+                if (isRandomDir) return Math.random() < 0.5 ? 'giving' : 'getting';
+                return direction;
+            }
+            if (isRandomDir) {
+                const pair = [leaf.giving, leaf.receiving];
+                return pair[Math.floor(Math.random() * pair.length)];
+            }
+            return String(direction || '').toLowerCase() === 'receiving' ? leaf.receiving : leaf.giving;
+        }
+
+        // Legacy vocabulary that may still be seeded by panelDefaults/JS constants
+        // (pussy/ass/mouth, getting/fucking/"fucked in") normalizes into the new tree.
+        const SS_LEGACY_METHOD_ALIAS = { pussy: 'vaginal', ass: 'anal', mouth: 'oral', cuddle: 'cuddling' };
+        function ssNormalizeMethodKey(method) {
+            const m = String(method || '').toLowerCase();
+            return ssFindLeaf(m) ? m : (SS_LEGACY_METHOD_ALIAS[m] || m);
+        }
+        const SS_LEGACY_DIRECTION_ALIAS = {
+            getting: 'receiving', get: 'receiving', giving: 'giving', give: 'giving',
+            fucking: 'giving', 'fucked in': 'receiving'
+        };
+        function ssNormalizeDirection(direction) {
             const d = String(direction || '').toLowerCase();
-            return d === 'giving' || d === 'getting';
-        }
-
-        function ssMethodList(direction) {
-            return ssGivingFamily(direction) ? SS_METHODS_GIVING.slice() : SS_METHODS_FUCKING.slice();
-        }
-
-        function ssRemapMethod(method) {
-            const t = String(method || '').toLowerCase();
-            if (t === 'pussy') return 'vaginal';
-            if (t === 'mouth') return 'oral';
-            if (t === 'ass') return 'anal';
-            if (t === 'cuddle') return 'cuddling';
-            if (t === 'hugging') return 'hug';
-            if (t === 'whipping') return 'whip';
-            return t;
+            if (d === 'giving' || d === 'receiving' || d === 'random') return d;
+            return SS_LEGACY_DIRECTION_ALIAS[d] || 'random';
         }
 
         function ssPapyrusIntent() {
@@ -4675,22 +4821,66 @@
         }
 
         function ssIsAffection() {
-            const m = ssRemapMethod(ssUi.method);
+            const m = ssWireMethod(ssUi.method);
             const setting = String(ssUi.settingName || '');
             return !!SS_AFFECTION_METHODS[m] || setting.indexOf('nonsexual') === 0;
         }
 
-        function ssApplyGates(pool) {
-            const n = ssSelectable(pool).length;
-            if (n < 2) {
-                ssUi.objectRelation = 'none';
-                ssUi.objectFormId = 0;
-                ssUi.andThird = 'none';
-                ssUi.thirdFormId = 0;
-            } else if (n < 3) {
-                ssUi.andThird = 'none';
-                ssUi.thirdFormId = 0;
+        function ssTargetFid(pool) {
+            const t = ssActorBySource(pool, 'currentActor');
+            return t ? formIdU32(t.formId) : 0;
+        }
+
+        // panelDefaults source → formId: "player" | "currentActor" (Target) | "none" (0).
+        function ssFidBySource(pool, source) {
+            if (source === 'currentActor') return ssTargetFid(pool);
+            if (source === 'player') {
+                const playerFid = formIdU32(playerActor && playerActor.formId);
+                return ssFind(ssSelectable(pool), playerFid) ? playerFid : 0;
             }
+            return 0;
+        }
+
+        // Target is always cast. If "with" is the player, the player is the subject and
+        // Target the object; otherwise Target is the subject and "with" (or "and") the object.
+        // A victim outside the cast falls back to the option default, then none.
+        function ssDeriveCast(pool) {
+            const sel = new Set(ssSelectable(pool).map(a => formIdU32(a.formId)));
+            const tFid = ssTargetFid(pool);
+            const playerFid = formIdU32(playerActor && playerActor.formId);
+            let p2 = formIdU32(ssUi.p2FormId);
+            let p3 = formIdU32(ssUi.p3FormId);
+            if (!sel.has(p2) || p2 === tFid) p2 = 0;
+            if (!sel.has(p3) || p3 === tFid || p3 === p2) p3 = 0;
+            if (sel.size < 2) { p2 = 0; p3 = 0; }
+            else if (sel.size < 3) p3 = 0;
+            ssUi.p2FormId = p2;
+            ssUi.p3FormId = p3;
+            let subject = tFid;
+            let object = p2;
+            if (p2 && p2 === playerFid) {
+                subject = playerFid;
+                object = tFid;
+            }
+            let third = p3;
+            if (!object && third) {
+                object = third;
+                third = 0;
+            }
+            ssUi.subjectFormId = subject;
+            ssUi.objectFormId = object;
+            ssUi.thirdFormId = third;
+            const members = [subject, object, third].filter(Boolean);
+            let victim = formIdU32(ssUi.victimFormId);
+            if (members.length < 2) {
+                victim = 0;
+            } else if (victim && members.indexOf(victim) < 0) {
+                victim = ssFidBySource(pool, ssUi.victimDefault);
+                if (members.indexOf(victim) < 0) victim = 0;
+            }
+            ssUi.victimFormId = victim;
+            ssUi.objectRelation = object ? (victim ? 'to victim' : 'with') : 'none';
+            ssUi.andThird = third ? 'and' : 'none';
         }
 
         function ssApplyDefaults(opt, pool, force) {
@@ -4699,57 +4889,33 @@
             if (!force && ssUi.seededForLabel === label)
                 return false;
             ssUi.seededForLabel = label;
-            ssUi.seedObjectRelation = d.objectRelation || 'with';
-            ssUi.seedAndThird = d.andThird || 'none';
-            ssUi.objectRelation = ssUi.seedObjectRelation;
-            ssUi.andThird = ssUi.seedAndThird;
-            ssUi.direction = d.direction || 'giving';
-            ssUi.method = d.method || ssMethodList(ssUi.direction)[0];
+            // Legacy objectRelation (external catalogs) maps onto participant2 / victim.
+            const p2Src = d.participant2 || (d.objectRelation === 'none' ? 'none' : 'player');
+            ssUi.seedObjectRelation = p2Src === 'none' ? 'none' : 'with';
+            ssUi.p2FormId = ssFidBySource(pool, p2Src);
+            ssUi.p3FormId = ssFidBySource(pool, d.participant3 || 'none');
+            ssUi.victimDefault = d.victim || (d.objectRelation === 'to victim' ? 'currentActor' : 'none');
+            ssUi.victimFormId = ssFidBySource(pool, ssUi.victimDefault);
+            ssUi.direction = ssNormalizeDirection(d.direction || 'random');
+            ssUi.method = ssNormalizeMethodKey(d.method) || 'vaginal';
             ssUi.intent = d.intent || 'sexual activities';
             ssUi.customIntent = '';
             ssUi.intentBeforeCustom = ssUi.intent === 'custom' ? 'sexual activities' : ssUi.intent;
             ssUi.style = d.style || 'normally';
             ssUi.settingName = d.settingName || d.setting_name || 'default';
-            const sub = ssActorBySource(pool, d.subject || 'player');
-            ssUi.subjectFormId = sub ? formIdU32(sub.formId) : 0;
-            if (ssUi.objectRelation !== 'none') {
-                const obj = ssActorBySource(pool, d.object || 'currentActor');
-                ssUi.objectFormId = obj ? formIdU32(obj.formId) : 0;
-                if (ssUi.objectFormId && ssUi.objectFormId === ssUi.subjectFormId) {
-                    const other = ssPickOther(pool, [ssUi.subjectFormId]);
-                    ssUi.objectFormId = other ? formIdU32(other.formId) : 0;
-                }
-            } else {
-                ssUi.objectFormId = 0;
-            }
-            if (ssUi.andThird === 'and') {
-                const third = ssPickOther(pool, [ssUi.subjectFormId, ssUi.objectFormId]);
-                ssUi.thirdFormId = third ? formIdU32(third.formId) : 0;
-                if (!ssUi.thirdFormId)
-                    ssUi.andThird = 'none';
-            } else {
-                ssUi.thirdFormId = 0;
-            }
-            const methods = ssMethodList(ssUi.direction);
-            if (methods.indexOf(ssUi.method) < 0)
-                ssUi.method = methods[0];
-            ssApplyGates(pool);
+            if (!ssFindLeaf(ssUi.method))
+                ssUi.method = 'vaginal';
+            ssDeriveCast(pool);
             return true;
         }
 
         function ssResolveCast(pool) {
+            ssDeriveCast(pool);
             const subject = ssFind(pool, ssUi.subjectFormId) || ssSelectable(pool)[0] || pool[0] || null;
-            let object = null;
-            let third = null;
-            if (ssUi.objectRelation !== 'none')
-                object = ssFind(pool, ssUi.objectFormId);
-            if (ssUi.andThird === 'and')
-                third = ssFind(pool, ssUi.thirdFormId);
-            if (ssUi.objectRelation === 'none' && third) {
-                object = third;
-                third = null;
-            }
-            return { subject, object, third };
+            const object = ssUi.objectFormId ? ssFind(pool, ssUi.objectFormId) : null;
+            const third = ssUi.thirdFormId ? ssFind(pool, ssUi.thirdFormId) : null;
+            const victim = ssUi.victimFormId ? ssFind(pool, ssUi.victimFormId) : null;
+            return { subject, object, third, victim };
         }
 
         function ssDuplicates(cast) {
@@ -4767,11 +4933,9 @@
         function ssCanStart(pool, cast) {
             if (!ssCanCustom(cast)) return false;
             if (ssDuplicates(cast)) return false;
-            const n = ssSelectable(pool).length;
-            if (ssUi.seedObjectRelation !== 'none' && n < 2) return false;
-            if (ssUi.objectRelation !== 'none' && !cast.object) return false;
-            if (ssUi.andThird === 'and' && !cast.third && ssUi.objectRelation !== 'none') return false;
-            if (ssUi.andThird === 'and' && ssUi.objectRelation === 'none' && !cast.object) return false;
+            if (ssUi.seedObjectRelation !== 'none' && !cast.object) return false;
+            if (ssUi.objectFormId && !cast.object) return false;
+            if (ssUi.thirdFormId && !cast.third) return false;
             return true;
         }
 
@@ -4787,8 +4951,8 @@
             if (i === 'cuddling' || i === 'showing affection' || i === 'comforting'
                 || i === 'show affection' || i === 'comfort')
                 return true;
-            const m = ssRemapMethod(method);
-            return m === 'cuddling' || m === 'kissing' || m === 'hug';
+            const m = ssWireMethod(method);
+            return m === 'cuddling' || m === 'kissing' || m === 'hugging';
         }
 
         function ssSpeakerPosition(intent, direction, objectIsVictim) {
@@ -5026,9 +5190,22 @@
             ];
         }
 
+        function ssMappingTwoVictim() {
+            return [
+                { type: 'dynamic', name: 'intent' },
+                { type: 'speaker', name: 'speaker' },
+                { type: 'target', name: 'target' },
+                { type: 'dynamic', name: 'victim' },
+                { type: 'dynamic', name: 'style' },
+                { type: 'dynamic', name: 'tags' },
+                { type: 'dynamic', name: 'direction' },
+                { type: 'dynamic', name: 'setting_name' }
+            ];
+        }
+
         function ssFireSpec(cast) {
             const count = ssActorCount(cast);
-            const toVictim = ssUi.objectRelation === 'to victim';
+            const toVictim = !!cast.victim;
             const assault = ssUi.intent === 'sexual assault' || ssUi.intent === 'punish';
             if (count <= 1) {
                 return {
@@ -5039,10 +5216,14 @@
                 };
             }
             if (count === 2) {
+                if (toVictim) {
+                    return {
+                        executionFunctionName: 'StartScene_Nonconsensual_Two',
+                        parameterMapping: ssMappingTwoVictim()
+                    };
+                }
                 return {
-                    executionFunctionName: toVictim
-                        ? 'StartScene_Nonconsensual_Two_TargetVictim'
-                        : 'StartScene_Consensual_Two',
+                    executionFunctionName: 'StartScene_Consensual_Two',
                     parameterMapping: ssMappingTwo()
                 };
             }
@@ -5064,29 +5245,32 @@
             if (!ssCanCustom(cast)) return null;
             const intent = ssPapyrusIntent();
             // method "random": no method tag; the scene setting's tags pick the animations.
-            const tag = ssUi.method === 'random' ? '' : ssRemapMethod(ssUi.method);
+            const tag = ssUi.method === 'random' ? '' : ssWireMethod(ssUi.method);
             const settingName = ssUi.settingName || 'default';
-            const toVictim = ssUi.objectRelation === 'to victim';
-            const speakerPos = ssSpeakerPosition(intent, ssUi.direction, toVictim);
+            const victimFid = cast.victim ? formIdU32(cast.victim.formId) : 0;
+            const direction = ssWireDirection(ssUi.direction, ssUi.method);
+            const speakerPos = ssSpeakerPosition(intent, direction, false);
             const positions = [];
             const seen = new Set();
-            const pushPos = (a, victim) => {
+            const pushPos = (a) => {
                 if (!a) return;
                 const fid = formIdU32(a.formId);
                 if (!fid || seen.has(fid)) return;
                 seen.add(fid);
-                positions.push(ssToPos(a, victim));
+                positions.push(ssToPos(a, fid === victimFid));
             };
+            // The victim takes position 0; otherwise direction picks subject/object order.
+            pushPos(cast.victim);
             if (!cast.object) {
-                pushPos(cast.subject, false);
+                pushPos(cast.subject);
             } else if (speakerPos === 0) {
-                pushPos(cast.subject, false);
-                pushPos(cast.object, toVictim);
+                pushPos(cast.subject);
+                pushPos(cast.object);
             } else {
-                pushPos(cast.object, toVictim);
-                pushPos(cast.subject, false);
+                pushPos(cast.object);
+                pushPos(cast.subject);
             }
-            pushPos(cast.third, false);
+            pushPos(cast.third);
             return {
                 _creator_sid: 0,
                 _from_target_menu: true,
@@ -5278,7 +5462,7 @@
             const pool = ssActorPool();
             const cast = ssResolveCast(pool);
             if (!ssCanStart(pool, cast)) return;
-            const tag = ssRemapMethod(ssUi.method);
+            const tag = ssWireMethod(ssUi.method);
             const reqId = 'ss' + Date.now();
             const spec = ssFireSpec(cast);
             ssResolvePending = {
@@ -5286,11 +5470,10 @@
                 opt,
                 cast,
                 spec,
-                direction: ssUi.direction,
+                direction: ssWireDirection(ssUi.direction, ssUi.method),
                 intent: ssPapyrusIntent(),
                 style: ssUi.style || 'normally',
-                settingName: ssUi.settingName || 'default',
-                toVictim: ssUi.objectRelation === 'to victim'
+                settingName: ssUi.settingName || 'default'
             };
             if (typeof window.onAnimDbResolveTags !== 'function') {
                 notifyPlayer('No matching animations for those tags.');
@@ -5347,8 +5530,8 @@
                 params.target = ssActorDict(pending.cast.object);
             if (pending.cast.third)
                 params.participate = ssActorDict(pending.cast.third);
-            if (pending.toVictim && pending.cast.object)
-                params.victim = ssActorDict(pending.cast.object);
+            if (pending.cast.victim)
+                params.victim = ssActorDict(pending.cast.victim);
             const sceneOpt = pending.punishReason != null
                 ? Object.assign({}, pending.opt, {
                     plugin: 'SkyrimNet_SexLab.esp',
@@ -5566,51 +5749,61 @@
             }, disabled);
         }
 
-        function ssActorCascade(key, caption, pool, current, onPick) {
-            if (!pool.length) {
-                const miss = document.createElement('div');
-                miss.textContent = '—';
-                return miss;
-            }
-            const curFid = current ? formIdU32(current.formId) : 0;
+        // Actor pulldown_cascade over formIds with a leading "none" (0).
+        function ssFidCascade(key, caption, pool, currentFid, onPick, disabled) {
+            const cur = formIdU32(currentFid);
+            const hit = cur ? ssFind(pool, cur) : null;
+            const tree = [{ label: 'none', value: 0, current: !hit }].concat(pool.map(a => ({
+                label: a.label,
+                value: formIdU32(a.formId),
+                current: formIdU32(a.formId) === cur,
+                disabled: !a.selectable
+            })));
             return createPulldownCascade({
                 key: key,
                 caption: caption,
-                display: current ? current.label : (pool[0].label || '—'),
-                tree: pool.map(a => ({
-                    label: a.label,
-                    value: a,
-                    current: formIdU32(a.formId) === curFid,
-                    disabled: !a.selectable
-                })),
+                display: hit ? hit.label : 'none',
+                tree: tree,
                 onPick: (node) => onPick(node.value)
-            });
+            }, disabled);
         }
 
-        // method row = direction → method tree. A method leaf starts the scene right away;
-        // "random" starts 3 related AnimDB animations. Embedded (punish-rape) has no random and
-        // hands the leaf to the host panel's start.
+        // method row = direction → category → leaf tree. "giving"/"receiving" each drill into
+        // the same shared category tree (sex / affection / punish / milking); a leaf starts the
+        // scene right away. The top-level "random" leaf starts 3 related AnimDB animations with
+        // no tag filter. Embedded (punish-rape) has no random leaf and hands the pick to the
+        // host panel's start.
         function ssMethodCascade(opt, embedOpts) {
             const embedded = !!(embedOpts && embedOpts.omitStartBar);
             const isRandom = ssUi.method === 'random';
+            const leafNode = (leaf, dir) => ({
+                label: leaf.label,
+                value: { direction: dir, method: leaf.key },
+                current: !isRandom && ssUi.direction === dir && ssUi.method === leaf.key
+            });
+            const buildDirection = (dir) => {
+                const children = SS_CATEGORIES.map(cat => ({
+                    label: cat.label,
+                    current: !isRandom && ssUi.direction === dir && !!ssFindLeaf(ssUi.method)
+                        && cat.leaves.indexOf(ssFindLeaf(ssUi.method)) >= 0,
+                    children: cat.leaves.map(l => leafNode(l, dir))
+                }));
+                children.push(leafNode(SS_MILKING_LEAF, dir));
+                return {
+                    label: dir,
+                    current: !isRandom && ssUi.direction === dir,
+                    children: children
+                };
+            };
             const tree = [];
             if (!embedded)
                 tree.push({ label: 'random', value: { random: true }, current: isRandom });
-            SS_DIRECTIONS.forEach(d => {
-                tree.push({
-                    label: d,
-                    current: !isRandom && ssUi.direction === d,
-                    children: ssMethodList(d).map(m => ({
-                        label: m,
-                        value: { direction: d, method: m },
-                        current: !isRandom && ssUi.direction === d && ssUi.method === m
-                    }))
-                });
-            });
+            tree.push(buildDirection('giving'));
+            tree.push(buildDirection('receiving'));
             return createPulldownCascade({
                 key: 'method',
-                caption: 'method',
-                display: isRandom ? 'random' : (ssUi.direction + ' ' + ssUi.method),
+                caption: 'direction',
+                display: isRandom ? 'random' : (ssUi.direction + ': ' + ((ssFindLeaf(ssUi.method) || {}).label || ssUi.method)),
                 tree: tree,
                 onPick: (node) => {
                     const v = node.value || {};
@@ -5630,96 +5823,65 @@
             });
         }
 
+        // Layout: [Start] style / with / and / victim / method / intent / scene setting.
+        // Target is always cast; ssDeriveCast turns with/and into subject/object/third.
         function renderSceneStartPanelBody(body, opt, embedOpts) {
-            const hideCustom = !!(embedOpts && embedOpts.hideCustom);
             const omitStartBar = !!(embedOpts && embedOpts.omitStartBar);
             const pool = ssActorPool();
             // TargetMenu scene start: the method row reads "random" until a leaf starts the scene.
             if (ssApplyDefaults(opt, pool) && !omitStartBar)
                 ssUi.method = 'random';
-            ssApplyGates(pool);
+            const cast = ssResolveCast(pool);
 
             const nSel = ssSelectable(pool).length;
-            const objectDisabled = nSel < 2;
-            const thirdDisabled = nSel < 3;
-
-            let subject = ssFind(pool, ssUi.subjectFormId) || ssSelectable(pool)[0] || pool[0] || null;
-            if (subject) ssUi.subjectFormId = formIdU32(subject.formId);
-            let object = ssUi.objectRelation !== 'none' ? ssFind(pool, ssUi.objectFormId) : null;
-            if (object && formIdU32(object.formId) === ssUi.subjectFormId)
-                object = ssPickOther(pool, [ssUi.subjectFormId]);
-            if (object) ssUi.objectFormId = formIdU32(object.formId);
-            else if (ssUi.objectRelation !== 'none') ssUi.objectFormId = 0;
-            let third = ssUi.andThird === 'and' ? ssFind(pool, ssUi.thirdFormId) : null;
-            if (third && (formIdU32(third.formId) === ssUi.subjectFormId
-                || (object && formIdU32(third.formId) === formIdU32(object.formId))))
-                third = ssPickOther(pool, [ssUi.subjectFormId, object && object.formId]);
-            if (third) ssUi.thirdFormId = formIdU32(third.formId);
-            else if (ssUi.andThird === 'and') ssUi.thirdFormId = 0;
+            const tFid = ssTargetFid(pool);
 
             const fields = document.createElement('div');
             fields.className = 'labeled-fields';
-            const addField = (labelTextOrNode, node, disabled) => {
+            const addField = (labelText, node, disabled) => {
                 const field = document.createElement('div');
                 field.className = 'dyn-field' + (disabled ? ' disabled' : '');
-                if (typeof labelTextOrNode === 'string') {
-                    const lab = document.createElement('label');
-                    lab.textContent = labelTextOrNode || '\u00a0';
-                    field.appendChild(lab);
-                } else if (labelTextOrNode) {
-                    field.appendChild(labelTextOrNode);
-                } else {
-                    const lab = document.createElement('label');
-                    lab.textContent = '\u00a0';
-                    field.appendChild(lab);
-                }
+                const lab = document.createElement('label');
+                lab.textContent = labelText || '\u00a0';
+                field.appendChild(lab);
                 if (node) field.appendChild(node);
                 fields.appendChild(field);
             };
 
-            addField('Subject', ssActorCascade('subject', 'Subject', pool, subject, (entry) => {
-                ssUi.subjectFormId = formIdU32(entry.formId);
-                if (ssUi.objectFormId === ssUi.subjectFormId) ssUi.objectFormId = 0;
-                if (ssUi.thirdFormId === ssUi.subjectFormId) ssUi.thirdFormId = 0;
+            const styleCascade = ssListCascade('style', 'style', ['forcefully', 'normally', 'gently'], ssUi.style, (v) => {
+                ssUi.style = v;
                 renderPapyrusPanel();
-            }));
+            });
+            // Embedded (no Start bar): style is an ordinary first row.
+            if (omitStartBar)
+                addField('style', styleCascade);
 
-            addField('and', ssListCascade('and', 'and', ['none', 'and'], ssUi.andThird, (v) => {
-                ssUi.andThird = v;
-                if (v !== 'and') ssUi.thirdFormId = 0;
+            const withDisabled = nSel < 2;
+            const withPool = pool.filter(a => formIdU32(a.formId) !== tFid);
+            addField('with', ssFidCascade('with', 'with', withPool, ssUi.p2FormId, (fid) => {
+                ssUi.p2FormId = fid;
                 renderPapyrusPanel();
-            }, thirdDisabled), thirdDisabled);
+            }, withDisabled), withDisabled);
 
-            if (ssUi.andThird === 'and' && !thirdDisabled) {
-                const thirdPool = pool.filter(a => {
-                    const fid = formIdU32(a.formId);
-                    if (fid === ssUi.subjectFormId) return false;
-                    if (ssUi.objectRelation !== 'none' && fid === ssUi.objectFormId) return false;
-                    return true;
-                });
-                addField('third', ssActorCascade('third', 'third', thirdPool, third, (entry) => {
-                    ssUi.thirdFormId = formIdU32(entry.formId);
-                    renderPapyrusPanel();
-                }));
-            }
+            const andDisabled = nSel < 3;
+            const andPool = pool.filter(a => {
+                const fid = formIdU32(a.formId);
+                return fid !== tFid && fid !== ssUi.p2FormId;
+            });
+            addField('and', ssFidCascade('and', 'and', andPool, ssUi.p3FormId, (fid) => {
+                ssUi.p3FormId = fid;
+                renderPapyrusPanel();
+            }, andDisabled), andDisabled);
+
+            // Victim choices are the scene's actors only.
+            const members = [cast.subject, cast.object, cast.third].filter(Boolean);
+            const victimDisabled = members.length < 2;
+            addField('victim', ssFidCascade('victim', 'victim', members, ssUi.victimFormId, (fid) => {
+                ssUi.victimFormId = fid;
+                renderPapyrusPanel();
+            }, victimDisabled), victimDisabled);
 
             addField('method', ssMethodCascade(opt, embedOpts));
-
-            const relPd = ssListCascade('relation', 'object', ['with', 'to victim', 'none'], ssUi.objectRelation, (v) => {
-                ssUi.objectRelation = v;
-                if (v === 'none') ssUi.objectFormId = 0;
-                renderPapyrusPanel();
-            }, objectDisabled);
-            addField('', relPd, objectDisabled);
-
-            if (ssUi.objectRelation !== 'none' && !objectDisabled) {
-                const objPool = pool.filter(a => formIdU32(a.formId) !== ssUi.subjectFormId);
-                addField('Object', ssActorCascade('object', 'Object', objPool, object, (entry) => {
-                    ssUi.objectFormId = formIdU32(entry.formId);
-                    if (ssUi.thirdFormId === ssUi.objectFormId) ssUi.thirdFormId = 0;
-                    renderPapyrusPanel();
-                }));
-            }
 
             const intentSeed = ssUi.intent === 'custom' && ssUi.customIntent
                 ? ('custom: ' + ssUi.customIntent)
@@ -5741,12 +5903,7 @@
                 renderPapyrusPanel();
             }));
 
-            addField('style', ssListCascade('style', 'style', ['forcefully', 'normally', 'gently'], ssUi.style, (v) => {
-                ssUi.style = v;
-                renderPapyrusPanel();
-            }));
-
-            addField('Scene Setting', ssListCascade('setting', 'Scene Setting', SS_SETTINGS, ssUi.settingName, (v) => {
+            addField('scene setting', ssListCascade('setting', 'Scene Setting', SS_SETTINGS, ssUi.settingName, (v) => {
                 ssUi.settingName = v;
                 renderPapyrusPanel();
             }));
@@ -5754,18 +5911,6 @@
             if (!omitStartBar) {
                 const bar = document.createElement('div');
                 bar.className = 'bottom-bar top-bar';
-                const cast = ssResolveCast(pool);
-                if (!hideCustom) {
-                    const customBtn = document.createElement('div');
-                    customBtn.className = 'action-btn';
-                    customBtn.textContent = 'Custom';
-                    if (!ssCanCustom(cast)) customBtn.classList.add('disabled');
-                    customBtn.onclick = () => {
-                        if (customBtn.classList.contains('disabled')) return;
-                        ssCustom(opt);
-                    };
-                    bar.appendChild(customBtn);
-                }
                 const startBtn = document.createElement('div');
                 startBtn.className = 'action-btn';
                 startBtn.textContent = 'Start';
@@ -5776,6 +5921,7 @@
                     else ssStart(opt);
                 };
                 bar.appendChild(startBtn);
+                bar.appendChild(styleCascade);
                 body.appendChild(bar);
             }
             body.appendChild(fields);
@@ -6629,13 +6775,12 @@
         };
 
         const FIELDS_RAPE_DEFAULTS = {
-            subject: 'player',
-            object: 'currentActor',
-            objectRelation: 'to victim',
-            andThird: 'none',
+            participant2: 'player',
+            participant3: 'none',
+            victim: 'currentActor',
             intent: 'sexual assault',
-            direction: 'fucking',
-            method: 'pussy',
+            direction: 'giving',
+            method: 'vaginal',
             style: 'forcefully',
             settingName: 'punish_pleasure_pain_rape'
         };
@@ -6772,8 +6917,8 @@
                 return;
             }
             const reason = fieldsUi.values.reason || 'being a bad slave';
-            const method = ssUi.method === 'random' ? ssMethodList(ssUi.direction)[0] : ssUi.method;
-            const tag = ssRemapMethod(method);
+            const method = ssUi.method === 'random' ? 'vaginal' : ssUi.method;
+            const tag = ssWireMethod(method);
             const reqId = 'ss' + Date.now();
             const spec = ssFireSpec(cast);
             ssResolvePending = {
@@ -6781,11 +6926,10 @@
                 opt,
                 cast,
                 spec,
-                direction: ssUi.direction,
+                direction: ssWireDirection(ssUi.direction, method),
                 intent: ssPapyrusIntent(),
                 style: ssUi.style || 'forcefully',
                 settingName: ssUi.settingName || 'punish_pleasure_pain_rape',
-                toVictim: ssUi.objectRelation === 'to victim',
                 punishReason: reason
             };
             if (typeof window.onAnimDbResolveTags !== 'function') {
@@ -6960,7 +7104,6 @@
                     panelDefaults: FIELDS_RAPE_DEFAULTS
                 });
                 renderSceneStartPanelBody(body, rapeOpt, {
-                    hideCustom: true,
                     omitStartBar: true,
                     onMethodStart: () => fieldsFireStart(opt)
                 });
@@ -7989,6 +8132,7 @@
             // even against a scene that started after the overlay was closed.
             DE.scenePick = 'any';
             DE.scenePickAuto = true;
+            stopDialogClose();
         }
 
         function flushSceneInfos() {
@@ -8021,6 +8165,57 @@
         function requestWebUIHide(commit) {
             if (typeof window.onWebUIHide === 'function')
                 window.onWebUIHide(JSON.stringify({ commit: !!commit }));
+        }
+
+        // Stop dialog (#stop-dialog-overlay). onPick(style, narration): style is forcefully|normally|gently|silent,
+        // or 'explain' with the typed text. explainOnly opens straight on "Explain why" (Cancel there closes it).
+        // window.prompt does not work in PrismaUI, so text entry has to go through this dialog.
+        const stopDialogState = { owner: '', onPick: null };
+
+        function stopDialogOpen(owner, onPick, explainOnly) {
+            stopDialogState.owner = owner || '';
+            stopDialogState.onPick = onPick;
+            document.getElementById('stop-dialog-overlay').classList.add('open');
+            if (explainOnly) {
+                stopDialogShowExplain();
+            } else {
+                document.getElementById('stop-dialog-choices').style.display = '';
+                document.getElementById('stop-dialog-explain').style.display = 'none';
+            }
+        }
+
+        function stopDialogClose() {
+            stopDialogState.owner = '';
+            stopDialogState.onPick = null;
+            const overlay = document.getElementById('stop-dialog-overlay');
+            if (overlay) overlay.classList.remove('open');
+            const ta = document.getElementById('stop-dialog-text');
+            if (ta) ta.value = '';
+            stopDialogUpdateSubmit();
+        }
+
+        function stopDialogPick(style, narration) {
+            const onPick = stopDialogState.onPick;
+            stopDialogClose();
+            if (typeof onPick === 'function') onPick(style, narration || '');
+        }
+
+        function stopDialogShowExplain() {
+            document.getElementById('stop-dialog-choices').style.display = 'none';
+            document.getElementById('stop-dialog-explain').style.display = '';
+            stopDialogUpdateSubmit();
+            document.getElementById('stop-dialog-text').focus();
+        }
+
+        function stopDialogUpdateSubmit() {
+            const ta = document.getElementById('stop-dialog-text');
+            const btn = document.getElementById('stop-dialog-submit');
+            if (btn) btn.classList.toggle('de-disabled', !(ta && ta.value.trim()));
+        }
+
+        function stopDialogSubmit() {
+            const text = (document.getElementById('stop-dialog-text').value || '').trim();
+            if (text) stopDialogPick('explain', text);
         }
 
         function copySceneInfoToSC(info) {
@@ -10020,9 +10215,15 @@
             tbody.innerHTML = '';
             wrap.style.display = DE.posDraft.length ? '' : 'none';
             const names = dePreviewNamesFor(deFindAnim(DE.focusRegistry));
+            const live = !!deStopLiveInfo();
             DE.posDraft.forEach((p, i) => {
                 const mods = scParseMods(p);
                 const tr = document.createElement('tr');
+                // Orgasm button only for a live scene; the unbound template view has no actors.
+                const tdOrg = document.createElement('td');
+                tdOrg.className = 'col-orgasm';
+                if (live)
+                    tdOrg.innerHTML = `<div class="action-btn orgasm_button" title="orgasm" onmousedown="event.preventDefault()" onclick="deOrgasm(${i})">orgasm</div>`;
                 const tdIdx = document.createElement('td');
                 tdIdx.className = 'col-idx';
                 tdIdx.textContent = String(i);
@@ -10054,6 +10255,7 @@
                 if (available.length)
                     list.appendChild(createPulldown(available, 'add', v => deAddPosMod(i, v)));
                 tdMods.appendChild(list);
+                tr.appendChild(tdOrg);
                 tr.appendChild(tdIdx);
                 tr.appendChild(tdName);
                 tr.appendChild(tdDressed);
@@ -10114,6 +10316,7 @@
             const a = deFindAnim(DE.focusRegistry);
             const nav = document.getElementById('de-stage-nav');
             if (nav) nav.style.display = deIsSceneBound() ? '' : 'none';
+            if (!deStopLiveInfo() && stopDialogState.owner === 'de') stopDialogClose();
             deUpdateStageNavButtons();
             const tagsHost = document.getElementById('de-tags-row');
             const tags = deAnimTagsList(a);
@@ -10153,6 +10356,8 @@
             set('de-btn-prev', stage <= 1 || !!DE.stagePending);
             set('de-btn-next', stage >= deStageMax() || !!DE.stagePending);
             set('de-btn-copyprev', stage <= 1);
+            const stopBtn = document.getElementById('de-btn-stop');
+            if (stopBtn) stopBtn.style.display = deStopLiveInfo() ? '' : 'none';
         }
 
         function deStageStep(dir) {
@@ -10239,6 +10444,30 @@
             deAutoSave();
         }
 
+        function deStopLiveInfo() {
+            const info = deSceneInfoForPick();
+            return info && info.mode === 'active' && info.scene_sid >= 0 ? info : null;
+        }
+
+        // Stop button: open the "Stop scene" dialog for the picked live scene.
+        function deStopScene() {
+            deAutoSave();
+            if (!deStopLiveInfo()) return;
+            stopDialogOpen('de', deStopWith, false);
+        }
+
+        // Same SceneInfo pendingStop path as Scene Creator Stop; ApplyWebUICommit turns explain + narration into
+        // "explain:<text>". Closes the WebUI with commit so flushSceneInfos() sends it.
+        function deStopWith(style, narration) {
+            const info = deStopLiveInfo();
+            if (!info) return;
+            info.pendingStop = true;
+            info.stopStyle = style;
+            info.stopNarration = narration || '';
+            info.dirty = true;
+            requestWebUIHide(true);
+        }
+
         // Send the active stage's rendered description to SkyrimNet as "The scene changes to ...".
         function deContinueScene() {
             deAutoSave();
@@ -10249,6 +10478,14 @@
             if (!text) return;
             if (typeof window.onSceneNarrate === 'function')
                 window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _text: text }));
+        }
+
+        // Orgasm button: Scene.WebUI_ForceOrgasm runs SexLab ForceOrgasm on thread position i
+        // (DE rows follow thread.Positions order) and narrates it once.
+        function deOrgasm(i) {
+            const info = deStopLiveInfo();
+            if (!info || typeof window.onSceneNarrate !== 'function') return;
+            window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _orgasm_pos: i }));
         }
 
         function deInsertActor(i) {

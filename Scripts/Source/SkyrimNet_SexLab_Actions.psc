@@ -628,16 +628,13 @@ Function TM_SetVictim(Actor speaker, Actor target, String formIdStr, String isVi
     if sl == None
         return
     endif
-    sslThreadController th = sl.GetThread()
-    if th == None
-        return
-    endif
     Actor a = Game.GetFormEx(formIdStr as int) as Actor
     if a == None
         return
     endif
     Bool isVictim = (isVictimStr == "1" || isVictimStr == "true")
-    th.SetVictim(a, isVictim)
+    ; Through the Scene so victim factions, victim/assailant flags and names follow the toggle.
+    sl.TM_ApplyVictim(a, isVictim)
 EndFunction
 
 Function TM_SetOrgasmMode(Actor speaker, Actor target, String formIdStr, String mode)
@@ -690,14 +687,17 @@ Function TM_SetClothed(Actor speaker, Actor target, String formIdStr, String clo
         return
     endif
     Bool clothed = (clothedStr == "1" || clothedStr == "true")
-    if clothed
+    ; Live scene actor: SexLab's own strip state (sslActorAlias.Strip/UnStrip), so the scene end
+    ; re-dresses them. Outfit_Dress/Undress is the out-of-scene API (KNOWLEDGEBASE "Description
+    ; Editor dressed toggle used wrong strip API").
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(a)
+    if sl != None
+        sl.ApplyDressedToActor(a, clothed)
+        sl.TM_ApplyClothed(a, clothed)
+    elseif clothed
         Outfit_Dress(speaker, a, "silently", "silent")
     else
         Outfit_Undress(speaker, a, "silently", "silent")
-    endif
-    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(target)
-    if sl != None
-        sl.TM_ApplyClothed(a, clothed)
     endif
 EndFunction
 
