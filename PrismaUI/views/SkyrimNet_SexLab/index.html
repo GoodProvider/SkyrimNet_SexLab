@@ -2856,6 +2856,8 @@
             }
             if (scOpen)
                 scReleaseOnEscape(targetOpen);
+            if (typeof deAutoSave === 'function')
+                deAutoSave();
             if (typeof window.onCancel === 'function')
                 window.onCancel();
             else {
@@ -4428,7 +4430,7 @@
             body.appendChild(table);
             body.appendChild(tmPapyrusConfirmBar(() => {
                 SC.stages = stages;
-                applySceneMenuDraftToSceneInfo({});
+                commitSceneInfoNow(applySceneMenuDraftToSceneInfo({}));
             }));
         }
 
@@ -4634,7 +4636,7 @@
             wrap.className = 'sc-positions-scroll';
             wrap.appendChild(table);
             body.appendChild(wrap);
-            body.appendChild(tmPapyrusConfirmBar(() => applySceneMenuDraftToSceneInfo({})));
+            body.appendChild(tmPapyrusConfirmBar(() => commitSceneInfoNow(applySceneMenuDraftToSceneInfo({}))));
         }
 
         // Each leaf: display key/label, the AnimDB tag it fires (wire), and which legacy
@@ -4716,6 +4718,7 @@
             settingName: 'nonsexual'
         };
         let ssResolvePending = null;
+        let ssResolveQueryId = 0;
         // pulldown_cascade state: open field key + branch index per column (see createPulldownCascade).
         let ssCascade = null;
         let ssCascadeSpecs = {};
@@ -5463,7 +5466,7 @@
             const cast = ssResolveCast(pool);
             if (!ssCanStart(pool, cast)) return;
             const tag = ssWireMethod(ssUi.method);
-            const reqId = 'ss' + Date.now();
+            const reqId = 'ss' + (++ssResolveQueryId);
             const spec = ssFireSpec(cast);
             ssResolvePending = {
                 id: reqId,
@@ -5490,8 +5493,8 @@
         function animDbResolveTagsResult(payload) {
             const rid = String((payload && payload._request_id) || '');
             const pending = ssResolvePending;
-            ssResolvePending = null;
             if (!pending || rid !== pending.id) return;
+            ssResolvePending = null;
             const resolved = String((payload && payload._resolved) || '');
             if (!resolved) {
                 notifyPlayer('No matching animations for those tags.');
@@ -6919,7 +6922,7 @@
             const reason = fieldsUi.values.reason || 'being a bad slave';
             const method = ssUi.method === 'random' ? 'vaginal' : ssUi.method;
             const tag = ssWireMethod(method);
-            const reqId = 'ss' + Date.now();
+            const reqId = 'ss' + (++ssResolveQueryId);
             const spec = ssFireSpec(cast);
             ssResolvePending = {
                 id: reqId,
@@ -8146,6 +8149,15 @@
             discardSceneInfos();
         }
 
+        // Send one SceneInfo now (Stop / Update / Done), so Escape (which discards uncommitted infos) can't lose it.
+        function commitSceneInfoNow(info) {
+            if (!info || typeof window.onSceneInfoCommit !== 'function') return;
+            window.onSceneInfoCommit(JSON.stringify({ _scenes: [info.toCommitJson()] }));
+            info.dirty = false;
+            info.pendingStop = false;
+            info.pendingCreate = false;
+        }
+
         // The overlay pauses the game while focused (PrismaUI Focus pauseGame). Show/Hide reset it to paused.
         let gamePaused = true;
 
@@ -8379,7 +8391,8 @@
             animQueryId: 0,
             tagQueryId: 0,
             metaQueryId: 0,
-            pendingNearby: null,
+            // Nearby adds waiting on onResolveActorMeta: request id -> position entry.
+            pendingNearby: new Map(),
             inThreadRegistries: [],
             activeRegistry: '',
             nextRegistry: '',
@@ -8502,7 +8515,7 @@
             SC.selectedRegistries = [];
             SC.lastAnimRegistries = [];
             SC.tagType = 'any';
-            SC.pendingNearby = null;
+            SC.pendingNearby.clear();
             if (SC.mode === 'active' && SC.inThreadRegistries.length)
                 SC.selectedRegistries = [];
             if (state._scene_presets) {
@@ -8578,7 +8591,7 @@
         }
 
         function scStop() {
-            applySceneMenuDraftToSceneInfo({ pendingStop: true, stopStyle: 'stop' });
+            commitSceneInfoNow(applySceneMenuDraftToSceneInfo({ pendingStop: true, stopStyle: 'stop' }));
         }
 
         function scPrevNext(dir) {
@@ -8593,7 +8606,7 @@
 
         function scAnimUpdate() {
             if (SC.mode !== 'active') return;
-            applySceneMenuDraftToSceneInfo({});
+            commitSceneInfoNow(applySceneMenuDraftToSceneInfo({}));
         }
 
         function requestSceneConnectionsRefresh() {
@@ -8771,13 +8784,14 @@
 
         function scSelectNearby(uuid) {
             const u = String(uuid || '');
-            if (!u || scSelectedUuidSet().has(u)) return;
-            if ((SC.positions || []).length >= 5) return;
+            const pendingAdds = Array.from(SC.pendingNearby.values());
+            if (!u || scSelectedUuidSet().has(u) || pendingAdds.some(p => p._uuid === u)) return;
+            if ((SC.positions || []).length + pendingAdds.length >= 5) return;
             const pool = scEligibleNearbyActors().find(a => a.uuid === u)
                 || scNearbyPool().find(a => a.uuid === u);
             if (!pool) return;
             const formId = pool.formId || 0;
-            SC.pendingNearby = {
+            const entry = {
                 _name: pool.name,
                 _uuid: pool.uuid,
                 _form_id: formIdU32(formId),
@@ -8790,14 +8804,14 @@
             };
             if (formId && typeof window.onResolveActorMeta === 'function') {
                 const id = 'n' + (++SC.metaQueryId);
+                SC.pendingNearby.set(id, entry);
                 window.onResolveActorMeta(JSON.stringify({
                     _request_id: id,
                     _form_ids: [formId]
                 }));
                 return;
             }
-            SC.positions.push(SC.pendingNearby);
-            SC.pendingNearby = null;
+            SC.positions.push(entry);
             scRenderPositions();
             scOnActorCountChanged();
         }
@@ -8830,17 +8844,18 @@
                 const fid = formIdU32(a._form_id != null ? a._form_id : 0);
                 if (fid) byForm.set(fid, a);
             });
-            if (rid.startsWith('n') && SC.pendingNearby) {
-                const pendingFid = formIdU32(SC.pendingNearby._form_id);
-                const meta = byForm.get(pendingFid) || actors[0];
+            if (rid.startsWith('n')) {
+                const entry = SC.pendingNearby.get(rid);
+                if (!entry) return;
+                SC.pendingNearby.delete(rid);
+                const meta = byForm.get(formIdU32(entry._form_id));
                 if (meta) {
                     if (meta._gender != null && meta._gender !== '')
-                        SC.pendingNearby._gender = Number(meta._gender);
-                    if (meta._race_key != null) SC.pendingNearby._race_key = meta._race_key;
-                    if (meta._name) SC.pendingNearby._name = meta._name;
+                        entry._gender = Number(meta._gender);
+                    if (meta._race_key != null) entry._race_key = meta._race_key;
+                    if (meta._name) entry._name = meta._name;
                 }
-                SC.positions.push(SC.pendingNearby);
-                SC.pendingNearby = null;
+                SC.positions.push(entry);
                 scPersistPositionsToSceneInfo();
                 scRenderPositions();
                 scOnActorCountChanged();
@@ -10013,8 +10028,7 @@
 
         function deApplyScenePick(pick, opts) {
             opts = opts || {};
-            if (DE.dirty && opts.userInitiated)
-                deCancel();
+            deAutoSave();
             DE.scenePick = pick || 'none';
             DE.scenePickAuto = !opts.userInitiated;
             deUpdateBrowseVisibility();
@@ -10066,6 +10080,7 @@
         function deOnControlFocusChanged() {
             const deEl = document.getElementById('description-editor-panel');
             if (!deEl || deEl.style.display === 'none') return;
+            deAutoSave();
             deApplyScenePick(deResolveDefaultScenePick(), { focusChange: true });
         }
 
@@ -10605,6 +10620,7 @@
         }
 
         function deSelectAnim(reg) {
+            deAutoSave();
             if (!reg || reg === DE.focusRegistry) return;
             DE.focusRegistry = reg;
             deSetCurrentAnimation(reg);
