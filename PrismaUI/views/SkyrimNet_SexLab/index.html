@@ -1765,7 +1765,7 @@
             <div class="sc-col-positions">
                 <div class="section-header">Positions</div>
                 <div class="compact-row" id="sc-override-row">
-                    <span id="sc-override-toggle" class="cell-toggle on" onclick="scToggleOverride()">✓</span>
+                    <span id="sc-override-toggle" class="cell-toggle" onclick="scToggleOverride()">—</span>
                     <span id="sc-override-label" onclick="scToggleOverride()">override animation settings</span>
                 </div>
                 <div class="sc-positions-scroll">
@@ -7377,7 +7377,7 @@
                 this.style = 'normally';
                 this.method = '';
                 this.positions = [];
-                this.positionOverride = true;
+                this.positionOverride = false;
                 this.tags = [];
                 this.suppress = [];
                 this.inThreadRegistries = [];
@@ -7634,7 +7634,7 @@
             SC.style = info.style || 'normally';
             SC.method = info.method;
             SC.positions = sceneInfoClone(info.positions || []);
-            SC.positionOverride = info.positionOverride !== false;
+            SC.positionOverride = info.positionOverride === true;
             SC.tags = (info.tags || []).slice();
             SC.suppress = (info.suppress || []).slice();
             SC.inThreadRegistries = (info.inThreadRegistries || []).slice();
@@ -7803,7 +7803,7 @@
             filterByOnce: '',
             hasDescription: 'any',
             // "override animation settings": off = dressed/O/modifiers come from the animation.
-            positionOverride: true
+            positionOverride: false
         };
 
         const SC_NEARBY_RANGES = [100, 200, 400, 800, 1600];

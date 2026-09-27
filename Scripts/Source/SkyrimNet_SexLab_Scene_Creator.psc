@@ -46,7 +46,7 @@ bool start_scene_pending = false
 bool Property scene_creator_menu_called = false Auto
 ; WebUI "override animation settings". Off: no_orgasm/no_stripping/speaking masks are ignored and
 ; the scene uses each animation's own defaults (Scene.Setup / SyncAnimationDefaults).
-bool Property position_override = true Auto
+bool Property position_override = false Auto
 String[] pending_registries = None
 int num_pending_registries = 0
 
@@ -210,7 +210,7 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
     num_tags_suppress = 0 
     style = STYLE_NORMALLY
     scene_creator_menu_called = false
-    position_override = true
+    position_override = false
     start_scene_pending = false
 
     if SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "tentacles") || SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "tentacle")
@@ -280,7 +280,7 @@ Function Release()
     no_orgasm_names = ""
     no_stripping_names = ""
     scene_creator_menu_called = false
-    position_override = true
+    position_override = false
     start_scene_pending = false
     parent.Release() 
     DbgEnd("Release")
