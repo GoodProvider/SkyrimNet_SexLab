@@ -681,6 +681,9 @@ void InitWebUI()
                             j.dump());
                     }
                 } else {
+                    // "close" = Scene Menu Close button; "cancel" (Escape on a Papyrus creator) keeps the flag.
+                    if (action == "close")
+                        ActionCatalog::SetShowSceneCreator(false);
                     if (!PapyrusBindings_WebUI::TargetMenuSessionActive)
                         WebUI_Visibility_HideWithoutCommit();
                     if (fromTargetMenu) {

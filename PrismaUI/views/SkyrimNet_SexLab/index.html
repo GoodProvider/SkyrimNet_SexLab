@@ -1695,7 +1695,7 @@
             <div class="bottom-bar" id="sc-action-bar">
                 <div id="sc-style-pulldown"></div>
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
-                <div class="option-cancel" id="sc-btn-cancel" onclick="scCancel()">Cancel</div>
+                <div class="option-cancel" id="sc-btn-close" onclick="scClose()">Close</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
             </div>
         </div>
@@ -2115,12 +2115,7 @@
                     renderTargetMenu();
             }
             if (tmSceneCreatorIsOpen()) {
-                if (typeof selectMainPanelByLabel === 'function')
-                    selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
-                if (typeof hidePanel === 'function')
-                    hidePanel('scene_creator_panel');
-                if (typeof renderTargetMenu === 'function')
-                    renderTargetMenu();
+                scClose();
                 return;
             }
             if (typeof ensureCreatorSceneInfo === 'function')
@@ -2735,24 +2730,20 @@
                 return;
             }
             const targetOpen = overlayElIsOpen('target-menu-row');
-            if (MAIN_SELECTED_KEY) {
-                if (targetOpen) {
-                    const key = MAIN_SELECTED_KEY;
-                    if (typeof selectMainPanelByLabel === 'function')
-                        selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
-                    if (key && typeof hidePanel === 'function')
-                        hidePanel(key);
-                    if (typeof renderTargetMenu === 'function')
-                        renderTargetMenu();
-                    return;
-                }
-                if (MAIN_SELECTED_KEY === 'scene_creator_panel'
-                    || MAIN_SELECTED_KEY === 'scene-creator-panel'
-                    || (typeof tmSceneCreatorIsOpen === 'function' && tmSceneCreatorIsOpen())) {
-                    scCancel();
-                    return;
-                }
+            // Scene Menu is never closed by Escape (only its Close button) -- Escape closes the WebUI.
+            const scOpen = tmSceneCreatorIsOpen();
+            if (MAIN_SELECTED_KEY && targetOpen && !scOpen) {
+                const key = MAIN_SELECTED_KEY;
+                if (typeof selectMainPanelByLabel === 'function')
+                    selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
+                if (key && typeof hidePanel === 'function')
+                    hidePanel(key);
+                if (typeof renderTargetMenu === 'function')
+                    renderTargetMenu();
+                return;
             }
+            if (scOpen)
+                scReleaseOnEscape(targetOpen);
             if (typeof window.onCancel === 'function')
                 window.onCancel();
             else {
@@ -7871,7 +7862,7 @@
                 if (el) el.style.display = show ? '' : 'none';
             };
             setDisp('sc-btn-start', !active);
-            setDisp('sc-btn-cancel', !active);
+            setDisp('sc-btn-close', !active);
             setDisp('sc-btn-stop', active);
             setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
@@ -9007,14 +8998,31 @@
             requestWebUIHide(true);
         }
 
-        function scCancel() {
+        function scSendResult(action) {
             if (typeof window.onSceneCreatorResult === 'function') {
                 window.onSceneCreatorResult(JSON.stringify({
-                    _action: 'cancel',
+                    _action: action,
                     _creator_sid: SC.creator_sid,
                     _from_target_menu: !!SC.from_target_menu
                 }));
             }
+        }
+
+        // Close clears C++ show_scene_creator so Scene Menu stops auto-opening on target focus.
+        function scClose() {
+            const selected = MAIN_SELECTED_KEY === 'scene_creator_panel' || MAIN_SELECTED_KEY === 'scene-creator-panel';
+            scSendResult('close');
+            if (selected && typeof selectMainPanelByLabel === 'function')
+                selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
+            if (typeof renderTargetMenu === 'function')
+                renderTargetMenu();
+        }
+
+        // Escape with Scene Menu open closes the WebUI: release a Papyrus-origin creator, keep show_scene_creator.
+        // Only without TargetMenu: pulldown-opened drafts default to sid 0 and need no Papyrus release.
+        function scReleaseOnEscape(targetOpen) {
+            if (!targetOpen && SC.mode !== 'active' && !SC.from_target_menu && SC.creator_sid >= 0)
+                scSendResult('cancel');
         }
 
         // ── Description Editor ────────────────────────────────────

@@ -92,7 +92,7 @@ namespace PapyrusBindings_WebUI {
     /// After Target_Menu_Open: pick ControlPanel default and maybe restore Animation panel.
     void WebUI_AfterTargetOpen(RE::StaticFunctionTag*, RE::Actor* preferred, bool preferExplicit);
 
-    /// Restore Animation main panel when preferred-open and focus is in SexLab.
+    /// Focus in SexLab → open Animation main panel; otherwise open Scene Menu when show_scene_creator.
     void WebUI_MaybeRestoreAnimationPanel(RE::StaticFunctionTag*);
 
     /// True when the selected main panel is `panel` (e.g. "description_editor_panel").

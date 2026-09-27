@@ -71,6 +71,10 @@ namespace ActionCatalog
     /// True when the selected main panel maps to `panel` (e.g. "description_editor_panel").
     bool IsMainPanelOpen(const std::string& panel);
     void SetAnimationPanelPreferredOpen(bool open);
+    /// show_scene_creator: set when Scene Menu opens, cleared by its Close button. While true, Scene Menu
+    /// auto-opens whenever the focus actor is not in an active SexLab scene.
+    bool IsShowSceneCreator();
+    void SetShowSceneCreator(bool show);
 
     // Assembled TargetMenu Actor or Scene defaultsParameters + options (matches ControlPanel focus)
     const nlohmann::json& TargetOptions();

@@ -28,6 +28,8 @@ namespace ActionCatalog
         nlohmann::json g_sceneSettings = nlohmann::json::object();
         std::string g_currentMainPanelKey;
         bool g_animationPanelPreferredOpen = false;
+        // show_scene_creator: set whenever Scene Menu opens; cleared only by its Close button.
+        bool g_showSceneCreator = false;
         bool g_loaded = false;
 
         struct ControlModeDef {
@@ -1207,6 +1209,18 @@ namespace ActionCatalog
         g_animationPanelPreferredOpen = open;
     }
 
+    bool IsShowSceneCreator()
+    {
+        return g_showSceneCreator;
+    }
+
+    void SetShowSceneCreator(bool show)
+    {
+        if (g_showSceneCreator != show)
+            webui_log::info("show_scene_creator={}", show);
+        g_showSceneCreator = show;
+    }
+
     void SwitchMainPanel(const std::string& key)
     {
         if (!g_loaded)
@@ -1229,6 +1243,8 @@ namespace ActionCatalog
                 // it just kept whatever DE.scenePick it had from before. Mirror the full-switch
                 // path's own call below so reopen re-resolves it too.
                 const std::string panel = cur ? cur->value("panel", "") : std::string();
+                if (panel == "scene_creator_panel")
+                    SetShowSceneCreator(true);
                 if (panel == "scene_creator_panel" || panel == "description_editor_panel") {
                     WebUI_Invoke("mainPanelDidOpen();");
                 }
@@ -1254,6 +1270,8 @@ namespace ActionCatalog
 
         const std::string panel = next->value("panel", "");
         g_animationPanelPreferredOpen = (panel == "description_editor_panel");
+        if (panel == "scene_creator_panel")
+            SetShowSceneCreator(true);
 
         // One-shot soft connection load when switching TO Scene Menu / Description Editor.
         if (panel == "scene_creator_panel" || panel == "description_editor_panel") {

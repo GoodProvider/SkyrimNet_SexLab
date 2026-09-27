@@ -1688,8 +1688,15 @@ namespace PapyrusBindings_WebUI
 
     void WebUI_MaybeRestoreAnimationPanel(RE::StaticFunctionTag*)
     {
-        if (!Target_Current || !IsSexLabAnimatingActor(Target_Current))
+        if (!Target_Current)
             return;
+        if (!IsSexLabAnimatingActor(Target_Current)) {
+            if (ActionCatalog::IsShowSceneCreator() && !ActionCatalog::IsMainPanelOpen("scene_creator_panel")) {
+                webui_log::info("WebUI_MaybeRestoreAnimationPanel: show_scene_creator -> Scene Menu");
+                ActionCatalog::SwitchMainPanel("scene_creator_panel");
+            }
+            return;
+        }
         webui_log::info("WebUI_MaybeRestoreAnimationPanel: opening Description Editor for animating focus");
         // No WebUI_ConfigureFocusScene here: WebUI_SeedSceneInfos already sent this scene's full state
         // (stages included) on overlay Show, and mainPanelDidOpen binds the panel from that cache.

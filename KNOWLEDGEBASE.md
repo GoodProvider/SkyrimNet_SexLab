@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## Scene Menu sticky `show_scene_creator` (2026-09-27)
+
+- C++ `ActionCatalog` `g_showSceneCreator` is set by every `SwitchMainPanel` to `scene_creator_panel` and cleared **only** by `onSceneCreatorResult` `_action:"close"` (Scene Menu **Close** button or TargetMenu Scene Creator toggle). `"cancel"` (Escape release of a Papyrus creator) and overlay hide/reset leave it set. In-memory only — resets on game restart, not saved.
+- While set, `WebUI_MaybeRestoreAnimationPanel` (hotkey open + ControlPanel actor change) opens Scene Menu for a non-animating focus actor; animating focus still gets Description Editor.
+- Picking another main panel / None from the pulldown does not clear it — Scene Menu returns on the next target selection by design.
+
 ## Description Editor actor-table edits never reach a live scene (2026-09-26)
 
 **Symptom:** Start a scene, open the Description Editor, toggle a live actor's `O` (orgasm) or
@@ -578,7 +584,7 @@ Left column: ControlPanel (`#control-panel`: **mode pulldown** + **views** label
 
 - **SceneInfo (2026-08-22):** JS class + `sceneInfoByKey` (`'new'` + `scene:<sid>`). Seed on Show. Panel drafts copy SceneInfo on open. Start/Done/Update/Stop write into SceneInfo; Cancel does not. Overlay Cancel/Escape → `WebUI_Visibility_HideWithoutCommit` (drop dirty). Hotkey / Scene Start / TargetMenu Start → `flushSceneInfos` → `WebUI_OnSceneInfoCommit` then Hide. Do not live-call `TM_*` from Scene panels during the session.
 
-- **Escape peel (2026-08-23):** Escape closes the highest UI layer first (open pulldowns → IntentPanel Cancel → YesNo silent → Sex menu → TargetMenu cascade/Parameters → main panel to ControlPanel **None**). Leftover TargetMenu/ControlPanel hides the overlay without SceneInfo commit. Scene Creator without TargetMenu (YesNo) still Cancel. Root Custom closes an open Parameter panel before toggling Scene Creator.
+- **Escape peel (2026-08-23):** Escape closes the highest UI layer first (open pulldowns → IntentPanel Cancel → YesNo silent → Sex menu → TargetMenu cascade/Parameters → main panel to ControlPanel **None**). Leftover TargetMenu/ControlPanel hides the overlay without SceneInfo commit. **Since 2026-09-27 Scene Menu is skipped by the peel:** Escape with Scene Menu open closes the overlay (a YesNo-origin creator without TargetMenu is still released with `_action:"cancel"` first). Root Custom closes an open Parameter panel before toggling Scene Creator.
 
 - **Pause toggle (2026-08-22, revised 2026-09-20):** Overlay opens `Focus(view, true)`. The ControlPanel toggle was removed so live threads cannot drift from SceneInfo; the Description Editor play/pause button now unpauses on purpose (actors must move to test a stage). It re-focuses via `Unfocus` + `Focus(view, paused)`; a repeat `Focus` alone did not unpause. Log tail is file I/O. AnimDB rebuild that needs Papyrus updates waits until close.
 
