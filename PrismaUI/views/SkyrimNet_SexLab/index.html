@@ -3379,27 +3379,78 @@
             main.className = 'option' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
             decorateTargetOption(main, { label: label, source: source });
             if (!disabled) {
-                main.onclick = (e) => {
-                    e.stopPropagation();
+                const open = () => {
                     if (onBefore) onBefore();
                     selectAction(name, label, optionParameters);
                 };
+                main.onclick = (e) => {
+                    e.stopPropagation();
+                    open();
+                };
+                tmBindHoverDrill(row, () => selectedActionName === name && !papyrusSelectedOpt, open);
             }
 
             row.appendChild(main);
             return row;
         }
 
+        // Hover-intent drill for pulldown rows (DOMPrism columns style). One shared
+        // timer so resting on a new row cancels the previous pending drill; the delay
+        // lets the pointer sweep across panels without wiping an open params panel.
+        const TM_HOVER_DELAY_MS = 150;
+        let tmHoverTimer = null;
+        function tmBindHoverDrill(el, isOpen, drill) {
+            el.addEventListener('mouseenter', () => {
+                clearTimeout(tmHoverTimer);
+                if (isOpen()) return;
+                tmHoverTimer = setTimeout(() => {
+                    if (!isOpen()) drill();
+                }, TM_HOVER_DELAY_MS);
+            });
+            el.addEventListener('mouseleave', () => clearTimeout(tmHoverTimer));
+        }
+
+        // optionWithInheritedSource copies foreign-source entries each render, so match by content.
+        function tmSameOpt(a, b) {
+            if (a === b) return true;
+            if (!a || !b) return false;
+            return displayLabel(a) === displayLabel(b) && a.panel === b.panel
+                && (a.executionFunctionName || a.executionfunctionname || '')
+                    === (b.executionFunctionName || b.executionfunctionname || '');
+        }
+
+        // Papyrus rows that only open a panel may open on hover; rows that fire
+        // immediately (no panel, confirmSave, explainPrompt) stay click-only.
+        function tmPapyrusHoverable(opt) {
+            return !!(opt && opt.panel && !opt.confirmSave && !opt.explainPrompt);
+        }
+
+        // Treated as "open" (no hover drill) when already shown, or when a scene-start
+        // row would reapply defaults to an open Scene Creator instead of showing a panel.
+        function tmPapyrusPanelOpen(opt) {
+            if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) return true;
+            if (!tmSameOpt(leftSelectedOpt, opt)) return false;
+            return opt.panel === 'animation' || !!papyrusSelectedOpt;
+        }
+
         function makeNestedPulldownRow(opt, depthIndex) {
+            // optionWithInheritedSource may copy opt, so also match on the shared options array.
+            const isOpen = () => {
+                const n = navStack[depthIndex + 1];
+                return !!n && (n === opt || (!!opt.options && n.options === opt.options));
+            };
+            const open = isOpen();
             const row = document.createElement('div');
-            row.className = 'option-row';
+            row.className = 'option-row' + (open ? ' selected' : '');
 
             const main = document.createElement('div');
-            main.className = 'option';
+            main.className = 'option' + (open ? ' selected' : '');
             decorateTargetOption(main, opt);
             const drill = () => {
                 navStack = navStack.slice(0, depthIndex + 1);
                 navStack.push(opt);
+                papyrusSelectedOpt = null;
+                tmCastDraft = null;
                 selectedActionName = null;
                 selectedActionLabel = null;
                 renderTargetMenu();
@@ -3417,6 +3468,8 @@
                 e.stopPropagation();
                 drill();
             };
+
+            tmBindHoverDrill(row, isOpen, drill);
 
             row.appendChild(main);
             row.appendChild(expand);
@@ -3718,6 +3771,8 @@
                     row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
                     decorateTargetOption(row, opt);
                     row.onclick = () => selectPapyrusOption(opt);
+                    if (tmPapyrusHoverable(opt))
+                        tmBindHoverDrill(row, () => tmPapyrusPanelOpen(opt), () => selectPapyrusOption(opt));
                     left.appendChild(row);
                     continue;
                 }
@@ -3726,6 +3781,9 @@
                 row.className = 'option' + (leftSelectedOpt === opt ? ' selected' : '');
                 decorateTargetOption(row, opt);
                 row.onclick = () => selectLeftPulldown(opt);
+                tmBindHoverDrill(row,
+                    () => leftSelectedOpt === opt && navStack[0] === opt,
+                    () => selectLeftPulldown(opt));
                 left.appendChild(row);
             }
 
@@ -6565,10 +6623,13 @@
                     const row = document.createElement('div');
                     row.className = 'option';
                     decorateTargetOption(row, entry);
-                    row.onclick = () => {
+                    const open = () => {
                         navStack = navStack.slice(0, depthIndex + 1);
                         selectPapyrusOption(entry);
                     };
+                    row.onclick = open;
+                    if (tmPapyrusHoverable(entry))
+                        tmBindHoverDrill(row, () => tmPapyrusPanelOpen(entry), open);
                     listEl.appendChild(row);
                     continue;
                 }
