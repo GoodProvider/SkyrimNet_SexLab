@@ -6661,6 +6661,73 @@
             }
         }
 
+        // Actor pulldown_cascade over a pool (no "none" row, unlike ssFidCascade).
+        function leashActorCascade(key, caption, pool, currentFid, onPick) {
+            const cur = formIdU32(currentFid);
+            const hit = cur ? pool.find(a => formIdU32(a.formId) === cur) : null;
+            return createPulldownCascade({
+                key: key,
+                caption: caption,
+                display: hit ? hit.label : '—',
+                tree: pool.map(a => ({
+                    label: a.label,
+                    value: formIdU32(a.formId),
+                    current: formIdU32(a.formId) === cur
+                })),
+                onPick: (node) => onPick(node.value)
+            });
+        }
+
+        function leashCanStart() {
+            return !!leashUi.subject && !!leashUi.leashed
+                && (leashUi.action !== 'give to' || (leashUi.holder && leashUi.holder !== leashUi.leashed));
+        }
+
+        // action row = verb → object tree (like the scene-start method row); a leaf sets
+        // action + holder/tiePoint and starts at once.
+        function leashActionCascade(opt, holderPool) {
+            const actionOf = (v) => leashUi.action === v;
+            const tieNodes = LEASH_TIE_POINTS.map(t => ({
+                label: t,
+                value: { action: 'tie to', tiePoint: t },
+                current: actionOf('tie to') && leashUi.tiePoint === t
+            }));
+            const holderNodes = holderPool.map(a => ({
+                label: a.label,
+                value: { action: 'give to', holder: formIdU32(a.formId) },
+                current: actionOf('give to') && formIdU32(a.formId) === formIdU32(leashUi.holder)
+            }));
+            const tree = [];
+            if (leashUi.isLeashed)
+                tree.push({ label: 'unleash', value: { action: 'unleash' }, current: actionOf('unleash') });
+            tree.push({ label: 'tie to', current: actionOf('tie to'), children: tieNodes });
+            tree.push({ label: 'give to', current: actionOf('give to'), children: holderNodes });
+
+            let display = leashUi.action;
+            if (actionOf('tie to')) {
+                display = 'tie to: ' + leashUi.tiePoint;
+            } else if (actionOf('give to')) {
+                const h = holderPool.find(a => formIdU32(a.formId) === formIdU32(leashUi.holder));
+                display = 'give to: ' + (h ? h.label : '—');
+            }
+            return createPulldownCascade({
+                key: 'leash_action',
+                caption: 'action',
+                display: display,
+                tree: tree,
+                onPick: (node) => {
+                    const v = node.value || {};
+                    leashUi.action = v.action;
+                    if (v.tiePoint) leashUi.tiePoint = v.tiePoint;
+                    if (v.holder) leashUi.holder = v.holder;
+                    if (leashCanStart()) leashFireStart(opt);
+                    else renderPapyrusPanel();
+                }
+            });
+        }
+
+        // Layout (pulldown_cascade, like renderSceneStartPanelBody): [Start] style /
+        // subject / leashed / (is leashed by | is tied to) / action.
         function renderLeashPanelBody(body, opt) {
             const pool = eligibleParamActors();
             let subject = outfitFindActor(pool, leashUi.subject)
@@ -6680,54 +6747,47 @@
             leashSeedAction();
 
             const holderPool = pool.filter(a => formIdU32(a.formId) !== formIdU32(leashUi.leashed));
-            let holder = outfitFindActor(holderPool, leashUi.holder)
+            const holder = outfitFindActor(holderPool, leashUi.holder)
                 || outfitFindActor(holderPool, leashUi.subject)
                 || holderPool[0]
                 || null;
-            if (holder) leashUi.holder = formIdU32(holder.formId);
-            else leashUi.holder = 0;
+            leashUi.holder = holder ? formIdU32(holder.formId) : 0;
 
             const bar = document.createElement('div');
             bar.className = 'bottom-bar top-bar';
             const startBtn = document.createElement('div');
             startBtn.className = 'action-btn';
             startBtn.textContent = 'Start';
-            const canStart = !!leashUi.subject && !!leashUi.leashed
-                && (leashUi.action !== 'give to' || (leashUi.holder && leashUi.holder !== leashUi.leashed));
-            if (!canStart) startBtn.classList.add('disabled');
+            if (!leashCanStart()) startBtn.classList.add('disabled');
             startBtn.onclick = () => {
                 if (startBtn.classList.contains('disabled')) return;
                 leashFireStart(opt);
             };
             bar.appendChild(startBtn);
+            bar.appendChild(ssListCascade('leash_style', 'style', LEASH_STYLES, leashUi.style, (v) => {
+                leashUi.style = v;
+                renderPapyrusPanel();
+            }));
             body.appendChild(bar);
 
             const fields = document.createElement('div');
             fields.className = 'labeled-fields';
-            const addField = (labelTextOrNode, node) => {
+            const addField = (labelText, node) => {
                 const field = document.createElement('div');
                 field.className = 'dyn-field';
-                if (typeof labelTextOrNode === 'string') {
-                    const lab = document.createElement('label');
-                    lab.textContent = labelTextOrNode || '\u00a0';
-                    field.appendChild(lab);
-                } else if (labelTextOrNode) {
-                    field.appendChild(labelTextOrNode);
-                } else {
-                    const lab = document.createElement('label');
-                    lab.textContent = '\u00a0';
-                    field.appendChild(lab);
-                }
+                const lab = document.createElement('label');
+                lab.textContent = labelText || ' ';
+                field.appendChild(lab);
                 if (node) field.appendChild(node);
                 fields.appendChild(field);
             };
 
-            addField('Subject', outfitActorPulldown(pool, subject, (entry) => {
-                leashUi.subject = formIdU32(entry.formId);
+            addField('subject', leashActorCascade('leash_subject', 'subject', pool, leashUi.subject, (fid) => {
+                leashUi.subject = fid;
                 renderPapyrusPanel();
             }));
-            addField('Leashed', outfitActorPulldown(pool, leashed, (entry) => {
-                leashUi.leashed = formIdU32(entry.formId);
+            addField('leashed', leashActorCascade('leash_leashed', 'leashed', pool, leashUi.leashed, (fid) => {
+                leashUi.leashed = fid;
                 leashUi.isLeashed = false;
                 leashUi.statusHolderFormId = 0;
                 leashUi.statusHolderName = '';
@@ -6744,26 +6804,7 @@
                     addField('is tied to', statusVal);
                 }
             }
-            addField('style', createPulldown(LEASH_STYLES, leashUi.style, (v) => {
-                leashUi.style = v;
-            }));
-
-            const actionPd = createPulldown(leashActionValues(), leashUi.action, (v) => {
-                leashUi.action = v;
-                renderPapyrusPanel();
-            });
-            let extra = null;
-            if (leashUi.action === 'tie to') {
-                extra = createPulldown(LEASH_TIE_POINTS, leashUi.tiePoint, (v) => {
-                    leashUi.tiePoint = v;
-                });
-            } else if (leashUi.action === 'give to') {
-                extra = outfitActorPulldown(holderPool, holder, (entry) => {
-                    leashUi.holder = formIdU32(entry.formId);
-                    renderPapyrusPanel();
-                });
-            }
-            addField(actionPd, extra);
+            addField('action', leashActionCascade(opt, holderPool));
             body.appendChild(fields);
         }
 
