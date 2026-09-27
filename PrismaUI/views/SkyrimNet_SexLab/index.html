@@ -593,7 +593,8 @@
             width: 100%;
             box-sizing: border-box;
             min-height: 3em;
-            resize: vertical;
+            resize: none;
+            overflow: hidden;
             font-family: var(--font-ui);
             font-size: var(--text-sm);
             background: rgba(28, 28, 33, 0.9);
@@ -1799,7 +1800,7 @@
                 <div id="de-actors-table-wrap" style="display:none">
                     <table class="data-table" id="de-actors-table"><thead><tr>
                         <th class="col-idx">#</th><th class="col-name">name</th>
-                        <th class="col-o">O</th><th class="col-dressed">dressed</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
+                        <th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
                     <div class="de-name-hint">Clicking a name adds it to the description</div>
                 </div>
@@ -2241,6 +2242,8 @@
                     el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel') ? 'flex' : 'block';
                     if (deOpening && sceneInfosSeeded)
                         deApplyScenePick(deResolveDefaultScenePick());
+                    if (pid === 'description-editor-panel')
+                        deFitStageInputs();
                     if (pid === 'settings-panel' && typeof window.onSettingsRefresh === 'function')
                         window.onSettingsRefresh('{}');
                     if (pid === 'log-panel')
@@ -9497,13 +9500,13 @@
                 const tdName = document.createElement('td');
                 tdName.className = 'col-name';
                 tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(names[i] || 'actor ' + i)}</div>`;
-                const tdO = document.createElement('td');
-                tdO.className = 'col-o';
-                const expected = !p._no_orgasm;
-                tdO.innerHTML = `<span class="cell-toggle ${expected ? 'on' : ''}" title="${expected ? 'orgasm expected' : 'orgasm not expected'}" onclick="deTogglePosO(${i})">${expected ? 'O' : '-'}</span>`;
                 const tdDressed = document.createElement('td');
                 tdDressed.className = 'col-dressed';
                 tdDressed.innerHTML = `<span class="cell-toggle ${p._dressed ? 'on' : ''}" title="${p._dressed ? 'clothed' : 'unclothed'}" onclick="deTogglePosDressed(${i})">${p._dressed ? '\u{1F455}' : '—'}</span>`;
+                const tdO = document.createElement('td');
+                tdO.className = 'col-o';
+                const expected = !p._no_orgasm;
+                tdO.innerHTML = `<span class="cell-toggle ${expected ? '' : 'on'}" title="${expected ? 'orgasm expected' : 'orgasm not expected'}" onclick="deTogglePosO(${i})">${expected ? 'O' : '-'}</span>`;
                 const tdVictim = document.createElement('td');
                 tdVictim.className = 'col-v';
                 tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}" title="${p._victim ? 'victim' : 'not victim'}" onclick="deTogglePosVictim(${i})">${p._victim ? 'V' : '—'}</span>`;
@@ -9524,8 +9527,8 @@
                 tdMods.appendChild(list);
                 tr.appendChild(tdIdx);
                 tr.appendChild(tdName);
-                tr.appendChild(tdO);
                 tr.appendChild(tdDressed);
+                tr.appendChild(tdO);
                 tr.appendChild(tdVictim);
                 tr.appendChild(tdMods);
                 tbody.appendChild(tr);
@@ -9693,6 +9696,7 @@
         function deSetStageText(stage, text) {
             const ta = document.querySelector('#de-stages-host textarea.de-stage-input[data-stage="' + stage + '"]');
             if (ta) ta.value = text;
+            deFitStageInput(ta);
             deStageEdit(stage, text);
             return ta;
         }
@@ -9755,7 +9759,7 @@
                 return `<tr data-stage="${st._stage}">` +
                     `<td class="de-stage-num">${st._stage}</td>` +
                     `<td class="de-stage-text"><textarea class="de-stage-input" rows="2" data-stage="${st._stage}" ` +
-                    `onfocus="DE.lastEditStage=${st._stage}; deUpdateStageNavButtons()" oninput="deStageEdit(${st._stage}, this.value)">${escapeHtml(st._template || '')}</textarea></td>` +
+                    `onfocus="DE.lastEditStage=${st._stage}; deUpdateStageNavButtons()" oninput="deStageEdit(${st._stage}, this.value); deFitStageInput(this)">${escapeHtml(st._template || '')}</textarea></td>` +
                     `<td class="de-stage-desc" data-stage="${st._stage}">${escapeHtml(preview)}</td>` +
                     `</tr>`;
             }).join('');
@@ -9766,6 +9770,18 @@
                 `<th class="de-stage-desc">description</th>` +
                 `</tr></thead><tbody>${rows}</tbody></table>`;
             deUpdateActiveStageRow();
+            deFitStageInputs();
+        }
+
+        // Grow a stage textarea to fit its text (skipped while the panel is hidden: scrollHeight is 0).
+        function deFitStageInput(ta) {
+            if (!ta) return;
+            ta.style.height = 'auto';
+            if (ta.scrollHeight > 0) ta.style.height = ta.scrollHeight + 'px';
+        }
+
+        function deFitStageInputs() {
+            document.querySelectorAll('#de-stages-host textarea.de-stage-input').forEach(deFitStageInput);
         }
 
         function deStageEdit(stage, val) {
