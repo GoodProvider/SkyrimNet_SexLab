@@ -44,6 +44,9 @@ bool start_scene_pending = false
 ; True after Scene Creator was opened for this creator; blocks a second open.
 ; Copied onto SkyrimNet_SexLab_Scene when FinishStartScene binds the SexLab thread.
 bool Property scene_creator_menu_called = false Auto
+; WebUI "override animation settings". Off: no_orgasm/no_stripping/speaking masks are ignored and
+; the scene uses each animation's own defaults (Scene.Setup / SyncAnimationDefaults).
+bool Property position_override = true Auto
 String[] pending_registries = None
 int num_pending_registries = 0
 
@@ -207,6 +210,7 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
     num_tags_suppress = 0 
     style = STYLE_NORMALLY
     scene_creator_menu_called = false
+    position_override = true
     start_scene_pending = false
 
     if SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "tentacles") || SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "tentacle")
@@ -276,6 +280,7 @@ Function Release()
     no_orgasm_names = ""
     no_stripping_names = ""
     scene_creator_menu_called = false
+    position_override = true
     start_scene_pending = false
     parent.Release() 
     DbgEnd("Release")
@@ -381,12 +386,13 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
             Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName()+" ValidateActor:"+code)
             failed = True 
         else 
-            if no_orgasm_mask[i] == 1 
+            ; Override off: the animation's defaults are applied once SexLab picks it (Scene.Setup).
+            if no_orgasm_mask[i] == 1 && position_override
                 Trace("StartScene","no orgasm for "+actors[i].GetDisplayname())
                 DbgMsg("StartScene", "model.DisableOrgasm "+actors[i].GetDisplayname())
                 model.DisableOrgasm(actors[i], true) 
             endif 
-            if no_stripping_mask[i] == 1 
+            if no_stripping_mask[i] == 1 && position_override
                 Trace("StartScene","no stripping for "+actors[i].GetDisplayname())
                 DbgMsg("StartScene", "model.SetNoStripping "+actors[i].GetDisplayname())
                 model.SetNoStripping(actors[i])
@@ -1342,6 +1348,7 @@ int Function BuildWebUIObject()
         i += 1
     endwhile
     JMap.setObj(obj, "_positions", pos_arr)
+    JMap.setInt(obj, "_position_override", position_override as int)
     JMap.setStr(obj, "_tags", JoinStrings(tags, num_tags))
     JMap.setStr(obj, "_tags_suppress", JoinStrings(tags_suppress, num_tags_suppress))
     String[] presets = manager.GetSceneSettings()
@@ -1407,6 +1414,9 @@ Function ApplyWebUIState(int obj)
             tags_suppress[ti] = parts[ti]
             ti += 1
         endwhile
+    endif
+    if JMap.hasKey(obj, "_position_override")
+        position_override = JMap.getInt(obj, "_position_override", 1) != 0
     endif
     if JMap.hasKey(obj, "_positions")
         int pos_arr = JMap.getObj(obj, "_positions")

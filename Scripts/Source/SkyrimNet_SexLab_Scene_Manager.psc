@@ -776,76 +776,76 @@ Bool Function SceneSettingNameIsValid(String setting_name)
 EndFunction
 
 Function SaveSceneSettingFromWebUIJson(String json)
-    int obj = JValue.objectFromPrototype(json)
+    int obj = SNSL_JValue.objectFromPrototype(json)
     if obj == 0
         Trace("SaveSceneSettingFromWebUIJson", "bad json", True)
         return
     endif
-    String setting_name = JMap.getStr(obj, "_scene_preset", "")
+    String setting_name = SNSL_JMap.getStr(obj, "_scene_preset", "")
     if !SceneSettingNameIsValid(setting_name)
         Trace("SaveSceneSettingFromWebUIJson", "invalid name:"+setting_name, True)
-        JValue.release(obj)
+        SNSL_JValue.release(obj)
         return
     endif
-    int setting_id = JMap.object()
-    String style = JMap.getStr(obj, "_style", "")
+    int setting_id = SNSL_JMap.object()
+    String style = SNSL_JMap.getStr(obj, "_style", "")
     if style != "" && style != "normally"
-        JMap.setStr(setting_id, "style", style)
+        SNSL_JMap.setStr(setting_id, "style", style)
     endif
-    String method = JMap.getStr(obj, "_method", "")
+    String method = SNSL_JMap.getStr(obj, "_method", "")
     if method != ""
-        JMap.setStr(setting_id, "method", method)
+        SNSL_JMap.setStr(setting_id, "method", method)
     endif
-    String hook = JMap.getStr(obj, "_event_hook", "")
+    String hook = SNSL_JMap.getStr(obj, "_event_hook", "")
     if hook != ""
-        JMap.setStr(setting_id, "event_hook", hook)
+        SNSL_JMap.setStr(setting_id, "event_hook", hook)
     endif
-    String tags = JMap.getStr(obj, "_tags", "")
+    String tags = SNSL_JMap.getStr(obj, "_tags", "")
     if tags != ""
-        JMap.setStr(setting_id, "tags", tags)
+        SNSL_JMap.setStr(setting_id, "tags", tags)
     endif
-    String suppress = JMap.getStr(obj, "_tags_suppress", "")
+    String suppress = SNSL_JMap.getStr(obj, "_tags_suppress", "")
     if suppress != ""
-        JMap.setStr(setting_id, "tags_suppress", suppress)
+        SNSL_JMap.setStr(setting_id, "tags_suppress", suppress)
     endif
-    int pos_arr = JMap.getObj(obj, "_positions")
+    int pos_arr = SNSL_JMap.getObj(obj, "_positions")
     int n = 0
     if pos_arr != 0
-        n = JArray.count(pos_arr)
+        n = SNSL_JArray.count(pos_arr)
     endif
     if n > 0
-        int no_strip_arr = JArray.objectWithSize(n)
-        int no_org_arr = JArray.objectWithSize(n)
-        int speak_arr = JArray.objectWithSize(n)
-        int victim_arr = JArray.objectWithSize(n)
+        int no_strip_arr = SNSL_JArray.objectWithSize(n)
+        int no_org_arr = SNSL_JArray.objectWithSize(n)
+        int speak_arr = SNSL_JArray.objectWithSize(n)
+        int victim_arr = SNSL_JArray.objectWithSize(n)
         int i = 0
         while i < n
-            int po = JArray.getObj(pos_arr, i)
+            int po = SNSL_JArray.getObj(pos_arr, i)
             int dressed = 0
             int no_org = 0
             String speaking = ""
             int victim = 0
             if po != 0
-                dressed = JMap.getInt(po, "_dressed", 0)
-                no_org = JMap.getInt(po, "_no_orgasm", 0)
-                speaking = JMap.getStr(po, "_speaking", "")
-                victim = JMap.getInt(po, "_victim", 0)
+                dressed = SNSL_JMap.getInt(po, "_dressed", 0)
+                no_org = SNSL_JMap.getInt(po, "_no_orgasm", 0)
+                speaking = SNSL_JMap.getStr(po, "_speaking", "")
+                victim = SNSL_JMap.getInt(po, "_victim", 0)
             endif
-            JArray.setInt(no_strip_arr, i, dressed)
-            JArray.setInt(no_org_arr, i, no_org)
-            JArray.setStr(speak_arr, i, speaking)
-            JArray.setInt(victim_arr, i, victim)
+            SNSL_JArray.setInt(no_strip_arr, i, dressed)
+            SNSL_JArray.setInt(no_org_arr, i, no_org)
+            SNSL_JArray.setStr(speak_arr, i, speaking)
+            SNSL_JArray.setInt(victim_arr, i, victim)
             i += 1
         endwhile
-        JMap.setObj(setting_id, "no_stripping", no_strip_arr)
-        JMap.setObj(setting_id, "no_orgasm", no_org_arr)
-        JMap.setObj(setting_id, "speaking_modifiers", speak_arr)
-        JMap.setObj(setting_id, "victim", victim_arr)
+        SNSL_JMap.setObj(setting_id, "no_stripping", no_strip_arr)
+        SNSL_JMap.setObj(setting_id, "no_orgasm", no_org_arr)
+        SNSL_JMap.setObj(setting_id, "speaking_modifiers", speak_arr)
+        SNSL_JMap.setObj(setting_id, "victim", victim_arr)
     endif
     String filename = GetSceneSettingFilename(setting_name)
-    JValue.writeToFile(setting_id, filename)
-    JValue.release(setting_id)
-    JValue.release(obj)
+    SNSL_JValue.writeToFile(setting_id, filename)
+    SNSL_JValue.release(setting_id)
+    SNSL_JValue.release(obj)
     Trace("SaveSceneSettingFromWebUIJson", "wrote "+filename)
 EndFunction
 
@@ -891,27 +891,27 @@ Function WebUI_PushSceneConnections()
 EndFunction
 
 String Function BuildSceneConnectionsJson()
-    int root = JMap.object()
-    int arr = JArray.object()
-    int neu = JMap.object()
-    JMap.setStr(neu, "_id", "new")
-    JMap.setStr(neu, "_label", "new")
-    JArray.addObj(arr, neu)
+    int root = SNSL_JMap.object()
+    int arr = SNSL_JArray.object()
+    int neu = SNSL_JMap.object()
+    SNSL_JMap.setStr(neu, "_id", "new")
+    SNSL_JMap.setStr(neu, "_label", "new")
+    SNSL_JArray.addObj(arr, neu)
     int i = 0
     while i < sl_scenes.length
         SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
         if sl_scene != None && sl_scene.GetThreadActive()
-            int co = JMap.object()
-            JMap.setStr(co, "_id", "scene:"+sl_scene.sid)
-            JMap.setInt(co, "_scene_sid", sl_scene.sid)
-            JMap.setStr(co, "_label", sl_scene.GetIntentMessage(sl_scene.INTENT_STAGE_ONGOING))
-            JArray.addObj(arr, co)
+            int co = SNSL_JMap.object()
+            SNSL_JMap.setStr(co, "_id", "scene:"+sl_scene.sid)
+            SNSL_JMap.setInt(co, "_scene_sid", sl_scene.sid)
+            SNSL_JMap.setStr(co, "_label", sl_scene.GetIntentMessage(sl_scene.INTENT_STAGE_ONGOING))
+            SNSL_JArray.addObj(arr, co)
         endif
         i += 1
     endwhile
-    JMap.setObj(root, "_connections", arr)
-    String json = ObjectToLowerCaseKeyJson(root)
-    JValue.release(root)
+    SNSL_JMap.setObj(root, "_connections", arr)
+    String json = SNSL_JValue.dump(root)
+    SNSL_JValue.release(root)
     return json
 EndFunction
 
@@ -1107,7 +1107,8 @@ Function WebUI_OnAnimRegistrySave(String json)
             sl_scene.WebUI_ApplyLivePositions(obj)
         endif
     endif
-    int payload = JMap.object()
+    ; obj stays JContainers until Scene.WebUI_ApplyLivePositions migrates (S3b); payload is SNSL.
+    int payload = SNSL_JMap.object()
     if JMap.hasKey(obj, "_stages")
         int stages_arr = JMap.getObj(obj, "_stages")
         int count = JArray.count(stages_arr)
@@ -1118,9 +1119,9 @@ Function WebUI_OnAnimRegistrySave(String json)
                 int stage_no = JMap.getInt(st, "_stage", i + 1)
                 String template = JMap.getStr(st, "_template", "")
                 if template != ""
-                    int stage_obj = JMap.object()
-                    JMap.setStr(stage_obj, "description", template)
-                    JMap.setObj(payload, "stage "+stage_no, stage_obj)
+                    int stage_obj = SNSL_JMap.object()
+                    SNSL_JMap.setStr(stage_obj, "description", template)
+                    SNSL_JMap.setObj(payload, "stage "+stage_no, stage_obj)
                 endif
             endif
             i += 1
@@ -1129,9 +1130,9 @@ Function WebUI_OnAnimRegistrySave(String json)
     if JMap.hasKey(obj, "_positions")
         int pos_arr = JMap.getObj(obj, "_positions")
         int count = JArray.count(pos_arr)
-        int orgasm_arr = JArray.objectWithSize(count)
-        int speak_arr = JArray.objectWithSize(count)
-        int clothed_arr = JArray.objectWithSize(count)
+        int orgasm_arr = SNSL_JArray.objectWithSize(count)
+        int speak_arr = SNSL_JArray.objectWithSize(count)
+        int clothed_arr = SNSL_JArray.objectWithSize(count)
         int i = 0
         while i < count
             int po = JArray.getObj(pos_arr, i)
@@ -1143,73 +1144,73 @@ Function WebUI_OnAnimRegistrySave(String json)
                 speaking = JMap.getStr(po, "_speaking", "")
                 dressed = JMap.getInt(po, "_dressed", 0)
             endif
-            JArray.setInt(orgasm_arr, i, 1 - no_org)
-            JArray.setStr(speak_arr, i, speaking)
-            JArray.setInt(clothed_arr, i, dressed)
+            SNSL_JArray.setInt(orgasm_arr, i, 1 - no_org)
+            SNSL_JArray.setStr(speak_arr, i, speaking)
+            SNSL_JArray.setInt(clothed_arr, i, dressed)
             i += 1
         endwhile
-        JMap.setObj(payload, "orgasm_expected", orgasm_arr)
-        JMap.setObj(payload, "speaking_modifiers", speak_arr)
-        JMap.setObj(payload, "clothed", clothed_arr)
+        SNSL_JMap.setObj(payload, "orgasm_expected", orgasm_arr)
+        SNSL_JMap.setObj(payload, "speaking_modifiers", speak_arr)
+        SNSL_JMap.setObj(payload, "clothed", clothed_arr)
     endif
-    String save_json = ObjectToLowerCaseKeyJson(payload)
-    JValue.release(payload)
+    String save_json = SNSL_JValue.dump(payload)
+    SNSL_JValue.release(payload)
     animdb.SaveAnimLocal(registry, save_json)
     JValue.release(obj)
 EndFunction
 
 ; JS onResolveActorMeta → enrich Scene Creator positions with SexLab gender + race key.
 Function WebUI_OnResolveActorMeta(String json)
-    int req = JValue.objectFromPrototype(json)
+    int req = SNSL_JValue.objectFromPrototype(json)
     if req == 0
         Trace("WebUI_OnResolveActorMeta", "bad json", true)
         return
     endif
-    String request_id = JMap.getStr(req, "_request_id", "")
-    int form_ids = JMap.getObj(req, "_form_ids")
+    String request_id = SNSL_JMap.getStr(req, "_request_id", "")
+    int form_ids = SNSL_JMap.getObj(req, "_form_ids")
     bool owned_form_ids = false
     if form_ids == 0
-        form_ids = JArray.object()
+        form_ids = SNSL_JArray.object()
         owned_form_ids = true
-        int single = JMap.getInt(req, "_form_id", 0)
+        int single = SNSL_JMap.getInt(req, "_form_id", 0)
         if single != 0
-            JArray.addInt(form_ids, single)
+            SNSL_JArray.addInt(form_ids, single)
         endif
     endif
-    int actors_arr = JArray.object()
+    int actors_arr = SNSL_JArray.object()
     int i = 0
-    int n = JArray.count(form_ids)
+    int n = SNSL_JArray.count(form_ids)
     while i < n
-        int form_id = JArray.getInt(form_ids, i)
+        int form_id = SNSL_JArray.getInt(form_ids, i)
         Actor ak = None
         if form_id != 0
             ak = Game.GetFormEx(form_id) as Actor
         endif
-        int po = JMap.object()
-        JMap.setInt(po, "_form_id", form_id)
+        int po = SNSL_JMap.object()
+        SNSL_JMap.setInt(po, "_form_id", form_id)
         if ak
             int gender = 0
             if sexlab
                 gender = sexlab.GetGender(ak)
             endif
-            JMap.setInt(po, "_gender", gender)
-            JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, ak))
-            JMap.setStr(po, "_name", ak.GetDisplayName())
+            SNSL_JMap.setInt(po, "_gender", gender)
+            SNSL_JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, ak))
+            SNSL_JMap.setStr(po, "_name", ak.GetDisplayName())
         else
-            JMap.setInt(po, "_gender", 0)
-            JMap.setStr(po, "_race_key", "")
+            SNSL_JMap.setInt(po, "_gender", 0)
+            SNSL_JMap.setStr(po, "_race_key", "")
         endif
-        JArray.addObj(actors_arr, po)
+        SNSL_JArray.addObj(actors_arr, po)
         i += 1
     endwhile
-    int out = JMap.object()
-    JMap.setStr(out, "_request_id", request_id)
-    JMap.setObj(out, "_actors", actors_arr)
-    String out_json = ObjectToLowerCaseKeyJson(out)
-    JValue.release(req)
-    JValue.release(out)
+    int out = SNSL_JMap.object()
+    SNSL_JMap.setStr(out, "_request_id", request_id)
+    SNSL_JMap.setObj(out, "_actors", actors_arr)
+    String out_json = SNSL_JValue.dump(out)
+    SNSL_JValue.release(req)
+    SNSL_JValue.release(out)
     if owned_form_ids
-        JValue.release(form_ids)
+        SNSL_JValue.release(form_ids)
     endif
     SkyrimNet_SexLab_WebUI.ActorAnimMeta_Result(out_json)
 EndFunction
@@ -1381,6 +1382,11 @@ Function RegisterEventsSexlab()
     RegisterForModEvent("HookAnimationStart", "AnimationStart")
     UnRegisterForModEvent("HookStageStart")
     RegisterForModEvent("HookStageStart", "StageStart")
+    UnRegisterForModEvent("HookAnimationChange")
+    RegisterForModEvent("HookAnimationChange", "AnimationChange")
+    ; Our own: Scene.QueueAnimationChangeStage -> run StageStart for an animation switch.
+    UnRegisterForModEvent("SkyrimNet_SexLab_AnimationChanged")
+    RegisterForModEvent("SkyrimNet_SexLab_AnimationChanged", "AnimationChangedStage")
     ;UnRegisterForModEvent("HookStageEnd")
     ;RegisterForModEvent("HookStageEnd", "SexLab_StageEnd")
     UnRegisterForModEvent("HookAnimationEnd")
@@ -1409,8 +1415,36 @@ Event AnimationStart(int ThreadID, bool HasPlayer)
         Trace("AnimationStart","Scene is None for ThreadID "+ThreadID)
         return
     endif
-    sl_scene.AnimationStart() 
-EndEvent 
+    sl_scene.AnimationStart()
+    StartAnimationPoll()
+EndEvent
+
+; ----------------------------------------------------------
+; Animation-change poll: SexLab's SetAnimation (used by SL Tools' animation list) sends no event,
+; so every ANIMATION_POLL_SECONDS each animating scene checks whether its animation changed.
+; Stops by itself when no scene is animating; restarted by AnimationStart/StageStart.
+float ANIMATION_POLL_SECONDS = 2.0
+
+Function StartAnimationPoll()
+    RegisterForSingleUpdate(ANIMATION_POLL_SECONDS)
+EndFunction
+
+Event OnUpdate()
+    bool any_animating = false
+    int i = 0
+    while i < sl_scenes.length
+        if sl_scenes[i] != None && sl_scenes[i].PollAnimationChange()
+            any_animating = true
+        endif
+        i += 1
+    endwhile
+    if sl_scene_generic != None && sl_scene_generic.PollAnimationChange()
+        any_animating = true
+    endif
+    if any_animating
+        RegisterForSingleUpdate(ANIMATION_POLL_SECONDS)
+    endif
+EndEvent
 
 
 ; ----------------------------------------------------------
@@ -1429,7 +1463,45 @@ Event StageStart(int ThreadID, bool HasPlayer)
         Trace("StageStart","Scene is None for ThreadID "+ThreadID)
         return
     endif
-    sl_scene.StageStart() 
+    sl_scene.StageStart()
+    ; Also covers a scene resumed from a save (no AnimationStart after load).
+    StartAnimationPoll()
+EndEvent
+
+; Sent by sslThreadController.ChangeAnimation (SexLab hotkey, SL Tools) after the new animation is
+; set. A bare SetAnimation (e.g. SL Tools' animation list) sends nothing; Scene.GetThreadObj polls
+; for that case.
+Event AnimationChange(int ThreadID, bool HasPlayer)
+    if sexlab == None
+        return
+    endif
+    sslThreadController thread = SexLab.GetController(ThreadID)
+    if thread == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
+    if sl_scene == None
+        Trace("AnimationChange","Scene is None for ThreadID "+ThreadID)
+        return
+    endif
+    sl_scene.CheckAnimationChange()
+EndEvent
+
+; An animation switch is handled as a stage start (narrates old stage -> new stage).
+Event AnimationChangedStage(int ThreadID)
+    if sexlab == None
+        return
+    endif
+    sslThreadController thread = SexLab.GetController(ThreadID)
+    if thread == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
+    if sl_scene == None
+        Trace("AnimationChangedStage","Scene is None for ThreadID "+ThreadID)
+        return
+    endif
+    sl_scene.StageStart()
 EndEvent
 
 
@@ -1544,7 +1616,13 @@ int Function GettotalOrgasms(Actor akActor)
     return sl_scene.GettotalOrgasms(akActor)
 EndFunction
 
-Function OrgasmCustom(Actor akActor, String msg) 
+; True if akActor's scene position has no_orgasm set, even when the scene can't be reached (e.g.
+; right after a load). Key is Scene.psc's persist_prefix + "no_orgasm"; cleared by Scene.Release.
+bool Function IsNoOrgasmPersisted(Actor akActor)
+    return StorageUtil.GetIntValue(akActor, "skyrimnet_sexlab_pos_no_orgasm", 0) == 1
+EndFunction
+
+Function OrgasmCustom(Actor akActor, String msg)
     sslThreadController thread = GetThreadByActor(akActor, true)
     SkyrimNet_SexLab_Scene sl_scene = None
     if thread != None

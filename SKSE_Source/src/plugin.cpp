@@ -42,8 +42,45 @@ void JsonStore_SelfTest() {
     webui_log::info("JsonStore {}", Stats());
 }
 
+// Co-save record: the JSON store session a save was made in, so the next load never reuses it
+// (see Json::OnNewSession). Revert fires before every load and on new game.
+namespace {
+    constexpr std::uint32_t kCoSaveId = 'SNSX';
+    constexpr std::uint32_t kJsonSessionRecord = 'JSES';
+    constexpr std::uint32_t kJsonSessionVersion = 1;
+
+    void CoSave_OnSave(SKSE::SerializationInterface *intfc) {
+        if (!intfc->WriteRecord(kJsonSessionRecord, kJsonSessionVersion, SexLabNet::Json::CurrentSession())) {
+            webui_log::error("co-save: failed to write JSON store session");
+        }
+    }
+
+    void CoSave_OnLoad(SKSE::SerializationInterface *intfc) {
+        std::uint32_t type = 0, version = 0, length = 0;
+        while (intfc->GetNextRecordInfo(type, version, length)) {
+            if (type == kJsonSessionRecord) {
+                std::uint32_t session = 0;
+                if (intfc->ReadRecordData(session)) {
+                    SexLabNet::Json::SetLoadedSaveSession(session);
+                }
+            }
+        }
+    }
+
+    void CoSave_OnRevert(SKSE::SerializationInterface *) {
+        SexLabNet::Json::SetLoadedSaveSession(0);
+    }
+}
+
 SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     SKSE::Init(skse);
+
+    if (auto *ser = SKSE::GetSerializationInterface()) {
+        ser->SetUniqueID(kCoSaveId);
+        ser->SetSaveCallback(CoSave_OnSave);
+        ser->SetLoadCallback(CoSave_OnLoad);
+        ser->SetRevertCallback(CoSave_OnRevert);
+    }
 
     SexLabNet::InitSkyrimNetAPI();
 

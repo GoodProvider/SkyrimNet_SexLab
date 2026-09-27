@@ -596,7 +596,7 @@ Function TM_SetAnimationIndex(Actor speaker, Actor target, String indexStr)
         return
     endif
     th.SetAnimation(idx)
-    sl.SeedOverlayFromAnimDb()
+    sl.CheckAnimationChange()
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl.BuildWebUISceneMenuState())
     SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl.BuildWebUIAnimationMenuState())
 EndFunction

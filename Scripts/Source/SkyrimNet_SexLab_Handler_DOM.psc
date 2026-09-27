@@ -124,6 +124,12 @@ Function DOMSlave_Orgasmed(Actor slave, String msg)
         Trace("DOMSlave_Orgasmed","--- manager is None, aborting")
         return
     elseif !manager.sexlab.IsActorActive(slave) || manager.GetSceneByActor(slave) == None
+        ; Scene unreachable (e.g. just after a load): the delayed fallback narrates directly and
+        ; would bypass Scene.OrgasmCustom's no_orgasm gate, so check the persisted flag here.
+        if manager.IsNoOrgasmPersisted(slave)
+            Trace("DOMSlave_Orgasmed", "--- "+GetDisplayName(slave)+" has no_orgasm, dropping delayed melt")
+            return
+        endif
         DelayMeltNarration(slave, msg)
     else 
         Trace("DOMSlave_Orgasmed", "--- OrgasmCustom for "+GetDisplayName(slave)+": "+msg)

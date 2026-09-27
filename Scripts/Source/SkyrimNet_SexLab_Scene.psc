@@ -164,22 +164,10 @@ Function Initialize(int _sid, SkyrimNet_SexLab_Scene_Manager _manager, bool _is_
         SNSL_JValue.retain(thread_obj)
     endif
 
-    ; Legacy name->position map removed; scrub so retained thread_obj does not emit it
-    if SNSL_JMap.hasKey(thread_obj, "actors")
-        SNSL_JMap.removeKey(thread_obj, "actors")
-    endif
-
-    if actors_objs < 1 || !SNSL_JValue.isExists(actors_objs)
-        actors_objs = SNSL_JArray.object()
-        ; Attach BEFORE retain (see SetSpeakingObj's identical fix for why): a fresh, unretained
-        ; array attaches by reference; retaining first would make this setObj below deep-copy it
-        ; instead, silently detaching actors_objs from thread_obj.actors forever. Matches the
-        ; already-correct setObj-then-retain order used by this same field's two resize sites
-        ; below (~line 225, ~line 810).
-        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
-        SNSL_JValue.retain(actors_objs)
-    elseif !SNSL_JMap.HasKey(thread_obj, "actors")
-        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
+    ; Recreate rather than re-attach: actors_objs is retained, so setObj-ing it back into a
+    ; thread_obj that lost it would store a deep copy (see ResetActorsObjs).
+    if actors_objs < 1 || !SNSL_JValue.isExists(actors_objs) || SNSL_JMap.getObj(thread_obj, "actors") != actors_objs
+        ResetActorsObjs(0)
     endif
     if victim_faction_forms < 1 || !SNSL_JValue.isExists(victim_faction_forms)
         victim_faction_forms = SNSL_JArray.object()
@@ -224,10 +212,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     ; Assign interface property (not a local) before SetPosition/SetActor so assailant flags work.
     num_victims = 0 
     if num_actors != SNSL_JArray.count(actors_objs)
-        SNSL_JValue.release(actors_objs)
-        actors_objs = SNSL_JArray.objectWithSize(num_actors)
-        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
-        SNSL_JValue.retain(actors_objs)
+        ResetActorsObjs(num_actors)
     endif
 
     ReconcileVictimFactions()
@@ -250,19 +235,20 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
         if receiver == None && num_actors >= 2
             receiver = positions[0]
         endif
-        i = 0 
-        while i < num_actors 
-            if i < creator.num_actors
+        position_override = creator.position_override
+        i = 0
+        while i < num_actors
+            if i < creator.num_actors && position_override
                 SetPosition(i, positions[i], creator.no_orgasm_mask[i], creator.speaking_modifiers[i])
                 SNSL_JMap.setInt(position_objs[i], "dressed", creator.no_stripping_mask[i])
-                ; Scene Creator's explicit choice must stick for the whole scene, matching
-                ; TM_ApplySpeaking's own lock semantics -- otherwise StageStart's
-                ; ApplyAnimDbSpeaking() clobbers it from the registry's own per-stage default on
-                ; the very next stage transition, before the user can ever see it applied.
+                ; Scene Creator's explicit choices hold for the starting animation, matching
+                ; TM_ApplySpeaking's lock semantics -- otherwise StageStart's
+                ; ApplyAnimDbSpeaking() clobbers speaking from the registry's per-stage default on
+                ; the very next stage transition. Switching animation drops all three locks and
+                ; reloads that animation's defaults (SyncAnimationDefaults).
                 SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
-                ; Same protection for the orgasm choice -- SeedOverlayFromAnimDb() otherwise
-                ; clobbers no_orgasm/deny_orgasm from AnimDB on the next animation change too.
                 SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
+                SNSL_JMap.setInt(position_objs[i], "dressed_locked", 1)
             else
                 SetPosition(i, positions[i], 0, creator.speaking_modifiers_default_current)
                 SNSL_JMap.setInt(position_objs[i], "dressed", 0)
@@ -314,6 +300,19 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
         animating_started_at = Utility.GetCurrentRealTime()
     endif
     SetNames()
+    PersistPositions()
+    ; New scene: the starting animation is the baseline for SyncAnimationDefaults.
+    seeded_registry = ""
+    pending_animation_change = false
+    animation_change_from = ""
+    if !position_override
+        ; No Scene Creator values: the first SyncAnimationDefaults (AnimationStart's
+        ; GetThreadObj, or StageStart) seeds the starting animation's defaults. Not here: the
+        ; thread is still preparing, and SexLab's own stripping would undo ApplyDressedToActor.
+        seed_first_animation = true
+    elseif thread.animation
+        seeded_registry = thread.animation.Registry
+    endif
     DbgEnd("Setup")
     return True
 EndFunction 
@@ -464,6 +463,11 @@ EndFunction
 Function Release()
     DbgEnter("Release")
     UnregisterForUpdate()
+    seeded_registry = ""
+    position_override = true
+    seed_first_animation = false
+    pending_animation_change = false
+    animation_change_from = ""
     orgasm_window_open = false
     orgasm_window_started_at = 0.0
     int i = 0
@@ -479,7 +483,8 @@ Function Release()
             endif 
             StorageUtil.UnsetIntValue(akActor, storage_obj_key)
             StorageUtil.UnsetIntValue(akActor, storage_total_orgasms_key)
-        endif 
+            ClearPersistedPosition(akActor)
+        endif
         if position_objs && i < position_objs.length && position_objs[i] > 0
             int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
             if speaking_obj > 0
@@ -535,12 +540,10 @@ Function Release()
     tracking = False
     scene_creator_menu_called = False
 
-    if thread_obj > 0
+    if thread_obj > 0 && SNSL_JValue.isExists(thread_obj)
+        ; clear detaches the retained actors_objs; ResetActorsObjs frees it and attaches a fresh one.
         SNSL_JMap.clear(thread_obj)
-        if actors_objs > 0
-            SNSL_JArray.clear(actors_objs)
-            SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
-        endif
+        ResetActorsObjs(0)
     endif
 
     if thread != None
@@ -571,13 +574,242 @@ Function EnsureActorArraysLargeEnough(int size)
     endif
     int i = 0
     while i < size
+        ; position_objs[i] is a retained root and the only live copy of the slot's metadata.
+        ; It is never attached anywhere by reference: RelinkActorsObjs gives actors_objs a
+        ; deep-copy snapshot of it, so all reads/writes must go through position_objs.
         if position_objs[i] < 1 || !SNSL_JValue.isExists(position_objs[i])
+            if position_objs[i] > 0 && thread != None && status == STATUS_ACTIVE
+                ; Diagnostic: a live scene's slot should only die across a save load.
+                Trace("EnsureActorArraysLargeEnough", "recreating dead slot "+i+" old handle:"+position_objs[i])
+            endif
             position_objs[i] = SNSL_JMap.object()
             SNSL_JValue.retain(position_objs[i])
+            ; Prompts call contains(speaker.speaking_modifiers, ...), which errors on a missing key.
+            ; RestorePosition bails for actors without a persisted tid, so seed an empty array first.
+            SetSpeakingObj(i, "")
+            ; After a load: restore before anything (SeedOverlayFromAnimDb, SetPosition) reads it.
+            if thread != None && i < thread.positions.length
+                RestorePosition(i, thread.positions[i])
+            endif
         endif
         i += 1
     endwhile
     DbgEnd("EnsureActorArraysLargeEnough")
+EndFunction
+
+; Frees actors_objs and attaches a fresh array of `size` under thread_obj.actors.
+; Attach BEFORE retain (see SetSpeakingObj for why): a fresh, unretained array attaches by
+; reference; retaining first would make setObj deep-copy it instead.
+Function ResetActorsObjs(int size)
+    if actors_objs > 0 && SNSL_JValue.isExists(actors_objs)
+        SNSL_JValue.release(actors_objs)
+    endif
+    actors_objs = SNSL_JArray.objectWithSize(size)
+    SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
+    SNSL_JValue.retain(actors_objs)
+EndFunction
+
+; Refreshes thread_obj.actors from position_objs. Each setObj stores a deep-copy snapshot
+; (position_objs are retained roots) and frees the previous one, so call this after the
+; last position_objs write and before thread_obj is dumped.
+Function RelinkActorsObjs(int size)
+    int i = 0
+    while i < size && i < position_objs.length
+        SNSL_JArray.setObj(actors_objs, i, position_objs[i])
+        i += 1
+    endwhile
+EndFunction
+
+; ----------------------------------------
+; Animation change: locks (speaking/orgasm/dressed) only hold within one animation. Switching to
+; a different animation drops them and reloads that animation's defaults.
+; -----------------------------------------
+String seeded_registry = ""   ; registry whose defaults position_objs currently reflect
+; Scene Creator "override animation settings". Off: the WebUI's per-actor dressed/orgasm/speaking
+; values are ignored and every animation, including the first, uses its own defaults.
+bool position_override = true
+; Set by Setup() when position_override is off, so SyncAnimationDefaults seeds the first
+; registry instead of only recording it.
+bool seed_first_animation = false
+
+; Set when an animation change was detected and not yet narrated. StageStart consumes it and
+; narrates "Scene changes from <old stage description> to <new stage description>".
+bool pending_animation_change = false
+String animation_change_from = ""
+
+; Call from anywhere that may observe a changed thread.animation outside StageStart (poll, hooks,
+; menus). Reloads the new animation's defaults now, and queues StageStart through a mod event
+; (asynchronous: this can run inside GetThreadObj while a prompt decorator is building JSON, where
+; narrating directly would be wrong). StageStart itself calls SyncAnimationDefaults directly.
+Function CheckAnimationChange()
+    String from_desc = description_last
+    if SyncAnimationDefaults()
+        QueueAnimationChangeStage(from_desc)
+    endif
+EndFunction
+
+; Called every few seconds by Scene_Manager's poll (OnUpdate). SexLab's SetAnimation sends no
+; event (SL Tools' animation list uses it), so polling is the only reliable detection. Returns
+; True while this scene is animating, so the manager knows to keep polling.
+bool Function PollAnimationChange()
+    if thread == None || (thread as sslThreadModel).GetState() != "animating"
+        return false
+    endif
+    CheckAnimationChange()
+    return true
+EndFunction
+
+Function QueueAnimationChangeStage(String from_desc)
+    pending_animation_change = true
+    animation_change_from = from_desc
+    int handle = ModEvent.Create("SkyrimNet_SexLab_AnimationChanged")
+    if handle
+        ModEvent.PushInt(handle, thread.tid)
+        ModEvent.Send(handle)
+    endif
+EndFunction
+
+; Reloads the new animation's defaults if thread.animation changed since the last call. Returns
+; True on a change. The first registry of a scene is only recorded, so Setup's (Scene Creator)
+; choices stand for the starting animation.
+bool Function SyncAnimationDefaults()
+    if thread == None || thread.animation == None
+        return false
+    endif
+    String reg = thread.animation.Registry
+    if reg == seeded_registry
+        return false
+    endif
+    bool first = seeded_registry == ""
+    seeded_registry = reg
+    if first && !seed_first_animation
+        return false
+    endif
+    seed_first_animation = false
+    Trace("SyncAnimationDefaults", "animation "+reg+" first:"+first+", reloading its defaults")
+    ReloadAnimationDefaults()
+    ; The first animation is not a change: nothing to narrate.
+    return !first
+EndFunction
+
+; Drops every position lock and reapplies the current animation's defaults to the actors.
+Function ReloadAnimationDefaults()
+    if thread == None || thread.animation == None
+        return
+    endif
+    ClearPositionLocks()
+    SeedOverlayFromAnimDb()
+    ; SeedOverlayFromAnimDb only sets the dressed flag; make the actors match it.
+    Actor[] positions = thread.positions
+    int i = 0
+    while positions && i < positions.length && i < position_objs.length
+        if positions[i] && position_objs[i] > 0
+            ApplyDressedToActor(positions[i], SNSL_JMap.getInt(position_objs[i], "dressed", 0) == 1)
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+; Strips or re-dresses akActor to match a dressed flag. Uses the thread's own tracked strip state
+; (sslActorAlias.Strip/UnStrip), not main.Store/UnStoreStrippedItems -- that cache is only ever
+; populated by the standalone Outfit_Dress/Outfit_Undress actions, never by the scene's own
+; automatic per-thread stripping. See KNOWLEDGEBASE "Description Editor dressed toggle used wrong
+; strip API (2026-09-22)".
+Function ApplyDressedToActor(Actor akActor, Bool clothed)
+    sslActorAlias slot = thread.ActorAlias(akActor)
+    if slot
+        if clothed
+            slot.UnStrip()
+        else
+            slot.Strip()
+        endif
+    endif
+EndFunction
+
+; For callers that already applied the user's choices for the new animation (Description Editor
+; commit): record it without reseeding, but still narrate the change like a stage start.
+Function NoteSeededRegistry(String reg)
+    bool changed = seeded_registry != "" && reg != seeded_registry
+    seeded_registry = reg
+    if changed
+        QueueAnimationChangeStage(description_last)
+    endif
+EndFunction
+
+Function ClearPositionLocks()
+    int i = 0
+    while position_objs && i < position_objs.length
+        if position_objs[i] > 0 && SNSL_JValue.isExists(position_objs[i])
+            SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
+            SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 0)
+            SNSL_JMap.setInt(position_objs[i], "dressed_locked", 0)
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+; ----------------------------------------
+; Per-position settings that survive a save load
+;
+; position_objs live in the in-memory JSON store and are recreated empty after a load. The
+; user-set fields below are mirrored per actor in StorageUtil (saved with the game) and
+; restored when EnsureActorArraysLargeEnough recreates a dead slot. The prefix must NOT start with storage_prefix: Initialize's
+; ClearAllPrefix(storage_prefix) runs on every load. Handler_DOM reads no_orgasm via
+; Scene_Manager.IsNoOrgasmPersisted.
+; -----------------------------------------
+String persist_prefix = "skyrimnet_sexlab_pos_"
+
+; Call at the end of any function that writes no_orgasm/dressed/deny_orgasm/speaking_modifiers
+; or their *_locked flags. Only persists slots whose actor is bound to its position obj, so a
+; not-yet-restored slot after a load can't overwrite the saved values with defaults.
+Function PersistPositions()
+    if thread == None || !position_objs
+        return
+    endif
+    int n = thread.positions.length
+    int i = 0
+    while i < n && i < position_objs.length
+        Actor a = thread.positions[i]
+        int obj = position_objs[i]
+        if a != None && SNSL_JValue.isExists(obj) && StorageUtil.GetIntValue(a, storage_obj_key, 0) == obj
+            StorageUtil.SetIntValue(a, persist_prefix+"tid", thread.tid)
+            StorageUtil.SetIntValue(a, persist_prefix+"no_orgasm", SNSL_JMap.getInt(obj, "no_orgasm"))
+            StorageUtil.SetIntValue(a, persist_prefix+"deny_orgasm", SNSL_JMap.getInt(obj, "deny_orgasm"))
+            StorageUtil.SetIntValue(a, persist_prefix+"dressed", SNSL_JMap.getInt(obj, "dressed"))
+            StorageUtil.SetIntValue(a, persist_prefix+"orgasm_locked", SNSL_JMap.getInt(obj, "orgasm_locked"))
+            StorageUtil.SetIntValue(a, persist_prefix+"speaking_locked", SNSL_JMap.getInt(obj, "speaking_locked"))
+            StorageUtil.SetIntValue(a, persist_prefix+"dressed_locked", SNSL_JMap.getInt(obj, "dressed_locked"))
+            StorageUtil.SetStringValue(a, persist_prefix+"speaking", SpeakingCsvFromIndex(i))
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+; Restores akActor's persisted settings into position_objs[i] if they belong to this thread.
+Function RestorePosition(int i, Actor akActor)
+    if thread == None || akActor == None || StorageUtil.GetIntValue(akActor, persist_prefix+"tid", -1) != thread.tid
+        return
+    endif
+    int obj = position_objs[i]
+    SNSL_JMap.setInt(obj, "no_orgasm", StorageUtil.GetIntValue(akActor, persist_prefix+"no_orgasm", 0))
+    SNSL_JMap.setInt(obj, "deny_orgasm", StorageUtil.GetIntValue(akActor, persist_prefix+"deny_orgasm", 0))
+    SNSL_JMap.setInt(obj, "dressed", StorageUtil.GetIntValue(akActor, persist_prefix+"dressed", 0))
+    SNSL_JMap.setInt(obj, "orgasm_locked", StorageUtil.GetIntValue(akActor, persist_prefix+"orgasm_locked", 0))
+    SNSL_JMap.setInt(obj, "speaking_locked", StorageUtil.GetIntValue(akActor, persist_prefix+"speaking_locked", 0))
+    SNSL_JMap.setInt(obj, "dressed_locked", StorageUtil.GetIntValue(akActor, persist_prefix+"dressed_locked", 0))
+    SetSpeakingObj(i, StorageUtil.GetStringValue(akActor, persist_prefix+"speaking", ""))
+    Trace("RestorePosition", GetDisplayName(akActor)+" index:"+i+" no_orgasm:"+SNSL_JMap.getInt(obj, "no_orgasm")+" dressed:"+SNSL_JMap.getInt(obj, "dressed"))
+EndFunction
+
+Function ClearPersistedPosition(Actor akActor)
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"tid")
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"no_orgasm")
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"deny_orgasm")
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"dressed")
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"orgasm_locked")
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"speaking_locked")
+    StorageUtil.UnsetIntValue(akActor, persist_prefix+"dressed_locked")
+    StorageUtil.UnsetStringValue(akActor, persist_prefix+"speaking")
 EndFunction
 
 ; ----------------------------------------
@@ -690,7 +922,7 @@ bool Function SetActor(int i, Actor akActor)
         return False 
     endif
     int obj = position_objs[i]
-    SNSL_JArray.setObj(actors_objs, i, obj)
+    ; actors_objs is refreshed by RelinkActorsObjs (AlignActors / GetThreadObj), not here.
 
     StorageUtil.SetIntValue(akActor, storage_obj_key, obj)
     StorageUtil.SetIntValue(akActor, storage_total_orgasms_key, 0)
@@ -777,18 +1009,32 @@ EndFunction
 
 int Function GetObjFromActor(Actor akActor) 
     DbgEnter("GetObjFromActor", "akActor:"+GetDisplayName(akActor))
-    DbgReturn("GetObjFromActor", "StorageUtil.GetIntValue(akActor, storage_obj_key, 0)")
-    return StorageUtil.GetIntValue(akActor, storage_obj_key, 0) 
-EndFunction 
+    int obj = StorageUtil.GetIntValue(akActor, storage_obj_key, 0)
+    ; StorageUtil survives a save load but SNSL handles do not: a dead handle here would make
+    ; callers read no_orgasm etc. as 0. Fall back to the actor's live position slot.
+    if obj > 0 && !SNSL_JValue.isExists(obj)
+        obj = 0
+        if thread != None && position_objs
+            int i = thread.positions.Find(akActor)
+            if i >= 0 && i < position_objs.length && SNSL_JValue.isExists(position_objs[i])
+                obj = position_objs[i]
+            endif
+        endif
+    endif
+    DbgReturn("GetObjFromActor", obj)
+    return obj
+EndFunction
 
 bool Function UpdateActor(int i , Actor akActor) 
     DbgEnter("UpdateActor", "i:"+i+" akActor:"+GetDisplayName(akActor))
     bool changed = False 
     int obj = position_objs[i]
     ; Slot changed if this actor is not bound to this position's metadata obj
-    if GetObjFromActor(akActor) != position_objs[i] 
-        SetActor(i, akActor) 
-        changed = True 
+    ; Raw StorageUtil value, not GetObjFromActor: its dead-handle fallback would hide a stale
+    ; binding that must still count as a mismatch so SetActor re-derives this slot.
+    if StorageUtil.GetIntValue(akActor, storage_obj_key, 0) != position_objs[i]
+        SetActor(i, akActor)
+        changed = True
         int total_orgasms = StorageUtil.GetIntValue(akActor, storage_total_orgasms_key, 0) 
         SetTotalOrgasms(akActor, total_orgasms)
         obj = position_objs[i]
@@ -815,10 +1061,7 @@ Function AlignActors()
     int i = 0 
     bool changed = False 
     if size != SNSL_JArray.count(actors_objs)
-        SNSL_JValue.release(actors_objs)
-        actors_objs = SNSL_JArray.objectWithSize(size)
-        SNSL_JMap.setObj(thread_obj, "actors", actors_objs)
-        SNSL_JValue.retain(actors_objs)
+        ResetActorsObjs(size)
         changed = True
     endif
     while i < size
@@ -827,13 +1070,7 @@ Function AlignActors()
         endif
         i += 1
     endwhile
-    ; Relink every slot: UpdateActor only writes actors_objs when an actor's binding
-    ; changes, so after a resize (recreated array) unchanged slots would stay null.
-    i = 0
-    while i < size
-        SNSL_JArray.setObj(actors_objs, i, position_objs[i])
-        i += 1
-    endwhile
+    RelinkActorsObjs(size)
     ; Do not tear down leftover slots here — only Release owns teardown.
 
     ; Positions may have changed; reconcile victim faction so departed actors are cleared.
@@ -1058,6 +1295,8 @@ EndFunction
 Function AnimationStart()
     description_last = ""
     stage_last = 0
+    pending_animation_change = false
+    animation_change_from = ""
     ; Re-entrant mid-scene AnimationStart must not force STATUS_SETUP (would re-run
     ; first-start/initiator path) or clear orgasm_messages_set while leaving non-empty
     ; slots (flush skips; Combined will not refill). Only reset orgasm stash on first start.
@@ -1098,9 +1337,15 @@ Function AnimationStart()
     DbgEnd("AnimationStart", "msg:"+msg+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
 EndFunction
 
-Function StageStart() 
+Function StageStart()
     DbgEnter("StageStart")
     AlignActors()
+    ; Catches animation changes not yet seen elsewhere; narrated below like a stage change.
+    String from_desc = description_last
+    if SyncAnimationDefaults()
+        pending_animation_change = true
+        animation_change_from = from_desc
+    endif
     ApplyAnimDbSpeaking()
     manager.SaveThreadsJson()
     if SexLab == None 
@@ -1164,7 +1409,16 @@ Function StageStart()
     else
         String narration = ""
         bool change_scene = false
-        if desc != "" && description_last != ""
+        if pending_animation_change && desc != ""
+            ; Animation switched (any route): narrate old animation's stage -> new animation's stage.
+            ; No anidata transition lookup: those are per-animation stage pairs.
+            if animation_change_from != "" && animation_change_from != desc
+                narration = "Scene changes from "+animation_change_from+" to "+desc
+            else
+                narration = "Scene changes to "+desc
+            endif
+            change_scene = true
+        elseif desc != "" && description_last != ""
             if desc != description_last
                 ; Prefer anidata transitions["from-to"]; else constructed "Scene changes to".
                 String transition = ""
@@ -1224,8 +1478,10 @@ Function StageStart()
     if cur_stage > 0
         stage_last = cur_stage
     endif
+    pending_animation_change = false
+    animation_change_from = ""
 
-    ; If this thread is being tracked print the thread's status 
+    ; If this thread is being tracked print the thread's status
     if tracking
         bool[] desc_orgasm = animdb.GetHasDescriptionOrgasmExpected(thread)
         String msg = "" 
@@ -1506,7 +1762,12 @@ String Function OrgasmMessagesToNarration()
         int k = 0
         int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
         while k < num_actors && k < orgasm_messages.length
-            int obj = SNSL_JArray.getObj(actors_objs, k)
+            ; position_objs, not actors_objs: actors_objs holds snapshots, so MarkOrgasmNarrated's
+            ; orgasm_narrated write would be lost on the next relink.
+            int obj = 0
+            if k < position_objs.length
+                obj = position_objs[k]
+            endif
             String name = SNSL_JMap.getStr(obj, "name")
             if orgasm_messages[k] != ""
                 orgasm_happened = true
@@ -1781,6 +2042,8 @@ int Function GetThreadObj(Actor speaker)
         return thread_obj
     endif
     alignactors()
+    ; Poll: some plugins switch animation via a bare SetAnimation that sends no SexLab event.
+    CheckAnimationChange()
 
     float distance = 0.0
     bool los = true 
@@ -1801,11 +2064,13 @@ int Function GetThreadObj(Actor speaker)
         if speaker != None && thread.positions[i] == speaker 
             los = true 
         endif 
-        if updateactor(i, thread.positions[i]) 
-            actor_changed = true 
-        endif 
-        i += 1 
-    endwhile 
+        if updateactor(i, thread.positions[i])
+            actor_changed = true
+        endif
+        i += 1
+    endwhile
+    ; updateactor wrote position_objs after alignactors' relink; refresh the snapshots.
+    RelinkActorsObjs(num_actors)
     if actor_changed
         setnames() 
     endif 
@@ -2129,6 +2394,7 @@ String Function BuildWebUIAnimationMenuState()
     if thread == None
         return "{}"
     endif
+    CheckAnimationChange()
     sslBaseAnimation anim = thread.animation
     int obj = JMap.object()
     JMap.setStr(obj, "_mode", "active")
@@ -2260,7 +2526,9 @@ Function WebUI_OnMenuLiveUpdate(String json)
     JValue.release(obj)
 EndFunction
 
-Function WebUI_ApplyLivePositions(int obj)
+; apply_values False (Scene Creator override off): only victim changes are applied; the per-actor
+; dressed/orgasm/speaking values stay whatever the animation defaults set.
+Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
     if thread == None || !JMap.hasKey(obj, "_positions")
         return
     endif
@@ -2280,7 +2548,7 @@ Function WebUI_ApplyLivePositions(int obj)
     int i = 0
     while i < n
         int po = JArray.getObj(pos_arr, i)
-        if po > 0
+        if po > 0 && apply_values
             int no_org = JMap.getInt(po, "_no_orgasm", 0)
             int dressed = JMap.getInt(po, "_dressed", 0)
             String speaking = JMap.getStr(po, "_speaking", "")
@@ -2291,29 +2559,18 @@ Function WebUI_ApplyLivePositions(int obj)
             ; silently reverts it to the registry default on the next stage transition.
             SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
             SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
+            SNSL_JMap.setInt(position_objs[i], "dressed_locked", 1)
             thread.DisableOrgasm(positions[i], no_org == 1)
             Bool clothed = dressed == 1
-            ; Use the thread's own tracked strip state (sslActorAlias.Strip/UnStrip), not
-            ; main.Store/UnStoreStrippedItems -- that cache is only ever populated by the
-            ; standalone Outfit_Dress/Outfit_Undress actions, never by the scene's own
-            ; automatic per-thread stripping. See KNOWLEDGEBASE "Description Editor dressed
-            ; toggle used wrong strip API (2026-09-22)".
-            sslActorAlias slot = thread.ActorAlias(positions[i])
-            if slot
-                if clothed
-                    slot.UnStrip()
-                else
-                    slot.Strip()
-                endif
-            endif
+            ApplyDressedToActor(positions[i], clothed)
             TM_ApplyClothed(positions[i], clothed)
-            if JMap.hasKey(po, "_victim")
-                Bool newVictim = JMap.getInt(po, "_victim", 0) == 1
-                Bool wasVictim = thread.IsVictim(positions[i])
-                thread.SetVictim(positions[i], newVictim)
-                if newVictim != wasVictim
-                    victim_changed_new[i] = newVictim as int
-                endif
+        endif
+        if po > 0 && JMap.hasKey(po, "_victim")
+            Bool newVictim = JMap.getInt(po, "_victim", 0) == 1
+            Bool wasVictim = thread.IsVictim(positions[i])
+            thread.SetVictim(positions[i], newVictim)
+            if newVictim != wasVictim
+                victim_changed_new[i] = newVictim as int
             endif
         endif
         i += 1
@@ -2327,7 +2584,9 @@ Function WebUI_ApplyLivePositions(int obj)
         endif
         i += 1
     endwhile
-    MarkUserDefaultsDirty()
+    if apply_values
+        MarkUserDefaultsDirty()
+    endif
 EndFunction
 
 ; Fired by WebUI_ApplyLivePositions when a live victim toggle (Description Editor's V column)
@@ -2569,6 +2828,7 @@ int Function BuildWebUISceneMenuObject()
         i += 1
     endwhile
     SNSL_JMap.setObj(obj, "_positions", pos_arr)
+    SNSL_JMap.setInt(obj, "_position_override", position_override as int)
     int in_thread = SNSL_JArray.object()
     String active_reg = ""
     if thread && thread.animation
@@ -2623,6 +2883,7 @@ int Function BuildWebUISceneMenuObject()
 EndFunction
 
 String Function BuildWebUISceneMenuState()
+    CheckAnimationChange()
     int obj = BuildWebUISceneMenuObject()
     String json = SNSL_JValue.dump(obj)
     SNSL_JValue.release(obj)
@@ -2673,6 +2934,7 @@ Function WebUI_OnAnimUpdate(String json)
     if idx >= 0
         thread.SetAnimation(idx)
         NotePlayedRegistry(next_reg)
+        CheckAnimationChange()
         SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
         SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
         return
@@ -2741,6 +3003,7 @@ Function WebUI_OnAnimUpdate(String json)
         endif
     endif
     NotePlayedRegistry(next_reg)
+    CheckAnimationChange()
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
     SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
 EndFunction
@@ -2838,11 +3101,19 @@ Function ApplyWebUICommit(int obj)
     if JMap.hasKey(obj, "_intent")
         intent = JMap.getStr(obj, "_intent", intent)
     endif
-    WebUI_ApplyLivePositions(obj)
+    ; Commits without the key (Description Editor, older UI) keep the scene's current mode.
+    bool override_on = JMap.getInt(obj, "_position_override", position_override as int) != 0
+    WebUI_ApplyLivePositions(obj, override_on)
+    if !override_on && position_override
+        ; Just switched off: drop the user's values and locks, fall back to the animation.
+        ReloadAnimationDefaults()
+        PersistPositions()
+    endif
+    position_override = override_on
     i = 0
     while i < count
         int po = JArray.getObj(pos_arr, i)
-        if po > 0
+        if po > 0 && override_on
             int fid = JMap.getInt(po, "_form_id", 0)
             Actor a = None
             if fid != 0
@@ -2904,6 +3175,7 @@ Function ApplyWebUICommit(int obj)
             if idx >= 0
                 thread.SetAnimation(idx)
                 NotePlayedRegistry(active_reg)
+                NoteSeededRegistry(active_reg)
             else
                 thread.AddAnimation(next_anim)
                 cur = thread.Animations
@@ -2918,6 +3190,7 @@ Function ApplyWebUICommit(int obj)
                 if idx >= 0
                     thread.SetAnimation(idx)
                     NotePlayedRegistry(active_reg)
+                    NoteSeededRegistry(active_reg)
                 endif
             endif
         endif
@@ -2987,10 +3260,12 @@ Function CacheUserDefaultsForRegistry(String registry)
     SNSL_JMap.setObj(user_anim_defaults, registry, payload)
 EndFunction
 
+; Called after every live per-position edit (WebUI / Target Menu).
 Function MarkUserDefaultsDirty()
     if thread && thread.animation
         CacheUserDefaultsForRegistry(thread.animation.Registry)
     endif
+    PersistPositions()
 EndFunction
 
 Function SeedOverlayFromAnimDb()
@@ -3045,6 +3320,8 @@ Function SeedOverlayFromAnimDb()
                 ; only re-derive from AnimDB when nothing has locked this position yet.
                 bool locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
                     && SNSL_JMap.getInt(position_objs[i], "speaking_locked", 0) == 1
+                bool dressed_locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
+                    && SNSL_JMap.getInt(position_objs[i], "dressed_locked", 0) == 1
                 bool orgasm_locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
                     && SNSL_JMap.getInt(position_objs[i], "orgasm_locked", 0) == 1
                 String applied_speaking = speaking
@@ -3059,7 +3336,9 @@ Function SeedOverlayFromAnimDb()
                 thread.DisableOrgasm(positions[i], applied_no_org == 1)
                 if position_objs && i < position_objs.length && position_objs[i] > 0
                     SNSL_JMap.setInt(position_objs[i], "orgasm_mode", expected)
-                    SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+                    if !dressed_locked
+                        SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+                    endif
                     if !orgasm_locked
                         SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
                     endif
@@ -3070,6 +3349,7 @@ Function SeedOverlayFromAnimDb()
             endif
             i += 1
         endwhile
+        PersistPositions()
         return
     endif
 
@@ -3091,6 +3371,8 @@ Function SeedOverlayFromAnimDb()
         if positions[i]
             bool locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
                 && SNSL_JMap.getInt(position_objs[i], "speaking_locked", 0) == 1
+            bool dressed_locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
+                && SNSL_JMap.getInt(position_objs[i], "dressed_locked", 0) == 1
             bool orgasm_locked = position_objs && i < position_objs.length && position_objs[i] > 0 \
                 && SNSL_JMap.getInt(position_objs[i], "orgasm_locked", 0) == 1
             String applied_speaking = speaking
@@ -3105,7 +3387,9 @@ Function SeedOverlayFromAnimDb()
             thread.DisableOrgasm(positions[i], applied_no_org == 1)
             if position_objs && i < position_objs.length && position_objs[i] > 0
                 SNSL_JMap.setInt(position_objs[i], "orgasm_mode", expected)
-                SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+                if !dressed_locked
+                    SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
+                endif
                 if !orgasm_locked
                     SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
                 endif
@@ -3116,6 +3400,7 @@ Function SeedOverlayFromAnimDb()
         endif
         i += 1
     endwhile
+    PersistPositions()
 EndFunction
 
 Function TM_ApplyOrgasmMode(Actor akActor, String mode)
@@ -3194,6 +3479,7 @@ Function TM_ApplyClothed(Actor akActor, Bool clothed)
     while i < n
         if positions[i] == akActor
             SNSL_JMap.setInt(position_objs[i], "dressed", clothed as int)
+            SNSL_JMap.setInt(position_objs[i], "dressed_locked", 1)
             MarkUserDefaultsDirty()
             return
         endif
@@ -3245,9 +3531,11 @@ Function TM_SaveAnimationSettings()
         if position_objs[i] > 0
             SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
             SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 0)
+            SNSL_JMap.setInt(position_objs[i], "dressed_locked", 0)
         endif
         i += 1
     endwhile
+    PersistPositions()
 EndFunction
 
 Function WebUI_ConfigureIfOverlayVisible()

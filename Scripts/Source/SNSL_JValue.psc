@@ -14,8 +14,12 @@
 /;
 ScriptName SNSL_JValue
 
-;/  No-op: this store has no garbage collector, so there is nothing to protect. Kept for call-site
-    parity with JContainers; logs a warning if @object is already dead.
+;/  NOT a no-op. There is no garbage collector, but retain marks @object as independently owned,
+    which changes how attaching it behaves: setObj/addObj of an unowned, retained handle stores a
+    deep COPY (later writes to @object don't reach the container). A retained child that gets
+    detached (clear/removeKey/overwrite) survives, and re-attaching it copies too.
+    Rule: attach first, then retain. Only retain an unattached root that you want the container to
+    snapshot (e.g. Scene_Manager's last_ended_obj). Logs a warning if @object is already dead.
 /;
 Int function retain(Int object, String tag="") global native
 

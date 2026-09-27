@@ -33,6 +33,8 @@
      {% endfor %}
 {% endif %}
 {# ---------------------------------- #}
+{# Missing/null on recreated slots: contains() requires an array #}
+{% if not speaker.speaking_modifiers %}{% set speaker.speaking_modifiers = [] %}{% endif %}
 {% if speaker.active %} 
 Don't describe yourself to yourself.
 **WRONG** I lay down on the grass, it felt wet and cold.

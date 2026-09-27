@@ -1039,6 +1039,19 @@
             color: var(--accent);
         }
 
+        #sc-override-label {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* Override off: dressed / O / modifiers show but cannot be edited (V stays editable). */
+        #sc-positions-table.override-off td.col-dressed,
+        #sc-positions-table.override-off td.col-o,
+        #sc-positions-table.override-off td.col-mods {
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
         #sc-positions-table tr.pos-excluded,
         #tm-positions-table tr.pos-excluded {
             color: var(--text-muted);
@@ -1751,6 +1764,10 @@
         <div class="sc-split-row">
             <div class="sc-col-positions">
                 <div class="section-header">Positions</div>
+                <div class="compact-row" id="sc-override-row">
+                    <span id="sc-override-toggle" class="cell-toggle on" onclick="scToggleOverride()">✓</span>
+                    <span id="sc-override-label" onclick="scToggleOverride()">override animation settings</span>
+                </div>
                 <div class="sc-positions-scroll">
                     <table class="data-table" id="sc-positions-table"><thead><tr>
                         <th class="col-idx">#</th>
@@ -7360,6 +7377,7 @@
                 this.style = 'normally';
                 this.method = '';
                 this.positions = [];
+                this.positionOverride = true;
                 this.tags = [];
                 this.suppress = [];
                 this.inThreadRegistries = [];
@@ -7413,6 +7431,7 @@
                 if (state._style != null) this.style = state._style || 'normally';
                 if (state._method != null) this.method = state._method || '';
                 if (state._positions) this.positions = sceneInfoClone(state._positions);
+                if (state._position_override != null) this.positionOverride = !!Number(state._position_override);
                 if (state._tags != null) {
                     this.tags = typeof state._tags === 'string'
                         ? state._tags.split(',').map(s => s.trim()).filter(Boolean)
@@ -7469,6 +7488,7 @@
                     _style: this.style,
                     _method: this.method,
                     _positions: this.positions,
+                    _position_override: this.positionOverride === false ? 0 : 1,
                     _tags: (this.tags || []).join(','),
                     _tags_suppress: (this.suppress || []).join(','),
                     _in_thread_registries: this.inThreadRegistries,
@@ -7614,6 +7634,7 @@
             SC.style = info.style || 'normally';
             SC.method = info.method;
             SC.positions = sceneInfoClone(info.positions || []);
+            SC.positionOverride = info.positionOverride !== false;
             SC.tags = (info.tags || []).slice();
             SC.suppress = (info.suppress || []).slice();
             SC.inThreadRegistries = (info.inThreadRegistries || []).slice();
@@ -7638,6 +7659,7 @@
             info.style = SC.style || 'normally';
             info.method = SC.method || '';
             info.positions = sceneInfoClone(SC.positions || []);
+            info.positionOverride = SC.positionOverride !== false;
             info.tags = (SC.tags || []).slice();
             info.suppress = (SC.suppress || []).slice();
             info.inThreadRegistries = (SC.inThreadRegistries || []).slice();
@@ -7779,7 +7801,9 @@
             filterChain: [],
             filterAuto: true,
             filterByOnce: '',
-            hasDescription: 'any'
+            hasDescription: 'any',
+            // "override animation settings": off = dressed/O/modifiers come from the animation.
+            positionOverride: true
         };
 
         const SC_NEARBY_RANGES = [100, 200, 400, 800, 1600];
@@ -8273,9 +8297,26 @@
             scSelectNearby(u);
         }
 
+        function scRenderOverrideToggle() {
+            const on = SC.positionOverride !== false;
+            const toggle = document.getElementById('sc-override-toggle');
+            if (toggle) {
+                toggle.classList.toggle('on', on);
+                toggle.textContent = on ? '✓' : '—';
+            }
+            const table = document.getElementById('sc-positions-table');
+            if (table) table.classList.toggle('override-off', !on);
+        }
+
+        function scToggleOverride() {
+            SC.positionOverride = SC.positionOverride === false;
+            scRenderPositions();
+        }
+
         function scRenderPositions() {
             const tbody = document.querySelector('#sc-positions-table tbody');
             if (!tbody) return;
+            scRenderOverrideToggle();
             tbody.innerHTML = '';
             const selectedSet = scSelectedUuidSet();
             const selectedFormIds = scSelectedFormIdSet();
@@ -8408,6 +8449,7 @@
         function scTogglePos(i, key) {
             const p = SC.positions[i];
             if (!p) return;
+            if (SC.positionOverride === false && key !== 'victim') return;
             if (key === 'dressed') p._dressed = p._dressed ? 0 : 1;
             if (key === 'no_orgasm') p._no_orgasm = p._no_orgasm ? 0 : 1;
             if (key === 'victim') p._victim = p._victim ? 0 : 1;
@@ -8417,7 +8459,7 @@
 
         function scRemoveMod(i, token) {
             const p = SC.positions[i];
-            if (!p) return;
+            if (!p || SC.positionOverride === false) return;
             ssPendingSettingData = null;
             scSetMods(p, scParseMods(p).filter(m => m !== token));
             scRenderPositions();
@@ -8425,7 +8467,7 @@
 
         function scAddMod(i, token) {
             const p = SC.positions[i];
-            if (!p || !token) return;
+            if (!p || !token || SC.positionOverride === false) return;
             const mods = scParseMods(p);
             if (mods.includes(token)) return;
             ssPendingSettingData = null;
@@ -9175,16 +9217,21 @@
 
         // Active scene playing `reg`, preferring the picked scene, then one containing the target actor.
         function deActiveSceneForRegistry(reg) {
-            if (!reg) return null;
             if (deIsSceneBound()) {
+                // The user explicitly picked this scene from the pulldown -- that binding is the
+                // live-sync target regardless of reg's casing (AnimDB rows are lowercase; a
+                // scene's own activeRegistry keeps SexLab casing, so a strict `===` against it
+                // silently missed here, which meant DE saves for a scene-bound animation were
+                // never applied live, only ever written to the animation's own DB defaults).
                 const picked = sceneInfoByKey.get(DE.scenePick);
-                return picked && picked.mode === 'active' && picked.activeRegistry === reg ? picked : null;
+                return picked && picked.mode === 'active' ? picked : null;
             }
+            if (!reg) return null;
             const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
             let found = null;
             for (const key of deListActiveSceneKeys()) {
                 const info = sceneInfoByKey.get(key);
-                if (!info || info.activeRegistry !== reg) continue;
+                if (!info || !deRegEq(info.activeRegistry, reg)) continue;
                 if (fid && info.hasActor(fid)) return info;
                 if (!found) found = info;
             }
@@ -9278,13 +9325,13 @@
             const keys = deListActiveSceneKeys();
             if (!keys.length) {
                 const ended = deEndedSceneInfo();
-                if (ended && (!DE.currentAnimation || DE.currentAnimation === ended.activeRegistry)) return 'last';
+                if (ended && (!DE.currentAnimation || deRegEq(DE.currentAnimation, ended.activeRegistry))) return 'last';
                 return DE.currentAnimation ? 'any' : 'none';
             }
             const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
             const infos = keys.map(key => ({ key, info: sceneInfoByKey.get(key) })).filter(e => e.info);
             const playing = DE.currentAnimation
-                ? infos.filter(e => e.info.activeRegistry === DE.currentAnimation) : [];
+                ? infos.filter(e => deRegEq(e.info.activeRegistry, DE.currentAnimation)) : [];
             const withTarget = list => fid ? list.find(e => e.info.hasActor(fid)) : null;
             const hit = withTarget(playing) || playing[0];
             if (hit) return hit.key;
@@ -9460,10 +9507,15 @@
             }
             const regs = sorted.map(a => a._registry).filter(Boolean);
             const active = isSceneConnectionActive() || SC.mode === 'active';
-            if (DE.currentAnimation && regs.includes(DE.currentAnimation)) {
-                DE.focusRegistry = DE.currentAnimation;
-            } else if (active && SC.activeRegistry && regs.includes(SC.activeRegistry)) {
-                DE.focusRegistry = SC.activeRegistry;
+            // Case-insensitive: regs come from AnimationDB (lowercase), currentAnimation/activeRegistry may
+            // carry SexLab casing. Store the list's spelling so deFindAnim matches.
+            const findReg = r => (r ? regs.find(x => deRegEq(x, r)) : undefined);
+            const curReg = findReg(DE.currentAnimation);
+            const actReg = active ? findReg(SC.activeRegistry) : undefined;
+            if (curReg) {
+                DE.focusRegistry = curReg;
+            } else if (actReg) {
+                DE.focusRegistry = actReg;
             } else if (DE.focusRegistry && regs.includes(DE.focusRegistry)) {
                 // keep current selection
             } else {

@@ -13,7 +13,9 @@
 // See JsonStore.h for the "why" (JContainers GC destroying in-flight payloads mid-walk).
 //
 // Handle layout (int32, never 0 for a real allocation -- slot 0 is a permanently reserved dummy):
-//   bits 31..26  session (6 bits) -- bumped on kPostLoadGame/kNewGame; invalidates every handle
+//   bit  31      always 0 -- handles must be positive int32; Papyrus treats <= 0 as None.
+//   bits 31..26  session (6 bits, values 16..31 only) -- new on kPostLoadGame/kNewGame (store is emptied, and the new
+//                                    session never equals the loaded save's, recorded in the co-save); invalidates every handle
 //                                    that was serialized into a save (Papyrus member variables).
 //   bits 25..18  generation (8 bits) -- bumped whenever a slot is freed and reused.
 //   bits 17..0   slot index (18 bits, up to 262143 concurrent live nodes).
@@ -76,7 +78,19 @@ namespace SexLabNet::Json
         std::recursive_mutex g_mutex;
         std::vector<Node> g_slots;
         std::vector<std::int32_t> g_freeSlots;
-        std::uint32_t g_session = 1;
+        // Sessions live in [kFirstSession, kLastSession]. Builds before 2026-09-26 numbered sessions
+        // 1, 2, 3... per game run, so starting at 16 keeps old saves from colliding with new sessions.
+        // kLastSession is 31, not kSessionMask: session 32+ sets bit 31 and makes every handle a
+        // negative int32, which Papyrus's `> 0` / `< 1` handle guards treat as None.
+        constexpr std::uint32_t kFirstSession = 16;
+        constexpr std::uint32_t kLastSession = kSessionMask >> 1;
+        static_assert((static_cast<std::uint64_t>(kLastSession) << (kGenBits + kSlotBits) |
+                          (static_cast<std::uint64_t>(kGenMask) << kSlotBits) | kSlotMask) <= 0x7FFFFFFFull,
+            "JsonStore handles must stay positive int32 (Papyrus guards handles with > 0)");
+        std::uint32_t g_session = kFirstSession;
+        // Session recorded in the co-save of the save being loaded (0 = none: new game, or a save
+        // made by an older build). OnNewSession never reuses it.
+        std::uint32_t g_loadedSaveSession = 0;
         std::uint64_t g_reparentCopies = 0;
 
         void EnsureDummySlot()
@@ -1045,8 +1059,29 @@ namespace SexLabNet::Json
     void OnNewSession()
     {
         std::lock_guard lock(g_mutex);
-        g_session = (g_session + 1) & kSessionMask;
-        if (g_session == 0) g_session = 1;  // keep 0 reserved / avoid an all-zero handle
+        // Free everything: only Papyrus holds handles, and it re-validates (isExists) and recreates
+        // every held handle after a load, so nothing from before the load is reachable any more.
+        const std::size_t freed = g_slots.empty() ? 0 : g_slots.size() - 1 - g_freeSlots.size();
+        g_slots.clear();
+        g_freeSlots.clear();
+        // With the store empty, the only handles that could alias a new node are the ones in the
+        // loaded save, all tagged with the session it was made in. Never reuse that session.
+        do {
+            g_session = (g_session >= kLastSession || g_session < kFirstSession) ? kFirstSession : g_session + 1;
+        } while (g_session == g_loadedSaveSession);
+        webui_log::info("JsonStore: new session {} (loaded save session {}), freed {} nodes", g_session, g_loadedSaveSession, freed);
+    }
+
+    std::uint32_t CurrentSession()
+    {
+        std::lock_guard lock(g_mutex);
+        return g_session;
+    }
+
+    void SetLoadedSaveSession(std::uint32_t session)
+    {
+        std::lock_guard lock(g_mutex);
+        g_loadedSaveSession = session;
     }
 
     std::string Stats()

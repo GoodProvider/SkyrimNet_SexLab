@@ -1,5 +1,100 @@
 # Knowledgebase
 
+## Description Editor actor-table edits never reach a live scene (2026-09-26)
+
+**Symptom:** Start a scene, open the Description Editor, toggle a live actor's `O` (orgasm) or
+`dressed` cell in the actor table, Save. The animation's `_local_/<registry>.json` file is written
+correctly, but the running scene's own state does not change, and closing/reopening WebUI shows the
+toggle reverted. No speaking-modifier chip added the same way survives either. `SkyrimNet_SexLab.log`
+shows `onAnimRegistrySave` → `AnimationDB::SaveAnimLocal` on every save, but no
+`skyrimnet_sexlab_scene.SetPosition` trace, which only fires from `WebUI_ApplyLivePositions`.
+
+**Cause:** `deSaveToDisk()` only attaches `_scene_sid` to the save payload (so Papyrus's
+`WebUI_OnAnimRegistrySave` will call `sl_scene.WebUI_ApplyLivePositions`) when
+`deActiveSceneForRegistry(DE.focusRegistry)` finds a match. Its scene-bound branch required
+`picked.activeRegistry === reg`, a strict string compare — `reg` (`DE.focusRegistry`) can carry
+AnimDB casing (lowercase, e.g. `ace_headpat`) while a live scene's `activeRegistry` keeps SexLab's
+own casing (e.g. `Ace_Headpat`), so the match silently failed and `_scene_sid` was never sent. Every
+DE actor-table edit then only ever reached the animation's own DB defaults, never the running scene
+— exactly the documented "unbound" behavior, but happening even when the editor was scene-bound.
+
+**Fix:** when `deIsSceneBound()` is true, `deActiveSceneForRegistry` now trusts the explicit pulldown
+pick directly and drops the registry-casing check entirely (the user's binding IS the sync target).
+Its unbound fallback (browsing the Animations list, no scene pulldown pick) still matches by
+registry, now via `deRegEq` instead of `!==`, matching the case-insensitive convention used
+everywhere else in this file (`deFindAnim`/`deEnsureFocus` already special-case this).
+
+**Rule:** any DE/Scene Menu code that matches a scene by registry string must go through `deRegEq`
+(SexLab casing vs AnimDB's lowercase), never `===`/`!==` directly — and when the user has explicitly
+bound to a specific scene via a pulldown, prefer that explicit binding over any registry re-match.
+
+## SkyrimNet "First argument to contains must be an array" (2026-09-26)
+
+**Symptom:** SkyrimNet logs `First argument to contains must be an array` while a scene is running.
+`threads.json` shows one actor (a DOM slave, after a load) with no `speaking_modifiers` key at all,
+and no `no_orgasm`/`dressed` either; the other actor has `"speaking_modifiers":[]`.
+
+**Cause:** `EnsureActorArraysLargeEnough()` recreates dead `position_objs[i]` as empty maps and relies
+on `RestorePosition()` to refill them, but `RestorePosition()` returns early when the actor has no
+persisted `tid`. The empty slot is then snapshotted into `thread_obj.actors`, and the prompts'
+`set speaker = actor_record` followed by `contains(speaker.speaking_modifiers, ...)` fails.
+
+**Fix:** a recreated slot gets `SetSpeakingObj(i, "")` before `RestorePosition()`. The activity and
+narration prompts also set `speaker.speaking_modifiers = []` when it is missing or null.
+
+**Rule:** any prompt field passed to `contains()` must always be an array. Seed it where the object
+is created, and guard it in the prompt.
+
+## JSON store handles from a save can alias new objects after a game restart (2026-09-26)
+
+**Symptom:** right after loading a save, the LLM thread JSON is `"Threads":[NULL]`
+(`JsonLowerCaseKeys failed, raw={"Counter":..,"Threads":[NULL]}`), and `SkyrimNet_SexLab.log` shows
+`dead handle 0x.. (slot=N alive=true gen=1/0 session=2/2)`: the handle's session equals the slot's
+but the generation doesn't. Per-position settings behave randomly for the rest of the scene.
+
+**Cause:** the session tag in each handle was meant to make every handle saved into a Papyrus
+member fail after a load. But `g_session` started at 1 in every game process and only counted
+loads, so the first load of every run was session 2. A save made during session 2 of one run and
+loaded as session 2 of the next run carries handles that pass `isExists` as soon as the same
+slot/generation is reused. `thread_obj`/`position_objs[i]` then silently pointed at some other
+object, which got freed or overwritten. `OnNewSession` also never freed anything, so every load
+leaked the previous session's nodes.
+
+**Fix:** `OnNewSession` now empties the store, and picks a session that is never the loaded save's.
+The save's session is recorded in the SKSE co-save (`plugin.cpp`, unique ID `SNSX`, record `JSES`).
+Sessions start at 32, so saves from older builds (sessions 1, 2, 3...) can't collide either.
+
+**Rule:** a handle-validity scheme for anything persisted in a save must be unique across game
+restarts, not just across loads within one run.
+
+## JSON store: a retained handle is copied, not linked, when attached (2026-09-26)
+
+**Symptom:** writes to a Papyrus-held handle never show up in the container it was attached to,
+or show up one refresh late. No log line. Seen as `thread_obj.actors` in the LLM thread JSON lagging
+one update behind `position_objs`, `orgasm_narrated` silently resetting on the Dom Combined
+fallback (possible double narration), and earlier as Scene Creator speaking modifiers never reaching
+the Description Editor (`SetSpeakingObj`).
+
+**Cause:** `SNSL_JValue.retain` is not a no-op (its doc comment used to claim it was). In
+`AttachChild` (`JsonStore.cpp`), an unowned handle with `retainCount > 0` is **deep-copied** into the
+container, not reparented; this is intended for snapshot roots like `last_ended_obj`. Freeing or
+clearing a container only *detaches* its retained children, so re-attaching one later copies again.
+`position_objs[i]` was retained at creation and then `setObj`'d into `actors_objs`, so `actors_objs`
+only ever held copies, and anything that read or wrote through `actors_objs` worked on a copy.
+`Release`'s `clear(thread_obj)` + re-`setObj(actors_objs)` and `Initialize`'s legacy
+`removeKey(thread_obj, "actors")` scrub did the same to `actors_objs` itself.
+
+**Fix:** `position_objs[i]` is now the only live copy of each slot. `actors_objs` is a snapshot array
+refreshed by `RelinkActorsObjs` (end of `AlignActors`, and in `GetThreadObj` after its
+`updateactor` loop), and nothing reads or writes through it. `ResetActorsObjs` recreates `actors_objs`
+(attach then retain) instead of re-attaching it.
+
+**Rule:** attach first, then retain. Never `setObj`/`addObj` a retained handle and then expect later
+writes to it to be visible in the container. If a retained root must appear inside another tree,
+treat the embedded value as a snapshot and re-attach it after the last write. Also true for
+`StorageUtil`-cached handles: `StorageUtil` survives a save load, so check them with `isExists`
+(see `GetObjFromActor`).
+
 ## JSON store handles die on every save load (2026-09-25)
 
 **Symptom:** Scene Creator sets an explicit speaking modifier / orgasm choice (visible correct in the
@@ -705,3 +800,11 @@ Scene-pick anim rows are stubs: `_in_thread_anims` (`Scene.psc`) carries only `_
 A diagnostic `Trace` added to `ObjectToLowerCaseKeyJson` (dumping the raw pre-lowercase JSON on failure instead of swallowing it) captured an exact repro: the `_in_thread_anims` array (built in `BuildWebUISceneMenuObject`, `Scene.psc:2477-2504`, from `thread.Animations`) has a well-formed run of anim entries, then one entry missing its `_registry`/`_tags` fields (only `_name` present), then ~48 literal unquoted **uppercase** `NULL` tokens as raw array elements — not valid JSON, and not a string this codebase's own manual JSON walker (`Utilities.psc:635-694`) ever writes (audited: every path there returns valid JSON or lowercase `"null"`; grepping `Scripts/Source` for `"NULL"` finds nothing). Root mechanism not yet confirmed — leading theory is `thread.Animations` (SexLab's own array) containing trailing invalid/`None` entries past a real count, with some property getter on them (`.Registry`, `GetTagsString`) failing in a way that isn't going through this codebase's `JsonQuote`/`JsonForm`. See `checkpoints/skse-scene/v3-checkpoint.md` §0 for the full capture and suggested next instrumentation step.
 
 **Fix**: not yet fixed — diagnostic only, landed to unblock the next debugging session with a precise repro instead of a guess.
+
+## JsonStore handles went negative: session >= 32 (2026-09-26)
+
+**Symptom**: Description Editor showed clothed `0,0` / orgasm `1,1` for an animation whose `_local_` file says `clothed [1,1]`, `orgasm_expected [0,0]`; actors stripped at scene start; DE Save wrote the file correctly but never re-dressed actors, and reopening the DE showed `0,0 / 1,1` again. Log: one actor's `RestorePosition` repeated many times in a single scene.
+
+**Cause**: `JsonStore.cpp` started sessions at 32. The session sits in handle bits 31..26, so session >= 32 sets bit 31 and every handle is a negative int32. Papyrus guards handles with `> 0` / `< 1` (~40 sites): `EnsureActorArraysLargeEnough` recreated `position_objs[i]` on every call (losing state, re-running `RestorePosition`), and `SeedOverlayFromAnimDb` / `WebUI_ApplyLivePositions` skipped every `position_objs[i] > 0` write.
+
+**Fix / rule**: sessions are restricted to 16..31 (`kLastSession = kSessionMask >> 1`) with a `static_assert` that the largest handle fits in a positive int32. Handles must always be in `(0, INT32_MAX]`; never widen the session/gen/slot layout into bit 31.

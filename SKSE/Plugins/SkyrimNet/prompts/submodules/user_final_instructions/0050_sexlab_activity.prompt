@@ -66,6 +66,8 @@
           {% endif %}
      {%- endfor -%}
 {% endif %} 
+{# Missing/null on recreated slots: contains() requires an array #}
+{% if not speaker.speaking_modifiers %}{% set speaker.speaking_modifiers = [] %}{% endif %}
 {% if speaker.notice_level > 1 %} 
 **Reaction must evolve—don't loop on the same observation.**
      {% if speaker.active %}

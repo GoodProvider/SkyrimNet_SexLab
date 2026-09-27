@@ -135,9 +135,16 @@ namespace SexLabNet::Json
     void WriteToFile(Handle h, const std::string& path);
 
     // --- Lifecycle ---------------------------------------------------------------------------
-    /// Bumps the session tag so every handle held across a save/load (in a Papyrus member
-    /// variable serialized into the save) fails IsValid() deterministically instead of aliasing
-    /// whatever now occupies that slot. Call from kPostLoadGame / kNewGame.
+    /// Empties the store and starts a new session tag, so every handle held across a save/load
+    /// (in a Papyrus member variable serialized into the save) fails IsValid() deterministically
+    /// instead of aliasing whatever now occupies that slot. The new session never equals the
+    /// loaded save's (SetLoadedSaveSession), which matters across game restarts, where the
+    /// counter would otherwise repeat. Sessions stay in 16..31 so handles are always positive
+    /// (Papyrus guards handles with > 0). Call from kPostLoadGame / kNewGame.
     void OnNewSession();
+    /// Session to record in the co-save (serialization save callback).
+    std::uint32_t CurrentSession();
+    /// Session read from the co-save of the save being loaded; 0 = none (revert / old save).
+    void SetLoadedSaveSession(std::uint32_t session);
     std::string Stats();
 }
