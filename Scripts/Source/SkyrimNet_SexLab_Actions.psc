@@ -172,6 +172,18 @@ Function SceneStop_Target(Actor speaker, Actor target, String style)
     SceneStop_Event(speaker, target, style) 
 EndFunction
 
+;-------------------------------------------
+; Scene Change Style (speed follows style)
+;-------------------------------------------
+
+Function SceneChangeStyle(Actor speaker, String style)
+    Trace("SceneChangeStyle",GetDisplayName(speaker)+" style: "+style)
+    int handle = ModEvent.Create("SkyrimNet_SexLab_Action_Style")
+    ModEvent.PushForm(handle, speaker)
+    ModEvent.PushString(handle, style)
+    ModEvent.Send(handle)
+EndFunction
+
 ;------------------------------------------------------------------------------
 ; Refused
 ;------------------------------------------------------------------------------

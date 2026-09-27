@@ -537,6 +537,8 @@ namespace PapyrusBindings_WebUI
     {
         webui_log::info("WebUI_SetHotkey dx={:#x} enabled={}", static_cast<uint32_t>(dxScanCode), enabled);
         WebUI_SetMenuHotkey(static_cast<uint32_t>(dxScanCode), enabled);
+        // Dashboard save lands here (MCM.ApplyHotkey); rebind the style hotkey after the menu key.
+        SexLabNet::Config::GetSingleton().ApplyStyleHotkey();
     }
 
     void WebUI_SetLastRebuildTimestamp(RE::StaticFunctionTag*, RE::BSFixedString timestamp)
@@ -1510,6 +1512,37 @@ namespace PapyrusBindings_WebUI
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             vm->DispatchMethodCall(scriptObject, RE::BSFixedString("ProcessHotkey"), args, callback);
             webui_log::info("Call_ProcessHotkey: dispatched key={}", keyCode);
+        });
+    }
+
+    void Call_CycleStyleHotkey()
+    {
+        SKSE::GetTaskInterface()->AddTask([]() {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm) {
+                webui_log::error("Call_CycleStyleHotkey: no VM");
+                return;
+            }
+
+            RE::TESQuest* quest = FindMainQuest();
+            if (!quest) {
+                webui_log::error("Call_CycleStyleHotkey: quest not found");
+                return;
+            }
+
+            auto handle = vm->GetObjectHandlePolicy()->GetHandleForObject(
+                static_cast<RE::VMTypeID>(quest->GetFormType()), quest);
+            RE::BSTSmartPointer<RE::BSScript::Object> scriptObject;
+            vm->FindBoundObject(handle, "SkyrimNet_SexLab_Menu", scriptObject);
+            if (!scriptObject) {
+                webui_log::error("Call_CycleStyleHotkey: Menu script not bound");
+                return;
+            }
+
+            auto* args = RE::MakeFunctionArguments();
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+            vm->DispatchMethodCall(scriptObject, RE::BSFixedString("CycleStyleHotkey"), args, callback);
+            webui_log::info("Call_CycleStyleHotkey: dispatched");
         });
     }
 

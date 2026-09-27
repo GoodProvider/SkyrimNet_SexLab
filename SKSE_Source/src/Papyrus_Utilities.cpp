@@ -1,4 +1,6 @@
 #include "Papyrus_Utilities.h"
+#include "AnimSpeed.h"
+#include "NarrationQueue.h"
 #include "WebUI_Log.h"
 
 #include <Windows.h>
@@ -150,6 +152,27 @@ namespace PapyrusBindings_Utilities
         return dx != 0 ? static_cast<std::int32_t>(dx) : 0x2B;
     }
 
+    void SetAnimSpeed(RE::StaticFunctionTag*, RE::Actor* akActor, float speed)
+    {
+        AnimSpeed::Set(akActor, speed);
+    }
+
+    void ClearAnimSpeed(RE::StaticFunctionTag*, RE::Actor* akActor)
+    {
+        AnimSpeed::Clear(akActor);
+    }
+
+    float GetAnimSpeed(RE::StaticFunctionTag*, RE::Actor* akActor)
+    {
+        return AnimSpeed::Get(akActor);
+    }
+
+    bool QueueDirectNarration(RE::StaticFunctionTag*, RE::BSFixedString msg, RE::Actor* source,
+        RE::Actor* target, bool purgeDialogue)
+    {
+        return NarrationQueue::Enqueue(msg.c_str() ? msg.c_str() : "", source, target, purgeDialogue);
+    }
+
     /// Binds JsonLowerCaseKeys on SkyrimNet_SexLab_Utilities.
     bool Register_Utilities_Functions(RE::BSScript::IVirtualMachine* a_vm)
     {
@@ -164,6 +187,10 @@ namespace PapyrusBindings_Utilities
         a_vm->RegisterFunction("VkToDxScanCode", scriptName, VkToDxScanCode);
         a_vm->RegisterFunction("JsonQuote", scriptName, JsonQuote);
         a_vm->RegisterFunction("UuidToDecimalString", scriptName, UuidToDecimalString);
+        a_vm->RegisterFunction("SetAnimSpeed", scriptName, SetAnimSpeed);
+        a_vm->RegisterFunction("ClearAnimSpeed", scriptName, ClearAnimSpeed);
+        a_vm->RegisterFunction("GetAnimSpeed", scriptName, GetAnimSpeed);
+        a_vm->RegisterFunction("QueueDirectNarration", scriptName, QueueDirectNarration);
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;
     }

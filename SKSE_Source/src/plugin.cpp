@@ -14,6 +14,8 @@
 #include "TargetMenuRegistry.h"
 #include "WebUI_Log.h"
 #include "Config.h"
+#include "AnimSpeed.h"
+#include "NarrationQueue.h"
 
 using namespace SKSE;
 
@@ -83,6 +85,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
     }
 
     SexLabNet::InitSkyrimNetAPI();
+    AnimSpeed::Install();
 
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message *message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
@@ -94,6 +97,8 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
             TargetMenuRegistry::Clear();
+            AnimSpeed::ClearAll();
+            NarrationQueue::Clear();
             WebUI_SetGameReady();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
             SexLabNet::Json::OnNewSession();

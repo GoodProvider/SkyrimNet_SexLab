@@ -73,6 +73,27 @@
       "file": "outfit_undress.yaml"
     },
     {
+      "name": "SexLab_Change_Style",
+      "label": "Change Style",
+      "customCategory": "",
+      "questEditorId": "SkyrimNet_SexLab",
+      "scriptName": "SkyrimNet_SexLab_Actions",
+      "executionFunctionName": "SceneChangeStyle",
+      "parameterMapping": [
+        {
+          "type": "speaker",
+          "name": "speaker",
+          "description": "Speaker Actor parameter (triggering entity)"
+        },
+        {
+          "type": "dynamic",
+          "name": "style",
+          "description": "forcefully|normally|gently"
+        }
+      ],
+      "file": "SexLab_Change_Style.yaml"
+    },
+    {
       "name": "SexLab_Masturbation_Forced",
       "label": "Forced masturbation",
       "customCategory": "sexlab_sex1",

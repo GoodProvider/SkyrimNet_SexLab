@@ -464,6 +464,7 @@ EndFunction
 Function Release()
     DbgEnter("Release")
     UnregisterForUpdate()
+    ClearStyleSpeed()
     seeded_registry = ""
     position_override = true
     seed_first_animation = false
@@ -1365,8 +1366,9 @@ Function AnimationStart()
         DbgReturn("AnimationStart", "void")
         return
     endif
-    AlignActors() 
-    manager.SaveThreadsJson() 
+    AlignActors()
+    ApplyStyleSpeed()
+    manager.SaveThreadsJson()
     String msg = GetIntentMessage(INTENT_STAGE_START) + GetDescription()
     RegisterEvent("sexlab update", msg, sender, receiver) 
     WebUI_ConfigureIfOverlayVisible()
@@ -1551,6 +1553,7 @@ Function AnimationEnd(Actor speaker=None, String style="silently")
         UnregisterForUpdate()
         orgasm_window_open = false
         orgasm_window_started_at = 0.0
+        ClearStyleSpeed()
 
         ; Leftover Combined orgasm stash folded into the end DN so 0550 still gates
         ; (RegisterEvent-only leftover is invisible to contains(_direct_narration, ...)).
@@ -2401,10 +2404,77 @@ String Function GetDescriptionFromTags()
     return buffer
 endFunction
 
+; ------------------------------------------------------
+; Style -> animation speed. Playback rate only: SexLab stage timers,
+; orgasm window and voices keep real-time timing.
+; ------------------------------------------------------
+Function SetStyle(String _style)
+    parent.SetStyle(_style)
+    ApplyStyleSpeed()
+EndFunction
+
+float Function GetStyleSpeed()
+    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.speed.enabled", true)
+        return 1.0
+    endif
+    if style == STYLE_GENTLY
+        return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.gently", 0.75)
+    elseif style == STYLE_FORCEFULLY
+        return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.forcefully", 1.4)
+    endif
+    return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.normally", 1.0)
+EndFunction
+
+; Same multiplier for every position keeps paired animations in sync.
+Function ApplyStyleSpeed()
+    if thread == None
+        return
+    endif
+    float speed = GetStyleSpeed()
+    Actor[] positions = thread.positions
+    int i = 0
+    while i < positions.length
+        if positions[i] != None
+            SkyrimNet_SexLab_Utilities.SetAnimSpeed(positions[i], speed)
+        endif
+        i += 1
+    endwhile
+    Trace("ApplyStyleSpeed", "style:"+style+" speed:"+speed+" actors:"+positions.length)
+EndFunction
+
+Function ClearStyleSpeed()
+    if thread == None
+        return
+    endif
+    Actor[] positions = thread.positions
+    int i = 0
+    while i < positions.length
+        if positions[i] != None
+            SkyrimNet_SexLab_Utilities.ClearAnimSpeed(positions[i])
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+; LLM action / style hotkey: change style mid-scene with one DirectNarration.
+Function ChangeStyle(Actor who, String _style)
+    String style_old = style
+    SetStyle(_style)
+    if style_old == style
+        return
+    endif
+    if orgasm_messages_set
+        Trace("ChangeStyle", "--- skipping style DN, orgasm window open")
+        return
+    endif
+    DirectNarration(GetDisplayName(who)+" changes from '"+style_old+"' to '"+style+"'", sender, receiver)
+EndFunction
+
 Function SetStyleDialog()
     DbgEnter("SetStyleDialog")
     String style_old = style
     parent.SetStyleDialog()
+    ApplyStyleSpeed()
 
     if style_old != style
         if orgasm_messages_set
@@ -2934,7 +3004,17 @@ Function WebUI_OnNarrate(String json)
         return
     endif
     String text = JMap.getStr(obj, "_text", "")
+    ; Description Editor style pulldown: style + speed + one style-change DirectNarration.
+    String new_style = JMap.getStr(obj, "_style", "")
     JValue.release(obj)
+    if new_style != ""
+        Actor who = sender
+        if has_player
+            who = Game.GetPlayer()
+        endif
+        ChangeStyle(who, new_style)
+        return
+    endif
     if text == ""
         return
     endif

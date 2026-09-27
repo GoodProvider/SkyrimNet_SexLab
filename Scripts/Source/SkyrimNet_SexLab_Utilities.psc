@@ -478,9 +478,9 @@ bool Function DirectNarration_Optional(String event_type, String msg, Actor sour
         return false
     endif
 
-    String type = "" 
+    String type = ""
     if NarrationCoolOffAllows(source, target)
-        SkyrimNetApi.DirectNarration(msg, source, target)
+        SendDirectNarration(msg, source, target)
         main.direct_narration_last_time = Utility.GetCurrentRealTime() 
         type = "direct"
     else 
@@ -502,6 +502,36 @@ bool Function DirectNarration_Optional(String event_type, String msg, Actor sour
     return type != "dropped"
 EndFunction
 
+; While the game is paused (WebUI overlay or a pausing menu) SkyrimNet blocks every Papyrus
+; decorator and NPC responses fail. The DLL queues paused narrations and, once unpaused, sends
+; them joined as one DirectNarration via DirectNarration_Flush. All mod narrations go through here.
+Function SendDirectNarration(String msg, Actor source=None, Actor target=None, bool purge_dialogue=False) global
+    if QueueDirectNarration(msg, source, target, purge_dialogue)
+        Trace("SendDirectNarration", "queued (game paused): "+msg)
+        return
+    endif
+    if purge_dialogue
+        SkyrimNetApi.PurgeDialogue(True)
+    endif
+    SkyrimNetApi.DirectNarration(msg, source, target)
+EndFunction
+
+; DLL callback after unpause: the queued narrations joined into one.
+Function DirectNarration_Flush(String msg, Actor source, Actor target, bool purge_dialogue) global
+    Trace("DirectNarration_Flush", msg)
+    if purge_dialogue
+        SkyrimNetApi.PurgeDialogue(True)
+    endif
+    SkyrimNetApi.DirectNarration(msg, source, target)
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    if main != None
+        main.direct_narration_last_time = Utility.GetCurrentRealTime()
+    endif
+EndFunction
+
+; SKSE native: queue msg when the game is paused; False = not paused, send now.
+bool Function QueueDirectNarration(String msg, Actor source, Actor target, bool purge_dialogue) global native
+
 Function DirectNarration(String msg, Actor source=None, Actor target=None, bool purge_dialogue=False) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     if main == None
@@ -513,11 +543,8 @@ Function DirectNarration(String msg, Actor source=None, Actor target=None, bool 
         return 
     endif 
 
-    if purge_dialogue
-          SkyrimNetApi.PurgeDialogue(True)
-    endif 
-    SkyrimNetApi.DirectNarration(msg, source, target)
-    main.direct_narration_last_time = Utility.GetCurrentRealTime() 
+    SendDirectNarration(msg, source, target, purge_dialogue)
+    main.direct_narration_last_time = Utility.GetCurrentRealTime()
     if source != None 
         msg += " source:"+source.GetDisplayName()
     endif 
@@ -603,6 +630,12 @@ String Function JsonLowerCaseKeys(String json) global native
 ; SkyrimNet dashboard hotkey fields store VK; Papyrus RegisterForKey wants DX.
 ; Invalid/unmapped VK -> DX backslash (0x2B).
 int Function VkToDxScanCode(int vk) global native
+
+; Animation playback multiplier (SKSE native, UpdateAnimation hook). 0.1..3.0; 1.0 clears.
+; Speed only: Papyrus/SexLab timers keep real-time timing. Cleared on load / new game.
+Function SetAnimSpeed(Actor akActor, float speed) global native
+Function ClearAnimSpeed(Actor akActor) global native
+float Function GetAnimSpeed(Actor akActor) global native
 
 ; JSON string literal (SKSE native): quoted and escaped; control bytes become unicode escapes.
 String Function JsonQuote(String s) global native

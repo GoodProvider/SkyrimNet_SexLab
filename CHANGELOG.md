@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Animation speed
+- Scene style now sets animation playback speed: gently 0.75×, normally 1.0×, forcefully 1.4× (dashboard **Animation speed**: `sexlab.speed.enabled`, `sexlab.speed.gently|normally|forcefully`). Speed only: stage length, orgasm timing and voices are unchanged. Native `UpdateAnimation` hook in `SkyrimNet_SexLab.dll` (`AnimSpeed.cpp`); Papyrus `SkyrimNet_SexLab_Utilities.SetAnimSpeed` / `ClearAnimSpeed` / `GetAnimSpeed`
+- New LLM action `SexLab_Change_Style` (speaker + `forcefully|normally|gently`) changes the style of the speaker's live scene, with one DirectNarration
+- New **Style hotkey** (`sexlab.style.hotkey_enabled`, `sexlab.style.hotkey`, default `]`) cycles gently → normally → forcefully on the player's scene (else the crosshair actor's). The WebUI style control also changes speed live
+
+### Narration
+- DirectNarrations made while the game is paused (WebUI overlay or a pausing menu) are queued in the DLL and sent as one joined DirectNarration once the game unpauses. Fixes NPC responses failing ("failed to generate a response") after WebUI actions such as the Description Editor style pulldown, because SkyrimNet cannot run Papyrus decorators while paused
+
 ### Voice
 - SexLab moans now follow speaking modifiers: an actor moans only while its modifiers include `_pleasure_` or `_pain_`; no modifiers, `_gagged_`, or `_kissing_` force the actor silent (`thread.SetVoice(..., ForceSilent)`). Re-applied at scene setup, every `StageStart`, live speaking edits, and after a load. Dashboard toggle **SexLab moans follow speaking modifiers** (`sexlab.voice.follow_speaking`, default on). See [docs/reference/protocol-tokens.md](docs/reference/protocol-tokens.md#sexlab-voice)
 
@@ -11,6 +19,9 @@
 - Stop auto-rebuilding AnimDB on load. If counts differ from SexLab after SexLab is ready, notify `SkyrimNet SexLab # animations doesn't match` and show a SkyMessage (empty → Build/Close; mismatch → Rebuild/Close)
 
 ### SKSE / WebUI
+- TargetMenu scene-start panel: every field is now a **pulldown_cascade** — shows the current value and opens cascade columns (hover drill, like the TargetMenu) to change it. The **method** row is a direction → method tree that reads `random`: picking a method starts the scene and closes the WebUI; `random` (or Start) has AnimDB pick 3 related animations (one random plus the two sharing the most tags) for the cast and scene setting
+- SKSE build: SkyrimNet `PublicAPI.h` include path is now `mods/SkyrimNet devkit/CppAPI`
+- Description Editor: new **style** pulldown left of Save (live scenes only). Changing it sets the scene's style (and animation speed) and sends one "changes from 'x' to 'y'" DirectNarration
 - Scene Creator layout: title is now "Scene Creator" with the style pulldown beside Start / Cancel; the range pulldown moved under the actor table; the activity field and the scene-setting preset pulldown / Save dialogs are removed. New **Save** next to "override animation settings" writes the actor table's dressed / O / modifiers to the selected animation (`onAnimRegistrySave`, stage descriptions untouched); disabled unless override is on and exactly one animation with a matching position count is selected
 - Scene Creator: the animation list starts with one animation selected; click selects just that row (click again to deselect), Ctrl+click adds rows. Each added animation reorders actors to match its position genders when possible and sets the dressed / O / modifiers columns from its defaults
 - Description Editor lists the scene that just ended (`… (ended)`) in the scene pulldown and selects it by default when no scene is active, so its animation is the current animation and editable after the scene stops

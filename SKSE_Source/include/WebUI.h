@@ -44,6 +44,8 @@ void WebUI_Visibility_HideWithoutCommit();
 void WebUI_Visibility_Toggle();
 /// True when PrismaUI is missing, the view is invalid, or the overlay is hidden.
 bool WebUI_IsHidden();
+/// Overlay visible and pausing the game (Focus pauseGame; DE play/pause can release it).
+bool WebUI_IsGamePaused();
 /// True when the PrismaUI view exists and DomReady has fired (safe to Show/Focus).
 bool WebUI_IsReady();
 void WebUI_Invoke(const std::string& script);
@@ -58,3 +60,5 @@ void WebUI_Reset();
 void Reset_To_Default();
 /// MCM-driven menu hotkey: register dxScanCode when enabled, else unregister.
 void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled);
+/// Bind dxScanCode to Menu.CycleStyleHotkey, or clear when disabled. Never shares the menu hotkey.
+void WebUI_SetStyleHotkey(uint32_t dxScanCode, bool enabled);

@@ -80,7 +80,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/PrismaUI
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../SkyrimNet/CppAPI
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../SkyrimNet devkit/CppAPI"
 )
 
 # Silence Microsoft STL deprecation warnings

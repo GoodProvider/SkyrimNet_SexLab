@@ -814,3 +814,21 @@ A diagnostic `Trace` added to `ObjectToLowerCaseKeyJson` (dumping the raw pre-lo
 **Cause**: `JsonStore.cpp` started sessions at 32. The session sits in handle bits 31..26, so session >= 32 sets bit 31 and every handle is a negative int32. Papyrus guards handles with `> 0` / `< 1` (~40 sites): `EnsureActorArraysLargeEnough` recreated `position_objs[i]` on every call (losing state, re-running `RestorePosition`), and `SeedOverlayFromAnimDb` / `WebUI_ApplyLivePositions` skipped every `position_objs[i] > 0` write.
 
 **Fix / rule**: sessions are restricted to 16..31 (`kLastSession = kSessionMask >> 1`) with a `static_assert` that the largest handle fits in a positive int32. Handles must always be in `(0, INT32_MAX]`; never widen the session/gen/slot layout into bit 31.
+
+## Style-driven animation speed (2026-09-27)
+
+SexLab 1.6x has no playback-speed API. `AnimSpeed.cpp` hooks `UpdateAnimation` (vfunc `0x7D`) on the `Character` and `PlayerCharacter` vtables and scales `a_delta` for actors in a FormID map (empty map → no lock, pass-through). **Rule**: this changes speed only. SexLab stage timers, the orgasm window and voices run on Papyrus real time and must stay untouched — never pair a style change with `UpdateTimer` / `AdvanceStage`. Every position in a thread gets the same multiplier (`Scene.ApplyStyleSpeed`), or paired animations drift apart. Speeds are set at `AnimationStart` and on `Scene.SetStyle` / `SetStyleDialog` / `ChangeStyle`, cleared at `AnimationEnd` / `Release`, and the whole map is cleared on load / new game. The style hotkey refuses the menu hotkey's scancode (`KeyHandler` keeps one callback per key). VR: vfunc index not verified (SE ≠ VR).
+
+## SkyrimNet CppAPI include path (2026-09-27)
+
+SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppAPI`. `SKSE_Source/CMakeLists.txt` includes `"../../SkyrimNet devkit/CppAPI"` (quoted — the folder name has a space). The old `../../SkyrimNet/CppAPI` no longer exists; `skyrimnet beta25 rc6\CppAPI` and `SkyrimNet Tester\CppAPI` are stale copies — do not point the build at them.
+
+## DirectNarration while the game is paused (2026-09-27)
+
+**Symptom**: changing style in the Description Editor narrated, but SkyrimNet logged `DialogueManager::GenerateResponse: NPC Nina failed to generate a response`. SkyrimNet.log showed every Papyrus decorator refused with `Blocking VM call for decorator … because game is paused` — the overlay pauses the game (Focus pauseGame), so the follow-up speaker had no decorator data.
+
+**Rule**: never call `SkyrimNetApi.DirectNarration` directly; use `SkyrimNet_SexLab_Utilities.SendDirectNarration` (the `DirectNarration` / `DirectNarration_Optional` wrappers already do). While paused (`WebUI_IsGamePaused()` or `UI::GameIsPaused()`), native `QueueDirectNarration` stores it in `NarrationQueue.cpp`; a watcher posts a game-thread check every 250 ms and, once unpaused, joins the queue (sentence-joined, exact repeats dropped, first source/target, purge if any asked) into one `DirectNarration_Flush`. Load / new game clears the queue.
+
+## New SKSE .cpp needs a CMake reconfigure (2026-09-27)
+
+`CMakeLists.txt` collects `src/*.cpp` with `file(GLOB …)` at configure time. A new source file links as "unresolved external" until CMake reconfigures — touch `CMakeLists.txt` (or rerun the configure preset) before `cmake --build`.

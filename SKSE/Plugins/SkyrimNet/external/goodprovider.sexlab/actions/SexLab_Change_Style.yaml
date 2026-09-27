@@ -1,0 +1,24 @@
+name: SexLab_Change_Style
+label: Change Style
+description: "Change how the ongoing sexual activity is being done: gently (slower), normally, or forcefully (faster). Use when the speaker wants the pace to change or reacts to a request to go gentler or harder."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: SceneChangeStyle
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: style
+    description: forcefully|normally|gently
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments:
+          - currentActor
+          - SexLabAnimatingFaction
+        comparisonOperator: ">"
+        expectedValue: 0
+    logicalOperator: AND
+    required: true

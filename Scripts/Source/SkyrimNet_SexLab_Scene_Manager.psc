@@ -1224,7 +1224,25 @@ Function RegisterEventsActions()
     UnRegisterForModEvent("SkyrimNet_SexLab_Action_Start")
     RegisterForModEvent("SkyrimNet_SexLab_Action_Stop", "Action_Stop")
     RegisterForModEvent("SkyrimNet_SexLab_Action_Start", "Action_Start")
-EndFunction 
+    UnRegisterForModEvent("SkyrimNet_SexLab_Action_Style")
+    RegisterForModEvent("SkyrimNet_SexLab_Action_Style", "Action_Style")
+EndFunction
+
+; LLM SexLab_Change_Style: style (and so animation speed) of the speaker's scene.
+Event Action_Style(Form f_speaker, String style)
+    Actor speaker = f_speaker as Actor
+    if speaker == None
+        Trace("Action_Style", "speaker is none, aborting")
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(speaker)
+    if sl_scene == None
+        Trace("Action_Style", "No sl_scene found for speaker: "+speaker.GetDisplayName())
+        return
+    endif
+    Trace("Action_Style", "speaker: "+speaker.GetDisplayName()+" style: "+style)
+    sl_scene.ChangeStyle(speaker, style)
+EndEvent
 
 Event Action_Stop(Form f_speaker,Form f_target, String style)
     Actor speaker = f_speaker as Actor 

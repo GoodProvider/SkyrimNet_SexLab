@@ -519,7 +519,8 @@ Function TM_BondageFinish(Actor speaker, Actor target, String style, String curr
         endif
         if msg != ""
             Debug.Notification(msg)
-            SkyrimNetApi.DirectNarration(msg, who, target)
+            ; Runs from the overlay (paused): queued and sent once the game unpauses.
+            SkyrimNet_SexLab_Utilities.SendDirectNarration(msg, who, target)
         endif
     endif
 

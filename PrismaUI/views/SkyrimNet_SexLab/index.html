@@ -325,6 +325,7 @@
         }
 
         .target-pulldown-panel,
+        .target-field-cascade,
         .target-params-panel,
         .target-papyrus-panel {
             min-width: min(280px, 40vw);
@@ -1158,8 +1159,16 @@
         }
 
         .pulldown-value:hover,
-        .pulldown.open .pulldown-value {
+        .pulldown.open .pulldown-value,
+        .pulldown.cascade-open .pulldown-value {
             border-color: rgba(201, 168, 76, 0.45);
+        }
+
+        .pulldown-cascade .pulldown-value::after {
+            content: '❯';
+            margin-left: auto;
+            padding-left: var(--space-sm);
+            opacity: 0.6;
         }
 
         .pulldown-menu {
@@ -1775,6 +1784,7 @@
         <div id="de-header-row">
             <div class="target-row">Description Editor</div>
             <div id="de-action-bar">
+                <div id="de-style-pulldown"></div>
                 <div class="action-btn" id="de-btn-save" onclick="deSave()">Save</div>
                 <div class="option-cancel" id="de-btn-cancel" onclick="deCancel()">Cancel</div>
             </div>
@@ -3613,7 +3623,14 @@
             return root;
         }
 
-        document.addEventListener('click', () => closeAllPulldowns());
+        document.addEventListener('click', () => {
+            closeAllPulldowns();
+            // Cascade rows / field values stopPropagation; any other click closes a field cascade.
+            if (ssCascade) {
+                ssCascade = null;
+                renderPapyrusPanel();
+            }
+        });
 
         function configureTargetMenu(catalog) {
             TARGET_CATALOG = catalog || { defaultsParameters: {}, options: [], actions: {} };
@@ -3636,6 +3653,7 @@
             bondageUi = { speaker: 0, target: 0, style: 'normally' };
             bondageState = { groups: [] };
             ssUi.seededForLabel = '';
+            ssCascade = null;
             ssCloseIntentPanel();
             const host = document.getElementById('target-cascade-host');
             if (host) host.innerHTML = '';
@@ -3649,6 +3667,7 @@
             selectedActionName = null;
             selectedActionLabel = null;
             ssUi.seededForLabel = '';
+            ssCascade = null;
             ssCloseIntentPanel();
             const host = document.getElementById('target-cascade-host');
             if (host) host.innerHTML = '';
@@ -3663,6 +3682,13 @@
         }
 
         function tmPeelCascade() {
+            // An open scene-start field cascade peels one column at a time, then closes.
+            if (ssCascade) {
+                if (ssCascade.path.length) ssCascade.path = ssCascade.path.slice(0, -1);
+                else ssCascade = null;
+                renderPapyrusPanel();
+                return;
+            }
             if (papyrusSelectedOpt) {
                 papyrusSelectedOpt = null;
                 if (!navStack.length) {
@@ -3840,6 +3866,7 @@
         }
 
         function selectPapyrusOption(opt) {
+            ssCascade = null;
             if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) {
                 leftSelectedOpt = opt;
                 papyrusSelectedOpt = null;
@@ -4465,6 +4492,12 @@
             settingName: 'nonsexual'
         };
         let ssResolvePending = null;
+        // pulldown_cascade state: open field key + branch index per column (see createPulldownCascade).
+        let ssCascade = null;
+        let ssCascadeSpecs = {};
+        let ssRandomPending = null;
+        let ssRandomQueryId = 0;
+        const SS_RANDOM_PICK = 3;
 
         function ssActorPool() {
             const pool = [];
@@ -4568,7 +4601,7 @@
             const label = displayLabel(opt);
             const d = (opt && (opt.panelDefaults || opt.paneldefaults)) || {};
             if (!force && ssUi.seededForLabel === label)
-                return;
+                return false;
             ssUi.seededForLabel = label;
             ssUi.seedObjectRelation = d.objectRelation || 'with';
             ssUi.seedAndThird = d.andThird || 'none';
@@ -4605,6 +4638,7 @@
             if (methods.indexOf(ssUi.method) < 0)
                 ssUi.method = methods[0];
             ssApplyGates(pool);
+            return true;
         }
 
         function ssResolveCast(pool) {
@@ -4933,7 +4967,8 @@
             const cast = ssResolveCast(pool);
             if (!ssCanCustom(cast)) return null;
             const intent = ssPapyrusIntent();
-            const tag = ssRemapMethod(ssUi.method);
+            // method "random": no method tag; the scene setting's tags pick the animations.
+            const tag = ssUi.method === 'random' ? '' : ssRemapMethod(ssUi.method);
             const settingName = ssUi.settingName || 'default';
             const toVictim = ssUi.objectRelation === 'to victim';
             const speakerPos = ssSpeakerPosition(intent, ssUi.direction, toVictim);
@@ -4978,39 +5013,155 @@
             if (typeof ensureCreatorSceneInfo === 'function')
                 ensureCreatorSceneInfo();
             selectedSceneInfoKey = 'new';
-            const settingName = (state._scene_presets && state._scene_presets[0]) || 'default';
-            const fallback = (settingName === 'nonsexual' || settingName.indexOf('nonsexual') === 0)
-                ? NONSEXUAL_SUPPRESS_FALLBACK : '';
-            const finish = (defData, selData) => {
-                ssApplySettingToState(state, defData || {});
-                if (selData)
-                    ssApplySettingToState(state, selData);
-                ssPendingSettingData = selData
-                    ? [defData || {}, selData]
-                    : [defData || {}];
-                if (!state._tags_suppress && fallback)
-                    state._tags_suppress = fallback;
+            ssApplySettingChainToState(state).then(chain => {
+                ssPendingSettingData = chain;
                 ssApplySceneCreator(state);
                 const info = sceneInfoByKey.get('new');
                 if (info) info.dirty = true;
-            };
-            ssLoadSetting('default').then(defData => {
-                if (!settingName || settingName === 'default') {
-                    finish(defData, null);
-                    return;
-                }
-                ssLoadSetting(settingName).then(sel => finish(defData, sel)).catch(() => {
-                    finish(defData, fallback ? { tags_suppress: fallback } : {});
-                });
-            }).catch(() => {
-                if (!settingName || settingName === 'default') {
-                    finish({}, null);
-                    return;
-                }
-                ssLoadSetting(settingName).then(sel => finish({}, sel)).catch(() => {
-                    finish({}, fallback ? { tags_suppress: fallback } : {});
-                });
             });
+        }
+
+        function ssNonsexualFallback(settingName) {
+            return (settingName === 'nonsexual' || String(settingName || '').indexOf('nonsexual') === 0)
+                ? NONSEXUAL_SUPPRESS_FALLBACK : '';
+        }
+
+        /// Loads default + the state's scene setting and applies both to state. Resolves the
+        /// [default, selected] chain; a missing setting degrades to the nonsexual suppress fallback.
+        function ssApplySettingChainToState(state) {
+            const settingName = (state._scene_presets && state._scene_presets[0]) || 'default';
+            const fallback = ssNonsexualFallback(settingName);
+            const loadSelected = (defData) => {
+                if (!settingName || settingName === 'default')
+                    return Promise.resolve([defData]);
+                return ssLoadSetting(settingName)
+                    .then(sel => [defData, sel])
+                    .catch(() => [defData, fallback ? { tags_suppress: fallback } : {}]);
+            };
+            return ssLoadSetting('default')
+                .catch(() => ({}))
+                .then(defData => loadSelected(defData || {}))
+                .then(chain => {
+                    chain.forEach(data => ssApplySettingToState(state, data || {}));
+                    if (!state._tags_suppress && fallback)
+                        state._tags_suppress = fallback;
+                    return chain;
+                });
+        }
+
+        // method "random": AnimDB candidates for the cast + scene setting, then one random
+        // animation plus the two sharing the most tags with it, started via the Creator commit.
+        function ssStartRandom(opt) {
+            const pool = ssActorPool();
+            if (!ssCanStart(pool, ssResolveCast(pool))) {
+                notifyPlayer('Pick valid scene actors before starting.');
+                renderPapyrusPanel();
+                return;
+            }
+            const state = ssBuildCreatorState(opt);
+            if (!state || typeof window.onAnimDbQuery !== 'function') return;
+            ssApplySettingChainToState(state).then(() => {
+                ssRandomQuery({ id: 'x' + (++ssRandomQueryId), state: state, genders: true });
+            });
+            renderPapyrusPanel();
+        }
+
+        function ssRandomFilter(state, withGenders) {
+            const split = (csv) => String(csv || '').split(',').map(s => s.trim()).filter(Boolean);
+            const must = split(state._tags);
+            const positions = state._positions || [];
+            const filter = {
+                _must_tags: must,
+                _suppress_tags: split(state._tags_suppress),
+                _require_all: must.length > 0,
+                _actor_count: positions.length
+            };
+            const genders = positions.map(p => scPosGender(p));
+            filter._creature = genders.some(g => g != null && g >= 2) ? 'require' : 'exclude';
+            if (withGenders && genders.length && genders.every(g => g != null)) {
+                filter._gender_match = true;
+                filter._males = genders.filter(g => g === 0).length;
+                filter._females = genders.filter(g => g === 1).length;
+                filter._male_creatures = genders.filter(g => g === 2).length;
+                filter._female_creatures = genders.filter(g => g === 3).length;
+            }
+            return filter;
+        }
+
+        function ssRandomQuery(pending) {
+            ssRandomPending = pending;
+            window.onAnimDbQuery(JSON.stringify({
+                _request_id: pending.id,
+                _type: 'anims',
+                _filter: ssRandomFilter(pending.state, pending.genders),
+                _n: 200
+            }));
+        }
+
+        function ssRandomQueryResult(payload) {
+            const pending = ssRandomPending;
+            if (!pending || String((payload && payload._request_id) || '') !== pending.id) return;
+            ssRandomPending = null;
+            const anims = ((payload && payload._anims) || []).filter(a => a && a._registry && a._enabled !== false);
+            if (!anims.length) {
+                // Gender match can be too strict (e.g. futa); retry once on actor count + tags only.
+                if (pending.genders) {
+                    pending.genders = false;
+                    pending.id = 'x' + (++ssRandomQueryId);
+                    ssRandomQuery(pending);
+                    return;
+                }
+                notifyPlayer('No matching animations for a random scene.');
+                return;
+            }
+            ssStartWithRegistries(pending.state, ssPickRelated(anims, SS_RANDOM_PICK));
+        }
+
+        function ssPickRelated(anims, count) {
+            const tagSet = (a) => new Set((Array.isArray(a._tags) ? a._tags : String(a._tags || '').split(','))
+                .map(t => String(t).trim().toLowerCase()).filter(Boolean));
+            const seed = anims[Math.floor(Math.random() * anims.length)];
+            const seedTags = tagSet(seed);
+            const ranked = anims.filter(a => a !== seed).map(a => {
+                let shared = 0;
+                tagSet(a).forEach(t => { if (seedTags.has(t)) shared += 1; });
+                return { a: a, shared: shared, r: Math.random() };
+            });
+            ranked.sort((x, y) => (y.shared - x.shared) || (x.r - y.r));
+            return [seed].concat(ranked.slice(0, count - 1).map(o => o.a)).map(a => a._registry);
+        }
+
+        // Headless Scene Creator start: fresh "new" SceneInfo committed on hide (same as scStart).
+        function ssStartWithRegistries(state, registries) {
+            const info = new SceneInfo();
+            info.key = 'new';
+            info.mergeFromState(state);
+            info.positionOverride = false;
+            info.selectedRegistries = registries.slice();
+            info.pendingCreate = true;
+            info.dirty = true;
+            sceneInfoByKey.set('new', info);
+            selectedSceneInfoKey = 'new';
+            ssCloseIntentPanel();
+            if (typeof hidePanel === 'function') {
+                hidePanel('target_menu_panel');
+                hidePanel('control_panel');
+            }
+            requestWebUIHide(true);
+        }
+
+        // Method leaf: start now with that direction + method. The method row always reads "random".
+        function ssStartMethod(opt) {
+            const pool = ssActorPool();
+            if (!ssCanStart(pool, ssResolveCast(pool))) {
+                notifyPlayer('Pick valid scene actors before starting.');
+                ssUi.method = 'random';
+                renderPapyrusPanel();
+                return;
+            }
+            ssStart(opt);
+            ssUi.method = 'random';
+            renderPapyrusPanel();
         }
 
         function ssCustom(opt) {
@@ -5183,27 +5334,213 @@
             renderPapyrusPanel();
         }
 
-        function ssActorPulldown(pool, current, onPick) {
+        // pulldown_cascade: looks like a pulldown and shows the current value, but opens
+        // TargetMenu-style cascade columns (hover drill, ❯ branches, ‹ back headers) right of
+        // the panel. spec: { key, caption, display, tree: [{ label, value, children, current,
+        // disabled }], onPick(node) }. Leaves call onPick; branches open the next column.
+        function createPulldownCascade(spec, disabled) {
+            ssCascadeSpecs[spec.key] = spec;
+            const isOpen = () => !!ssCascade && ssCascade.key === spec.key;
+            const root = document.createElement('div');
+            root.className = 'pulldown pulldown-cascade' + (isOpen() ? ' cascade-open' : '');
+            const valueEl = document.createElement('div');
+            valueEl.className = 'pulldown-value';
+            valueEl.textContent = spec.display || '—';
+            root.appendChild(valueEl);
+            if (disabled) return root;
+            const open = () => {
+                ssCascade = { key: spec.key, path: [] };
+                renderPapyrusPanel();
+            };
+            valueEl.onclick = (e) => {
+                e.stopPropagation();
+                closeAllPulldowns();
+                if (isOpen()) {
+                    ssCascade = null;
+                    renderPapyrusPanel();
+                } else {
+                    open();
+                }
+            };
+            tmBindHoverDrill(root, isOpen, open);
+            return root;
+        }
+
+        function ssCascadeNodes(spec, level) {
+            let nodes = spec.tree || [];
+            for (let i = 0; i < level; i++) {
+                const n = nodes[ssCascade.path[i]];
+                if (!n || !n.children) return null;
+                nodes = n.children;
+            }
+            return nodes;
+        }
+
+        function ssCascadeRow(spec, node, idx, level) {
+            const deeperOpen = () => !!ssCascade && ssCascade.key === spec.key && ssCascade.path.length > level;
+            if (node.children) {
+                const isOpen = () => !!ssCascade && ssCascade.key === spec.key && ssCascade.path[level] === idx;
+                const drill = () => {
+                    if (!ssCascade) return;
+                    ssCascade.path = ssCascade.path.slice(0, level).concat([idx]);
+                    renderPapyrusPanel();
+                };
+                const row = document.createElement('div');
+                row.className = 'option-row' + (isOpen() ? ' selected' : '');
+                const main = document.createElement('div');
+                main.className = 'option' + (isOpen() || node.current ? ' selected' : '');
+                main.textContent = node.label;
+                main.onclick = (e) => {
+                    e.stopPropagation();
+                    drill();
+                };
+                const expand = document.createElement('div');
+                expand.className = 'option-expand';
+                expand.textContent = '❯';
+                expand.title = 'Open';
+                expand.onclick = (e) => {
+                    e.stopPropagation();
+                    drill();
+                };
+                tmBindHoverDrill(row, isOpen, drill);
+                row.appendChild(main);
+                row.appendChild(expand);
+                return row;
+            }
+            const row = document.createElement('div');
+            row.className = 'option' + (node.current ? ' selected' : '') + (node.disabled ? ' disabled' : '');
+            row.textContent = node.label;
+            if (node.disabled) return row;
+            row.onclick = (e) => {
+                e.stopPropagation();
+                ssCascade = null;
+                spec.onPick(node);
+            };
+            // Resting on a leaf folds columns opened from a sibling branch.
+            tmBindHoverDrill(row, () => !deeperOpen(), () => {
+                if (!ssCascade) return;
+                ssCascade.path = ssCascade.path.slice(0, level);
+                renderPapyrusPanel();
+            });
+            return row;
+        }
+
+        function ssRenderFieldCascade(host) {
+            host.querySelectorAll('.target-field-cascade').forEach(el => el.remove());
+            if (!ssCascade) return;
+            const spec = ssCascadeSpecs[ssCascade.key];
+            if (!spec) {
+                ssCascade = null;
+                return;
+            }
+            for (let level = 0; level <= ssCascade.path.length; level++) {
+                const nodes = ssCascadeNodes(spec, level);
+                if (!nodes) break;
+                const panel = document.createElement('div');
+                panel.className = 'panel target-field-cascade';
+                const header = document.createElement('div');
+                header.className = 'section-header';
+                if (level > 0) {
+                    const parent = ssCascadeNodes(spec, level - 1)[ssCascade.path[level - 1]];
+                    header.textContent = '‹ ' + (parent ? parent.label : '');
+                    header.style.cursor = 'pointer';
+                    header.onclick = (e) => {
+                        e.stopPropagation();
+                        ssCascade.path = ssCascade.path.slice(0, level - 1);
+                        renderPapyrusPanel();
+                    };
+                } else {
+                    header.textContent = spec.caption || spec.key;
+                }
+                panel.appendChild(header);
+                const list = document.createElement('div');
+                nodes.forEach((node, idx) => list.appendChild(ssCascadeRow(spec, node, idx, level)));
+                panel.appendChild(list);
+                host.appendChild(panel);
+            }
+        }
+
+        function ssListCascade(key, caption, values, current, onPick, disabled) {
+            return createPulldownCascade({
+                key: key,
+                caption: caption,
+                display: current,
+                tree: values.map(v => ({ label: v, value: v, current: v === current })),
+                onPick: (node) => onPick(node.value)
+            }, disabled);
+        }
+
+        function ssActorCascade(key, caption, pool, current, onPick) {
             if (!pool.length) {
                 const miss = document.createElement('div');
                 miss.textContent = '—';
                 return miss;
             }
-            const labels = pool.map(a => a.label);
-            const seed = current ? current.label : (labels[0] || '—');
-            return createPulldown(labels, seed, (picked, idx) => {
-                const entry = (idx != null && idx >= 0 && idx < pool.length) ? pool[idx]
-                    : pool.find(a => a.label === picked);
-                if (!entry) return;
-                onPick(entry);
-            }, new Set(pool.filter(a => !a.selectable).map(a => a.label)));
+            const curFid = current ? formIdU32(current.formId) : 0;
+            return createPulldownCascade({
+                key: key,
+                caption: caption,
+                display: current ? current.label : (pool[0].label || '—'),
+                tree: pool.map(a => ({
+                    label: a.label,
+                    value: a,
+                    current: formIdU32(a.formId) === curFid,
+                    disabled: !a.selectable
+                })),
+                onPick: (node) => onPick(node.value)
+            });
+        }
+
+        // method row = direction → method tree. A method leaf starts the scene right away;
+        // "random" starts 3 related AnimDB animations. Embedded (punish-rape) has no random and
+        // hands the leaf to the host panel's start.
+        function ssMethodCascade(opt, embedOpts) {
+            const embedded = !!(embedOpts && embedOpts.omitStartBar);
+            const isRandom = ssUi.method === 'random';
+            const tree = [];
+            if (!embedded)
+                tree.push({ label: 'random', value: { random: true }, current: isRandom });
+            SS_DIRECTIONS.forEach(d => {
+                tree.push({
+                    label: d,
+                    current: !isRandom && ssUi.direction === d,
+                    children: ssMethodList(d).map(m => ({
+                        label: m,
+                        value: { direction: d, method: m },
+                        current: !isRandom && ssUi.direction === d && ssUi.method === m
+                    }))
+                });
+            });
+            return createPulldownCascade({
+                key: 'method',
+                caption: 'method',
+                display: isRandom ? 'random' : (ssUi.direction + ' ' + ssUi.method),
+                tree: tree,
+                onPick: (node) => {
+                    const v = node.value || {};
+                    if (v.random) {
+                        ssStartRandom(opt);
+                        return;
+                    }
+                    ssUi.direction = v.direction;
+                    ssUi.method = v.method;
+                    if (embedded) {
+                        if (embedOpts.onMethodStart) embedOpts.onMethodStart();
+                        renderPapyrusPanel();
+                        return;
+                    }
+                    ssStartMethod(opt);
+                }
+            });
         }
 
         function renderSceneStartPanelBody(body, opt, embedOpts) {
             const hideCustom = !!(embedOpts && embedOpts.hideCustom);
             const omitStartBar = !!(embedOpts && embedOpts.omitStartBar);
             const pool = ssActorPool();
-            ssApplyDefaults(opt, pool);
+            // TargetMenu scene start: the method row reads "random" until a leaf starts the scene.
+            if (ssApplyDefaults(opt, pool) && !omitStartBar)
+                ssUi.method = 'random';
             ssApplyGates(pool);
 
             const nSel = ssSelectable(pool).length;
@@ -5244,18 +5581,18 @@
                 fields.appendChild(field);
             };
 
-            addField('Subject', ssActorPulldown(pool, subject, (entry) => {
+            addField('Subject', ssActorCascade('subject', 'Subject', pool, subject, (entry) => {
                 ssUi.subjectFormId = formIdU32(entry.formId);
                 if (ssUi.objectFormId === ssUi.subjectFormId) ssUi.objectFormId = 0;
                 if (ssUi.thirdFormId === ssUi.subjectFormId) ssUi.thirdFormId = 0;
                 renderPapyrusPanel();
             }));
 
-            addField('and', createPulldown(['none', 'and'], ssUi.andThird, (v) => {
+            addField('and', ssListCascade('and', 'and', ['none', 'and'], ssUi.andThird, (v) => {
                 ssUi.andThird = v;
                 if (v !== 'and') ssUi.thirdFormId = 0;
                 renderPapyrusPanel();
-            }), thirdDisabled);
+            }, thirdDisabled), thirdDisabled);
 
             if (ssUi.andThird === 'and' && !thirdDisabled) {
                 const thirdPool = pool.filter(a => {
@@ -5264,37 +5601,24 @@
                     if (ssUi.objectRelation !== 'none' && fid === ssUi.objectFormId) return false;
                     return true;
                 });
-                addField('third', ssActorPulldown(thirdPool, third, (entry) => {
+                addField('third', ssActorCascade('third', 'third', thirdPool, third, (entry) => {
                     ssUi.thirdFormId = formIdU32(entry.formId);
                     renderPapyrusPanel();
                 }));
             }
 
-            addField('direction', createPulldown(SS_DIRECTIONS, ssUi.direction, (v) => {
-                const wasGiving = ssGivingFamily(ssUi.direction);
-                ssUi.direction = v;
-                if (ssGivingFamily(v) !== wasGiving) {
-                    const methods = ssMethodList(v);
-                    if (methods.indexOf(ssUi.method) < 0)
-                        ssUi.method = methods[0];
-                }
-                renderPapyrusPanel();
-            }));
+            addField('method', ssMethodCascade(opt, embedOpts));
 
-            addField('method', createPulldown(ssMethodList(ssUi.direction), ssUi.method, (v) => {
-                ssUi.method = v;
-            }));
-
-            const relPd = createPulldown(['with', 'to victim', 'none'], ssUi.objectRelation, (v) => {
+            const relPd = ssListCascade('relation', 'object', ['with', 'to victim', 'none'], ssUi.objectRelation, (v) => {
                 ssUi.objectRelation = v;
                 if (v === 'none') ssUi.objectFormId = 0;
                 renderPapyrusPanel();
-            });
+            }, objectDisabled);
             addField('', relPd, objectDisabled);
 
             if (ssUi.objectRelation !== 'none' && !objectDisabled) {
                 const objPool = pool.filter(a => formIdU32(a.formId) !== ssUi.subjectFormId);
-                addField('Object', ssActorPulldown(objPool, object, (entry) => {
+                addField('Object', ssActorCascade('object', 'Object', objPool, object, (entry) => {
                     ssUi.objectFormId = formIdU32(entry.formId);
                     if (ssUi.thirdFormId === ssUi.objectFormId) ssUi.thirdFormId = 0;
                     renderPapyrusPanel();
@@ -5307,24 +5631,28 @@
             const intentValues = SS_INTENTS.slice();
             if (ssUi.intent === 'custom' && ssUi.customIntent && intentValues.indexOf(intentSeed) < 0)
                 intentValues[intentValues.length - 1] = intentSeed;
-            addField('intent', createPulldown(intentValues, ssUi.intent === 'custom' ? intentSeed : ssUi.intent, (v) => {
+            addField('intent', ssListCascade('intent', 'intent', intentValues, ssUi.intent === 'custom' ? intentSeed : ssUi.intent, (v) => {
                 if (v === 'custom' || String(v).indexOf('custom:') === 0) {
                     ssUi.intentBeforeCustom = ssUi.intent === 'custom'
                         ? ssUi.intentBeforeCustom
                         : ssUi.intent;
                     ssOpenIntentPanel();
+                    renderPapyrusPanel();
                     return;
                 }
                 ssUi.intent = v;
                 ssUi.intentBeforeCustom = v;
+                renderPapyrusPanel();
             }));
 
-            addField('style', createPulldown(['forcefully', 'normally', 'gently'], ssUi.style, (v) => {
+            addField('style', ssListCascade('style', 'style', ['forcefully', 'normally', 'gently'], ssUi.style, (v) => {
                 ssUi.style = v;
+                renderPapyrusPanel();
             }));
 
-            addField('Scene Setting', createPulldown(SS_SETTINGS, ssUi.settingName, (v) => {
+            addField('Scene Setting', ssListCascade('setting', 'Scene Setting', SS_SETTINGS, ssUi.settingName, (v) => {
                 ssUi.settingName = v;
+                renderPapyrusPanel();
             }));
 
             if (!omitStartBar) {
@@ -5348,7 +5676,8 @@
                 if (!ssCanStart(pool, cast)) startBtn.classList.add('disabled');
                 startBtn.onclick = () => {
                     if (startBtn.classList.contains('disabled')) return;
-                    ssStart(opt);
+                    if (ssUi.method === 'random') ssStartRandom(opt);
+                    else ssStart(opt);
                 };
                 bar.appendChild(startBtn);
                 body.appendChild(bar);
@@ -6347,7 +6676,8 @@
                 return;
             }
             const reason = fieldsUi.values.reason || 'being a bad slave';
-            const tag = ssRemapMethod(ssUi.method);
+            const method = ssUi.method === 'random' ? ssMethodList(ssUi.direction)[0] : ssUi.method;
+            const tag = ssRemapMethod(method);
             const reqId = 'ss' + Date.now();
             const spec = ssFireSpec(cast);
             ssResolvePending = {
@@ -6533,16 +6863,24 @@
                     panel: 'scene_start',
                     panelDefaults: FIELDS_RAPE_DEFAULTS
                 });
-                renderSceneStartPanelBody(body, rapeOpt, { hideCustom: true, omitStartBar: true });
+                renderSceneStartPanelBody(body, rapeOpt, {
+                    hideCustom: true,
+                    omitStartBar: true,
+                    onMethodStart: () => fieldsFireStart(opt)
+                });
             }
         }
 
         function renderPapyrusPanel() {
             const host = document.getElementById('target-cascade-host');
             if (!host) return;
-            host.querySelectorAll('.target-papyrus-panel').forEach(el => el.remove());
+            host.querySelectorAll('.target-papyrus-panel, .target-field-cascade').forEach(el => el.remove());
+            ssCascadeSpecs = {};
             const opt = papyrusSelectedOpt;
-            if (!opt || !opt.panel) return;
+            if (!opt || !opt.panel) {
+                ssCascade = null;
+                return;
+            }
 
             const panel = document.createElement('div');
             panel.className = 'panel target-papyrus-panel';
@@ -6563,6 +6901,7 @@
                 renderSceneStartPanelBody(body, opt);
                 panel.appendChild(body);
                 host.appendChild(panel);
+                ssRenderFieldCascade(host);
                 return;
             }
 
@@ -6587,9 +6926,11 @@
 
             panel.appendChild(body);
             host.appendChild(panel);
+            ssRenderFieldCascade(host);
         }
 
         function selectLeftPulldown(opt) {
+            ssCascade = null;
             leftSelectedOpt = opt;
             papyrusSelectedOpt = null;
             tmCastDraft = null;
@@ -8882,6 +9223,10 @@
 
         function animDbQueryResult(payload) {
             const rid = payload._request_id || '';
+            if (String(rid).startsWith('x')) {
+                ssRandomQueryResult(payload);
+                return;
+            }
             if (String(rid).startsWith('r')) {
                 deOnAnimRowResult(payload, String(rid));
                 return;
@@ -9300,6 +9645,30 @@
                 deApplyScenePick(key, { userInitiated: true });
             }, null, (el, key) => {
                 el.textContent = labelByKey.get(key) || key;
+            }));
+            deRenderStylePulldown();
+        }
+
+        // Live scene the style pulldown edits: the picked scene, else the one playing the focused animation.
+        function deStyleSceneInfo() {
+            const picked = deSceneInfoForPick();
+            if (picked) return picked.mode === 'active' && picked.scene_sid >= 0 ? picked : null;
+            return deActiveSceneForRegistry(DE.focusRegistry);
+        }
+
+        // Style pulldown left of Save. A change goes straight to the scene (Scene.ChangeStyle:
+        // style, animation speed, one "changes from 'x' to 'y'" DirectNarration).
+        function deRenderStylePulldown() {
+            const host = document.getElementById('de-style-pulldown');
+            if (!host) return;
+            host.innerHTML = '';
+            const info = deStyleSceneInfo();
+            if (!info) return;
+            host.appendChild(createPulldown(['forcefully', 'normally', 'gently'], info.style || 'normally', (v) => {
+                if (v === info.style) return;
+                info.style = v;
+                if (typeof window.onSceneNarrate === 'function')
+                    window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _style: v }));
             }));
         }
 

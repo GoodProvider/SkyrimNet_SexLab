@@ -59,6 +59,58 @@ schema:
       category: "Controls"
       supportsOverride: false
 
+    - name: "Enable style hotkey"
+      path: "sexlab.style.hotkey_enabled"
+      type: "bool"
+      description: "Enables the hotkey that cycles the current scene's style (gently, normally, forcefully). Animation speed follows the style."
+      defaultValue: false
+      category: "Controls"
+
+    - name: "Style hotkey"
+      path: "sexlab.style.hotkey"
+      type: "hotkey"
+      description: "Cycles the style of the player's scene (or the crosshair actor's scene). Must differ from the Start Sex / Edit Stage hotkey. Default is right bracket (])."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 221
+      category: "Controls"
+      supportsOverride: false
+
+    - name: "Style changes animation speed"
+      path: "sexlab.speed.enabled"
+      type: "bool"
+      description: "Scene style sets animation playback speed. Speed only: stage length, orgasm timing and voices are unchanged."
+      defaultValue: true
+      category: "Animation speed"
+
+    - name: "Gently speed"
+      path: "sexlab.speed.gently"
+      type: "float"
+      description: "Animation playback multiplier for the gently style."
+      min: 0.1
+      max: 3.0
+      defaultValue: 0.75
+      category: "Animation speed"
+
+    - name: "Normally speed"
+      path: "sexlab.speed.normally"
+      type: "float"
+      description: "Animation playback multiplier for the normally style."
+      min: 0.1
+      max: 3.0
+      defaultValue: 1.0
+      category: "Animation speed"
+
+    - name: "Forcefully speed"
+      path: "sexlab.speed.forcefully"
+      type: "float"
+      description: "Animation playback multiplier for the forcefully style."
+      min: 0.1
+      max: 3.0
+      defaultValue: 1.4
+      category: "Animation speed"
+
     - name: "Hide Edit Stage Description help"
       path: "sexlab.editor.hide_help"
       type: "bool"

@@ -32,6 +32,8 @@ public:
     static Config& GetSingleton();
 
     void ApplyFromConfig();
+    /// Also called from WebUI_SetHotkey so a dashboard save rebinds it after the menu key.
+    void ApplyStyleHotkey();
     int FrameworkPlayerIndex() const { return frameworkPlayerIndex_; }
 
 private:

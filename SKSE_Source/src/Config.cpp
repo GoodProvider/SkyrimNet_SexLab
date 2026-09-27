@@ -101,6 +101,7 @@ void Config::ApplyFromConfig()
 {
     ApplyGlobals();
     ApplyMenuHotkey();
+    ApplyStyleHotkey();
 }
 
 void Config::ApplyGlobals()
@@ -128,6 +129,15 @@ void Config::ApplyMenuHotkey()
     const auto dx = static_cast<uint32_t>(VkToDx(vk));
     webui_log::info("ApplyMenuHotkey: enabled={} vk={} dx={:#x}", enabled, vk, dx);
     WebUI_SetMenuHotkey(dx, enabled);
+}
+
+void Config::ApplyStyleHotkey()
+{
+    const bool enabled = GetBool("sexlab.style.hotkey_enabled", false);
+    const int vk = GetInt("sexlab.style.hotkey", 221);
+    const auto dx = static_cast<uint32_t>(VkToDx(vk));
+    webui_log::info("ApplyStyleHotkey: enabled={} vk={} dx={:#x}", enabled, vk, dx);
+    WebUI_SetStyleHotkey(dx, enabled);
 }
 
 }  // namespace SexLabNet

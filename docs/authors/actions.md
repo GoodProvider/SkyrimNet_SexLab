@@ -54,6 +54,7 @@ Prefer Papyrus slot names: `method`, `how` (outfit), `victim` when needed.
 | `StartScene_Nonconsensual_Two_SpeakerVictim` | Speaker is victim |
 | `StartScene_Refused_Two` | Refusal |
 | `Outfit_Dress` / `Outfit_Undress` | Speaker dresses/undresses Target; narration `silent` → RegisterEvent |
+| `SceneChangeStyle` | `SexLab_Change_Style`: speaker's live scene → `forcefully\|normally\|gently`; animation speed follows style |
 
 No `speaking_victim`. No `sexlab_none_rape`. Outfit eligibility uses `OStimActorCountFaction`.
 
