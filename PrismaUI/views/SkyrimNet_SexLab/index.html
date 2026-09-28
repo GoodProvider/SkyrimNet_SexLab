@@ -730,6 +730,25 @@
             font-size: var(--text-sm);
         }
 
+        /* Inline flow (not flex) so the tag list wraps back under "range <pulldown>". */
+        #sc-range-row.compact-row {
+            display: block;
+            line-height: 1.6;
+        }
+
+        #sc-range-row > span:first-child,
+        #sc-range-pulldown {
+            display: inline-block;
+            vertical-align: top;
+            margin-right: var(--space-sm);
+        }
+
+        .sc-last-anim-tags {
+            display: inline;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
         #sc-override-row #sc-btn-save-anim {
             margin-left: auto;
         }
@@ -1802,6 +1821,7 @@
                 <div class="compact-row" id="sc-range-row">
                     <span>range</span>
                     <div id="sc-range-pulldown"></div>
+                    <span id="sc-last-anim-tags" class="sc-last-anim-tags"></span>
                 </div>
             </div>
             <div class="sc-col-tags">
@@ -9562,6 +9582,7 @@
                 `<th class="col-desc">description</th>` +
                 `</tr></thead><tbody>${rows}</tbody></table>`;
             scUpdateSaveAnimButton();
+            scRenderLastAnimTags();
             deOnAnimsUpdated();
         }
 
@@ -9687,6 +9708,15 @@
             if (!regs.length) return null;
             const reg = regs[regs.length - 1];
             return (SC.lastAnims || []).find(x => x._registry === reg) || null;
+        }
+
+        function scRenderLastAnimTags() {
+            const el = document.getElementById('sc-last-anim-tags');
+            if (!el) return;
+            const a = scLastSelectedAnim();
+            const text = a ? 'tags: ' + deAnimTagsList(a).join(', ') : '';
+            el.textContent = text;
+            el.title = text;
         }
 
         // With override off the Actor table mirrors the last-selected animation's settings.
