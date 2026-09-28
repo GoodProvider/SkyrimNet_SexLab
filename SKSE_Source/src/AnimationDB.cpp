@@ -1093,7 +1093,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             } else {
                 if (has_penis && (HasTag(tags, "vaginal") || HasTag(tags, "boobjob") ||
                                      HasTag(tags, "blowjob") || HasTag(tags, "handjob") ||
-                                     HasTag(tags, "footjob") || HasTag(tags, "oral") || HasTag(tags, "anal")))
+                                     HasTag(tags, "footjob") || HasTag(tags, "thighjob") ||
+                                     HasTag(tags, "oral") || HasTag(tags, "anal")))
                     out[i] = 1;
                 else
                     out[i] = 0;
