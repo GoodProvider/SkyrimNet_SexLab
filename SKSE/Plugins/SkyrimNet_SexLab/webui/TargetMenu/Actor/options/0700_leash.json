@@ -1,7 +1,0 @@
-{
-  "type": "handoff",
-  "label": "leash",
-  "name": "leash",
-  "requiresPlugin": "SkyrimNet_Leashed.esp",
-  "modEvent": "SkyrimNet_Leashed_OpenPanel"
-}

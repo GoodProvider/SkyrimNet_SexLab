@@ -348,9 +348,9 @@ Enabled hotkey did nothing after `main`→`skse` merge. Papyrus: `Unbound native
 
 ## Leash TargetMenu panel (2026-09-02)
 
-- TargetMenu **leash** is `panel: leash` (`SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/Actor/options/0700_sexlab_leash.json`). Catalog `requiresPlugin`: `SkyrimNet_Leash.esp`. Core SKSE tree (not FOMOD-split).
+- TargetMenu **leash** is `panel: leash`. The option JSON (`0700_leashed_panel.json`, `requiresPlugin: SkyrimNet_Leashed.esp`) ships in SkyrimNet_Leashed, not here; the panel renderer + `onLeashStatus` live in the core SKSE tree. The old `0700_sexlab_leash.json` (stale `SkyrimNet_Leash.esp`) and `0700_leash.json` (unhandled `type: handoff`) were removed (2026-09-28).
 - Start-only ParameterPanel. Action pulldown is its own row (label column): not leashed → `tie to` / `give to`; leashed → `unleash` / `tie to` / `give to`. Control column: location if `tie to`, holder otherwise, empty if `unleash`.
-- Status from C++ `onLeashStatus` → `LeashFramework.IsLeashed` / `GetLeashHolder` (faction 0xD6A fallback). Do not copy YAML leash decorators. Start dispatches `SkyrimNet_Leash_Actions` (no YAML / `actions_index`). No refuses.
+- Status from C++ `onLeashStatus` → `LeashFramework.IsLeashed` / `GetLeashHolder` (faction 0xD6A fallback). Do not copy YAML leash decorators. Start dispatches `SkyrimNet_Leashed_Actions` (no YAML / `actions_index`). No refuses.
 
 ## AddActor -11 ForbiddenFaction after Edit Tags (2026-09-14)
 
