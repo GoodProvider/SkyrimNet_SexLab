@@ -732,9 +732,14 @@ Function ApplyDressedToActor(Actor akActor, Bool clothed)
     endif
     sslActorAlias slot = thread.ActorAlias(akActor)
     if slot
+        Trace("ApplyDressedToActor", akActor.GetDisplayName()+" clothed:"+clothed)
         if clothed
             slot.UnStrip()
         else
+            ; SetNoStripping left an all-false StripOverride; replace it with SexLab's normal strip
+            ; set (OverrideStrip can't clear it -- length must be 33).
+            Bool is_female = akActor.GetLeveledActorBase().GetSex() == 1
+            slot.OverrideStrip(thread.Config.GetStrip(is_female, thread.UseLimitedStrip(), thread.IsAggressive, thread.IsVictim(akActor)))
             slot.Strip()
         endif
     endif

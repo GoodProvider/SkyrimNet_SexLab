@@ -1,5 +1,13 @@
 # Knowledgebase
 
+## Live undress no-op after a clothed start: SetNoStripping override (2026-09-27)
+
+**Symptom:** a scene started clothed (`ApplyMajorityClothed ... clothed_majority:1`). The user set both actors to undressed in the Description Editor. `WebUI_ApplyLivePositions` ran and the thread JSON showed `dressed:0 dressed_locked:1`, but nobody stripped.
+
+**Cause:** `sslThreadModel.SetNoStripping` installs an all-false 33-slot `StripOverride` on the alias. `sslActorAlias.Strip()` uses that override whenever its length is 33, so it strips nothing. `OverrideStrip` rejects any array whose length isn't 33, so the override can't be cleared, only replaced.
+
+**Rule:** before a mid-scene `slot.Strip()`, replace the override with SexLab's normal set: `slot.OverrideStrip(thread.Config.GetStrip(is_female, thread.UseLimitedStrip(), thread.IsAggressive, thread.IsVictim(actor)))`. This is done in `Scene.ApplyDressedToActor`. See also "Description Editor dressed toggle used wrong strip API" below.
+
 ## `style` parameter shadowed by Scene_Interface property (2026-09-27)
 
 **Symptom:** custom stop reason never narrated ("Bob stops the scene." instead of the reason); `silent` stops still narrated. Log showed `Action_Stop … style: explain:<reason>` reaching `AnimationEnd`.

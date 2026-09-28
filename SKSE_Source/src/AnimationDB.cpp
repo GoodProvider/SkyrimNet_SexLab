@@ -1086,6 +1086,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                                      HasTag(tags, "lesbian") || HasTag(tags, "fingering") ||
                                      HasTag(tags, "dildo")))
                     out[i] = 1;
+                else if (has_penis && (HasTag(tags, "blowjob") || HasTag(tags, "oral")))
+                    out[i] = 1;
                 else if (HasTag(tags, "anal") || HasTag(tags, "fisting"))
                     out[i] = 1;
                 else
@@ -1103,12 +1105,27 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         return out;
     }
 
+    bool HasSexualActTag(const std::unordered_set<std::string>& tags)
+    {
+        static const char* kActTags[] = { "vaginal", "cunnilingus", "lesbian", "fingering", "dildo",
+            "blowjob", "oral", "anal", "fisting", "boobjob", "handjob", "footjob", "thighjob", "69",
+            "masturbation", "estrus" };
+        for (const char* t : kActTags) {
+            if (HasTag(tags, t))
+                return true;
+        }
+        return false;
+    }
+
     void InferSpeakingModifiers(const std::vector<int>& pos_no_orgasm,
         const std::unordered_set<std::string>& tags, std::vector<std::string>& out_csv_per_pos)
     {
         // Tag-derived: gentle / nonsexual activity → empty list for all actors.
-        if (HasTag(tags, "cuddling") || HasTag(tags, "kissing") || HasTag(tags, "hug") ||
-            HasTag(tags, "holding") || HasTag(tags, "lovingkiss")) {
+        // Only when no real sexual-act tag is also present (e.g. "69 holding" must
+        // still get pleasure speaking; "holding" alone should not).
+        if (!HasSexualActTag(tags) &&
+            (HasTag(tags, "cuddling") || HasTag(tags, "kissing") || HasTag(tags, "hug") ||
+                HasTag(tags, "holding") || HasTag(tags, "lovingkiss"))) {
             out_csv_per_pos.assign(pos_no_orgasm.size(), "");
             return;
         }
@@ -1302,6 +1319,23 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         }
         if (row.stage_count >= 1)
             row.stage_speaking[1] = row.pos_speaking_modifiers;
+
+        // Fill in inferred speaking for stages 2+ that weren't authored/resolved
+        // by ApplyAnimJsonToRow (climax stages otherwise stay blank).
+        for (int s = 2; s <= row.stage_count; ++s) {
+            if (row.stage_speaking.contains(s))
+                continue;
+            std::unordered_set<std::string> tags_for_infer_s;
+            if (row.stage_tags.contains(s)) {
+                const auto& t = row.stage_tags[s];
+                tags_for_infer_s.insert(t.begin(), t.end());
+            } else {
+                tags_for_infer_s = tagset;
+            }
+            std::vector<std::string> inferred_s;
+            InferSpeakingModifiers(row.pos_no_orgasm, tags_for_infer_s, inferred_s);
+            row.stage_speaking[s] = inferred_s;
+        }
 
         if (row.pos_clothed.size() < orgasm.size())
             row.pos_clothed.resize(orgasm.size(), 0);
