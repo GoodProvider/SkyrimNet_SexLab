@@ -5879,8 +5879,8 @@
                 ssUi.style = v;
                 renderPapyrusPanel();
             });
-            // Embedded (no Start bar): style is an ordinary first row.
-            if (omitStartBar)
+            // Embedded (no Start bar): style is an ordinary first row unless the host bar carries it.
+            if (omitStartBar && !(embedOpts && embedOpts.omitStyle))
                 addField('style', styleCascade);
 
             const withDisabled = nSel < 2;
@@ -6014,15 +6014,16 @@
                 }
             };
             bar.appendChild(startBtn);
+            bar.appendChild(ssListCascade('outfit_style', 'style', OUTFIT_STYLES, outfitUi.style, (v) => {
+                outfitUi.style = v;
+                renderPapyrusPanel();
+            }));
             body.appendChild(bar);
 
             const row = document.createElement('div');
             row.className = 'compact-row';
             row.appendChild(outfitActorPulldown(pool, pos1, (entry) => {
                 outfitUi.pos1 = formIdU32(entry.formId);
-            }));
-            row.appendChild(createPulldown(OUTFIT_STYLES, outfitUi.style, (v) => {
-                outfitUi.style = v;
             }));
             body.appendChild(row);
 
@@ -6515,17 +6516,18 @@
                     currentJson: currentJson
                 });
             };
-            bar.appendChild(cancelBtn);
             bar.appendChild(doneBtn);
+            bar.appendChild(ssListCascade('bondage_style', 'style', OUTFIT_STYLES, bondageUi.style, (v) => {
+                bondageUi.style = v;
+                renderPapyrusPanel();
+            }));
+            bar.appendChild(cancelBtn);
             body.appendChild(bar);
 
             const row = document.createElement('div');
             row.className = 'compact-row';
             row.appendChild(outfitActorPulldown(pool, speaker, (entry) => {
                 bondageUi.speaker = formIdU32(entry.formId);
-            }));
-            row.appendChild(createPulldown(OUTFIT_STYLES, bondageUi.style, (v) => {
-                bondageUi.style = v;
             }));
             const verbEl = document.createElement('span');
             verbEl.textContent = 'changes devices on';
@@ -7089,6 +7091,22 @@
             }
             fieldsEnsureSeeded(opt);
             const showStart = !fieldsAllApplyOnChange(opt);
+            const isRape = fieldsIsRapeMethod();
+
+            const fieldPulldown = (f, name) => {
+                const opts = fieldsUi.fieldOptions[name] || [];
+                const labels = opts.map(o => o.label || o.value);
+                const curVal = fieldsUi.values[name] || '';
+                const curOpt = fieldsFindOption(name, curVal);
+                const seedLabel = (curOpt && (curOpt.label || curOpt.value))
+                    || (fieldsUi.showTextFor === name ? 'custom' : curVal)
+                    || (labels[0] || '—');
+                return createPulldown(labels, seedLabel, (picked) => {
+                    fieldsOnSelectChange(opt, f, picked);
+                });
+            };
+            // Style rides the Start bar: a `style` panelField, else the embedded rape scene's style.
+            const styleField = showStart ? list.find(f => fieldsFieldId(f) === 'style') : null;
 
             if (showStart) {
                 const bar = document.createElement('div');
@@ -7109,6 +7127,14 @@
                     fieldsFireStart(opt);
                 };
                 bar.appendChild(startBtn);
+                if (styleField) {
+                    bar.appendChild(fieldPulldown(styleField, 'style'));
+                } else if (isRape) {
+                    bar.appendChild(ssListCascade('style', 'style', ['forcefully', 'normally', 'gently'], ssUi.style, (v) => {
+                        ssUi.style = v;
+                        renderPapyrusPanel();
+                    }));
+                }
                 body.appendChild(bar);
             }
 
@@ -7127,17 +7153,8 @@
             list.forEach(f => {
                 const name = fieldsFieldId(f);
                 if (!name) return;
-                const opts = fieldsUi.fieldOptions[name] || [];
-                const labels = opts.map(o => o.label || o.value);
-                const curVal = fieldsUi.values[name] || '';
-                const curOpt = fieldsFindOption(name, curVal);
-                const seedLabel = (curOpt && (curOpt.label || curOpt.value))
-                    || (fieldsUi.showTextFor === name ? 'custom' : curVal)
-                    || (labels[0] || '—');
-                const pd = createPulldown(labels, seedLabel, (picked) => {
-                    fieldsOnSelectChange(opt, f, picked);
-                });
-                addField(fieldsFieldCaption(f) || name, pd);
+                if (f !== styleField)
+                    addField(fieldsFieldCaption(f) || name, fieldPulldown(f, name));
 
                 if (fieldsUi.showTextFor === name) {
                     const wrap = document.createElement('div');
@@ -7168,7 +7185,7 @@
             });
             body.appendChild(fields);
 
-            if (fieldsIsRapeMethod()) {
+            if (isRape) {
                 if (!fieldsUi.rapeSeeded)
                     fieldsSeedRapeScene();
                 const rapeOpt = Object.assign({}, opt, {
@@ -7178,6 +7195,7 @@
                 });
                 renderSceneStartPanelBody(body, rapeOpt, {
                     omitStartBar: true,
+                    omitStyle: showStart && !styleField,
                     onMethodStart: () => fieldsFireStart(opt)
                 });
             }
@@ -7381,7 +7399,6 @@
             startBtn.className = 'action-btn';
             startBtn.textContent = 'Start';
             startBtn.onclick = () => targetMenuStart();
-            bar.appendChild(customBtn);
             bar.appendChild(startBtn);
             panel.appendChild(bar);
 
@@ -7409,11 +7426,16 @@
                 const name = m.name;
                 if (!name) continue;
 
+                // Style sits in the top bar right after Start.
+                const inBar = name === 'style';
                 const field = document.createElement('div');
                 field.className = 'dyn-field';
-                const lab = document.createElement('label');
-                lab.textContent = name;
-                field.appendChild(lab);
+                if (!inBar) {
+                    const lab = document.createElement('label');
+                    lab.textContent = name;
+                    field.appendChild(lab);
+                }
+                const fieldHost = inBar ? bar : field;
 
                 const pipes = pipeValues(m.description || '');
                 const yamlDef = yamlDefaultFromDescription(m.description || '');
@@ -7423,7 +7445,7 @@
                 if (pipes) {
                     const shown = current || pipes[0];
                     paramDict[name] = { type: 'String', default: shown };
-                    field.appendChild(createPulldown(pipes, shown, (v) => {
+                    fieldHost.appendChild(createPulldown(pipes, shown, (v) => {
                         setParamValue(name, v);
                     }));
                 } else {
@@ -7435,10 +7457,11 @@
                         setParamValue(name, inp.value);
                     };
                     paramDict[name] = { type: 'String', default: inp.value };
-                    field.appendChild(inp);
+                    fieldHost.appendChild(inp);
                 }
-                dyn.appendChild(field);
+                if (!inBar) dyn.appendChild(field);
             }
+            bar.appendChild(customBtn);
             panel.appendChild(dyn);
 
             updateTargetConfirmButtons();

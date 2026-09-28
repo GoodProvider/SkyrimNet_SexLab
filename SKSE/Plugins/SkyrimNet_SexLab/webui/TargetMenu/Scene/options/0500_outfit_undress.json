@@ -12,5 +12,19 @@
     { "type": "target", "name": "target" },
     { "type": "dynamic", "name": "style" },
     { "type": "static", "name": "how", "value": "undress" }
+  ],
+  "eligibilityRules": [
+    {
+      "conditions": [
+        {
+          "decoratorName": "papyrus_util",
+          "arguments": ["HasIntValue", "currentActor", "skyrimnet_sexlab_scene_undressed"],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        }
+      ],
+      "logicalOperator": "AND",
+      "required": true
+    }
   ]
 }

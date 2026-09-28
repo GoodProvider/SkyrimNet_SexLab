@@ -250,10 +250,12 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
                 SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
                 SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
                 SNSL_JMap.setInt(position_objs[i], "dressed_locked", 1)
+                SetUndressedFlag(positions[i], creator.no_stripping_mask[i] == 0)
             else
                 SetPosition(i, positions[i], 0, creator.speaking_modifiers_default_current)
                 SNSL_JMap.setInt(position_objs[i], "dressed", 0)
-            endif 
+                SetUndressedFlag(positions[i], true)
+            endif
             i += 1 
         endwhile 
     else 
@@ -742,6 +744,23 @@ Function ApplyDressedToActor(Actor akActor, Bool clothed)
             slot.OverrideStrip(thread.Config.GetStrip(is_female, thread.UseLimitedStrip(), thread.IsAggressive, thread.IsVictim(akActor)))
             slot.Strip()
         endif
+        SetUndressedFlag(akActor, !clothed)
+    endif
+EndFunction
+
+; In-scene strip state for the WebUI TargetMenu/Scene dress|undress eligibilityRules
+; (HasIntValue). Separate from position_objs "dressed", which TargetMenu dress/undress must not
+; touch. Set by Setup (SexLab's own start strip) and ApplyDressedToActor; cleared at scene end.
+String storage_undressed_key = "skyrimnet_sexlab_scene_undressed"
+
+Function SetUndressedFlag(Actor akActor, Bool undressed)
+    if akActor == None
+        return
+    endif
+    if undressed
+        StorageUtil.SetIntValue(akActor, storage_undressed_key, 1)
+    else
+        StorageUtil.UnsetIntValue(akActor, storage_undressed_key)
     endif
 EndFunction
 
@@ -829,6 +848,7 @@ Function ClearPersistedPosition(Actor akActor)
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"speaking_locked")
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"dressed_locked")
     StorageUtil.UnsetStringValue(akActor, persist_prefix+"speaking")
+    SetUndressedFlag(akActor, false)
 EndFunction
 
 ; ----------------------------------------
