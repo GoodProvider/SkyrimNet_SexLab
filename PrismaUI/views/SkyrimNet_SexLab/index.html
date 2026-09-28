@@ -6024,13 +6024,18 @@
             row.appendChild(createPulldown(OUTFIT_STYLES, outfitUi.style, (v) => {
                 outfitUi.style = v;
             }));
+            body.appendChild(row);
+
+            // Verb shares the object (position_0) pulldown's line.
+            const objRow = document.createElement('div');
+            objRow.className = 'compact-row';
             const verbEl = document.createElement('span');
             verbEl.textContent = verb;
-            row.appendChild(verbEl);
-            row.appendChild(outfitActorPulldown(pool, pos0, (entry) => {
+            objRow.appendChild(verbEl);
+            objRow.appendChild(outfitActorPulldown(pool, pos0, (entry) => {
                 outfitUi.pos0 = formIdU32(entry.formId);
             }));
-            body.appendChild(row);
+            body.appendChild(objRow);
         }
 
         function bondageParseArg(arg) {

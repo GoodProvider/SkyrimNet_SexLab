@@ -452,6 +452,32 @@ Function TM_Outfit(Actor speaker, Actor target, String style)
     endif
 EndFunction
 
+; TargetMenu/Scene dress|undress: target is in a SexLab thread, so strip/unstrip through the
+; thread's sslActorAlias (scene end re-dresses them), not main.Store/UnStoreStrippedItems.
+Function TM_SceneOutfit(Actor speaker, Actor target, String style, String how)
+    Trace("TM_SceneOutfit", GetDisplayName(speaker)+" -> "+GetDisplayName(target)+" style:"+style+" how:"+how)
+    if speaker == None || target == None
+        return
+    endif
+    String narration = "silent"
+    if style == "silently" || style == "silent"
+        narration = "none"
+    endif
+    Bool clothed = how == "dress"
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(target)
+    if sl == None
+        if clothed
+            Outfit_Dress(speaker, target, style, narration)
+        else
+            Outfit_Undress(speaker, target, style, narration)
+        endif
+        return
+    endif
+    ; Strip state only -- no TM_ApplyClothed, so position JSON / AnimDB defaults are untouched.
+    sl.ApplyDressedToActor(target, clothed)
+    Outfit_Narrate(speaker, target, style, how, narration)
+EndFunction
+
 Function TM_StopSilent(Actor speaker, Actor target)
     Trace("TM_StopSilent", GetDisplayName(speaker)+" -> "+GetDisplayName(target))
     SceneStop_Target(speaker, target, "silent")
