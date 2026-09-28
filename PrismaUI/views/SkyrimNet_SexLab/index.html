@@ -954,6 +954,7 @@
         #tm-positions-table .col-v,
         #de-actors-table .col-orgasm,
         #de-actors-table .col-idx,
+        #de-actors-table .col-move,
         #de-actors-table .col-name,
         #de-actors-table .col-o,
         #de-actors-table .col-dressed,
@@ -973,7 +974,8 @@
         }
 
         #sc-positions-table .pos-move,
-        #tm-positions-table .pos-move {
+        #tm-positions-table .pos-move,
+        #de-actors-table .pos-move {
             display: inline-flex;
             flex-direction: column;
             gap: 2px;
@@ -986,12 +988,14 @@
         }
 
         #sc-positions-table .pos-move span,
-        #tm-positions-table .pos-move span {
+        #tm-positions-table .pos-move span,
+        #de-actors-table .pos-move span {
             padding: 0 var(--space-xs);
         }
 
         #sc-positions-table .pos-move span:hover,
-        #tm-positions-table .pos-move span:hover {
+        #tm-positions-table .pos-move span:hover,
+        #de-actors-table .pos-move span:hover {
             background: var(--accent-muted);
         }
 
@@ -1876,7 +1880,7 @@
                 </div>
                 <div id="de-actors-table-wrap" style="display:none">
                     <table class="data-table" id="de-actors-table"><thead><tr>
-                        <th class="col-orgasm"></th><th class="col-idx">#</th><th class="col-name">name</th>
+                        <th class="col-orgasm"></th><th class="col-idx">#</th><th class="col-move"></th><th class="col-name">name</th>
                         <th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
                     <div class="de-name-hint">Clicking a name adds it to the description</div>
@@ -8167,6 +8171,11 @@
         }
 
         function discardSceneInfos() {
+            // A Description Editor actor reorder is applied on any close, commit or not.
+            sceneInfoByKey.forEach(info => {
+                if (info && info.pendingReorder && info.dirty)
+                    commitSceneInfoNow(info);
+            });
             sceneInfoByKey.clear();
             selectedSceneInfoKey = 'new';
             sceneInfosSessionActive = false;
@@ -8197,6 +8206,7 @@
             info.dirty = false;
             info.pendingStop = false;
             info.pendingCreate = false;
+            info.pendingReorder = false;
         }
 
         // The overlay pauses the game while focused (PrismaUI Focus pauseGame). Show/Hide reset it to paused.
@@ -10271,7 +10281,9 @@
             tbody.innerHTML = '';
             wrap.style.display = DE.posDraft.length ? '' : 'none';
             const names = dePreviewNamesFor(deFindAnim(DE.focusRegistry));
-            const live = !!deStopLiveInfo();
+            const liveInfo = deStopLiveInfo();
+            const live = !!liveInfo;
+            const liveCount = live ? (liveInfo.positions || []).length : 0;
             DE.posDraft.forEach((p, i) => {
                 const mods = scParseMods(p);
                 const tr = document.createElement('tr');
@@ -10283,6 +10295,26 @@
                 const tdIdx = document.createElement('td');
                 tdIdx.className = 'col-idx';
                 tdIdx.textContent = String(i);
+                // Live scene only: reorders the scene's actors; applied by ApplyWebUICommit when the WebUI closes.
+                const tdMove = document.createElement('td');
+                tdMove.className = 'col-move';
+                if (live && i < liveCount) {
+                    const move = document.createElement('div');
+                    move.className = 'pos-move';
+                    if (i > 0) {
+                        const up = document.createElement('span');
+                        up.textContent = '▲';
+                        up.onclick = (e) => { e.stopPropagation(); deMovePos(i, -1); };
+                        move.appendChild(up);
+                    }
+                    if (i < liveCount - 1) {
+                        const down = document.createElement('span');
+                        down.textContent = '▼';
+                        down.onclick = (e) => { e.stopPropagation(); deMovePos(i, 1); };
+                        move.appendChild(down);
+                    }
+                    tdMove.appendChild(move);
+                }
                 const tdName = document.createElement('td');
                 tdName.className = 'col-name';
                 tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(names[i] || 'actor ' + i)}</div>`;
@@ -10313,6 +10345,7 @@
                 tdMods.appendChild(list);
                 tr.appendChild(tdOrg);
                 tr.appendChild(tdIdx);
+                tr.appendChild(tdMove);
                 tr.appendChild(tdName);
                 tr.appendChild(tdDressed);
                 tr.appendChild(tdO);
@@ -10542,6 +10575,29 @@
             const info = deStopLiveInfo();
             if (!info || typeof window.onSceneNarrate !== 'function') return;
             window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _orgasm_pos: i }));
+        }
+
+        // Swap two actors of the live scene. Only the SceneInfo changes here; the close commit
+        // (flushSceneInfos, or discardSceneInfos for pendingReorder) runs ChangeActors if the order differs.
+        // DE.posDraft stays put: its settings belong to the animation slot, not the actor.
+        function deMovePos(i, dir) {
+            const info = deStopLiveInfo();
+            if (!info || !info.positions) return;
+            const j = i + dir;
+            if (i < 0 || j < 0 || i >= info.positions.length || j >= info.positions.length) return;
+            const tmp = info.positions[i];
+            info.positions[i] = info.positions[j];
+            info.positions[j] = tmp;
+            if (typeof selectedSceneInfo === 'function' && selectedSceneInfo() === info
+                    && SC.positions && i < SC.positions.length && j < SC.positions.length) {
+                const t = SC.positions[i];
+                SC.positions[i] = SC.positions[j];
+                SC.positions[j] = t;
+                scRenderPositions();
+            }
+            info.dirty = true;
+            info.pendingReorder = true;
+            deRenderNames();
         }
 
         function deInsertActor(i) {
