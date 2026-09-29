@@ -71,10 +71,14 @@ namespace ActionCatalog
     /// True when the selected main panel maps to `panel` (e.g. "description_editor_panel").
     bool IsMainPanelOpen(const std::string& panel);
     void SetAnimationPanelPreferredOpen(bool open);
-    /// show_scene_creator: set when Scene Menu opens, cleared by its Close button. While true, Scene Menu
-    /// auto-opens whenever the focus actor is not in an active SexLab scene.
-    bool IsShowSceneCreator();
-    void SetShowSceneCreator(bool show);
+    /// show_scene_panel: set when the Scene view opens, cleared by the main-panel Close. While true, the
+    /// Scene view opens with the WebUI: Description Editor when the target is in a SexLab scene, else
+    /// Scene Creator.
+    bool IsShowScenePanel();
+    void SetShowScenePanel(bool show);
+    /// Scene view selected: flip it to Description Editor (inScene) or Scene Creator. Used at scene
+    /// start/end, where the SexLab faction may not match yet. No-op when already showing that panel.
+    void RerouteScenePanel(bool inScene);
 
     // Assembled TargetMenu Actor or Scene defaultsParameters + options (matches ControlPanel focus)
     const nlohmann::json& TargetOptions();

@@ -278,29 +278,59 @@
             max-height: 100%;
         }
 
-        #main-panel-host > #description-editor-panel > .de-section:not(.de-anims-section):not(.de-desc-section),
-        #main-panel-host > #description-editor-panel > #de-header-row,
-        #main-panel-host > #description-editor-panel > .de-scene-section {
+        #main-panel-host > #description-editor-panel > .de-section:not(.de-animfilter-section):not(.de-desc-section),
+        #main-panel-host > #description-editor-panel > #de-header-row {
             flex: 0 0 auto;
         }
 
-        #description-editor-panel.de-no-browse .de-filter-section,
-        #description-editor-panel.de-no-browse .de-anims-section {
-            display: none !important;
+        /* Bottom tabs: exactly one of stage descriptions / animation filter fills the rest of the panel. */
+        #de-tab-bar {
+            display: flex;
+            gap: var(--space-lg);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: var(--space-xs);
         }
 
-        #description-editor-panel.de-no-browse .de-desc-section {
+        #description-editor-panel .de-desc-section,
+        #description-editor-panel .de-animfilter-section {
+            display: none;
             flex: 1 1 auto;
             min-height: 0;
-            display: flex;
             flex-direction: column;
             margin-bottom: 0;
         }
 
-        #description-editor-panel.de-no-browse #de-stages-host {
+        #description-editor-panel.de-tab-stages .de-desc-section,
+        #description-editor-panel.de-tab-filter .de-animfilter-section {
+            display: flex;
+        }
+
+        #description-editor-panel #de-stages-host {
             flex: 1 1 auto;
             min-height: 0;
             max-height: none;
+        }
+
+        .de-animfilter-section > .section-header,
+        .de-animfilter-section > .compact-row,
+        .de-animfilter-section > .de-filter-section {
+            flex-shrink: 0;
+        }
+
+        /* Thread's loaded animations: five rows, then scroll. */
+        #de-loaded-list {
+            flex: 0 0 auto;
+            max-height: calc(5 * 1.9em + 2.2em);
+            overflow-y: auto;
+        }
+
+        #de-loaded-list tr.de-pending td {
+            font-style: italic;
+        }
+
+        #de-anim-name-filter {
+            flex: 1 1 auto;
+            min-width: 8em;
         }
 
         #description-editor-panel #de-anims-list {
@@ -308,6 +338,21 @@
             min-height: 0;
             overflow-y: auto;
             max-height: none;
+        }
+
+        /* Shared main-panel Close: same top-right spot on every main panel. */
+        #main-panel-close {
+            position: absolute;
+            top: var(--space-lg);
+            right: var(--space-xl);
+            z-index: 5;
+            margin: 0;
+            padding: 0;
+            border-top: none;
+        }
+
+        #main-panel-host > .panel > :first-child {
+            padding-right: 5em;
         }
 
         #overlay-panels {
@@ -498,24 +543,6 @@
             flex-shrink: 0;
         }
 
-        .de-scene-section {
-            margin-bottom: var(--space-xs);
-        }
-
-        .de-scene-section .compact-row {
-            align-items: center;
-        }
-
-        #de-scene-pulldown {
-            flex: 1 1 auto;
-            min-width: 12em;
-        }
-
-        #de-scene-pulldown .pulldown,
-        #de-scene-pulldown .pulldown-value {
-            max-width: 100%;
-        }
-
         .de-section {
             flex-shrink: 0;
             margin-bottom: var(--space-sm);
@@ -620,23 +647,6 @@
             width: 100%;
             border-top: 1px solid var(--border);
             padding-top: var(--space-sm);
-        }
-
-        .de-anims-section {
-            flex: 0 0 50%;
-            height: 50%;
-            max-height: 50%;
-            min-height: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            border-top: 1px solid var(--border);
-            padding-top: var(--space-sm);
-        }
-
-        .de-anims-section > .section-header,
-        .de-anims-section > .compact-row {
-            flex-shrink: 0;
         }
 
         #log-panel {
@@ -1788,13 +1798,14 @@
     </div>
 
     <div id="main-panel-host">
+    <!-- One Close for every main panel, same spot: returns the view to None (overlay stays open). -->
+    <div class="option-cancel" id="main-panel-close" style="display:none" onmousedown="event.preventDefault()" onclick="mainPanelClose()">Close</div>
     <div id="scene-creator-panel" class="panel" style="display:none">
         <div id="sc-header-row1">
             <div class="target-row">Scene Creator</div>
             <div class="bottom-bar" id="sc-action-bar">
                 <div id="sc-style-pulldown"></div>
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
-                <div class="option-cancel" id="sc-btn-close" onclick="scClose()">Close</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
             </div>
         </div>
@@ -1870,7 +1881,7 @@
         </div>
     </div>
 
-    <div id="description-editor-panel" class="panel" style="display:none">
+    <div id="description-editor-panel" class="panel de-tab-stages" style="display:none">
         <div id="de-header-row">
             <div class="target-row">Description Editor</div>
             <div id="de-action-bar">
@@ -1878,12 +1889,6 @@
                 <div class="action-btn" id="de-btn-save" onclick="deSave()">Save</div>
                 <div class="action-btn" id="de-btn-stop" style="display:none" onmousedown="event.preventDefault()" onclick="deStopScene()">Stop</div>
                 <div class="option-cancel" id="de-btn-cancel" onclick="deCancel()">Cancel</div>
-            </div>
-        </div>
-        <div class="de-section de-scene-section">
-            <div class="compact-row">
-                <span>scene:</span>
-                <div id="de-scene-pulldown"></div>
             </div>
         </div>
         <div class="de-section de-actors-section" id="de-actors-section">
@@ -1907,38 +1912,46 @@
                 </div>
             </div>
         </div>
+        <div class="de-section" id="de-tab-bar">
+            <span class="tag-mode-btn de-tab active" id="de-tab-btn-stages" onmousedown="event.preventDefault()" onclick="deSetBottomTab('stages')">stage descriptions</span>
+            <span class="tag-mode-btn de-tab" id="de-tab-btn-filter" onmousedown="event.preventDefault()" onclick="deSetBottomTab('filter')">animation filter</span>
+        </div>
         <div class="de-section de-desc-section">
             <div class="section-header" id="de-desc-header">Description</div>
             <div id="de-stages-host"></div>
         </div>
-        <div class="de-section de-filter-section">
-            <div class="section-header">Filter</div>
-            <div class="sc-selected-tags">
-                <div class="tag-mode-row">
-                    <span class="tag-mode-btn active" id="de-btn-include" onclick="scSetTagMode('include')">tags</span>
-                    <div id="de-include-tags" class="active-tag-list"></div>
+        <div class="de-section de-animfilter-section">
+            <div class="section-header">loaded</div>
+            <div id="de-loaded-list" class="scroll-list"></div>
+            <div class="de-filter-section">
+                <div class="sc-selected-tags">
+                    <div class="tag-mode-row">
+                        <span class="tag-mode-btn active" id="de-btn-include" onclick="scSetTagMode('include')">tags</span>
+                        <div id="de-include-tags" class="active-tag-list"></div>
+                    </div>
+                    <div class="tag-mode-row">
+                        <span class="tag-mode-btn" id="de-btn-exclude" onclick="scSetTagMode('exclude')">suppress</span>
+                        <div id="de-exclude-tags" class="active-tag-list"></div>
+                    </div>
                 </div>
-                <div class="tag-mode-row">
-                    <span class="tag-mode-btn" id="de-btn-exclude" onclick="scSetTagMode('exclude')">suppress</span>
-                    <div id="de-exclude-tags" class="active-tag-list"></div>
+                <div class="sc-available-block">
+                    <div class="compact-row">
+                        <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
+                        <div id="de-type-pulldown"></div>
+                    </div>
+                    <div id="de-available-tags" class="scroll-list"></div>
+                    <div class="compact-row">
+                        <span>filter by gender:</span>
+                        <div id="de-filter-by-pulldown"></div>
+                        <span>description:</span>
+                        <div id="de-filter-has-description"></div>
+                    </div>
+                    <div class="compact-row">
+                        <span>name:</span>
+                        <input id="de-anim-name-filter" type="text" placeholder="part of the animation name" oninput="deOnNameFilterInput(this.value)" />
+                    </div>
                 </div>
             </div>
-            <div class="sc-available-block">
-                <div class="compact-row">
-                    <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
-                    <div id="de-type-pulldown"></div>
-                </div>
-                <div id="de-available-tags" class="scroll-list"></div>
-                <div class="compact-row">
-                    <span>filter by gender:</span>
-                    <div id="de-filter-by-pulldown"></div>
-                    <span>description:</span>
-                    <div id="de-filter-has-description"></div>
-                </div>
-            </div>
-        </div>
-        <div class="de-section de-anims-section">
-            <div class="section-header">Animations</div>
             <div class="compact-row"><span id="de-anim-count"></span></div>
             <div id="de-anims-list" class="scroll-list"></div>
         </div>
@@ -2148,19 +2161,32 @@
         // Fallback when C++ configureControlPanel has not run / main_panels/*.json missing from Data.
         const MAIN_PANEL_NONE_LABEL = 'None';
         const DEFAULT_MAIN_PANELS = [
+            { type: 'builtin', label: 'Scene', panel: 'scene_panel' },
             { type: 'builtin', label: 'Log', panel: 'log_panel' },
-            { type: 'builtin', label: 'Settings', panel: 'settings_panel' },
-            { type: 'builtin', label: 'Scene Menu', panel: 'scene_creator_panel' },
-            { type: 'builtin', label: 'Description Editor', panel: 'description_editor_panel' }
+            { type: 'builtin', label: 'Settings', panel: 'settings_panel' }
         ];
         let MAIN_PANELS = DEFAULT_MAIN_PANELS.slice();
         // Empty key = None (no panel in main_panel host).
         let MAIN_SELECTED_KEY = '';
         let mainPanelPulldownBusy = false;
+        // The Scene view (`scene_panel`) shows one of two DOM panels, picked by C++ from the target's scene
+        // state: description_editor_panel (target in a SexLab scene) or scene_creator_panel.
+        let SCENE_PANEL_RESOLVED = '';
+
+        function isScenePanelKey(key) {
+            return key === 'scene_panel' || key === 'scene_creator_panel' || key === 'scene-creator-panel'
+                || key === 'description_editor_panel' || key === 'description-editor-panel';
+        }
+
+        // Without C++ routing: Description Editor when the selected SceneInfo is a live scene.
+        function scenePanelFallbackResolve() {
+            const info = typeof selectedSceneInfo === 'function' ? selectedSceneInfo() : null;
+            return info && info.mode === 'active' && info.scene_sid >= 0 ? 'description_editor_panel' : 'scene_creator_panel';
+        }
 
         function mainPanelKeyOf(entry) {
             if (!entry) return '';
-            if (entry.type === 'builtin') return entry.panel || '';
+            if (entry.type === 'builtin') return isScenePanelKey(entry.panel) ? 'scene_panel' : (entry.panel || '');
             if (entry.type === 'papyrus' || entry.type === 'data_table' || entry.type === 'actor_detail')
                 return entry.id || '';
             return '';
@@ -2189,6 +2215,35 @@
                 if (el) el.style.display = 'none';
             }
             logStopPolling();
+            updateMainPanelClose();
+        }
+
+        // Close sits over whichever main panel is showing; hidden at None.
+        function updateMainPanelClose() {
+            const btn = document.getElementById('main-panel-close');
+            if (btn) btn.style.display = MAIN_SELECTED_KEY ? '' : 'none';
+        }
+
+        // Shared main-panel Close: back to None with the overlay still open. On the Scene view it also clears
+        // C++ show_scene_panel so the view stops opening with the WebUI (Scene Creator via its close result,
+        // which also releases a Papyrus-origin creator).
+        function mainPanelClose() {
+            const key = MAIN_SELECTED_KEY;
+            if (!key) return;
+            if (key === 'scene_panel') {
+                if (SCENE_PANEL_RESOLVED === 'scene_creator_panel') {
+                    scClose();
+                    return;
+                }
+                deAutoSave();
+                deDbg('mainPanelClose before drop'); // DEBUG-DELETE
+                DE.pendingSwitch = null;
+                if (typeof window.onScenePanelClose === 'function')
+                    window.onScenePanelClose('{}');
+            }
+            selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
+            if (typeof renderTargetMenu === 'function')
+                renderTargetMenu();
         }
 
         function showControlPanel() {
@@ -2214,6 +2269,7 @@
             }
             if (key === MAIN_SELECTED_KEY) return;
             MAIN_SELECTED_KEY = key;
+            updateMainPanelClose();
             if (typeof window.onMainPanelChange === 'function') {
                 window.onMainPanelChange(JSON.stringify({ key: key }));
             } else if (!key) {
@@ -2224,7 +2280,7 @@
         }
 
         function tmSceneCreatorIsOpen() {
-            if (MAIN_SELECTED_KEY === 'scene_creator_panel' || MAIN_SELECTED_KEY === 'scene-creator-panel')
+            if (MAIN_SELECTED_KEY === 'scene_panel' && SCENE_PANEL_RESOLVED === 'scene_creator_panel')
                 return true;
             const el = document.getElementById('scene-creator-panel');
             if (!el) return false;
@@ -2248,7 +2304,7 @@
             if (typeof showPanel === 'function')
                 showPanel('scene_creator_panel');
             else if (typeof window.onMainPanelChange === 'function')
-                window.onMainPanelChange(JSON.stringify({ key: 'scene_creator_panel' }));
+                window.onMainPanelChange(JSON.stringify({ key: 'scene_panel' }));
             if (typeof bindVisiblePanelsFromSceneInfo === 'function')
                 bindVisiblePanelsFromSceneInfo();
             if (typeof renderTargetMenu === 'function')
@@ -2328,6 +2384,7 @@
         }
 
         function domIdForPanelKey(key) {
+            if (key === 'scene_panel') key = SCENE_PANEL_RESOLVED || scenePanelFallbackResolve();
             if (key === 'scene_creator_panel') return 'scene-creator-panel';
             if (key === 'description_editor_panel') return 'description-editor-panel';
             if (key === 'settings_panel') return 'settings-panel';
@@ -2335,7 +2392,8 @@
             return key;
         }
 
-        function revealMainPanel(panelKey) {
+        // resolved: for the Scene view, which DOM panel C++ picked (scene_creator_panel | description_editor_panel).
+        function revealMainPanel(panelKey, resolved) {
             showControlPanel();
             if (!panelKey) {
                 MAIN_SELECTED_KEY = '';
@@ -2345,10 +2403,17 @@
                 clearMainPanelHost();
                 return;
             }
+            if (isScenePanelKey(panelKey)) {
+                if (resolved) SCENE_PANEL_RESOLVED = resolved;
+                else if (panelKey === 'scene_creator_panel' || panelKey === 'description_editor_panel') SCENE_PANEL_RESOLVED = panelKey;
+                else if (!SCENE_PANEL_RESOLVED) SCENE_PANEL_RESOLVED = scenePanelFallbackResolve();
+                panelKey = 'scene_panel';
+            }
             MAIN_SELECTED_KEY = panelKey;
             mainPanelPulldownBusy = true;
             renderControlPanelPulldown();
             mainPanelPulldownBusy = false;
+            updateMainPanelClose();
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel'];
             const want = domIdForPanelKey(panelKey);
@@ -2358,15 +2423,19 @@
                 if (!el) continue;
                 applySourceTint(el, pid === want ? wantSrc : '');
                 if (pid === want) {
-                    // Description Editor opens behind "loading..." until the seed lands, then binds the final pick directly.
+                    // Description Editor opens behind "loading..." until the seed lands, then binds the target's scene.
                     const deOpening = pid === 'description-editor-panel' && el.style.display === 'none';
                     if (deOpening) {
+                        deDbg('DE opening before reset'); // DEBUG-DELETE
                         DE.scenePick = 'none';
+                        DE.bottomTab = 'stages';
+                        DE.pendingSwitch = null;
+                        deApplyBottomTabClass();
                         if (!sceneInfosSeeded) deSetLocked(true);
                     }
                     el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel') ? 'flex' : 'block';
                     if (deOpening && sceneInfosSeeded)
-                        deApplyScenePick(deResolveDefaultScenePick());
+                        deBindTargetScene();
                     if (pid === 'description-editor-panel')
                         deFitStageInputs();
                     if (pid === 'settings-panel' && typeof window.onSettingsRefresh === 'function')
@@ -2386,6 +2455,19 @@
         function concealMainPanel(panelKey) {
             if (!panelKey) {
                 clearMainPanelHost();
+                return;
+            }
+            if (panelKey === 'scene_panel') {
+                // Scene view closed: hide whichever of its two DOM panels is up.
+                for (const pid of ['scene-creator-panel', 'description-editor-panel']) {
+                    const sel = document.getElementById(pid);
+                    if (sel) sel.style.display = 'none';
+                }
+                deSetLocked(false);
+                if (MAIN_SELECTED_KEY === 'scene_panel') {
+                    MAIN_SELECTED_KEY = '';
+                    updateMainPanelClose();
+                }
                 return;
             }
             const el = document.getElementById(domIdForPanelKey(panelKey));
@@ -2647,8 +2729,7 @@
                 id === 'scene_creator_panel' || id === 'scene-creator-panel' ||
                 id === 'yesno_panel' || id === 'yesno-panel';
             const isMainBuiltin =
-                id === 'scene_creator_panel' || id === 'scene-creator-panel' ||
-                id === 'description_editor_panel' || id === 'description-editor-panel' ||
+                isScenePanelKey(id) ||
                 id === 'settings_panel' || id === 'settings-panel' ||
                 id === 'log_panel' || id === 'log-panel';
 
@@ -2668,23 +2749,19 @@
                 showSexMenu();
             } else if (id === 'yesno_panel' || id === 'yesno-panel') {
                 document.getElementById('yesno-panel').style.display = 'block';
-            } else if (id === 'scene_creator_panel' || id === 'scene-creator-panel') {
+            } else if (isScenePanelKey(id)) {
+                // Scene Creator / Description Editor are the Scene view: C++ picks which one from the target.
                 showControlPanel();
-                if (MAIN_SELECTED_KEY === 'scene_creator_panel' || MAIN_SELECTED_KEY === 'scene-creator-panel') {
-                    revealMainPanel('scene_creator_panel');
+                const wantDom = (id === 'description_editor_panel' || id === 'description-editor-panel')
+                    ? 'description_editor_panel' : (id === 'scene_panel' ? '' : 'scene_creator_panel');
+                if (MAIN_SELECTED_KEY === 'scene_panel' && (!wantDom || wantDom === SCENE_PANEL_RESOLVED)) {
+                    // Already showing that panel: re-show only (a round trip would rebind over a just-configured state).
+                    revealMainPanel('scene_panel');
                 } else if (typeof window.onMainPanelChange === 'function') {
-                    window.onMainPanelChange(JSON.stringify({ key: 'scene_creator_panel' }));
+                    window.onMainPanelChange(JSON.stringify({ key: 'scene_panel' }));
                 } else {
-                    revealMainPanel('scene_creator_panel');
-                }
-            } else if (id === 'description_editor_panel' || id === 'description-editor-panel') {
-                showControlPanel();
-                if (MAIN_SELECTED_KEY === 'description_editor_panel' || MAIN_SELECTED_KEY === 'description-editor-panel') {
-                    revealMainPanel('description_editor_panel');
-                } else if (typeof window.onMainPanelChange === 'function') {
-                    window.onMainPanelChange(JSON.stringify({ key: 'description_editor_panel' }));
-                } else {
-                    revealMainPanel('description_editor_panel');
+                    revealMainPanel('scene_panel', (id === 'description_editor_panel' || id === 'description-editor-panel')
+                        ? 'description_editor_panel' : 'scene_creator_panel');
                 }
             } else if (id === 'settings_panel' || id === 'settings-panel') {
                 showControlPanel();
@@ -2865,25 +2942,15 @@
                 tmPeelCascade();
                 return;
             }
+            // Escape never closes a main panel by itself (that is the main-panel Close): it closes the WebUI
+            // and applies any changed state, like the hotkey (flushSceneInfos, incl. a pending DE switch).
             const targetOpen = overlayElIsOpen('target-menu-row');
-            // Scene Menu is never closed by Escape (only its Close button) -- Escape closes the WebUI.
-            const scOpen = tmSceneCreatorIsOpen();
-            if (MAIN_SELECTED_KEY && targetOpen && !scOpen) {
-                const key = MAIN_SELECTED_KEY;
-                if (typeof selectMainPanelByLabel === 'function')
-                    selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
-                if (key && typeof hidePanel === 'function')
-                    hidePanel(key);
-                if (typeof renderTargetMenu === 'function')
-                    renderTargetMenu();
-                return;
-            }
-            if (scOpen)
+            if (tmSceneCreatorIsOpen())
                 scReleaseOnEscape(targetOpen);
             if (typeof deAutoSave === 'function')
                 deAutoSave();
-            if (typeof window.onCancel === 'function')
-                window.onCancel();
+            if (typeof window.onWebUIHide === 'function')
+                window.onWebUIHide(JSON.stringify({ commit: true, endSession: true }));
             else {
                 hidePanel('target_menu_panel');
                 hidePanel('sex_menu_panel');
@@ -4087,7 +4154,7 @@
                 selectedActionLabel = null;
                 papyrusSelectedOpt = null;
                 if (typeof window.onMainPanelChange === 'function')
-                    window.onMainPanelChange(JSON.stringify({ key: 'description_editor_panel' }));
+                    window.onMainPanelChange(JSON.stringify({ key: 'scene_panel' }));
                 renderTargetMenu();
                 return;
             }
@@ -5014,7 +5081,7 @@
             if (typeof showPanel === 'function')
                 showPanel('scene_creator_panel');
             else if (typeof window.onMainPanelChange === 'function')
-                window.onMainPanelChange(JSON.stringify({ key: 'scene_creator_panel' }));
+                window.onMainPanelChange(JSON.stringify({ key: 'scene_panel' }));
             // Refresh nearby so Scene Creator Include lists everyone in range.
             if (typeof window.onNearbyRangeChange === 'function')
                 window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 1600 }));
@@ -7996,7 +8063,7 @@
         let selectedSceneInfoKey = 'new';
         let sceneInfosSessionActive = false;
         // True only once seedSceneInfos has landed for this WebUI show (configure* also set SessionActive early).
-        // `var`: revealMainPanel / deApplyScenePick can run before this line during script load.
+        // `var`: revealMainPanel / deBindTargetScene can run before this line during script load.
         var sceneInfosSeeded = false;
 
         function sceneInfoClone(v) {
@@ -8043,7 +8110,6 @@
                 if (!state) return 'new';
                 const mode = state._mode || state.mode;
                 const sid = state._scene_sid != null ? state._scene_sid : state.scene_sid;
-                if (mode === 'ended') return 'last';
                 if (mode === 'active' || (sid != null && sid >= 0 && mode !== 'creator'))
                     return 'scene:' + sid;
                 return 'new';
@@ -8060,8 +8126,7 @@
             mergeFromState(state) {
                 if (!state) return;
                 this.key = SceneInfo.keyFromState(state);
-                this.mode = state._mode === 'ended' ? 'ended'
-                    : ((state._mode === 'active' || this.key !== 'new') ? 'active' : 'creator');
+                this.mode = (state._mode === 'active' || this.key !== 'new') ? 'active' : 'creator';
                 this.scene_sid = state._scene_sid != null ? state._scene_sid : (this.mode === 'active' ? 0 : -1);
                 this.creator_sid = state._creator_sid != null ? state._creator_sid : 0;
                 if (state._from_target_menu != null) this.from_target_menu = !!state._from_target_menu;
@@ -8070,7 +8135,9 @@
                 if (state._method != null) this.method = state._method || '';
                 if (state._positions) this.positions = sceneInfoClone(state._positions);
                 if (state._position_override != null) this.positionOverride = !!Number(state._position_override);
-                if (state._tags != null) {
+                // An active push's _tags are the playing animation's tags (the scene push handler puts them on
+                // its lastAnims row), not the include-tag filter; taking them here limits the filter to that one.
+                if (state._tags != null && this.mode !== 'active') {
                     this.tags = typeof state._tags === 'string'
                         ? state._tags.split(',').map(s => s.trim()).filter(Boolean)
                         : (state._tags || []).slice();
@@ -8201,42 +8268,50 @@
             });
             sceneInfosSessionActive = true;
             sceneInfosSeeded = true;
+            // selectSceneInfoForActor rebinds visible panels (the DE opens "loading..." until this seed lands).
             selectSceneInfoForActor(targetActor);
-            if (typeof deRenderScenePulldown === 'function')
-                deRenderScenePulldown();
-            // The panel opens before the seed lands ("loading..." on None); now that scenes exist, bind it.
-            const deEl = document.getElementById('description-editor-panel');
-            // Also upgrade a wrong automatic 'any'/'last' fallback (opened before the real live
-            // scene was seeded, e.g. via the hotkey's C++/Papyrus timing race) once a live scene
-            // actually exists -- never overrides a deliberate user pick (scenePickAuto is only
-            // true for automatic applies; see deApplyScenePick).
-            const shouldAutoResolve = deIsLocked()
-                || (DE.scenePick === 'none' && (deListActiveSceneKeys().length || deEndedSceneInfo()))
-                || (DE.scenePickAuto && (DE.scenePick === 'any' || DE.scenePick === 'last')
-                    && deListActiveSceneKeys().length);
-            if (deEl && deEl.style.display !== 'none' && shouldAutoResolve)
-                deApplyScenePick(deResolveDefaultScenePick());
+            // DEBUG-DELETE
+            (Array.isArray(list) ? list : []).forEach(st => {
+                if (typeof window.onDebugLog === 'function' && st && st._mode === 'active')
+                    window.onDebugLog('seed ' + SceneInfo.keyFromState(st) + ' active=' + st._active_registry +
+                        ' in_thread(' + (st._in_thread_registries || []).length + ')=[' + (st._in_thread_registries || []).join(',') + ']');
+            });
+            deDbg('seed after bind');
+            // DEBUG-DELETE end
         }
 
-        function discardSceneInfos() {
-            // A Description Editor actor reorder is applied on any close, commit or not.
-            sceneInfoByKey.forEach(info => {
-                if (info && info.pendingReorder && info.dirty)
-                    commitSceneInfoNow(info);
-            });
+        // End of an overlay session: forget every SceneInfo and draft (no Papyrus calls).
+        function clearSceneInfos() {
+            DE.pendingSwitch = null;
             sceneInfoByKey.clear();
             selectedSceneInfoKey = 'new';
             sceneInfosSessionActive = false;
             sceneInfosSeeded = false;
-            // A deliberate 'Any' pick (scenePickAuto=false) must not outlive this overlay session --
-            // otherwise seedSceneInfos()'s auto-resolve guard stays permanently blocked on reopen,
-            // even against a scene that started after the overlay was closed.
-            DE.scenePick = 'any';
-            DE.scenePickAuto = true;
+            DE.scenePick = 'none';
             stopDialogClose();
         }
 
+        // WebUI Cancel (non-commit close): drop every draft, and have each live scene put back the state it
+        // snapshotted when the overlay opened (Scene.WebUI_RestoreCancelSnapshot; a no-op when nothing changed).
+        function discardSceneInfos() {
+            deDbg('discardSceneInfos (cancel)'); // DEBUG-DELETE
+            if (typeof window.onSceneInfoCommit === 'function') {
+                const restores = [];
+                sceneInfoByKey.forEach(info => {
+                    if (info && info.mode === 'active' && info.scene_sid >= 0)
+                        restores.push({ _key: info.key, _mode: 'active', _scene_sid: info.scene_sid, _restore_snapshot: 1 });
+                });
+                if (restores.length)
+                    window.onSceneInfoCommit(JSON.stringify({ _scenes: restores }));
+            }
+            clearSceneInfos();
+        }
+
+        // Commit close (hotkey, Escape, Save, Start): apply every changed SceneInfo, including a Description
+        // Editor animation pick still waiting for the game to unpause.
         function flushSceneInfos() {
+            deDbg('flushSceneInfos'); // DEBUG-DELETE
+            deSendPendingSwitch();
             const scenes = [];
             sceneInfoByKey.forEach(info => {
                 if (info && (info.dirty || info.pendingCreate || info.pendingStop))
@@ -8244,10 +8319,10 @@
             });
             if (scenes.length && typeof window.onSceneInfoCommit === 'function')
                 window.onSceneInfoCommit(JSON.stringify({ _scenes: scenes }));
-            discardSceneInfos();
+            clearSceneInfos();
         }
 
-        // Send one SceneInfo now (Stop / Update / Done), so Escape (which discards uncommitted infos) can't lose it.
+        // Send one SceneInfo now (Stop / Update / Done), so Cancel (which discards uncommitted infos) cannot lose it.
         function commitSceneInfoNow(info) {
             if (!info || typeof window.onSceneInfoCommit !== 'function') return;
             window.onSceneInfoCommit(JSON.stringify({ _scenes: [info.toCommitJson()] }));
@@ -8268,6 +8343,8 @@
 
         function deTogglePause() {
             deAutoSave();
+            // Unpausing is when a Description Editor animation pick takes effect.
+            if (gamePaused) deSendPendingSwitch();
             setGamePaused(!gamePaused);
             if (typeof window.onGamePauseSet === 'function')
                 window.onGamePauseSet(gamePaused ? '1' : '0');
@@ -8387,10 +8464,17 @@
         }
 
         function bindVisiblePanelsFromSceneInfo() {
+            const scEl = document.getElementById('scene-creator-panel');
+            const scVisible = scEl && scEl.style.display !== 'none';
+            // The Scene view shows Scene Creator only for a target outside any scene: it always edits the
+            // 'new' draft (the target's scene may have just ended while the overlay was open).
+            if (scVisible && selectedSceneInfoKey !== 'new') {
+                ensureCreatorSceneInfo();
+                selectedSceneInfoKey = 'new';
+            }
             const info = selectedSceneInfo();
             copySceneInfoToSC(info);
-            const scEl = document.getElementById('scene-creator-panel');
-            if (scEl && scEl.style.display !== 'none' && typeof configureSceneCreator === 'function') {
+            if (scVisible && typeof configureSceneCreator === 'function') {
                 const payload = info.toCommitJson();
                 payload._mode = info.mode;
                 payload._scene_presets = info.presets;
@@ -8673,7 +8757,6 @@
                 if (el) el.style.display = show ? '' : 'none';
             };
             setDisp('sc-btn-start', !active);
-            setDisp('sc-btn-close', !active);
             setDisp('sc-btn-stop', active);
             setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
@@ -9337,6 +9420,9 @@
             if (SC.hasDescription && SC.hasDescription !== 'any') {
                 filter._has_description = SC.hasDescription;
             }
+            // Description Editor animation filter tab: case-insensitive substring of the animation name.
+            if (typeof deFilterTabActive === 'function' && deFilterTabActive() && DE.animNameFilter)
+                filter._name_contains = DE.animNameFilter;
             return filter;
         }
 
@@ -9611,10 +9697,15 @@
                 `</tr></thead><tbody>${rows}</tbody></table>`;
             scUpdateSaveAnimButton();
             scRenderLastAnimTags();
-            deOnAnimsUpdated();
         }
 
         function scRefreshAnims() {
+            // The shared filter controls also drive the Description Editor's animation filter tab; its results go
+            // to DE.filterAnims so SC.lastAnims (the editor's live focus row) is never overwritten.
+            if (typeof deFilterTabActive === 'function' && deFilterTabActive()) {
+                deRefreshFilterAnims();
+                return;
+            }
             if (typeof window.onAnimDbQuery !== 'function') return;
             const mode = SC.filterBy || SC_FILTER_DEFAULT;
             if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady()) {
@@ -9638,6 +9729,10 @@
             }
             if (String(rid).startsWith('r')) {
                 deOnAnimRowResult(payload, String(rid));
+                return;
+            }
+            if (String(rid).startsWith('f')) {
+                deOnFilterAnimsResult(payload, String(rid));
                 return;
             }
             if (String(rid).startsWith('a')) {
@@ -9835,9 +9930,10 @@
             }
         }
 
-        // Close clears C++ show_scene_creator so Scene Menu stops auto-opening on target focus.
+        // Main-panel Close on Scene Creator (and the TargetMenu Custom toggle): the close result clears C++
+        // show_scene_panel so the Scene view stops opening with the WebUI.
         function scClose() {
-            const selected = MAIN_SELECTED_KEY === 'scene_creator_panel' || MAIN_SELECTED_KEY === 'scene-creator-panel';
+            const selected = MAIN_SELECTED_KEY === 'scene_panel';
             scSendResult('close');
             if (selected && typeof selectMainPanelByLabel === 'function')
                 selectMainPanelByLabel(MAIN_PANEL_NONE_LABEL);
@@ -9855,15 +9951,22 @@
         // ── Description Editor ────────────────────────────────────
         let DE = {
             scene_sid: -1,
-            // scenePick: 'none' (nothing shown), 'any' (filter + animation list), or a scene key.
+            // scenePick: the ControlPanel target's live scene key ('scene:<sid>'), or 'none' while waiting
+            // for the seed / when the target is in no scene (the Scene view then shows Scene Creator).
             scenePick: 'none',
-            // True when scenePick was set by automatic fallback (not a user pulldown click) --
-            // lets seedSceneInfos() silently upgrade a wrong 'any'/'last' guess once the real
-            // live scene is seeded, without ever overriding a deliberate user pick.
-            scenePickAuto: false,
             focusRegistry: '',
-            // Last animation the editor was bound to; the scene pulldown defaults to it on open.
+            // Last animation the editor was bound to.
             currentAnimation: '',
+            // Bottom tabs: 'stages' (stage descriptions) or 'filter' (animation filter).
+            bottomTab: 'stages',
+            animNameFilter: '',
+            nameFilterTimer: 0,
+            // Animation filter tab query results (request id prefix 'f'); never SC.lastAnims.
+            filterAnims: [],
+            filterQueryId: 0,
+            // Animation picked while paused: { key, reg, row }. Shown as a preview; sent to the scene on
+            // play or a commit close (deSendPendingSwitch), dropped by Cancel.
+            pendingSwitch: null,
             stagesDraft: [],
             loadedStages: [],
             // Per-actor animation defaults: [{_no_orgasm, _speaking}]; only sent on Save when posDirty.
@@ -9891,7 +9994,7 @@
                 deLockTimer = null;
                 sceneInfosSessionActive = true;
                 sceneInfosSeeded = true;
-                deApplyScenePick(deResolveDefaultScenePick());
+                deBindTargetScene();
                 deSetLocked(false);
             }, DE_LOCK_TIMEOUT_MS);
         }
@@ -9902,34 +10005,39 @@
         }
 
         function deIsSceneBound() {
-            return !!(DE.scenePick && DE.scenePick !== 'none' && DE.scenePick !== 'any');
+            return !!(DE.scenePick && DE.scenePick !== 'none');
         }
+
+        // DEBUG-DELETE: temporary trace to SkyrimNet_SexLab.log ([JS DEBUG] lines, WebUI.cpp onDebugLog).
+        function deDbg(where) {
+            try {
+                const info = sceneInfoByKey.get(DE.scenePick);
+                const pend = DE.pendingSwitch;
+                const msg = where + ' pick=' + DE.scenePick +
+                    ' active=' + (info ? info.activeRegistry : '-') +
+                    ' inThread(' + (info ? (info.inThreadRegistries || []).length : 0) + ')=[' +
+                    (info ? (info.inThreadRegistries || []).join(',') : '') + ']' +
+                    ' pending=' + (pend ? (pend.reg + (pend.sent ? '(sent)' : '')) : 'none');
+                if (typeof window.onDebugLog === 'function') window.onDebugLog(msg);
+            } catch (e) {}
+        }
+        // DEBUG-DELETE end
 
         function deSetCurrentAnimation(reg) {
             if (reg) DE.currentAnimation = String(reg);
         }
 
-        // Active scene playing `reg`, preferring the picked scene, then one containing the target actor.
+        // True while the editor previews an animation picked for the bound scene but not yet playing.
+        function dePendingActive() {
+            return !!(DE.pendingSwitch && DE.pendingSwitch.key === DE.scenePick);
+        }
+
+        // The live scene the editor's focused animation is playing in: the bound scene, unless the focus is a
+        // pending pick (not playing yet -- no live stage, and Save must not push its values onto the actors).
         function deActiveSceneForRegistry(reg) {
-            if (deIsSceneBound()) {
-                // The user explicitly picked this scene from the pulldown -- that binding is the
-                // live-sync target regardless of reg's casing (AnimDB rows are lowercase; a
-                // scene's own activeRegistry keeps SexLab casing, so a strict `===` against it
-                // silently missed here, which meant DE saves for a scene-bound animation were
-                // never applied live, only ever written to the animation's own DB defaults).
-                const picked = sceneInfoByKey.get(DE.scenePick);
-                return picked && picked.mode === 'active' ? picked : null;
-            }
-            if (!reg) return null;
-            const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
-            let found = null;
-            for (const key of deListActiveSceneKeys()) {
-                const info = sceneInfoByKey.get(key);
-                if (!info || !deRegEq(info.activeRegistry, reg)) continue;
-                if (fid && info.hasActor(fid)) return info;
-                if (!found) found = info;
-            }
-            return found;
+            if (!deIsSceneBound() || dePendingActive()) return null;
+            const picked = sceneInfoByKey.get(DE.scenePick);
+            return picked && picked.mode === 'active' ? picked : null;
         }
 
         // Stage number of the focused animation when it is playing in an active scene, else 0.
@@ -9950,12 +10058,6 @@
             return sceneInfoByKey.get(DE.scenePick) || null;
         }
 
-        // Snapshot of the scene that last ended (seeded with _mode "ended"); listed after live scenes, never live.
-        function deEndedSceneInfo() {
-            const info = sceneInfoByKey.get('last');
-            return info && info.mode === 'ended' ? info : null;
-        }
-
         function deListActiveSceneKeys() {
             const keys = [];
             sceneInfoByKey.forEach((info, key) => {
@@ -9965,27 +10067,12 @@
             return keys;
         }
 
-        function dePosDisplayName(p) {
-            return (p && (p._name || p.name)) || '';
-        }
-
-        function deSceneCastLabel(info) {
-            return (info.positions || []).map(dePosDisplayName).filter(Boolean).join(', ');
-        }
-
         function deSceneAnimName(info) {
             const reg = info.activeRegistry || '';
             let name = reg;
             const inThread = (info.lastAnims || []).find(a => a._registry === reg);
             if (inThread && inThread._name) name = inThread._name;
             return name || '(unnamed)';
-        }
-
-        function deSceneOptionLabel(info) {
-            const cast = deSceneCastLabel(info);
-            const anim = deSceneAnimName(info);
-            if (cast) return cast + ': ' + anim;
-            return anim;
         }
 
         function deFocusedAnimName() {
@@ -10002,7 +10089,10 @@
             const el = document.getElementById('de-desc-header');
             if (!el) return;
             const name = deFocusedAnimName();
-            el.textContent = name ? ('Description: ' + name) : 'Description';
+            let text = name ? ('Description: ' + name) : 'Description';
+            if (dePendingActive()) text += ' (on unpause)';
+            else if (!deIsSceneBound() && sceneInfosSeeded) text = 'Description (target is not in a scene)';
+            el.textContent = text;
         }
 
         function deAnimTagsList(a) {
@@ -10013,65 +10103,28 @@
             return [];
         }
 
-        // Default pick: an active scene (the one playing the last animation, then the target's, then the first).
-        // With no active scene: Any when an animation was last edited (deEnsureFocus reselects it), else None.
-        function deResolveDefaultScenePick() {
-            const keys = deListActiveSceneKeys();
-            if (!keys.length) {
-                const ended = deEndedSceneInfo();
-                if (ended && (!DE.currentAnimation || deRegEq(DE.currentAnimation, ended.activeRegistry))) return 'last';
-                return DE.currentAnimation ? 'any' : 'none';
-            }
+        // The ControlPanel target's live scene: selectSceneInfoForActor's pick, else any live scene with the target.
+        function deTargetSceneKey() {
+            const sel = sceneInfoByKey.get(selectedSceneInfoKey);
+            if (sel && sel.mode === 'active' && sel.scene_sid >= 0) return selectedSceneInfoKey;
             const fid = deHasValidTarget() ? formIdU32(targetActor.formId) : 0;
-            const infos = keys.map(key => ({ key, info: sceneInfoByKey.get(key) })).filter(e => e.info);
-            const playing = DE.currentAnimation
-                ? infos.filter(e => deRegEq(e.info.activeRegistry, DE.currentAnimation)) : [];
-            const withTarget = list => fid ? list.find(e => e.info.hasActor(fid)) : null;
-            const hit = withTarget(playing) || playing[0];
-            if (hit) return hit.key;
-            const mine = withTarget(infos);
-            return mine ? mine.key : keys[0];
-        }
-
-        function deUpdateBrowseVisibility() {
-            const panel = document.getElementById('description-editor-panel');
-            if (panel)
-                panel.classList.toggle('de-no-browse', DE.scenePick !== 'any');
-        }
-
-        function deRenderScenePulldown() {
-            const host = document.getElementById('de-scene-pulldown');
-            if (!host || typeof createPulldown !== 'function') return;
-            const entries = [{ key: 'none', label: 'None' }, { key: 'any', label: 'Any' }];
-            deListActiveSceneKeys().forEach(key => {
+            if (!fid) return 'none';
+            const hit = deListActiveSceneKeys().find(key => {
                 const info = sceneInfoByKey.get(key);
-                if (info) entries.push({ key, label: deSceneOptionLabel(info) });
+                return info && info.hasActor(fid);
             });
-            const endedInfo = deEndedSceneInfo();
-            if (endedInfo) entries.push({ key: 'last', label: deSceneOptionLabel(endedInfo) + ' (ended)' });
-            const labelByKey = new Map(entries.map(e => [e.key, e.label]));
-            const values = entries.map(e => e.key);
-            if (DE.scenePick && !values.includes(DE.scenePick)) {
-                // Picked scene ended; fall back to the default pick (re-renders this pulldown).
-                deApplyScenePick(deResolveDefaultScenePick());
-                return;
-            }
-            const current = DE.scenePick || 'none';
-            DE.scenePick = current;
-            host.innerHTML = '';
-            host.appendChild(createPulldown(values, current, (key) => {
-                deApplyScenePick(key, { userInitiated: true });
-            }, null, (el, key) => {
-                el.textContent = labelByKey.get(key) || key;
-            }));
+            return hit || 'none';
+        }
+
+        // Header: the style pulldown for the bound live scene.
+        function deRenderHeader() {
             deRenderStylePulldown();
         }
 
-        // Live scene the style pulldown edits: the picked scene, else the one playing the focused animation.
+        // Live scene the style pulldown edits: the bound scene.
         function deStyleSceneInfo() {
             const picked = deSceneInfoForPick();
-            if (picked) return picked.mode === 'active' && picked.scene_sid >= 0 ? picked : null;
-            return deActiveSceneForRegistry(DE.focusRegistry);
+            return picked && picked.mode === 'active' && picked.scene_sid >= 0 ? picked : null;
         }
 
         // Style pulldown left of Save. A change goes straight to the scene (Scene.ChangeStyle:
@@ -10135,122 +10188,65 @@
             deRenderAnimTags();
         }
 
-        function deApplyScenePick(pick, opts) {
-            opts = opts || {};
+        // Bind the editor to the ControlPanel target's live scene (no scene pulldown). A pending pick for the
+        // same scene survives the rebind and stays previewed.
+        function deBindTargetScene() {
             deAutoSave();
-            DE.scenePick = pick || 'none';
-            DE.scenePickAuto = !opts.userInitiated;
-            deUpdateBrowseVisibility();
-            if (DE.scenePick === 'none') {
+            const key = deTargetSceneKey();
+            if (DE.pendingSwitch && DE.pendingSwitch.key !== key) DE.pendingSwitch = null;
+            DE.scenePick = key;
+            const info = deSceneInfoForPick();
+            if (!info) {
+                DE.scene_sid = -1;
                 DE.focusRegistry = '';
-                deLoadFocusAnim();
-            } else if (DE.scenePick === 'any') {
-                copySceneInfoToSC(selectedSceneInfo());
-                const forcedFilterBy = SC.filterByOnce || SC.filterBy || SC_FILTER_DEFAULT;
-                SC.filterByOnce = '';
-                scArmFilterDowngrade(forcedFilterBy);
-                if (SC.mode !== 'active') {
-                    scEnsurePositionSeed();
-                    if (SC.mode === 'creator')
-                        scEnrichActorMeta();
-                }
-                scRenderTagChips();
-                scSetTagMode(SC.tagMode || 'include');
-                scRenderHasDescriptionPulldown();
-                const typeHost = document.getElementById('de-type-pulldown');
-                if (typeHost) {
-                    typeHost.innerHTML = '';
-                    const typeValues = ['any'].concat(SC.groupOrder || []);
-                    typeHost.appendChild(createPulldown(typeValues, SC.tagType || 'any', v => {
-                        SC.tagType = v;
-                        scRefreshTags();
-                    }));
-                }
-                scRefreshTags();
-                scRefreshAnims();
-                deEnsureFocus();
-                deLoadFocusAnim();
+                DE.stagesDraft = [];
+                DE.loadedStages = [];
+                DE.posDraft = [];
+                DE.loadedPos = [];
+                DE.dirty = false;
+                DE.posDirty = false;
+                deRenderStages();
             } else {
-                const info = sceneInfoByKey.get(DE.scenePick);
-                if (!info) {
-                    deApplyScenePick(deResolveDefaultScenePick(), opts);
-                    return;
-                }
                 DE.scene_sid = info.scene_sid;
                 copySceneInfoToSC(info);
-                deEnsureSceneAnimRow();
-                deLoadFocusAnimFromScene();
+                if (dePendingActive()) deLoadPendingPreview();
+                else deLoadFocusAnimFromScene();
             }
-            deRenderScenePulldown();
-            // Before the seed lands the pick is a placeholder: keep "loading..." up until real scene data exists.
+            deRenderHeader();
+            deApplyBottomTabClass();
+            if (DE.bottomTab === 'filter') deOpenFilterTab();
+            // Before the seed lands the binding is a placeholder: keep "loading..." up until real scene data exists.
             if (sceneInfosSeeded) deSetLocked(false);
         }
 
         function deOnControlFocusChanged() {
             const deEl = document.getElementById('description-editor-panel');
             if (!deEl || deEl.style.display === 'none') return;
-            deAutoSave();
-            deApplyScenePick(deResolveDefaultScenePick(), { focusChange: true });
+            deBindTargetScene();
         }
 
         function deFindAnim(reg) {
             return (SC.lastAnims || []).find(x => x._registry === reg) || null;
         }
 
-        function deSortedAnims() {
-            const anims = SC.lastAnims || [];
-            const active = isSceneConnectionActive() || SC.mode === 'active';
-            const indices = sortAnimListRows(anims, {
-                active: active,
-                inThread: SC.inThreadRegistries,
-                activeRegistry: SC.activeRegistry
-            });
-            return indices.map(i => anims[i]);
-        }
-
-        function deEnsureFocus() {
-            if (deIsSceneBound()) {
-                const info = deSceneInfoForPick();
-                if (info && info.activeRegistry) {
-                    DE.focusRegistry = info.activeRegistry;
-                    SC.activeRegistry = DE.focusRegistry;
-                }
-                return;
-            }
-            const sorted = deSortedAnims();
-            if (!sorted.length) {
-                DE.focusRegistry = '';
-                return;
-            }
-            const regs = sorted.map(a => a._registry).filter(Boolean);
-            const active = isSceneConnectionActive() || SC.mode === 'active';
-            // Case-insensitive: regs come from AnimationDB (lowercase), currentAnimation/activeRegistry may
-            // carry SexLab casing. Store the list's spelling so deFindAnim matches.
-            const findReg = r => (r ? regs.find(x => deRegEq(x, r)) : undefined);
-            const curReg = findReg(DE.currentAnimation);
-            const actReg = active ? findReg(SC.activeRegistry) : undefined;
-            if (curReg) {
-                DE.focusRegistry = curReg;
-            } else if (actReg) {
-                DE.focusRegistry = actReg;
-            } else if (DE.focusRegistry && regs.includes(DE.focusRegistry)) {
-                // keep current selection
-            } else {
-                DE.focusRegistry = regs[0] || '';
-            }
-            SC.activeRegistry = DE.focusRegistry;
-            const info = selectedSceneInfo();
-            if (info) info.activeRegistry = DE.focusRegistry;
-        }
-
         function deLoadFocusAnim() {
-            if (deIsSceneBound()) {
-                deLoadFocusAnimFromScene();
-                return;
-            }
-            const a = deFindAnim(DE.focusRegistry);
-            const stageCount = (a && a._stage_count) ? (a._stage_count | 0) : 0;
-            const sd = (a && a._stage_descriptions) || {};
+            if (dePendingActive()) deLoadPendingPreview();
+            else deLoadFocusAnimFromScene();
+        }
+
+        // Preview of the pending pick: its authored stages and, per live actor, its orgasm/speaking defaults
+        // with dressed = live && default (an animation switch only ever undresses). Replaced by the live
+        // values once the scene reports the switch.
+        function deLoadPendingPreview() {
+            const pend = DE.pendingSwitch;
+            if (!pend) return;
+            const row = pend.row || { _registry: pend.reg, _name: pend.reg };
+            DE.focusRegistry = pend.reg;
+            deSetCurrentAnimation(pend.reg);
+            // Shared object: deSaveToDisk updates it, so a later re-preview shows the saved text.
+            SC.lastAnims = [row];
+            const stageCount = (row._stage_count | 0);
+            const sd = row._stage_descriptions || {};
             DE.stagesDraft = [];
             for (let n = 1; n <= stageCount; n++) {
                 const text = sd[String(n)] != null ? String(sd[String(n)]) : '';
@@ -10261,7 +10257,6 @@
             deLoadPosDraft();
             deRenderStages();
             deRenderAnimTags();
-            deRenderAnimList();
         }
 
         function deNormSpeaking(v) {
@@ -10269,40 +10264,33 @@
             return v == null ? '' : String(v).split(',').map(s => s.trim()).filter(Boolean).join(',');
         }
 
-        // Draft of the focused animation's per-actor state. Scene-bound: live state from
-        // SC.positions (real dressed/no_orgasm/speaking for this running scene instance, not the
-        // registry's generic template). Unbound: AnimDB registry-template defaults, whose anim
-        // rows are stubs (no _position_count) that fetch the DB row and stay hidden until it lands.
+        // Draft of the per-actor state shown in the actor table: the live scene's values (real
+        // dressed/no_orgasm/speaking for this running scene, not the registry's generic template). While an
+        // animation pick is pending: its AnimDB defaults, dressed only where the actor is dressed now and the
+        // animation keeps them dressed (a switch never re-dresses). A stub row fetches the DB row first.
         function deLoadPosDraft() {
             DE.posDirty = false;
             DE.posDraft = [];
-            if (deIsSceneBound()) {
-                const positions = SC.positions || [];
-                for (let i = 0; i < positions.length; i++) {
-                    const p = positions[i] || {};
-                    DE.posDraft.push({
-                        _no_orgasm: p._no_orgasm ? 1 : 0,
-                        _speaking: deNormSpeaking(p._speaking),
-                        _dressed: p._dressed ? 1 : 0,
-                        _victim: p._victim ? 1 : 0
-                    });
-                }
-                DE.loadedPos = sceneInfoClone(DE.posDraft);
+            if (!deIsSceneBound()) {
+                DE.loadedPos = [];
                 return;
             }
-            const reg = DE.focusRegistry;
-            const a = reg ? deFindAnim(reg) : null;
-            if (a && a._position_count == null) {
-                deRequestAnimRow(reg);
-            } else if (a) {
-                const no = a._pos_no_orgasm || [];
-                const sp = a._pos_speaking_modifiers || [];
-                const cl = a._pos_clothed || [];
-                const n = deAnimActorCount(a);
-                // Victim is a per-scene role, not an animation template property -- no AnimDB
-                // default to seed from here (matches: not scene-bound = no victim to show).
-                for (let i = 0; i < n; i++)
-                    DE.posDraft.push({ _no_orgasm: no[i] ? 1 : 0, _speaking: deNormSpeaking(sp[i]), _dressed: cl[i] ? 1 : 0, _victim: 0 });
+            const pend = dePendingActive() ? DE.pendingSwitch : null;
+            const row = pend && pend.row && pend.row._position_count != null ? pend.row : null;
+            if (pend && !row) deRequestAnimRow(pend.reg);
+            const positions = SC.positions || [];
+            for (let i = 0; i < positions.length; i++) {
+                const p = positions[i] || {};
+                let noOrg = p._no_orgasm ? 1 : 0;
+                let speaking = deNormSpeaking(p._speaking);
+                let dressed = p._dressed ? 1 : 0;
+                if (row) {
+                    const clothed = row._clothed || row._pos_clothed || [];
+                    noOrg = (row._pos_no_orgasm || [])[i] ? 1 : 0;
+                    speaking = deNormSpeaking((row._pos_speaking_modifiers || [])[i]);
+                    dressed = dressed && clothed[i] ? 1 : 0;
+                }
+                DE.posDraft.push({ _no_orgasm: noOrg, _speaking: speaking, _dressed: dressed, _victim: p._victim ? 1 : 0 });
             }
             DE.loadedPos = sceneInfoClone(DE.posDraft);
         }
@@ -10318,8 +10306,18 @@
         }
 
         function deOnAnimRowResult(payload, rid) {
-            if (DE.posDirty || !DE.focusRegistry) return;
             const anims = payload._anims || [];
+            // Full AnimDB row for a pending pick (loaded-list rows are stubs): preview its stages + defaults.
+            const pend = DE.pendingSwitch;
+            if (pend && dePendingActive()) {
+                const full = anims.find(x => deRegEq(x._registry, pend.reg));
+                if (full && full._position_count != null && !DE.dirty && !DE.posDirty) {
+                    pend.row = full;
+                    deLoadPendingPreview();
+                }
+                return;
+            }
+            if (DE.posDirty || !DE.focusRegistry) return;
             const row = anims.find(x => deRegEq(x._registry, DE.focusRegistry));
             const a = deFindAnim(DE.focusRegistry);
             if (!row || !a || row._position_count == null) return;
@@ -10500,9 +10498,12 @@
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('de-disabled', off);
             };
-            set('de-btn-prev', stage <= 1 || !!DE.stagePending);
-            set('de-btn-next', stage >= deStageMax() || !!DE.stagePending);
+            // A pending animation pick has no live stage yet: stage nav and continue wait for the switch.
+            const pending = dePendingActive();
+            set('de-btn-prev', stage <= 1 || !!DE.stagePending || pending);
+            set('de-btn-next', stage >= deStageMax() || !!DE.stagePending || pending);
             set('de-btn-copyprev', stage <= 1);
+            set('de-btn-continue', pending);
             const stopBtn = document.getElementById('de-btn-stop');
             if (stopBtn) stopBtn.style.display = deStopLiveInfo() ? '' : 'none';
         }
@@ -10511,7 +10512,7 @@
             deAutoSave();
             const info = deSceneInfoForPick();
             if (!info) return;
-            if (DE.stagePending) return;
+            if (DE.stagePending || dePendingActive()) return;
             const cur = deActiveStage();
             const step = dir < 0 ? -1 : 1;
             if (cur + step < 1 || cur + step > deStageMax()) return;
@@ -10619,7 +10620,7 @@
         function deContinueScene() {
             deAutoSave();
             const info = deSceneInfoForPick();
-            if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
+            if (!info || info.mode !== 'active' || info.scene_sid < 0 || dePendingActive()) return;
             const st = DE.stagesDraft.find(s => s._stage === deActiveStage());
             const text = st ? deSubstitute(st._template || '', dePreviewNamesFor(deFindAnim(DE.focusRegistry))).trim() : '';
             if (!text) return;
@@ -10635,8 +10636,8 @@
             window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _orgasm_pos: i }));
         }
 
-        // Swap two actors of the live scene. Only the SceneInfo changes here; the close commit
-        // (flushSceneInfos, or discardSceneInfos for pendingReorder) runs ChangeActors if the order differs.
+        // Swap two actors of the live scene. Only the SceneInfo changes here; the
+        // commit close (flushSceneInfos) runs ChangeActors if the order differs; Cancel drops the reorder.
         // DE.posDraft stays put: its settings belong to the animation slot, not the actor.
         function deMovePos(i, dir) {
             const info = deStopLiveInfo();
@@ -10736,72 +10737,246 @@
             deRenderNames();
         }
 
+        // ── Description Editor bottom tabs ──
+        function deApplyBottomTabClass() {
+            const panel = document.getElementById('description-editor-panel');
+            if (panel) {
+                panel.classList.toggle('de-tab-stages', DE.bottomTab !== 'filter');
+                panel.classList.toggle('de-tab-filter', DE.bottomTab === 'filter');
+            }
+            const st = document.getElementById('de-tab-btn-stages');
+            const fi = document.getElementById('de-tab-btn-filter');
+            if (st) st.classList.toggle('active', DE.bottomTab !== 'filter');
+            if (fi) fi.classList.toggle('active', DE.bottomTab === 'filter');
+        }
+
+        function deSetBottomTab(tab) {
+            deAutoSave();
+            DE.bottomTab = tab === 'filter' ? 'filter' : 'stages';
+            deApplyBottomTabClass();
+            if (DE.bottomTab === 'filter') deOpenFilterTab();
+            else deFitStageInputs();
+        }
+
+        function deFilterTabActive() {
+            const el = document.getElementById('description-editor-panel');
+            return !!(el && el.style.display !== 'none' && DE.bottomTab === 'filter' && deIsSceneBound());
+        }
+
+        function deRenderTypePulldown() {
+            const typeHost = document.getElementById('de-type-pulldown');
+            if (!typeHost) return;
+            typeHost.innerHTML = '';
+            const typeValues = ['any'].concat(SC.groupOrder || []);
+            typeHost.appendChild(createPulldown(typeValues, SC.tagType || 'any', v => {
+                SC.tagType = v;
+                scRefreshTags();
+            }));
+        }
+
+        // Same tag / suppress / gender / description filter as Scene Creator (shared SC state), run against the
+        // bound scene's cast so only animations it can play are listed.
+        function deOpenFilterTab() {
+            if (!deIsSceneBound()) return;
+            scArmFilterDowngrade(SC.filterBy || SC_FILTER_DEFAULT);
+            scRenderTagChips();
+            scSetTagMode(SC.tagMode || 'include');
+            scRenderFilterByPulldown();
+            scRenderHasDescriptionPulldown();
+            deRenderTypePulldown();
+            const nameEl = document.getElementById('de-anim-name-filter');
+            if (nameEl && nameEl.value !== DE.animNameFilter) nameEl.value = DE.animNameFilter;
+            deRenderLoadedList();
+            scRefreshTags();
+            deRefreshFilterAnims();
+        }
+
+        function deOnNameFilterInput(value) {
+            DE.animNameFilter = String(value || '').trim().toLowerCase();
+            if (DE.nameFilterTimer) clearTimeout(DE.nameFilterTimer);
+            DE.nameFilterTimer = setTimeout(() => {
+                DE.nameFilterTimer = 0;
+                scRefreshTags();
+                deRefreshFilterAnims();
+            }, 250);
+        }
+
+        function deRefreshFilterAnims() {
+            if (typeof window.onAnimDbQuery !== 'function' || !deIsSceneBound()) return;
+            const mode = SC.filterBy || SC_FILTER_DEFAULT;
+            const countEl = document.getElementById('de-anim-count');
+            if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady()) {
+                if (countEl) countEl.textContent = 'animations …';
+                return;
+            }
+            const id = ++DE.filterQueryId;
+            window.onAnimDbQuery(JSON.stringify({ _request_id: 'f' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 }));
+        }
+
+        // animDbQueryResult 'f…': the animation filter tab's list.
+        function deOnFilterAnimsResult(payload, rid) {
+            if (rid !== 'f' + DE.filterQueryId) return;
+            const anims = scFilterAnimsByHasDescription(payload._anims || []);
+            if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any') {
+                SC.filterBy = SC.filterChain.shift();
+                scRenderFilterByPulldown();
+                scRefreshTags();
+                deRefreshFilterAnims();
+                return;
+            }
+            SC.filterChain = [];
+            DE.filterAnims = anims;
+            const countEl = document.getElementById('de-anim-count');
+            if (countEl) countEl.textContent = `animations ${anims.length}/${payload._total_enabled || '?'}`;
+            deRenderAnimList();
+        }
+
+        function deAnimRowCells(a) {
+            const genders = (a._pos_genders || []).map((g, gi) => {
+                const letter = (g === 0 || g === 2) ? 'm' : 'f';
+                const no = (a._pos_no_orgasm || [])[gi];
+                return no ? letter : letter.toUpperCase();
+            }).join(' ');
+            const stages = (a._stage_count != null) ? a._stage_count : '';
+            const desc = previewDescription(a);
+            return `<td class="col-genders">${escapeHtml(genders)}</td>` +
+                `<td class="col-mods">${escapeHtml(formatMods(a))}</td>` +
+                `<td class="col-name">${escapeHtml(a._name || a._registry || '(unnamed)')}</td>` +
+                `<td class="col-stages">${escapeHtml(stages)}</td>` +
+                `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>`;
+        }
+
+        function deAnimTableHead() {
+            return `<table class="data-table anim-table"><thead><tr>` +
+                `<th class="col-an"></th><th class="col-genders">genders</th><th class="col-mods">modifiers</th>` +
+                `<th class="col-name">name</th><th class="col-stages">num stages</th><th class="col-desc">description</th>` +
+                `</tr></thead><tbody>`;
+        }
+
+        function deRegInList(list, reg) {
+            return (list || []).some(r => deRegEq(r, reg));
+        }
+
+        // Pending pick for the bound scene, else its playing animation: the row the lists highlight.
+        function deCurrentSceneReg(info) {
+            if (dePendingActive()) return DE.pendingSwitch.reg;
+            return (info && info.activeRegistry) || '';
+        }
+
+        // SexLab's loaded list for the bound scene (thread.Animations). A = playing; the current pick is
+        // highlighted and marked "next" until the game unpauses and switches to it.
+        function deRenderLoadedList() {
+            const host = document.getElementById('de-loaded-list');
+            if (!host) return;
+            const info = deSceneInfoForPick();
+            const regs = info ? (info.inThreadRegistries || []) : [];
+            const current = deCurrentSceneReg(info);
+            deDbg('deRenderLoadedList'); // DEBUG-DELETE
+            const rows = regs.map((reg, i) => {
+                const a = (info.lastAnims || []).find(x => deRegEq(x._registry, reg))
+                    || (DE.filterAnims || []).find(x => deRegEq(x._registry, reg))
+                    || { _registry: reg };
+                const playing = deRegEq(reg, info.activeRegistry);
+                const pending = dePendingActive() && deRegEq(reg, DE.pendingSwitch.reg);
+                const mark = playing ? 'A' : (pending ? 'next' : '');
+                const cls = (deRegEq(reg, current) ? 'selected' : '') + (pending ? ' de-pending' : '');
+                return `<tr class="${cls}" onclick="dePickLoadedAnimation(${i})">` +
+                    `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
+            }).join('');
+            host.innerHTML = deAnimTableHead() + rows + `</tbody></table>`;
+            const sel = host.querySelector('tr.selected');
+            if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+        }
+
+        function dePickLoadedAnimation(i) {
+            const info = deSceneInfoForPick();
+            const reg = info && (info.inThreadRegistries || [])[i];
+            if (reg) dePickSceneAnimation(reg);
+        }
+
+        // The animation filter tab's result list. L = already loaded, A = playing. A click adds the animation to
+        // the scene's loaded list (on unpause) and makes it the current pick.
         function deRenderAnimList() {
             const host = document.getElementById('de-anims-list');
             if (!host) return;
-            const anims = deSortedAnims();
-            const current = DE.focusRegistry || '';
-            const rows = anims.map((a) => {
+            const info = deSceneInfoForPick();
+            const inThread = info ? (info.inThreadRegistries || []) : [];
+            const current = deCurrentSceneReg(info);
+            const anims = DE.filterAnims || [];
+            const order = sortAnimListRows(anims, { active: true, inThread: inThread, activeRegistry: info ? info.activeRegistry : '' });
+            const rows = order.map(i => {
+                const a = anims[i];
                 const reg = a._registry || '';
-                const sel = reg === current;
-                const an = scAnimAnLetter(reg);
-                const genders = (a._pos_genders || []).map((g, gi) => {
-                    const letter = (g === 0 || g === 2) ? 'm' : 'f';
-                    const no = (a._pos_no_orgasm || [])[gi];
-                    return no ? letter : letter.toUpperCase();
-                }).join(' ');
-                const mods = formatMods(a);
-                const name = a._name || '(unnamed)';
-                const stages = (a._stage_count != null) ? a._stage_count : '';
-                const desc = previewDescription(a);
-                return `<tr class="${sel ? 'selected' : ''}" onclick="deSelectAnim('${String(reg).replace(/'/g, "\\'")}')">` +
-                    `<td class="col-an">${escapeHtml(an)}</td>` +
-                    `<td class="col-genders">${escapeHtml(genders)}</td>` +
-                    `<td class="col-mods">${escapeHtml(mods)}</td>` +
-                    `<td class="col-name">${escapeHtml(name)}</td>` +
-                    `<td class="col-stages">${escapeHtml(stages)}</td>` +
-                    `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>` +
-                    `</tr>`;
+                const mark = info && deRegEq(reg, info.activeRegistry) ? 'A' : (deRegInList(inThread, reg) ? 'L' : '');
+                return `<tr class="${deRegEq(reg, current) ? 'selected' : ''}" onclick="deAddAnimToScene(${i})">` +
+                    `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
             }).join('');
-            host.innerHTML =
-                `<table class="data-table anim-table"><thead><tr>` +
-                `<th class="col-an"></th>` +
-                `<th class="col-genders">genders</th>` +
-                `<th class="col-mods">modifiers</th>` +
-                `<th class="col-name">name</th>` +
-                `<th class="col-stages">num stages</th>` +
-                `<th class="col-desc">description</th>` +
-                `</tr></thead><tbody>${rows}</tbody></table>`;
+            host.innerHTML = deAnimTableHead() + rows + `</tbody></table>`;
         }
 
-        function deSelectAnim(reg) {
+        function deAddAnimToScene(i) {
+            const info = deSceneInfoForPick();
+            const a = (DE.filterAnims || [])[i];
+            if (!info || !a || !a._registry) return;
+            if (!deRegInList(info.inThreadRegistries, a._registry)) {
+                info.inThreadRegistries = (info.inThreadRegistries || []).concat([a._registry]);
+                info.lastAnims = (info.lastAnims || []).concat([{ _registry: a._registry, _name: a._name, _tags: a._tags }]);
+            }
+            dePickSceneAnimation(a._registry, a);
+            deDbg('deAddAnimToScene ' + a._registry); // DEBUG-DELETE
+        }
+
+        // Make reg the editor's current animation for the bound scene. Picking the playing one drops a pending
+        // pick; anything else becomes the pending pick, previewed now and switched to when the game unpauses
+        // (play, or a commit close) -- Scene.ApplyWebUICommit adds it to the thread if it is not loaded yet.
+        function dePickSceneAnimation(reg, row) {
+            const info = deSceneInfoForPick();
+            if (!info || !reg) return;
             deAutoSave();
-            if (!reg || reg === DE.focusRegistry) return;
-            DE.focusRegistry = reg;
-            deSetCurrentAnimation(reg);
-            SC.activeRegistry = reg;
-            const info = selectedSceneInfo();
-            if (info) info.activeRegistry = reg;
-            deLoadFocusAnim();
+            if (deRegEq(reg, info.activeRegistry)) {
+                if (!DE.pendingSwitch) return;
+                DE.pendingSwitch = null;
+                info.nextRegistry = '';
+                deLoadFocusAnimFromScene();
+            } else {
+                const full = row || (DE.filterAnims || []).find(x => deRegEq(x._registry, reg))
+                    || (info.lastAnims || []).find(x => deRegEq(x._registry, reg)) || { _registry: reg };
+                DE.pendingSwitch = { key: info.key, reg: reg, row: full };
+                info.nextRegistry = reg;
+                deLoadPendingPreview();
+            }
+            deRenderLoadedList();
+            deRenderAnimList();
         }
 
-        function deOnAnimsUpdated() {
-            const el = document.getElementById('description-editor-panel');
-            if (!el || el.style.display === 'none') return;
-            if (DE.scenePick !== 'any') return;
-            const prev = DE.focusRegistry;
-            deEnsureFocus();
-            const countEl = document.getElementById('de-anim-count');
-            if (countEl) {
-                const n = (SC.lastAnims || []).length;
-                countEl.textContent = `animations ${n}`;
+        // Hand a pending pick to the scene (Scene.ApplyWebUICommit -> WebUI_SwitchToRegistry with reseed:
+        // the new animation's orgasm/speaking defaults, dressing only toward undressed). Kept until the scene
+        // reports the new animation, so the preview stays up meanwhile.
+        function deSendPendingSwitch() {
+            const pend = DE.pendingSwitch;
+            if (!pend || pend.sent || typeof window.onSceneInfoCommit !== 'function') return;
+            const info = sceneInfoByKey.get(pend.key);
+            if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
+            pend.sent = true;
+            deDbg('deSendPendingSwitch sending'); // DEBUG-DELETE
+            window.onSceneInfoCommit(JSON.stringify({ _scenes: [{
+                _key: info.key,
+                _mode: 'active',
+                _scene_sid: info.scene_sid,
+                _active_registry: pend.reg,
+                _reseed_defaults: 1
+            }] }));
+        }
+
+        // Scene state pushed: a pending pick that is now playing is done; the live values replace the preview.
+        function deOnSceneAnimationPushed(info) {
+            const pend = DE.pendingSwitch;
+            if (pend && pend.key === info.key && deRegEq(info.activeRegistry, pend.reg)) {
+                DE.pendingSwitch = null;
+                info.nextRegistry = '';
+                return true;
             }
-            if (DE.focusRegistry !== prev || !DE.stagesDraft.length)
-                deLoadFocusAnim();
-            else {
-                deRenderAnimList();
-                deRenderAnimTags();
-            }
+            return false;
         }
 
         // Save to disk without closing; skipped when nothing changed.
@@ -10852,20 +11027,19 @@
             deRenderAnimList();
         }
 
+        // Cancel: drop unsaved edits and any pending animation pick, then close the WebUI without committing --
+        // discardSceneInfos has every live scene restore the state it had when the overlay opened.
         function deCancel() {
             DE.stagesDraft = sceneInfoClone(DE.loadedStages);
             DE.posDraft = sceneInfoClone(DE.loadedPos);
             DE.posDirty = false;
             DE.dirty = false;
-            deRenderStages();
+            DE.pendingSwitch = null;
+            requestWebUIHide(false);
         }
 
         function configureDescriptionEditorFromSceneInfo(info) {
-            if (!info) info = selectedSceneInfo();
-            DE.scene_sid = info.scene_sid;
-            DE.dirty = false;
-            deRenderScenePulldown();
-            deApplyScenePick(deResolveDefaultScenePick());
+            deBindTargetScene();
         }
 
         function configureDescriptionEditor(state) {
@@ -10907,26 +11081,35 @@
                     if (state._anim_name) row._name = state._anim_name;
                 }
             }
-            selectedSceneInfoKey = key;
+            // Only the ControlPanel target's scene becomes the selected one: another scene's push must not pull
+            // the editor off the target.
+            if (!deHasValidTarget() || info.hasActor(formIdU32(targetActor.formId)))
+                selectedSceneInfoKey = key;
             sceneInfosSessionActive = true;
+            // A pending pick the scene now plays is done: the live values replace the preview.
+            const switched = deOnSceneAnimationPushed(info);
             const deEl = document.getElementById('description-editor-panel');
             const deVisible = deEl && deEl.style.display !== 'none';
-            if (deVisible) {
-                deRenderScenePulldown();
-                // Same scene + animation and the editor is already on the thread's stage (or has unsaved edits):
-                // a full push must not reload drafts, or it erases what the user is typing.
-                const sameScene = hadInfo && deIsSceneBound() && DE.scenePick === key;
-                const sameAnim = sameScene && deRegEq(prevReg, info.activeRegistry) && DE.stagesDraft.length > 0;
-                const keepDrafts = sameAnim && ((info.stage | 0) === prevStage || DE.dirty || DE.posDirty);
-                if (sameScene && !keepDrafts)
-                    deApplyScenePick(DE.scenePick);
-                else
-                    deUpdateActiveStageRow();
-                deOnThreadStage(info);
-                if (sceneInfosSeeded) deSetLocked(false);
-            } else {
-                configureDescriptionEditorFromSceneInfo(info);
+            if (!deVisible) return;
+            if (DE.scenePick !== key) {
+                // Not the bound scene. Bind it when it is the target's (e.g. the target's scene just started).
+                if (!deIsSceneBound() && deTargetSceneKey() === key) deBindTargetScene();
+                return;
             }
+            // Same animation and the editor is already on the thread's stage (or has unsaved edits, or still
+            // previews a pending pick): a full push must not reload drafts, or it erases what the user is typing.
+            const sameAnim = hadInfo && deRegEq(prevReg, info.activeRegistry) && DE.stagesDraft.length > 0;
+            const keepDrafts = !switched && (dePendingActive()
+                || (sameAnim && ((info.stage | 0) === prevStage || DE.dirty || DE.posDirty)));
+            if (keepDrafts) {
+                deUpdateActiveStageRow();
+                deRenderLoadedList();
+                if (DE.bottomTab === 'filter') deRenderAnimList();
+            } else {
+                deBindTargetScene();
+            }
+            deOnThreadStage(info);
+            if (sceneInfosSeeded) deSetLocked(false);
         }
 
         // Papyrus Animation_Menu_* still calls configureAnimationMenu.

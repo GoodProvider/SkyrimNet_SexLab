@@ -19,7 +19,7 @@ ScriptName SNSL_JValue
     deep COPY (later writes to @object don't reach the container). A retained child that gets
     detached (clear/removeKey/overwrite) survives, and re-attaching it copies too.
     Rule: attach first, then retain. Only retain an unattached root that you want the container to
-    snapshot (e.g. Scene_Manager's last_ended_obj). Logs a warning if @object is already dead.
+    snapshot. Logs a warning if @object is already dead.
 /;
 Int function retain(Int object, String tag="") global native
 

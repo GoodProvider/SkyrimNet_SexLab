@@ -29,8 +29,10 @@ namespace ActionCatalog
         nlohmann::json g_sceneSettings = nlohmann::json::object();
         std::string g_currentMainPanelKey;
         bool g_animationPanelPreferredOpen = false;
-        // show_scene_creator: set whenever Scene Menu opens; cleared only by its Close button.
-        bool g_showSceneCreator = false;
+        // show_scene_panel: set whenever the Scene view opens; cleared only by the main-panel Close.
+        bool g_showScenePanel = false;
+        // DOM panel the Scene view currently shows (scene_creator_panel | description_editor_panel).
+        std::string g_scenePanelResolved;
         bool g_loaded = false;
 
         struct ControlModeDef {
@@ -583,13 +585,21 @@ namespace ActionCatalog
             return out;
         }
 
+        // The old Scene Menu / Description Editor builtins are aliases of the single Scene view.
+        bool IsScenePanelAlias(const std::string& panel)
+        {
+            return panel == "scene_panel" || panel == "scene_creator_panel" || panel == "description_editor_panel";
+        }
+
         std::string MainPanelKey(const nlohmann::json& entry)
         {
             if (!entry.is_object())
                 return {};
             const std::string type = entry.value("type", "");
-            if (EqualsIgnoreCase(type, "builtin"))
-                return entry.value("panel", "");
+            if (EqualsIgnoreCase(type, "builtin")) {
+                const std::string panel = entry.value("panel", "");
+                return IsScenePanelAlias(panel) ? std::string("scene_panel") : panel;
+            }
             if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
                 EqualsIgnoreCase(type, "actor_detail"))
                 return entry.value("id", "");
@@ -698,7 +708,7 @@ namespace ActionCatalog
         {
             const std::string type = entry.value("type", "");
             if (EqualsIgnoreCase(type, "builtin")) {
-                const std::string panel = entry.value("panel", "");
+                const std::string panel = MainPanelKey(entry);
                 if (!panel.empty())
                     WebUI_Invoke("concealMainPanel('" + panel + "');");
             } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
@@ -716,12 +726,19 @@ namespace ActionCatalog
             }
         }
 
+        bool FocusIsInSexLabScene();
+
         void OpenMainPanelEntry(const nlohmann::json& entry)
         {
             const std::string type = entry.value("type", "");
             if (EqualsIgnoreCase(type, "builtin")) {
-                const std::string panel = entry.value("panel", "");
-                if (!panel.empty()) {
+                const std::string panel = MainPanelKey(entry);
+                if (panel == "scene_panel") {
+                    // Target in a SexLab scene -> Description Editor for it, else Scene Creator.
+                    g_scenePanelResolved = FocusIsInSexLabScene() ? "description_editor_panel" : "scene_creator_panel";
+                    webui_log::info("scene_panel -> {}", g_scenePanelResolved);
+                    WebUI_Invoke("revealMainPanel('scene_panel', '" + g_scenePanelResolved + "');");
+                } else if (!panel.empty()) {
                     WebUI_Invoke("revealMainPanel('" + panel + "');");
                     if (panel == "settings_panel")
                         SexLabNet::InvokeConfigureSettingsPanel();
@@ -1189,12 +1206,25 @@ namespace ActionCatalog
         nlohmann::json catalog;
         nlohmann::json panels = nlohmann::json::array();
         auto& src = ActiveMainPanels();
+        bool haveScenePanel = false;
         if (src.is_array()) {
             for (auto& entry : src) {
                 if (!entry.is_object())
                     continue;
                 if (!PassesRequiresPlugin(entry))
                     continue;
+                if (EqualsIgnoreCase(entry.value("type", ""), "builtin") && MainPanelKey(entry) == "scene_panel") {
+                    // Old scene_creator_panel / description_editor_panel entries collapse into one Scene view.
+                    if (haveScenePanel)
+                        continue;
+                    haveScenePanel = true;
+                    nlohmann::json scene = entry;
+                    scene["panel"] = "scene_panel";
+                    if (entry.value("panel", "") != "scene_panel")
+                        scene["label"] = "Scene";
+                    panels.push_back(std::move(scene));
+                    continue;
+                }
                 panels.push_back(entry);
             }
         }
@@ -1233,8 +1263,10 @@ namespace ActionCatalog
     {
         if (g_currentMainPanelKey.empty())
             return false;
+        if (g_currentMainPanelKey == "scene_panel")
+            return panel == "scene_panel" || panel == g_scenePanelResolved;
         auto* cur = FindMainPanelByKey(g_currentMainPanelKey);
-        return cur && cur->value("panel", "") == panel;
+        return cur && MainPanelKey(*cur) == panel;
     }
 
     void SetAnimationPanelPreferredOpen(bool open)
@@ -1242,22 +1274,39 @@ namespace ActionCatalog
         g_animationPanelPreferredOpen = open;
     }
 
-    bool IsShowSceneCreator()
+    void RerouteScenePanel(bool inScene)
     {
-        return g_showSceneCreator;
+        if (g_currentMainPanelKey != "scene_panel")
+            return;
+        const std::string want = inScene ? "description_editor_panel" : "scene_creator_panel";
+        if (want == g_scenePanelResolved)
+            return;
+        g_scenePanelResolved = want;
+        g_animationPanelPreferredOpen = inScene;
+        webui_log::info("RerouteScenePanel: scene_panel -> {}", want);
+        WebUI_Invoke("revealMainPanel('scene_panel', '" + want + "');");
+        WebUI_Invoke("mainPanelDidOpen();");
     }
 
-    void SetShowSceneCreator(bool show)
+    bool IsShowScenePanel()
     {
-        if (g_showSceneCreator != show)
-            webui_log::info("show_scene_creator={}", show);
-        g_showSceneCreator = show;
+        return g_showScenePanel;
     }
 
-    void SwitchMainPanel(const std::string& key)
+    void SetShowScenePanel(bool show)
+    {
+        if (g_showScenePanel != show)
+            webui_log::info("show_scene_panel={}", show);
+        g_showScenePanel = show;
+    }
+
+    void SwitchMainPanel(const std::string& keyIn)
     {
         if (!g_loaded)
             Load();
+
+        // Old Scene Menu / Description Editor keys select the single Scene view.
+        const std::string key = IsScenePanelAlias(keyIn) ? std::string("scene_panel") : keyIn;
 
         if (key.empty()) {
             ClearMainPanelSelection();
@@ -1266,19 +1315,14 @@ namespace ActionCatalog
         }
 
         if (key == g_currentMainPanelKey) {
-            // Already selected: re-show DOM only (no connection reload — avoids loop).
+            // Already selected: re-show DOM only (no connection reload — avoids loop). For the Scene
+            // view this re-resolves DE vs Scene Creator from the target's current scene state.
             if (auto* cur = FindMainPanelByKey(key)) {
                 if (EqualsIgnoreCase(cur->value("type", ""), "builtin"))
                     OpenMainPanelEntry(*cur);
-                // Reopening (hotkey toggle, or reselecting from the panel pulldown) while this
-                // panel was already selected used to skip mainPanelDidOpen() entirely, so the
-                // Description Editor's scene pulldown never re-resolved which scene is active --
-                // it just kept whatever DE.scenePick it had from before. Mirror the full-switch
-                // path's own call below so reopen re-resolves it too.
-                const std::string panel = cur ? cur->value("panel", "") : std::string();
-                if (panel == "scene_creator_panel")
-                    SetShowSceneCreator(true);
-                if (panel == "scene_creator_panel" || panel == "description_editor_panel") {
+                if (key == "scene_panel") {
+                    SetShowScenePanel(true);
+                    g_animationPanelPreferredOpen = (g_scenePanelResolved == "description_editor_panel");
                     WebUI_Invoke("mainPanelDidOpen();");
                 }
             }
@@ -1301,13 +1345,10 @@ namespace ActionCatalog
         OpenMainPanelEntry(*next);
         webui_log::info("SwitchMainPanel: selected '{}'", key);
 
-        const std::string panel = next->value("panel", "");
-        g_animationPanelPreferredOpen = (panel == "description_editor_panel");
-        if (panel == "scene_creator_panel")
-            SetShowSceneCreator(true);
-
-        // One-shot soft connection load when switching TO Scene Menu / Description Editor.
-        if (panel == "scene_creator_panel" || panel == "description_editor_panel") {
+        g_animationPanelPreferredOpen = (key == "scene_panel" && g_scenePanelResolved == "description_editor_panel");
+        if (key == "scene_panel") {
+            SetShowScenePanel(true);
+            // One-shot soft connection load when switching TO the Scene view.
             WebUI_Invoke("mainPanelDidOpen();");
         }
     }

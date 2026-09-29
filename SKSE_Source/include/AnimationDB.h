@@ -64,6 +64,7 @@ namespace AnimationDB
         int females = -1;
         int male_creatures = -1;
         int female_creatures = -1;
+        std::string name_contains; // lowercase; case-insensitive substring of AnimRow::name
     };
 
     struct TagCount

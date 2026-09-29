@@ -709,9 +709,9 @@ void InitWebUI()
                                 SafeDump(j));
                         }
                     } else {
-                        // "close" = Scene Menu Close button; "cancel" (Escape on a Papyrus creator) keeps the flag.
+                        // "close" = main-panel Close on Scene Creator; "cancel" (Escape on a Papyrus creator) keeps the flag.
                         if (action == "close")
-                            ActionCatalog::SetShowSceneCreator(false);
+                            ActionCatalog::SetShowScenePanel(false);
                         if (!PapyrusBindings_WebUI::TargetMenuSessionActive)
                             WebUI_Visibility_HideWithoutCommit();
                         if (fromTargetMenu) {
@@ -724,6 +724,20 @@ void InitWebUI()
                 } catch (...) {
                     webui_log::warn("onSceneCreatorResult: bad JSON");
                 }
+            });
+        });
+
+        // Main-panel Close on the Description Editor side of the Scene view: stop the Scene view from
+        // auto-opening. JS then selects ControlPanel None (onMainPanelChange ''); the overlay stays open.
+        // DEBUG-DELETE: temporary JS -> SkyrimNet_SexLab.log bridge (deDbg in index.html).
+        PrismaUI->RegisterJSListener(g_view, "onDebugLog", [](const char* value) {
+            webui_log::info("[JS DEBUG] {}", value ? value : "");
+        });
+        // DEBUG-DELETE end
+
+        PrismaUI->RegisterJSListener(g_view, "onScenePanelClose", [](const char*) {
+            RunGuarded("onScenePanelClose", [&] {
+                ActionCatalog::SetShowScenePanel(false);
             });
         });
 
@@ -1028,14 +1042,21 @@ void InitWebUI()
         PrismaUI->RegisterJSListener(g_view, "onWebUIHide", [](const char* value) {
             RunGuarded("onWebUIHide", [&] {
                 bool commit = true;
+                // endSession (Escape): also end the TargetMenu session, like Cancel, but still commit.
+                bool endSession = false;
                 if (value) {
                     try {
                         auto j = nlohmann::json::parse(value);
                         commit = j.value("commit", true);
+                        endSession = j.value("endSession", false);
                     } catch (...) {
                     }
                 }
-                webui_log::info("onWebUIHide commit={}", commit);
+                webui_log::info("onWebUIHide commit={} endSession={}", commit, endSession);
+                if (endSession) {
+                    WebUI_Invoke("hidePanel('target_menu_panel');");
+                    PapyrusBindings_WebUI::ClearTargetMenuSession();
+                }
                 if (commit)
                     WebUI_Visibility_Hide();
                 else

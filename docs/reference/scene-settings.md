@@ -16,6 +16,8 @@ Files under `SKSE/Plugins/SkyrimNet_SexLab/scenes/(setting_name).json`, loaded w
 
 `no_orgasm` / `no_stripping` / `speaking_modifiers` only apply when the Scene Creator's "override animation settings" is on. When it is off, each position starts clothed if a strict majority of the candidate animations default that position to clothed in AnimDB (`_clothed`); a tie starts undressed. The chosen animation's own defaults then take over at its first stage.
 
+**Animation change mid-scene** (SexLab switching animations, SL Tools, or the Description Editor's animation filter): each actor's orgasm and speaking modifiers are reloaded from the new animation's defaults, but dressing only goes toward undressed. An actor the new animation wants undressed is stripped; an actor already undressed stays undressed even when the new animation defaults them to clothed (A dressed in animation 1, undressed in animation 2: 1 → 2 undresses A, 2 → 1 does not re-dress A). Turning "override animation settings" off on a live scene is the exception: it reapplies the animation's dressed flags both ways.
+
 ## Built-in scenes
 
 `default`, `pleasure_pain`, `no_penis`, `nonsexual`, `nonsexual_kissing`, `nonsexual_male_position_0`–`2`, `punish_spanking`, `punish_spanking_victim_nude`, `punish_whipping_oral`, `punish_pleasure_pain_rape`.

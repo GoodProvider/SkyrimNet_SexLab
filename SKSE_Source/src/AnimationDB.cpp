@@ -882,6 +882,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 if (spec.has_description == 2 && any)
                     return false;
             }
+            if (!spec.name_contains.empty() && ToLower(row.name).find(spec.name_contains) == std::string::npos)
+                return false;
             return true;
         }
 

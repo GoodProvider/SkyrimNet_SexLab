@@ -937,16 +937,16 @@ String Function BuildSceneConnectionsJson()
     return json
 EndFunction
 
-; Snapshot (SNSL_JMap, _mode "ended") of the most recently ended scene; the Description Editor
-; lists it after the thread is gone. Handle comes from SkyrimNet_SexLab_Scene.BuildWebUISceneMenuObject,
-; which is SNSL_JValue-backed (C++ JSON store, not JContainers).
-int last_ended_obj = 0
-
-Function SetLastEndedScene(int obj)
-    if last_ended_obj > 0
-        SNSL_JValue.release(last_ended_obj)
-    endif
-    last_ended_obj = SNSL_JValue.retain(obj)
+; Overlay Show: every active scene records the state WebUI Cancel restores.
+Function WebUI_TakeCancelSnapshots()
+    int i = 0
+    while i < sl_scenes.length
+        SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
+        if sl_scene != None && sl_scene.GetThreadActive()
+            sl_scene.WebUI_TakeCancelSnapshot()
+        endif
+        i += 1
+    endwhile
 EndFunction
 
 String Function BuildAllSceneInfosJson()
@@ -991,16 +991,6 @@ String Function BuildAllSceneInfosJson()
         endif
         i += 1
     endwhile
-    ; last_ended_obj is a retained handle held across save/load; the JSON store invalidates it on
-    ; load (JsonStore.h OnNewSession) same as any other retained Papyrus member -- re-check isExists
-    ; or a dead handle gets attached as a null "_scenes" entry (SceneInfo.keyFromState(null) -> 'new'
-    ; on the JS side, clobbering or crashing the Scene Creator draft). See KNOWLEDGEBASE "JSON store
-    ; handles die on every save load".
-    if last_ended_obj > 0 && SNSL_JValue.isExists(last_ended_obj)
-        SNSL_JArray.addObj(arr, last_ended_obj)
-    elseif last_ended_obj > 0
-        last_ended_obj = 0
-    endif
     SNSL_JMap.setObj(root, "_scenes", arr)
     String json = SNSL_JValue.dump(root)
     SNSL_JValue.release(root)

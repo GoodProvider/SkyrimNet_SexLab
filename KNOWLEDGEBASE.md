@@ -1,5 +1,13 @@
 # Knowledgebase
 
+## SexLab `AddAnimation` overwrites index 0 (2026-09-29)
+
+**Symptom:** after adding an animation in the Description Editor and reopening, the loaded list still had 3 rows. Log: `WebUI_SwitchToRegistry B_B_CCG idx:0`, while `WebUI_TakeCancelSnapshot anims:4`.
+
+**Cause:** `sslThreadModel.AddAnimation` calls `sslUtility.MergeAnimationLists(PrimaryAnimations, [new])`. It grows the array with a trailing `None`, then writes the new entries from `Output[Count-1]` down to `Output[0]`, overwriting List1's first entries. `[A,B,C]` + D becomes `[D,B,C,None]`. It also only writes `PrimaryAnimations`, which `thread.Animations` hides whenever forced (`CustomAnimations`) are set.
+
+**Rule:** never call `thread.AddAnimation` or `MergeAnimationLists`. Build the array yourself (skip `None`) and apply it with `SetForcedAnimations` if `GetForcedAnimations()` is non-empty, else `SetAnimations`. See `Scene.WebUI_SwitchToRegistry`.
+
 ## Live undress no-op after a clothed start: SetNoStripping override (2026-09-27)
 
 **Symptom:** a scene started clothed (`ApplyMajorityClothed ... clothed_majority:1`). The user set both actors to undressed in the Description Editor. `WebUI_ApplyLivePositions` ran and the thread JSON showed `dressed:0 dressed_locked:1`, but nobody stripped.
@@ -29,11 +37,24 @@
 - **explain:** `window.prompt` (and likely `window.confirm`) does not show anything in PrismaUI (Ultralight), so the handler returned as if cancelled. Text entry goes through the shared `#stop-dialog-overlay` (`stopDialogOpen(owner, onPick, explainOnly)`).
 - **stop / silent:** `tmFireStop` used `applySceneMenuDraftToSceneInfo`, which copies the SC draft (`mode`, `scene_sid`) into `selectedSceneInfo()`. When SC was a creator draft, the commit carried `_scene_sid:-1` and `WebUI_OnSceneInfoCommit` silently skipped it. Stops now set `pendingStop` directly on the target actor's live SceneInfo (`tmLiveSceneInfo`).
 
-## Scene Menu sticky `show_scene_creator` (2026-09-27)
+## Scene view sticky `show_scene_panel` (2026-09-27, reworked 2026-09-28)
 
-- C++ `ActionCatalog` `g_showSceneCreator` is set by every `SwitchMainPanel` to `scene_creator_panel` and cleared **only** by `onSceneCreatorResult` `_action:"close"` (Scene Menu **Close** button or TargetMenu Scene Creator toggle). `"cancel"` (Escape release of a Papyrus creator) and overlay hide/reset leave it set. In-memory only — resets on game restart, not saved.
-- While set, `WebUI_MaybeRestoreAnimationPanel` (hotkey open + ControlPanel actor change) opens Scene Menu for a non-animating focus actor; animating focus still gets Description Editor.
-- Picking another main panel / None from the pulldown does not clear it — Scene Menu returns on the next target selection by design.
+- One **Scene** main panel (`scene_panel`) replaces the separate Scene Menu / Description Editor entries: C++ shows the Description Editor when the ControlPanel target is in SexLabAnimatingFaction, else Scene Creator. The old `scene_creator_panel` / `description_editor_panel` keys are aliases.
+- C++ `ActionCatalog` `g_showScenePanel` is set by every `SwitchMainPanel` to the Scene view and cleared **only** by the shared main-panel **Close** on it (`onSceneCreatorResult` `_action:"close"` for Scene Creator, `onScenePanelClose` for the Description Editor). `"cancel"` (Escape release of a Papyrus creator), Escape, Cancel and overlay hide/reset leave it set. In-memory only — resets on game restart, not saved.
+- While set, `WebUI_MaybeRestoreScenePanel` (hotkey open + ControlPanel actor change) opens the Scene view for any focus actor. With it cleared, the hotkey no longer opens the Description Editor mid-scene (pick **Scene** from the views pulldown once).
+- Picking another main panel / None from the pulldown does not clear it — the Scene view returns on the next target selection by design.
+- Scene start/end inside `AnimationStart` / `AnimationEnd` cannot rely on the faction check (it may not have changed yet), so the scene tells C++ which panel to show (`WebUI_RerouteScenePanel(inScene)`).
+
+## Description Editor animation filter lists one animation (2026-09-29)
+
+- An active scene push's `_tags` (`Scene.psc` `JMap.setStr(obj, "_tags", GetTagsString(anim))`) are the **playing animation's** tags, not the include-tag filter. `SceneInfo.mergeFromState` copied them into `info.tags` → `copySceneInfoToSC` → `SC.tags`, and `scBuildFilter` sent `_must_tags` with `_require_all`, so the animDB matched only that animation.
+- **Rule:** `mergeFromState` takes `_tags` as filter tags only for creator states; the scene push handler puts active `_tags` on the playing animation's `lastAnims` row.
+
+## Papyrus runs while the WebUI pauses the game (2026-09-28)
+
+**Symptom trap:** "apply this when the game unpauses" cannot be done by sending the commit right away and relying on the pause: the overlay pause stops game time, not the Papyrus VM (seed and commits run while paused). Only SexLab work that needs game time (`GoToStage` → `Advancing`, playback) waits.
+
+**Rule:** hold a deferred change in JS and send it on unpause (Description Editor **play**) or a commit close — the Description Editor's pending animation pick (`DE.pendingSwitch`, `deSendPendingSwitch`) works this way. Cancel then only has to drop it (or restore the Cancel snapshot if it was already sent).
 
 ## Description Editor actor-table edits never reach a live scene (2026-09-26)
 

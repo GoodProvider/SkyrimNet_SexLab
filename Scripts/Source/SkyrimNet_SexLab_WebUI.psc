@@ -26,8 +26,10 @@ Function WebUI_CloseOverlay() global native
 Function WebUI_SetHotkey(int dxScanCode, bool enabled) global native
 ; After Target_Menu_Open: JS picks ControlPanel default (preferredFormId or nearest non-player).
 Function WebUI_AfterTargetOpen(Actor preferred, Bool preferExplicit) global native
-; Hotkey reopen: show Animation main panel when preferred-open and focus is in SexLab.
-Function WebUI_MaybeRestoreAnimationPanel() global native
+; Hotkey open / actor focus: open the Scene view (DE if the target is in a scene, else Scene Creator) while show_scene_panel is set.
+Function WebUI_MaybeRestoreScenePanel() global native
+; Scene start/end with the Scene view selected: DE (inScene) or Scene Creator.
+Function WebUI_RerouteScenePanel(Bool inScene) global native
 ; True when PrismaUI overlay is visible (inverse of WebUI_IsHidden).
 Bool Function WebUI_IsOverlayVisible() global native
 ; Push last AnimDb rebuild timestamp into C++ for Settings panel.

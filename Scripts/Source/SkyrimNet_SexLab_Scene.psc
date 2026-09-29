@@ -706,7 +706,9 @@ bool Function SyncAnimationDefaults()
 EndFunction
 
 ; Drops every position lock and reapplies the current animation's defaults to the actors.
-Function ReloadAnimationDefaults()
+; undress_only (animation changes): dressing only goes toward undressed -- an actor the new animation
+; wants dressed but who is already undressed stays undressed (flag rewritten to match).
+Function ReloadAnimationDefaults(bool undress_only = true)
     if thread == None || thread.animation == None
         return
     endif
@@ -717,10 +719,16 @@ Function ReloadAnimationDefaults()
     int i = 0
     while positions && i < positions.length && i < position_objs.length
         if positions[i] && position_objs[i] > 0
-            ApplyDressedToActor(positions[i], SNSL_JMap.getInt(position_objs[i], "dressed", 0) == 1)
+            bool want_dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0) == 1
+            if want_dressed && undress_only && StorageUtil.HasIntValue(positions[i], storage_undressed_key)
+                SNSL_JMap.setInt(position_objs[i], "dressed", 0)
+            else
+                ApplyDressedToActor(positions[i], want_dressed)
+            endif
         endif
         i += 1
     endwhile
+    PersistPositions()
 EndFunction
 
 ; Strips or re-dresses akActor to match a dressed flag. Uses the thread's own tracked strip state
@@ -1414,7 +1422,9 @@ Function AnimationStart()
     ApplyStyleSpeed()
     manager.SaveThreadsJson()
     String msg = GetIntentMessage(INTENT_STAGE_START) + GetDescription()
-    RegisterEvent("sexlab update", msg, sender, receiver) 
+    RegisterEvent("sexlab update", msg, sender, receiver)
+    ; Scene view showing Scene Creator for a target who just started animating -> Description Editor.
+    WebUI_RerouteForFocus(true)
     WebUI_ConfigureIfOverlayVisible()
     DbgEnd("AnimationStart", "msg:"+msg+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
 EndFunction
@@ -1688,15 +1698,8 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         endif 
     endif
 
-    ; Keep the scene visible to the Description Editor after the thread is gone (snapshot before Release clears position_objs).
-    ; ended_obj is an SNSL_JValue handle (BuildWebUISceneMenuObject's own store).
-    if thread != None && manager != None
-        int ended_obj = BuildWebUISceneMenuObject()
-        if ended_obj > 0
-            SNSL_JMap.setStr(ended_obj, "_mode", "ended")
-            manager.SetLastEndedScene(ended_obj)
-        endif
-    endif
+    ; Scene view showing this scene's Description Editor -> Scene Creator (the target is no longer in a scene).
+    WebUI_RerouteForFocus(false)
 
     Release()
     DbgEnd("AnimationEnd")
@@ -2390,6 +2393,7 @@ Function BuildInThreadAnims(sslThreadController _thread, int in_thread, int in_t
     if skipped > 0
         Trace("BuildInThreadAnims", "skipped "+skipped+"/"+anims.length+" anims, first at index "+first_skipped)
     endif
+    Trace("BuildInThreadAnims", "DEBUG sent:"+SNSL_JArray.count(in_thread)+" "+SNSL_JValue.dump(in_thread)+" sexlab "+DbgAnimList()) ; DEBUG-DELETE
 EndFunction
 
 
@@ -3137,6 +3141,7 @@ Function WebUI_OnNarrate(String json)
             who = Game.GetPlayer()
         endif
         ChangeStyle(who, new_style)
+        cancel_dirty = true
         return
     endif
     if text == ""
@@ -3183,99 +3188,333 @@ Function WebUI_OnAnimUpdate(String json)
     if next_reg == ""
         return
     endif
-    sslBaseAnimation next_anim = sexlab.GetAnimationByRegistry(next_reg)
-    if next_anim == None
-        Trace("WebUI_OnAnimUpdate", "unknown registry:"+next_reg, true)
-        return
+    WebUI_SwitchToRegistry(next_reg, true)
+EndFunction
+
+; DEBUG-DELETE: raw SexLab thread.Animations dump, "len:N forced:F [reg,None,...]".
+String Function DbgAnimList()
+    if thread == None
+        return "no thread"
     endif
+    sslBaseAnimation[] anims = thread.Animations
+    int n = 0
+    if anims
+        n = anims.length
+    endif
+    sslBaseAnimation[] forced = thread.GetForcedAnimations()
+    int nf = 0
+    if forced
+        nf = forced.length
+    endif
+    String s = "len:"+n+" forced:"+nf+" ["
+    int i = 0
+    while i < n
+        if i > 0
+            s += ","
+        endif
+        if anims[i]
+            s += anims[i].Registry
+        else
+            s += "None"
+        endif
+        i += 1
+    endwhile
+    return s+"]"
+EndFunction
+; DEBUG-DELETE end
+
+; Makes reg the playing animation: SetAnimation when the thread already has it, else appends it to a
+; rebuilt list (at SexLab's 128 cap, evicts an unplayed non-active entry first). reseed: reload the new animation's
+; orgasm/speaking defaults, dressing only toward undressed, and narrate the change (CheckAnimationChange).
+; Otherwise only record it (NoteSeededRegistry), for callers that already applied their own choices.
+bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
+    if thread == None || reg == "" || !sexlab
+        return false
+    endif
+    sslBaseAnimation next_anim = sexlab.GetAnimationByRegistry(reg)
+    if next_anim == None
+        Trace("WebUI_SwitchToRegistry", "unknown registry:"+reg, true)
+        return false
+    endif
+    Trace("WebUI_SwitchToRegistry", "DEBUG before "+reg+" "+DbgAnimList()) ; DEBUG-DELETE
     sslBaseAnimation[] cur = thread.Animations
     int idx = -1
     int i = 0
     while cur && i < cur.length
-        if cur[i] && cur[i].Registry == next_reg
+        if cur[i] && cur[i].Registry == reg
             idx = i
         endif
         i += 1
     endwhile
-    if idx >= 0
-        thread.SetAnimation(idx)
-        NotePlayedRegistry(next_reg)
-        CheckAnimationChange()
-        SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
-        SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
-        return
-    endif
-    int len = 0
-    if cur
-        len = cur.length
-    endif
-    bool use_forced = false
-    sslBaseAnimation[] forced = thread.GetForcedAnimations()
-    if forced && forced.length > 0
-        use_forced = true
-    endif
-    if len >= 128
-        String active_now = ""
-        if thread.animation
-            active_now = thread.animation.Registry
+    if idx < 0
+        ; Never thread.AddAnimation: SexLab's MergeAnimationLists overwrites index 0 and leaves a None
+        ; tail (KNOWLEDGEBASE), and it only writes PrimaryAnimations, which a forced list hides. Rebuild
+        ; the list instead: drop None slots, evict at the 128 cap, append the new animation last.
+        int len = 0
+        if cur
+            len = cur.length
         endif
-        int evict = -1
+        int kept = 0
         i = 0
         while i < len
-            if cur[i] && cur[i].Registry != active_now
-                if !WasRegistryPlayed(cur[i].Registry)
-                    evict = i
-                    i = len
-                elseif evict < 0
-                    evict = i
-                endif
+            if cur[i]
+                kept += 1
             endif
             i += 1
         endwhile
-        if evict < 0
-            Trace("WebUI_OnAnimUpdate", "cannot evict at cap", true)
-            return
+        int evict = -1
+        if kept >= 128
+            String active_now = ""
+            if thread.animation
+                active_now = thread.animation.Registry
+            endif
+            i = 0
+            while i < len
+                if cur[i] && cur[i].Registry != active_now
+                    if !WasRegistryPlayed(cur[i].Registry)
+                        evict = i
+                        i = len
+                    elseif evict < 0
+                        evict = i
+                    endif
+                endif
+                i += 1
+            endwhile
+            if evict < 0
+                Trace("WebUI_SwitchToRegistry", "cannot evict at cap", true)
+                return false
+            endif
+            kept -= 1
         endif
-        sslBaseAnimation[] rebuilt = sslUtility.AnimationArray(len)
+        sslBaseAnimation[] rebuilt = sslUtility.AnimationArray(kept + 1)
         int w = 0
         i = 0
         while i < len
-            if i != evict
+            if cur[i] && i != evict
                 rebuilt[w] = cur[i]
                 w += 1
             endif
             i += 1
         endwhile
         rebuilt[w] = next_anim
-        if use_forced
+        sslBaseAnimation[] forced = thread.GetForcedAnimations()
+        if forced && forced.length > 0
             thread.SetForcedAnimations(rebuilt)
         else
             thread.SetAnimations(rebuilt)
         endif
-        thread.SetAnimation(w)
-    else
-        thread.AddAnimation(next_anim)
         cur = thread.Animations
-        idx = -1
         i = 0
         while cur && i < cur.length
-            if cur[i] && cur[i].Registry == next_reg
+            if cur[i] && cur[i].Registry == reg
                 idx = i
             endif
             i += 1
         endwhile
-        if idx >= 0
-            thread.SetAnimation(idx)
+    endif
+    if idx < 0
+        Trace("WebUI_SwitchToRegistry", "add failed:"+reg, true)
+        return false
+    endif
+    int anim_count = 0
+    if thread.Animations
+        anim_count = thread.Animations.length
+    endif
+    Trace("WebUI_SwitchToRegistry", "DEBUG after rebuild idx:"+idx+" "+DbgAnimList()) ; DEBUG-DELETE
+    thread.SetAnimation(idx)
+    Trace("WebUI_SwitchToRegistry", "DEBUG after SetAnimation active:"+thread.animation.Registry+" "+DbgAnimList()) ; DEBUG-DELETE
+    NotePlayedRegistry(reg)
+    cancel_dirty = true
+    if reseed
+        CheckAnimationChange()
+    else
+        NoteSeededRegistry(reg)
+    endif
+    Trace("WebUI_SwitchToRegistry", reg+" idx:"+idx+" anims:"+anim_count+" reseed:"+reseed)
+    WebUI_ConfigureIfOverlayVisible()
+    return true
+EndFunction
+
+; -------------------------------------------------
+; WebUI Cancel snapshot
+;
+; Taken when the overlay opens (Menu.WebUI_SeedSceneInfos). WebUI Cancel sends _restore_snapshot and
+; the scene goes back to it: animation list, playing animation, stage, style, per-actor orgasm/
+; speaking/dressed + locks, and anyone undressed since is re-dressed. Plain script arrays, no JSON
+; store handles. cancel_dirty marks that a WebUI change landed since the snapshot (restore is a
+; no-op otherwise).
+; -------------------------------------------------
+bool snap_valid = false
+bool cancel_dirty = false
+String[] snap_regs
+bool snap_forced = false
+String snap_active_reg = ""
+int snap_stage = 0
+String snap_style = ""
+String snap_seeded = ""
+Actor[] snap_actors
+int[] snap_no_orgasm
+int[] snap_deny
+int[] snap_dressed
+int[] snap_undressed
+int[] snap_orgasm_locked
+int[] snap_speaking_locked
+int[] snap_dressed_locked
+String[] snap_speaking
+
+Function WebUI_TakeCancelSnapshot()
+    snap_valid = false
+    cancel_dirty = false
+    if thread == None || thread.animation == None
+        return
+    endif
+    sslBaseAnimation[] forced = thread.GetForcedAnimations()
+    snap_forced = forced && forced.length > 0
+    sslBaseAnimation[] anims = thread.Animations
+    int n = 0
+    if anims
+        n = anims.length
+    endif
+    snap_regs = PapyrusUtil.StringArray(n)
+    int i = 0
+    while i < n
+        if anims[i]
+            snap_regs[i] = anims[i].Registry
+        endif
+        i += 1
+    endwhile
+    snap_active_reg = thread.animation.Registry
+    snap_stage = thread.stage
+    snap_style = style
+    snap_seeded = seeded_registry
+    Actor[] positions = thread.positions
+    int pn = 0
+    if positions
+        pn = positions.length
+    endif
+    snap_actors = PapyrusUtil.ActorArray(pn)
+    snap_no_orgasm = PapyrusUtil.IntArray(pn)
+    snap_deny = PapyrusUtil.IntArray(pn)
+    snap_dressed = PapyrusUtil.IntArray(pn)
+    snap_undressed = PapyrusUtil.IntArray(pn)
+    snap_orgasm_locked = PapyrusUtil.IntArray(pn)
+    snap_speaking_locked = PapyrusUtil.IntArray(pn)
+    snap_dressed_locked = PapyrusUtil.IntArray(pn)
+    snap_speaking = PapyrusUtil.StringArray(pn)
+    i = 0
+    while i < pn
+        Actor a = positions[i]
+        snap_actors[i] = a
+        if a && StorageUtil.HasIntValue(a, storage_undressed_key)
+            snap_undressed[i] = 1
+        endif
+        if position_objs && i < position_objs.length && position_objs[i] > 0
+            int po = position_objs[i]
+            snap_no_orgasm[i] = SNSL_JMap.getInt(po, "no_orgasm")
+            snap_deny[i] = SNSL_JMap.getInt(po, "deny_orgasm")
+            snap_dressed[i] = SNSL_JMap.getInt(po, "dressed")
+            snap_orgasm_locked[i] = SNSL_JMap.getInt(po, "orgasm_locked")
+            snap_speaking_locked[i] = SNSL_JMap.getInt(po, "speaking_locked")
+            snap_dressed_locked[i] = SNSL_JMap.getInt(po, "dressed_locked")
+            snap_speaking[i] = SpeakingCsvFromIndex(i)
+        endif
+        i += 1
+    endwhile
+    snap_valid = true
+    Trace("WebUI_TakeCancelSnapshot", "anim:"+snap_active_reg+" stage:"+snap_stage+" anims:"+n+" actors:"+pn)
+    Trace("WebUI_TakeCancelSnapshot", "DEBUG "+DbgAnimList()) ; DEBUG-DELETE
+EndFunction
+
+Function WebUI_RestoreCancelSnapshot()
+    if !snap_valid || !cancel_dirty || thread == None
+        Trace("WebUI_RestoreCancelSnapshot", "nothing to restore valid:"+snap_valid+" dirty:"+cancel_dirty)
+        return
+    endif
+    ; Animation list + playing animation.
+    int n = snap_regs.length
+    sslBaseAnimation[] anims = sslUtility.AnimationArray(n)
+    int w = 0
+    int active_idx = -1
+    int i = 0
+    while i < n
+        sslBaseAnimation a = None
+        if snap_regs[i] != ""
+            a = sexlab.GetAnimationByRegistry(snap_regs[i])
+        endif
+        if a
+            anims[w] = a
+            if snap_regs[i] == snap_active_reg
+                active_idx = w
+            endif
+            w += 1
+        endif
+        i += 1
+    endwhile
+    if w > 0
+        if w != n
+            sslBaseAnimation[] trimmed = sslUtility.AnimationArray(w)
+            i = 0
+            while i < w
+                trimmed[i] = anims[i]
+                i += 1
+            endwhile
+            anims = trimmed
+        endif
+        if snap_forced
+            thread.SetForcedAnimations(anims)
+        else
+            thread.SetAnimations(anims)
+        endif
+        if active_idx >= 0 && (thread.animation == None || thread.animation.Registry != snap_active_reg)
+            thread.SetAnimation(active_idx)
         endif
     endif
-    NotePlayedRegistry(next_reg)
-    CheckAnimationChange()
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
+    ; Record without reseeding or narrating: the values below are the ones to keep.
+    seeded_registry = snap_seeded
+    pending_animation_change = false
+    if snap_style != "" && snap_style != style
+        SetStyle(snap_style)
+    endif
+    ; Per-actor settings, matched by actor (not slot).
+    Actor[] positions = thread.positions
+    i = 0
+    while i < snap_actors.length
+        Actor a = snap_actors[i]
+        int p = -1
+        if a && positions
+            p = positions.Find(a)
+        endif
+        if p >= 0 && position_objs && p < position_objs.length && position_objs[p] > 0
+            int po = position_objs[p]
+            SNSL_JMap.setInt(po, "no_orgasm", snap_no_orgasm[i])
+            SNSL_JMap.setInt(po, "deny_orgasm", snap_deny[i])
+            SNSL_JMap.setInt(po, "dressed", snap_dressed[i])
+            SNSL_JMap.setInt(po, "orgasm_locked", snap_orgasm_locked[i])
+            SNSL_JMap.setInt(po, "speaking_locked", snap_speaking_locked[i])
+            SNSL_JMap.setInt(po, "dressed_locked", snap_dressed_locked[i])
+            SetSpeakingObj(p, snap_speaking[i])
+            thread.DisableOrgasm(a, snap_no_orgasm[i] == 1 || snap_deny[i] == 1)
+            if snap_undressed[i] == 0 && StorageUtil.HasIntValue(a, storage_undressed_key)
+                ApplyDressedToActor(a, true)
+            endif
+        endif
+        i += 1
+    endwhile
+    PersistPositions()
+    if snap_stage >= 1 && thread.animation && snap_stage != thread.stage && snap_stage <= thread.animation.StageCount()
+        thread.GoToStage(snap_stage)
+    endif
+    cancel_dirty = false
+    Trace("WebUI_RestoreCancelSnapshot", "anim:"+snap_active_reg+" stage:"+snap_stage+" style:"+snap_style)
 EndFunction
 
 Function ApplyWebUICommit(int obj)
     if obj == 0
+        return
+    endif
+    ; WebUI Cancel: put the scene back the way it was when the overlay opened.
+    if JMap.getInt(obj, "_restore_snapshot", 0) == 1
+        WebUI_RestoreCancelSnapshot()
         return
     endif
     if JMap.getInt(obj, "_pending_stop", 0) == 1
@@ -3372,7 +3611,7 @@ Function ApplyWebUICommit(int obj)
     WebUI_ApplyLivePositions(obj, override_on)
     if !override_on && position_override
         ; Just switched off: drop the user's values and locks, fall back to the animation.
-        ReloadAnimationDefaults()
+        ReloadAnimationDefaults(false)
         PersistPositions()
     endif
     position_override = override_on
@@ -3417,6 +3656,7 @@ Function ApplyWebUICommit(int obj)
         Trace("ApplyWebUICommit", "stage thread:"+thread.stage+" want:"+want_stage+" step:"+stage_step+" max:"+maxStage)
         if want_stage <= maxStage && want_stage != thread.stage
             thread.GoToStage(want_stage)
+            cancel_dirty = true
             Trace("ApplyWebUICommit", "stage now:"+thread.stage)
         endif
         ; GoToStage sets thread.stage synchronously: show it in the editor now, not at StageStart.
@@ -3426,40 +3666,12 @@ Function ApplyWebUICommit(int obj)
     if active_reg == ""
         active_reg = JMap.getStr(obj, "_next_registry", "")
     endif
-    if active_reg != "" && sexlab
-        sslBaseAnimation next_anim = sexlab.GetAnimationByRegistry(active_reg)
-        if next_anim
-            sslBaseAnimation[] cur = thread.Animations
-            int idx = -1
-            i = 0
-            while cur && i < cur.length
-                if cur[i] && cur[i].Registry == active_reg
-                    idx = i
-                endif
-                i += 1
-            endwhile
-            if idx >= 0
-                thread.SetAnimation(idx)
-                NotePlayedRegistry(active_reg)
-                NoteSeededRegistry(active_reg)
-            else
-                thread.AddAnimation(next_anim)
-                cur = thread.Animations
-                idx = -1
-                i = 0
-                while cur && i < cur.length
-                    if cur[i] && cur[i].Registry == active_reg
-                        idx = i
-                    endif
-                    i += 1
-                endwhile
-                if idx >= 0
-                    thread.SetAnimation(idx)
-                    NotePlayedRegistry(active_reg)
-                    NoteSeededRegistry(active_reg)
-                endif
-            endif
-        endif
+    Trace("ApplyWebUICommit", "DEBUG active_reg:"+active_reg+" reseed:"+JMap.getInt(obj, "_reseed_defaults", 0)+" "+DbgAnimList()) ; DEBUG-DELETE
+    if active_reg != "" && (thread.animation == None || thread.animation.Registry != active_reg)
+        ; _reseed_defaults (Description Editor switch): the new animation's defaults replace the actors'
+        ; orgasm/speaking, dressing only toward undressed. Without it (Scene Menu Update) the user's
+        ; values above stand.
+        WebUI_SwitchToRegistry(active_reg, JMap.getInt(obj, "_reseed_defaults", 0) == 1)
     endif
 EndFunction
 
@@ -3796,6 +4008,20 @@ Function TM_SaveAnimationSettings()
         i += 1
     endwhile
     PersistPositions()
+EndFunction
+
+; Scene start (in_scene) / end with the overlay open: when the ControlPanel target is in this thread,
+; flip a selected Scene view to the Description Editor or Scene Creator. Told explicitly because the
+; SexLab animating faction may not have changed yet inside these hooks.
+Function WebUI_RerouteForFocus(bool in_scene)
+    if thread == None || !SkyrimNet_SexLab_WebUI.WebUI_IsOverlayVisible()
+        return
+    endif
+    Actor focus = SkyrimNet_SexLab_WebUI.WebUI_GetFocusActor()
+    if focus == None || !thread.positions || thread.positions.Find(focus) < 0
+        return
+    endif
+    SkyrimNet_SexLab_WebUI.WebUI_RerouteScenePanel(in_scene)
 EndFunction
 
 Function WebUI_ConfigureIfOverlayVisible()

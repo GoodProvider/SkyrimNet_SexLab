@@ -65,23 +65,37 @@ Function ProcessHotkey(int key_code)
     Actor player = Game.GetPlayer()
     bool preferExplicit = false
 
-    if target == None && main.sexlab.IsActorActive(player)
+    if main.sexlab.IsActorActive(player)
+        ; Player mid-scene (crosshair ignored): first non-player from position 0, else the player
+        ; when solo. Others stay reachable via the pulldown.
         target = player
         preferExplicit = true
+        sslThreadController thread = manager.GetThreadByActor(player)
+        if thread && thread.Positions
+            int i = 0
+            while i < thread.Positions.length
+                Actor a = thread.Positions[i]
+                if a != None && a != player
+                    target = a
+                    i = thread.Positions.length
+                else
+                    i += 1
+                endif
+            endwhile
+        endif
     elseif target != None
         preferExplicit = true
-        ; Crosshair on a non-participant (e.g. DOM mistress) mid-scene: focus the player so the
-        ; Description Editor opens for the player's scene. Others stay reachable via the pulldown.
-        if !main.sexlab.IsActorActive(target) && main.sexlab.IsActorActive(player)
-            target = player
-        endif
     else
         target = player
         preferExplicit = false
     endif
 
     bool target_not_none = target != None
-    Trace("ProcessHotkey","target_not_none: "+target_not_none+" preferExplicit:"+preferExplicit)
+    String target_name = "None"
+    if target_not_none
+        target_name = target.GetDisplayName()
+    endif
+    Trace("ProcessHotkey","target: "+target_name+" preferExplicit:"+preferExplicit)
 
     if target != None
         Open_WebUI_Target(target)
@@ -147,7 +161,7 @@ Function WebUI_OnControlActorFocus(Actor target)
     bool hasStripped = main.HasStrippedItems(target)
     Trace("WebUI_OnControlActorFocus", target.GetDisplayName()+" hasStripped:"+hasStripped)
     SkyrimNet_SexLab_WebUI.Target_Menu_Refresh(hasStripped)
-    SkyrimNet_SexLab_WebUI.WebUI_MaybeRestoreAnimationPanel()
+    SkyrimNet_SexLab_WebUI.WebUI_MaybeRestoreScenePanel()
 EndFunction
 
 Function WebUI_ConfigureFocusScene()
@@ -170,6 +184,8 @@ Function WebUI_SeedSceneInfos()
     if !manager
         return
     endif
+    ; Overlay Show = "before the hotkey": the state WebUI Cancel restores.
+    manager.WebUI_TakeCancelSnapshots()
     SkyrimNet_SexLab_WebUI.SceneInfos_Seed(manager.BuildAllSceneInfosJson())
 EndFunction
 

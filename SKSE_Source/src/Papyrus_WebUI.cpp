@@ -263,6 +263,12 @@ namespace PapyrusBindings_WebUI
                 spec.male_creatures = j["_male_creatures"].get<int>();
             if (j.contains("_female_creatures") && j["_female_creatures"].is_number_integer())
                 spec.female_creatures = j["_female_creatures"].get<int>();
+            if (j.contains("_name_contains") && j["_name_contains"].is_string()) {
+                std::string s = AnimationDB::ToLower(j["_name_contains"].get<std::string>());
+                const auto b = s.find_first_not_of(" \t");
+                const auto e = s.find_last_not_of(" \t");
+                spec.name_contains = (b == std::string::npos) ? std::string() : s.substr(b, e - b + 1);
+            }
         } catch (...) {
             webui_log::warn("ParseFilterJson failed");
         }
@@ -1731,22 +1737,21 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke(std::format("selectControlActorDefault({});", fid));
     }
 
-    void WebUI_MaybeRestoreAnimationPanel(RE::StaticFunctionTag*)
+    void WebUI_MaybeRestoreScenePanel(RE::StaticFunctionTag*)
     {
-        auto* focus = TargetCurrent();
-        if (!focus)
+        if (!TargetCurrent() || !ActionCatalog::IsShowScenePanel())
             return;
-        if (!IsSexLabAnimatingActor(focus)) {
-            if (ActionCatalog::IsShowSceneCreator() && !ActionCatalog::IsMainPanelOpen("scene_creator_panel")) {
-                webui_log::info("WebUI_MaybeRestoreAnimationPanel: show_scene_creator -> Scene Menu");
-                ActionCatalog::SwitchMainPanel("scene_creator_panel");
-            }
-            return;
-        }
-        webui_log::info("WebUI_MaybeRestoreAnimationPanel: opening Description Editor for animating focus");
-        // No WebUI_ConfigureFocusScene here: WebUI_SeedSceneInfos already sent this scene's full state
-        // (stages included) on overlay Show, and mainPanelDidOpen binds the panel from that cache.
-        ActionCatalog::SwitchMainPanel("description_editor_panel");
+        // SwitchMainPanel re-resolves an already-selected Scene view, so a target change or a scene
+        // start/end flips it between Description Editor and Scene Creator. No WebUI_ConfigureFocusScene:
+        // WebUI_SeedSceneInfos already sent every scene's full state on overlay Show, and
+        // mainPanelDidOpen binds the panel from that cache.
+        webui_log::info("WebUI_MaybeRestoreScenePanel: show_scene_panel -> Scene");
+        ActionCatalog::SwitchMainPanel("scene_panel");
+    }
+
+    void WebUI_RerouteScenePanel(RE::StaticFunctionTag*, bool inScene)
+    {
+        ActionCatalog::RerouteScenePanel(inScene);
     }
 
     bool WebUI_IsMainPanelOpen(RE::StaticFunctionTag*, RE::BSFixedString panel)
@@ -1784,7 +1789,8 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("WebUI_CloseOverlay", scriptName, WebUI_CloseOverlay);
         a_vm->RegisterFunction("WebUI_SetHotkey", scriptName, WebUI_SetHotkey);
         a_vm->RegisterFunction("WebUI_AfterTargetOpen", scriptName, WebUI_AfterTargetOpen);
-        a_vm->RegisterFunction("WebUI_MaybeRestoreAnimationPanel", scriptName, WebUI_MaybeRestoreAnimationPanel);
+        a_vm->RegisterFunction("WebUI_MaybeRestoreScenePanel", scriptName, WebUI_MaybeRestoreScenePanel);
+        a_vm->RegisterFunction("WebUI_RerouteScenePanel", scriptName, WebUI_RerouteScenePanel);
         a_vm->RegisterFunction("WebUI_IsOverlayVisible", scriptName, WebUI_IsOverlayVisible);
         a_vm->RegisterFunction("WebUI_IsMainPanelOpen", scriptName, WebUI_IsMainPanelOpen);
         a_vm->RegisterFunction("WebUI_SetLastRebuildTimestamp", scriptName, WebUI_SetLastRebuildTimestamp);
