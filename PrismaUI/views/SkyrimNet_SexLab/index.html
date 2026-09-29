@@ -313,14 +313,45 @@
 
         .de-animfilter-section > .section-header,
         .de-animfilter-section > .compact-row,
-        .de-animfilter-section > .de-filter-section {
+        .de-animfilter-section > .de-animfilter-top {
             flex-shrink: 0;
         }
 
-        /* Thread's loaded animations: five rows, then scroll. */
+        /* Animation filter tab top: filters (left) | SexLab current animations (right). */
+        .de-animfilter-top {
+            display: flex;
+            gap: var(--space-sm);
+            align-items: stretch;
+            border-top: 1px solid var(--border);
+            padding-top: var(--space-sm);
+        }
+
+        .de-animfilter-top > .de-filter-section {
+            flex: 1 1 0;
+            min-width: 0;
+            width: auto;
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .de-loaded-col {
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* The filter column sets the row height; the loaded list scrolls within it (at least five rows). */
+        .de-loaded-body {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: calc(5 * 1.9em + 2.2em);
+        }
+
         #de-loaded-list {
-            flex: 0 0 auto;
-            max-height: calc(5 * 1.9em + 2.2em);
+            position: absolute;
+            inset: 0;
+            max-height: none;
             overflow-y: auto;
         }
 
@@ -1921,8 +1952,7 @@
             <div id="de-stages-host"></div>
         </div>
         <div class="de-section de-animfilter-section">
-            <div class="section-header">loaded</div>
-            <div id="de-loaded-list" class="scroll-list"></div>
+            <div class="de-animfilter-top">
             <div class="de-filter-section">
                 <div class="sc-selected-tags">
                     <div class="tag-mode-row">
@@ -1951,6 +1981,13 @@
                         <input id="de-anim-name-filter" type="text" placeholder="part of the animation name" oninput="deOnNameFilterInput(this.value)" />
                     </div>
                 </div>
+            </div>
+            <div class="de-loaded-col">
+                <div class="section-header">SexLab current animations</div>
+                <div class="de-loaded-body">
+                    <div id="de-loaded-list" class="scroll-list"></div>
+                </div>
+            </div>
             </div>
             <div class="compact-row"><span id="de-anim-count"></span></div>
             <div id="de-anims-list" class="scroll-list"></div>
