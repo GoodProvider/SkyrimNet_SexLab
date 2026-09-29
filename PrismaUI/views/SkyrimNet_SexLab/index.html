@@ -317,6 +317,40 @@
             flex-shrink: 0;
         }
 
+        /* Selected tags (left half) | suppress (right half); both grow to show every chip; click a chip to remove it. */
+        .de-selected-tags-split {
+            display: flex;
+            gap: var(--space-sm);
+            align-items: flex-start;
+            flex-shrink: 0;
+        }
+
+        .de-selected-tags-split > .tag-mode-row {
+            flex: 1 1 0;
+            min-width: 0;
+            align-items: flex-start;
+        }
+
+        .de-selected-tags-split .tag-mode-btn {
+            flex-shrink: 0;
+            min-height: 0;
+            align-items: flex-start;
+            /* chip border (1px) + chip padding (1px) so label text lines up with chip text */
+            padding-top: 2px;
+            line-height: 1.6;
+        }
+
+        .de-selected-tags-split .active-tag-list {
+            flex: 1 1 auto;
+            min-width: 0;
+            align-items: flex-start;
+            align-content: flex-start;
+        }
+
+        .de-selected-tags-split .tag-chip {
+            line-height: 1.6;
+        }
+
         /* Animation filter tab top: filters (left) | SexLab current animations (right). */
         .de-animfilter-top {
             display: flex;
@@ -572,6 +606,13 @@
             align-items: center;
             gap: var(--space-sm);
             flex-shrink: 0;
+        }
+
+        /* Cancel sits inline with Save and the shared Close: drop .option-cancel's footer offset. */
+        #de-action-bar .option-cancel {
+            margin-top: 0;
+            padding: 0;
+            border-top: none;
         }
 
         .de-section {
@@ -1880,9 +1921,7 @@
                 </div>
                 <div class="sc-available-block">
                     <div class="compact-row">
-                        <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
-                        <div id="sc-type-pulldown"></div>
-                    </div>
+                        <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />                    </div>
                     <div id="sc-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
                         <span>filter by gender:</span>
@@ -1954,7 +1993,7 @@
         <div class="de-section de-animfilter-section">
             <div class="de-animfilter-top">
             <div class="de-filter-section">
-                <div class="sc-selected-tags">
+                <div class="de-selected-tags-split">
                     <div class="tag-mode-row">
                         <span class="tag-mode-btn active" id="de-btn-include" onclick="scSetTagMode('include')">tags</span>
                         <div id="de-include-tags" class="active-tag-list"></div>
@@ -1967,7 +2006,6 @@
                 <div class="sc-available-block">
                     <div class="compact-row">
                         <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
-                        <div id="de-type-pulldown"></div>
                     </div>
                     <div id="de-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
@@ -2252,13 +2290,35 @@
                 if (el) el.style.display = 'none';
             }
             logStopPolling();
-            updateMainPanelClose();
+            syncMainPanelPulldown('', false);
         }
 
         // Close sits over whichever main panel is showing; hidden at None.
         function updateMainPanelClose() {
             const btn = document.getElementById('main-panel-close');
             if (btn) btn.style.display = MAIN_SELECTED_KEY ? '' : 'none';
+        }
+
+        // Keep the ControlPanel pulldown on what is actually shown. A builtin main panel hidden directly
+        // (C++ hidePanel after Scene Creator start/cancel, animation-menu close/stop) drops to None here and
+        // in C++ (onMainPanelChange ''), so a later configureControlPanel does not re-seed it. Leaves
+        // show_scene_panel alone: the Scene view still restores on the next open when that flag is set.
+        // hiddenKey: the builtin just concealed; only drops when it is the selected panel (a switch sets the
+        // new key before C++ conceals the old one). changed: the caller already cleared MAIN_SELECTED_KEY
+        // (TargetMenu Custom/Editor need a re-render).
+        function syncMainPanelPulldown(hiddenKey, changed) {
+            if (hiddenKey && MAIN_SELECTED_KEY && domIdForPanelKey(hiddenKey) === domIdForPanelKey(MAIN_SELECTED_KEY)) {
+                MAIN_SELECTED_KEY = '';
+                changed = true;
+                if (typeof window.onMainPanelChange === 'function')
+                    window.onMainPanelChange(JSON.stringify({ key: '' }));
+            }
+            mainPanelPulldownBusy = true;
+            renderControlPanelPulldown();
+            mainPanelPulldownBusy = false;
+            updateMainPanelClose();
+            if (changed && typeof renderTargetMenu === 'function')
+                renderTargetMenu();
         }
 
         // Shared main-panel Close: back to None with the overlay still open. On the Scene view it also clears
@@ -2325,25 +2385,33 @@
             return d === 'flex' || d === 'block';
         }
 
-        function tmToggleSceneCreator() {
+        // Scene view up (Description Editor or Scene Creator): TargetMenu Custom / Editor rows highlight.
+        function tmScenePanelIsOpen() {
+            return MAIN_SELECTED_KEY === 'scene_panel';
+        }
+
+        // TargetMenu Custom (actor root, type scene_creator) and Editor (scene root, type scene_editor) both
+        // toggle the Scene view, and so C++ show_scene_panel: close = main-panel Close, open = select Scene.
+        function tmToggleScenePanel(opt) {
             if (typeof tmCascadeIsOpen === 'function' && tmCascadeIsOpen()) {
                 closeTargetPulldowns();
                 if (typeof renderTargetMenu === 'function')
                     renderTargetMenu();
             }
-            if (tmSceneCreatorIsOpen()) {
-                scClose();
+            if (tmScenePanelIsOpen()) {
+                mainPanelClose();
                 return;
             }
-            if (typeof ensureCreatorSceneInfo === 'function')
-                ensureCreatorSceneInfo();
-            selectedSceneInfoKey = 'new';
-            if (typeof showPanel === 'function')
+            if (opt && opt.type === 'scene_editor') {
+                showPanel('scene_panel');
+            } else {
+                if (typeof ensureCreatorSceneInfo === 'function')
+                    ensureCreatorSceneInfo();
+                selectedSceneInfoKey = 'new';
                 showPanel('scene_creator_panel');
-            else if (typeof window.onMainPanelChange === 'function')
-                window.onMainPanelChange(JSON.stringify({ key: 'scene_panel' }));
-            if (typeof bindVisiblePanelsFromSceneInfo === 'function')
-                bindVisiblePanelsFromSceneInfo();
+                if (typeof bindVisiblePanelsFromSceneInfo === 'function')
+                    bindVisiblePanelsFromSceneInfo();
+            }
             if (typeof renderTargetMenu === 'function')
                 renderTargetMenu();
         }
@@ -2501,10 +2569,10 @@
                     if (sel) sel.style.display = 'none';
                 }
                 deSetLocked(false);
-                if (MAIN_SELECTED_KEY === 'scene_panel') {
+                const wasScene = MAIN_SELECTED_KEY === 'scene_panel';
+                if (wasScene)
                     MAIN_SELECTED_KEY = '';
-                    updateMainPanelClose();
-                }
+                syncMainPanelPulldown('', wasScene);
                 return;
             }
             const el = document.getElementById(domIdForPanelKey(panelKey));
@@ -2513,6 +2581,7 @@
                 deSetLocked(false);
             if (panelKey === 'log_panel' || panelKey === 'log-panel')
                 logStopPolling();
+            syncMainPanelPulldown(panelKey, false);
         }
 
         function revealForeignMainPanel(type) {
@@ -4083,11 +4152,11 @@
                     ));
                     continue;
                 }
-                if (opt.type === 'scene_creator') {
+                if (opt.type === 'scene_creator' || opt.type === 'scene_editor') {
                     const row = document.createElement('div');
-                    row.className = 'option' + (tmSceneCreatorIsOpen() ? ' selected' : '');
+                    row.className = 'option' + (tmScenePanelIsOpen() ? ' selected' : '');
                     decorateTargetOption(row, opt);
-                    row.onclick = () => tmToggleSceneCreator();
+                    row.onclick = () => tmToggleScenePanel(opt);
                     left.appendChild(row);
                     continue;
                 }
@@ -8603,9 +8672,7 @@
             lastAnimRegistries: [],
             lastAnims: [],
             lastTags: [],
-            tagMode: 'include',
-            tagType: 'any',
-            groupTags: {},
+            tagMode: 'include',            groupTags: {},
             groupOrder: [],
             presets: [],
             animQueryId: 0,
@@ -8733,9 +8800,7 @@
             if (state._stage != null && typeof deOnThreadStage === 'function') deOnThreadStage(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
             SC.selectedRegistries = [];
-            SC.lastAnimRegistries = [];
-            SC.tagType = 'any';
-            SC.pendingNearby.clear();
+            SC.lastAnimRegistries = [];            SC.pendingNearby.clear();
             if (SC.mode === 'active' && SC.inThreadRegistries.length)
                 SC.selectedRegistries = [];
             if (state._scene_presets) {
@@ -8758,12 +8823,6 @@
                 }));
             }
             scRenderRangePulldown();
-            const typeHost = document.getElementById('sc-type-pulldown');
-            if (typeHost) {
-                typeHost.innerHTML = '';
-                const typeValues = ['any'].concat(SC.groupOrder);
-                typeHost.appendChild(createPulldown(typeValues, 'any', v => { SC.tagType = v; scRefreshTags(); }));
-            }
             const forcedFilterBy = SC.filterByOnce || SC_FILTER_DEFAULT;
             SC.filterByOnce = '';
             scArmFilterDowngrade(forcedFilterBy);
@@ -9474,11 +9533,6 @@
 
         function scRenderAvailableTags() {
             let tags = SC.lastTags || [];
-            if (SC.tagType && SC.tagType !== 'any') {
-                const members = SC.groupTags[SC.tagType] || [];
-                const set = new Set(Array.isArray(members) ? members : Object.keys(members || {}));
-                tags = tags.filter(t => set.has(t._tag));
-            }
             const scQ = document.getElementById('sc-tag-filter');
             const deQ = document.getElementById('de-tag-filter');
             const q = ((scQ && scQ.value) || (deQ && deQ.value) || '').toLowerCase();
@@ -10800,17 +10854,6 @@
             return !!(el && el.style.display !== 'none' && DE.bottomTab === 'filter' && deIsSceneBound());
         }
 
-        function deRenderTypePulldown() {
-            const typeHost = document.getElementById('de-type-pulldown');
-            if (!typeHost) return;
-            typeHost.innerHTML = '';
-            const typeValues = ['any'].concat(SC.groupOrder || []);
-            typeHost.appendChild(createPulldown(typeValues, SC.tagType || 'any', v => {
-                SC.tagType = v;
-                scRefreshTags();
-            }));
-        }
-
         // Same tag / suppress / gender / description filter as Scene Creator (shared SC state), run against the
         // bound scene's cast so only animations it can play are listed.
         function deOpenFilterTab() {
@@ -10819,9 +10862,7 @@
             scRenderTagChips();
             scSetTagMode(SC.tagMode || 'include');
             scRenderFilterByPulldown();
-            scRenderHasDescriptionPulldown();
-            deRenderTypePulldown();
-            const nameEl = document.getElementById('de-anim-name-filter');
+            scRenderHasDescriptionPulldown();            const nameEl = document.getElementById('de-anim-name-filter');
             if (nameEl && nameEl.value !== DE.animNameFilter) nameEl.value = DE.animNameFilter;
             deRenderLoadedList();
             scRefreshTags();
