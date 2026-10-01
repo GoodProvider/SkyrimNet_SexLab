@@ -132,6 +132,34 @@ Function CycleStyleHotkey()
     Trace("CycleStyleHotkey", style+" -> "+next_style, true)
 EndFunction
 
+; Scene HUD keys (C++ Hud): SexLab thread operations on the player's scene. calm / arouse / focus /
+; slower / faster never reach Papyrus (OrgasmEngine + AnimSpeed in C++).
+; focus: the HUD's focus actor (deny key); None for the other keys.
+Function Hud_OnKey(String control, Actor focus = None)
+    Actor player = Game.GetPlayer()
+    if !main.sexlab.IsActorActive(player)
+        return
+    endif
+    Trace("Hud_OnKey", control)
+    if control == "end"
+        actions.SceneStop_Target(player, player, "normally")
+    elseif control == "previous"
+        actions.TM_StagePrev(player, player)
+    elseif control == "next"
+        actions.TM_StageNext(player, player)
+    elseif control == "pause"
+        SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(player)
+        if sl_scene != None
+            sl_scene.TogglePause()
+        endif
+    elseif control == "deny"
+        SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(player)
+        if deny_scene != None && focus != None
+            deny_scene.ToggleDenyOrgasm(focus)
+        endif
+    endif
+EndFunction
+
 ; WebUI hotkey / stay-open refresh: pass StorageUtil strip state for actionSwitch.
 Function Open_WebUI_Target(Actor target)
     if target == None

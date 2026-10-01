@@ -357,7 +357,52 @@ void KeyHandler::Unregister(uint32_t dxScanCode)
     _callbacks.erase(dxScanCode);
 }
 
+void KeyHandler::SetHudKeys(std::map<uint32_t, KeyCallback> keys)
+{
+    std::unique_lock lock(_mutex);
+    _hudKeys = std::move(keys);
+}
+
+void KeyHandler::SetHudActive(bool active)
+{
+    _hudActive.store(active);
+}
+
 namespace {
+
+/// DX code of a button event: keyboard scancode, or 256 + button for the mouse (SKSE convention).
+/// 0 for anything else (wheel, gamepad).
+uint32_t HudCode(const RE::ButtonEvent* btn)
+{
+    if (!btn)
+        return 0;
+    const auto device = btn->GetDevice();
+    if (device == RE::INPUT_DEVICE::kKeyboard)
+        return btn->GetIDCode();
+    if (device == RE::INPUT_DEVICE::kMouse && btn->GetIDCode() < 8)
+        return 256 + btn->GetIDCode();
+    return 0;
+}
+
+/// Unlink every button event whose code is a live HUD key (down, held and up alike).
+void StripHudInputEvents(RE::InputEvent* const* a_eventList, const std::map<uint32_t, KeyCallback>& keys)
+{
+    auto*& head = const_cast<RE::InputEvent*&>(*a_eventList);
+    RE::InputEvent* prev = nullptr;
+    for (auto* cur = head; cur;) {
+        const bool match = cur->eventType == RE::INPUT_EVENT_TYPE::kButton &&
+                           keys.contains(HudCode(cur->AsButtonEvent()));
+        auto* next = cur->next;
+        if (!match) {
+            prev = cur;
+        } else if (prev) {
+            prev->next = next;
+        } else {
+            head = next;
+        }
+        cur = next;
+    }
+}
 
 bool ShouldSwallowSkseInputEvent(const RE::InputEvent* event)
 {
@@ -406,20 +451,37 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
         return RE::BSEventNotifyControl::kContinue;
 
     std::vector<KeyCallback> toRun;
+    // Scene HUD keys: only while the HUD is up and the overlay is closed.
+    const bool hud = _hudActive.load() && WebUI_IsHidden();
+    std::map<uint32_t, KeyCallback> hudKeys;
 
     {
         std::shared_lock lock(_mutex);
+        if (hud)
+            hudKeys = _hudKeys;
         for (auto event = *a_eventList; event; event = event->next) {
             if (event->eventType != RE::INPUT_EVENT_TYPE::kButton)
                 continue;
             const auto btn = event->AsButtonEvent();
-            if (!btn || btn->GetDevice() != RE::INPUT_DEVICE::kKeyboard || !btn->IsDown())
+            if (!btn || !btn->IsDown())
+                continue;
+            if (hud) {
+                const auto hit = hudKeys.find(HudCode(btn));
+                if (hit != hudKeys.end()) {
+                    toRun.push_back(hit->second);
+                    continue;
+                }
+            }
+            if (btn->GetDevice() != RE::INPUT_DEVICE::kKeyboard)
                 continue;
             auto it = _callbacks.find(btn->GetIDCode());
             if (it != _callbacks.end())
                 toRun.push_back(it->second);
         }
     }
+
+    if (hud && !hudKeys.empty())
+        StripHudInputEvents(a_eventList, hudKeys);
 
     for (const auto& cb : toRun)
         cb();

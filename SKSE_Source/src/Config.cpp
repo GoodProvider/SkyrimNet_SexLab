@@ -1,4 +1,6 @@
 #include "Config.h"
+#include "Hud.h"
+#include "OrgasmEngine.h"
 #include "PublicAPI.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
@@ -59,6 +61,18 @@ int GetInt(const char* path, int def)
     return ParseInt(GetRaw(path, buf), def);
 }
 
+float GetFloat(const char* path, float def)
+{
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%g", static_cast<double>(def));
+    const std::string raw = GetRaw(path, buf);
+    if (raw.empty())
+        return def;
+    char* end = nullptr;
+    const float v = std::strtof(raw.c_str(), &end);
+    return end == raw.c_str() ? def : v;
+}
+
 void SetGlobalByEditorId(const char* editorId, float value)
 {
     auto* form = RE::TESForm::LookupByEditorID(editorId);
@@ -81,6 +95,62 @@ std::int32_t VkToDx(int vk)
 
 }  // namespace
 
+bool GetConfigBool(const char* path, bool def)
+{
+    return GetBool(path, def);
+}
+
+int GetConfigInt(const char* path, int def)
+{
+    return GetInt(path, def);
+}
+
+float GetConfigFloat(const char* path, float def)
+{
+    return GetFloat(path, def);
+}
+
+std::uint32_t HotkeyVkToDx(int vk)
+{
+    switch (vk) {
+    case VK_LBUTTON:
+        return 256;
+    case VK_RBUTTON:
+        return 257;
+    case VK_MBUTTON:
+        return 258;
+    case VK_PAUSE:
+        return 0xC5;  // DIK_PAUSE; MapVirtualKey has no scancode for it
+    default:
+        break;
+    }
+    if (vk < 1 || vk > 255)
+        return 0;
+    const UINT sc = MapVirtualKeyA(static_cast<UINT>(vk), MAPVK_VK_TO_VSC);
+    if (sc == 0)
+        return 0;
+    // Arrows / Home / End / PgUp / PgDn / Insert / Delete are extended keys: DirectInput reports
+    // them as 0x80 | scancode (End = 0xCF), which MapVirtualKey's plain VSC leaves out.
+    switch (vk) {
+    case VK_LEFT:
+    case VK_RIGHT:
+    case VK_UP:
+    case VK_DOWN:
+    case VK_HOME:
+    case VK_END:
+    case VK_PRIOR:
+    case VK_NEXT:
+    case VK_INSERT:
+    case VK_DELETE:
+    case VK_DIVIDE:
+    case VK_RCONTROL:
+    case VK_RMENU:
+        return 0x80 | sc;
+    default:
+        return sc;
+    }
+}
+
 void InitSkyrimNetAPI()
 {
     if (!FindFunctions()) {
@@ -102,6 +172,7 @@ void Config::ApplyFromConfig()
     ApplyGlobals();
     ApplyMenuHotkey();
     ApplyStyleHotkey();
+    ApplyHudConfig();
 }
 
 void Config::ApplyGlobals()
@@ -138,6 +209,12 @@ void Config::ApplyStyleHotkey()
     const auto dx = static_cast<uint32_t>(VkToDx(vk));
     webui_log::info("ApplyStyleHotkey: enabled={} vk={} dx={:#x}", enabled, vk, dx);
     WebUI_SetStyleHotkey(dx, enabled);
+}
+
+void Config::ApplyHudConfig()
+{
+    OrgasmEngine::ReloadConfig();
+    Hud::ApplyConfig();
 }
 
 }  // namespace SexLabNet

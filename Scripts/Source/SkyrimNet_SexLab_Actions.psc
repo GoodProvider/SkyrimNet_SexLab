@@ -690,7 +690,86 @@ Function TM_ForceOrgasm(Actor speaker, Actor target, String formIdStr)
     if a == None
         return
     endif
+    ; WebUI is all-powerful: forced engine request (skips every gate, narrates once).
+    if SkyrimNet_SexLab_OrgasmEngine.IsManaged(a)
+        SkyrimNet_SexLab_OrgasmEngine.RequestOrgasm(a, true, "webui")
+        return
+    endif
     th.ForceOrgasm(a)
+EndFunction
+
+;-------------------------------------------
+; Orgasm mini-game (LLM actions): same engine code as the HUD keys, stronger (llm_multiplier)
+;-------------------------------------------
+
+Function MiniGame_Arouse(Actor speaker, Actor target)
+    MiniGame_Act(speaker, target, true)
+EndFunction
+
+Function MiniGame_Calm(Actor speaker, Actor target)
+    MiniGame_Act(speaker, target, false)
+EndFunction
+
+Function MiniGame_Act(Actor speaker, Actor target, bool arouse)
+    if target == None
+        target = speaker
+    endif
+    if speaker == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(speaker)
+    if sl == None || sl.GetThread() == None || sl.GetThread().Positions.Find(target) < 0
+        Trace("MiniGame_Act", GetDisplayName(target)+" is not in "+GetDisplayName(speaker)+"'s scene")
+        return
+    endif
+    float mult = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.minigame.llm_multiplier", 3.0)
+    bool ok
+    if arouse
+        ok = SkyrimNet_SexLab_OrgasmEngine.Arouse(speaker, target, mult)
+    else
+        ok = SkyrimNet_SexLab_OrgasmEngine.Calm(speaker, target, mult)
+    endif
+    Trace("MiniGame_Act", GetDisplayName(speaker)+" "+arouse+" "+GetDisplayName(target)+" mult:"+mult+" ok:"+ok)
+EndFunction
+
+;-------------------------------------------
+; Orgasm denial (LLM actions): only the aggressor denies / allows the victim
+;-------------------------------------------
+
+Function LLM_DenyOrgasm(Actor speaker, Actor target)
+    LLM_SetDenyOrgasm(speaker, target, true)
+EndFunction
+
+Function LLM_AllowOrgasm(Actor speaker, Actor target)
+    LLM_SetDenyOrgasm(speaker, target, false)
+EndFunction
+
+; Same scene, speaker not a victim, target a victim, target not the player (the player's own deny
+; stays with the player). Allow checks every actor and narrates the orgasm with the allow prefix.
+Function LLM_SetDenyOrgasm(Actor speaker, Actor target, bool deny)
+    if speaker == None || target == None || speaker == target
+        Trace("LLM_SetDenyOrgasm", "needs a speaker and a different target")
+        return
+    endif
+    if target == Game.GetPlayer()
+        Trace("LLM_SetDenyOrgasm", GetDisplayName(speaker)+" cannot deny / allow the player")
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(speaker)
+    sslThreadController thread = None
+    if sl != None
+        thread = sl.GetThread()
+    endif
+    if thread == None || thread.Positions.Find(target) < 0
+        Trace("LLM_SetDenyOrgasm", GetDisplayName(target)+" is not in "+GetDisplayName(speaker)+"'s scene")
+        return
+    endif
+    if thread.IsVictim(speaker) || !thread.IsVictim(target)
+        Trace("LLM_SetDenyOrgasm", GetDisplayName(speaker)+" is not the aggressor of "+GetDisplayName(target))
+        return
+    endif
+    bool changed = sl.SetDenyOrgasm(target, deny, speaker, true)
+    Trace("LLM_SetDenyOrgasm", GetDisplayName(speaker)+" deny:"+deny+" "+GetDisplayName(target)+" changed:"+changed)
 EndFunction
 
 Function TM_SetSpeaking(Actor speaker, Actor target, String formIdStr, String speaking)

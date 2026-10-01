@@ -1605,11 +1605,16 @@ Event OrgasmCombined(int ThreadID, bool HasPlayer)
         return 
     endif 
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByThreadId(ThreadID)
-    if sl_scene == None 
+    if sl_scene == None
         Trace("OrgasmCombined","Scene is None for ThreadID "+ThreadID)
         return
     endif
-    sl_scene.OrgasmCombined() 
+    ; OrgasmEngine scenes: this hook is the one Scene.Orgasm_ApplyGroup sent itself (already narrated).
+    sslThreadController hook_thread = sl_scene.GetThread()
+    if hook_thread != None && hook_thread.Positions.length > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(hook_thread.Positions[0])
+        return
+    endif
+    sl_scene.OrgasmCombined()
 EndEvent 
 
 ; Used for SLSO.esp orgasm handling
@@ -1620,10 +1625,29 @@ Event OrgasmIndividual(Form akForm, int full_enjoyment, int num_orgasms)
         return
     endif
 
+    ; OrgasmEngine scenes: SexLab's own trigger is off, so this is either our ForceOrgasm (already
+    ; narrated in Scene.Orgasm_ApplyGroup) or another plugin calling SexLab's orgasm directly. Record the
+    ; latter in the engine (reset, count, cooldown, HUD flash, events) and narrate it once.
+    if SkyrimNet_SexLab_OrgasmEngine.IsManaged(akActor)
+        if SkyrimNet_SexLab_OrgasmEngine.ConsumeOwnOrgasm(akActor)
+            return
+        endif
+        SkyrimNet_SexLab_OrgasmEngine.NoteExternalOrgasm(akActor, "sexlab")
+        if main.handler_dom.IsDOMSlave(akActor)
+            return
+        endif
+        SkyrimNet_SexLab_Scene ext_scene = GetSceneByActor(akActor)
+        if ext_scene != None
+            ext_scene.Mirror_Rebaseline(akActor)
+            ext_scene.OrgasmIndividual(akActor, full_enjoyment, -1, true)
+        endif
+        return
+    endif
+
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
-    if !config.SeparateOrgasms 
-        return 
-    endif 
+    if !config.SeparateOrgasms
+        return
+    endif
 
     ; DOM handles it's own orgasms
     if main.handler_dom.IsDOMSlave(akActor)

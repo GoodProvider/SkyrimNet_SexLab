@@ -1,0 +1,22 @@
+name: SexLab_AllowOrgasm
+label: Allow Orgasm
+description: "[speaker], as the aggressor during ongoing sex, allows [target] to orgasm after denying them."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: LLM_AllowOrgasm
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity), the aggressor
+  - type: dynamic
+    name: target
+    description: The denied victim now allowed to orgasm
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+    logicalOperator: AND
+    required: true

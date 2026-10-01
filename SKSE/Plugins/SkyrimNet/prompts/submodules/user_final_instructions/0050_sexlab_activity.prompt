@@ -58,8 +58,10 @@
                     for actor_record in thread.actors %} {% 
                          if actor_record.is_hermaphrodiate %} {{ actor_record.name }} is a hermaphrodiate. {% endif %} {% 
                          if actor_record.creature_description != "" %} {{ actor_record.creature_description }} {% endif %} {% 
-                         if actor_record.wearing_strapon %} {{ actor_record.name }} is wearing a strap on dildo. {% endif %}
-                    {% endfor %} 
+                         if actor_record.wearing_strapon %} {{ actor_record.name }} is wearing a strap on dildo. {% endif %}{%
+                         if existsIn(actor_record, "enjoyment") and to_number(actor_record.uuid) != npc.UUID %} {{ actor_record.name }} is {%
+                              if actor_record.enjoyment >= 90 %}on the verge of orgasm{% else if actor_record.enjoyment >= 75 %}close to orgasm{% else if actor_record.enjoyment >= 50 %}very aroused{% else if actor_record.enjoyment >= 25 %}aroused{% else %}barely aroused{% endif %}. {% endif %}
+                    {% endfor %}
           {% else if _notice_level == 1 %} 
                - You can tell someone is having sex{% if _includes_creatures %}, which includes creatures{% endif %}.
           {% endif %}
@@ -81,6 +83,9 @@ You are physically engaged in consensual intense physical activity right now.
 Match your feelings of desire, vulnerability, playfulness, intensity, connection, and desperation.
                {% endif %}
          {% endif %} 
+         {% if existsIn(speaker, "enjoyment") %}
+You are {% if speaker.enjoyment >= 90 %}on the verge of orgasm{% else if speaker.enjoyment >= 75 %}close to orgasm{% else if speaker.enjoyment >= 50 %}very aroused{% else if speaker.enjoyment >= 25 %}aroused{% else %}barely aroused{% endif %}.
+         {% endif %}
          {% if is_narration_enabled() %}
          {% endif %}
          {% if length(speaker.speaking_modifiers) > 0 %} 

@@ -63,6 +63,8 @@ bool Property rape_allowed = true Auto
 bool Property sex_edit_tags_player = true Auto 
 bool Property sex_edit_tags_nonplayer = False Auto
 float Property orgasm_delay = 5.0 Auto
+; Orgasm DirectNarration budget (chars): lower-priority parts past it are sent as one event.
+int Property narration_max_chars = 350 Auto
 ; SexLab moans only for _pleasure_ / _pain_ speaking modifiers (Scene.ApplySexLabVoice).
 bool Property voice_follows_speaking = true Auto
 

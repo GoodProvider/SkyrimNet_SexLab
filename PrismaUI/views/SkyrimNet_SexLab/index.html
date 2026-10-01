@@ -1058,6 +1058,7 @@
         #de-actors-table .col-move,
         #de-actors-table .col-name,
         #de-actors-table .col-o,
+        #de-actors-table .col-deny,
         #de-actors-table .col-dressed,
         #de-actors-table .col-v {
             width: 1%;
@@ -1976,7 +1977,7 @@
                 <div id="de-actors-table-wrap" style="display:none">
                     <table class="data-table" id="de-actors-table"><thead><tr>
                         <th class="col-orgasm"></th><th class="col-idx">#</th><th class="col-move"></th><th class="col-name">name</th>
-                        <th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
+                        <th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-deny" title="orgasm denied (live scene)">deny</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
                     <div class="de-name-hint">Clicking a name adds it to the description</div>
                 </div>
@@ -8395,6 +8396,28 @@
             sceneInfosSeeded = false;
             DE.scenePick = 'none';
             stopDialogClose();
+            resetAnimFilters();
+        }
+
+        // Every WebUI close: Scene Creator / DE animation filters back to defaults for the next open.
+        function resetAnimFilters() {
+            SC.tags = [];
+            SC.suppress = [];
+            SC.tagMode = 'include';
+            SC.filterBy = SC_FILTER_DEFAULT;
+            SC.filterStart = SC_FILTER_DEFAULT;
+            SC.filterChain = [];
+            SC.filterAuto = true;
+            SC.filterByOnce = '';
+            SC.hasDescription = 'any';
+            SC.show_all_selected_unselected_pulldown = true;
+            if (DE.nameFilterTimer) clearTimeout(DE.nameFilterTimer);
+            DE.nameFilterTimer = 0;
+            DE.animNameFilter = '';
+            DE.filterAnims = [];
+            deSyncTagFilter('');
+            const nameEl = document.getElementById('de-anim-name-filter');
+            if (nameEl) nameEl.value = '';
         }
 
         // WebUI Cancel (non-commit close): drop every draft, and have each live scene put back the state it
@@ -10472,6 +10495,13 @@
                 tdO.className = 'col-o';
                 const expected = !p._no_orgasm;
                 tdO.innerHTML = `<span class="cell-toggle ${expected ? '' : 'on'}" title="${expected ? 'orgasm expected' : 'orgasm not expected'}" onclick="deTogglePosO(${i})">${expected ? 'O' : '-'}</span>`;
+                // Deny: live scene state (not animation metadata), sent at once; not part of posDraft.
+                const tdDeny = document.createElement('td');
+                tdDeny.className = 'col-deny';
+                if (live && i < liveCount) {
+                    const denied = Number((liveInfo.positions[i] || {})._deny_orgasm) === 1;
+                    tdDeny.innerHTML = `<span class="cell-toggle ${denied ? 'on' : ''}" title="${denied ? 'orgasm denied' : 'orgasm allowed'}" onclick="deToggleDeny(${i})">${denied ? '\u{1F512}' : '\u{1F513}'}</span>`;
+                }
                 const tdVictim = document.createElement('td');
                 tdVictim.className = 'col-v';
                 tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}" title="${p._victim ? 'victim' : 'not victim'}" onclick="deTogglePosVictim(${i})">${p._victim ? 'V' : '—'}</span>`;
@@ -10496,6 +10526,7 @@
                 tr.appendChild(tdName);
                 tr.appendChild(tdDressed);
                 tr.appendChild(tdO);
+                tr.appendChild(tdDeny);
                 tr.appendChild(tdVictim);
                 tr.appendChild(tdMods);
                 tbody.appendChild(tr);
@@ -10725,6 +10756,17 @@
             const info = deStopLiveInfo();
             if (!info || typeof window.onSceneNarrate !== 'function') return;
             window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _orgasm_pos: i }));
+        }
+
+        // Deny column: Scene.ToggleDenyOrgasm on thread position i (player-only orgasm denial).
+        function deToggleDeny(i) {
+            const info = deStopLiveInfo();
+            if (!info || typeof window.onSceneNarrate !== 'function') return;
+            const p = (info.positions || [])[i];
+            if (!p) return;
+            p._deny_orgasm = Number(p._deny_orgasm) === 1 ? 0 : 1;
+            window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _deny_pos: i }));
+            deRenderActors();
         }
 
         // Swap two actors of the live scene. Only the SceneInfo changes here; the

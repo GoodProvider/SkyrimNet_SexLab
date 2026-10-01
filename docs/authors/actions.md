@@ -110,3 +110,22 @@ Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_all
 - [ ] Eligibility: `logicalOperator` + `required: true`
 - [ ] Game Data Explorer Refresh
 - [ ] `tools/sync_legacy_skyrimnet_content.py` if YAML/prompts changed
+
+## Mini-game actions
+
+`SexLab_Arouse` / `SexLab_Calm` (`speaker` + dynamic `target`, eligible while the speaker is in `SexLabAnimatingFaction`) call `SkyrimNet_SexLab_Actions.MiniGame_Arouse` / `MiniGame_Calm`. Those call the same OrgasmEngine code as the HUD keys, with `mult = sexlab.minigame.llm_multiplier`. They work in NPC-only scenes, and `SkyrimNet_SexLab_MCM.ApplyMiniGameActions` unregisters them while the mini-game is off. See [../developers/orgasm-engine.md](../developers/orgasm-engine.md).
+
+## Orgasm denial actions
+
+`SexLab_DenyOrgasm` and `SexLab_AllowOrgasm` take `speaker` + dynamic `target`, and are eligible while the speaker is in `SexLabAnimatingFaction`. They call `SkyrimNet_SexLab_Actions.LLM_DenyOrgasm` / `LLM_AllowOrgasm`, and from there `Scene.SetDenyOrgasm(target, deny, speaker, from_llm=true)`.
+
+- **Aggressor only.** YAML can only check the faction, so Papyrus enforces the rest. Nothing happens unless all of these hold:
+  - speaker and target are in the same scene,
+  - the speaker is not a victim,
+  - the target is a victim,
+  - the target is not the player.
+- **Deny:** `deny_orgasm` 1 and `deny_by` = the speaker. The narration is the event `"<speaker> denies <target> release."`, because the NPC's own line already says it.
+- **Allow:** every actor is checked at once (`OrgasmEngine.AllowOrgasm`).
+  - If anyone orgasms, the one orgasm DN starts `"<speaker> allows <target> to orgasm. "`.
+  - Otherwise the event `"<speaker> allows <target> to orgasm."` is sent.
+- See [../reference/orgasm-narration.md](../reference/orgasm-narration.md).

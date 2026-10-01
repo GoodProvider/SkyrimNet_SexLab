@@ -48,7 +48,10 @@ Don't repeat the same vocalizations more than three times in a row.
 Change the words and meaning each time.
 {% endif %} 
 {# ---------------------------------- #} 
-{%  if speaker.arousal > 99 %}
+{# This actor's orgasm is denied (deny_orgasm: player or aggressor) and enjoyment is maxed #}
+{%  if existsIn(speaker, "deny_orgasm") and speaker.deny_orgasm == 1 and existsIn(speaker, "enjoyment") and speaker.enjoyment >= 100 %}
+Your mind is consumed by a need to cum; release is being denied to you.
+{% else if speaker.arousal > 99 %}
 Your mind is awash in hormones and neurotransmitters, a painful itch that only sexual release will scratch.
 {% else if speaker.arousal > 95 %}
 Your mind is awash in hormones and neurotransmitters, your mind is filled with sexual fantasies.
@@ -58,7 +61,7 @@ Your mind is awash in hormones and neurotransmitters, your mind keeps turning to
 {# ---------------------------------- #} 
 {% if triggeringEvent and triggeringEvent.type == "direct_narration" %}
    {% set _direct_narration = format_event(triggeringEvent, "verbose") %}   
-   {% if _direct_narration and contains(_direct_narration, " is orgasming.") %} 
+   {% if _direct_narration and (contains(_direct_narration, " is orgasming.") or contains(_direct_narration, " are orgasming") or contains(_direct_narration, " forced to orgasm")) %} 
       {% if is_narration_enabled() %} 
 Narration must include the word orgasming or synonym.
       {% else %} 

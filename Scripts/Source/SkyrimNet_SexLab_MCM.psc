@@ -143,6 +143,7 @@ Function ApplyPluginConfig()
     main.sex_edit_tags_player = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.tags.player", true)
     main.sex_edit_tags_nonplayer = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.tags.nonplayer", false)
     main.orgasm_delay = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.orgasm.delay", 5.0)
+    main.narration_max_chars = SkyrimNetApi.GetConfigInt(PLUGIN_CONFIG, "sexlab.narration.max_chars", 350)
     main.voice_follows_speaking = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.voice.follow_speaking", true)
     main.direct_narration_cool_off = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.narration.cooldown", 20.0)
     main.direct_narration_max_distance = SkyrimNetApi.GetConfigFloat(PLUGIN_CONFIG, "sexlab.narration.max_distance", 15.0)
@@ -152,7 +153,9 @@ Function ApplyPluginConfig()
     endif
 
     ApplyRapeActions()
+    ApplyMiniGameActions()
     ApplyHotkey()
+    SkyrimNet_SexLab_OrgasmEngine.ReloadConfig()
     Trace("ApplyPluginConfig", "rape_allowed:"+main.rape_allowed+" cool_off:"+main.direct_narration_cool_off+" hotkey:"+sex_edit_key+" enabled:"+hot_key_toggle)
 EndFunction
 
@@ -173,6 +176,26 @@ Function ApplyRapeActions()
     SkyrimNetApi.UnregisterAction("SexLab_Masturbation_Forced")
     rape_actions_unregistered = True
     Trace("ApplyRapeActions", "unregistered rape LLM actions")
+EndFunction
+
+; Orgasm mini-game LLM actions exist only while sexlab.minigame.enabled (re-enable needs save + reload).
+bool minigame_actions_unregistered = False
+
+Function ApplyMiniGameActions()
+    bool enabled = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.minigame.enabled", false)
+    if enabled
+        if minigame_actions_unregistered
+            Trace("ApplyMiniGameActions", "mini-game re-enabled; save and reload to restore LLM actions")
+        endif
+        return
+    endif
+    if minigame_actions_unregistered
+        return
+    endif
+    SkyrimNetApi.UnregisterAction("SexLab_Arouse")
+    SkyrimNetApi.UnregisterAction("SexLab_Calm")
+    minigame_actions_unregistered = True
+    Trace("ApplyMiniGameActions", "unregistered mini-game LLM actions")
 EndFunction
 
 Function ApplyHotkey()

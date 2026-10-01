@@ -1,0 +1,22 @@
+name: SexLab_Calm
+label: Calm
+description: "[speaker] calms [target] during ongoing sex, holding back their orgasm (target can be the speaker)."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: MiniGame_Calm
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: target
+    description: Actor being calmed (can be speaker)
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+    logicalOperator: AND
+    required: true

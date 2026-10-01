@@ -21,7 +21,29 @@ Function DOMSlave_Orgasmed(Actor slave, String msg)
 EndFunction
 
 Bool Function Orgasm_Desired(Actor akActor)
-    return false 
+    return false
+EndFunction
+
+; OrgasmEngine DOM support: engine arousal change -> DOM arousal_factor
+Function AddArousal(Actor akActor, float delta)
+EndFunction
+
+; 0-100 meter of how close DOM is to an orgasm (>= 50: DOM's values could produce one)
+float Function OrgasmMeter(Actor akActor)
+    return 0.0
+EndFunction
+
+; True when DOM's current values could produce an orgasm (aroused / arousable, not refractory)
+Bool Function CouldOrgasm(Actor akActor)
+    return false
+EndFunction
+
+; Engine push: prepay (cancel DOM's own recurring adds once per scene), mini-game delta, spread steps
+Function DomSync(Actor akActor, float miniDelta, float daring, float naivety, bool prepay, bool hasPlayer)
+EndFunction
+
+; Light roll after a rise: IsOrgasmingAfterArousal(act base x share). DOM decides.
+Function StepRoll(Actor akActor, bool hasPlayer, float share)
 EndFunction
 
 int Function GetThreads()

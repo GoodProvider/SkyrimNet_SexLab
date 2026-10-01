@@ -108,7 +108,7 @@ schema:
       description: "Animation playback multiplier for the forcefully style."
       min: 0.1
       max: 3.0
-      defaultValue: 1.4
+      defaultValue: 1.25
       category: "Animation speed"
 
     - name: "Hide Edit Stage Description help"
@@ -125,6 +125,15 @@ schema:
       min: 0
       max: 60
       defaultValue: 5.0
+      category: "Narration"
+
+    - name: "Orgasm narration max length (chars)"
+      path: "sexlab.narration.max_chars"
+      type: "int"
+      description: "Length budget for the one orgasm Direct Narration. Orgasming, forced and denied actors are always included; cum, not-orgasming and arouse/calm lines that do not fit are sent as an event instead."
+      min: 100
+      max: 2000
+      defaultValue: 350
       category: "Narration"
 
     - name: "SexLab moans follow speaking modifiers"
@@ -160,3 +169,283 @@ schema:
       max: 1
       defaultValue: 0
       category: "General"
+
+    - name: "Show enjoyment bars"
+      path: "sexlab.hud.enjoyment"
+      type: "bool"
+      description: "Scene HUD (upper left, player scenes only): one enjoyment bar per actor."
+      defaultValue: true
+      category: "Scene HUD"
+
+    - name: "Show scene controls"
+      path: "sexlab.hud.controls"
+      type: "bool"
+      description: "Scene HUD: end / pause / previous / next / slower / faster hotkeys and their labels. Off also disables those keys."
+      defaultValue: true
+      category: "Scene HUD"
+
+    - name: "End scene key"
+      path: "sexlab.hud.key_end"
+      type: "hotkey"
+      description: "Ends the player's scene (same as stop). Default End."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 35
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Previous stage key"
+      path: "sexlab.hud.key_previous"
+      type: "hotkey"
+      description: "Goes back one stage. Default Left arrow."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 37
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Next stage key"
+      path: "sexlab.hud.key_next"
+      type: "hotkey"
+      description: "Advances one stage. Default Right arrow."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 39
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Slower key"
+      path: "sexlab.hud.key_slower"
+      type: "hotkey"
+      description: "Steps the scene down one speed level (slow and gentle 50%, gentle 75%, normal 100%, forceful 125%, fast and forceful 150%). Default Down arrow."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 40
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Faster key"
+      path: "sexlab.hud.key_faster"
+      type: "hotkey"
+      description: "Steps the scene up one speed level (slow and gentle 50%, gentle 75%, normal 100%, forceful 125%, fast and forceful 150%). Default Up arrow."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 38
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Pause key"
+      path: "sexlab.hud.key_pause"
+      type: "hotkey"
+      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment keeps rising while paused. Default Home."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 36
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Deny / allow orgasm key"
+      path: "sexlab.hud.key_deny"
+      type: "hotkey"
+      description: "Toggles orgasm denial for the HUD's focus actor (🔒). A denied actor gains enjoyment as normal but cannot orgasm. Default Page Down."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 34
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Normal enjoyment multiplier"
+      path: "sexlab.enjoyment.passive_mult"
+      type: "float"
+      description: "Enjoyment rate for consensual actors. The base rate comes from the scene's SexLab stage timers: at 1.0 an actor reaches 100 near the end of the final stage. Faster / slower, pausing and repeating stages change the outcome. The OrgasmEngine triggers every orgasm; SexLab's own trigger is off."
+      min: 0
+      max: 5
+      defaultValue: 1.0
+      category: "Enjoyment"
+
+    - name: "Aggressor enjoyment multiplier"
+      path: "sexlab.enjoyment.aggressor_mult"
+      type: "float"
+      description: "Enjoyment rate for the aggressor in a non-consensual scene (x the stage-timer base rate)."
+      min: 0
+      max: 5
+      defaultValue: 1.15
+      category: "Enjoyment"
+
+    - name: "Victim enjoyment multiplier"
+      path: "sexlab.enjoyment.victim_mult"
+      type: "float"
+      description: "Enjoyment rate for a victim (x the stage-timer base rate). At 0.8 about 30% of victims reach 90 by the end and orgasm."
+      min: 0
+      max: 5
+      defaultValue: 0.8
+      category: "Enjoyment"
+
+    - name: "Rate jitter minimum"
+      path: "sexlab.enjoyment.jitter_min"
+      type: "float"
+      description: "Each actor's rate is multiplied by a random value between the minimum and maximum, rolled at scene start. Above 1.0 orgasms a little early."
+      min: 0.5
+      max: 2
+      defaultValue: 0.95
+      category: "Enjoyment"
+
+    - name: "Rate jitter maximum"
+      path: "sexlab.enjoyment.jitter_max"
+      type: "float"
+      description: "Upper end of the per-actor random rate factor."
+      min: 0.5
+      max: 2
+      defaultValue: 1.2
+      category: "Enjoyment"
+
+    - name: "Group orgasm threshold"
+      path: "sexlab.enjoyment.group_join"
+      type: "float"
+      description: "When anyone orgasms, every other actor at this enjoyment or more (not denied, edging, cooling down or a DOM slave) orgasms with them, in one narration."
+      min: 0
+      max: 100
+      defaultValue: 95
+      category: "Enjoyment"
+
+    - name: "DOM arousal per scene"
+      path: "sexlab.dom.arousal_scale"
+      type: "float"
+      description: "DOM slaves: DOM arousal amount (MOD_Daring) per point of scene progress, pushed in steps over the animation. 0.2 = DOM's own 20 per scene, which is cancelled."
+      min: 0
+      max: 2
+      defaultValue: 0.2
+      category: "Enjoyment"
+
+    - name: "DOM arousal per player scene"
+      path: "sexlab.dom.arousal_scale_player"
+      type: "float"
+      description: "DOM slaves in player scenes: extra DOM arousal (MOD_Naivety) per point of progress. 0.2 = DOM's own 20 at its roll, which is cancelled."
+      min: 0
+      max: 2
+      defaultValue: 0.2
+      category: "Enjoyment"
+
+    - name: "Enable orgasm mini-game"
+      path: "sexlab.minigame.enabled"
+      type: "bool"
+      description: "Player controls enjoyment: focus with 1-4, calm (edge) and arouse. Enables the SexLab_Arouse / SexLab_Calm LLM actions. Near the end of the final stage, actors at 90%+ who have not orgasmed (and were not calmed in that stage) still orgasm, with it on or off. Turning it back on after off needs a save and reload for the LLM actions."
+      defaultValue: false
+      category: "Mini-game"
+
+    - name: "Calm key"
+      path: "sexlab.minigame.key_calm"
+      type: "hotkey"
+      description: "Calms the focused actor (costs your magicka). At 90%+ enjoyment it also edges (holds off the orgasm). Default left mouse button."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 1
+      category: "Mini-game"
+      supportsOverride: false
+
+    - name: "Arouse key"
+      path: "sexlab.minigame.key_arouse"
+      type: "hotkey"
+      description: "Arouses the focused actor (costs your stamina). Default right mouse button."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 2
+      category: "Mini-game"
+      supportsOverride: false
+
+    - name: "Arouse amount"
+      path: "sexlab.minigame.arouse_amount"
+      type: "int"
+      description: "Enjoyment added per arouse (x (1 + 0.1 x skill))."
+      min: 1
+      max: 20
+      defaultValue: 3
+      category: "Mini-game"
+
+    - name: "Calm amount"
+      path: "sexlab.minigame.calm_amount"
+      type: "int"
+      description: "Enjoyment removed per calm."
+      min: 1
+      max: 20
+      defaultValue: 4
+      category: "Mini-game"
+
+    - name: "Arouse stamina cost"
+      path: "sexlab.minigame.stamina_cost"
+      type: "float"
+      description: "Stamina per arouse (x 10 / (10 + skill))."
+      min: 0
+      max: 50
+      defaultValue: 8
+      category: "Mini-game"
+
+    - name: "Calm magicka cost"
+      path: "sexlab.minigame.magicka_cost"
+      type: "float"
+      description: "Magicka per calm (x (1 + 0.05 x lewdness))."
+      min: 0
+      max: 50
+      defaultValue: 8
+      category: "Mini-game"
+
+    - name: "Edge seconds"
+      path: "sexlab.minigame.edge_seconds"
+      type: "float"
+      description: "Calming someone at 90%+ enjoyment holds off their orgasm for this long."
+      min: 0
+      max: 30
+      defaultValue: 4
+      category: "Mini-game"
+
+    - name: "Random orgasm bonus (%)"
+      path: "sexlab.minigame.random_bonus"
+      type: "float"
+      description: "With the mini-game on, once a second each actor's orgasm test adds a random 0 to this much, so an orgasm can land from 90%."
+      min: 0
+      max: 30
+      defaultValue: 10
+      category: "Mini-game"
+
+    - name: "Mental break"
+      path: "sexlab.minigame.mental_break"
+      type: "bool"
+      description: "Being aroused by a partner drains magicka. At 10% magicka or less the actor is broken and cannot calm or edge until above 25%."
+      defaultValue: false
+      category: "Mini-game"
+
+    - name: "Mental break drain"
+      path: "sexlab.minigame.break_drain"
+      type: "float"
+      description: "Magicka drained per arouse at 100% enjoyment (x partner skill, x orgasms)."
+      min: 0
+      max: 50
+      defaultValue: 6
+      category: "Mini-game"
+
+    - name: "Calm / arouse narration window (sec)"
+      path: "sexlab.minigame.narrate_window"
+      type: "float"
+      description: "Presses on another actor within this window give one narration."
+      min: 0
+      max: 30
+      defaultValue: 3
+      category: "Mini-game"
+
+    - name: "LLM mini-game strength"
+      path: "sexlab.minigame.llm_multiplier"
+      type: "float"
+      description: "Multiplier for the SexLab_Arouse / SexLab_Calm LLM actions (stronger than one key press)."
+      min: 0.1
+      max: 10
+      defaultValue: 3
+      category: "Mini-game"

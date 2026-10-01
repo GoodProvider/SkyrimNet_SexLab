@@ -22,6 +22,10 @@ namespace AnimSpeed
     /// Removes every multiplier. Called on load / new game so nothing leaks across saves.
     void ClearAll();
 
-    /// Actor's multiplier, 1.0 when none is set.
+    /// Actor's effective multiplier (style speed x scale, clamped kMin..kMax), 1.0 when none is set.
     float Get(RE::Actor* a_actor);
+
+    /// Scene HUD faster/slower: an extra factor on top of Set's style speed. 1.0 removes it.
+    /// Clear / ClearAll drop it too.
+    void SetScale(RE::Actor* a_actor, float a_scale);
 }

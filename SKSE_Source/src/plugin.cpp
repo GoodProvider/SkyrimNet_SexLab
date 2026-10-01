@@ -16,6 +16,9 @@
 #include "Config.h"
 #include "AnimSpeed.h"
 #include "NarrationQueue.h"
+#include "OrgasmEngine.h"
+#include "Hud.h"
+#include "Papyrus_OrgasmEngine.h"
 
 using namespace SKSE;
 
@@ -78,6 +81,7 @@ namespace {
         if (!intfc->WriteRecord(kJsonSessionRecord, kJsonSessionVersion, SexLabNet::Json::CurrentSession())) {
             webui_log::error("co-save: failed to write JSON store session");
         }
+        OrgasmEngine::Save(intfc);
     }
 
     void CoSave_OnLoad(SKSE::SerializationInterface *intfc) {
@@ -88,12 +92,15 @@ namespace {
                 if (intfc->ReadRecordData(session)) {
                     SexLabNet::Json::SetLoadedSaveSession(session);
                 }
+            } else if (type == OrgasmEngine::kRecord) {
+                OrgasmEngine::Load(intfc, version, length);
             }
         }
     }
 
     void CoSave_OnRevert(SKSE::SerializationInterface *) {
         SexLabNet::Json::SetLoadedSaveSession(0);
+        OrgasmEngine::Revert();
     }
 }
 
@@ -115,7 +122,9 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             RE::ConsoleLog::GetSingleton()->Print("SkyrimNet_SexLab: SKSE listening!");
             AnimationDB::Open();
             InitWebUI();
+            Hud::Init();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
+            OrgasmEngine::Install();
             JsonStore_SelfTest();
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
@@ -123,6 +132,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             PapyrusBindings_WebUI::ClearOnGameLoad();
             AnimSpeed::ClearAll();
             NarrationQueue::Clear();
+            Hud::Reset();
             WebUI_SetGameReady();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
             SexLabNet::Json::OnNewSession();
@@ -155,6 +165,11 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             webui_log::error("Failed to register Json Papyrus functions");
         } else {
             webui_log::info("Json Papyrus functions registered");
+        }
+        if (!papyrus->Register(PapyrusBindings_OrgasmEngine::Register_OrgasmEngine_Functions)) {
+            webui_log::error("Failed to register OrgasmEngine Papyrus functions");
+        } else {
+            webui_log::info("OrgasmEngine Papyrus functions registered");
         }
     } else {
         webui_log::info("Failed to get Papyrus interface.");

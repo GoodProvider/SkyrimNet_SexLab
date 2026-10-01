@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SkyrimNet SexLab HUD</title>
+    <!--
+        Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
+        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys, blocked, paused, speed}) each engine tick when it changes.
+        Same position and scale as the overlay's ControlPanel (#left-column in index.html).
+    -->
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        :root {
+            --text-primary:  #e8e6e1;
+            --text-secondary:#a8a5a0;
+            --text-muted:    #65635e;
+            --accent:        #c9a84c;
+            --danger:        #e54545;
+            --font-ui:       'Segoe UI', 'Microsoft YaHei UI', 'Meiryo', system-ui, sans-serif;
+            --text-sm:       14px;
+            --text-base:     15px;
+            --space-xs:      4px;
+            --space-sm:      8px;
+            --space-md:      14px;
+            --radius:        6px;
+        }
+        html {
+            font-family: var(--font-ui);
+            font-size: var(--text-base);
+            line-height: 1.4;
+            -webkit-font-smoothing: antialiased;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            user-select: none;
+            pointer-events: none;
+            color: var(--text-primary);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
+        }
+        #hud {
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            display: none;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+        #hud.visible { display: flex; }
+
+        /* Invisible table: focus | name | magicka | stamina | enjoyment (focus + resources: mini-game only) */
+        #enjoyment { border-collapse: collapse; }
+        #enjoyment td { padding: 1px var(--space-sm) 1px 0; vertical-align: middle; }
+        td.focus { width: 1.4em; text-align: center; color: var(--text-secondary); font-weight: 600; }
+        td.focus.on { color: var(--accent); }
+        td.name { white-space: nowrap; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+        tr.broken td.name { color: var(--text-muted); font-style: italic; }
+        td.name .dom { font-size: 0.7em; font-weight: 600; color: var(--accent); vertical-align: middle; }
+        td.barcell { width: 180px; }
+        td.rescell { width: 60px; }
+        .bar.res { height: 6px; }
+        .fill.magicka { background-color: #3f7fe0; }
+        .fill.stamina { background-color: #4fbf5a; }
+        .bar {
+            position: relative;
+            height: 10px;
+            border-radius: var(--radius);
+            background: rgba(0, 0, 0, 0.45);
+            box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.35);
+            overflow: hidden;
+        }
+        .fill {
+            height: 100%;
+            width: 0%;
+            border-radius: var(--radius);
+            transition: width 0.25s linear, background-color 0.4s linear;
+        }
+        .bar.near .fill { animation: pulse 0.9s ease-in-out infinite; }
+        .bar.flash .fill { animation: orgasm 0.45s linear infinite; width: 100% !important; }
+        @keyframes pulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.6); }
+        }
+        @keyframes orgasm {
+            0%   { background-color: #ff4fa3; }
+            25%  { background-color: #ffd24f; }
+            50%  { background-color: #ffffff; }
+            75%  { background-color: #b44fff; }
+            100% { background-color: #ff4fa3; }
+        }
+
+        /* Controls: "[key] label" on the left of a pair, "label [key]" on the right */
+        #controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-xs) var(--space-md);
+            font-size: var(--text-sm);
+        }
+        .ctl { display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; }
+        .pair { display: inline-flex; gap: var(--space-sm); }
+        .key {
+            display: inline-block;
+            min-width: 1.6em;
+            padding: 0 5px;
+            border: 1px solid rgba(201, 168, 76, 0.6);
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.45);
+            color: var(--accent);
+            font-size: 12px;
+            text-align: center;
+            line-height: 1.5;
+        }
+        .ctl.blocked { opacity: 0.4; }
+        td.lock { width: 1.2em; text-align: center; }
+        .paused-tag { color: var(--accent); font-weight: 600; letter-spacing: 0.05em; }
+        .speed-tag { color: var(--text-secondary); font-style: italic; white-space: nowrap; }
+        .ctl.blocked .label { text-decoration: line-through; }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <table id="enjoyment"><tbody id="rows"></tbody></table>
+        <div id="controls"></div>
+    </div>
+
+    <script>
+        // ── Display scale: same rule as index.html (body.zoom = Dashboard ui_scale × up-only 1080p baseline) ──
+        let _uiUserScale = 1;
+        function resolutionBaseline() {
+            const s = window.innerHeight / 1080;
+            return s > 1.05 ? s * 0.85 : 1;
+        }
+        function applyUiScale(userScale) {
+            _uiUserScale = Math.max(0.75, Math.min(1.5, Number(userScale) || 1));
+            document.body.style.zoom = String(_uiUserScale * resolutionBaseline());
+        }
+        function skyrimNetApiBase() {
+            if (typeof window.__SN_BASE__ === 'string' && window.__SN_BASE__)
+                return window.__SN_BASE__.replace(/\/$/, '');
+            return 'http://localhost:8080';
+        }
+        function loadDashboardUiScale() {
+            fetch(skyrimNetApiBase() + '/config?api=get&name=Dashboard')
+                .then(function (res) { return res.ok ? res.json() : Promise.reject(res.status); })
+                .then(function (body) {
+                    const d = (body && body.data) ? body.data : {};
+                    applyUiScale(typeof d.ui_scale === 'number' ? d.ui_scale : 1);
+                })
+                .catch(function () { applyUiScale(_uiUserScale); });
+        }
+        applyUiScale(1);
+        loadDashboardUiScale();
+        window.addEventListener('resize', function () { applyUiScale(_uiUserScale); });
+
+        // ── Rendering ──
+        const ARROWS = { Up: '↑', Down: '↓', Left: '←', Right: '→' };
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        function keyLabel(keys, control) {
+            const k = keys && keys[control];
+            return k ? (ARROWS[k] || k) : '';
+        }
+
+        // Enjoyment 0..100 → gold (calm) to hot pink (close).
+        function barColor(e) {
+            const t = Math.max(0, Math.min(1, e / 100));
+            const from = [201, 168, 76], to = [255, 60, 120];
+            const c = from.map(function (v, i) { return Math.round(v + (to[i] - v) * t); });
+            return 'rgb(' + c.join(',') + ')';
+        }
+
+        // Mini-game resource bar: kind 'magicka' (calm cost) or 'stamina' (arouse cost), pct 0..100.
+        function resBar(kind, pct) {
+            return '<td class="rescell"><div class="bar res"><div class="fill ' + kind + '" style="width:' +
+                Math.max(0, Math.min(100, Number(pct) || 0)) + '%"></div></div></td>';
+        }
+
+        // side: 'left' = "[key] label", 'right' = "label [key]"
+        function ctl(keys, control, label, side, blocked) {
+            const k = keyLabel(keys, control);
+            if (!k) return '';
+            const key = '<span class="key">' + esc(k) + '</span>';
+            const lab = '<span class="label">' + esc(label) + '</span>';
+            return '<span class="ctl' + (blocked ? ' blocked' : '') + '">' +
+                (side === 'left' ? key + lab : lab + key) + '</span>';
+        }
+
+        function hudUpdate(state) {
+            const hud = document.getElementById('hud');
+            if (!state || !state.groups) { hud.classList.remove('visible'); return; }
+            const g = state.groups;
+            const actors = state.actors || [];
+            const keys = state.keys || {};
+            const blocked = state.blocked || {};
+
+            // Rows: enjoyment bars, and/or the mini-game focus column + magicka/stamina bars.
+            const rows = document.getElementById('rows');
+            let html = '';
+            if (g.enjoyment || g.minigame) {
+                actors.forEach(function (a, i) {
+                    let focus = '';
+                    if (g.minigame) {
+                        // Number = focus key; the focused actor's number becomes an arrow at its name.
+                        focus = (i === state.focus) ? '▶' : (i < 4 ? String(i + 1) : '');
+                    }
+                    const cls = (a.flash ? ' flash' : '') + (!a.flash && a.near ? ' near' : '');
+                    html += '<tr class="' + (a.broken ? 'broken' : '') + '">' +
+                        (g.minigame ? '<td class="focus' + (i === state.focus ? ' on' : '') + '">' + focus + '</td>' : '') +
+                        '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') + '</td>' +
+                        (g.minigame ? resBar('magicka', a.magicka) + resBar('stamina', a.stamina) : '') +
+                        (g.enjoyment
+                            ? '<td class="barcell"><div class="bar' + cls + '"><div class="fill" style="width:' +
+                              Math.max(0, Math.min(100, a.enjoyment)) + '%;background-color:' + barColor(a.enjoyment) +
+                              '"></div></div></td>'
+                            : '') +
+                        '<td class="lock">' + (a.denied ? '<span title="orgasm denied">🔒</span>' : '') + '</td>' +
+                        '</tr>';
+                });
+            }
+            rows.innerHTML = html;
+
+            // Controls: [Paused]  end  previous/pause/next  slower <speed> faster  calm/arouse
+            let c = '';
+            if (state.paused) c += '<span class="paused-tag">Paused</span>';
+            if (g.controls) {
+                c += ctl(keys, 'end', 'end', 'left');
+                c += '<span class="pair">' + ctl(keys, 'previous', 'previous', 'left') +
+                    ctl(keys, 'pause', state.paused ? 'resume' : 'pause', 'left') +
+                    ctl(keys, 'next', 'next', 'right') + '</span>';
+                c += '<span class="pair">' + ctl(keys, 'slower', 'slower', 'left') +
+                    (state.speed ? '<span class="speed-tag">' + esc(state.speed) + '</span>' : '') +
+                    ctl(keys, 'faster', 'faster', 'right') + '</span>';
+            }
+            if (g.minigame) {
+                const calmLabel = blocked.broken ? 'broken' : 'calm';
+                c += '<span class="pair">' + ctl(keys, 'calm', calmLabel, 'left', blocked.calm) +
+                    ctl(keys, 'arouse', 'arouse', 'right', blocked.arouse) + '</span>';
+            }
+            // Deny / allow for the focus actor: last in the row.
+            if (g.controls) {
+                const fa = actors[state.focus];
+                c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 'left');
+            }
+            document.getElementById('controls').innerHTML = c;
+
+            hud.classList.toggle('visible', html !== '' || c !== '');
+        }
+        window.hudUpdate = hudUpdate;
+    </script>
+</body>
+</html>

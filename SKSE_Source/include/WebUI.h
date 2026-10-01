@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <map>
 #include <vector>
@@ -19,6 +20,11 @@ public:
     static void PromoteSink();
     void Register(uint32_t dxScanCode, KeyCallback callback);
     void Unregister(uint32_t dxScanCode);
+    /// Scene HUD keys (DX scancodes; mouse buttons are 256 + button). Only live while
+    /// SetHudActive(true); matched events (down, held and up) are unlinked from the input list so
+    /// SexLab hotkeys, favorites and attacks never see them.
+    void SetHudKeys(std::map<uint32_t, KeyCallback> keys);
+    void SetHudActive(bool active);
 
 private:
     KeyHandler() = default;
@@ -32,6 +38,8 @@ private:
                                           RE::BSTEventSource<RE::InputEvent*>* a_eventSource) override;
 
     std::map<uint32_t, KeyCallback> _callbacks;
+    std::map<uint32_t, KeyCallback> _hudKeys;
+    std::atomic<bool> _hudActive{ false };
     std::shared_mutex _mutex;
 };
 

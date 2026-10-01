@@ -21,8 +21,24 @@ int victim_faction_forms
 ; Stores the Orgasm messages for Combined flush (StageStart, or Scene OnUpdate
 ; when a DOM slave is in the thread so last-stage melt can join the player).
 String[] orgasm_messages
+; Per slot, what orgasm_messages[i] holds (ORGASM_KIND_*). DOM melt: the text with the name as {n}.
+int[] orgasm_kinds
+; Pending parts of the one orgasm message: "<allower> allows <allowed> to orgasm. " and folded
+; arouse / calm narrations. orgasm_overflow: parts that did not fit the budget (sent as an event).
+String orgasm_prefix = ""
+String orgasm_extras = ""
+String orgasm_overflow = ""
 bool orgasm_messages_set = false
 bool orgasm_window_open = false
+; Thread hook OrgasmStart sent on entering the final (non-LeadIn) stage; OrgasmEnd not yet sent.
+bool orgasm_hook_open = false
+; Pause hotkey: the stage is held with thread.UpdateTimer(PAUSE_HOLD_SECONDS) (StageTimer and
+; TimedStage are private to sslThreadController). paused_stage/paused_anim: the stage last held.
+bool scene_paused = false
+float pause_started_at = 0.0
+int paused_stage = 0
+sslBaseAnimation paused_anim = None
+float Property PAUSE_HOLD_SECONDS = 100000.0 AutoReadOnly
 ; Real-time stamp when the Combined DOM window first armed; ArmOrgasmWindow
 ; will not extend past 2x orgasm_delay from this start.
 float orgasm_window_started_at = 0.0
@@ -206,6 +222,8 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     EnsureActorArraysLargeEnough(num_actors) 
     orgasm_messages_set = false
     orgasm_window_open = false
+    orgasm_hook_open = false
+    scene_paused = false
     orgasm_window_started_at = 0.0
     UnregisterForUpdate()
 
@@ -474,6 +492,8 @@ Function Release()
     pending_animation_change = false
     animation_change_from = ""
     orgasm_window_open = false
+    orgasm_hook_open = false
+    scene_paused = false
     orgasm_window_started_at = 0.0
     int i = 0
     int num_actors = 0
@@ -528,15 +548,10 @@ Function Release()
     endif
     ; Clear pending orgasm messages so a reused pool scene never inherits stale
     ; entries (OrgasmCombined only writes a slot when orgasm_messages[i] == "").
-    if orgasm_messages
-        int m = 0
-        while m < orgasm_messages.length
-            orgasm_messages[m] = ""
-            m += 1
-        endwhile
-    endif
-    orgasm_messages_set = false
+    ClearOrgasmStash()
     orgasm_window_open = false
+    orgasm_hook_open = false
+    scene_paused = false
     orgasm_window_started_at = 0.0
     animating_started_at = 0.0
 
@@ -583,6 +598,9 @@ Function EnsureActorArraysLargeEnough(int size)
     if !position_objs || !orgasm_messages || size > position_objs.length || size > orgasm_messages.length
         position_objs = EnsureIntsLargeEnough(position_objs, size, 0 )
         orgasm_messages = EnsureStringsLargeEnough(orgasm_messages, size, "")
+    endif
+    if !orgasm_kinds || size > orgasm_kinds.length
+        orgasm_kinds = EnsureIntsLargeEnough(orgasm_kinds, size, 0)
     endif
     int i = 0
     while i < size
@@ -646,7 +664,7 @@ bool position_override = true
 bool seed_first_animation = false
 
 ; Set when an animation change was detected and not yet narrated. StageStart consumes it and
-; narrates "Scene changes from <old stage description> to <new stage description>".
+; sends optional DirectNarration "Scene changes to '<new stage description>'".
 bool pending_animation_change = false
 String animation_change_from = ""
 
@@ -658,6 +676,8 @@ Function CheckAnimationChange()
     String from_desc = description_last
     if SyncAnimationDefaults()
         QueueAnimationChangeStage(from_desc)
+        Engine_SetSkills()
+        Engine_SetStage()
     endif
 EndFunction
 
@@ -821,6 +841,7 @@ Function PersistPositions()
             StorageUtil.SetIntValue(a, persist_prefix+"tid", thread.tid)
             StorageUtil.SetIntValue(a, persist_prefix+"no_orgasm", SNSL_JMap.getInt(obj, "no_orgasm"))
             StorageUtil.SetIntValue(a, persist_prefix+"deny_orgasm", SNSL_JMap.getInt(obj, "deny_orgasm"))
+            StorageUtil.SetStringValue(a, persist_prefix+"deny_by", SNSL_JMap.getStr(obj, "deny_by"))
             StorageUtil.SetIntValue(a, persist_prefix+"dressed", SNSL_JMap.getInt(obj, "dressed"))
             StorageUtil.SetIntValue(a, persist_prefix+"orgasm_locked", SNSL_JMap.getInt(obj, "orgasm_locked"))
             StorageUtil.SetIntValue(a, persist_prefix+"speaking_locked", SNSL_JMap.getInt(obj, "speaking_locked"))
@@ -839,6 +860,7 @@ Function RestorePosition(int i, Actor akActor)
     int obj = position_objs[i]
     SNSL_JMap.setInt(obj, "no_orgasm", StorageUtil.GetIntValue(akActor, persist_prefix+"no_orgasm", 0))
     SNSL_JMap.setInt(obj, "deny_orgasm", StorageUtil.GetIntValue(akActor, persist_prefix+"deny_orgasm", 0))
+    SNSL_JMap.setStr(obj, "deny_by", StorageUtil.GetStringValue(akActor, persist_prefix+"deny_by", ""))
     SNSL_JMap.setInt(obj, "dressed", StorageUtil.GetIntValue(akActor, persist_prefix+"dressed", 0))
     SNSL_JMap.setInt(obj, "orgasm_locked", StorageUtil.GetIntValue(akActor, persist_prefix+"orgasm_locked", 0))
     SNSL_JMap.setInt(obj, "speaking_locked", StorageUtil.GetIntValue(akActor, persist_prefix+"speaking_locked", 0))
@@ -851,6 +873,7 @@ Function ClearPersistedPosition(Actor akActor)
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"tid")
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"no_orgasm")
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"deny_orgasm")
+    StorageUtil.UnsetStringValue(akActor, persist_prefix+"deny_by")
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"dressed")
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"orgasm_locked")
     StorageUtil.UnsetIntValue(akActor, persist_prefix+"speaking_locked")
@@ -971,6 +994,11 @@ Function ApplySexLabVoice(int i)
     Actor a = positions[i]
     String csv = SpeakingCsvFromIndex(i)
     bool voiced = StringUtil.Find(csv, "_pleasure_") >= 0 || StringUtil.Find(csv, "_pain_") >= 0
+    ; Not expected to orgasm: the animation does not arouse them, silent until enjoyment reaches 50.
+    int obj = GetObjFromActor(a)
+    if voiced && obj > 0 && SNSL_JMap.getInt(obj, "orgasm_expected", 1) == 0 && Voice_BelowGate(a)
+        voiced = false
+    endif
     sslBaseVoice v = thread.GetVoice(a)
     ; Silenced before SexLab picked a voice leaves Voice none; pick one when un-silencing.
     if voiced && v == None && sexlab != None
@@ -978,6 +1006,10 @@ Function ApplySexLabVoice(int i)
     endif
     thread.SetVoice(a, v, !voiced)
     Trace("ApplySexLabVoice", GetDisplayName(a)+" speaking:"+csv+" voiced:"+voiced)
+EndFunction
+
+bool Function Voice_BelowGate(Actor a)
+    return SkyrimNet_SexLab_OrgasmEngine.IsManaged(a) && SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(a) < VOICE_GATE_ENJOYMENT
 EndFunction
 
 Function ApplySexLabVoices()
@@ -1066,19 +1098,18 @@ bool Function SetActor(int i, Actor akActor)
     endif
 
     DbgMsg("SetActor", "thread.ActorAlias "+akActor.GetDisplayName())
+    ; OrgasmEngine's live enjoyment (0-100); SexLab's is mirrored from it.
     int enjoyment = 0
     if status == STATUS_ACTIVE
-        sslActorAlias actorAlias = thread.ActorAlias(akActor) 
-        ;if Game.GetModByName("SLSO.esp") != 255
-            ;enjoyment = actorAlias.Getfull_enjoyment() 
-        ;else 
-        ;    int enjoyment = actorAlias.GetEnjoyment() 
-        ;endif 
-
-        if actorAlias != None
-            enjoyment = actorAlias.GetEnjoyment() 
-        endif 
-    endif 
+        if SkyrimNet_SexLab_OrgasmEngine.IsManaged(akActor)
+            enjoyment = SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(akActor) as int
+        else
+            sslActorAlias actorAlias = thread.ActorAlias(akActor)
+            if actorAlias != None
+                enjoyment = actorAlias.GetEnjoyment()
+            endif
+        endif
+    endif
     SNSL_JMap.setInt(obj, "enjoyment", enjoyment)
 
     if main.handler_dom.IsDOMSlave(akActor)
@@ -1253,8 +1284,63 @@ EndFunction
 int Function GetTotalOrgasms(Actor akActor)
     DbgEnter("GetTotalOrgasms", "akActor:"+GetDisplayName(akActor))
     DbgReturn("GetTotalOrgasms", "StorageUtil.GetIntValue(akActor, storage_total_orgasms_key, 0)")
-    return StorageUtil.GetIntValue(akActor, storage_total_orgasms_key, 0) 
-EndFunction 
+    return StorageUtil.GetIntValue(akActor, storage_total_orgasms_key, 0)
+EndFunction
+
+String Function PossessivePronoun(Actor akActor)
+    if akActor != None
+        int sex = akActor.GetLeveledActorBase().GetSex()
+        if sex == 1
+            return "her"
+        elseif sex == 0
+            return "his"
+        endif
+    endif
+    return "their"
+EndFunction
+
+; "A" / "A and B" / "A, B, and C".
+String Function JoinNames(String[] names, int count)
+    if count <= 0
+        return ""
+    elseif count == 1
+        return names[0]
+    elseif count == 2
+        return names[0]+" and "+names[1]
+    endif
+    String s = ""
+    int i = 0
+    while i < count - 1
+        s += names[i]+", "
+        i += 1
+    endwhile
+    return s+"and "+names[count - 1]
+EndFunction
+
+; One sentence for a state: "<A> <single> " or "<A and B> <plural> ". Empty when count is 0.
+String Function NamesClause(String[] names, int count, String single, String plural)
+    if count <= 0
+        return ""
+    elseif count == 1
+        return names[0]+" "+single+" "
+    endif
+    return JoinNames(names, count)+" "+plural+" "
+EndFunction
+
+String Function ReplaceAll(String s, String find, String rep)
+    if s == "" || find == ""
+        return s
+    endif
+    int flen = StringUtil.GetLength(find)
+    String out = ""
+    int p = StringUtil.Find(s, find)
+    while p >= 0
+        out += StringUtil.Substring(s, 0, p) + rep
+        s = StringUtil.Substring(s, p + flen)
+        p = StringUtil.Find(s, find)
+    endwhile
+    return out + s
+EndFunction
 
 Function SetTotalOrgasms(Actor akActor, int total_orgasms)
     DbgEnter("SetTotalOrgasms", "akActor:"+GetDisplayName(akActor)+" total_orgasms:"+total_orgasms)
@@ -1271,32 +1357,81 @@ Function SetTotalOrgasms(Actor akActor, int total_orgasms)
     DbgEnd("SetTotalOrgasms")
 EndFunction 
 
-; Builds the prompt-gate clause and updates the actor's orgasm total.
+; orgasm_kinds: what a stash slot holds. The builder (OrgasmMessagesToNarration) groups by kind.
+int Property ORGASM_KIND_NONE = 0 AutoReadOnly    ; empty, or legacy verbatim text
+int Property ORGASM_KIND_ORGASM = 1 AutoReadOnly  ; "<names> is/are orgasming."
+int Property ORGASM_KIND_AGAIN = 2 AutoReadOnly   ; "<names> is orgasming. again." / "are orgasming again."
+int Property ORGASM_KIND_FORCED = 3 AutoReadOnly  ; "<names> is/are forced to orgasm by <player>."
+int Property ORGASM_KIND_MELT = 4 AutoReadOnly    ; DOM melt: orgasm_messages[i] = text with {n} for the name
+
+; Stashes an orgasm for slot i and updates the actor's orgasm total.
 ; total_orgasms < 0: +1 from current. total_orgasms >= 0: set absolute (SLSO).
-; Tentacles tag: append flavor on the orgasming actor only (do not force-orgasm all positions).
-String Function GetIsOrgasming(Actor akActor, int total_orgasms = -1)
-    DbgEnter("GetIsOrgasming", "akActor:"+GetDisplayName(akActor)+" total_orgasms:"+total_orgasms)
-    if akActor == None
-        Trace("GetIsOrgasming", "Is None")
-        return ""
+; A melt / forced slot is not downgraded to a plain orgasm by a later stash in the same window.
+Function StashOrgasm(int i, Actor akActor, int kind, String text = "", int total_orgasms = -1)
+    if akActor == None || i < 0
+        return
     endif
+    EnsureActorArraysLargeEnough(i + 1)
     if total_orgasms < 0
         SetTotalOrgasms(akActor, GetTotalOrgasms(akActor) + 1)
     else
         SetTotalOrgasms(akActor, total_orgasms)
     endif
     int recorded = GetTotalOrgasms(akActor)
-    DbgMsg("GetIsOrgasming", GetDisplayName(akActor)+" total_orgasms:"+recorded) ; debug-total_orgasms
-    String name = akActor.GetDisplayName()
-    String msg = name+" is orgasming. "
-    if recorded > 1
-        msg = name+" is orgasming. again. "
+    if kind == ORGASM_KIND_ORGASM && recorded > 1
+        kind = ORGASM_KIND_AGAIN
     endif
-    if thread != None && thread.Animation != None && thread.Animation.HasTag("tentacles")
-        msg += "The tentacles is orgasming and flooding cum both inside and outside. "
+    int old = orgasm_kinds[i]
+    if (old == ORGASM_KIND_MELT || old == ORGASM_KIND_FORCED) && (kind == ORGASM_KIND_ORGASM || kind == ORGASM_KIND_AGAIN)
+        kind = old
+        text = orgasm_messages[i]
     endif
-    DbgReturn("GetIsOrgasming", msg)
-    return msg
+    if kind != ORGASM_KIND_MELT
+        ; Non-empty marker so slot checks (orgasm_messages[i] == "") still see the stash.
+        text = GetDisplayName(akActor)+" is orgasming. "
+    endif
+    orgasm_kinds[i] = kind
+    orgasm_messages[i] = text
+    orgasm_messages_set = true
+    Trace("StashOrgasm", GetDisplayName(akActor)+" slot:"+i+" kind:"+kind+" total:"+recorded+" text:"+text)
+EndFunction
+
+Function ClearOrgasmStash()
+    if orgasm_messages
+        int m = 0
+        while m < orgasm_messages.length
+            orgasm_messages[m] = ""
+            m += 1
+        endwhile
+    endif
+    if orgasm_kinds
+        int k = 0
+        while k < orgasm_kinds.length
+            orgasm_kinds[k] = 0
+            k += 1
+        endwhile
+    endif
+    orgasm_prefix = ""
+    orgasm_extras = ""
+    orgasm_messages_set = false
+EndFunction
+
+; DOM melt text -> stash key: drops the manager's ". <name> is orgasming." clause and replaces the
+; slave's name with {n}, so slaves with the same melt text merge into one sentence.
+String Function MeltKey(Actor akActor, String msg)
+    String name = GetDisplayName(akActor)
+    int p = StringUtil.Find(msg, name+" is orgasming.")
+    if p >= 0
+        msg = StringUtil.Substring(msg, 0, p)
+    endif
+    int len = StringUtil.GetLength(msg)
+    while len > 0 && (StringUtil.GetNthChar(msg, len - 1) == " " || StringUtil.GetNthChar(msg, len - 1) == ".")
+        len -= 1
+    endwhile
+    if len <= 0
+        return ""
+    endif
+    return ReplaceAll(StringUtil.Substring(msg, 0, len), name, "{n}")
 EndFunction
 
 Function SetThread(sslThreadController _thread) 
@@ -1336,6 +1471,13 @@ String Function GetIntentMessage(int intent_stage = -1)
         verb = "start"
     elseif intent_stage == INTENT_STAGE_END 
         verb = "finish"
+    endif
+    ; Start / ongoing carry the pace: "Bob and Alice are fast and forcefully ..." (normal: no adverb).
+    if intent_stage != INTENT_STAGE_END
+        String adverb = GetSpeedAdverb()
+        if adverb != ""
+            verb += " "+adverb
+        endif
     endif
     ; DOM / empty-intent creators must not emit "Nina and Bob finish ."
     String fallback = ""
@@ -1379,7 +1521,351 @@ bool Function GetThreadActive()
 EndFunction
 
 ; --------------------------------------------
-; Animation Event Handlers 
+; OrgasmEngine shell (C++ owns enjoyment + orgasms; see docs/developers/orgasm-engine.md)
+; --------------------------------------------
+
+; Per-actor orgasm on/off. SexLab's own trigger is off for the whole thread (DisableAllOrgasms);
+; keep SexLab's per-actor flag in step and tell the engine. DOM slaves are DOM-driven: the engine
+; raises DOM's arousal and DOM rolls its own orgasm (Handler_DOM, docs/developers/orgasm-engine.md).
+Function SetOrgasmDisabled(Actor akActor, bool disabled)
+    if akActor == None
+        return
+    endif
+    if thread != None
+        thread.DisableOrgasm(akActor, disabled)
+    endif
+    SkyrimNet_SexLab_OrgasmEngine.SetSceneBlocked(akActor, disabled)
+    SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(akActor, main.handler_dom.IsDOMSlave(akActor))
+EndFunction
+
+; Registers (or re-syncs) this scene with the engine. Re-entrant: the engine keeps existing actors' state.
+Function Engine_BeginScene()
+    if thread == None || !thread.Positions
+        return
+    endif
+    thread.DisableAllOrgasms(true)
+    Actor[] positions = thread.Positions
+    int n = positions.length
+    int[] roles = Utility.CreateIntArray(n)
+    float[] seeds = Utility.CreateFloatArray(n)
+    bool any_victim = false
+    int i = 0
+    while i < n
+        if positions[i] != None && thread.IsVictim(positions[i])
+            any_victim = true
+        endif
+        i += 1
+    endwhile
+    i = 0
+    while i < n
+        Actor a = positions[i]
+        if a != None
+            if thread.IsVictim(a)
+                roles[i] = 2
+            elseif any_victim
+                roles[i] = 1
+            endif
+            sslActorAlias actorAlias = thread.ActorAlias(a)
+            if actorAlias != None
+                seeds[i] = actorAlias.GetEnjoyment() as float
+            endif
+        endif
+        i += 1
+    endwhile
+    SkyrimNet_SexLab_OrgasmEngine.BeginScene(sid, positions, roles, seeds, has_player)
+    i = 0
+    while i < n
+        Actor a = positions[i]
+        if a != None
+            int obj = GetObjFromActor(a)
+            ; Only the player's deny blocks; not expected (no_orgasm) just stops passive gain (Engine_SetSkills).
+            bool blocked = obj > 0 && SNSL_JMap.getInt(obj, "deny_orgasm") == 1
+            SkyrimNet_SexLab_OrgasmEngine.SetSceneBlocked(a, blocked)
+            SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(a, main.handler_dom.IsDOMSlave(a))
+        endif
+        i += 1
+    endwhile
+    Engine_SetSkills()
+    Engine_SetStage()
+EndFunction
+
+; Skill for the current act (by animation tag) and lewd - pure, per actor. Start and animation change only.
+Function Engine_SetSkills()
+    if thread == None || thread.Animation == None || sexlab == None
+        return
+    endif
+    String skill_name = "Foreplay"
+    if thread.Animation.HasTag("Vaginal")
+        skill_name = "Vaginal"
+    elseif thread.Animation.HasTag("Anal")
+        skill_name = "Anal"
+    elseif thread.Animation.HasTag("Oral") || thread.Animation.HasTag("Blowjob") || thread.Animation.HasTag("Cunnilingus")
+        skill_name = "Oral"
+    endif
+    Actor[] positions = thread.Positions
+    ; Not expected to orgasm (AnimDB orgasm_expected 0, or the scene's no_orgasm): no passive gain,
+    ; mini-game only. Missing: expected.
+    int[] orgasm = animdb.GetOrgasmExpected(thread)
+    int i = 0
+    while i < positions.length
+        Actor a = positions[i]
+        if a != None
+            int lewd = sexlab.Stats.GetLewdLevel(a) - sexlab.Stats.GetPureLevel(a)
+            SkyrimNet_SexLab_OrgasmEngine.SetActorSkills(a, sexlab.GetSkillLevel(a, skill_name), lewd)
+            int obj = GetObjFromActor(a)
+            bool expected = !orgasm || orgasm.length <= i || orgasm[i] == 1
+            if obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
+                expected = false
+            endif
+            SkyrimNet_SexLab_OrgasmEngine.SetOrgasmExpected(a, expected)
+            if obj > 0
+                SNSL_JMap.setInt(obj, "orgasm_expected", expected as int)
+            endif
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+Function Engine_SetStage()
+    if thread == None || thread.Animation == None
+        return
+    endif
+    ; SexLab's stage term steps on a stage change: not another plugin's doing.
+    Mirror_RebaselineAll()
+    int count = thread.Animation.StageCount()
+    SkyrimNet_SexLab_OrgasmEngine.SetStageTimers(sid, Engine_StageSeconds(), thread.LeadIn)
+    ; Thread hooks at SexLab's timing (its own are off with DisableAllOrgasms): OrgasmStart once on
+    ; entering the final non-LeadIn stage, OrgasmEnd on leaving it (or at AnimationEnd). DOM makes
+    ; its one full roll from this OrgasmStart.
+    bool final_stage = thread.Stage >= count && !thread.LeadIn
+    if final_stage && !orgasm_hook_open
+        orgasm_hook_open = true
+        Trace("Engine_SetStage", "OrgasmStart hook stage:"+thread.Stage+"/"+count)
+        thread.SendThreadEvent("OrgasmStart")
+    elseif !final_stage && orgasm_hook_open
+        orgasm_hook_open = false
+        Trace("Engine_SetStage", "OrgasmEnd hook stage:"+thread.Stage+"/"+count)
+        thread.SendThreadEvent("OrgasmEnd")
+    endif
+    SkyrimNet_SexLab_OrgasmEngine.SetStage(sid, thread.Stage, count)
+EndFunction
+
+; Seconds per stage of the current animation, by sslThreadController.GetTimer's rule (TimedStage is
+; Animation.HasTimer(stage)). Empty when SexLab has no timers: the engine uses its fallback rate.
+float[] Function Engine_StageSeconds()
+    sslBaseAnimation anim = thread.Animation
+    float[] timers = thread.Timers
+    int count = anim.StageCount()
+    if count < 1 || timers.length < 1
+        return Utility.CreateFloatArray(0)
+    endif
+    float[] secs = Utility.CreateFloatArray(count)
+    int last = timers.length - 1
+    int s = 1
+    while s <= count
+        if anim.HasTimer(s)
+            secs[s - 1] = anim.GetTimer(s)
+        elseif s < last
+            secs[s - 1] = timers[s - 1]
+        elseif s >= count || last < 1
+            secs[s - 1] = timers[last]
+        else
+            secs[s - 1] = timers[last - 1]
+        endif
+        s += 1
+    endwhile
+    return secs
+EndFunction
+
+; --------------------------------------------
+; Pause / resume (HUD pause key). StageTimer / TimedStage are private to sslThreadController, so the
+; stage is held by pushing its timer far out (UpdateTimer) and released by pulling it back by the
+; unpaused remainder; ResolveTimers restores TimedStage = Animation.HasTimer(Stage).
+; --------------------------------------------
+bool Function IsPaused()
+    return scene_paused
+EndFunction
+
+Function TogglePause()
+    if thread == None || thread.Animation == None
+        return
+    endif
+    scene_paused = !scene_paused
+    if scene_paused
+        paused_stage = 0
+        paused_anim = None
+        Pause_Hold()
+    else
+        float held = SexLabUtil.GetCurrentGameRealTime() - pause_started_at
+        thread.UpdateTimer(held - PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+        Trace("TogglePause", "resumed stage:"+thread.Stage+" held:"+held)
+    endif
+    SkyrimNet_SexLab_OrgasmEngine.SetScenePaused(sid, scene_paused)
+EndFunction
+
+; Holds the current stage. Once per (animation, stage): a new stage resets SexLab's timer, a
+; repeated StageStart for the same stage (animation-change queue) must not stack another hold.
+Function Pause_Hold()
+    if !scene_paused || thread == None
+        return
+    endif
+    if paused_anim == thread.Animation && paused_stage == thread.Stage
+        return
+    endif
+    paused_anim = thread.Animation
+    paused_stage = thread.Stage
+    pause_started_at = SexLabUtil.GetCurrentGameRealTime()
+    thread.UpdateTimer(PAUSE_HOLD_SECONDS)
+    Trace("Pause_Hold", "holding stage:"+thread.Stage)
+EndFunction
+
+; Engine -> Effect_OrgasmGroup: everyone who orgasmed together (trigger + group join at 95).
+; ForceOrgasm runs SexLab's cum/sound/SexLabOrgasm and resets its build-up for each.
+; individual: narrate the group now as one DN; else (safety net / joiners of an external orgasm) or
+; while a window is open: stash and let the window flush one DN.
+; allower: deny 1 -> 0 -> "<allower> allows <allowed> to orgasm. " leads the message.
+Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String source, Actor allower, Actor allowed, String extras)
+    if thread == None || !actors
+        Trace("Orgasm_ApplyGroup", "no thread or actors")
+        return
+    endif
+    DbgEnter("Orgasm_ApplyGroup", "count:"+actors.length+" individual:"+individual+" source:"+source+" allower:"+GetDisplayName(allower))
+    EnsureActorArraysLargeEnough(thread.positions.length)
+    Actor first = None
+    int i = 0
+    while i < actors.length
+        Actor a = actors[i]
+        int slot = -1
+        if a != None
+            slot = thread.positions.Find(a)
+        endif
+        if slot >= 0
+            ; SexLab's trigger stays disabled (DisableAllOrgasms); we run SexLab's orgasm ourselves. The
+            ; thread hooks OrgasmStart / OrgasmEnd follow SexLab's stage timing (Engine_SetStage).
+            thread.ForceOrgasm(a)
+            Mirror_Rebaseline(a)
+            int kind = ORGASM_KIND_ORGASM
+            if forced && i < forced.length && forced[i] == 1
+                kind = ORGASM_KIND_FORCED
+            endif
+            StashOrgasm(slot, a, kind)
+            if first == None
+                first = a
+            endif
+        else
+            Trace("Orgasm_ApplyGroup", GetDisplayName(a)+" not in thread.positions")
+        endif
+        i += 1
+    endwhile
+    if first == None
+        DbgEnd("Orgasm_ApplyGroup")
+        return
+    endif
+    if allower != None && allowed != None
+        orgasm_prefix = GetDisplayName(allower)+" allows "+GetDisplayName(allowed)+" to orgasm. "
+    endif
+    if extras != ""
+        if orgasm_extras != ""
+            orgasm_extras += " "
+        endif
+        orgasm_extras += extras
+    endif
+    if !individual || orgasm_window_open
+        ArmOrgasmWindow()
+    else
+        Actor target = allower
+        if target == None || target == first
+            target = FirstOtherPosition(first)
+        endif
+        NarrateOrgasmStash(first, target)
+    endif
+    DbgEnd("Orgasm_ApplyGroup")
+EndFunction
+
+Actor Function FirstOtherPosition(Actor akActor)
+    if thread == None
+        return None
+    endif
+    int i = 0
+    while i < thread.positions.length
+        if thread.positions[i] != akActor
+            return thread.positions[i]
+        endif
+        i += 1
+    endwhile
+    return None
+EndFunction
+
+; SexLab enjoyment the last mirror left behind (position obj "sl_mirror_set"; -1 = no baseline).
+; Between mirrors SexLab only drifts a little on its own (time term), so a larger move means another
+; plugin called AdjustEnjoyment: fold it into the engine instead of overwriting it.
+int Property MIRROR_EXTERNAL_THRESHOLD = 3 AutoReadOnly
+; Not expected to orgasm: SexLab voice stays silent below this enjoyment.
+int Property VOICE_GATE_ENJOYMENT = 50 AutoReadOnly
+
+; Forget the baseline where SexLab jumps legitimately (orgasm resets QuitEnjoyment, stage term steps).
+Function Mirror_Rebaseline(Actor akActor)
+    int obj = GetObjFromActor(akActor)
+    if obj > 0
+        SNSL_JMap.setInt(obj, "sl_mirror_set", -1)
+    endif
+EndFunction
+
+Function Mirror_RebaselineAll()
+    if thread == None
+        return
+    endif
+    int i = 0
+    while i < thread.positions.length
+        Mirror_Rebaseline(thread.positions[i])
+        i += 1
+    endwhile
+EndFunction
+
+; Engine -> Effect_Mirror: SexLab's enjoyment follows ours (voices / expressions), after pulling in
+; any change another plugin made to SexLab's enjoyment since the last mirror.
+Function Mirror_Apply(Actor akActor, int value)
+    if thread == None || akActor == None
+        return
+    endif
+    sslActorAlias actorAlias = thread.ActorAlias(akActor)
+    if actorAlias == None
+        return
+    endif
+    int current = actorAlias.GetEnjoyment()
+    int obj = GetObjFromActor(akActor)
+    int baseline = -1
+    if obj > 0
+        baseline = SNSL_JMap.getInt(obj, "sl_mirror_set", -1)
+    endif
+    if baseline >= 0
+        int external = current - baseline
+        if external >= MIRROR_EXTERNAL_THRESHOLD || external <= -MIRROR_EXTERNAL_THRESHOLD
+            SkyrimNet_SexLab_OrgasmEngine.AddEnjoyment(akActor, external as float, "sexlab")
+            value = SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(akActor) as int
+            Trace("Mirror_Apply", GetDisplayName(akActor)+" external SexLab change "+external+" -> engine "+value)
+        endif
+    endif
+    int delta = value - current
+    if delta != 0
+        actorAlias.AdjustEnjoyment(delta)
+    endif
+    if obj > 0
+        SNSL_JMap.setInt(obj, "sl_mirror_set", actorAlias.GetEnjoyment())
+        ; Not expected: re-voice when enjoyment crosses the gate either way.
+        if SNSL_JMap.getInt(obj, "orgasm_expected", 1) == 0
+            int above = (value >= VOICE_GATE_ENJOYMENT) as int
+            if SNSL_JMap.getInt(obj, "voice_gate", -1) != above
+                SNSL_JMap.setInt(obj, "voice_gate", above)
+                ApplySexLabVoice(thread.Positions.Find(akActor))
+            endif
+        endif
+    endif
+EndFunction
+
+; --------------------------------------------
+; Animation Event Handlers
 ; --------------------------------------------
 Function AnimationStart()
     description_last = ""
@@ -1399,14 +1885,7 @@ Function AnimationStart()
             Trace("AnimationStart", "--- flushing pending orgasm stash before reset")
             FlushOrgasmWindow()
         else
-            if orgasm_messages
-                int m = 0
-                while m < orgasm_messages.length
-                    orgasm_messages[m] = ""
-                    m += 1
-                endwhile
-            endif
-            orgasm_messages_set = false
+            ClearOrgasmStash()
             orgasm_window_open = false
             orgasm_window_started_at = 0.0
             UnregisterForUpdate()
@@ -1420,6 +1899,7 @@ Function AnimationStart()
     endif
     AlignActors()
     ApplyStyleSpeed()
+    Engine_BeginScene()
     manager.SaveThreadsJson()
     String msg = GetIntentMessage(INTENT_STAGE_START) + GetDescription()
     RegisterEvent("sexlab update", msg, sender, receiver)
@@ -1437,7 +1917,12 @@ Function StageStart()
     if SyncAnimationDefaults()
         pending_animation_change = true
         animation_change_from = from_desc
+        Engine_SetSkills()
     endif
+    ; Also covers actors joining / leaving (ChangeActors restarts at a stage).
+    Engine_BeginScene()
+    ; GoToStage reset SexLab's stage timer: keep a paused scene held.
+    Pause_Hold()
     ApplyAnimDbSpeaking()
     ApplySexLabVoices()
     manager.SaveThreadsJson()
@@ -1505,11 +1990,7 @@ Function StageStart()
         if pending_animation_change && desc != ""
             ; Animation switched (any route): narrate old animation's stage -> new animation's stage.
             ; No anidata transition lookup: those are per-animation stage pairs.
-            if animation_change_from != "" && animation_change_from != desc
-                narration = "Scene changes from "+animation_change_from+" to "+desc
-            else
-                narration = "Scene changes to "+desc
-            endif
+            narration = "Scene changes to '"+desc+"'"
             change_scene = true
         elseif desc != "" && description_last != ""
             if desc != description_last
@@ -1561,8 +2042,9 @@ Function StageStart()
             DirectNarration(orgasm_narration, sender, receiver, purge_dialogue=True)
         else
             DirectNarration_optional("orgasm", orgasm_narration, sender, receiver)
-        endif 
-    endif 
+        endif
+        SendOrgasmOverflow(sender, receiver)
+    endif
     ; Only advance description_last when desc is a real new description; unchanged
     ; path sets desc="" and must not wipe the prior value (would skip later Scene changes to).
     if desc != ""
@@ -1631,11 +2113,19 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
 
         ; Leftover Combined orgasm stash folded into the end DN so 0550 still gates
         ; (RegisterEvent-only leftover is invisible to contains(_direct_narration, ...)).
-        String orgasm_narration = OrgasmMessagesToNarration()
+        String end_intent = GetIntentMessage(INTENT_STAGE_END)
+        String orgasm_narration = OrgasmMessagesToNarration(StringUtil.GetLength(end_intent) + 1)
 
-        ; Post-activity afterglow (SeparateOrgasms); not ongoing sexual activity
+        ; Post-activity afterglow (individual orgasms: OrgasmEngine, or SexLab SeparateOrgasms); not ongoing sexual activity
         String afterglow = ""
-        if config.SeparateOrgasms
+        bool engine_managed = thread.positions.length > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(thread.positions[0])
+        if orgasm_hook_open
+            orgasm_hook_open = false
+            thread.SendThreadEvent("OrgasmEnd")
+        endif
+        scene_paused = false
+        SkyrimNet_SexLab_OrgasmEngine.EndScene(sid)
+        if config.SeparateOrgasms || engine_managed
             int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
             int j = thread.positions.length - 1 
             while 0 <= j 
@@ -1665,12 +2155,17 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         endif 
 
         ; Mirror AnimationStart: "A and B finish <intent>."
-        String end_message = GetIntentMessage(INTENT_STAGE_END)
+        String end_message = end_intent
         if orgasm_narration != ""
             end_message = orgasm_narration + " " + end_message
         endif
         if afterglow != ""
-            end_message += " "+afterglow
+            ; Lowest priority of the end DN: over the budget it becomes an event.
+            if StringUtil.GetLength(end_message) + 1 + StringUtil.GetLength(afterglow) <= NarrationMaxChars()
+                end_message += " "+afterglow
+            else
+                orgasm_overflow += afterglow
+            endif
         endif
         Bool skip_narration = (stop_style == "silently" || stop_style == "silent")
         if speaker != None && !skip_narration
@@ -1695,7 +2190,9 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
             else
                 DirectNarration_optional("end", end_message, sender, receiver)
             endif
-        endif 
+            SendOrgasmOverflow(sender, receiver)
+        endif
+        orgasm_overflow = ""
     endif
 
     ; Scene view showing this scene's Description Editor -> Scene Creator (the target is no longer in a scene).
@@ -1721,7 +2218,7 @@ EndFunction
 ; --------------------------------------------
 Function OrgasmCombined()
     DbgEnter("OrgasmCombined")
-    AlignActors() 
+    AlignActors()
     int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
     int i = 0
     int num_actors = thread.positions.length
@@ -1733,9 +2230,8 @@ Function OrgasmCombined()
         bool is_dom_slave = SNSL_JMap.getInt(obj,"dom_slave") == 1
 
         if orgasm_expected[i] == 1 && !no_orgasm && !is_dom_slave && orgasm_messages[i] == ""
-            orgasm_messages_set = true
-            orgasm_messages[i] = GetIsOrgasming(thread.positions[i])
-        endif 
+            StashOrgasm(i, thread.positions[i], ORGASM_KIND_ORGASM)
+        endif
         i += 1
     endwhile
     if orgasm_messages_set
@@ -1750,190 +2246,323 @@ Function OrgasmCombined()
     DbgEnd("OrgasmCombined")
 EndFunction
 
-; Used for SLSO.esp orgasm handling (invoked from Manager as a Function call)
-Function OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms)
-    DbgEnter("OrgasmIndividual", "akActor:"+GetDisplayName(akActor)+" full_enjoyment:"+full_enjoyment+" num_orgasms:"+num_orgasms)
-    if akActor == None 
-        Trace("OrgasmIndividual","akActor is None") 
+; Used for SLSO.esp / another plugin's SexLab orgasm (invoked from Manager as a Function call)
+; from_engine: the OrgasmEngine already decided (a forced request may target a no_orgasm actor).
+; Stashes and arms the window: the engine's group join for this orgasm (NoteExternalOrgasm) lands
+; in the same window, so both are one DirectNarration.
+Function OrgasmIndividual(Actor akActor, int full_enjoyment, int num_orgasms, bool from_engine = false)
+    DbgEnter("OrgasmIndividual", "akActor:"+GetDisplayName(akActor)+" full_enjoyment:"+full_enjoyment+" num_orgasms:"+num_orgasms+" from_engine:"+from_engine)
+    if akActor == None || thread == None
+        Trace("OrgasmIndividual","akActor or thread is None")
         DbgReturn("OrgasmIndividual", "void")
-        return 
-    endif 
+        return
+    endif
 
-    String name = GetDisplayName(akActor) 
+    String name = GetDisplayName(akActor)
     int obj = GetObjFromActor(akActor)
-    if obj > 0
-        if SNSL_JMap.getInt(obj, "no_orgasm") == 1
-            Trace("OrgasmIndividual",name+" shouldn't orgasm")
+    if obj > 0 && !from_engine
+        ; Only the deny blocks; not expected (no_orgasm) can still orgasm via the mini-game.
+        if SNSL_JMap.getInt(obj, "deny_orgasm") == 1
+            Trace("OrgasmIndividual",name+" orgasm denied")
             DbgReturn("OrgasmIndividual", "void")
             return
         endif
-        SNSL_JMap.setInt(obj, "enjoyment", full_enjoyment)
     endif
 
-    ; Prompt gate + total via GetIsOrgasming (SLSO absolute count).
-    String msg = GetIsOrgasming(akActor, num_orgasms)
-
-    int num_actors = thread.positions.length
-    int i = 0
-    while i < num_actors
-        if thread.positions[i] != akActor
-            msg += " "+thread.positions[i].GetDisplayName()+" is not orgasming right now. "
-        endif 
-        i += 1 
-    endwhile 
-    OrgasmHelper(akActor, msg)
+    EnsureActorArraysLargeEnough(thread.positions.length)
+    int i = thread.positions.Find(akActor)
+    if i < 0
+        Trace("OrgasmIndividual", name+" not in thread.positions")
+        DbgEnd("OrgasmIndividual")
+        return
+    endif
+    ; SLSO sends an absolute count (num_orgasms >= 0).
+    StashOrgasm(i, akActor, ORGASM_KIND_ORGASM, "", num_orgasms)
+    ArmOrgasmWindow()
     DbgEnd("OrgasmIndividual")
 EndFunction
 
-; ignore_no_orgasm: manual trigger (Description Editor orgasm button) narrates even when not expected.
+; DOM melt (and the Description Editor button for unmanaged actors). The melt text is stashed as a
+; key with {n} for the name, so slaves with the same text merge into one sentence, then the window
+; joins it with the player / group joiners into one DirectNarration.
+; ignore_no_orgasm: manual trigger (Description Editor orgasm button) narrates even when denied.
 Function OrgasmCustom(Actor akActor, String msg, bool ignore_no_orgasm = false)
     DbgEnter("OrgasmCustom", "akActor:"+GetDisplayName(akActor)+" msg:"+msg+" ignore_no_orgasm:"+ignore_no_orgasm)
-    sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
 
-    ; DOM rolls its own orgasm and ignores SexLab DisableOrgasm; honor orgasm_expected (no_orgasm = 1 - expected).
+    ; DOM rolls its own orgasm and ignores SexLab DisableOrgasm; honor deny_orgasm.
+    ; Not expected (no_orgasm) no longer blocks: it only stops passive gain.
     int obj = GetObjFromActor(akActor)
-    if !ignore_no_orgasm && obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
-        Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" shouldn't orgasm, dropping")
+    if !ignore_no_orgasm && obj > 0 && SNSL_JMap.getInt(obj, "deny_orgasm") == 1
+        Trace("OrgasmCustom", "--- "+GetDisplayName(akActor)+" orgasm denied, dropping")
+        DbgEnd("OrgasmCustom")
+        return
+    endif
+    if thread == None
+        Trace("OrgasmCustom", "--- thread is None, aborting")
         DbgEnd("OrgasmCustom")
         return
     endif
 
-    if StringUtil.Find(msg, " is orgasming.") < 0
-        msg += GetIsOrgasming(akActor)
+    EnsureActorArraysLargeEnough(thread.positions.length)
+    int i = thread.positions.Find(akActor)
+    if i < 0
+        Trace("OrgasmCustom", "--- actor not in thread.positions, stash skipped "+GetDisplayName(akActor))
+        DbgEnd("OrgasmCustom")
+        return
+    endif
+    String melt_key = MeltKey(akActor, msg)
+    if melt_key != ""
+        StashOrgasm(i, akActor, ORGASM_KIND_MELT, melt_key)
     else
-        ; Manager/DOM already appended the substring; still count this orgasm.
-        GetIsOrgasming(akActor)
+        StashOrgasm(i, akActor, ORGASM_KIND_ORGASM)
     endif
-
-    if config.SeparateOrgasms
-        Trace("OrgasmCustom", "--- SeparateOrgasms OrgasmHelper "+GetDisplayName(akActor))
-        OrgasmHelper(akActor, msg)
-    else 
-        if thread == None
-            Trace("OrgasmCustom", "--- thread is None, aborting")
-            DbgEnd("OrgasmCustom")
-            return
-        endif
-        EnsureActorArraysLargeEnough(thread.positions.length)
-        int i = 0 
-        while i < thread.positions.length && thread.positions[i] != akActor
-            i += 1
-        endwhile
-        if i < thread.positions.length
-            orgasm_messages_set = true
-            orgasm_messages[i] = msg
-            Trace("OrgasmCustom", "--- Combined stash "+GetDisplayName(akActor)+" slot:"+i)
-            ArmOrgasmWindow()
-        else
-            Trace("OrgasmCustom", "--- actor not in thread.positions, stash skipped "+GetDisplayName(akActor))
-        endif
-    endif
+    Trace("OrgasmCustom", "--- stash "+GetDisplayName(akActor)+" slot:"+i+" key:"+melt_key)
+    ArmOrgasmWindow()
     DbgEnd("OrgasmCustom")
 EndFunction
 
-Function OrgasmHelper(Actor akActor, String msg)
-    DbgEnter("OrgasmHelper", "akActor:"+GetDisplayName(akActor)+" msg:"+msg)
-    AlignActors()
-    Actor cum_catcher = None
-    String cum_catcher_name = "(None)"
-
-    int gender = sexlab.GetGender(akActor) 
-    DbgMsg("OrgasmHelper", "sexlab.GetGender returned "+gender)
-    bool has_penis = gender == 0 || gender == 2
-    if has_penis 
-        ; Generate the orgasm message
-        int i = 0
-        int num_actors = thread.positions.length
-        while i < num_actors
-            if thread.positions[i] != akActor && cum_catcher == None
-                cum_catcher = thread.positions[i]
-                cum_catcher_name = cum_catcher.GetDisplayName()
-                msg += AddCum(i, cum_catcher, cum_catcher_name)
-            endif 
-            i += 1 
-        endwhile 
-    endif 
-
-    Trace("OrgasmHelper"," has_penis:"+has_penis+" cum_catcher:"+cum_catcher_name+" msg:"+msg)
-    if has_player 
-        DirectNarration(msg, akActor, cum_catcher, purge_dialogue=true)
-    else 
-        DirectNarration_Optional("orgasm", msg, akActor, cum_catcher) 
-    endif 
-    DbgEnd("OrgasmHelper")
+; Narration budget (sexlab.narration.max_chars): DirectNarration text past it moves its lowest-priority
+; parts into one event (SendOrgasmOverflow).
+int Function NarrationMaxChars()
+    if main && main.narration_max_chars > 0
+        return main.narration_max_chars
+    endif
+    return 350
 EndFunction
 
-String Function OrgasmMessagesToNarration()
-    String narration = ""
-    bool orgasm_happened = false
-    bool ejaculation_happened = false
-    int num_actors = thread.positions.length
-    if orgasm_messages_set
-        orgasm_messages_set = false
-        int k = 0
-        int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
-        while k < num_actors && k < orgasm_messages.length
-            ; position_objs, not actors_objs: actors_objs holds snapshots, so MarkOrgasmNarrated's
-            ; orgasm_narrated write would be lost on the next relink.
-            int obj = 0
-            if k < position_objs.length
-                obj = position_objs[k]
-            endif
-            String name = SNSL_JMap.getStr(obj, "name")
-            if orgasm_messages[k] != ""
-                orgasm_happened = true
-                ; Totals already bumped when GetIsOrgasming built the stashed clause.
-                if SNSL_JMap.getInt(obj, "has_penis") == 1
-                    ejaculation_happened = true
-                endif 
-                narration += orgasm_messages[k]
-                orgasm_messages[k] = ""
-                MarkOrgasmNarrated(obj, thread.positions[k])
-            elseif orgasm_expected.length > k && orgasm_expected[k] == 1 && SNSL_JMap.getInt(obj, "dom_slave") == 1
-                ; Dom Combined fallback: custom raced empty this window (unspoken total bump).
-                int total = GetTotalOrgasms(thread.positions[k])
-                if total < 1
-                    total = SNSL_JMap.getInt(obj, "total_orgasm")
-                endif
-                int narrated = SNSL_JMap.getInt(obj, "orgasm_narrated")
-                if total > narrated
-                    orgasm_happened = true
-                    if SNSL_JMap.getInt(obj, "has_penis") == 1
-                        ejaculation_happened = true
-                    endif
-                    narration += name+" is orgasming. "
-                    MarkOrgasmNarrated(obj, thread.positions[k])
-                elseif total < 1
-                    narration += main.handler_dom.HandleOrgasmDenied(thread.positions[k])
-                else
-                    narration += name+" is not orgasming right now. "
-                endif
-            else
-                narration += name+" is not orgasming right now. "
-            endif 
-            k += 1
-        endwhile
-    endif 
+; Appends part when it fits the budget, else queues it for the overflow event.
+String Function FitOrOverflow(String text, String part, int budget)
+    if part == ""
+        return text
+    endif
+    String sep = ""
+    if text != "" && StringUtil.GetNthChar(text, StringUtil.GetLength(text) - 1) != " "
+        sep = " "
+    endif
+    if StringUtil.GetLength(text) + StringUtil.GetLength(sep) + StringUtil.GetLength(part) <= budget
+        return text + sep + part
+    endif
+    if orgasm_overflow != ""
+        orgasm_overflow += " "
+    endif
+    orgasm_overflow += part
+    return text
+EndFunction
 
-    if ejaculation_happened
-        int i = 0
-        while i < num_actors 
-            String cum_msg = AddCum(i, thread.positions[i], thread.positions[i].GetDisplayName())
-            if cum_msg != ""
-                if narration != "" && StringUtil.GetNthChar(narration, StringUtil.GetLength(narration) - 1) != " "
-                    narration += " "
-                endif
-                narration += cum_msg
-            endif
-            i += 1 
-        endwhile 
-    endif 
-
-    if orgasm_happened
-        return narration
-    else 
+; The one orgasm message for everything stashed (see docs/reference/orgasm-narration.md, message table).
+; Each actor is in one state; names in a state are joined "A" / "A and B" / "A, B, and C".
+; Always in the DN: allow prefix, forced, DOM melt, orgasming, denied. While the budget allows
+; (reserve = room the caller needs): cum, recovering / not orgasming, folded arouse / calm.
+; The rest is left in orgasm_overflow for SendOrgasmOverflow. "" when nobody orgasmed.
+String Function OrgasmMessagesToNarration(int reserve = 0)
+    orgasm_overflow = ""
+    if thread == None || !orgasm_messages_set || !orgasm_messages
+        orgasm_prefix = ""
+        orgasm_extras = ""
         return ""
     endif
+    orgasm_messages_set = false
+    int n = thread.positions.length
+    if n > orgasm_messages.length
+        n = orgasm_messages.length
+    endif
+    if n < 1
+        orgasm_prefix = ""
+        orgasm_extras = ""
+        return ""
+    endif
+    EnsureActorArraysLargeEnough(n)
+    int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
+    String player_name = GetDisplayName(Game.GetPlayer())
+
+    String[] forced_names = Utility.CreateStringArray(n)
+    String[] orgasm_names = Utility.CreateStringArray(n)
+    String[] again_names = Utility.CreateStringArray(n)
+    String[] denied_names = Utility.CreateStringArray(n)
+    String[] denied_by = Utility.CreateStringArray(n)
+    String[] recovering_names = Utility.CreateStringArray(n)
+    String[] idle_names = Utility.CreateStringArray(n)
+    int forced_n = 0
+    int orgasm_n = 0
+    int again_n = 0
+    int denied_n = 0
+    int recovering_n = 0
+    int idle_n = 0
+    Actor recovering_one = None
+    String legacy = ""
+    String dom_not = ""
+    bool orgasm_happened = false
+    bool ejaculation_happened = false
+
+    int k = 0
+    while k < n
+        ; position_objs, not actors_objs: actors_objs holds snapshots, so MarkOrgasmNarrated's
+        ; orgasm_narrated write would be lost on the next relink.
+        int obj = 0
+        if k < position_objs.length
+            obj = position_objs[k]
+        endif
+        Actor a = thread.positions[k]
+        String name = SNSL_JMap.getStr(obj, "name")
+        if name == ""
+            name = GetDisplayName(a)
+        endif
+        int kind = orgasm_kinds[k]
+        bool fired = orgasm_messages[k] != ""
+        bool dom_unspoken = false
+        if !fired && orgasm_expected.length > k && orgasm_expected[k] == 1 && SNSL_JMap.getInt(obj, "dom_slave") == 1
+            ; Dom Combined fallback: custom raced empty this window (unspoken total bump).
+            int total = GetTotalOrgasms(a)
+            if total < 1
+                total = SNSL_JMap.getInt(obj, "total_orgasm")
+            endif
+            if total > SNSL_JMap.getInt(obj, "orgasm_narrated")
+                dom_unspoken = true
+            endif
+        endif
+
+        if fired || dom_unspoken
+            orgasm_happened = true
+            ; Totals were bumped when the slot was stashed.
+            if SNSL_JMap.getInt(obj, "has_penis") == 1
+                ejaculation_happened = true
+            endif
+            if kind == ORGASM_KIND_FORCED
+                forced_names[forced_n] = name
+                forced_n += 1
+            elseif kind == ORGASM_KIND_NONE && fired
+                ; Legacy verbatim text (older stash).
+                legacy += orgasm_messages[k]
+            elseif kind == ORGASM_KIND_AGAIN || (kind != ORGASM_KIND_ORGASM && GetTotalOrgasms(a) > 1)
+                again_names[again_n] = name
+                again_n += 1
+            else
+                orgasm_names[orgasm_n] = name
+                orgasm_n += 1
+            endif
+            ; Melt slots keep their key for the melt pass below.
+            if kind != ORGASM_KIND_MELT
+                orgasm_messages[k] = ""
+                orgasm_kinds[k] = 0
+            endif
+            MarkOrgasmNarrated(obj, a)
+        elseif SNSL_JMap.getInt(obj, "deny_orgasm") == 1
+            String by = SNSL_JMap.getStr(obj, "deny_by")
+            if by == ""
+                by = player_name
+            endif
+            denied_names[denied_n] = name
+            denied_by[denied_n] = by
+            denied_n += 1
+        elseif orgasm_expected.length > k && orgasm_expected[k] == 1 && SNSL_JMap.getInt(obj, "dom_slave") == 1 && GetTotalOrgasms(a) < 1 && SNSL_JMap.getInt(obj, "total_orgasm") < 1
+            dom_not += main.handler_dom.HandleOrgasmDenied(a)
+        elseif GetTotalOrgasms(a) > 0
+            recovering_names[recovering_n] = name
+            recovering_n += 1
+            recovering_one = a
+        else
+            idle_names[idle_n] = name
+            idle_n += 1
+        endif
+        k += 1
+    endwhile
+
+    ; DOM melts: one sentence per distinct melt text, {n} -> every slave who melted with it.
+    String melts = ""
+    int m = 0
+    while m < n
+        if orgasm_kinds[m] == ORGASM_KIND_MELT && orgasm_messages[m] != ""
+            String melt_key = orgasm_messages[m]
+            String[] melt_names = Utility.CreateStringArray(n)
+            int melt_n = 0
+            int j = m
+            while j < n
+                if orgasm_kinds[j] == ORGASM_KIND_MELT && orgasm_messages[j] == melt_key
+                    String melt_name = SNSL_JMap.getStr(position_objs[j], "name")
+                    if melt_name == ""
+                        melt_name = GetDisplayName(thread.positions[j])
+                    endif
+                    melt_names[melt_n] = melt_name
+                    melt_n += 1
+                    orgasm_messages[j] = ""
+                    orgasm_kinds[j] = 0
+                endif
+                j += 1
+            endwhile
+            melts += ReplaceAll(melt_key, "{n}", JoinNames(melt_names, melt_n)) + ". "
+        endif
+        m += 1
+    endwhile
+
+    ; Denied, grouped by who denied them.
+    String denied = ""
+    int d = 0
+    while d < denied_n
+        if denied_by[d] != ""
+            String denier = denied_by[d]
+            String[] group = Utility.CreateStringArray(denied_n)
+            int group_n = 0
+            int e = d
+            while e < denied_n
+                if denied_by[e] == denier
+                    group[group_n] = denied_names[e]
+                    group_n += 1
+                    denied_by[e] = ""
+                endif
+                e += 1
+            endwhile
+            denied += NamesClause(group, group_n, "is denied orgasm by "+denier+".", "are denied orgasm by "+denier+".")
+        endif
+        d += 1
+    endwhile
+
+    String must = orgasm_prefix
+    must += NamesClause(forced_names, forced_n, "is forced to orgasm by "+player_name+".", "are forced to orgasm by "+player_name+".")
+    must += melts
+    must += NamesClause(orgasm_names, orgasm_n, "is orgasming.", "are orgasming.")
+    must += NamesClause(again_names, again_n, "is orgasming. again.", "are orgasming again.")
+    must += legacy
+    if orgasm_happened && thread.Animation != None && thread.Animation.HasTag("tentacles")
+        must += "The tentacles is orgasming and flooding cum both inside and outside. "
+    endif
+    must += denied
+
+    String others = ""
+    if recovering_n == 1
+        others += recovering_names[0]+" is recovering from "+PossessivePronoun(recovering_one)+" orgasm. "
+    else
+        others += NamesClause(recovering_names, recovering_n, "", "are recovering from their orgasms.")
+    endif
+    others += NamesClause(idle_names, idle_n, "isn't orgasming right now.", "aren't orgasming right now.")
+    others += dom_not
+
+    String cum = ""
+    if ejaculation_happened
+        int i = 0
+        while i < n
+            String cum_msg = AddCum(i, thread.positions[i], thread.positions[i].GetDisplayName())
+            if cum_msg != ""
+                if cum != "" && StringUtil.GetNthChar(cum, StringUtil.GetLength(cum) - 1) != " "
+                    cum += " "
+                endif
+                cum += cum_msg
+            endif
+            i += 1
+        endwhile
+    endif
+
+    String extras = orgasm_extras
+    orgasm_prefix = ""
+    orgasm_extras = ""
+    if !orgasm_happened
+        return ""
+    endif
+    int budget = NarrationMaxChars() - reserve
+    String narration = must
+    narration = FitOrOverflow(narration, cum, budget)
+    narration = FitOrOverflow(narration, others, budget)
+    narration = FitOrOverflow(narration, extras, budget)
+    return narration
 EndFunction
 
 Function MarkOrgasmNarrated(int obj, Actor akActor)
@@ -2011,30 +2640,40 @@ Function FlushOrgasmWindow()
     orgasm_window_started_at = 0.0
     if thread == None
         Trace("FlushOrgasmWindow", "--- thread is None, clearing stash")
-        if orgasm_messages
-            int m = 0
-            while m < orgasm_messages.length
-                orgasm_messages[m] = ""
-                m += 1
-            endwhile
-        endif
-        orgasm_messages_set = false
+        ClearOrgasmStash()
         return
     endif
+    NarrateOrgasmStash(sender, receiver)
+EndFunction
+
+; One DirectNarration for everything stashed, then the parts that did not fit as one event.
+Function NarrateOrgasmStash(Actor source, Actor target)
     ; Match StageStart / AnimationEnd: keep actors_objs aligned with positions
     ; before OrgasmMessagesToNarration reads names / orgasm_narrated.
     AlignActors()
     String orgasm_narration = OrgasmMessagesToNarration()
     if orgasm_narration == ""
-        Trace("FlushOrgasmWindow", "--- empty stash")
+        Trace("NarrateOrgasmStash", "--- empty stash")
         return
     endif
-    Trace("FlushOrgasmWindow", "--- "+orgasm_narration)
+    Trace("NarrateOrgasmStash", "--- "+orgasm_narration+" | overflow: "+orgasm_overflow)
     if has_player
-        DirectNarration(orgasm_narration, sender, receiver, purge_dialogue=True)
+        DirectNarration(orgasm_narration, source, target, purge_dialogue=True)
     else
-        DirectNarration_Optional("orgasm", orgasm_narration, sender, receiver)
+        DirectNarration_Optional("orgasm", orgasm_narration, source, target)
     endif
+    SendOrgasmOverflow(source, target)
+EndFunction
+
+; Lower-priority orgasm parts (cum, not orgasming, arouse / calm) that did not fit the DN budget.
+; Never holds an orgasm gate string, so CheckDuplicate cannot blank the DN it follows.
+Function SendOrgasmOverflow(Actor source, Actor target)
+    if orgasm_overflow == ""
+        return
+    endif
+    String overflow = orgasm_overflow
+    orgasm_overflow = ""
+    RegisterEvent("sexlab update", overflow, source, target)
 EndFunction
 
 Event OnUpdate()
@@ -2181,6 +2820,10 @@ int Function GetThreadObj(Actor speaker)
         if updateactor(i, thread.positions[i])
             actor_changed = true
         endif
+        ; Live OrgasmEngine enjoyment for sexlab_get_threads / 0050 prompt.
+        if i < position_objs.length && position_objs[i] > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(thread.positions[i])
+            SNSL_JMap.setInt(position_objs[i], "enjoyment", SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(thread.positions[i]) as int)
+        endif
         i += 1
     endwhile
     ; updateactor wrote position_objs after alignactors' relink; refresh the snapshots.
@@ -2202,6 +2845,7 @@ int Function GetThreadObj(Actor speaker)
     SNSL_JMap.SetStr(thread_obj, "status",status)
     SNSL_JMap.SetStr(thread_obj, "description", getdescription())
     SNSL_JMap.SetStr(thread_obj, "style", style)
+    SNSL_JMap.SetStr(thread_obj, "speed", GetSpeedName())
     SNSL_JMap.setStr(thread_obj, "speaker_name", speaker_name)
     SNSL_JMap.SetFlt(thread_obj, "speaker_distance", distance)
     SNSL_JMap.setint(thread_obj, "speaker_los", los as int)
@@ -2495,9 +3139,51 @@ float Function GetStyleSpeed()
     if style == STYLE_GENTLY
         return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.gently", 0.75)
     elseif style == STYLE_FORCEFULLY
-        return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.forcefully", 1.4)
+        return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.forcefully", 1.25)
     endif
     return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.normally", 1.0)
+EndFunction
+
+; Speed level (OrgasmEngine) of the scene's effective animation speed: style speed x HUD slower/faster.
+; 0 slow and gentle, 1 gentle, 2 normal, 3 forceful, 4 fast and forceful. No thread: from the style.
+int Function GetSpeedLevel()
+    if thread != None && thread.positions.length > 0 && thread.positions[0] != None
+        return SkyrimNet_SexLab_OrgasmEngine.GetSpeedLevel(thread.positions[0])
+    endif
+    if style == STYLE_GENTLY
+        return 1
+    elseif style == STYLE_FORCEFULLY
+        return 3
+    endif
+    return 2
+EndFunction
+
+String Function GetSpeedName()
+    int level = GetSpeedLevel()
+    if level == 0
+        return "slow and gentle"
+    elseif level == 1
+        return "gentle"
+    elseif level == 3
+        return "forceful"
+    elseif level == 4
+        return "fast and forceful"
+    endif
+    return "normal"
+EndFunction
+
+String Function GetSpeedAdverb()
+    int level = GetSpeedLevel()
+    if level == 0
+        return "slowly and gently"
+    elseif level == 1
+        return "gently"
+    elseif level == 3
+        return "forcefully"
+    elseif level == 4
+        return "fast and forcefully"
+    endif
+    return ""
 EndFunction
 
 ; Same multiplier for every position keeps paired animations in sync.
@@ -2538,6 +3224,10 @@ Function ChangeStyle(Actor who, String _style)
     if style_old == style
         return
     endif
+    ; HUD faster/slower is relative to the style: back to 1.0 on a style change.
+    if thread != None && thread.positions.length > 0
+        SkyrimNet_SexLab_OrgasmEngine.ResetSpeedScale(thread.positions[0])
+    endif
     if orgasm_messages_set
         Trace("ChangeStyle", "--- skipping style DN, orgasm window open")
         return
@@ -2552,6 +3242,9 @@ Function SetStyleDialog()
     ApplyStyleSpeed()
 
     if style_old != style
+        if thread != None && thread.positions.length > 0
+            SkyrimNet_SexLab_OrgasmEngine.ResetSpeedScale(thread.positions[0])
+        endif
         if orgasm_messages_set
             Trace("SetStyleDialog", "--- skipping style DN, orgasm window open")
         else
@@ -2743,7 +3436,7 @@ Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
             SNSL_JMap.setInt(position_objs[i], "speaking_locked", 1)
             SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
             SNSL_JMap.setInt(position_objs[i], "dressed_locked", 1)
-            thread.DisableOrgasm(positions[i], no_org == 1)
+            SetOrgasmDisabled(positions[i], SNSL_JMap.getInt(position_objs[i], "deny_orgasm") == 1)
             Bool clothed = dressed == 1
             ApplyDressedToActor(positions[i], clothed)
             TM_ApplyClothed(positions[i], clothed)
@@ -2773,6 +3466,9 @@ Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
         i += 1
     endwhile
     if apply_values
+        ; no_orgasm may have changed: passive gain + voice gate follow.
+        Engine_SetSkills()
+        ApplySexLabVoices()
         MarkUserDefaultsDirty()
     endif
 EndFunction
@@ -3130,9 +3826,17 @@ Function WebUI_OnNarrate(String json)
     String new_style = JMap.getStr(obj, "_style", "")
     ; Description Editor orgasm button: thread position index.
     int orgasm_pos = JMap.getInt(obj, "_orgasm_pos", -1)
+    ; Description Editor deny column: thread position index.
+    int deny_pos = JMap.getInt(obj, "_deny_pos", -1)
     JValue.release(obj)
     if orgasm_pos >= 0
         WebUI_ForceOrgasm(orgasm_pos)
+        return
+    endif
+    if deny_pos >= 0
+        if thread != None && deny_pos < thread.Positions.length
+            ToggleDenyOrgasm(thread.Positions[deny_pos])
+        endif
         return
     endif
     if new_style != ""
@@ -3150,6 +3854,67 @@ Function WebUI_OnNarrate(String json)
     DirectNarration("The scene changes to "+text, sender, receiver)
 EndFunction
 
+; Player orgasm denial toggle (HUD deny key, Description Editor deny column).
+Function ToggleDenyOrgasm(Actor akActor)
+    int obj = GetObjFromActor(akActor)
+    if obj <= 0
+        Trace("ToggleDenyOrgasm", "no obj")
+        return
+    endif
+    SetDenyOrgasm(akActor, SNSL_JMap.getInt(obj, "deny_orgasm") != 1, Game.GetPlayer())
+EndFunction
+
+; Orgasm denial: the player (HUD / Description Editor / TargetMenu) or an aggressor NPC (LLM actions
+; SexLab_DenyOrgasm / SexLab_AllowOrgasm). Scene state, not animation metadata: survives animation
+; changes. The denied actor gains enjoyment as normal but cannot orgasm.
+; Allow (1 -> 0) checks every actor at once (OrgasmEngine.AllowOrgasm): when anyone orgasms, the
+; group's one DN starts "<denier> allows <actor> to orgasm. "; otherwise the plain allow is narrated.
+; from_llm: the NPC's own line already says it, so the plain deny / allow is an event, not a DN.
+; narrate false: no plain deny / allow narration (an orgasm on allow still narrates).
+; Returns false when the state already matched (nothing changed).
+bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_llm = false, bool narrate = true)
+    int obj = GetObjFromActor(akActor)
+    if thread == None || akActor == None || obj <= 0
+        Trace("SetDenyOrgasm", "no thread / actor / obj")
+        return false
+    endif
+    if denier == None
+        denier = Game.GetPlayer()
+    endif
+    if (SNSL_JMap.getInt(obj, "deny_orgasm") == 1) == deny
+        Trace("SetDenyOrgasm", GetDisplayName(akActor)+" already deny:"+deny)
+        return false
+    endif
+    SNSL_JMap.setInt(obj, "deny_orgasm", deny as int)
+    String msg = ""
+    bool fired = false
+    if deny
+        SNSL_JMap.setStr(obj, "deny_by", GetDisplayName(denier))
+        SetOrgasmDisabled(akActor, true)
+        msg = GetDisplayName(denier)+" denies "+GetDisplayName(akActor)+" release."
+    else
+        SNSL_JMap.setStr(obj, "deny_by", "")
+        thread.DisableOrgasm(akActor, false)
+        SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(akActor, main.handler_dom.IsDOMSlave(akActor))
+        ; Unblocks in the engine and fires anyone at 100 (+ the group join) in one step.
+        fired = SkyrimNet_SexLab_OrgasmEngine.AllowOrgasm(akActor, denier)
+        msg = GetDisplayName(denier)+" allows "+GetDisplayName(akActor)+" to orgasm."
+    endif
+    PersistPositions()
+    manager.SaveThreadsJson()
+    Trace("SetDenyOrgasm", GetDisplayName(akActor)+" deny:"+deny+" by:"+GetDisplayName(denier)+" fired:"+fired+" llm:"+from_llm)
+    if fired || !narrate
+        ; The group orgasm DN carries the allow prefix.
+        return true
+    endif
+    if from_llm
+        RegisterEvent("sexlab update", msg, denier, akActor)
+    else
+        DirectNarration(msg, denier, akActor)
+    endif
+    return true
+EndFunction
+
 ; SexLab ForceOrgasm only sends SexLabOrgasm (never HookOrgasmStart), so the event path narrates only
 ; with SeparateOrgasms on, a non-DOM-slave actor and no_orgasm off. Otherwise narrate via OrgasmCustom.
 Function WebUI_ForceOrgasm(int pos)
@@ -3162,17 +3927,16 @@ Function WebUI_ForceOrgasm(int pos)
         Trace("WebUI_ForceOrgasm", "no actor at pos:"+pos)
         return
     endif
-    thread.ForceOrgasm(a)
-    sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
-    int obj = GetObjFromActor(a)
-    bool no_org = obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
-    bool dom_slave = obj > 0 && SNSL_JMap.getInt(obj, "dom_slave") == 1
-    if config.SeparateOrgasms && !no_org && !dom_slave
-        Trace("WebUI_ForceOrgasm", GetDisplayName(a)+" pos:"+pos+" narrated by SexLabOrgasm event")
-    else
-        Trace("WebUI_ForceOrgasm", GetDisplayName(a)+" pos:"+pos+" OrgasmCustom separate:"+config.SeparateOrgasms+" no_orgasm:"+no_org+" dom_slave:"+dom_slave)
-        OrgasmCustom(a, "", true)
+    ; The WebUI is all-powerful: a forced request skips every engine gate (no_orgasm, cooldown, edge).
+    ; The engine fires on its next tick -> Effect_OrgasmGroup -> Orgasm_ApplyGroup (ForceOrgasm + group join + one narration).
+    if SkyrimNet_SexLab_OrgasmEngine.IsManaged(a)
+        Trace("WebUI_ForceOrgasm", GetDisplayName(a)+" pos:"+pos+" -> OrgasmEngine forced request")
+        SkyrimNet_SexLab_OrgasmEngine.RequestOrgasm(a, true, "webui")
+        return
     endif
+    Trace("WebUI_ForceOrgasm", GetDisplayName(a)+" pos:"+pos+" not managed, OrgasmCustom")
+    thread.ForceOrgasm(a)
+    OrgasmCustom(a, "", true)
 EndFunction
 
 Function WebUI_OnAnimUpdate(String json)
@@ -3493,7 +4257,7 @@ Function WebUI_RestoreCancelSnapshot()
             SNSL_JMap.setInt(po, "speaking_locked", snap_speaking_locked[i])
             SNSL_JMap.setInt(po, "dressed_locked", snap_dressed_locked[i])
             SetSpeakingObj(p, snap_speaking[i])
-            thread.DisableOrgasm(a, snap_no_orgasm[i] == 1 || snap_deny[i] == 1)
+            SetOrgasmDisabled(a, snap_deny[i] == 1)
             if snap_undressed[i] == 0 && StorageUtil.HasIntValue(a, storage_undressed_key)
                 ApplyDressedToActor(a, true)
             endif
@@ -3808,14 +4572,10 @@ Function SeedOverlayFromAnimDb()
                     applied_no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", no_org)
                 endif
                 SetPosition(i, positions[i], applied_no_org, applied_speaking)
-                thread.DisableOrgasm(positions[i], applied_no_org == 1)
                 if position_objs && i < position_objs.length && position_objs[i] > 0
                     SNSL_JMap.setInt(position_objs[i], "orgasm_mode", expected)
                     if !dressed_locked
                         SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
-                    endif
-                    if !orgasm_locked
-                        SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
                     endif
                     if !locked
                         SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
@@ -3859,14 +4619,10 @@ Function SeedOverlayFromAnimDb()
                 applied_no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", no_org)
             endif
             SetPosition(i, positions[i], applied_no_org, applied_speaking)
-            thread.DisableOrgasm(positions[i], applied_no_org == 1)
             if position_objs && i < position_objs.length && position_objs[i] > 0
                 SNSL_JMap.setInt(position_objs[i], "orgasm_mode", expected)
                 if !dressed_locked
                     SNSL_JMap.setInt(position_objs[i], "dressed", dressed)
-                endif
-                if !orgasm_locked
-                    SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
                 endif
                 if !locked
                     SNSL_JMap.setInt(position_objs[i], "speaking_locked", 0)
@@ -3895,7 +4651,8 @@ Function TM_ApplyOrgasmMode(Actor akActor, String mode)
             if mode == "not_expected"
                 no_org = 1
             elseif mode == "deny"
-                no_org = 1
+                ; Deny is its own flag: keeps the current expected state.
+                no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
                 deny = 1
             endif
             String speaking = SpeakingCsvFromIndex(i)
@@ -3904,10 +4661,26 @@ Function TM_ApplyOrgasmMode(Actor akActor, String mode)
             elseif mode == "not_expected"
                 speaking = SkyrimNet_SexLab_AnimDb.SpeakingDefaultFromOrgasmExpected(0)
             endif
+            int old_deny = SNSL_JMap.getInt(position_objs[i], "deny_orgasm", 0)
             SetPosition(i, positions[i], no_org, speaking)
-            SNSL_JMap.setInt(position_objs[i], "deny_orgasm", deny)
             SNSL_JMap.setInt(position_objs[i], "orgasm_locked", 1)
-            thread.DisableOrgasm(akActor, no_org == 1 || deny == 1)
+            if deny == 1
+                if old_deny != 1
+                    SNSL_JMap.setStr(position_objs[i], "deny_by", GetDisplayName(Game.GetPlayer()))
+                endif
+                SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 1)
+                SetOrgasmDisabled(akActor, true)
+            elseif old_deny == 1
+                ; 1 -> 0: the allow path checks every actor; silent unless someone orgasms (then the
+                ; group DN starts "<player> allows <actor> to orgasm. ").
+                SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 1)
+                SetDenyOrgasm(akActor, false, Game.GetPlayer(), false, false)
+            else
+                SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 0)
+                SetOrgasmDisabled(akActor, false)
+            endif
+            Engine_SetSkills()
+            ApplySexLabVoice(i)
             MarkUserDefaultsDirty()
             return
         endif

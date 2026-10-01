@@ -445,6 +445,22 @@ Unquoted `comparisonOperator: >` is a YAML folded block scalar, so SkyrimNet sto
 
 **Fix:** `Scene.OrgasmCustom` returns early when `no_orgasm==1`. DOM's internal state still counts the orgasm.
 
+## OrgasmEngine: DOM slave stuck at 100%, never orgasms (2026-09-29)
+
+**Symptom:** Nina (`dom_slave:1`) reaches 100% on the HUD but never orgasms. The log shows no `OrgasmEngine: orgasm` and no DOM melt.
+
+**Cause:**
+- The engine blocked every DOM slave (`SetSceneBlocked(… || IsDOMSlave)`) so that DOM could decide.
+- DOM only rolls a sex orgasm inside SexLab's orgasm hook (`handleSexOrgasmEvent` → `handleSexOrgasm`).
+- The engine runs with `DisableAllOrgasms`, so that hook never fires and DOM never rolls.
+
+**Fix:** DOM slaves are now DOM-driven (`SetDomSlave`) instead of blocked.
+- Engine gains (passive, Arouse, Calm) go to DOM's `arousal_factor` through `Effect_DomSync` → `Handler_DOM.AddArousal`.
+- After each rise, if `CouldOrgasm`, the engine calls `mind.handleSexOrgasm`. DOM decides.
+- The bar shows `Handler_DOM.OrgasmMeter`, built from DOM's orgasm values (50 means an orgasm is now possible).
+- A melt calls `NoteExternalOrgasm(slave, "dom")`.
+- Do not bring back the block, and do not let the engine `Fire` DOM slaves except through a forced WebUI request.
+
 ## Start Sex hotkey live-reload (2026-09-13)
 
 Dashboard `sexlab.editor.hotkey_enabled` / `sexlab.editor.hotkey` used to apply only from `MCM.Setup` (load) and `OnConfigOpen`. Enabling the hotkey in the SkyrimNet dashboard did not `RegisterForKey`, so SkyMessage never opened until MCM or reload. `SkyrimNet_OnPluginConfigSaved` (SKSE `SendModEvent`: `eventName`, `strArg`, `numArg`, `sender`) now calls `ApplyPluginConfig`. Pre-VK saves stored DX `43` for backslash; `ApplyHotkey` treats `43` as VK `220`. Do not enable this hotkey on the same key as SkyrimNet_Leashed’s panel (both default `\\`).
@@ -794,7 +810,7 @@ Upstream schema: [WORKFLOW_ACTIONS.md](https://github.com/MinLL/SkyrimNet-GamePl
 
 **Contract**:
 - Orgasming actors’ clauses in Combined/custom narration must include `" is orgasming."`.
-- Non-orgasming / denied clauses must not (e.g. Combined and Separate `name+" is not orgasming right now. "`, `HandleOrgasmDenied`, “did not orgasm”, afterglow “failed to orgasm”). Combined flush and `OrgasmIndividual` name every non-orgasming actor; do not use a generic “only listed actors” sentence.
+- Non-orgasming / denied clauses must not (e.g. Combined and Separate `name+" is not orgasming right now. "`, `HandleOrgasmDenied`, “did not orgasm”, afterglow “failed to orgasm”). Combined flush and `OrgasmIndividual` name every non-orgasming actor; do not use a generic “only listed actors” sentence. Actors with scene totals > 0 get `" is recovering from her orgasm. "` via `Scene.NotOrgasmingClause`.
 - Dom custom path: `Handler_DOM.DOMSlave_Orgasmed` → `Scene_Manager.OrgasmCustom` appends `". "+name+" is orgasming."` before Scene stashes/sends. Required for the prompt gate.
 - Dom Combined fallback: when `_dom_slave`, `orgasm_expected==1`, totals > 0, and custom message empty, Scene still appends `name+" is orgasming. "` so the prompt gate fires if Dom feed raced past Combined.
 - Dom feed: sibling `SkyrimNet_DOM_Events.OnNotificationSent` (Ext3 on) routes **melt** phrasing (`brain melts` / `mind melts` / `overwhelmed by orgasm` / `submerged by orgasm`, not `your orgasm`) to `DOMSlave_Orgasmed`. Do not match bare `"orgasm"`. The player-climax tease (`squirms under your grasp as your orgasm submerges you`) is skipped in Dom `OnNotifcationSkip` and again in `Handler_DOM.DOMSlave_Orgasmed` (no OrgasmCustom / DN). Prefer notifications over `DOMOnOrgasm` (faster; leave Orgasm unregistered). Dom `SexLab_AnimationStart` may `DisableOrgasm` on Dom actors so SexLab hooks alone will not narrate them. If Ext3 is off: Dom melt HUD can fire while DN denies the slave or narrates other actors only — see SkyrimNet_DOM KNOWLEDGEBASE “Dom melt without DirectNarration”.
@@ -882,3 +898,36 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 ## New SKSE .cpp needs a CMake reconfigure (2026-09-27)
 
 `CMakeLists.txt` collects `src/*.cpp` with `file(GLOB …)` at configure time. A new source file links as "unresolved external" until CMake reconfigures — touch `CMakeLists.txt` (or rerun the configure preset) before `cmake --build`.
+
+## OrgasmEngine owns orgasms; SexLab trigger off (2026-09-29)
+
+- **Engine:** `SKSE_Source/src/OrgasmEngine.cpp` decides every orgasm. `Scene.Engine_BeginScene` calls `thread.DisableAllOrgasms(true)`.
+- **Firing:** the engine uses `thread.ForceOrgasm`, which is `DoOrgasm(true)` and bypasses `NoOrgasm` / `DisableOrgasms`.
+  - It still runs SexLab's cum, sound, the `SexLabOrgasm` event and the `QuitEnjoyment` reset.
+  - It keeps SexLab's 5 s "excessive" guard.
+- **Thread hooks kept, at SexLab's timing:** the thread-wide switch stops SexLab sending `OrgasmStart` / `OrgasmEnd` itself.
+  - `Scene.Engine_SetStage` sends `OrgasmStart` once, on entering the final stage of a non-LeadIn animation. It sends `OrgasmEnd` on leaving that stage, or at `AnimationEnd` (`orgasm_hook_open`).
+  - They are **not** sent per orgasm: an early partner orgasm would use up DOM's once-per-scene hook roll.
+  - Other mods still get `HookOrgasmStart` / `HookOrgasmEnd`; our own `Manager.OrgasmCombined` ignores them for engine-managed scenes.
+- **DOM always rolls once per scene:** DOM hooks `HookOrgasmStart_DOM<id>ORGASM`. If that never fires, `handleSexEndEvent` calls `handleSexOrgasm` at AnimationEnd (`had_handle_orgasm`). `SexLabOrgasmSeparate` only comes from SLSO.
+- **Timed enjoyment rate:** the engine's base rate is `100 / (stages 1..N-1 + 0.9 × final)` seconds from the thread's stage timers (`GetTimer` rule). It is a fixed rate, so pausing, repeating stages or speeding up add enjoyment. The role keys are multipliers now, under new names: `sexlab.enjoyment.passive_mult` / `aggressor_mult` / `victim_mult`. The old absolute `*_rate` values would have been misread as multipliers.
+- **sslThreadController `StageTimer` / `TimedStage` are private script variables** (not properties), so other scripts can't read or set them. For the pause hotkey, use the public `UpdateTimer(sec)` (sets `TimedStage = true`, `StageTimer += sec`) and `ResolveTimers()` (resets `TimedStage = Animation.HasTimer(Stage)`). `GoToStage` → `PlayStageAnimations` resets `StageTimer`, so a hold must be re-applied at StageStart.
+- **Pause key DX:** `MapVirtualKey(VK_PAUSE)` returns no scancode. `HotkeyVkToDx` maps it to DIK_PAUSE 0xC5 explicitly.
+- **DOM compile headers:** `SkyrimNet_DOM/Headers_Source/DOM/` stubs (imported by `skyrimse.ppj`) only declare what we call. Add a member there (copied from `extern/Source_DOM`) before using it from Handler_DOM, or Pyro reports "not a property".
+- **Why thread-wide:** a per-actor `DisableOrgasm` would be re-enabled by the existing `DisableOrgasm(a, false)` call sites. Those now route through `Scene.SetOrgasmDisabled`, which also sets the engine block.
+- **Enjoyment trap:** SexLab's `CalcReaction` uses the **absolute** enjoyment, so a large negative `BaseEnjoyment` reads as strong. The engine's mirror (`AdjustEnjoyment(ours − GetEnjoyment())`) never targets below 0.
+- **HUD view:** `hud.html` is shown but never `Focus`ed, so it does not pause the game or take input. Keys come through `KeyHandler` HUD keys, not the page.
+- **Key codes:** mouse buttons are DX 256 (LMB), 257 (RMB) and 258 (MMB). Arrows, Home, End, PgUp/PgDn, Ins and Del need the 0x80 extended bit; `MapVirtualKey` VSC omits it (End = 0xCF, not 0x4F).
+- **Unconfirmed in-game:** a PrismaUI view shown but not focused, used as a live HUD. Also unlinking mouse `ButtonEvent`s to stop attacks — confirm neither affects the overlay cursor (HUD keys are inactive while the overlay is visible). SE only; VR untested.
+- **Other plugins using SexLab directly:** the engine still watches `SexLabOrgasm`. Our own orgasms are told apart by an in-flight counter (`ConsumeOwnOrgasm`); anything else is recorded (`NoteExternalOrgasm`) and narrated once. An outside `AdjustEnjoyment` is detected at mirror time as a jump of 3 or more from the last value we set (`sl_mirror_set`) and added to the engine.
+- **Unconfirmed drift:** the detection assumes SexLab's own drift between mirrors (at most 3 s apart) stays under 3. The unskilled time term is about 0.2/s. The skilled `CalcEnjoyment` drift is not verified — watch for false "external SexLab change" traces.
+- **Orgasm expected vs. denied:** `no_orgasm` (not expected, from AnimDB or the scene) only zeroes passive gain (`SetOrgasmExpected`) and gates SexLab voice below 50. It does not block. `deny_orgasm` is the only scene block (`SetSceneBlocked`). It is set by the player (HUD PgDn, Description Editor 🔒) or an aggressor NPC (LLM `SexLab_DenyOrgasm`), survives animation changes, and is independent of `no_orgasm`. Before this split, "-" only blocked the orgasm, so enjoyment still climbed to 100.
+
+## One orgasm DN per moment: group join, allow, budget (2026-09-30)
+
+- **Group:** every orgasm (engine, forced, safety net, allow, DOM melt, external SexLab) makes everyone else at `sexlab.enjoyment.group_join` (95) or more orgasm too: `OrgasmEngine::JoinGroup`, one `Effect_OrgasmGroup`.
+- **Gate strings are now three:** `" is orgasming."`, `" are orgasming"` (grouped "A and B are orgasming.") and `" forced to orgasm"` (WebUI force: "Nina is forced to orgasm by Bob."). They must stay in sync with `0550_sexlab_narration.prompt` (both copies). Not-orgasming wording changed to "isn't / aren't orgasming right now", and denied to "is denied orgasm by <deny_by>"; neither may hit a gate string.
+- **Allow must be atomic:** unblocking with `SetSceneBlocked(false)` and then checking lets the 250 ms tick fire first, without the "allows ... to orgasm." prefix. `OrgasmEngine::AllowOrgasm` unblocks and fires under one lock.
+- **Papyrus `Key` is a type:** a local `String key` fails with "cannot name a variable or property the same as a known type or script". Use `melt_key`.
+- **Arrays to Papyrus:** `RE::MakeFunctionArguments` packs `std::vector<RE::Actor*>` / `std::vector<std::int32_t>` as Papyrus arrays. Avoid `std::vector<bool>` (proxy elements); send int 0/1.
+- **Budget:** `sexlab.narration.max_chars` (350). Overflow goes out as one `RegisterEvent` after the DN and never holds a gate string, so `CheckDuplicate` cannot blank the DN.

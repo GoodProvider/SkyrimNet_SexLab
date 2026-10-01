@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace SexLabNet {
@@ -23,6 +24,14 @@ void InvokeConfigureSettingsPanel();
 void InvokeLogPanelOpen();
 void PushLogPanelPoll();
 
+/// Dashboard values from manifest.yaml (control store). `def` when unset or unreadable.
+bool GetConfigBool(const char* path, bool def);
+int GetConfigInt(const char* path, int def);
+float GetConfigFloat(const char* path, float def);
+/// VK (dashboard type:hotkey) -> DX scancode. Mouse VKs map to SKSE's 256+ codes
+/// (VK_LBUTTON 256, VK_RBUTTON 257, VK_MBUTTON 258). 0 when unmapped.
+std::uint32_t HotkeyVkToDx(int vk);
+
 class Config
 {
 public:
@@ -34,6 +43,8 @@ public:
     void ApplyFromConfig();
     /// Also called from WebUI_SetHotkey so a dashboard save rebinds it after the menu key.
     void ApplyStyleHotkey();
+    /// Scene HUD + mini-game keys and OrgasmEngine tuning (sexlab.hud.* / sexlab.minigame.* / sexlab.enjoyment.*).
+    void ApplyHudConfig();
     int FrameworkPlayerIndex() const { return frameworkPlayerIndex_; }
 
 private:
