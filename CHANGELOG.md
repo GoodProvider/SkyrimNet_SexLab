@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### OrgasmEngine
+- Slower default enjoyment: `sexlab.enjoyment.passive_mult` 1.0 → 0.4, `aggressor_mult` 1.15 → 0.45, `victim_mult` 0.8 → 0.3, `jitter_max` 1.2 → 1.1. Logs showed scenes running 2–3.5× their stage timers (narration / LLM pacing), so actors orgasmed every ~50 s. Saved configs keep their old values; reset the **Enjoyment** settings to pick up the new defaults
+- Passive gain stops while the stage is paused (Home key)
+- Safety net, mini-game off: every non-victim expected to orgasm who has not yet fires at 90% of the final stage, regardless of enjoyment, so each actor comes once. Victims and the mini-game still need 90
+
 ### Animation speed
 - Scene style now sets animation playback speed: gently 0.75×, normally 1.0×, forcefully 1.4× (dashboard **Animation speed**: `sexlab.speed.enabled`, `sexlab.speed.gently|normally|forcefully`). Speed only: stage length, orgasm timing and voices are unchanged. Native `UpdateAnimation` hook in `SkyrimNet_SexLab.dll` (`AnimSpeed.cpp`); Papyrus `SkyrimNet_SexLab_Utilities.SetAnimSpeed` / `ClearAnimSpeed` / `GetAnimSpeed`
 - New LLM action `SexLab_Change_Style` (speaker + `forcefully|normally|gently`) changes the style of the speaker's live scene, with one DirectNarration
@@ -18,11 +23,21 @@
 - SexLab moans now follow speaking modifiers: an actor moans only while its modifiers include `_pleasure_` or `_pain_`; no modifiers, `_gagged_`, or `_kissing_` force the actor silent (`thread.SetVoice(..., ForceSilent)`). Re-applied at scene setup, every `StageStart`, live speaking edits, and after a load. Dashboard toggle **SexLab moans follow speaking modifiers** (`sexlab.voice.follow_speaking`, default on). See [docs/reference/protocol-tokens.md](docs/reference/protocol-tokens.md#sexlab-voice)
 
 ### AnimDB
+- Tag synonyms: `synonyms-strict.json` (true equivalents) and `synonyms-broad.json` (default; adds families) in `SKSE/Plugins/SkyrimNet_SexLab/` group tags into clusters. A must or suppress tag matches every animation tagged with any member of its cluster. The clusters were curated from all 274 tags in the 531-animation AnimDB. Mode parameter `_synonyms` (`broad|strict|none`) on AnimDB filters, `AnimDb_ResolveTags(…, synonyms = "broad")` and `onAnimDbResolveTags`. Reloaded at `kDataLoaded`, on every game load, and on AnimDB sync/rebuild. See [docs/reference/tag-synonyms.md](docs/reference/tag-synonyms.md)
+- New **synonyms** pulldown in the Scene Creator and Description Editor animation filters (shared state, resets to `broad` on close). Scene Creator starts pass the mode to Papyrus (`_synonyms` → `Scene_Creator.synonyms_mode`)
+- Scene starts no longer call `SexLab.GetAnimationsByTags` (literal tags only). All tag-based selection goes through AnimDB (`SelectAnimationsFromAnimDb`, formerly `SelectAnimationsAnimDbNoneFallback`) with a new `_shuffle` filter key, so starts pick a random 32 matches instead of the alphabetically first 32
 - Live scenes now apply the animation's speaking modifiers (as shown in the Description Editor, per stage) at every `StageStart`, so a position with orgasm not expected / empty speaking no longer keeps the creator's `_pleasure_`. Live speaking edits stay until Save or an animation switch
 - Scenes started without "override animation settings" now begin each actor in the clothed state most candidate animations share (new `AnimDb_ClothedMajority` native; tie → undressed), so an all-dressed animation set (hug, kiss) no longer strips then re-dresses at the first stage
 - Stop auto-rebuilding AnimDB on load. If counts differ from SexLab after SexLab is ready, notify `SkyrimNet SexLab # animations doesn't match` and show a SkyMessage (empty → Build/Close; mismatch → Rebuild/Close)
 
 ### SKSE / WebUI
+- New dashboard toggle **Devious devices are added to tags** (`sexlab.tags.filter_by_devious_devices`, default on): when cast members wear DD heavy bondage, every TargetMenu scene start adds `armbinder` / `yoke` / `cuffs` / `bound` through one pipeline. C++ `BondageCatalog::WornAnimationTags` does a worn keyword scan with no DD dependency. The paths that use it:
+  - Method leaf / Start and DOM punish rape: `onAnimDbResolveTags {_form_ids}` → `AnimationDB::AppendMatchingTags`, which keeps the method first.
+  - Random: `requestDeviousTags` → `_must_tags`.
+  - Scene Creator / Description Editor filter: include tags the player can remove, and removed tags stay removed for the session.
+  - YAML action Start: `ExecuteAction`.
+
+  Tags with no matching animation are dropped before any other filter loosening
 - One **Scene** view replaces the separate Scene Menu and Description Editor views: it shows the Description Editor when the ControlPanel target is in a SexLab scene, otherwise the Scene Creator, and switches when the target changes or the target's scene starts or ends. The Description Editor's **scene:** pulldown (None / Any / ended scene) is gone; it always edits the target's scene. The view stays open across hotkey presses until you press **Close** (`show_scene_panel`, was `show_scene_creator`)
 - Every main panel (Scene, Log, Settings, mode panels) has a **Close** button in the same top-right spot; it returns the view to None and keeps the WebUI open. Scene Creator's own Close button is gone
 - TargetMenu for an actor in a scene has an **Editor** button in Custom's spot. Editor and Custom both open / close the Scene view (and whether it reopens with the WebUI)

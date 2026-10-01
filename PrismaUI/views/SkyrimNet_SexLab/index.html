@@ -713,6 +713,9 @@
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: var(--space-xs) var(--space-sm);
+            user-select: text;
+            -webkit-user-select: text;
+            cursor: text;
         }
 
         .de-filter-section {
@@ -1877,6 +1880,8 @@
         <div id="sc-header-row1">
             <div class="target-row">Scene Creator</div>
             <div class="bottom-bar" id="sc-action-bar">
+                <div id="sc-initiator-pulldown"></div>
+                <span id="sc-initiates-label">initiates</span>
                 <div id="sc-style-pulldown"></div>
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
@@ -1929,6 +1934,8 @@
                         <div id="sc-filter-by-pulldown"></div>
                         <span>description:</span>
                         <div id="sc-filter-has-description"></div>
+                        <span>synonyms:</span>
+                        <div id="sc-filter-synonyms"></div>
                     </div>
                 </div>
             </div>
@@ -2014,6 +2021,8 @@
                         <div id="de-filter-by-pulldown"></div>
                         <span>description:</span>
                         <div id="de-filter-has-description"></div>
+                        <span>synonyms:</span>
+                        <div id="de-filter-synonyms"></div>
                     </div>
                     <div class="compact-row">
                         <span>name:</span>
@@ -5147,6 +5156,13 @@
             return n;
         }
 
+        // Distinct cast form ids (subject / object / third / victim) for the DD tag pipeline.
+        function ssCastFormIds(cast) {
+            const ids = [cast.subject, cast.object, cast.third, cast.victim]
+                .filter(Boolean).map(a => formIdU32(a.formId)).filter(id => id);
+            return Array.from(new Set(ids));
+        }
+
         function ssIsHugGiverPose(intent, method) {
             const i = String(intent || '').toLowerCase();
             if (i === 'cuddling' || i === 'showing affection' || i === 'comforting'
@@ -5534,22 +5550,36 @@
         // animation plus the two sharing the most tags with it, started via the Creator commit.
         function ssStartRandom(opt) {
             const pool = ssActorPool();
-            if (!ssCanStart(pool, ssResolveCast(pool))) {
+            const cast = ssResolveCast(pool);
+            if (!ssCanStart(pool, cast)) {
                 notifyPlayer('Pick valid scene actors before starting.');
                 renderPapyrusPanel();
                 return;
             }
             const state = ssBuildCreatorState(opt);
             if (!state || typeof window.onAnimDbQuery !== 'function') return;
-            ssApplySettingChainToState(state).then(() => {
-                ssRandomQuery({ id: 'x' + (++ssRandomQueryId), state: state, genders: true });
-            });
+            ssApplySettingChainToState(state)
+                .then(() => requestDeviousTags(ssCastFormIds(cast)))
+                .then(dd => {
+                    const have = ssSplitTags(state._tags).concat(ssSplitTags(state._tags_suppress));
+                    ssRandomQuery({
+                        id: 'x' + (++ssRandomQueryId),
+                        state: state,
+                        genders: true,
+                        dd: dd.filter(t => !have.includes(t))
+                    });
+                });
             renderPapyrusPanel();
         }
 
-        function ssRandomFilter(state, withGenders) {
-            const split = (csv) => String(csv || '').split(',').map(s => s.trim()).filter(Boolean);
-            const must = split(state._tags);
+        function ssSplitTags(csv) {
+            return String(csv || '').split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        // pending.dd: the cast's worn DD tags still on probation (dropped from the end when nothing matches).
+        function ssRandomFilter(state, withGenders, dd) {
+            const split = ssSplitTags;
+            const must = split(state._tags).concat(dd || []);
             const positions = state._positions || [];
             const filter = {
                 _must_tags: must,
@@ -5574,7 +5604,7 @@
             window.onAnimDbQuery(JSON.stringify({
                 _request_id: pending.id,
                 _type: 'anims',
-                _filter: ssRandomFilter(pending.state, pending.genders),
+                _filter: ssRandomFilter(pending.state, pending.genders, pending.dd),
                 _n: 200
             }));
         }
@@ -5585,6 +5615,13 @@
             ssRandomPending = null;
             const anims = ((payload && payload._anims) || []).filter(a => a && a._registry && a._enabled !== false);
             if (!anims.length) {
+                // DD tags go first (before loosening the cast's genders): drop the most generic and retry.
+                if (pending.dd && pending.dd.length) {
+                    pending.dd = pending.dd.slice(0, -1);
+                    pending.id = 'x' + (++ssRandomQueryId);
+                    ssRandomQuery(pending);
+                    return;
+                }
                 // Gender match can be too strict (e.g. futa); retry once on actor count + tags only.
                 if (pending.genders) {
                     pending.genders = false;
@@ -5595,6 +5632,9 @@
                 notifyPlayer('No matching animations for a random scene.');
                 return;
             }
+            // Surviving DD tags join the creator's tags so its tag fallback matches the picked animations.
+            if (pending.dd && pending.dd.length)
+                pending.state._tags = ssSplitTags(pending.state._tags).concat(pending.dd).join(',');
             ssStartWithRegistries(pending.state, ssPickRelated(anims, SS_RANDOM_PICK));
         }
 
@@ -5663,28 +5703,32 @@
             const pool = ssActorPool();
             const cast = ssResolveCast(pool);
             if (!ssCanStart(pool, cast)) return;
-            const tag = ssWireMethod(ssUi.method);
-            const reqId = 'ss' + (++ssResolveQueryId);
-            const spec = ssFireSpec(cast);
-            ssResolvePending = {
-                id: reqId,
+            ssRequestResolve({
                 opt,
                 cast,
-                spec,
+                spec: ssFireSpec(cast),
                 direction: ssWireDirection(ssUi.direction, ssUi.method),
                 intent: ssPapyrusIntent(),
                 style: ssUi.style || 'normally',
                 settingName: ssUi.settingName || 'default'
-            };
+            }, ssWireMethod(ssUi.method));
+        }
+
+        // Shared method-start resolve (ssStart, DOM punish rape): C++ resolves the method tag for the cast and
+        // appends the cast's worn DD tags that still match (`_form_ids`), then animDbResolveTagsResult fires.
+        function ssRequestResolve(pending, tag) {
+            pending.id = 'ss' + (++ssResolveQueryId);
+            ssResolvePending = pending;
             if (typeof window.onAnimDbResolveTags !== 'function') {
                 notifyPlayer('No matching animations for those tags.');
                 ssResolvePending = null;
                 return;
             }
             window.onAnimDbResolveTags(JSON.stringify({
-                _request_id: reqId,
+                _request_id: pending.id,
                 _tags: tag,
-                _actor_count: ssActorCount(cast)
+                _actor_count: ssActorCount(pending.cast),
+                _form_ids: ssCastFormIds(pending.cast)
             }));
         }
 
@@ -7167,30 +7211,16 @@
             }
             const reason = fieldsUi.values.reason || 'being a bad slave';
             const method = ssUi.method === 'random' ? 'vaginal' : ssUi.method;
-            const tag = ssWireMethod(method);
-            const reqId = 'ss' + (++ssResolveQueryId);
-            const spec = ssFireSpec(cast);
-            ssResolvePending = {
-                id: reqId,
+            ssRequestResolve({
                 opt,
                 cast,
-                spec,
+                spec: ssFireSpec(cast),
                 direction: ssWireDirection(ssUi.direction, method),
                 intent: ssPapyrusIntent(),
                 style: ssUi.style || 'forcefully',
                 settingName: ssUi.settingName || 'punish_pleasure_pain_rape',
                 punishReason: reason
-            };
-            if (typeof window.onAnimDbResolveTags !== 'function') {
-                notifyPlayer('No matching animations for those tags.');
-                ssResolvePending = null;
-                return;
-            }
-            window.onAnimDbResolveTags(JSON.stringify({
-                _request_id: reqId,
-                _tags: tag,
-                _actor_count: ssActorCount(cast)
-            }));
+            }, ssWireMethod(method));
         }
 
         function fieldsOnSelectChange(opt, field, value) {
@@ -8187,6 +8217,7 @@
                 this.from_target_menu = false;
                 this.intent = '';
                 this.style = 'normally';
+                this.initiatorFormId = 0;
                 this.method = '';
                 this.positions = [];
                 this.positionOverride = false;
@@ -8239,6 +8270,7 @@
                 if (state._from_target_menu != null) this.from_target_menu = !!state._from_target_menu;
                 if (state._intent != null) this.intent = state._intent || '';
                 if (state._style != null) this.style = state._style || 'normally';
+                if (state._initiator_form_id != null) this.initiatorFormId = formIdU32(state._initiator_form_id) || 0;
                 if (state._method != null) this.method = state._method || '';
                 if (state._positions) this.positions = sceneInfoClone(state._positions);
                 if (state._position_override != null) this.positionOverride = !!Number(state._position_override);
@@ -8298,6 +8330,7 @@
                     _from_target_menu: this.from_target_menu ? 1 : 0,
                     _intent: this.intent,
                     _style: this.style,
+                    _initiator_form_id: this.initiatorFormId || 0,
                     _method: this.method,
                     _positions: this.positions,
                     _position_override: this.positionOverride === false ? 0 : 1,
@@ -8410,6 +8443,10 @@
             SC.filterAuto = true;
             SC.filterByOnce = '';
             SC.hasDescription = 'any';
+            SC.synonyms = SC_SYNONYM_DEFAULT;
+            SC.ddAuto = [];
+            SC.ddProbe = false;
+            SC.ddDismissed = new Set();
             SC.show_all_selected_unselected_pulldown = true;
             if (DE.nameFilterTimer) clearTimeout(DE.nameFilterTimer);
             DE.nameFilterTimer = 0;
@@ -8543,11 +8580,13 @@
             SC.from_target_menu = !!info.from_target_menu;
             SC.intent = info.intent;
             SC.style = info.style || 'normally';
+            SC.initiatorFormId = info.initiatorFormId || 0;
             SC.method = info.method;
             SC.positions = sceneInfoClone(info.positions || []);
             SC.positionOverride = info.positionOverride === true;
             SC.tags = (info.tags || []).slice();
             SC.suppress = (info.suppress || []).slice();
+            SC.ddAuto = SC.ddAuto.filter(t => SC.tags.includes(t));
             SC.inThreadRegistries = (info.inThreadRegistries || []).slice();
             SC.lastAnims = sceneInfoClone(info.lastAnims || []);
             SC.activeRegistry = info.activeRegistry || '';
@@ -8567,6 +8606,7 @@
             const info = selectedSceneInfo();
             info.intent = SC.intent || '';
             info.style = SC.style || 'normally';
+            info.initiatorFormId = scResolveInitiator();
             info.method = SC.method || '';
             info.positions = sceneInfoClone(SC.positions || []);
             info.positionOverride = SC.positionOverride !== false;
@@ -8679,6 +8719,9 @@
         const SC_FILTER_DEFAULT = 'gender';
         const SC_FILTER_OPTIONS = ['gender', 'none', 'positions'];
         const SC_HAS_DESCRIPTION_OPTIONS = ['any', 'described', 'undescribed'];
+        // AnimDB tag synonym clusters (synonyms-broad.json / synonyms-strict.json); none = literal tags.
+        const SC_SYNONYM_DEFAULT = 'broad';
+        const SC_SYNONYM_OPTIONS = ['broad', 'strict', 'none'];
 
         let SC = {
             creator_sid: 0,
@@ -8687,6 +8730,7 @@
             from_target_menu: false,
             intent: '',
             style: 'normally',
+            initiatorFormId: 0,
             method: '',
             positions: [],
             tags: [],
@@ -8717,6 +8761,13 @@
             filterAuto: true,
             filterByOnce: '',
             hasDescription: 'any',
+            synonyms: SC_SYNONYM_DEFAULT,
+            // Devious Devices tags (sexlab.tags.filter_by_devious_devices): ddAuto = tags auto-added from worn
+            // devices, ddProbe = still dropping them when nothing matches, ddDismissed = removed by the player.
+            ddAuto: [],
+            ddProbe: false,
+            ddDismissed: new Set(),
+            ddQueryId: 0,
             // "override animation settings": off = dressed/O/modifiers come from the animation.
             positionOverride: false,
             // Anim table view filter: true = show every listed animation, false = show only
@@ -8772,6 +8823,23 @@
                 if (!host) continue;
                 host.innerHTML = '';
                 host.appendChild(createPulldown(SC_HAS_DESCRIPTION_OPTIONS, SC.hasDescription, onPick));
+            }
+        }
+
+        function scRenderSynonymsPulldown() {
+            if (!SC.synonyms) SC.synonyms = SC_SYNONYM_DEFAULT;
+            const onPick = v => {
+                if (v === SC.synonyms) return;
+                SC.synonyms = v;
+                scRenderSynonymsPulldown(); // keep the SC and DE copies in sync
+                scRefreshAnims();
+                scRefreshTags();
+            };
+            for (const hostId of ['sc-filter-synonyms', 'de-filter-synonyms']) {
+                const host = document.getElementById(hostId);
+                if (!host) continue;
+                host.innerHTML = '';
+                host.appendChild(createPulldown(SC_SYNONYM_OPTIONS, SC.synonyms, onPick));
             }
         }
 
@@ -8850,12 +8918,16 @@
             SC.filterByOnce = '';
             scArmFilterDowngrade(forcedFilterBy);
             scRenderHasDescriptionPulldown();
+            scRenderSynonymsPulldown();
             scRenderAnimShowPulldown();
             scApplyModeChrome();
             scEnsurePositionSeed();
             scRenderPositions();
             scRenderTagChips();
-            if (SC.mode === 'creator') scEnrichActorMeta();
+            if (SC.mode === 'creator') {
+                scEnrichActorMeta();
+                scRequestDeviousTags();
+            }
             scRefreshTags();
             scRefreshAnims();
             if (typeof window.onSceneConnectionsRefresh === 'function') {
@@ -8876,6 +8948,8 @@
                 if (el) el.style.display = show ? '' : 'none';
             };
             setDisp('sc-btn-start', !active);
+            setDisp('sc-initiator-pulldown', !active);
+            setDisp('sc-initiates-label', !active);
             setDisp('sc-btn-stop', active);
             setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
@@ -9061,6 +9135,7 @@
         function scOnActorCountChanged() {
             SC.selectedRegistries = [];
             scPersistPositionsToSceneInfo();
+            if (SC.mode === 'creator') scRequestDeviousTags();
             scRefreshTags();
             scRefreshAnims();
         }
@@ -9135,6 +9210,89 @@
                 scRefreshTags();
                 scRefreshAnims();
             }
+        }
+
+        // Shared DD pipeline front door: worn Devious Devices heavy bondage on the cast -> ordered animation tags
+        // (armbinder, yoke, cuffs, bound; [] when sexlab.tags.filter_by_devious_devices is off). Every TargetMenu
+        // start uses it (here, or C++ onAnimDbResolveTags {_form_ids} / ExecuteAction). Never rejects: a missing
+        // listener or no reply within DD_TAGS_TIMEOUT_MS resolves [] so a start never hangs.
+        const DD_TAGS_TIMEOUT_MS = 1500;
+        const ddPending = new Map();
+        let ddRequestSeq = 0;
+
+        function requestDeviousTags(formIds) {
+            return new Promise(resolve => {
+                const ids = (formIds || []).map(id => formIdU32(id)).filter(id => id);
+                if (typeof window.onResolveDeviousTags !== 'function' || !ids.length) {
+                    resolve([]);
+                    return;
+                }
+                const rid = 'd' + (++ddRequestSeq);
+                const timer = setTimeout(() => {
+                    ddPending.delete(rid);
+                    resolve([]);
+                }, DD_TAGS_TIMEOUT_MS);
+                ddPending.set(rid, tags => {
+                    clearTimeout(timer);
+                    resolve(tags);
+                });
+                window.onResolveDeviousTags(JSON.stringify({ _request_id: rid, _form_ids: ids }));
+            });
+        }
+
+        function deviousTagsResult(payload) {
+            const rid = String((payload && payload._request_id) || '');
+            const done = ddPending.get(rid);
+            if (!done) return;
+            ddPending.delete(rid);
+            done(((payload && payload._tags) || []).map(String));
+        }
+
+        function scRequestDeviousTags() {
+            const ids = (SC.positions || []).map(p => p._form_id || 0);
+            const qid = ++SC.ddQueryId;
+            requestDeviousTags(ids).then(tags => {
+                if (qid === SC.ddQueryId) scApplyDeviousTags(tags);
+            });
+        }
+
+        // Adds the cast's DD tags the player has not removed and drops auto tags the cast no longer wears.
+        // Tags already present (player or scene setting) stay player-owned.
+        function scApplyDeviousTags(tags) {
+            const want = (tags || []).filter(t => !SC.ddDismissed.has(t));
+            let changed = false;
+            SC.ddAuto = SC.ddAuto.filter(t => {
+                if (want.includes(t)) return true;
+                SC.tags = SC.tags.filter(x => x !== t);
+                changed = true;
+                return false;
+            });
+            want.forEach(t => {
+                if (SC.tags.includes(t)) return;
+                SC.tags.push(t);
+                SC.ddAuto.push(t);
+                SC.ddProbe = true;
+                changed = true;
+            });
+            if (!changed) return;
+            scRenderTagChips();
+            scRefreshTags();
+            scRefreshAnims();
+        }
+
+        // Empty result while auto DD tags are on probation: drop the last (most generic) one; caller re-queries.
+        // The first non-empty result ends probation, so later empties from player edits never strip tags.
+        function scDropDeviousTagIfEmpty(anims) {
+            if (!SC.ddProbe) return false;
+            if (anims.length || !SC.ddAuto.length) {
+                SC.ddProbe = false;
+                return false;
+            }
+            const tag = SC.ddAuto.pop();
+            SC.tags = SC.tags.filter(t => t !== tag);
+            scRenderTagChips();
+            scRefreshTags();
+            return true;
         }
 
         function actorAnimMetaResult(payload) {
@@ -9294,9 +9452,41 @@
             scSyncPositionsToLastAnim();
         }
 
+        // Initiator ("X initiates: ...") = one of the scene's actors; default player, else position 0.
+        function scResolveInitiator() {
+            const ids = (SC.positions || []).map(p => formIdU32(p && (p._form_id != null ? p._form_id : p.formId)));
+            if (SC.initiatorFormId && ids.includes(SC.initiatorFormId)) return SC.initiatorFormId;
+            SC.initiatorFormId = ids.includes(0x14) ? 0x14 : (ids[0] || 0);
+            return SC.initiatorFormId;
+        }
+
+        function scRenderInitiatorPulldown() {
+            const host = document.getElementById('sc-initiator-pulldown');
+            if (!host) return;
+            host.innerHTML = '';
+            const cur = scResolveInitiator();
+            const labels = [];
+            const idByLabel = new Map();
+            let curLabel = '';
+            (SC.positions || []).forEach((p, i) => {
+                const fid = formIdU32(p && (p._form_id != null ? p._form_id : p.formId));
+                if (!fid) return;
+                let label = (p._name || p.name || '?');
+                if (idByLabel.has(label)) label += ' (' + i + ')';
+                labels.push(label);
+                idByLabel.set(label, fid);
+                if (fid === cur) curLabel = label;
+            });
+            if (!labels.length) return;
+            host.appendChild(createPulldown(labels, curLabel, v => {
+                SC.initiatorFormId = idByLabel.get(v) || 0;
+            }));
+        }
+
         function scRenderPositions() {
             const tbody = document.querySelector('#sc-positions-table tbody');
             if (!tbody) return;
+            scRenderInitiatorPulldown();
             scRenderOverrideToggle();
             tbody.innerHTML = '';
             const selectedSet = scSelectedUuidSet();
@@ -9488,8 +9678,13 @@
         }
 
         function scRemoveTag(list, tag) {
-            if (list === 'include') SC.tags = SC.tags.filter(t => t !== tag);
-            else SC.suppress = SC.suppress.filter(t => t !== tag);
+            if (list === 'include') {
+                SC.tags = SC.tags.filter(t => t !== tag);
+                if (SC.ddAuto.includes(tag)) {
+                    SC.ddAuto = SC.ddAuto.filter(t => t !== tag);
+                    SC.ddDismissed.add(tag);
+                }
+            } else SC.suppress = SC.suppress.filter(t => t !== tag);
             scRenderTagChips();
             scRefreshTags();
             scRefreshAnims();
@@ -9498,6 +9693,7 @@
         function scAddTag(tag, list) {
             const arr = list === 'include' ? SC.tags : SC.suppress;
             if (!arr.includes(tag)) arr.push(tag);
+            if (list === 'include') SC.ddDismissed.delete(tag);
             scRenderTagChips();
             scRefreshTags();
             scRefreshAnims();
@@ -9542,6 +9738,7 @@
             // Description Editor animation filter tab: case-insensitive substring of the animation name.
             if (typeof deFilterTabActive === 'function' && deFilterTabActive() && DE.animNameFilter)
                 filter._name_contains = DE.animNameFilter;
+            filter._synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
             return filter;
         }
 
@@ -9852,6 +10049,10 @@
             if (String(rid).startsWith('a')) {
                 if (String(rid) !== 'a' + SC.animQueryId) return;
                 let anims = scFilterAnimsByHasDescription(payload._anims || []);
+                if (scDropDeviousTagIfEmpty(anims)) {
+                    scRefreshAnims();
+                    return;
+                }
                 if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any') {
                     SC.filterBy = SC.filterChain.shift();
                     scRenderFilterByPulldown();
@@ -10015,9 +10216,11 @@
                 _from_target_menu: !!SC.from_target_menu,
                 _intent: SC.intent || '',
                 _style: SC.style,
+                _initiator_form_id: scResolveInitiator(),
                 _method: SC.method,
                 _tags: SC.tags.join(','),
                 _tags_suppress: SC.suppress.join(','),
+                _synonyms: SC.synonyms || SC_SYNONYM_DEFAULT,
                 _positions: SC.positions,
                 _selected_registries: scSelectedRegistries(),
                 _event_hook: SC.event_hook || ''
@@ -10829,7 +11032,7 @@
                 return `<tr data-stage="${st._stage}">` +
                     `<td class="de-stage-num">${st._stage}</td>` +
                     `<td class="de-stage-text"><textarea class="de-stage-input" rows="2" data-stage="${st._stage}" ` +
-                    `onfocus="DE.lastEditStage=${st._stage}; deUpdateStageNavButtons()" oninput="deStageEdit(${st._stage}, this.value); deFitStageInput(this)">${escapeHtml(st._template || '')}</textarea></td>` +
+                    `onmousedown="deStageInputMouseDown(event, this)" onfocus="DE.lastEditStage=${st._stage}; deUpdateStageNavButtons()" oninput="deStageEdit(${st._stage}, this.value); deFitStageInput(this)">${escapeHtml(st._template || '')}</textarea></td>` +
                     `<td class="de-stage-desc" data-stage="${st._stage}">${escapeHtml(preview)}</td>` +
                     `</tr>`;
             }).join('');
@@ -10848,6 +11051,96 @@
             if (!ta) return;
             ta.style.height = 'auto';
             if (ta.scrollHeight > 0) ta.style.height = ta.scrollHeight + 'px';
+        }
+
+        // Map a client point to a text offset in a textarea, via a mirror div with identical wrapping.
+        function deTaOffsetAt(ta, x, y) {
+            const text = ta.value;
+            const cs = getComputedStyle(ta);
+            const r = ta.getBoundingClientRect();
+            const m = document.createElement('div');
+            ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight',
+             'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+             'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+             'boxSizing', 'textIndent', 'tabSize'].forEach(p => { m.style[p] = cs[p]; });
+            m.style.position = 'fixed';
+            m.style.left = r.left + 'px';
+            m.style.top = (r.top - ta.scrollTop) + 'px';
+            m.style.width = r.width + 'px';
+            m.style.whiteSpace = 'pre-wrap';
+            m.style.wordWrap = 'break-word';
+            m.style.wordBreak = cs.wordBreak;
+            m.style.borderStyle = 'solid';
+            m.style.borderColor = 'transparent';
+            m.style.visibility = 'hidden';
+            m.style.pointerEvents = 'none';
+            for (let i = 0; i < text.length; i++) {
+                const s = document.createElement('span');
+                s.textContent = text[i];
+                m.appendChild(s);
+            }
+            document.body.appendChild(m);
+            let best = text.length;
+            try {
+                const spans = m.children;
+                if (!spans.length) { best = 0; }
+                else if (y < spans[0].getBoundingClientRect().top) { best = 0; }
+                else {
+                    // Find the visual line containing y, then the char within it by x.
+                    let lineTop = null, lineEnd = -1, found = false;
+                    for (let i = 0; i < spans.length; i++) {
+                        const cr = spans[i].getBoundingClientRect();
+                        if (y >= cr.top && y < cr.bottom) {
+                            if (text[i] === '\n') { if (!found) best = i; break; }
+                            found = true;
+                            lineTop = cr.top;
+                            lineEnd = i;
+                            if (x < cr.left + cr.width / 2) { best = i; break; }
+                            best = i + 1;
+                        } else if (found && cr.top !== lineTop) {
+                            // Next visual line: clamp to end of current (before a wrap space).
+                            if (best > lineEnd) best = (text[lineEnd] === ' ' && lineEnd + 1 < text.length) ? lineEnd : lineEnd + 1;
+                            break;
+                        }
+                    }
+                }
+            } finally {
+                m.remove();
+            }
+            return best;
+        }
+
+        function deStageInputMouseDown(ev, ta) {
+            if (ev.button !== 0) return;
+            ev.preventDefault();
+            ta.focus();
+            const stage = parseInt(ta.dataset.stage, 10);
+            if (!isNaN(stage)) DE.lastEditStage = stage;
+            const pos = deTaOffsetAt(ta, ev.clientX, ev.clientY);
+            if (ev.detail === 2) {
+                const t = ta.value;
+                let a = pos, b = pos;
+                while (a > 0 && /\w/.test(t[a - 1])) a--;
+                while (b < t.length && /\w/.test(t[b])) b++;
+                ta.setSelectionRange(a, b);
+                return;
+            }
+            let anchor = pos;
+            if (ev.shiftKey) {
+                anchor = ta.selectionDirection === 'backward' ? ta.selectionEnd : ta.selectionStart;
+            }
+            const apply = (p) => {
+                if (p < anchor) ta.setSelectionRange(p, anchor, 'backward');
+                else ta.setSelectionRange(anchor, p, 'forward');
+            };
+            apply(pos);
+            const move = (e) => apply(deTaOffsetAt(ta, e.clientX, e.clientY));
+            const up = () => {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
         }
 
         function deFitStageInputs() {
@@ -10901,10 +11194,13 @@
         function deOpenFilterTab() {
             if (!deIsSceneBound()) return;
             scArmFilterDowngrade(SC.filterBy || SC_FILTER_DEFAULT);
+            scRequestDeviousTags();
             scRenderTagChips();
             scSetTagMode(SC.tagMode || 'include');
             scRenderFilterByPulldown();
-            scRenderHasDescriptionPulldown();            const nameEl = document.getElementById('de-anim-name-filter');
+            scRenderHasDescriptionPulldown();
+            scRenderSynonymsPulldown();
+            const nameEl = document.getElementById('de-anim-name-filter');
             if (nameEl && nameEl.value !== DE.animNameFilter) nameEl.value = DE.animNameFilter;
             deRenderLoadedList();
             scRefreshTags();
@@ -10937,6 +11233,10 @@
         function deOnFilterAnimsResult(payload, rid) {
             if (rid !== 'f' + DE.filterQueryId) return;
             const anims = scFilterAnimsByHasDescription(payload._anims || []);
+            if (scDropDeviousTagIfEmpty(anims)) {
+                deRefreshFilterAnims();
+                return;
+            }
             if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any') {
                 SC.filterBy = SC.filterChain.shift();
                 scRenderFilterByPulldown();

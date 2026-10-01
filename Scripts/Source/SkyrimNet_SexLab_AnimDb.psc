@@ -20,7 +20,8 @@ String Function AnimDb_GetTransition(String registry, int from_stage, int to_sta
 String Function AnimDb_SubstituteActors(String desc, String actors_json) global native
 String Function AnimDb_GetStagesJson(String registry, int stage_count, String actors_json, int current_stage) global native
 Bool Function AnimDb_SaveAnimLocal(String registry, String json) global native
-String Function AnimDb_ResolveTags(String tags_csv, int actor_count) global native
+; synonyms: "broad" | "strict" | "none" — which synonyms-*.json clusters count as a tag match.
+String Function AnimDb_ResolveTags(String tags_csv, int actor_count, String synonyms = "broad") global native
 Bool Function AnimDb_CsvHasTag(String tags_csv, String tag) global native
 ; Per position 1 when most registries default it to clothed (tie -> 0). See Scene_Creator.ApplyMajorityClothed.
 int[] Function AnimDb_ClothedMajority(String[] registries, int position_count) global native
@@ -465,8 +466,8 @@ Bool Function SaveAnimLocal(String registry, String json)
     return AnimDb_SaveAnimLocal(registry, json)
 EndFunction
 
-String Function ResolveTags(String tags_csv, int actor_count)
-    return AnimDb_ResolveTags(tags_csv, actor_count)
+String Function ResolveTags(String tags_csv, int actor_count, String synonyms = "broad")
+    return AnimDb_ResolveTags(tags_csv, actor_count, synonyms)
 EndFunction
 
 Bool Function CsvHasTag(String tags_csv, String tag)

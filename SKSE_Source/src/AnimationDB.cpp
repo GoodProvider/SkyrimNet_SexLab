@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <memory>
+#include <random>
 #include <sstream>
 
 namespace AnimationDB
@@ -20,6 +22,22 @@ namespace AnimationDB
         bool g_force_rebuild = false;
         std::unordered_map<std::string, AnimRow> g_rows;
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
+
+        /// tag → its cluster's members (incl. itself). [0] = strict, [1] = broad. Guarded by g_mutex.
+        using SynonymMap = std::unordered_map<std::string, std::shared_ptr<const std::vector<std::string>>>;
+        SynonymMap g_syn[2];
+
+        const SynonymMap* SynonymMapFor(SynonymMode mode)
+        {
+            switch (mode) {
+            case SynonymMode::Strict:
+                return &g_syn[0];
+            case SynonymMode::Broad:
+                return &g_syn[1];
+            default:
+                return nullptr;
+            }
+        }
 
         std::string JsonDump(const nlohmann::json& j)
         {
@@ -811,7 +829,45 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             return tags.contains(t);
         }
 
-        bool MatchesFilter(const AnimRow& row, const FilterSpec& spec)
+        /// spec.must_tags / suppress_tags, each widened to its synonym cluster. Build once per query.
+        struct ExpandedTags
+        {
+            std::vector<std::vector<std::string>> must;
+            std::vector<std::vector<std::string>> suppress;
+        };
+
+        std::vector<std::string> ExpandTagLocked(const std::string& raw, SynonymMode mode)
+        {
+            std::string tag = ToLower(raw);
+            if (const auto* map = SynonymMapFor(mode)) {
+                if (auto it = map->find(tag); it != map->end())
+                    return *it->second;
+            }
+            return { std::move(tag) };
+        }
+
+        ExpandedTags ExpandSpecTagsLocked(const FilterSpec& spec)
+        {
+            ExpandedTags ex;
+            ex.must.reserve(spec.must_tags.size());
+            for (const auto& m : spec.must_tags)
+                ex.must.push_back(ExpandTagLocked(m, spec.synonyms));
+            ex.suppress.reserve(spec.suppress_tags.size());
+            for (const auto& s : spec.suppress_tags)
+                ex.suppress.push_back(ExpandTagLocked(s, spec.synonyms));
+            return ex;
+        }
+
+        bool HasAnyOf(const std::unordered_set<std::string>& tagset, const std::vector<std::string>& cluster)
+        {
+            for (const auto& t : cluster) {
+                if (tagset.contains(t))
+                    return true;
+            }
+            return false;
+        }
+
+        bool MatchesFilter(const AnimRow& row, const FilterSpec& spec, const ExpandedTags& ex)
         {
             if (spec.enabled_only && !row.enabled)
                 return false;
@@ -822,21 +878,22 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             if (spec.creature == 2 && row.has_creature)
                 return false;
 
+            // Within a cluster any member matches; require_all is AND/OR across requested tags.
             std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
-            for (const auto& s : spec.suppress_tags) {
-                if (tagset.contains(ToLower(s)))
+            for (const auto& s : ex.suppress) {
+                if (HasAnyOf(tagset, s))
                     return false;
             }
-            if (!spec.must_tags.empty()) {
+            if (!ex.must.empty()) {
                 if (spec.require_all) {
-                    for (const auto& m : spec.must_tags) {
-                        if (!tagset.contains(ToLower(m)))
+                    for (const auto& m : ex.must) {
+                        if (!HasAnyOf(tagset, m))
                             return false;
                     }
                 } else {
                     bool any = false;
-                    for (const auto& m : spec.must_tags) {
-                        if (tagset.contains(ToLower(m))) {
+                    for (const auto& m : ex.must) {
+                        if (HasAnyOf(tagset, m)) {
                             any = true;
                             break;
                         }
@@ -984,23 +1041,126 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     namespace
     {
-        bool AnyAnimHasAllTagsLocked(const std::vector<std::string>& must, int actor_count)
+        bool AnyAnimHasAllTagsLocked(const std::vector<std::string>& must, int actor_count, SynonymMode mode)
         {
             FilterSpec spec;
             spec.must_tags = must;
             spec.require_all = true;
             spec.enabled_only = true;
+            spec.synonyms = mode;
             if (actor_count > 0)
                 spec.actor_count = actor_count;
+            const auto ex = ExpandSpecTagsLocked(spec);
             for (const auto& [_, row] : g_rows) {
-                if (MatchesFilter(row, spec))
+                if (MatchesFilter(row, spec, ex))
                     return true;
             }
             return false;
         }
+
+        std::string TrimLower(std::string s)
+        {
+            s = ToLower(std::move(s));
+            const auto b = s.find_first_not_of(" \t");
+            if (b == std::string::npos)
+                return {};
+            const auto e = s.find_last_not_of(" \t");
+            return s.substr(b, e - b + 1);
+        }
+
+        /// Parses {"clusters": [[...], ...]}. Members are lowercased + trimmed only (row tags are not
+        /// SanitizeTag'd, so "pussy" must stay "pussy"). A member already in another cluster merges the two.
+        SynonymMap LoadSynonymsFile(const std::filesystem::path& path)
+        {
+            SynonymMap out;
+            std::error_code ec;
+            if (!std::filesystem::exists(path, ec)) {
+                webui_log::warn("AnimationDB: synonyms file missing {} (literal tags only)", path.string());
+                return out;
+            }
+            nlohmann::json j;
+            try {
+                std::ifstream f(path);
+                j = nlohmann::json::parse(f);
+            } catch (const std::exception& e) {
+                webui_log::warn("AnimationDB: failed to parse {}: {}", path.string(), e.what());
+                return out;
+            }
+            if (!j.contains("clusters") || !j["clusters"].is_array()) {
+                webui_log::warn("AnimationDB: {} has no \"clusters\" array", path.string());
+                return out;
+            }
+
+            std::vector<std::vector<std::string>> clusters;
+            std::unordered_map<std::string, size_t> owner;
+            for (const auto& arr : j["clusters"]) {
+                if (!arr.is_array())
+                    continue;
+                const size_t idx = clusters.size();
+                clusters.emplace_back();
+                for (const auto& el : arr) {
+                    if (!el.is_string())
+                        continue;
+                    std::string tag = TrimLower(el.get<std::string>());
+                    if (tag.empty())
+                        continue;
+                    auto it = owner.find(tag);
+                    if (it == owner.end()) {
+                        owner[tag] = idx;
+                        clusters[idx].push_back(std::move(tag));
+                    } else if (it->second != idx) {
+                        const size_t other = it->second;
+                        webui_log::warn("AnimationDB: {} tag '{}' in two clusters; merging", path.filename().string(), tag);
+                        for (auto& m : clusters[other]) {
+                            owner[m] = idx;
+                            clusters[idx].push_back(std::move(m));
+                        }
+                        clusters[other].clear();
+                    }
+                }
+            }
+
+            size_t live = 0;
+            for (auto& c : clusters) {
+                if (c.size() < 2)
+                    continue;
+                ++live;
+                auto shared = std::make_shared<const std::vector<std::string>>(std::move(c));
+                for (const auto& m : *shared)
+                    out[m] = shared;
+            }
+            webui_log::info("AnimationDB: synonyms {} clusters={} tags={}", path.filename().string(), live, out.size());
+            return out;
+        }
     }
 
-    std::string ResolveTags(const std::string& tags_csv, int actor_count)
+    SynonymMode ParseSynonymMode(const std::string& s)
+    {
+        const std::string m = TrimLower(s);
+        if (m == "strict")
+            return SynonymMode::Strict;
+        if (m == "none")
+            return SynonymMode::None;
+        return SynonymMode::Broad;
+    }
+
+    void LoadSynonyms()
+    {
+        const auto dir = PluginDataDir();
+        auto strict = LoadSynonymsFile(dir / "synonyms-strict.json");
+        auto broad = LoadSynonymsFile(dir / "synonyms-broad.json");
+        std::lock_guard lock(g_mutex);
+        g_syn[0] = std::move(strict);
+        g_syn[1] = std::move(broad);
+    }
+
+    std::vector<std::string> SynonymsOf(const std::string& tag, SynonymMode mode)
+    {
+        std::lock_guard lock(g_mutex);
+        return ExpandTagLocked(tag, mode);
+    }
+
+    std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode)
     {
         auto tags = ParseSanitizeTagsCsv(tags_csv);
         if (tags.empty())
@@ -1018,7 +1178,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 subset.reserve(static_cast<size_t>(k));
                 for (int i : idx)
                     subset.push_back(tags[static_cast<size_t>(i)]);
-                if (AnyAnimHasAllTagsLocked(subset, actor_count))
+                if (AnyAnimHasAllTagsLocked(subset, actor_count, mode))
                     return TagsCsv(subset);
 
                 // next combination in lex order
@@ -1033,6 +1193,28 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
         }
         return {};
+    }
+
+    std::string AppendMatchingTags(const std::string& resolved_csv, const std::vector<std::string>& extra,
+        int actor_count, SynonymMode mode)
+    {
+        auto tags = ParseSanitizeTagsCsv(resolved_csv);
+        if (tags.empty() || extra.empty())
+            return resolved_csv;
+
+        std::lock_guard lock(g_mutex);
+        bool added = false;
+        for (const auto& raw : extra) {
+            const std::string tag = SanitizeTag(raw);
+            if (tag.empty() || std::find(tags.begin(), tags.end(), tag) != tags.end())
+                continue;
+            tags.push_back(tag);
+            if (AnyAnimHasAllTagsLocked(tags, actor_count, mode))
+                added = true;
+            else
+                tags.pop_back();
+        }
+        return added ? TagsCsv(tags) : resolved_csv;
     }
 
     bool CsvHasTag(const std::string& tags_csv, const std::string& tag)
@@ -1171,6 +1353,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         }
         LoadAllRowsLocked();
         webui_log::info("AnimationDB: opened {} ({} rows)", path.string(), g_rows.size());
+        LoadSynonyms();
         return true;
     }
 
@@ -1374,19 +1557,26 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         Exec("DELETE FROM animation_tags WHERE registry NOT IN (SELECT registry FROM animations)");
         LoadAllRowsLocked();
         webui_log::info("AnimationDB: EndSync gen={} rows={}", g_sync_gen, g_rows.size());
+        LoadSynonyms();
         return true;
     }
 
     std::vector<AnimRow> QueryTopNAnims(const FilterSpec& spec, int n)
     {
         std::lock_guard lock(g_mutex);
+        const auto ex = ExpandSpecTagsLocked(spec);
         std::vector<AnimRow> out;
         for (const auto& [reg, row] : g_rows) {
-            if (MatchesFilter(row, spec))
+            if (MatchesFilter(row, spec, ex))
                 out.push_back(row);
         }
-        std::sort(out.begin(), out.end(),
-            [](const AnimRow& a, const AnimRow& b) { return a.registry < b.registry; });
+        if (spec.shuffle) {
+            static std::mt19937 rng{ std::random_device{}() };
+            std::shuffle(out.begin(), out.end(), rng);
+        } else {
+            std::sort(out.begin(), out.end(),
+                [](const AnimRow& a, const AnimRow& b) { return a.registry < b.registry; });
+        }
         if (n > 0 && static_cast<int>(out.size()) > n)
             out.resize(static_cast<size_t>(n));
         return out;

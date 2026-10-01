@@ -269,6 +269,11 @@ namespace PapyrusBindings_WebUI
                 const auto e = s.find_last_not_of(" \t");
                 spec.name_contains = (b == std::string::npos) ? std::string() : s.substr(b, e - b + 1);
             }
+            if (j.contains("_synonyms") && j["_synonyms"].is_string())
+                spec.synonyms = AnimationDB::ParseSynonymMode(j["_synonyms"].get<std::string>());
+            if (j.contains("_shuffle"))
+                spec.shuffle = j["_shuffle"].is_boolean() ? j["_shuffle"].get<bool>()
+                               : j["_shuffle"].is_number() && j["_shuffle"].get<double>() != 0;
         } catch (...) {
             webui_log::warn("ParseFilterJson failed");
         }
@@ -1357,6 +1362,54 @@ namespace PapyrusBindings_WebUI
         }
     }
 
+    namespace
+    {
+        /// JS `_form_ids` (u32, signed, or double) → form IDs; missing / non-array → empty.
+        std::vector<std::uint32_t> ParseFormIds(const nlohmann::json& j)
+        {
+            std::vector<std::uint32_t> out;
+            if (!j.contains("_form_ids") || !j["_form_ids"].is_array())
+                return out;
+            for (const auto& el : j["_form_ids"]) {
+                if (el.is_number_unsigned())
+                    out.push_back(el.get<std::uint32_t>());
+                else if (el.is_number_integer())
+                    out.push_back(static_cast<std::uint32_t>(el.get<std::int64_t>()));
+                else if (el.is_number())
+                    out.push_back(static_cast<std::uint32_t>(el.get<double>()));
+            }
+            return out;
+        }
+
+        /// Main thread. Unresolvable IDs are skipped.
+        std::vector<RE::Actor*> ActorsFromFormIds(const std::vector<std::uint32_t>& formIds)
+        {
+            std::vector<RE::Actor*> out;
+            for (const auto formId : formIds) {
+                if (auto* actor = formId ? RE::TESForm::LookupByID<RE::Actor>(formId) : nullptr)
+                    out.push_back(actor);
+            }
+            return out;
+        }
+
+        std::string JoinTags(const std::vector<std::string>& tags)
+        {
+            std::string out;
+            for (const auto& t : tags)
+                out += out.empty() ? t : "," + t;
+            return out;
+        }
+
+        void InvokeResolveTagsResult(const std::string& request_id, const std::string& tags, const std::string& resolved)
+        {
+            nlohmann::json payload;
+            payload["_request_id"] = request_id;
+            payload["_resolved"] = resolved;
+            payload["_ok"] = !resolved.empty() || tags.empty();
+            WebUI_Invoke("animDbResolveTagsResult(" + SafeDump(payload) + ");");
+        }
+    }
+
     void HandleAnimDbResolveTags(const char* value)
     {
         if (!value)
@@ -1366,13 +1419,22 @@ namespace PapyrusBindings_WebUI
             const std::string request_id = j.value("_request_id", "");
             const std::string tags = j.value("_tags", "");
             const int actor_count = j.value("_actor_count", 0);
-            const std::string resolved = AnimationDB::ResolveTags(tags, actor_count);
-            nlohmann::json payload;
-            payload["_request_id"] = request_id;
-            payload["_resolved"] = resolved;
-            payload["_ok"] = !resolved.empty() || tags.empty();
-            std::string js = "animDbResolveTagsResult(" + SafeDump(payload) + ");";
-            WebUI_Invoke(js);
+            const auto mode = AnimationDB::ParseSynonymMode(j.value("_synonyms", ""));
+            if (!j.contains("_form_ids")) {
+                InvokeResolveTagsResult(request_id, tags, AnimationDB::ResolveTags(tags, actor_count, mode));
+                return;
+            }
+            // TargetMenu scene start: append the cast's worn DD tags that still match (main thread for the scan).
+            const auto formIds = ParseFormIds(j);
+            SKSE::GetTaskInterface()->AddTask([request_id, tags, actor_count, mode, formIds]() {
+                std::string resolved = AnimationDB::ResolveTags(tags, actor_count, mode);
+                const auto dd = BondageCatalog::WornAnimationTags(ActorsFromFormIds(formIds));
+                if (!resolved.empty() && !dd.empty())
+                    resolved = AnimationDB::AppendMatchingTags(resolved, dd, actor_count, mode);
+                webui_log::info("HandleAnimDbResolveTags id={} tags={} dd={} resolved={}",
+                    request_id, tags, JoinTags(dd), resolved);
+                InvokeResolveTagsResult(request_id, tags, resolved);
+            });
         } catch (...) {
             webui_log::warn("HandleAnimDbResolveTags: parse failed");
         }
@@ -1461,6 +1523,29 @@ namespace PapyrusBindings_WebUI
                 }
             }
             WebUI_Invoke(std::string("leashStatusResult(") + SafeDump(out) + ");");
+        });
+    }
+
+    void HandleResolveDeviousTags(const char* value)
+    {
+        std::string request_id;
+        std::vector<std::uint32_t> formIds;
+        try {
+            auto j = nlohmann::json::parse(value ? value : "");
+            request_id = j.value("_request_id", "");
+            formIds = ParseFormIds(j);
+        } catch (...) {
+            webui_log::warn("HandleResolveDeviousTags: parse failed");
+            return;
+        }
+
+        SKSE::GetTaskInterface()->AddTask([request_id, formIds]() {
+            const auto dd = BondageCatalog::WornAnimationTags(ActorsFromFormIds(formIds));
+            webui_log::info("HandleResolveDeviousTags id={} actors={} tags={}", request_id, formIds.size(), JoinTags(dd));
+            nlohmann::json out;
+            out["_request_id"] = request_id;
+            out["_tags"] = dd;
+            WebUI_Invoke(std::string("deviousTagsResult(") + SafeDump(out) + ");");
         });
     }
 

@@ -1,4 +1,6 @@
 #include "ActionDispatch.h"
+#include "AnimationDB.h"
+#include "BondageCatalog.h"
 #include "JsonUtil.h"
 #include "Config.h"
 #include "WebUI_Log.h"
@@ -310,6 +312,7 @@ namespace ActionCatalog
         }
 
         auto args = std::make_shared<DynamicArgs>();
+        int tagsIndex = -1;  // StartScene_* tags/method arg: worn DD tags are appended on the main thread
 
         for (auto& pm : def->parameterMapping) {
             if (pm.name.empty())
@@ -368,6 +371,8 @@ namespace ActionCatalog
                 }
             }
 
+            if (EqualsIgnoreCase(pm.name, "tags") || EqualsIgnoreCase(pm.name, "method"))
+                tagsIndex = static_cast<int>(args->items.size());
             DynamicArgs::Item item;
             item.kind = DynamicArgs::Kind::String;
             item.str = value;
@@ -399,11 +404,32 @@ namespace ActionCatalog
         const std::string questPlugin = def->questPlugin;
         const std::uint32_t questFormId = def->questFormId;
 
-        SKSE::GetTaskInterface()->AddTask([captured, scriptName, functionName, questEditorId, questPlugin, questFormId, actionName]() {
+        SKSE::GetTaskInterface()->AddTask([captured, scriptName, functionName, questEditorId, questPlugin, questFormId, actionName, tagsIndex]() {
             auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
             if (!vm) {
                 webui_log::error("ExecuteAction: no VM");
                 return;
+            }
+
+            // TargetMenu scene start: same DD pipeline as JS onAnimDbResolveTags {_form_ids}.
+            std::string startTags;
+            const bool rewriteTags = tagsIndex >= 0 && tagsIndex < static_cast<int>(captured.size()) &&
+                                     functionName.rfind("StartScene", 0) == 0 && !captured[tagsIndex].str.empty();
+            if (rewriteTags) {
+                std::vector<RE::Actor*> cast;
+                for (const auto& c : captured) {
+                    if (c.isActor && c.actor && std::find(cast.begin(), cast.end(), c.actor) == cast.end())
+                        cast.push_back(c.actor);
+                }
+                const int n = static_cast<int>(cast.size());
+                const std::string& tags = captured[tagsIndex].str;
+                startTags = AnimationDB::ResolveTags(tags, n);
+                const auto dd = BondageCatalog::WornAnimationTags(cast);
+                if (startTags.empty())
+                    startTags = tags;
+                else if (!dd.empty())
+                    startTags = AnimationDB::AppendMatchingTags(startTags, dd, n);
+                webui_log::info("ExecuteAction: {} tags={} dd={} -> {}", actionName, tags, dd.size(), startTags);
             }
             auto* quest = FindQuest(questFormId, questEditorId, questPlugin);
             if (!quest) {
@@ -420,14 +446,15 @@ namespace ActionCatalog
             }
 
             auto* raw = new DynamicArgs();
-            for (auto& c : captured) {
+            for (size_t i = 0; i < captured.size(); ++i) {
+                const auto& c = captured[i];
                 DynamicArgs::Item item;
                 if (c.isActor) {
                     item.kind = DynamicArgs::Kind::Actor;
                     item.actor = c.actor;
                 } else {
                     item.kind = DynamicArgs::Kind::String;
-                    item.str = c.str;
+                    item.str = rewriteTags && static_cast<int>(i) == tagsIndex ? startTags : c.str;
                 }
                 raw->items.push_back(std::move(item));
             }

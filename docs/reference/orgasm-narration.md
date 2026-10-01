@@ -46,7 +46,7 @@ The C++ OrgasmEngine ([../developers/orgasm-engine.md](../developers/orgasm-engi
 - **Engine group:** in each tick, per scene, everyone who fires (at 100, forced, safety net) plus the group join → one `Effect_OrgasmGroup` → `Scene.Orgasm_ApplyGroup`. That calls `thread.ForceOrgasm` per actor, stashes each one (`StashOrgasm`), and then:
   - `individual`: narrates now (`NarrateOrgasmStash`), or joins an open window;
   - safety-net-only groups: `ArmOrgasmWindow`.
-- **Safety net (final stage, mini-game on or off, no LeadIn):** at 90% of the final stage's timer, each non-DOM actor at 90 or more who hasn't orgasmed, isn't blocked or edging, and wasn't calmed in that stage fires as a non-individual group (stash + window). Actors below 90 don't orgasm; the afterglow says `failed to orgasm` when one was expected.
+- **Safety net (final stage, mini-game on or off, no LeadIn):** at 90% of the final stage's timer, each non-DOM actor at 90 or more (mini-game off: any enjoyment, except victims and actors not expected to orgasm) who hasn't orgasmed, isn't blocked or edging, and wasn't calmed in that stage fires as a non-individual group (stash + window). Actors below 90 don't orgasm; the afterglow says `failed to orgasm` when one was expected.
 - **External orgasms** (DOM melt `NoteExternalOrgasm(slave, "dom")`, another plugin's SexLab orgasm `"sexlab"`):
   - The caller stashes that actor (`OrgasmCustom` / `OrgasmIndividual`) and arms the window.
   - The engine's group join for it arrives as a non-individual group in the same window, so both are one DN.

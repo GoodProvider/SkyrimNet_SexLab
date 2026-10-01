@@ -21,14 +21,14 @@ For each managed scene:
      - `baseRate = 100 / targetSecs`. It is fixed per animation, and enjoyment carries over when the animation changes.
      - LeadIn: `targetSecs` = all stages × 1.5, so no one reaches 100.
      - No timers: a flat 0.5/s.
-   - **The rate is fixed; it is not "remaining ÷ time left".** Extra time adds enjoyment: pausing, repeating a stage, or a slow narration. An actor can then orgasm earlier, or more than once.
-   - **`roleMult`:** `sexlab.enjoyment.passive_mult` (1.0), `aggressor_mult` (1.15) or `victim_mult` (0.8).
-   - **`jitter`:** rolled per actor at `BeginScene`, uniform in [`jitter_min`, `jitter_max`] (0.95–1.2).
+   - **The rate is fixed; it is not "remaining ÷ time left".** Extra time adds enjoyment: repeating a stage or a slow narration (a paused stage adds none). Real scenes usually run 2–3× their stage timers, which is why the default multipliers are well below 1.0.
+   - **`roleMult`:** `sexlab.enjoyment.passive_mult` (0.4), `aggressor_mult` (0.45) or `victim_mult` (0.3).
+   - **`jitter`:** rolled per actor at `BeginScene`, uniform in [`jitter_min`, `jitter_max`] (0.95–1.1).
    - **Anim speed:** `AnimSpeed::Get`, which is the style speed multiplied by the HUD's faster/slower scale.
    - **Not expected to orgasm:** positions with AnimDB `orgasm_expected` 0, or the scene's `no_orgasm` 1, get no passive gain. Not expected is **not** a block: orgasm checks run as normal. `Scene.ApplySexLabVoice` keeps SexLab silent below 50 enjoyment (`VOICE_GATE_ENJOYMENT`, re-checked in `Mirror_Apply`). The only scene block (`SetSceneBlocked`) is the player's `deny_orgasm` (HUD `sexlab.hud.key_deny` → `Menu.Hud_OnKey("deny", focus)` → `Scene.ToggleDenyOrgasm`; Description Editor `_deny_pos`). Positions with AnimDB `orgasm_expected` 0 get no passive gain (DOM slaves: no `domProgress`). `Engine_SetSkills` sends `SetOrgasmExpected(actor, expected)` at start and on each animation change; missing data counts as expected. Mini-game Arouse / Calm still move their enjoyment, and the no-timer safety net still needs 90 for them.
    - Expected results at normal speed with no mini-game:
-     - A normal actor ends on 95–120. Actors with jitter above 1.0 orgasm before the safety net.
-     - A victim ends on 76–96. About 30% reach 90 (jitter ≥ 1.125) and orgasm.
+     - A normal actor usually reaches 100 late in the scene; anyone who has not is fired by the safety net, so each actor orgasms once.
+     - A victim orgasms only if they reach 90 by the safety net.
 2. **Orgasm test:**
    - The test value is `enjoyment`. With the mini-game on, once a second it becomes `enjoyment + random(0, random_bonus)`.
    - An orgasm fires at 100 or more when:
@@ -41,12 +41,12 @@ For each managed scene:
    - A **forced** request (the WebUI orgasm button, `RequestOrgasm(…, true, …)`) skips every gate.
 3. **Safety net (mini-game on or off, never in LeadIn):** at 90% of the final stage's timer, counting only animating, unpaused time, each non-DOM actor is fired as *combined* when all of these hold:
    - the actor has not orgasmed yet in this scene,
-   - enjoyment is 90 or more,
+   - enjoyment is 90 or more (mini-game off: not needed, except for victims and actors not expected to orgasm),
    - there is no block,
    - the actor is not edging, and
    - the actor was not calmed during the final stage.
 
-   Below 90 the actor does not orgasm; this is the natural miss for a victim. The orgasms are stashed and flushed as one narration through `ArmOrgasmWindow`. With no timers, the net fires on entering the final stage, and it fires everyone when the mini-game is off (the old rule).
+   Otherwise, below 90 the actor does not orgasm; this is the natural miss for a victim. The orgasms are stashed and flushed as one narration through `ArmOrgasmWindow`. With no timers, the net fires on entering the final stage, and it fires everyone when the mini-game is off (the old rule).
 4. **Group (`JoinGroup`):** everyone fired in this scene in this tick (steps 2 and 3, forced included) is one group. Every other actor joins it when all of these hold:
    - not a DOM slave,
    - not blocked,
@@ -82,7 +82,7 @@ For each managed scene:
   - **Pause:** `thread.UpdateTimer(100000)` pushes the stage's timer far out.
   - **Resume:** `thread.UpdateTimer(held − 100000)` puts back the remaining time, then `thread.ResolveTimers()` restores `TimedStage = Animation.HasTimer(Stage)`.
 - `StageStart` re-applies the hold while paused, because `GoToStage` resets the timer. It is applied once per (animation, stage). Manual previous/next still work.
-- `SetScenePaused` tells the engine. That drives the HUD's "Paused" tag and its **pause**/**resume** label, and stops the safety-net clock. Passive gain keeps running.
+- `SetScenePaused` tells the engine. That drives the HUD's "Paused" tag and its **pause**/**resume** label, stops the safety-net clock and stops passive gain.
 
 ## Mini-game
 

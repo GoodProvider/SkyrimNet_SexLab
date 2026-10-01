@@ -479,7 +479,7 @@ MCM workaround: Climax type End/Legacy, or disable High Enj Orgasm Wait / Player
 
 ## Scene initiator vs victim (2026-08-30)
 
-`Scene.initiator` is the speaker by default. If the thread has victims (`num_victims > 0`), a victim is never initiator: keep the current initiator only when they are not a victim; otherwise pick the first non-victim from positions 1…n then 0 (or None). Used for `"X initiates: …"` on first StageStart. Do not recompute on AlignActors / live SetVictim.
+`Scene.initiator` is the speaker by default (WebUI Scene Creator: the **initiator** pulldown → `_initiator_form_id` → creator `speaker`; default player, else position 0). If the thread has victims (`num_victims > 0`), a victim is never initiator: keep the current initiator only when they are not a victim; otherwise pick the first non-victim from positions 1…n then 0 (or None). Used for `"X initiates: …"` on first StageStart. Do not recompute on AlignActors / live SetVictim.
 
 ## BondagePanel / Devious Devices NG (2026-09-15)
 
@@ -493,6 +493,8 @@ MCM workaround: Climax type End/Legacy, or disable High Enj Orgasm Wait / Player
 - `zadLibs` / device Forms live **only** on `SkyrimNet_SexLab_Handler_UDNG` (optional ESP). Do **not** put `zadLibs` on the main quest — the VM will not bind the type when DD is absent. Runtime: `GetFormFromFile(0x00F624, "Devious Devices - Integration.esm")`. Apply still uses `zadLibs.LockDevice` / `SwapDevices` / `UnLockDevice`.
 - Compile import: `@ModsFolder\Devious Devices for SE-AE-VR\Scripts\Source` plus `PapyrusSourcesDD\SRC_SLA` (`slautilscr` on `zadLibs`). That tree’s `zadLibs.psc` is Headliner-stubbed; shipped DD `.pex` is used at runtime. Do not clone `PapyrusSourcesDD` into this repo / `Makefile` `dd:`.
 - LLM lock/unlock stays in SkyrimNet_UDNG. `TM_BondageApply` can remain for other callers; BondagePanel must not use it.
+- **DD animation tags** (`sexlab.tags.filter_by_devious_devices`, 2026-10-01): C++ `BondageCatalog::WornAnimationTags` uses only a worn-armor `HasKeywordString("zad_Devious…")` scan — no `DeviousDevicesAPI`, no `zadLibs`, no DD ESP lookup — so it is safe in the core DLL and finds nothing when DD is absent. Rendered devices are the worn armor and carry the `zad_Devious*` keywords.
+- **Optional tags vs `AnimationDB::ResolveTags`:** `ResolveTags` returns the *largest* matching subset, so `"vaginal,armbinder,bound"` can resolve to `"armbinder,bound"` and silently drop the method (Papyrus `Setup` narrates `parts[0]` as the method). Append optional tags (DD) with `AnimationDB::AppendMatchingTags(ResolveTags(method), extra, n)` instead.
 
 ## Scene Menu Start Control Panel new → Handoff (2026-08-16)
 
@@ -899,6 +901,14 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 
 `CMakeLists.txt` collects `src/*.cpp` with `file(GLOB …)` at configure time. A new source file links as "unresolved external" until CMake reconfigures — touch `CMakeLists.txt` (or rerun the configure preset) before `cmake --build`.
 
+## OrgasmEngine: real scenes run 2-3.5x their stage timers (2026-10-01)
+
+**Symptom:** with the mini-game off, actors orgasmed every ~50 s (player 4x in one scene).
+
+**Cause:** the passive base rate is `100 / targetSecs` from SexLab's stage timers, but held stages (narration, LLM pacing, pause) made scenes last ~200-285 s against a 58-88 s target. Passive gain also kept running while paused.
+
+**Fix:** defaults `passive_mult` 0.4 / `aggressor_mult` 0.45 / `victim_mult` 0.3 / `jitter_max` 1.1; no gain while `sc.paused`; mini-game off, the safety net fires every non-victim expected actor who has not orgasmed, at any enjoyment. Rule: tune rates against observed real scene length, not stage timers.
+
 ## OrgasmEngine owns orgasms; SexLab trigger off (2026-09-29)
 
 - **Engine:** `SKSE_Source/src/OrgasmEngine.cpp` decides every orgasm. `Scene.Engine_BeginScene` calls `thread.DisableAllOrgasms(true)`.
@@ -931,3 +941,10 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Papyrus `Key` is a type:** a local `String key` fails with "cannot name a variable or property the same as a known type or script". Use `melt_key`.
 - **Arrays to Papyrus:** `RE::MakeFunctionArguments` packs `std::vector<RE::Actor*>` / `std::vector<std::int32_t>` as Papyrus arrays. Avoid `std::vector<bool>` (proxy elements); send int 0/1.
 - **Budget:** `sexlab.narration.max_chars` (350). Overflow goes out as one `RegisterEvent` after the DN and never holds a gate string, so `CheckDuplicate` cannot blank the DN.
+
+## AnimDB tag synonyms; no SexLab.GetAnimationsByTags (2026-10-01)
+
+- **Row tags are not sanitized:** `AnimRow::tags` are only `ToLower`'d. `SanitizeTag`'s aliases (`pussy` → `vaginal`, `ass` → `anal`) apply only to query input. Synonym members must be loaded with lowercase and trim **only**. Running them through `SanitizeTag` would turn the cluster's `pussy` into `vaginal`, and the 17 `pussy`-tagged rows would stop matching.
+- **Never cluster DD restraint tags together** (`yoke`, `armbinder`, `hogtied`), not even in broad. `AppendMatchingTags` adds worn-device tags to keep only animations playable in that device; a yoke = armbinder cluster would hand an armbinder wearer yoke animations. Also keep `hug` apart from `cuddling`: `resolved == "hug"` plays the hug idle (`Actions.psc`).
+- **Papyrus default args are compiled into the caller:** adding `String synonyms = "broad"` to the `AnimDb_ResolveTags` native means every **caller's** `.pex` must be recompiled (`Actions.psc`). Otherwise the old pex passes 2 args to a 3-arg native and fails at runtime. Pyro's incremental build only recompiles changed sources, so touch the callers.
+- **SexLab literal lookup removed:** `GetAnimationsByTags` ignores synonyms, and with `require=false` and no tags it returns every N-actor animation (the P+ enjoyment-wait loop). All Scene_Creator tag selection is `SelectAnimationsFromAnimDb` (full query, then peel), with `_shuffle` so the cap of 32 is random rather than alphabetical.

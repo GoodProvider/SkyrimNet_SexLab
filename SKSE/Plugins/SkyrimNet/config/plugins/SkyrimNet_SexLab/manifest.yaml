@@ -41,6 +41,13 @@ schema:
       defaultValue: false
       category: "Tags"
 
+    - name: "Devious devices are added to tags"
+      path: "sexlab.tags.filter_by_devious_devices"
+      type: "bool"
+      description: "When an actor wears Devious Devices heavy bondage (armbinder, yoke, front cuffs, other bound devices), scenes started from the TargetMenu prefer animations with the matching tag, and the Scene Creator and Description Editor animation filters start with it. A tag with no matching animation is dropped. You can always remove the tags in the Scene Creator. Actors not wearing devices are unaffected."
+      defaultValue: true
+      category: "Tags"
+
     - name: "Enable Start Sex / Edit Stage hotkey"
       path: "sexlab.editor.hotkey_enabled"
       type: "bool"
@@ -209,7 +216,7 @@ schema:
     - name: "Pause on current stage key"
       path: "sexlab.hud.key_pause"
       type: "hotkey"
-      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment keeps rising while paused. Default Home."
+      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment holds while paused. Default Home."
       min: 1
       max: 255
       required: false
@@ -264,10 +271,10 @@ schema:
     - name: "Normal enjoyment multiplier"
       path: "sexlab.enjoyment.passive_mult"
       type: "float"
-      description: "Enjoyment rate for consensual actors. The base rate comes from the scene's SexLab stage timers: at 1.0 an actor reaches 100 near the end of the final stage. Faster / slower, pausing and repeating stages change the outcome. The OrgasmEngine triggers every orgasm; SexLab's own trigger is off."
+      description: "Enjoyment rate for consensual actors. The base rate comes from the scene's SexLab stage timers: at 1.0 an actor reaches 100 near the end of the final stage if the stages ran on their timers, but narration and LLM pacing usually make scenes 2-3x longer, so the default is 0.4. Faster / slower and repeating stages change the outcome. The OrgasmEngine triggers every orgasm; SexLab's own trigger is off."
       min: 0
       max: 5
-      defaultValue: 1.0
+      defaultValue: 0.4
       category: "Enjoyment"
 
     - name: "Aggressor enjoyment multiplier"
@@ -276,16 +283,16 @@ schema:
       description: "Enjoyment rate for the aggressor in a non-consensual scene (x the stage-timer base rate)."
       min: 0
       max: 5
-      defaultValue: 1.15
+      defaultValue: 0.45
       category: "Enjoyment"
 
     - name: "Victim enjoyment multiplier"
       path: "sexlab.enjoyment.victim_mult"
       type: "float"
-      description: "Enjoyment rate for a victim (x the stage-timer base rate). At 0.8 about 30% of victims reach 90 by the end and orgasm."
+      description: "Enjoyment rate for a victim (x the stage-timer base rate). Victims only orgasm if they reach 90 by the end."
       min: 0
       max: 5
-      defaultValue: 0.8
+      defaultValue: 0.3
       category: "Enjoyment"
 
     - name: "Rate jitter minimum"
@@ -303,7 +310,7 @@ schema:
       description: "Upper end of the per-actor random rate factor."
       min: 0.5
       max: 2
-      defaultValue: 1.2
+      defaultValue: 1.1
       category: "Enjoyment"
 
     - name: "Group orgasm threshold"
@@ -336,7 +343,7 @@ schema:
     - name: "Enable orgasm mini-game"
       path: "sexlab.minigame.enabled"
       type: "bool"
-      description: "Player controls enjoyment: focus with 1-4, calm (edge) and arouse. Enables the SexLab_Arouse / SexLab_Calm LLM actions. Near the end of the final stage, actors at 90%+ who have not orgasmed (and were not calmed in that stage) still orgasm, with it on or off. Turning it back on after off needs a save and reload for the LLM actions."
+      description: "Player controls enjoyment: focus with 1-4, calm (edge) and arouse. Enables the SexLab_Arouse / SexLab_Calm LLM actions. Near the end of the final stage, actors who have not orgasmed still orgasm: with it off, everyone except victims (victims need 90%+); with it on, only actors at 90%+ who were not calmed in that stage. Turning it back on after off needs a save and reload for the LLM actions."
       defaultValue: false
       category: "Mini-game"
 

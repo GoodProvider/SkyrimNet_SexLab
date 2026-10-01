@@ -48,6 +48,8 @@ SkyrimNet is not seeing Actions functions.
 
 Scene files via `setting_name`: [../reference/scene-settings.md](../reference/scene-settings.md).
 
+**Tag synonyms:** an animation tag search also matches that tag's synonyms. For example, `doggy` finds animations tagged `doggystyle`, and `titjob` finds `boobjob`. The Scene Creator and Description Editor animation filters have a **synonyms** pulldown: **broad** (default) matches wider families such as every gallows variant, **strict** only true equivalents, and **none** literal tags. The lists are `SKSE/Plugins/SkyrimNet_SexLab/synonyms-broad.json` and `synonyms-strict.json`. You can edit them, and the edits load when you load a save.
+
 ## Settings (SkyrimNet dashboard)
 
 Configure in SkyrimNet under plugin **SkyrimNet_SexLab** (`goodprovider.sexlab`). The MCM only reloads those values.
@@ -55,6 +57,7 @@ Configure in SkyrimNet under plugin **SkyrimNet_SexLab** (`goodprovider.sexlab`)
 - Prompt: hide hermaphrodites; public sex accepted
 - Rape: add rape actions (off unregisters LLM actions; on needs save/reload)
 - Tag Edit dialogs; Start Sex / Edit Stage hotkey (default backslash `\`)
+- Devious devices are added to tags (`sexlab.tags.filter_by_devious_devices`, default on): when actors wear DD heavy bondage, every TargetMenu scene start (method, random, Custom, DOM punish) adds `armbinder`, `yoke`, `cuffs` or `bound`, and the Scene Creator / Description Editor animation filter starts with them. A tag with no matching animation is dropped; in the Scene Creator / Description Editor you can remove any of them
 - Direct Narration: cooldown, max distance
 - Scene HUD, enjoyment rates, orgasm mini-game: see [hotkeys.md](hotkeys.md#scene-hud-player-scenes). Orgasms are decided by the mod's OrgasmEngine (SexLab's own trigger is off)
 - OstimNet: sex framework 0 SexLab / 1 Ostim (`sexlab.ostim.player`)

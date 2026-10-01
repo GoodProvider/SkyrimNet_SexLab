@@ -129,6 +129,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
             TargetMenuRegistry::Clear();
+            AnimationDB::LoadSynonyms();
             PapyrusBindings_WebUI::ClearOnGameLoad();
             AnimSpeed::ClearAll();
             NarrationQueue::Clear();

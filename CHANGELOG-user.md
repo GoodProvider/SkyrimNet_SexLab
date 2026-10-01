@@ -1,8 +1,13 @@
 Unreleased ⚗️
 
+- Enjoyment rises much more slowly, so actors no longer orgasm over and over. Without the mini-game, everyone (except victims) orgasms once near the end of the scene. If you saved the Enjoyment settings before, reset them to get the new defaults. Pausing a stage now also pauses enjoyment.
+- Tag synonyms: searching animations by tag now also finds that tag's synonyms. For example, "doggy" finds "doggystyle" animations, and "titjob" finds "boobjob". This applies to LLM scene starts and to the Scene Creator / Description Editor animation filters. A new **synonyms** pulldown in those filters picks broad (default), strict, or none (exact tags only). You can edit the lists in `SKSE/Plugins/SkyrimNet_SexLab/synonyms-broad.json` and `synonyms-strict.json`; the edits load when you load a save.
+- Scenes started from tags now choose randomly among all matching animations, not the same alphabetical few.
+- New setting **Devious devices are added to tags** (on by default): if someone in the scene wears an armbinder, yoke, front cuffs or other heavy bondage, scenes started from the TargetMenu (any method, random, Custom, DOM punish) prefer animations they can play, and the Scene Creator and Description Editor animation filter start with that tag. A tag with no matching animation is dropped, and in the Scene Creator you can always remove the tags yourself.
 - AnimDB no longer rebuilds itself when you load a save. If it is empty or the animation count does not match SexLab, you get a notification and a dialog to Build/Rebuild or Close.
 - Start Sex / Edit Stage hotkey now always closes the Control Panel if it is already open (does not matter who is selected).
 - The overlay HTML is included in the installer. If it is missing, the hotkey shows a notification instead of pausing the game with a blank screen.
+- Description Editor stage text boxes: click and drag to select text (follows line wrap in either direction); Shift+click extends, double-click selects a word.
 - LLM actions and prompts ship in both the Beta 25 plugin folder and the older SkyrimNet folders, so this version still works on pre-0.25 SkyrimNet.
 
 https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1

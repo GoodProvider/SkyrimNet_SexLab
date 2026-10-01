@@ -46,11 +46,11 @@ namespace OrgasmEngine
         {
             bool miniGame = false;
             // Role multipliers on the scene's timed base rate.
-            float passiveRate = 1.0f;
-            float aggressorRate = 1.15f;
-            float victimRate = 0.8f;
+            float passiveRate = 0.4f;
+            float aggressorRate = 0.45f;
+            float victimRate = 0.3f;
             float jitterMin = 0.95f;
-            float jitterMax = 1.2f;
+            float jitterMax = 1.1f;
             float domArousalScale = 0.2f;        // DOM amount per progress point (MOD_Daring)
             float domArousalScalePlayer = 0.2f;  // player scenes: extra per point (MOD_Naivety)
             float arouseAmount = 3.0f;
@@ -679,9 +679,10 @@ namespace OrgasmEngine
                         ActorState& st = at->second;
                         RE::Actor* actor = ActorFor(id);
 
-                        // 1. Passive gain: fixed rate from the stage timers, so extra time (pause, repeated
-                        // stage) or speed adds enjoyment. Not expected to orgasm: mini-game only.
-                        float rate = st.orgasmExpected ? sceneRate * RoleMult(st.role) * st.jitter : 0.0f;
+                        // 1. Passive gain: fixed rate from the stage timers, so extra time (repeated stage) or
+                        // speed adds enjoyment; a paused stage holds. Not expected to orgasm: mini-game only.
+                        float rate = st.orgasmExpected && !sc.paused ? sceneRate * RoleMult(st.role) * st.jitter
+                                                                     : 0.0f;
                         for (const auto& [src, m] : st.rateMods) {
                             rate *= m;
                         }
@@ -789,15 +790,14 @@ namespace OrgasmEngine
                     }
 
                     // 4. Safety net: at 90% of the final stage's timer (animating, unpaused time), fire
-                    // each non-DOM actor who has not finished and is close. Below kSafetyMin: no orgasm
-                    // (the natural miss for a victim). No LeadIn. Without timers: at final-stage entry,
-                    // everyone when the mini-game is off (the old rule).
+                    // each non-DOM actor who has not finished. Mini-game off: every non-victim who is
+                    // expected to orgasm fires (one orgasm each). Victims and the mini-game need
+                    // kSafetyMin (below: the natural miss). No LeadIn. Without timers: at final-stage entry.
                     if (finalStage && !sc.finalDone && !sc.leadIn) {
                         const float finalSecs = sc.stageSecs.empty() ? 0.0f : sc.stageSecs.back();
                         const bool timed = sc.baseRate > 0.0f && finalSecs > 0.0f;
                         if (!timed || sc.finalElapsed >= kSafetyAt * finalSecs) {
                             sc.finalDone = true;
-                            const float needed = timed || g_settings.miniGame ? kSafetyMin : 0.0f;
                             for (const auto id : sc.actors) {
                                 auto at = g_actors.find(id);
                                 if (at == g_actors.end()) {
@@ -806,8 +806,10 @@ namespace OrgasmEngine
                                 ActorState& st = at->second;
                                 const bool edging = now < st.edgeUntil;
                                 const bool calmed = st.lastCalmAt >= sc.finalStageAt;
+                                const bool sure =
+                                    !g_settings.miniGame && st.orgasmExpected && st.role != Role::kVictim;
                                 if (st.dom || st.orgasmCount != 0 || AnyBlock(st) || edging || calmed ||
-                                    st.enjoyment < (st.orgasmExpected ? needed : kSafetyMin)) {
+                                    st.enjoyment < (sure ? 0.0f : kSafetyMin)) {
                                     webui_log::info("OrgasmEngine: safety net skips {:#x} enjoyment={:.1f} "
                                                     "count={} dom={} edging={} calmed={}",
                                         id, st.enjoyment, st.orgasmCount, st.dom, edging, calmed);
@@ -924,11 +926,11 @@ namespace OrgasmEngine
         using SexLabNet::GetConfigFloat;
         Settings s;
         s.miniGame = GetConfigBool("sexlab.minigame.enabled", false);
-        s.passiveRate = GetConfigFloat("sexlab.enjoyment.passive_mult", 1.0f);
-        s.aggressorRate = GetConfigFloat("sexlab.enjoyment.aggressor_mult", 1.15f);
-        s.victimRate = GetConfigFloat("sexlab.enjoyment.victim_mult", 0.8f);
+        s.passiveRate = GetConfigFloat("sexlab.enjoyment.passive_mult", 0.4f);
+        s.aggressorRate = GetConfigFloat("sexlab.enjoyment.aggressor_mult", 0.45f);
+        s.victimRate = GetConfigFloat("sexlab.enjoyment.victim_mult", 0.3f);
         s.jitterMin = GetConfigFloat("sexlab.enjoyment.jitter_min", 0.95f);
-        s.jitterMax = std::max(s.jitterMin, GetConfigFloat("sexlab.enjoyment.jitter_max", 1.2f));
+        s.jitterMax = std::max(s.jitterMin, GetConfigFloat("sexlab.enjoyment.jitter_max", 1.1f));
         s.domArousalScale = GetConfigFloat("sexlab.dom.arousal_scale", 0.2f);
         s.domArousalScalePlayer = GetConfigFloat("sexlab.dom.arousal_scale_player", 0.2f);
         s.arouseAmount = static_cast<float>(SexLabNet::GetConfigInt("sexlab.minigame.arouse_amount", 3));

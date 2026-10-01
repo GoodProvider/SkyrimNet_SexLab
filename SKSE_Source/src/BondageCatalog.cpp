@@ -1,5 +1,6 @@
 #include "PCH.h"
 #include "BondageCatalog.h"
+#include "Config.h"
 #include "DeviousDevicesNG/API.h"
 #include "WebUI_Log.h"
 
@@ -8,6 +9,7 @@
 #include <fstream>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace BondageCatalog
 {
@@ -487,5 +489,50 @@ namespace BondageCatalog
         ApplyEquipped(groups, wornById, wornHint);
         state["groups"] = std::move(groups);
         return state;
+    }
+
+    std::vector<std::string> WornAnimationTags(const std::vector<RE::Actor*>& actors)
+    {
+        // Worn-keyword scan only: no DeviousDevicesAPI / zadLibs, so the core never depends on DD.
+        static const std::pair<const char*, const char*> kDeviousTagKeywords[] = {
+            {"zad_DeviousArmbinderElbow", "armbinder"},
+            {"zad_DeviousArmbinder", "armbinder"},
+            {"zad_DeviousYokeBB", "yoke"},
+            {"zad_DeviousYoke", "yoke"},
+            {"zad_DeviousCuffsFront", "cuffs"},
+        };
+        static const char* kTagOrder[] = { "armbinder", "yoke", "cuffs", "bound" };
+
+        std::vector<std::string> out;
+        if (!SexLabNet::GetConfigBool("sexlab.tags.filter_by_devious_devices", true))
+            return out;
+        std::unordered_set<std::string> found;
+        for (auto* actor : actors) {
+            if (!actor)
+                continue;
+            auto inv = actor->GetInventory([](RE::TESBoundObject& o) { return o.IsArmor(); });
+            for (const auto& [obj, data] : inv) {
+                if (!data.second || !data.second->IsWorn())
+                    continue;
+                auto* armo = obj ? obj->As<RE::TESObjectARMO>() : nullptr;
+                if (!armo)
+                    continue;
+                bool matched = false;
+                for (const auto& [kw, tag] : kDeviousTagKeywords) {
+                    if (armo->HasKeywordString(kw)) {
+                        found.insert(tag);
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched && armo->HasKeywordString("zad_DeviousHeavyBondage"))
+                    found.insert("bound");
+            }
+        }
+        for (const char* tag : kTagOrder) {
+            if (found.contains(tag))
+                out.emplace_back(tag);
+        }
+        return out;
     }
 }

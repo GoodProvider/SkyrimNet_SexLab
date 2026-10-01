@@ -79,6 +79,12 @@ namespace PapyrusBindings_AnimationDB
                     spec.male_creatures = j["_male_creatures"].get<int>();
                 if (j.contains("_female_creatures") && j["_female_creatures"].is_number_integer())
                     spec.female_creatures = j["_female_creatures"].get<int>();
+                if (j.contains("_synonyms") && j["_synonyms"].is_string())
+                    spec.synonyms = AnimationDB::ParseSynonymMode(j["_synonyms"].get<std::string>());
+                // JContainers writes bools as ints.
+                if (j.contains("_shuffle"))
+                    spec.shuffle = j["_shuffle"].is_boolean() ? j["_shuffle"].get<bool>()
+                                   : j["_shuffle"].is_number() && j["_shuffle"].get<double>() != 0;
             } catch (...) {
                 webui_log::warn("AnimationDB: bad filter JSON");
             }
@@ -273,10 +279,10 @@ namespace PapyrusBindings_AnimationDB
     }
 
     RE::BSFixedString AnimDb_ResolveTags(RE::StaticFunctionTag*, RE::BSFixedString tags_csv,
-        std::int32_t actor_count)
+        std::int32_t actor_count, RE::BSFixedString synonyms)
     {
-        return RE::BSFixedString(
-            AnimationDB::ResolveTags(tags_csv.c_str() ? tags_csv.c_str() : "", actor_count));
+        return RE::BSFixedString(AnimationDB::ResolveTags(tags_csv.c_str() ? tags_csv.c_str() : "", actor_count,
+            AnimationDB::ParseSynonymMode(synonyms.c_str() ? synonyms.c_str() : "")));
     }
 
     bool AnimDb_CsvHasTag(RE::StaticFunctionTag*, RE::BSFixedString tags_csv, RE::BSFixedString tag)

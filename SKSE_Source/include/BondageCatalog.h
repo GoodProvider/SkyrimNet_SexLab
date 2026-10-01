@@ -1,6 +1,8 @@
 #pragma once
 
 #include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
 
 namespace BondageCatalog
 {
@@ -25,4 +27,9 @@ namespace BondageCatalog
     /// Slim payload: catalog groups + equippedId. wornFromApi uses GetWornDevices.
     nlohmann::json BuildState(RE::Actor* target, const nlohmann::json& papyrusHint,
         const nlohmann::json& groups, bool wornFromApi);
+
+    /// Worn DD heavy bondage → SexLab animation tags for the cast, ordered armbinder, yoke, cuffs, bound
+    /// (specific first, so callers drop from the end). Empty when sexlab.tags.filter_by_devious_devices is off.
+    /// Worn-keyword scan only (no DD API). Main thread.
+    std::vector<std::string> WornAnimationTags(const std::vector<RE::Actor*>& actors);
 }

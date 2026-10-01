@@ -7,7 +7,7 @@
 | Job | Start here |
 |-----|------------|
 | Player / FAQ / install | docs/players/overview.md, docs/players/requirements.md, docs/players/hotkeys.md |
-| Author actions / scenes | docs/authors/actions.md, docs/reference/scene-settings.md |
+| Author actions / scenes | docs/authors/actions.md, docs/reference/scene-settings.md, docs/reference/tag-synonyms.md |
 | Author prompts | docs/authors/prompts.md + docs/reference/{json-keys,protocol-tokens,orgasm-narration}.md |
 | Author animations | docs/authors/animations.md |
 | Stage descriptor prototype (Billyy / SLAL → anidata) | descriptor/README.md |

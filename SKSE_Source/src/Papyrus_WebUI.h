@@ -151,4 +151,8 @@ namespace PapyrusBindings_WebUI {
 
     /// JS: onLeashStatus({formId}) → leashStatusResult({formId, isLeashed, holderFormId, holderName})
     void HandleLeashStatus(const char* value);
+
+    /// JS: onResolveDeviousTags({_request_id, _form_ids}) → deviousTagsResult({_request_id, _tags})
+    /// Worn DD heavy-bondage keywords → animation tags; empty when sexlab.tags.filter_by_devious_devices is off.
+    void HandleResolveDeviousTags(const char* value);
 }

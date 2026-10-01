@@ -960,6 +960,12 @@ void InitWebUI()
                 PapyrusBindings_WebUI::HandleAnimDbResolveTags(value);
             });
         });
+
+        PrismaUI->RegisterJSListener(g_view, "onResolveDeviousTags", [](const char* value) {
+            RunGuarded("onResolveDeviousTags", [&] {
+                PapyrusBindings_WebUI::HandleResolveDeviousTags(value);
+            });
+        });
         PrismaUI->RegisterJSListener(g_view, "onNotify", [](const char* value) {
             RunGuarded("onNotify", [&] {
                 PapyrusBindings_WebUI::HandleNotify(value);

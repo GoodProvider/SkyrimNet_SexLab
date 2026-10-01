@@ -47,6 +47,9 @@ namespace AnimationDB
         std::int64_t sync_gen = 0;
     };
 
+    /// Which synonyms-*.json cluster set expands must/suppress tags. None = literal tags only.
+    enum class SynonymMode { None, Strict, Broad };
+
     struct FilterSpec
     {
         std::optional<int> actor_count;
@@ -65,6 +68,8 @@ namespace AnimationDB
         int male_creatures = -1;
         int female_creatures = -1;
         std::string name_contains; // lowercase; case-insensitive substring of AnimRow::name
+        SynonymMode synonyms = SynonymMode::Broad;
+        bool shuffle = false; // QueryTopNAnims: random order before truncating to n
     };
 
     struct TagCount
@@ -111,7 +116,20 @@ namespace AnimationDB
     /// Split CSV, sanitize each, dedupe preserving order.
     std::vector<std::string> ParseSanitizeTagsCsv(const std::string& csv);
     /// Largest front-preferring subset matching ≥1 enabled anim. Empty input → "". actor_count≤0 ignores count.
-    std::string ResolveTags(const std::string& tags_csv, int actor_count);
+    /// Returns the requested words (not their synonyms); `mode` only widens what counts as a match.
+    std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode = SynonymMode::Broad);
+    /// resolved_csv plus each `extra` tag (in order) that still leaves ≥1 enabled anim with all tags.
+    /// Keeps resolved_csv first (narration method = first tag). Use for optional tags (DD) instead of
+    /// ResolveTags, whose subset search can drop the method in favour of the extras.
+    std::string AppendMatchingTags(const std::string& resolved_csv, const std::vector<std::string>& extra,
+        int actor_count, SynonymMode mode = SynonymMode::Broad);
+
+    /// "strict" / "none" (case-insensitive); anything else (incl. empty) → Broad.
+    SynonymMode ParseSynonymMode(const std::string& s);
+    /// Reload synonyms-strict.json + synonyms-broad.json from PluginDataDir(). Missing file → that mode is literal.
+    void LoadSynonyms();
+    /// Cluster containing `tag` under `mode` (always includes `tag` itself).
+    std::vector<std::string> SynonymsOf(const std::string& tag, SynonymMode mode);
     /// True if needle (sanitized) is an element of tags_csv (sanitized elements).
     bool CsvHasTag(const std::string& tags_csv, const std::string& tag);
 
