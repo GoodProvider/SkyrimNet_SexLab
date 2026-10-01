@@ -286,6 +286,7 @@
         /* Bottom tabs: exactly one of stage descriptions / animation filter fills the rest of the panel. */
         #de-tab-bar {
             display: flex;
+            align-items: center;
             gap: var(--space-lg);
             border-bottom: 1px solid var(--border);
             margin-bottom: var(--space-xs);
@@ -797,16 +798,6 @@
             margin: 0;
             flex: 1;
             min-width: 0;
-        }
-
-        #sc-header-row1 #sc-action-bar {
-            display: flex;
-            align-items: center;
-            gap: var(--space-sm);
-            margin: 0;
-            padding: 0;
-            border: none;
-            flex-shrink: 0;
         }
 
         #sc-range-row {
@@ -1879,13 +1870,6 @@
     <div id="scene-creator-panel" class="panel" style="display:none">
         <div id="sc-header-row1">
             <div class="target-row">Scene Creator</div>
-            <div class="bottom-bar" id="sc-action-bar">
-                <div id="sc-initiator-pulldown"></div>
-                <span id="sc-initiates-label">initiates</span>
-                <div id="sc-style-pulldown"></div>
-                <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
-                <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
-            </div>
         </div>
         <div class="sc-split-row">
             <div class="sc-col-positions">
@@ -1943,6 +1927,11 @@
         <div class="sc-anims-section">
             <div class="section-header">Animations</div>
             <div class="compact-row">
+                <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
+                <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
+                <div id="sc-initiator-pulldown"></div>
+                <span id="sc-initiates-label">initiates</span>
+                <div id="sc-style-pulldown"></div>
                 <span id="sc-anim-count"></span>
                 <span id="sc-selected-count"></span>
                 <div class="action-btn" id="sc-btn-all" onclick="scClearAnims()">All</div>
@@ -1991,6 +1980,7 @@
             </div>
         </div>
         <div class="de-section" id="de-tab-bar">
+            <div class="action-btn de-btn-continue-close" onmousedown="event.preventDefault()" onclick="deContinueAndClose()">continue</div>
             <span class="tag-mode-btn de-tab active" id="de-tab-btn-stages" onmousedown="event.preventDefault()" onclick="deSetBottomTab('stages')">stage descriptions</span>
             <span class="tag-mode-btn de-tab" id="de-tab-btn-filter" onmousedown="event.preventDefault()" onclick="deSetBottomTab('filter')">animation filter</span>
         </div>
@@ -8516,6 +8506,17 @@
                 window.onGamePauseSet(gamePaused ? '1' : '0');
         }
 
+        // Continue (stage / filter tabs): unpause (applying a pending animation pick) and close the WebUI.
+        function deContinueAndClose() {
+            deAutoSave();
+            if (gamePaused) {
+                deSendPendingSwitch();
+                setGamePaused(false);
+                if (typeof window.onGamePauseSet === 'function') window.onGamePauseSet('0');
+            }
+            requestWebUIHide(true);
+        }
+
         function requestWebUIHide(commit) {
             if (typeof window.onWebUIHide === 'function')
                 window.onWebUIHide(JSON.stringify({ commit: !!commit }));
@@ -10786,6 +10787,7 @@
             const a = deFindAnim(DE.focusRegistry);
             const nav = document.getElementById('de-stage-nav');
             if (nav) nav.style.display = deIsSceneBound() ? '' : 'none';
+            document.querySelectorAll('.de-btn-continue-close').forEach(b => { b.style.display = deIsSceneBound() ? '' : 'none'; });
             if (!deStopLiveInfo() && stopDialogState.owner === 'de') stopDialogClose();
             deUpdateStageNavButtons();
             const tagsHost = document.getElementById('de-tags-row');
