@@ -441,6 +441,10 @@ namespace Hud
             j["keys"] = std::move(keys);
         }
         j["paused"] = OrgasmEngine::IsPlayerScenePaused();
+        int stage = 0, stageCount = 0;
+        OrgasmEngine::GetPlayerSceneStage(stage, stageCount);
+        j["stage"] = stage;
+        j["stages"] = stageCount;
         const int speedLevel = OrgasmEngine::GetPlayerSceneSpeedLevel();
         j["speed"] = speedLevel >= 0 ? OrgasmEngine::kSpeedLevelNames[speedLevel] : "";
         j["blocked"] = { { "arouse", !OrgasmEngine::CanArouse(player) }, { "calm", !OrgasmEngine::CanCalm(player) },

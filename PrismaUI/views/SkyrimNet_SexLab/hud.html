@@ -6,7 +6,7 @@
     <title>SkyrimNet SexLab HUD</title>
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
-        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys, blocked, paused, speed}) each engine tick when it changes.
+        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys, blocked, paused, speed, stage, stages}) each engine tick when it changes.
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
     <style>
@@ -52,6 +52,19 @@
             gap: var(--space-sm);
         }
         #hud.visible { display: flex; }
+
+        /* Stage row (first table row, magicka..enjoyment columns): one bar per stage, active = yellow, rest = blue */
+        .stages { display: flex; gap: 3px; }
+        #enjoyment td.stagelabel { text-align: right; padding-right: 1em; color: var(--text-secondary); white-space: nowrap; }
+        .stg {
+            flex: 1;
+            height: 10px;
+            border-radius: var(--radius);
+            background-color: #3f7fe0;
+            box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.35);
+            transition: background-color 0.4s linear;
+        }
+        .stg.active { background-color: #ffd24f; }
 
         /* Invisible table: focus | name | magicka | stamina | enjoyment (focus + resources: mini-game only) */
         #enjoyment { border-collapse: collapse; }
@@ -227,6 +240,20 @@
                         '<td class="lock">' + (a.denied ? '<span title="orgasm denied">🔒</span>' : '') + '</td>' +
                         '</tr>';
                 });
+            }
+            // Stage row on top, in the enjoyment bar column.
+            const count = Number(state.stages) || 0, stage = Number(state.stage) || 0;
+            if (html && g.enjoyment && count > 0) {
+                let s = '';
+                for (let i = 1; i <= count; i++) {
+                    s += '<div class="stg' + (i === stage ? ' active' : '') + '" title="Stage ' + i + '/' + count + '"></div>';
+                }
+                // Bars span magicka + stamina + enjoyment columns; "stages" label sits right-aligned before them.
+                html = '<tr class="stagerow">' +
+                    (g.minigame ? '<td class="focus"></td>' : '') +
+                    '<td class="stagelabel">stages</td>' +
+                    '<td' + (g.minigame ? ' colspan="3"' : ' class="barcell"') + '><div class="stages">' + s + '</div></td>' +
+                    '<td class="lock"></td></tr>' + html;
             }
             rows.innerHTML = html;
 

@@ -1069,6 +1069,16 @@ namespace OrgasmEngine
         return sc && sc->paused;
     }
 
+    bool GetPlayerSceneStage(int& stage, int& count)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(RE::PlayerCharacter::GetSingleton());
+        const SceneState* sc = st ? SceneOf(*st) : nullptr;
+        stage = sc ? sc->stage : 0;
+        count = sc ? sc->stageCount : 0;
+        return sc != nullptr;
+    }
+
     void SetSceneBlocked(RE::Actor* actor, bool blocked)
     {
         std::lock_guard lock(g_lock);

@@ -38,6 +38,8 @@ namespace OrgasmEngine
     /// Pause hotkey state: HUD label; the safety-net clock stops. Passive gain keeps running.
     void SetScenePaused(std::int32_t sid, bool paused);
     bool IsPlayerScenePaused();
+    /// Player scene stage (1-based) and stage count; false (0/0) when not in a scene.
+    bool GetPlayerSceneStage(int& stage, int& count);
     void SetSceneBlocked(RE::Actor* actor, bool blocked);
     // Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
     void SetOrgasmExpected(RE::Actor* actor, bool expected);
