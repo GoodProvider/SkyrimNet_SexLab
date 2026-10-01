@@ -173,14 +173,14 @@ schema:
     - name: "Show enjoyment bars"
       path: "sexlab.hud.enjoyment"
       type: "bool"
-      description: "Scene HUD (upper left, player scenes only): one enjoyment bar per actor."
+      description: "Scene HUD (upper left, player scenes only): the stage row and one enjoyment bar per actor (with the mini-game, also its focus and magicka/stamina columns). The controls row is unaffected."
       defaultValue: true
       category: "Scene HUD"
 
     - name: "Show scene controls"
       path: "sexlab.hud.controls"
       type: "bool"
-      description: "Scene HUD: end / pause / previous / next / slower / faster hotkeys and their labels. Off also disables those keys."
+      description: "Scene HUD: end / previous / pause / next / slower / faster hotkeys and their labels. Off also disables those keys."
       defaultValue: true
       category: "Scene HUD"
 
@@ -203,6 +203,17 @@ schema:
       max: 255
       required: false
       defaultValue: 37
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Pause on current stage key"
+      path: "sexlab.hud.key_pause"
+      type: "hotkey"
+      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment keeps rising while paused. Default Home."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 36
       category: "Scene HUD"
       supportsOverride: false
 
@@ -236,17 +247,6 @@ schema:
       max: 255
       required: false
       defaultValue: 38
-      category: "Scene HUD"
-      supportsOverride: false
-
-    - name: "Pause key"
-      path: "sexlab.hud.key_pause"
-      type: "hotkey"
-      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment keeps rising while paused. Default Home."
-      min: 1
-      max: 255
-      required: false
-      defaultValue: 36
       category: "Scene HUD"
       supportsOverride: false
 

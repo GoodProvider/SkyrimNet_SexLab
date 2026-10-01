@@ -7,6 +7,7 @@
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
         C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys, blocked, paused, speed, stage, stages}) each engine tick when it changes.
+        Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
     <style>
@@ -50,8 +51,12 @@
             display: none;
             flex-direction: column;
             gap: var(--space-sm);
+            /* Fixed width: focus + name + magicka + stamina + bar + lock columns (+ cell padding). */
+            width: calc(1.4em + 12em + 60px + 60px + 180px + 1.2em + 6 * var(--space-sm));
         }
         #hud.visible { display: flex; }
+        /* Hidden parts keep their space so nothing else moves. */
+        .off { visibility: hidden; }
 
         /* Stage row (first table row, magicka..enjoyment columns): one bar per stage, active = yellow, rest = blue */
         .stages { display: flex; gap: 3px; }
@@ -67,11 +72,12 @@
         .stg.active { background-color: #ffd24f; }
 
         /* Invisible table: focus | name | magicka | stamina | enjoyment (focus + resources: mini-game only) */
-        #enjoyment { border-collapse: collapse; }
+        #enjoyment { border-collapse: collapse; width: 100%; visibility: hidden; }
+        #enjoyment.visible { visibility: visible; }
         #enjoyment td { padding: 1px var(--space-sm) 1px 0; vertical-align: middle; }
         td.focus { width: 1.4em; text-align: center; color: var(--text-secondary); font-weight: 600; }
         td.focus.on { color: var(--accent); }
-        td.name { white-space: nowrap; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+        td.name { white-space: nowrap; width: 12em; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
         tr.broken td.name { color: var(--text-muted); font-style: italic; }
         td.name .dom { font-size: 0.7em; font-weight: 600; color: var(--accent); vertical-align: middle; }
         td.barcell { width: 180px; }
@@ -110,11 +116,15 @@
         /* Controls: "[key] label" on the left of a pair, "label [key]" on the right */
         #controls {
             display: flex;
+            visibility: hidden;
             flex-wrap: wrap;
             align-items: center;
             gap: var(--space-xs) var(--space-md);
             font-size: var(--text-sm);
         }
+        #controls.visible { visibility: visible; }
+        /* Labels that swap text (pause/resume, calm/broken, deny/allow) keep a fixed width. */
+        #controls .label.swap { display: inline-block; min-width: 3.6em; }
         .ctl { display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; }
         .pair { display: inline-flex; gap: var(--space-sm); }
         .key {
@@ -194,18 +204,19 @@
         }
 
         // Mini-game resource bar: kind 'magicka' (calm cost) or 'stamina' (arouse cost), pct 0..100.
-        function resBar(kind, pct) {
-            return '<td class="rescell"><div class="bar res"><div class="fill ' + kind + '" style="width:' +
+        function resBar(kind, pct, off) {
+            return '<td class="rescell' + (off || '') + '"><div class="bar res"><div class="fill ' + kind + '" style="width:' +
                 Math.max(0, Math.min(100, Number(pct) || 0)) + '%"></div></div></td>';
         }
 
         // side: 'left' = "[key] label", 'right' = "label [key]"
-        function ctl(keys, control, label, side, blocked) {
+        // off: render invisibly so the slot keeps its size; swap: label alternates text (fixed min-width).
+        function ctl(keys, control, label, side, blocked, off, swap) {
             const k = keyLabel(keys, control);
             if (!k) return '';
             const key = '<span class="key">' + esc(k) + '</span>';
-            const lab = '<span class="label">' + esc(label) + '</span>';
-            return '<span class="ctl' + (blocked ? ' blocked' : '') + '">' +
+            const lab = '<span class="label' + (swap ? ' swap' : '') + '">' + esc(label) + '</span>';
+            return '<span class="ctl' + (blocked ? ' blocked' : '') + (off ? ' off' : '') + '">' +
                 (side === 'left' ? key + lab : lab + key) + '</span>';
         }
 
@@ -217,71 +228,69 @@
             const keys = state.keys || {};
             const blocked = state.blocked || {};
 
-            // Rows: enjoyment bars, and/or the mini-game focus column + magicka/stamina bars.
+            // Enjoyment part: stage row + actor rows (bars; mini-game adds focus + magicka/stamina columns).
             const rows = document.getElementById('rows');
             let html = '';
-            if (g.enjoyment || g.minigame) {
+            // All columns are always emitted; non-minigame columns get .off so widths never change.
+            const mgOff = g.minigame ? '' : ' off';
+            {
                 actors.forEach(function (a, i) {
-                    let focus = '';
-                    if (g.minigame) {
-                        // Number = focus key; the focused actor's number becomes an arrow at its name.
-                        focus = (i === state.focus) ? '▶' : (i < 4 ? String(i + 1) : '');
-                    }
+                    // Number = focus key; the focused actor's number becomes an arrow at its name.
+                    const focus = (i === state.focus) ? '▶' : (i < 4 ? String(i + 1) : '');
                     const cls = (a.flash ? ' flash' : '') + (!a.flash && a.near ? ' near' : '');
                     html += '<tr class="' + (a.broken ? 'broken' : '') + '">' +
-                        (g.minigame ? '<td class="focus' + (i === state.focus ? ' on' : '') + '">' + focus + '</td>' : '') +
+                        '<td class="focus' + (i === state.focus ? ' on' : '') + mgOff + '">' + focus + '</td>' +
                         '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') + '</td>' +
-                        (g.minigame ? resBar('magicka', a.magicka) + resBar('stamina', a.stamina) : '') +
-                        (g.enjoyment
-                            ? '<td class="barcell"><div class="bar' + cls + '"><div class="fill" style="width:' +
-                              Math.max(0, Math.min(100, a.enjoyment)) + '%;background-color:' + barColor(a.enjoyment) +
-                              '"></div></div></td>'
-                            : '') +
+                        resBar('magicka', a.magicka, mgOff) + resBar('stamina', a.stamina, mgOff) +
+                        '<td class="barcell"><div class="bar' + cls + '"><div class="fill" style="width:' +
+                        Math.max(0, Math.min(100, a.enjoyment)) + '%;background-color:' + barColor(a.enjoyment) +
+                        '"></div></div></td>' +
                         '<td class="lock">' + (a.denied ? '<span title="orgasm denied">🔒</span>' : '') + '</td>' +
                         '</tr>';
                 });
             }
             // Stage row on top, in the enjoyment bar column.
             const count = Number(state.stages) || 0, stage = Number(state.stage) || 0;
-            if (html && g.enjoyment && count > 0) {
+            if (html && count > 0) {
                 let s = '';
                 for (let i = 1; i <= count; i++) {
                     s += '<div class="stg' + (i === stage ? ' active' : '') + '" title="Stage ' + i + '/' + count + '"></div>';
                 }
                 // Bars span magicka + stamina + enjoyment columns; "stages" label sits right-aligned before them.
                 html = '<tr class="stagerow">' +
-                    (g.minigame ? '<td class="focus"></td>' : '') +
+                    '<td class="focus"></td>' +
                     '<td class="stagelabel">stages</td>' +
-                    '<td' + (g.minigame ? ' colspan="3"' : ' class="barcell"') + '><div class="stages">' + s + '</div></td>' +
+                    '<td colspan="3"><div class="stages">' + s + '</div></td>' +
                     '<td class="lock"></td></tr>' + html;
             }
             rows.innerHTML = html;
+            const enjoyOn = !!g.enjoyment && html !== '';
+            document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
-            // Controls: [Paused]  end  previous/pause/next  slower <speed> faster  calm/arouse
-            let c = '';
-            if (state.paused) c += '<span class="paused-tag">Paused</span>';
-            if (g.controls) {
-                c += ctl(keys, 'end', 'end', 'left');
-                c += '<span class="pair">' + ctl(keys, 'previous', 'previous', 'left') +
-                    ctl(keys, 'pause', state.paused ? 'resume' : 'pause', 'left') +
-                    ctl(keys, 'next', 'next', 'right') + '</span>';
-                c += '<span class="pair">' + ctl(keys, 'slower', 'slower', 'left') +
-                    (state.speed ? '<span class="speed-tag">' + esc(state.speed) + '</span>' : '') +
-                    ctl(keys, 'faster', 'faster', 'right') + '</span>';
-            }
-            if (g.minigame) {
-                const calmLabel = blocked.broken ? 'broken' : 'calm';
-                c += '<span class="pair">' + ctl(keys, 'calm', calmLabel, 'left', blocked.calm) +
-                    ctl(keys, 'arouse', 'arouse', 'right', blocked.arouse) + '</span>';
-            }
+            // Controls part: [Paused]  end  previous/pause/next  slower <speed> faster  calm/arouse
+            // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
+            const cOff = !g.controls;
+            const mgcOff = cOff || !g.minigame;
+            let c = '<span class="paused-tag' + (state.paused ? '' : ' off') + '">Paused</span>';
+            c += ctl(keys, 'end', 'end', 'left', false, cOff);
+            c += '<span class="pair">' + ctl(keys, 'previous', 'previous', 'left', false, cOff) +
+                ctl(keys, 'pause', state.paused ? 'resume' : 'pause', 'left', false, cOff, true) +
+                ctl(keys, 'next', 'next', 'right', false, cOff) + '</span>';
+            c += '<span class="pair">' + ctl(keys, 'slower', 'slower', 'left', false, cOff) +
+                '<span class="speed-tag' + (cOff || !state.speed ? ' off' : '') + '">' + esc(state.speed || '1.0x') + '</span>' +
+                ctl(keys, 'faster', 'faster', 'right', false, cOff) + '</span>';
+            const calmLabel = blocked.broken ? 'broken' : 'calm';
+            c += '<span class="pair">' + ctl(keys, 'calm', calmLabel, 'left', blocked.calm, mgcOff, true) +
+                ctl(keys, 'arouse', 'arouse', 'right', blocked.arouse, mgcOff) + '</span>';
             // Deny / allow for the focus actor: last in the row.
-            if (g.controls) {
-                const fa = actors[state.focus];
-                c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 'left');
-            }
-            document.getElementById('controls').innerHTML = c;
+            const fa = actors[state.focus];
+            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 'left', false, cOff, true);
+            const controlsOn = !!g.controls || !!state.paused;
+            const controls = document.getElementById('controls');
+            controls.innerHTML = c;
+            controls.classList.toggle('visible', controlsOn);
 
-            hud.classList.toggle('visible', html !== '' || c !== '');
+            hud.classList.toggle('visible', enjoyOn || controlsOn);
         }
         window.hudUpdate = hudUpdate;
     </script>
