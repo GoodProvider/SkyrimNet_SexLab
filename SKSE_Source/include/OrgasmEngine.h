@@ -40,6 +40,9 @@ namespace OrgasmEngine
     /// Gate pass narration was just sent: the next non-player speech start pushes the scene to its
     /// final stage (Effect_AdvanceToFinal).
     void GateNarrationSent(std::int32_t sid);
+    /// Scene ending lead and orgasm target (0 = off). The lead reaching it in the second-to-last stage
+    /// triggers the early final roll in the group join (the Scene jumps to the final stage).
+    void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target);
     // Seconds left on the timed final stage (unpaused, animating); -1 when not in one.
     float FinalStageRemaining(std::int32_t sid);
     bool IsPlayerScenePaused();

@@ -295,22 +295,13 @@ schema:
       defaultValue: 1.1
       category: "Enjoyment"
 
-    - name: "Group orgasm threshold"
-      path: "sexlab.enjoyment.group_join"
-      type: "float"
-      description: "When anyone orgasms, every other actor at this enjoyment or more (not denied, edging, cooling down or a DOM slave) orgasms with them, in one narration."
-      min: 0
-      max: 100
-      defaultValue: 95
-      category: "Enjoyment"
-
-    - name: "Final-stage group orgasm threshold"
+    - name: "Gate group orgasm threshold"
       path: "sexlab.enjoyment.group_join_final"
       type: "float"
-      description: "Same as the group orgasm threshold, but used in the final stage and when someone passes the orgasm gate: others this close join them, in one narration."
+      description: "When someone passes the orgasm gate, every other actor at this enjoyment or more joins them, in one narration. (Any other orgasm makes everyone else roll: chance = enjoyment %.)"
       min: 0
       max: 100
-      defaultValue: 80
+      defaultValue: 90
       category: "Enjoyment"
 
     - name: "Stage advance enjoyment"

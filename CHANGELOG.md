@@ -17,6 +17,11 @@
 - Each stage advance adds `sexlab.enjoyment.stage_spike` (5) enjoyment
 - New `sexlab.enjoyment.group_join_final` (80): the group-join threshold in the final stage and for the gate (anyone that close, repeat orgasms too, rushes with a gate passer into the same DN). New native `FinalStageRemaining(sid)`
 - Final-stage narration: orgasms go through the orgasm window and fold into the `… finish` DN when the stage ends inside the window cap (`Scene.OrgasmWindow_HoldForFinish`); no `continue activity` DN at final-stage StageStart (a scene change is an event); `NarrateOrgasmStash` re-entrancy guard (concurrent groups crossed their sentences)
+- Group join is now a roll: when anyone orgasms, every other actor rolls once (chance = enjoyment %). `sexlab.enjoyment.group_join` removed
+- Early final roll: in the second-to-last stage, when the lead's orgasm (after the group roll) reaches their target, everyone still out rolls again with the passive enjoyment left until the scene ends (rest of that stage + the final stage), so they finish in the same DN. A fail means no more orgasms this scene (forced still works). New native `SetEndingTarget(sid, lead, target)`
+- The lead's target jumps to the final stage only from the second-to-last stage; earlier, the scene runs on
+- An aggressive NPC lead reaching their target, at any stage, holds the stage until the orgasm dialogue has played, then ends the animation
+- `sexlab.enjoyment.group_join_final` default 80 → 90 (now only the gate-pass join)
 - `Scene.Setup`: receiver falls back to the first other position when it equals sender (WebUI initiator pulldown gave "Bob and Bob")
 
 ### Animation speed

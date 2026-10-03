@@ -951,7 +951,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 
 ## One orgasm DN per moment: group join, allow, budget (2026-09-30)
 
-- **Group:** every orgasm (engine, forced, safety net, allow, DOM melt, external SexLab) makes everyone else at `sexlab.enjoyment.group_join` (95) or more orgasm too: `OrgasmEngine::JoinGroup`, one `Effect_OrgasmGroup`.
+- **Group:** every orgasm (engine, forced, safety net, allow, DOM melt, external SexLab) makes everyone else at `sexlab.enjoyment.group_join` (95) or more orgasm too: `OrgasmEngine::JoinGroup`, one `Effect_OrgasmGroup`. (2026-10-03: replaced by a roll, chance = enjoyment %, plus the early final roll; `group_join` removed.)
 - **Gate strings are now three:** `" is orgasming."`, `" are orgasming"` (grouped "A and B are orgasming.") and `" forced to orgasm"` (WebUI force: "Nina is forced to orgasm by Bob."). They must stay in sync with `0550_sexlab_narration.prompt` (both copies). Not-orgasming wording changed to "isn't / aren't orgasming right now", and denied to "is denied orgasm by <deny_by>"; neither may hit a gate string.
 - **Allow must be atomic:** unblocking with `SetSceneBlocked(false)` and then checking lets the 250 ms tick fire first, without the "allows ... to orgasm." prefix. `OrgasmEngine::AllowOrgasm` unblocks and fires under one lock.
 - **Papyrus `Key` is a type:** a local `String key` fails with "cannot name a variable or property the same as a known type or script". Use `melt_key`.

@@ -40,6 +40,9 @@ Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 Function SetScenePaused(int sid, bool paused) global native
 ; Gate pass narration was just sent: the next voice pushes the scene to its final stage.
 Function GateNarrationSent(int sid) global native
+; Scene ending lead and orgasm target (0 = off): the lead reaching it in the second-to-last stage makes
+; everyone else roll early for the final stage, into the same DN.
+Function SetEndingTarget(int sid, Actor lead, int target) global native
 ; Seconds left on the final stage's timer (unpaused, animating); -1 when not in a timed final stage.
 float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native

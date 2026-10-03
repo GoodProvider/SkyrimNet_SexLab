@@ -93,6 +93,10 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::GateNarrationSent(sid);
         }
+        void SetEndingTarget(RE::StaticFunctionTag*, std::int32_t sid, RE::Actor* lead, std::int32_t target)
+        {
+            OrgasmEngine::SetEndingTarget(sid, lead, target);
+        }
         float FinalStageRemaining(RE::StaticFunctionTag*, std::int32_t sid)
         {
             return OrgasmEngine::FinalStageRemaining(sid);
@@ -160,6 +164,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetStageTimers", s, SetStageTimers);
         a_vm->RegisterFunction("SetScenePaused", s, SetScenePaused);
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
+        a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
         a_vm->RegisterFunction("FinalStageRemaining", s, FinalStageRemaining);
         a_vm->RegisterFunction("SetSceneBlocked", s, SetSceneBlocked);
         a_vm->RegisterFunction("SetOrgasmExpected", s, SetOrgasmExpected);

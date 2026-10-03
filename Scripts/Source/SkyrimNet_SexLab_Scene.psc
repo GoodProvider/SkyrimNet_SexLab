@@ -53,6 +53,8 @@ bool ending_hold_pending = false
 float ending_hold_started = 0.0
 float ending_orgasm_at = 0.0
 float ending_narrated_at = 0.0
+; An aggressive NPC lead reached the target: Ending_Poll ends the animation instead of releasing the hold.
+bool ending_end_after = false
 ; Engine gate passed in the second-to-last stage: that stage is held until the gate narration's voice
 ; starts (Engine_AdvanceToFinal) or sexlab.ending.gate_wait_max. gate_hold_timer: UpdateTimer applied.
 bool gate_holding = false
@@ -1618,6 +1620,7 @@ Function Engine_BeginScene()
         i += 1
     endwhile
     Ending_RollTarget()
+    Engine_SetEndingTarget()
     Engine_SetSkills()
     Engine_SetStage()
 EndFunction
@@ -1736,6 +1739,7 @@ Function Ending_Reset()
     ending_hold_started = 0.0
     ending_orgasm_at = 0.0
     ending_narrated_at = 0.0
+    ending_end_after = false
 EndFunction
 
 Function Ending_RollTarget()
@@ -1767,7 +1771,18 @@ Function Ending_RollTarget()
     Trace("Ending_RollTarget", GetDisplayName(ending_actor)+" ("+which+") target:"+ending_target)
 EndFunction
 
-; After an orgasm group: the lead reached the target -> final stage + dialogue hold.
+; The engine's early final roll needs the lead and target (0 once the ending is done or off).
+Function Engine_SetEndingTarget()
+    int target = ending_target
+    if ending_done || ending_actor == None || !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true)
+        target = 0
+    endif
+    SkyrimNet_SexLab_OrgasmEngine.SetEndingTarget(sid, ending_actor, target)
+EndFunction
+
+; After an orgasm group (the engine's group roll already ran, so a lead who joined counts): the lead
+; reached the target. Aggressive NPC lead: hold the current stage and end the animation once the
+; dialogue has played. Otherwise: final stage + dialogue hold, from the second-to-last stage only.
 Function Ending_Check(Actor[] actors)
     if ending_done || ending_actor == None || ending_target <= 0 || thread == None || thread.Animation == None || thread.LeadIn
         return
@@ -1781,6 +1796,20 @@ Function Ending_Check(Actor[] actors)
     int count = SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor)
     if count < ending_target
         Trace("Ending_Check", GetDisplayName(ending_actor)+" orgasms:"+count+"/"+ending_target)
+        return
+    endif
+    int stages = thread.Animation.StageCount()
+    if ending_actor != Game.GetPlayer() && thread.IsAggressive && !thread.IsVictim(ending_actor)
+        Trace("Ending_Check", GetDisplayName(ending_actor)+" (aggressor) reached target "+count+"/"+ending_target+" at stage "+thread.Stage+"/"+stages+", ending after dialogue")
+        ending_done = true
+        ending_end_after = true
+        ending_orgasm_at = Utility.GetCurrentRealTime()
+        ending_narrated_at = 0.0
+        Ending_Hold()
+        return
+    endif
+    if thread.Stage < stages - 1
+        Trace("Ending_Check", GetDisplayName(ending_actor)+" reached target "+count+"/"+ending_target+" at stage "+thread.Stage+"/"+stages+", not second-to-last: no jump")
         return
     endif
     Trace("Ending_Check", GetDisplayName(ending_actor)+" reached target "+count+"/"+ending_target+", final stage")
@@ -1954,7 +1983,8 @@ EndFunction
 Function Ending_Hold()
     ending_hold_pending = false
     float hold_max = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.dialogue_hold_max", 45.0)
-    if hold_max <= 0.0 || ending_holding
+    ; Ending after the dialogue still needs the poll, even with no hold cap (ends at the first poll).
+    if (hold_max <= 0.0 && !ending_end_after) || ending_holding
         return
     endif
     ending_holding = true
@@ -1993,6 +2023,12 @@ Function Ending_Poll()
         return
     endif
     ending_holding = false
+    if ending_end_after
+        ending_end_after = false
+        Trace("Ending_Poll", "aggressor finished, ending the animation after "+held+"s")
+        thread.EndAnimation()
+        return
+    endif
     if !scene_paused
         thread.UpdateTimer(held - PAUSE_HOLD_SECONDS)
         thread.ResolveTimers()
