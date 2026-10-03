@@ -46,6 +46,8 @@ Allowing again checks every actor at once. Anyone at 100 orgasms, and so does an
 
 Use `punish_*` (not obsolete `punishing_*`).
 
+`nonsexual_male_position_0`–`2` (LLM cuddle / comfort / affection actions, MCM affection) filter like `nonsexual` (strict, affection `tags_any`, same suppress list plus `forplay,whip`) and add `male_position`. The cuddle actions pass a posture (`sitting` / `laying`) as the method tag, so without `tags_any` + `strict` the posture alone matched sex animations.
+
 TargetMenu scene-start options and their settings:
 
 | Option | Setting | Filter |

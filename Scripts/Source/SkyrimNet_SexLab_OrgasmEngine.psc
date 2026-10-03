@@ -38,6 +38,10 @@ Function SetStage(int sid, int stage, int stageCount) global native
 Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 ; Pause hotkey: HUD label, stops the final-stage safety-net clock (gain keeps running).
 Function SetScenePaused(int sid, bool paused) global native
+; Gate pass narration was just sent: the next voice pushes the scene to its final stage.
+Function GateNarrationSent(int sid) global native
+; Seconds left on the final stage's timer (unpaused, animating); -1 when not in a timed final stage.
+float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native
 ; Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
 Function SetOrgasmExpected(Actor akActor, bool expected) global native
@@ -89,7 +93,20 @@ Function Effect_OrgasmGroup(Actor[] actors, int[] forced, bool individual, Strin
     sl_scene.Orgasm_ApplyGroup(actors, forced, individual, source, allower, allowed, extras)
 EndFunction
 
-; Gate passed just before the final stage: push the actor's scene to its final stage.
+; Gate passed: narrate the passers now (one DN) and, before the final stage, hold the stage until
+; the voice starts (Effect_AdvanceToFinal). The orgasm itself follows as a "gate" group.
+Function Effect_GatePassed(Actor[] actors, bool holdStage) global
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager == None || !actors || actors.length == 0 || actors[0] == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(actors[0])
+    if sl_scene != None
+        sl_scene.Engine_GatePassed(actors, holdStage)
+    endif
+EndFunction
+
+; The gate narration's voice started: push the actor's scene to its final stage.
 Function Effect_AdvanceToFinal(Actor akActor) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()
     if manager == None || akActor == None

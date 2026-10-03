@@ -30,6 +30,8 @@ String orgasm_extras = ""
 String orgasm_overflow = ""
 bool orgasm_messages_set = false
 bool orgasm_window_open = false
+; NarrateOrgasmStash is building / sending: a second caller arms the window instead (slot arrays are shared).
+bool orgasm_narrating = false
 ; Thread hook OrgasmStart sent on entering the final (non-LeadIn) stage; OrgasmEnd not yet sent.
 bool orgasm_hook_open = false
 ; Pause hotkey: the stage is held with thread.UpdateTimer(PAUSE_HOLD_SECONDS) (StageTimer and
@@ -49,6 +51,11 @@ bool ending_hold_pending = false
 float ending_hold_started = 0.0
 float ending_orgasm_at = 0.0
 float ending_narrated_at = 0.0
+; Engine gate passed in the second-to-last stage: that stage is held until the gate narration's voice
+; starts (Engine_AdvanceToFinal) or sexlab.ending.gate_wait_max. gate_hold_timer: UpdateTimer applied.
+bool gate_holding = false
+bool gate_hold_timer = false
+float gate_hold_started = 0.0
 ; Real-time stamp when the Combined DOM window first armed; ArmOrgasmWindow
 ; will not extend past 2x orgasm_delay from this start.
 float orgasm_window_started_at = 0.0
@@ -232,6 +239,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     EnsureActorArraysLargeEnough(num_actors) 
     orgasm_messages_set = false
     orgasm_window_open = false
+    orgasm_narrating = false
     orgasm_hook_open = false
     scene_paused = false
     Ending_Reset()
@@ -310,6 +318,10 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
             sender = positions[1]
             receiver = positions[0]
         endif
+    endif
+    ; WebUI initiator pulldown can make the speaker the creator's target: never narrate "Bob and Bob".
+    if num_actors >= 2 && (receiver == None || receiver == sender)
+        receiver = FirstOtherPosition(sender)
     endif
     ApplySexLabVoices()
     if num_actors > 1 && num_victims > 0
@@ -1693,14 +1705,22 @@ EndFunction
 
 ; --------------------------------------------
 ; Scene ending (sexlab.ending.*). The lead's orgasm target is rolled once per scene; reaching it
-; (Orgasm_ApplyGroup) or passing the engine's gate (Engine_AdvanceToFinal) jumps to the final stage,
-; which is held (UpdateTimer, like the pause key) until the orgasm dialogue has played.
+; (Orgasm_ApplyGroup) jumps to the final stage. The engine's gate passes just before the final stage
+; (Engine_GatePassed: DN now, stage held) and its voice starting jumps (Engine_AdvanceToFinal). The
+; final stage is then held (UpdateTimer, like the pause key) until the orgasm dialogue has played.
 ; --------------------------------------------
 Function Ending_Reset()
     if ending_holding && thread != None && !scene_paused
         thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
         thread.ResolveTimers()
     endif
+    if gate_holding && gate_hold_timer && thread != None
+        thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+    endif
+    gate_holding = false
+    gate_hold_timer = false
+    gate_hold_started = 0.0
     ending_actor = None
     ending_target = 0
     ending_done = false
@@ -1760,12 +1780,109 @@ Function Ending_Check(Actor[] actors)
     Ending_ToFinal()
 EndFunction
 
-; Engine gate passed in the second-to-last stage: push to the final stage (plus the dialogue hold).
+; Engine gate passed (in the second-to-last stage, early by the measured DN -> voice time; or on
+; reaching the final stage first): narrate the passers now as one direct DN so the voice is ready when
+; the stage turns. Their orgasms follow as a "gate" group (ForceOrgasm only) once their bars fill in
+; the final stage. hold_stage: hold the second-to-last stage until the voice starts.
+Function Engine_GatePassed(Actor[] actors, bool hold_stage)
+    if thread == None || thread.Animation == None || !actors
+        return
+    endif
+    EnsureActorArraysLargeEnough(thread.positions.length)
+    Actor first = None
+    int i = 0
+    while i < actors.length
+        Actor a = actors[i]
+        int slot = -1
+        if a != None
+            slot = thread.positions.Find(a)
+        endif
+        if slot >= 0
+            StashOrgasm(slot, a, ORGASM_KIND_ORGASM)
+            if first == None
+                first = a
+            endif
+        else
+            Trace("Engine_GatePassed", GetDisplayName(a)+" not in thread.positions")
+        endif
+        i += 1
+    endwhile
+    if first == None
+        return
+    endif
+    Trace("Engine_GatePassed", "count:"+actors.length+" hold:"+hold_stage+" stage:"+thread.Stage+"/"+thread.Animation.StageCount())
+    ; Anything waiting in the orgasm window goes out in this same DN.
+    if orgasm_window_open
+        UnregisterForUpdate()
+        orgasm_window_open = false
+        orgasm_window_started_at = 0.0
+        if ending_holding
+            RegisterForSingleUpdate(1.0)
+        endif
+    endif
+    NarrateOrgasmStash(first, FirstOtherPosition(first), force_direct=True)
+    SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid)
+    if hold_stage
+        Gate_Hold()
+    elseif !ending_done && !thread.LeadIn
+        Ending_ToFinal()
+    endif
+EndFunction
+
+Function Gate_Hold()
+    if gate_holding
+        return
+    endif
+    gate_holding = true
+    gate_hold_started = Utility.GetCurrentRealTime()
+    ; The pause key already holds the stage; its resume restores the timer.
+    gate_hold_timer = !scene_paused
+    if gate_hold_timer
+        thread.UpdateTimer(PAUSE_HOLD_SECONDS)
+    endif
+    Trace("Gate_Hold", "holding stage:"+thread.Stage+" for the gate voice")
+    RegisterForSingleUpdate(1.0)
+EndFunction
+
+Function Gate_Release()
+    if !gate_holding
+        return
+    endif
+    gate_holding = false
+    if gate_hold_timer && thread != None
+        thread.UpdateTimer((Utility.GetCurrentRealTime() - gate_hold_started) - PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+    endif
+    gate_hold_timer = false
+EndFunction
+
+; No voice by sexlab.ending.gate_wait_max (DN dropped, TTS off, load mid-wait): go on anyway.
+Function Gate_Poll()
+    if !gate_holding
+        return
+    endif
+    float held = Utility.GetCurrentRealTime() - gate_hold_started
+    float wait_max = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.gate_wait_max", 20.0)
+    if held < wait_max
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    Trace("Gate_Poll", "no gate voice after "+held+"s")
+    Engine_AdvanceToFinal()
+EndFunction
+
+; The gate narration's voice started (engine) or Gate_Poll gave up: release the gate hold and go to
+; the final stage (plus the dialogue hold); the engine's rush fires the orgasm there.
 Function Engine_AdvanceToFinal()
+    Gate_Release()
     if thread == None || thread.Animation == None || thread.LeadIn
         return
     endif
-    Trace("Engine_AdvanceToFinal", "gate passed stage:"+thread.Stage+"/"+thread.Animation.StageCount())
+    int count = thread.Animation.StageCount()
+    Trace("Engine_AdvanceToFinal", "gate voice stage:"+thread.Stage+"/"+count)
+    if ending_done && thread.Stage >= count
+        return
+    endif
     Ending_ToFinal()
 EndFunction
 
@@ -1783,6 +1900,16 @@ Function Ending_ToFinal()
 EndFunction
 
 Function Ending_StageStart()
+    ; SexLab (or a manual advance) reached the final stage before the gate voice: GoToStage already
+    ; reset the held timer; hold the final stage for the dialogue instead.
+    if gate_holding && thread != None && thread.Animation != None && thread.Stage >= thread.Animation.StageCount()
+        gate_holding = false
+        gate_hold_timer = false
+        if !ending_done && !thread.LeadIn
+            Ending_ToFinal()
+            return
+        endif
+    endif
     if ending_hold_pending && thread != None && thread.Animation != None && thread.Stage >= thread.Animation.StageCount()
         Ending_Hold()
     endif
@@ -1905,11 +2032,14 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
             ; thread hooks OrgasmStart / OrgasmEnd follow SexLab's stage timing (Engine_SetStage).
             thread.ForceOrgasm(a)
             Mirror_Rebaseline(a)
-            int kind = ORGASM_KIND_ORGASM
-            if forced && i < forced.length && forced[i] == 1
-                kind = ORGASM_KIND_FORCED
+            ; Gate rush: stashed and narrated at the pass (Engine_GatePassed).
+            if source != "gate"
+                int kind = ORGASM_KIND_ORGASM
+                if forced && i < forced.length && forced[i] == 1
+                    kind = ORGASM_KIND_FORCED
+                endif
+                StashOrgasm(slot, a, kind)
             endif
-            StashOrgasm(slot, a, kind)
             if first == None
                 first = a
             endif
@@ -1922,6 +2052,11 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
         DbgEnd("Orgasm_ApplyGroup")
         return
     endif
+    if source == "gate"
+        Ending_Check(actors)
+        DbgEnd("Orgasm_ApplyGroup")
+        return
+    endif
     if allower != None && allowed != None
         orgasm_prefix = GetDisplayName(allower)+" allows "+GetDisplayName(allowed)+" to orgasm. "
     endif
@@ -1931,7 +2066,9 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
         endif
         orgasm_extras += extras
     endif
-    if !individual || orgasm_window_open
+    ; Final stage: window too, so a near end folds it into the finish DN (OnUpdate). The dialogue hold
+    ; (ending_holding) waits on this narration, so it goes out at once there.
+    if !individual || orgasm_window_open || (IsFinalStage() && !ending_holding)
         ArmOrgasmWindow()
     else
         Actor target = allower
@@ -1942,6 +2079,10 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
     endif
     Ending_Check(actors)
     DbgEnd("Orgasm_ApplyGroup")
+EndFunction
+
+bool Function IsFinalStage()
+    return thread != None && thread.Animation != None && !thread.LeadIn && thread.Stage >= thread.Animation.StageCount()
 EndFunction
 
 Actor Function FirstOtherPosition(Actor akActor)
@@ -2179,6 +2320,11 @@ Function StageStart()
                 RegisterEventForce("change", narration, sender, receiver)
             endif
         elseif orgasm_narration != ""
+            if change_scene
+                RegisterEventForce("change", narration, sender, receiver)
+            endif
+        elseif IsFinalStage()
+            ; The orgasm / finish DN is coming: no continue DN to race it, a scene change is an event.
             if change_scene
                 RegisterEventForce("change", narration, sender, receiver)
             endif
@@ -2798,7 +2944,7 @@ EndFunction
 
 Function FlushOrgasmWindow()
     UnregisterForUpdate()
-    if ending_holding
+    if ending_holding || gate_holding
         RegisterForSingleUpdate(1.0)
     endif
     orgasm_window_open = false
@@ -2812,22 +2958,33 @@ Function FlushOrgasmWindow()
 EndFunction
 
 ; One DirectNarration for everything stashed, then the parts that did not fit as one event.
-Function NarrateOrgasmStash(Actor source, Actor target)
+; force_direct: always a DirectNarration, NPC-only scenes too (gate pass: the voice times the stage).
+Function NarrateOrgasmStash(Actor source, Actor target, bool force_direct = false)
+    ; Two groups narrating at once interleave on the slot arrays (external calls yield): the later
+    ; one leaves its stash for the window.
+    if orgasm_narrating
+        Trace("NarrateOrgasmStash", "--- busy, stash goes to the window")
+        ArmOrgasmWindow()
+        return
+    endif
+    orgasm_narrating = true
     ; Match StageStart / AnimationEnd: keep actors_objs aligned with positions
     ; before OrgasmMessagesToNarration reads names / orgasm_narrated.
     AlignActors()
     String orgasm_narration = OrgasmMessagesToNarration()
     if orgasm_narration == ""
+        orgasm_narrating = false
         Trace("NarrateOrgasmStash", "--- empty stash")
         return
     endif
     Trace("NarrateOrgasmStash", "--- "+orgasm_narration+" | overflow: "+orgasm_overflow)
-    if has_player
-        DirectNarration(orgasm_narration, source, target, purge_dialogue=True)
+    if has_player || force_direct
+        DirectNarration(orgasm_narration, source, target, purge_dialogue=has_player)
     else
         DirectNarration_Optional("orgasm", orgasm_narration, source, target)
     endif
     SendOrgasmOverflow(source, target)
+    orgasm_narrating = false
 EndFunction
 
 ; Lower-priority orgasm parts (cum, not orgasming, arouse / calm) that did not fit the DN budget.
@@ -2841,22 +2998,44 @@ Function SendOrgasmOverflow(Actor source, Actor target)
     RegisterEvent("sexlab update", overflow, source, target)
 EndFunction
 
+; Final stage ending within the window's cap (2x orgasm_delay from its start): keep the stash for
+; AnimationEnd, which folds it into the finish DN. Past the cap the next OnUpdate flushes.
+bool Function OrgasmWindow_HoldForFinish()
+    if !orgasm_window_open || ending_holding || gate_holding || !IsFinalStage() || orgasm_window_started_at <= 0.0
+        return false
+    endif
+    float remaining = SkyrimNet_SexLab_OrgasmEngine.FinalStageRemaining(sid)
+    if remaining < 0.0
+        return false
+    endif
+    float elapsed = Utility.GetCurrentRealTime() - orgasm_window_started_at
+    if elapsed + remaining + 1.0 > GetOrgasmDelay() * 2.0
+        return false
+    endif
+    Trace("OnUpdate", "--- holding orgasm window for finish remaining:"+remaining+" elapsed:"+elapsed)
+    RegisterForSingleUpdate(remaining + 1.0)
+    return true
+EndFunction
+
 Event OnUpdate()
     if Utility.IsInMenuMode()
         RegisterForSingleUpdate(0.5)
         Trace("OnUpdate", "--- orgasm window waiting on menu")
         return
     endif
-    ; Shared with the scene-ending dialogue hold poll.
-    if orgasm_window_open || !ending_holding
+    ; Shared with the scene-ending dialogue hold poll and the gate voice wait.
+    if orgasm_window_open || (!ending_holding && !gate_holding)
         if !orgasm_messages_set
             orgasm_window_open = false
             orgasm_window_started_at = 0.0
             Trace("OnUpdate", "--- orgasm window empty, skip")
-        else
+        elseif !OrgasmWindow_HoldForFinish()
             Trace("OnUpdate", "--- flushing orgasm window")
             FlushOrgasmWindow()
         endif
+    endif
+    if gate_holding
+        Gate_Poll()
     endif
     if ending_holding
         Ending_Poll()

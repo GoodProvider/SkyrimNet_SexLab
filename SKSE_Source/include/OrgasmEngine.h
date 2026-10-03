@@ -37,6 +37,11 @@ namespace OrgasmEngine
     void SetStageTimers(std::int32_t sid, const std::vector<float>& stageSecs, bool leadIn);
     /// Pause hotkey state: HUD label; the safety-net clock stops. Passive gain keeps running.
     void SetScenePaused(std::int32_t sid, bool paused);
+    /// Gate pass narration was just sent: the next non-player speech start pushes the scene to its
+    /// final stage (Effect_AdvanceToFinal).
+    void GateNarrationSent(std::int32_t sid);
+    // Seconds left on the timed final stage (unpaused, animating); -1 when not in one.
+    float FinalStageRemaining(std::int32_t sid);
     bool IsPlayerScenePaused();
     /// Player scene stage (1-based) and stage count; false (0/0) when not in a scene.
     bool GetPlayerSceneStage(int& stage, int& count);

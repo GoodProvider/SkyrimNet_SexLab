@@ -2,6 +2,7 @@
 #include "WebUI_Log.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -18,6 +19,8 @@ namespace NarrationTiming
 
         constexpr auto kTimeout = std::chrono::seconds(60);
         constexpr std::size_t kPreviewLen = 60;
+        constexpr std::size_t kEstimateSamples = 20;  // EstimateSeconds: median of the latest samples
+        constexpr std::size_t kEstimateMin = 3;       // fewer clean samples: the caller's fallback
 
         struct Pending
         {
@@ -35,6 +38,7 @@ namespace NarrationTiming
         int g_busy = 0;
         int g_overlapped = 0;
         int g_missed = 0;
+        std::atomic<std::uint64_t> g_speechStarts{ 0 };
 
         // Caller holds g_lock.
         void ExpireStale(Clock::time_point now)
@@ -72,7 +76,10 @@ namespace NarrationTiming
             g_speaking = true;
             ExpireStale(now);
             // The player's own voiced line is not the response to the narration.
-            if (!g_pending || (sender && sender->GetFormID() == 0x14))
+            if (sender && sender->GetFormID() == 0x14)
+                return;
+            g_speechStarts.fetch_add(1);
+            if (!g_pending)
                 return;
 
             const double secs = std::chrono::duration<double>(now - g_pending->sent).count();
@@ -153,5 +160,27 @@ namespace NarrationTiming
         std::lock_guard lock(g_lock);
         g_pending.reset();
         g_speaking = false;
+    }
+
+    double EstimateSeconds(double fallback)
+    {
+        double est = fallback;
+        {
+            std::lock_guard lock(g_lock);
+            if (g_clean.size() >= kEstimateMin) {
+                const auto first = g_clean.size() > kEstimateSamples ? g_clean.end() - kEstimateSamples
+                                                                     : g_clean.begin();
+                std::vector<double> recent(first, g_clean.end());
+                std::sort(recent.begin(), recent.end());
+                const auto n = recent.size();
+                est = n % 2 ? recent[n / 2] : (recent[n / 2 - 1] + recent[n / 2]) / 2.0;
+            }
+        }
+        return std::clamp(est, 1.0, 30.0);
+    }
+
+    std::uint64_t SpeechStarts()
+    {
+        return g_speechStarts.load();
     }
 }

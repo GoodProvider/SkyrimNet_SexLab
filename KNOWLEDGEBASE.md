@@ -959,6 +959,17 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Papyrus `strict` is read with `JMap.getInt`** (JContainers stores JSON `true` as 1). `setting_has_filter` lets a start with no tags still query AnimDB when the setting has `tags_any` / `tags_prefer` / `exclude_settings`; `tags_suppress_unless_bound` alone never forces a query, so untagged LLM starts keep SexLab's own pick.
 - **Kissing switch:** `Setup` forces `nonsexual_kissing` for a kissing tag except under `nonsexual_platonic`. LLM General/Cuddle actions pass `nonsexual_male_position_1` and still need the switch for the `_kissing_` speaking token.
 
+## Final-stage narration: Bob and Bob, split orgasm DNs (2026-10-03)
+
+**Symptom:** Nina + player Bob. `continue activity that includes Bob and Bob`; then `Nina is orgasming. again. Bob is recovering…` and `Bob is orgasming. … Nina is recovering…` as two DNs, then `Nina and Bob finish` as a third.
+
+**Causes:**
+- `Scene.Setup sender:Bob receiver:Bob`: the WebUI initiator pulldown (`Creator.ApplyWebUIState`) sets `speaker` to an actor who can already be the creator's `target`. `Setup` now falls back to `FirstOtherPosition(sender)` when `receiver == sender`.
+- Gate skipped Nina (`count=1`, repeat) and Bob failed his roll. In the final stage Bob fired, and Nina (~90) stayed below `group_join` 95, so she fired alone 2.2 s later. Fix: `group_join_final` (80) for the final stage and the gate join.
+- Final-stage `StageStart` sent `continue activity` 56 ms before Bob fired. Fix: no continue DN in the final stage.
+- The two groups' `NarrateOrgasmStash` ran at the same time; `OrgasmMessagesToNarration` yields on JMap / native calls, so each consumed the other's slots (crossed recovering lines). Fix: `orgasm_narrating` guard → window.
+- The finish came 7.8 s after the orgasm. Fix: final-stage orgasms use the window, and `OrgasmWindow_HoldForFinish` keeps it for `AnimationEnd` when the stage ends inside the cap.
+
 ## PrismaUI modals: own full-screen layer, hide imperatively (2026-10-03)
 
 - LLM player start with the WebUI closed showed only the ControlPanel, no Confirm dialogue. Logs: `YesNo_Open … overlay_was_open=false` (solo path), no JS / Papyrus errors.

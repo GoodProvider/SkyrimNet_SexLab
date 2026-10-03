@@ -39,7 +39,14 @@ For each managed scene:
      - the cooldown has passed (SexLab's rule: 10 s female, 20 s male, +10 s creature).
    - A blocked actor at 100 sends `OrgasmDenied` once per climb.
    - A **forced** request (the WebUI orgasm button, `RequestOrgasm(…, true, …)`) skips every gate.
-3. **Gate (`sexlab.ending.gate`, timed scenes, never in LeadIn):** at 90% of the second-to-last stage's timer (animating, unpaused time), or on reaching the final stage first, each actor who has not orgasmed in this scene, is expected to orgasm and passes `CanOrgasmNow` rolls once: `uniform(0, 100) < enjoyment`. Passes fire as `source=gate` (individual). If anyone passed while still in the second-to-last stage, `Effect_AdvanceToFinal` → `Scene.Engine_AdvanceToFinal` jumps to the final stage and arms the dialogue hold (see [Scene ending](#scene-ending)). All fail: SexLab advances normally, no orgasm.
+3. **Gate (`sexlab.ending.gate`, timed scenes, never in LeadIn):** each actor who has not orgasmed in this scene, is expected to orgasm and passes `CanOrgasmNow` rolls once: `uniform(0, 100) < enjoyment`.
+   - **When:** `lead` seconds before the second-to-last stage's timer ends (animating, unpaused time; on entering it when `lead` is longer), or on reaching the final stage first. `lead` = `NarrationTiming::EstimateSeconds`: the median of the last 20 clean DN→first-speech samples this session, `sexlab.ending.gate_lead_default` (5 s) until 3 exist, clamped 1–30 s.
+   - **A pass does not fire yet.** The actor is *rushing*: enjoyment climbs at `(98 − enjoyment) / lead` per second (no passive gain, pause and speed ignored, capped at 98 before the final stage, no other orgasm test). `Effect_GatePassed(actors, holdStage)` → `Scene.Engine_GatePassed` stashes the passers and sends one DirectNarration at once, then calls `GateNarrationSent(sid)`, which marks `NarrationTiming::SpeechStarts()`.
+   - **Before the final stage** the Scene holds the stage (`Gate_Hold`, `UpdateTimer` like the pause key). The first non-player `SkyrimNet_SpeechStarted` after the mark makes the tick dispatch `Effect_AdvanceToFinal` → `Scene.Engine_AdvanceToFinal`: release the hold, `Ending_ToFinal` (final stage + dialogue hold). No voice by `sexlab.ending.gate_wait_max` (20 s): `Gate_Poll` advances anyway. SexLab reaching the final stage first also ends the wait.
+   - **In the final stage** the rush finishes within 1 s and fires at 97 as a `gate` group: `Fire` only, no group join, no extras fold. `Orgasm_ApplyGroup` runs `ForceOrgasm` and skips the stash and narration.
+   - **Gate join:** when anyone passes, every other actor who is expected to orgasm, passes `CanOrgasmNow`, isn't rushing and is at ≥ `group_join_final` rushes with them and goes into the same gate DN. Repeat orgasms join too (only rolling skips them). Log `gate join`.
+   - A block (deny) cancels the rush. A forced request fires through the normal path. Stepping back before the last two stages drops the rush and re-arms the gate. Rushes are not saved.
+   - All fail: SexLab advances normally, no orgasm.
 
    **Safety net (gate off, or no timers):** at 90% of the final stage's timer, each non-DOM actor at 90 or more who has not orgasmed, is not blocked or edging and was not calmed in the final stage fires as *combined*. With no timers it fires on entering the final stage, everyone when the mini-game is off.
 4. **Group (`JoinGroup`):** everyone fired in this scene in this tick (steps 2 and 3, forced included) is one group. Every other actor joins it when all of these hold:
@@ -47,9 +54,10 @@ For each managed scene:
    - not blocked,
    - not edging,
    - not cooling down,
-   - enjoyment ≥ `sexlab.enjoyment.group_join` (default 95).
+   - enjoyment ≥ `sexlab.enjoyment.group_join` (default 95), or `sexlab.enjoyment.group_join_final` (default 80) in the final (non-LeadIn) stage.
 
    The group is sent as one `Effect_OrgasmGroup`, so it gets one narration. It is `individual` unless every trigger came from the safety net. Pending arouse/calm narrations about the group's actors are folded into it (`extras`).
+   `FinalStageRemaining(sid)` (native) returns the final stage's timer minus its animating, unpaused seconds, or -1 outside a timed final stage. `Scene.OrgasmWindow_HoldForFinish` uses it.
 5. **Mirror:** at most once a second per actor, `Effect_Mirror` → `AdjustEnjoyment(ours − SexLab's)`, so SexLab voices and expressions follow our value.
 
 **Firing an orgasm:**
@@ -152,7 +160,7 @@ bool IsMentallyBroken(Actor)   bool IsMiniGameEnabled()
 SetRates(float passive, float aggressor, float victim)   ; role multipliers, runtime override until the next config save
 ```
 
-The shell-only natives (`BeginScene`, `SetStage`, `SetStageTimers`, `SetScenePaused`, `SetSceneBlocked`, `SetDomSlave`, `SetDomMeter`, `SetActorSkills`, `EndScene`, `ResetSpeedScale`, `ReloadConfig`, `AllowOrgasm`) are for this mod's own Scene and MCM scripts. `AllowOrgasm` is not in the C++ API.
+The shell-only natives (`BeginScene`, `SetStage`, `SetStageTimers`, `SetScenePaused`, `GateNarrationSent`, `SetSceneBlocked`, `SetDomSlave`, `SetDomMeter`, `SetActorSkills`, `EndScene`, `ResetSpeedScale`, `ReloadConfig`, `AllowOrgasm`) are for this mod's own Scene and MCM scripts. `AllowOrgasm` is not in the C++ API.
 
 ## ModEvents
 
@@ -209,6 +217,6 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
 `Scene.psc` `Ending_*` (settings `sexlab.ending.*`):
 
 - **Target:** `Ending_RollTarget` (from `Engine_BeginScene`, once per scene) picks the lead: `initiator` (`PickNonVictimInitiator` makes it the aggressor when there is a victim), else position 0. Target = `RandomInt(target_male_min, target_male_max)` for SexLab gender 0, else the female range. 0 = never jumps.
-- **Jump:** `Ending_Check` (end of `Orgasm_ApplyGroup`) compares `OrgasmEngine.GetOrgasmCount(lead)` with the target; reaching it calls `Ending_ToFinal` → `thread.GoToStage(final)`. The gate's `Engine_AdvanceToFinal` does the same. Once per scene (`ending_done`), never in LeadIn.
+- **Jump:** `Ending_Check` (end of `Orgasm_ApplyGroup`) compares `OrgasmEngine.GetOrgasmCount(lead)` with the target; reaching it calls `Ending_ToFinal` → `thread.GoToStage(final)`. The gate's `Engine_AdvanceToFinal` (its narration's voice started) does the same after releasing the gate hold. Once per scene (`ending_done`), never in LeadIn.
 - **Dialogue hold:** on the final stage's `StageStart` (`Ending_StageStart` → `Ending_Hold`) the stage is held with `thread.UpdateTimer(PAUSE_HOLD_SECONDS)`, as the pause key does. `Ending_Poll` (shares `OnUpdate` with the orgasm window, 1 s) releases when the orgasm window is closed, `SkyrimNetApi.GetSpeechQueueSize() == 0`, and `GetTimeSinceLastAudioEnded()` shows audio ended at least 1 s after the narration (min 3 s), or at `dialogue_hold_max` (45 s; 0 = no hold). Release pulls the timer back by the held time, so the final stage then plays its remaining time. While the pause key holds the stage the timer is left to the pause.
 

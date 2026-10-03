@@ -13,7 +13,7 @@ These three substrings must stay exact on the whole direct-narration string. The
 ## One message per orgasm moment
 
 The LLM cannot answer an endless prompt, so every orgasm moment produces **one** DirectNarration (DN).
-- **All actors, every check.** When anyone orgasms (natural, forced, safety net, allow, DOM melt, external SexLab), every other actor at `sexlab.enjoyment.group_join` (default 95) or more joins them. This skips DOM slaves and actors who are denied, edging or cooling down. They all go into the same message.
+- **All actors, every check.** When anyone orgasms (natural, forced, safety net, allow, DOM melt, external SexLab), every other actor at `sexlab.enjoyment.group_join` (default 95) or more joins them. In the final (non-LeadIn) stage and at a gate pass the threshold is `sexlab.enjoyment.group_join_final` (default 80). This skips DOM slaves and actors who are denied, edging or cooling down. They all go into the same message.
 - **Grouped sentences.** Each actor is in exactly one state. Names in a state are joined as `A` / `A and B` / `A, B, and C`.
 - **Budget.** `sexlab.narration.max_chars` (default 350) limits the DN. Lower-priority parts that don't fit go into one `RegisterEvent("sexlab update", …)` sent after the DN (`Scene.SendOrgasmOverflow`).
 
@@ -45,8 +45,9 @@ The C++ OrgasmEngine ([../developers/orgasm-engine.md](../developers/orgasm-engi
 
 - **Engine group:** in each tick, per scene, everyone who fires (at 100, forced, safety net) plus the group join → one `Effect_OrgasmGroup` → `Scene.Orgasm_ApplyGroup`. That calls `thread.ForceOrgasm` per actor, stashes each one (`StashOrgasm`), and then:
   - `individual`: narrates now (`NarrateOrgasmStash`), or joins an open window;
+  - final stage (unless the dialogue hold is on): always the window. When the window would flush, `OrgasmWindow_HoldForFinish` checks `OrgasmEngine.FinalStageRemaining`. If the stage ends inside the window cap (2× `orgasm_delay` from its start), it waits and `AnimationEnd` folds the stash into the finish DN (`"Bob is orgasming. Nina is orgasming. again. … Nina and Bob finish."`). Otherwise it flushes on its own;
   - safety-net-only groups: `ArmOrgasmWindow`.
-- **Gate (`sexlab.ending.gate`, no LeadIn):** just before the final stage, each actor who hasn't orgasmed rolls once (chance = enjoyment %). Passes fire as an individual group (narrated now) and the scene jumps to the final stage, which is held until the orgasm dialogue has played (`sexlab.ending.dialogue_hold_max`). The lead reaching their orgasm target (`sexlab.ending.target_*`) does the same jump and hold.
+- **Gate (`sexlab.ending.gate`, no LeadIn):** just before the final stage (early by the measured DN→speech time), each actor who hasn't orgasmed rolls once (chance = enjoyment %). The passers are stashed and narrated **at once** as one DirectNarration (`Scene.Engine_GatePassed`, direct even in NPC-only scenes; an open orgasm window is folded in). Anyone else at `group_join_final` or more (repeat orgasms too) joins the pass. Their `ForceOrgasm` follows as a `gate` group when the bars fill in the final stage, with no second narration (`Orgasm_ApplyGroup` skips stash and DN for source `gate`). The final stage starts when the narration's voice starts, and is held until the orgasm dialogue has played (`sexlab.ending.dialogue_hold_max`). The lead reaching their orgasm target (`sexlab.ending.target_*`) does the same jump and hold.
 - **Safety net (gate off or no timers, final stage, no LeadIn):** at 90% of the final stage's timer, each non-DOM actor at 90 or more who hasn't orgasmed, isn't blocked or edging, and wasn't calmed in that stage fires as a non-individual group (stash + window). Actors below 90 don't orgasm; the afterglow says `failed to orgasm` when one was expected.
 - **External orgasms** (DOM melt `NoteExternalOrgasm(slave, "dom")`, another plugin's SexLab orgasm `"sexlab"`):
   - The caller stashes that actor (`OrgasmCustom` / `OrgasmIndividual`) and arms the window.
@@ -71,6 +72,8 @@ The C++ OrgasmEngine ([../developers/orgasm-engine.md](../developers/orgasm-engi
   - StageStart must not consume the stash while that window is open.
   - The style-change DN is skipped while the stash is pending.
 - Window cap: `ArmOrgasmWindow` records `orgasm_window_started_at` on first arm. Later events may restart the timer, but never past **2×** `orgasm_delay` from that start; then it flushes immediately.
+- `NarrateOrgasmStash` is not re-entrant: `OrgasmMessagesToNarration` yields on external calls, and two groups narrating at once interleave on the shared slot arrays (crossed sentences, 2026-10-03). A second caller while `orgasm_narrating` is set arms the window instead.
+- Final-stage `StageStart` sends no `continue activity` DN (the orgasm / finish DN follows); a scene change there is `RegisterEventForce` only.
 - `NarrateOrgasmStash` (used by `FlushOrgasmWindow`) calls `AlignActors()` before `OrgasmMessagesToNarration`, so names and `orgasm_narrated` match `thread.positions`. If `thread` is None, `ClearOrgasmStash` clears the stash without narrating.
 - `AnimationStart` (first start / STATUS_SETUP path): if a stash is still pending, flush it before clearing.
 - `AnimationEnd` folds a leftover stash into the end DN, keeping room for the intent sentence. The afterglow goes into the overflow event when it doesn't fit.

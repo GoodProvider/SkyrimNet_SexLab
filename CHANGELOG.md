@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Scene settings
+- `nonsexual_male_position_0/1/2` now match `nonsexual`: `strict`, `tags_any` cuddling/hug/spooning/kissing/headpat/handholding/lappillow, and the full sex-act suppress list. LLM `SexLab_Nonsexual_Cuddle` / `SexLabComfortCuddle` send `sitting|laying` as the method tag; with no `tags_any` and a non-strict setting, the posture alone (or the step-3 fallback that peels suppress tags) picked sex animations
+
 ### WebUI
 - LLM-started scene gating dialogue (`YesNo_Open`) is now a centered modal. WebUI open: shown on top (`showYesNoDialog`), answers leave the view as it was (`YesNo_OverlayWasOpen`). WebUI closed: dialogue only (one Invoke `openYesNoSolo(cfg)` before `WebUI_Visibility_Show(false)`; separate hide/show Invokes arrived out of order and sometimes hid the dialogue; hides the ControlPanel / main panels inline and makes `showControlPanel` a no-op until `clearYesNoSolo`; the dialogue lives in its own `#yesno-overlay` layer because a fixed panel inside `#overlay-panels` rendered invisible); Yes keeps it as an "Opening Scene Creator…" placeholder until `SceneCreator_Open`; Yes (Random) / No (Silent) / No close the WebUI. New **No, explain** (button 4): textarea + Accept / Cancel; Accept → `Manager.WebUI_OnYesNoExplain` → `Creator.RejectWithReason` DirectNarration "<player> rejects <requester>'s request for <intent>, because <reason>.", no scene. Buttons top-aligned
 
@@ -10,8 +13,11 @@
 - Passive gain stops while the stage is paused (pause key)
 - New **Scene ending** settings (`sexlab.ending.*`). The lead (aggressor with a victim, else the initiator) gets a target orgasm count at scene start (male 1-1, female 1-2, ranges configurable); reaching it jumps the scene to the final stage (`Scene.Ending_Check` → `GoToStage`)
 - The final stage is then held until the orgasm dialogue has played (SkyrimNet speech queue empty + audio ended), at most `sexlab.ending.dialogue_hold_max` (45 s)
-- Orgasm gate replaces the final-stage safety net for timed scenes (`sexlab.ending.gate`): at 90% of the second-to-last stage, each actor who hasn't orgasmed rolls once, chance = enjoyment %. A pass orgasms and jumps to the final stage (`Effect_AdvanceToFinal`); all fail: no orgasm. Logs showed the old net (needs 90) skipping everyone at 38-86
+- Orgasm gate replaces the final-stage safety net for timed scenes (`sexlab.ending.gate`): each actor who hasn't orgasmed rolls once, chance = enjoyment %, `lead` seconds before the second-to-last stage ends (or on reaching the final stage first). `lead` = `NarrationTiming::EstimateSeconds` (median of the last 20 clean DN->speech samples; `sexlab.ending.gate_lead_default` 5 s until 3 exist). A pass sends the combined orgasm DN at once (`Effect_GatePassed` -> `Scene.Engine_GatePassed`, DirectNarration even in NPC-only scenes), holds the stage, and rushes the bar to 98 by the expected voice. The first non-player `SkyrimNet_SpeechStarted` after the DN (`GateNarrationSent` mark, `NarrationTiming::SpeechStarts`) pushes the final stage (`Effect_AdvanceToFinal`); the rush finishes within 1 s there and fires at 97 as a `gate` group (ForceOrgasm only, no second DN). No voice by `sexlab.ending.gate_wait_max` (20 s): advances anyway. All fail: no orgasm. Logs showed the old net (needs 90) skipping everyone at 38-86
 - Each stage advance adds `sexlab.enjoyment.stage_spike` (5) enjoyment
+- New `sexlab.enjoyment.group_join_final` (80): the group-join threshold in the final stage and for the gate (anyone that close, repeat orgasms too, rushes with a gate passer into the same DN). New native `FinalStageRemaining(sid)`
+- Final-stage narration: orgasms go through the orgasm window and fold into the `… finish` DN when the stage ends inside the window cap (`Scene.OrgasmWindow_HoldForFinish`); no `continue activity` DN at final-stage StageStart (a scene change is an event); `NarrateOrgasmStash` re-entrancy guard (concurrent groups crossed their sentences)
+- `Scene.Setup`: receiver falls back to the first other position when it equals sender (WebUI initiator pulldown gave "Bob and Bob")
 
 ### Animation speed
 - Scene style now sets animation playback speed: gently 0.75×, normally 1.0×, forcefully 1.4× (dashboard **Animation speed**: `sexlab.speed.enabled`, `sexlab.speed.gently|normally|forcefully`). Speed only: stage length, orgasm timing and voices are unchanged. Native `UpdateAnimation` hook in `SkyrimNet_SexLab.dll` (`AnimSpeed.cpp`); Papyrus `SkyrimNet_SexLab_Utilities.SetAnimSpeed` / `ClearAnimSpeed` / `GetAnimSpeed`

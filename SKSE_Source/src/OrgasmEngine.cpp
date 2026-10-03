@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "Hud.h"
 #include "NarrationQueue.h"
+#include "NarrationTiming.h"
 #include "WebUI_Log.h"
 
 #include <algorithm>
@@ -39,6 +40,9 @@ namespace OrgasmEngine
         constexpr float kLeadInStretch = 1.5f;      // LeadIn target: all stages x this (never reaches 100)
         constexpr float kSafetyAt = 0.9f;           // safety net: this share of the final stage's timer
         constexpr float kSafetyMin = 90.0f;         // safety net: enjoyment needed to fire
+        constexpr float kRushHover = 98.0f;         // gate pass: bar cap until the final stage starts
+        constexpr float kRushFireAt = 97.0f;        // gate pass: orgasm (ForceOrgasm) at this in the final stage
+        constexpr double kRushFinish = 1.0;         // gate pass: seconds to finish the climb in the final stage
         constexpr float kDomStep = 10.0f;           // DOM slave: progress points per arousal push
         constexpr float kDomStepShare = 0.1f;       // DOM slave: step roll share of one full DOM roll
 
@@ -63,8 +67,10 @@ namespace OrgasmEngine
             float randomBonus = 10.0f;
             float narrateWindow = 3.0f;
             float groupJoin = 95.0f;  // someone orgasms: others at this enjoyment or more join them
+            float groupJoinFinal = 80.0f;  // same, in the final stage and at a gate pass
             float stageSpike = 5.0f;  // enjoyment added on each stage advance
             bool gate = true;         // orgasm roll just before the final stage
+            float gateLeadDefault = 5.0f;  // DN -> speech seconds until NarrationTiming has samples
         };
 
         struct ActorState
@@ -95,6 +101,10 @@ namespace OrgasmEngine
             std::int32_t ownOrgasmsInFlight = 0;  // fired by us, SexLabOrgasm not seen yet
             float jitter = 1.0f;                  // per-actor rate factor, rolled at BeginScene
             double lastCalmAt = -1.0;
+            // Gate pass: narration already sent; the bar climbs at rushRate and the orgasm fires (no DN)
+            // at kRushFireAt in the final stage. Not saved.
+            bool rushing = false;
+            float rushRate = 0.0f;
             // DOM slave: passive gain is progress pushed to DOM in steps; enjoyment is a meter computed
             // by DOM (SetDomMeter).
             bool dom = false;
@@ -128,6 +138,11 @@ namespace OrgasmEngine
             bool staged = false;        // SetStage seen once (no spike for the first stage)
             bool gateDone = false;      // gate rolled for this pass through the last two stages
             double gateElapsed = 0.0;   // animating, unpaused seconds in the second-to-last stage
+            // Gate passed in the second-to-last stage (held by the Scene): the first non-player speech
+            // after the narration (SpeechStarts() > gateSpeechMark) pushes the scene to its final stage.
+            bool gateAwait = false;
+            bool gateMarked = false;  // GateNarrationSent seen
+            std::uint64_t gateSpeechMark = 0;
         };
 
         // Work collected under the lock, run after it is released (Papyrus dispatch / events / HUD).
@@ -173,6 +188,12 @@ namespace OrgasmEngine
             bool prepay;      // first sync of the scene: cancel DOM's own recurring adds
             bool hasPlayer;
         };
+        // Gate passed: the Scene narrates these actors now (one DN) and holds the stage until the voice.
+        struct GatePassFx
+        {
+            std::vector<RE::FormID> actors;
+            bool holdStage;  // still in the second-to-last stage
+        };
         struct Effects
         {
             std::vector<OrgasmGroupFx> orgasms;
@@ -180,11 +201,12 @@ namespace OrgasmEngine
             std::vector<NarrateFx> narrations;
             std::vector<EventFx> events;
             std::vector<DomSyncFx> domSyncs;
-            std::vector<RE::FormID> advances;  // gate passed: push the scene to its final stage
+            std::vector<GatePassFx> gatePasses;
+            std::vector<RE::FormID> advances;  // voice started after a gate pass: push the scene to its final stage
             bool empty() const
             {
                 return orgasms.empty() && mirrors.empty() && narrations.empty() && events.empty() &&
-                       domSyncs.empty() && advances.empty();
+                       domSyncs.empty() && gatePasses.empty() && advances.empty();
             }
         };
 
@@ -393,6 +415,7 @@ namespace OrgasmEngine
             st.pending = false;
             st.pendingForce = false;
             st.deniedSent = false;
+            st.rushing = false;
             // SexLab's QuitEnjoyment resets inside ForceOrgasm; re-mirror soon after.
             st.lastMirrored = -1000;
             st.lastMirrorAt = now;
@@ -414,9 +437,12 @@ namespace OrgasmEngine
             return !st.dom && !AnyBlock(st) && now >= st.edgeUntil && !IsCooling(st, now);
         }
 
-        // Caller holds g_lock. Someone in the scene orgasmed: everyone else at groupJoin or more joins them.
+        // Caller holds g_lock. Someone in the scene orgasmed: everyone else at groupJoin or more joins them
+        // (groupJoinFinal in the final stage: the scene is ending, so close is close enough).
         void JoinGroup(const SceneState& sc, OrgasmGroupFx& group, double now, Effects& fx)
         {
+            const bool finalStage = sc.stageCount > 0 && sc.stage >= sc.stageCount && !sc.leadIn;
+            const float threshold = finalStage ? g_settings.groupJoinFinal : g_settings.groupJoin;
             for (const auto id : sc.actors) {
                 if (std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end()) {
                     continue;
@@ -426,7 +452,7 @@ namespace OrgasmEngine
                     continue;
                 }
                 ActorState& st = at->second;
-                if (!CanOrgasmNow(st, now) || st.enjoyment < g_settings.groupJoin) {
+                if (!CanOrgasmNow(st, now) || st.enjoyment < threshold) {
                     continue;
                 }
                 webui_log::info("OrgasmEngine: {:#x} joins the group orgasm enjoyment={:.1f}", id, st.enjoyment);
@@ -558,6 +584,18 @@ namespace OrgasmEngine
                         RE::BSFixedString(g.source.c_str()), ActorFor(g.allower), ActorFor(g.allowed),
                         RE::BSFixedString(g.extras.c_str())));
             }
+            for (const auto& p : fx.gatePasses) {
+                std::vector<RE::Actor*> actors;
+                for (const auto id : p.actors) {
+                    if (auto* a = ActorFor(id)) {
+                        actors.push_back(a);
+                    }
+                }
+                if (!actors.empty()) {
+                    DispatchShell("Effect_GatePassed",
+                        RE::MakeFunctionArguments(std::move(actors), static_cast<bool>(p.holdStage)));
+                }
+            }
             for (const auto id : fx.advances) {
                 if (auto* a = ActorFor(id)) {
                     DispatchShell("Effect_AdvanceToFinal", RE::MakeFunctionArguments(std::move(a)));
@@ -682,6 +720,8 @@ namespace OrgasmEngine
                     const float sceneRate = sc.baseRate > 0.0f ? sc.baseRate : kFallbackRate;
                     // Everyone who orgasms in this scene this tick: one group, one message.
                     OrgasmGroupFx group;
+                    // Gate passers reaching kRushFireAt: already narrated, so their own group, no join.
+                    OrgasmGroupFx rushGroup;
 
                     for (const auto id : sc.actors) {
                         auto at = g_actors.find(id);
@@ -691,103 +731,124 @@ namespace OrgasmEngine
                         ActorState& st = at->second;
                         RE::Actor* actor = ActorFor(id);
 
-                        // 1. Passive gain: fixed rate from the stage timers, so extra time (repeated stage) or
-                        // speed adds enjoyment; a paused stage holds. Not expected to orgasm: mini-game only.
-                        float rate = st.orgasmExpected && !sc.paused ? sceneRate * RoleMult(st.role) * st.jitter
-                                                                     : 0.0f;
-                        for (const auto& [src, m] : st.rateMods) {
-                            rate *= m;
+                        if (st.rushing && AnyBlock(st)) {
+                            st.rushing = false;
+                            webui_log::info("OrgasmEngine: gate rush {:#x} cancelled (blocked) enjoyment={:.1f}", id,
+                                st.enjoyment);
                         }
-                        const float gain = static_cast<float>(rate * dt) * speed;
-                        if (st.dom) {
-                            st.domProgress += gain;
-                            st.domStepAcc += gain;
-                        } else {
-                            st.enjoyment = std::clamp(st.enjoyment + gain, 0.0f, kMaxEnjoyment);
-                        }
-
-                        // Mental break recovers as magicka regenerates.
-                        if (st.broken || g_settings.mentalBreak) {
-                            UpdateBroken(st, actor, 0, "minigame", fx);
-                        }
-
-                        // 2. Orgasm test.
-                        if (st.pending && st.pendingForce) {
-                            Fire(st, group, true, st.pendingSource, now, fx);
-                        } else if (st.dom) {
-                            // DOM decides: push progress to DOM's arousal in steps (vanilla total spread over
-                            // the animation), with a light step roll after each rise. DOM's own full roll
-                            // still comes from the OrgasmStart hook or AnimationEnd.
-                            st.pending = false;
-                            const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
-                            const bool edging = now < st.edgeUntil;
-                            const bool blocked = AnyBlock(st);
-                            if (blocked && st.enjoyment >= kDomMeterPossible && !st.deniedSent) {
-                                st.deniedSent = true;
-                                fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kOrgasmDenied, st.id,
-                                    st.id, "dom", st.enjoyment, st.orgasmCount });
+                        // Gate pass: the narration is already out. Climb to kRushHover by the expected voice
+                        // start, then finish within kRushFinish in the final stage and fire there (no second
+                        // DN). No passive gain or other test meanwhile; a forced request still wins.
+                        if (st.rushing && !(st.pending && st.pendingForce)) {
+                            if (finalStage) {
+                                // Kept in rushRate so the finish is linear (max keeps the first tick's rate).
+                                st.rushRate = std::max(st.rushRate,
+                                    static_cast<float>((kRushFireAt - st.enjoyment) / kRushFinish));
                             }
-                            if (st.enjoyment < kDomMeterPossible) {
-                                st.deniedSent = false;
-                            }
-                            const double since = now - st.lastDomSyncAt;
-                            const bool due = st.domSyncNow || !st.domPrepaid ||
-                                             (since >= kDomSyncInterval && (st.domStepAcc >= kDomStep ||
-                                                                             st.domDelta != 0.0f ||
-                                                                             since >= kDomRefresh));
-                            if (due) {
-                                int steps = 0;
-                                while (st.domStepAcc >= kDomStep) {
-                                    st.domStepAcc -= kDomStep;
-                                    ++steps;
-                                }
-                                const float points = static_cast<float>(steps) * kDomStep;
-                                const float daring = points * g_settings.domArousalScale;
-                                const float naivety = sc.hasPlayer ? points * g_settings.domArousalScalePlayer : 0.0f;
-                                const bool rising = steps > 0 || st.domDelta > 0.0f;
-                                const bool allowRoll = rising && !blocked && !cooling && !edging;
-                                const float share =
-                                    allowRoll ? static_cast<float>(steps) * kDomStepShare + st.domShare : 0.0f;
-                                const bool prepay = !st.domPrepaid;
-                                st.domPrepaid = true;
-                                fx.domSyncs.push_back({ id, st.domDelta, daring, naivety, share, prepay, sc.hasPlayer });
-                                if (steps > 0 || prepay || st.domDelta != 0.0f) {
-                                    webui_log::info(
-                                        "OrgasmEngine: dom step {:#x} steps={} progress={:.1f} daring={} naivety={} "
-                                        "mini={} share={} prepay={}",
-                                        id, steps, st.domProgress, daring, naivety, st.domDelta, share, prepay);
-                                }
-                                st.domDelta = 0.0f;
-                                st.domShare = 0.0f;
-                                st.domSyncNow = false;
-                                st.lastDomSyncAt = now;
+                            st.enjoyment = std::clamp(st.enjoyment + static_cast<float>(st.rushRate * dt), 0.0f,
+                                finalStage ? kMaxEnjoyment : kRushHover);
+                            if (finalStage && st.enjoyment >= kRushFireAt) {
+                                Fire(st, rushGroup, true, "gate", now, fx);
                             }
                         } else {
-                            float test = st.enjoyment;
-                            if (g_settings.miniGame && now - st.lastRollAt >= kRollInterval) {
-                                st.lastRollAt = now;
-                                std::uniform_real_distribution<float> roll(0.0f, std::max(0.0f, g_settings.randomBonus));
-                                test += roll(g_rng);
+                            // 1. Passive gain: fixed rate from the stage timers, so extra time (repeated stage) or
+                            // speed adds enjoyment; a paused stage holds. Not expected to orgasm: mini-game only.
+                            float rate = st.orgasmExpected && !sc.paused ? sceneRate * RoleMult(st.role) * st.jitter
+                                                                         : 0.0f;
+                            for (const auto& [src, m] : st.rateMods) {
+                                rate *= m;
                             }
-                            const bool wants = test >= kMaxEnjoyment || st.pending;
-                            const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
-                            const bool edging = now < st.edgeUntil;
-                            if (wants && !cooling && !edging) {
-                                if (AnyBlock(st)) {
-                                    if (!st.deniedSent) {
-                                        st.deniedSent = true;
-                                        fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kOrgasmDenied,
-                                            st.id, st.id, st.pending ? st.pendingSource : "engine", st.enjoyment,
-                                            st.orgasmCount });
+                            const float gain = static_cast<float>(rate * dt) * speed;
+                            if (st.dom) {
+                                st.domProgress += gain;
+                                st.domStepAcc += gain;
+                            } else {
+                                st.enjoyment = std::clamp(st.enjoyment + gain, 0.0f, kMaxEnjoyment);
+                            }
+
+                            // Mental break recovers as magicka regenerates.
+                            if (st.broken || g_settings.mentalBreak) {
+                                UpdateBroken(st, actor, 0, "minigame", fx);
+                            }
+
+                            // 2. Orgasm test.
+                            if (st.pending && st.pendingForce) {
+                                Fire(st, group, true, st.pendingSource, now, fx);
+                            } else if (st.dom) {
+                                // DOM decides: push progress to DOM's arousal in steps (vanilla total spread over
+                                // the animation), with a light step roll after each rise. DOM's own full roll
+                                // still comes from the OrgasmStart hook or AnimationEnd.
+                                st.pending = false;
+                                const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
+                                const bool edging = now < st.edgeUntil;
+                                const bool blocked = AnyBlock(st);
+                                if (blocked && st.enjoyment >= kDomMeterPossible && !st.deniedSent) {
+                                    st.deniedSent = true;
+                                    fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kOrgasmDenied, st.id,
+                                        st.id, "dom", st.enjoyment, st.orgasmCount });
+                                }
+                                if (st.enjoyment < kDomMeterPossible) {
+                                    st.deniedSent = false;
+                                }
+                                const double since = now - st.lastDomSyncAt;
+                                const bool due = st.domSyncNow || !st.domPrepaid ||
+                                                 (since >= kDomSyncInterval && (st.domStepAcc >= kDomStep ||
+                                                                                 st.domDelta != 0.0f ||
+                                                                                 since >= kDomRefresh));
+                                if (due) {
+                                    int steps = 0;
+                                    while (st.domStepAcc >= kDomStep) {
+                                        st.domStepAcc -= kDomStep;
+                                        ++steps;
                                     }
-                                    st.pending = false;
-                                } else {
-                                    const std::string source = st.pending ? st.pendingSource : "engine";
-                                    Fire(st, group, true, source, now, fx);
+                                    const float points = static_cast<float>(steps) * kDomStep;
+                                    const float daring = points * g_settings.domArousalScale;
+                                    const float naivety = sc.hasPlayer ? points * g_settings.domArousalScalePlayer : 0.0f;
+                                    const bool rising = steps > 0 || st.domDelta > 0.0f;
+                                    const bool allowRoll = rising && !blocked && !cooling && !edging;
+                                    const float share =
+                                        allowRoll ? static_cast<float>(steps) * kDomStepShare + st.domShare : 0.0f;
+                                    const bool prepay = !st.domPrepaid;
+                                    st.domPrepaid = true;
+                                    fx.domSyncs.push_back({ id, st.domDelta, daring, naivety, share, prepay, sc.hasPlayer });
+                                    if (steps > 0 || prepay || st.domDelta != 0.0f) {
+                                        webui_log::info(
+                                            "OrgasmEngine: dom step {:#x} steps={} progress={:.1f} daring={} naivety={} "
+                                            "mini={} share={} prepay={}",
+                                            id, steps, st.domProgress, daring, naivety, st.domDelta, share, prepay);
+                                    }
+                                    st.domDelta = 0.0f;
+                                    st.domShare = 0.0f;
+                                    st.domSyncNow = false;
+                                    st.lastDomSyncAt = now;
                                 }
-                            }
-                            if (st.enjoyment < kEdgeThreshold) {
-                                st.deniedSent = false;
+                            } else {
+                                float test = st.enjoyment;
+                                if (g_settings.miniGame && now - st.lastRollAt >= kRollInterval) {
+                                    st.lastRollAt = now;
+                                    std::uniform_real_distribution<float> roll(0.0f, std::max(0.0f, g_settings.randomBonus));
+                                    test += roll(g_rng);
+                                }
+                                const bool wants = test >= kMaxEnjoyment || st.pending;
+                                const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
+                                const bool edging = now < st.edgeUntil;
+                                if (wants && !cooling && !edging) {
+                                    if (AnyBlock(st)) {
+                                        if (!st.deniedSent) {
+                                            st.deniedSent = true;
+                                            fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kOrgasmDenied,
+                                                st.id, st.id, st.pending ? st.pendingSource : "engine", st.enjoyment,
+                                                st.orgasmCount });
+                                        }
+                                        st.pending = false;
+                                    } else {
+                                        const std::string source = st.pending ? st.pendingSource : "engine";
+                                        Fire(st, group, true, source, now, fx);
+                                    }
+                                }
+                                if (st.enjoyment < kEdgeThreshold) {
+                                    st.deniedSent = false;
+                                }
                             }
                         }
 
@@ -801,10 +862,12 @@ namespace OrgasmEngine
                         }
                     }
 
-                    // 4a. Gate (timed, no LeadIn): at 90% of the second-to-last stage's timer (animating,
-                    // unpaused time), or on reaching the final stage first, each actor who has not
-                    // orgasmed rolls once: chance = enjoyment %. A pass orgasms and pushes the scene to
-                    // its final stage; all fail: SexLab advances as normal, no orgasm.
+                    // 4a. Gate (timed, no LeadIn): in the second-to-last stage, `lead` seconds (the measured
+                    // DN -> speech time) before its timer ends, or on reaching the final stage first, each
+                    // actor who has not orgasmed rolls once: chance = enjoyment %. Passers rush (bars reach
+                    // kRushHover by the expected voice) and the Scene narrates them at once and holds the
+                    // stage; the voice starting pushes the final stage, where the rush fires the orgasm. All
+                    // fail: SexLab advances as normal, no orgasm.
                     const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
                     const bool useGate = g_settings.gate && timedScene && !sc.leadIn;
                     if (useGate && !sc.gateDone && sc.stage >= sc.stageCount - 1) {
@@ -813,34 +876,75 @@ namespace OrgasmEngine
                             sc.gateElapsed += dt;
                         }
                         const float gateSecs = sc.stageSecs[sc.stageSecs.size() - 2];
-                        if (!penultimate || sc.gateElapsed >= kSafetyAt * gateSecs) {
+                        const double lead = NarrationTiming::EstimateSeconds(g_settings.gateLeadDefault);
+                        if (!penultimate || sc.gateElapsed >= std::max(0.0, gateSecs - lead)) {
                             sc.gateDone = true;
                             std::uniform_real_distribution<float> roll(0.0f, kMaxEnjoyment);
+                            GatePassFx pass{ {}, penultimate };
                             for (const auto id : sc.actors) {
                                 auto at = g_actors.find(id);
                                 if (at == g_actors.end()) {
                                     continue;
                                 }
                                 ActorState& st = at->second;
-                                if (st.orgasmCount != 0 || !st.orgasmExpected || !CanOrgasmNow(st, now) ||
-                                    std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end()) {
+                                if (st.orgasmCount != 0 || !st.orgasmExpected || st.rushing || !CanOrgasmNow(st, now) ||
+                                    std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
+                                    std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
+                                        rushGroup.actors.end()) {
                                     webui_log::info("OrgasmEngine: gate skips {:#x} enjoyment={:.1f} count={} "
                                                     "expected={} dom={}",
                                         id, st.enjoyment, st.orgasmCount, st.orgasmExpected, st.dom);
                                     continue;
                                 }
                                 const float r = roll(g_rng);
-                                const bool pass = r < st.enjoyment;
-                                webui_log::info("OrgasmEngine: gate {:#x} enjoyment={:.1f} roll={:.1f} pass={}", id,
-                                    st.enjoyment, r, pass);
-                                if (pass) {
-                                    Fire(st, group, true, "gate", now, fx);
+                                const bool passed = r < st.enjoyment;
+                                webui_log::info("OrgasmEngine: gate {:#x} enjoyment={:.1f} roll={:.1f} pass={} "
+                                                "lead={:.2f}s penultimate={}",
+                                    id, st.enjoyment, r, passed, lead, penultimate);
+                                if (passed) {
+                                    st.rushing = true;
+                                    st.rushRate = std::max(0.0f, kRushHover - st.enjoyment) / static_cast<float>(lead);
+                                    pass.actors.push_back(id);
                                 }
                             }
-                            if (penultimate && !group.actors.empty()) {
-                                fx.advances.push_back(group.actors.front());
+                            // Anyone close (groupJoinFinal) rushes with the passers, repeat orgasms too:
+                            // one gate DN for everyone who finishes together.
+                            if (!pass.actors.empty()) {
+                                for (const auto id : sc.actors) {
+                                    if (std::find(pass.actors.begin(), pass.actors.end(), id) != pass.actors.end()) {
+                                        continue;
+                                    }
+                                    auto at = g_actors.find(id);
+                                    if (at == g_actors.end()) {
+                                        continue;
+                                    }
+                                    ActorState& st = at->second;
+                                    if (!st.orgasmExpected || st.rushing || !CanOrgasmNow(st, now) ||
+                                        st.enjoyment < g_settings.groupJoinFinal ||
+                                        std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
+                                        std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
+                                            rushGroup.actors.end()) {
+                                        continue;
+                                    }
+                                    webui_log::info("OrgasmEngine: gate join {:#x} enjoyment={:.1f} count={}", id,
+                                        st.enjoyment, st.orgasmCount);
+                                    st.rushing = true;
+                                    st.rushRate = std::max(0.0f, kRushHover - st.enjoyment) / static_cast<float>(lead);
+                                    pass.actors.push_back(id);
+                                }
+                            }
+                            if (!pass.actors.empty()) {
+                                sc.gateAwait = penultimate;
+                                sc.gateMarked = false;
+                                fx.gatePasses.push_back(std::move(pass));
                             }
                         }
+                    }
+                    // The voice for the gate narration started: final stage now (the rush fires there).
+                    if (sc.gateAwait && sc.gateMarked && !sc.actors.empty() && NarrationTiming::SpeechStarts() > sc.gateSpeechMark) {
+                        sc.gateAwait = false;
+                        webui_log::info("OrgasmEngine: scene {} gate voice started, to the final stage", sid);
+                        fx.advances.push_back(sc.actors.front());
                     }
 
                     // 4b. Safety net (gate off, or no timers): at 90% of the final stage's timer, each
@@ -876,6 +980,10 @@ namespace OrgasmEngine
                     if (!group.actors.empty()) {
                         JoinGroup(sc, group, now, fx);
                         EmitGroup(std::move(group), fx);
+                    }
+                    // Gate rush: narrated at the pass; ForceOrgasm only (Orgasm_ApplyGroup source "gate").
+                    if (!rushGroup.actors.empty()) {
+                        fx.orgasms.push_back(std::move(rushGroup));
                     }
                 }
                 for (const auto sid : stale) {
@@ -995,8 +1103,11 @@ namespace OrgasmEngine
         s.randomBonus = GetConfigFloat("sexlab.minigame.random_bonus", 10.0f);
         s.narrateWindow = GetConfigFloat("sexlab.minigame.narrate_window", 3.0f);
         s.groupJoin = std::clamp(GetConfigFloat("sexlab.enjoyment.group_join", 95.0f), 0.0f, kMaxEnjoyment);
+        s.groupJoinFinal =
+            std::clamp(GetConfigFloat("sexlab.enjoyment.group_join_final", 80.0f), 0.0f, kMaxEnjoyment);
         s.stageSpike = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_spike", 5.0f));
         s.gate = GetConfigBool("sexlab.ending.gate", true);
+        s.gateLeadDefault = std::clamp(GetConfigFloat("sexlab.ending.gate_lead_default", 5.0f), 1.0f, 30.0f);
         {
             std::lock_guard lock(g_lock);
             g_settings = s;
@@ -1004,10 +1115,10 @@ namespace OrgasmEngine
         }
         webui_log::info(
             "OrgasmEngine: config minigame={} role mults={}/{}/{} jitter={}-{} dom scale={}/{} arouse={} calm={} "
-            "cost={}/{} edge={}s break={} drain={} random={} window={}s group_join={} stage_spike={} gate={}",
+            "cost={}/{} edge={}s break={} drain={} random={} window={}s group_join={}/{} stage_spike={} gate={} gate_lead={}",
             s.miniGame, s.passiveRate, s.aggressorRate, s.victimRate, s.jitterMin, s.jitterMax, s.domArousalScale,
             s.domArousalScalePlayer, s.arouseAmount, s.calmAmount, s.staminaCost, s.magickaCost, s.edgeSeconds,
-            s.mentalBreak, s.breakDrain, s.randomBonus, s.narrateWindow, s.groupJoin, s.stageSpike, s.gate);
+            s.mentalBreak, s.breakDrain, s.randomBonus, s.narrateWindow, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
     }
 
     bool IsMiniGameEnabled()
@@ -1102,7 +1213,19 @@ namespace OrgasmEngine
             sc.gateElapsed = 0.0;
         }
         if (stageCount >= 2 && stage < stageCount - 1) {
+            // Back before the last two stages: the gate rolls again; a pending rush / wait is dropped.
+            if (sc.gateDone || sc.gateAwait) {
+                for (const auto id : sc.actors) {
+                    if (auto at = g_actors.find(id); at != g_actors.end()) {
+                        at->second.rushing = false;
+                    }
+                }
+            }
             sc.gateDone = false;
+            sc.gateAwait = false;
+        }
+        if (stageCount > 0 && stage >= stageCount) {
+            sc.gateAwait = false;  // final stage reached (voice, SexLab's timer or a manual advance)
         }
         sc.stage = stage;
         sc.stageCount = stageCount;
@@ -1140,6 +1263,34 @@ namespace OrgasmEngine
             it->second.paused = paused;
             webui_log::info("OrgasmEngine: scene {} {}", sid, paused ? "paused" : "resumed");
         }
+    }
+
+    void GateNarrationSent(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it == g_scenes.end() || !it->second.gateAwait) {
+            return;
+        }
+        it->second.gateSpeechMark = NarrationTiming::SpeechStarts();
+        it->second.gateMarked = true;
+        webui_log::info("OrgasmEngine: scene {} gate narration sent, waiting for speech (mark {})", sid,
+            it->second.gateSpeechMark);
+    }
+
+    float FinalStageRemaining(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it == g_scenes.end()) {
+            return -1.0f;
+        }
+        const SceneState& sc = it->second;
+        if (sc.stageCount <= 0 || sc.stage < sc.stageCount || sc.leadIn || sc.stageSecs.empty() ||
+            sc.stageSecs.back() <= 0.0f) {
+            return -1.0f;
+        }
+        return std::max(0.0f, static_cast<float>(sc.stageSecs.back() - sc.finalElapsed));
     }
 
     bool IsPlayerScenePaused()

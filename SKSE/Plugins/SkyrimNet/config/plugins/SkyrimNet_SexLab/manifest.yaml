@@ -304,6 +304,15 @@ schema:
       defaultValue: 95
       category: "Enjoyment"
 
+    - name: "Final-stage group orgasm threshold"
+      path: "sexlab.enjoyment.group_join_final"
+      type: "float"
+      description: "Same as the group orgasm threshold, but used in the final stage and when someone passes the orgasm gate: others this close join them, in one narration."
+      min: 0
+      max: 100
+      defaultValue: 80
+      category: "Enjoyment"
+
     - name: "Stage advance enjoyment"
       path: "sexlab.enjoyment.stage_spike"
       type: "float"
@@ -359,8 +368,26 @@ schema:
     - name: "Orgasm check before the last stage"
       path: "sexlab.ending.gate"
       type: "bool"
-      description: "Just before the scene would move to the last stage, each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. Anyone who passes orgasms and the scene moves to the last stage. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm."
+      description: "Shortly before the last stage (early by the measured time from narration to voice), each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. For those who pass, the orgasm narration is sent at once, their bars fill, and the last stage starts with the orgasm when the voice begins. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm."
       defaultValue: true
+      category: "Scene ending"
+
+    - name: "Narration to voice estimate"
+      path: "sexlab.ending.gate_lead_default"
+      type: "float"
+      description: "Seconds from sending a narration to its first spoken line, used to time the orgasm check until a few real narrations have been measured this session."
+      min: 1
+      max: 20
+      defaultValue: 5
+      category: "Scene ending"
+
+    - name: "Longest wait for the orgasm voice"
+      path: "sexlab.ending.gate_wait_max"
+      type: "float"
+      description: "After a passed orgasm check, the stage before the last is held until the orgasm narration starts speaking, for at most this many seconds."
+      min: 5
+      max: 60
+      defaultValue: 20
       category: "Scene ending"
 
     - name: "Hold last stage for orgasm dialogue"

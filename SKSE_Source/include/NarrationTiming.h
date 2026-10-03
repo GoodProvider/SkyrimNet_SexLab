@@ -18,4 +18,11 @@ namespace NarrationTiming
 
     /// Drops the running timer and speech state (load / new game). Run stats are kept.
     void Clear();
+
+    /// Expected DN -> first speech seconds: median of the last clean samples, or fallback while there
+    /// are too few. Clamped to [1, 30].
+    double EstimateSeconds(double fallback);
+
+    /// Count of non-player SkyrimNet_SpeechStarted events this session (any thread).
+    std::uint64_t SpeechStarts();
 }
