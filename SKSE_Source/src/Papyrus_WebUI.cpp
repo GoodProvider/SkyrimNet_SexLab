@@ -491,7 +491,7 @@ namespace PapyrusBindings_WebUI
     void SceneCreator_Open(RE::StaticFunctionTag*, RE::BSFixedString state_json)
     {
         webui_log::info("SceneCreator_Open");
-        WebUI_HideAllPanels(nullptr);
+        ActionCatalog::ClearMainPanelSelection();
         const char* raw = state_json.c_str() ? state_json.c_str() : "{}";
         std::string dumped = "{}";
         try {
@@ -504,9 +504,27 @@ namespace PapyrusBindings_WebUI
             webui_log::error("SceneCreator_Open: bad state_json; using {{}}");
         }
         SceneCreatorOpenedForPending = true;
-        WebUI_Invoke(std::string("configureSceneCreator(") + dumped + ");");
-        WebUI_Invoke("showPanel('scene_creator_panel');");
+        // One Invoke: hide/clear/configure/show land in order (the previous WebUI_HideAllPanels +
+        // configureSceneCreator + showPanel split across three Invokes could have the hide land after
+        // the show, leaving the panel hidden — see openYesNoSolo's comment for the same race).
+        WebUI_Invoke(std::format(
+            "openSceneCreatorPanel({}, {});", dumped, TargetMenuSessionActive ? "true" : "false"));
         WebUI_Visibility_Show();
+    }
+
+    /// Yes from the YesNo gate dialogue is supposed to always be followed by SceneCreator_Open, which
+    /// replaces the "Opening Scene Creator..." placeholder it leaves up (YesNo_Open, button 0, WebUI
+    /// closed). A few Papyrus paths resolve the scene directly instead (no active creator for the sid,
+    /// or the creator already opened once): this closes that stale placeholder instead of leaving it
+    /// stuck. No-op when the WebUI was already open before the dialogue (nothing to clean up there).
+    void WebUI_CloseYesNoIfSolo(RE::StaticFunctionTag*)
+    {
+        if (YesNo_OverlayWasOpen)
+            return;
+        webui_log::info("WebUI_CloseYesNoIfSolo: no Scene Creator followed, closing the placeholder");
+        WebUI_Invoke("hidePanel('yesno_panel');");
+        WebUI_Invoke("clearYesNoSolo();");
+        WebUI_Visibility_Hide();
     }
 
     void SceneCreator_Configure(RE::StaticFunctionTag*, RE::BSFixedString state_json)
@@ -1869,6 +1887,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("SceneInfos_Seed", scriptName, SceneInfos_Seed);
         a_vm->RegisterFunction("WebUI_HideAllPanels", scriptName, WebUI_HideAllPanels);
         a_vm->RegisterFunction("WebUI_CloseOverlay", scriptName, WebUI_CloseOverlay);
+        a_vm->RegisterFunction("WebUI_CloseYesNoIfSolo", scriptName, WebUI_CloseYesNoIfSolo);
         a_vm->RegisterFunction("WebUI_SetHotkey", scriptName, WebUI_SetHotkey);
         a_vm->RegisterFunction("WebUI_AfterTargetOpen", scriptName, WebUI_AfterTargetOpen);
         a_vm->RegisterFunction("WebUI_MaybeRestoreScenePanel", scriptName, WebUI_MaybeRestoreScenePanel);

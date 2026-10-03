@@ -23,6 +23,14 @@ namespace NarrationTiming
     /// are too few. Clamped to [1, 30].
     double EstimateSeconds(double fallback);
 
-    /// Count of non-player SkyrimNet_SpeechStarted events this session (any thread).
+    /// Count of non-player SkyrimNet_SpeechStarted events this session (any thread). Bumped on every
+    /// sentence of any speech, so it is NOT a reliable "the narration I just sent was spoken" signal
+    /// by itself (a response already playing bumps it too) — prefer Completions() for that.
     std::uint64_t SpeechStarts();
+
+    /// Count of MarkSent() calls actually paired off with a following speech start (the one-shot
+    /// pending/consumed latency sample, regardless of busy/overlap). Unlike SpeechStarts(), later
+    /// sentences of an already-matched response do not bump this again, so "Completions() grew past
+    /// the count taken right after a MarkSent()" means that specific narration's own response began.
+    std::uint64_t Completions();
 }

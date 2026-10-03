@@ -22,6 +22,10 @@ Function SceneInfos_Seed(String state_json) global native
 Function WebUI_HideAllPanels() global native
 ; Close overlay (clear TargetMenu session, hide panels, Unfocus). Handler Done uses this.
 Function WebUI_CloseOverlay() global native
+; Closes the YesNo gate dialogue's "Opening Scene Creator..." placeholder when no SceneCreator_Open
+; actually follows Yes (no active creator for the sid, or it already opened once). No-op if the
+; WebUI was already open before the dialogue (YesNo_Open's on-top path, nothing to clean up).
+Function WebUI_CloseYesNoIfSolo() global native
 ; MCM: enable/disable C++ menu hotkey and set DX scancode (Escape unchanged).
 Function WebUI_SetHotkey(int dxScanCode, bool enabled) global native
 ; After Target_Menu_Open: JS picks ControlPanel default (preferredFormId or nearest non-player).

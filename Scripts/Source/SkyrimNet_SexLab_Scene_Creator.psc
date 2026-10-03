@@ -1010,6 +1010,11 @@ Function LoadSetting(String setting_name)
         scene_setting_name = setting_name
         setting_strict = JMap.getInt(setting_id, "strict") != 0
         setting_has_filter = JMap.HasKey(setting_id, "tags_any") || JMap.HasKey(setting_id, "tags_prefer") || JMap.HasKey(setting_id, "exclude_settings")
+    else
+        ; Loading "default" after a filtered preset: drop that preset's flags instead of keeping them.
+        scene_setting_name = ""
+        setting_strict = false
+        setting_has_filter = false
     endif
 
     ; ------------------------------
@@ -1353,6 +1358,8 @@ Function ContinueAfterYesNo(int button)
     if button == BUTTON_YES
         if !TryOpenSceneCreatorMenu()
             Trace("ContinueAfterYesNo", "SceneCreator already opened, resolving from tags")
+            ; No SceneCreator_Open follows on this path: drop the "Opening Scene Creator..." placeholder.
+            SkyrimNet_SexLab_WebUI.WebUI_CloseYesNoIfSolo()
             sslBaseAnimation[] animationsFallback = ResolveAnimationsFromTags()
             SkyrimNet_SexLab_Scene sl_scene_fb = FinishStartScene(animationsFallback)
             if sl_scene_fb == None

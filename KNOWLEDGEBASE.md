@@ -1,5 +1,21 @@
 # Knowledgebase
 
+## Gate hold: speech-count race, stale hold across animation/pause/save, double narration (2026-10-03)
+
+**Symptom (code review, not yet seen live):** the gate rush (`Engine_GatePassed` / `Gate_Hold`) could jump to the final stage before its own narration's voice played, get stuck across an animation change, ignore the pause hotkey, double-roll after a save/load mid-hold, and occasionally lose the player's "no continue DN" guard for a gate/non-gate final stage.
+
+**Causes and fixes:**
+- `OrgasmEngine::SpeechStarts()` counts every sentence of *any* non-player speech, so a response already playing (e.g. the previous stage's continue narration) could satisfy `gateAwait`'s "the voice started" check before the gate narration's own voice did. Added `NarrationTiming::Completions()` — bumped only when a `MarkSent` narration is actually paired with its first following speech (the existing DN→speech latency pairing) — and switched the gate advance (`OrgasmEngine.cpp` ~944) to compare against that instead.
+- `gate_holding` (Scene.psc) was only cleared on reaching the final stage of the *same* animation; a mid-hold animation change left it stuck, so `Gate_Poll`'s timeout later force-advanced the new (wrong) animation. `Ending_StageStart` now drops a stale hold whenever `pending_animation_change` is set.
+- `Gate_Poll` measured `Utility.GetCurrentRealTime()` against a stamp that isn't pause-aware or save/load-safe: pausing via the hotkey still let the 20s timeout elapse, and a save/load mid-hold (clock reset) could leave `held` negative for up to the previous session's length. `Gate_Poll` now freezes the countdown while `scene_paused` and treats a negative `held` as expired instead of waiting; `Gate_Release` clamps the same negative case before `UpdateTimer`.
+- The engine's co-save (`OrgasmEngine::Save`/`Load`, `kRecordVersion` 3→4) didn't persist `gateDone`/`gateAwait`/per-actor `rushing`, so a reload mid-hold re-rolled the gate for the same actors (plus `JoinGroup` didn't skip `rushing` actors, so a group-join could narrate the same orgasm twice). Both are now persisted/guarded.
+- `NarrateOrgasmStash(force_direct=True)` from `Engine_GatePassed` silently dropped `force_direct` when it deferred to the busy window (`orgasm_narrating`), and `GateNarrationSent` was still called immediately regardless. `NarrateOrgasmStash` now returns whether it actually sent; the gate's `force_direct` and the `GateNarrationSent` call both carry through to `FlushOrgasmWindow`.
+- `StageStart`'s final-stage branch suppressed the "continue" narration unconditionally, even when no orgasm/finish DN was actually coming (gate off + no one reaches target, or a non-orgasm scene). Now gated on `gate_holding || ending_done || GetHasDescriptionOrgasmExpected(thread)[1]`.
+
+**Also fixed in the same pass:** the YesNo gate dialogue's "Opening Scene Creator…" placeholder could stay stuck when no `SceneCreator_Open` followed Yes (no active creator for the sid, or it was already opened once) — see `WebUI_CloseYesNoIfSolo`. `SceneCreator_Open` had the same PrismaUI Invoke-ordering race `openYesNoSolo` fixed earlier (separate hide/configure/show Invokes aren't guaranteed to land in issue order) — folded into one `openSceneCreatorPanel` JS entry point. `Scene_Creator.LoadSetting` didn't clear `scene_setting_name`/`setting_strict`/`setting_has_filter` when loading "default" after a filtered preset.
+
+**Status:** compiles clean (pyro + the SKSE Debug build); not yet verified in game.
+
 ## SexLab `AddAnimation` overwrites index 0 (2026-09-29)
 
 **Symptom:** after adding an animation in the Description Editor and reopening, the loaded list still had 3 rows. Log: `WebUI_SwitchToRegistry B_B_CCG idx:0`, while `WebUI_TakeCancelSnapshot anims:4`.

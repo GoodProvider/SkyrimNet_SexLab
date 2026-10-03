@@ -651,6 +651,8 @@ Function WebUI_OnYesNoResult(int creator_sid, int button)
         creator.ContinueAfterYesNo(button)
     else
         Trace("WebUI_OnYesNoResult", "no active creator for sid:"+creator_sid, true)
+        ; No creator to call SceneCreator_Open: drop the "Opening Scene Creator..." placeholder.
+        SkyrimNet_SexLab_WebUI.WebUI_CloseYesNoIfSolo()
     endif
 EndFunction
 

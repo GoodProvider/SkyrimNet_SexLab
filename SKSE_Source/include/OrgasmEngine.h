@@ -127,8 +127,10 @@ namespace OrgasmEngine
     void Load(SKSE::SerializationInterface* intfc, std::uint32_t version, std::uint32_t length);
     void Revert();
     constexpr std::uint32_t kRecord = 'ORGE';
-    // 2: + per-actor dom flag. 3: + stage timers, pause, final clock; jitter, DOM step state. Older still load.
-    constexpr std::uint32_t kRecordVersion = 3;
+    // 2: + per-actor dom flag. 3: + stage timers, pause, final clock; jitter, DOM step state.
+    // 4: + gateDone/gateAwait per scene, rushing per actor (a mid-hold save no longer re-rolls the
+    // gate on load). Older still load.
+    constexpr std::uint32_t kRecordVersion = 4;
 
     /// The exported C++ interface (RequestOrgasmEngineAPI).
     SKYRIMNET_SEXLAB_API::IOrgasmEngineV1* GetInterface();

@@ -138,11 +138,14 @@ namespace OrgasmEngine
             bool staged = false;        // SetStage seen once (no spike for the first stage)
             bool gateDone = false;      // gate rolled for this pass through the last two stages
             double gateElapsed = 0.0;   // animating, unpaused seconds in the second-to-last stage
-            // Gate passed in the second-to-last stage (held by the Scene): the first non-player speech
-            // after the narration (SpeechStarts() > gateSpeechMark) pushes the scene to its final stage.
+            // Gate passed in the second-to-last stage (held by the Scene): the gate narration's own
+            // DN->speech pairing completing (Completions() > gateCompletionMark) pushes the scene to
+            // its final stage. Completions() only grows when a MarkSent narration gets its matching
+            // speech start, so unrelated sentences of other in-flight speech do not trip this early
+            // (SpeechStarts() would, since it counts every sentence of any speech).
             bool gateAwait = false;
             bool gateMarked = false;  // GateNarrationSent seen
-            std::uint64_t gateSpeechMark = 0;
+            std::uint64_t gateCompletionMark = 0;
         };
 
         // Work collected under the lock, run after it is released (Papyrus dispatch / events / HUD).
@@ -452,7 +455,9 @@ namespace OrgasmEngine
                     continue;
                 }
                 ActorState& st = at->second;
-                if (!CanOrgasmNow(st, now) || st.enjoyment < threshold) {
+                // Rushing: already gate-passed and narrated for this orgasm; a group join would
+                // narrate the same actor's orgasm a second time.
+                if (st.rushing || !CanOrgasmNow(st, now) || st.enjoyment < threshold) {
                     continue;
                 }
                 webui_log::info("OrgasmEngine: {:#x} joins the group orgasm enjoyment={:.1f}", id, st.enjoyment);
@@ -941,7 +946,8 @@ namespace OrgasmEngine
                         }
                     }
                     // The voice for the gate narration started: final stage now (the rush fires there).
-                    if (sc.gateAwait && sc.gateMarked && !sc.actors.empty() && NarrationTiming::SpeechStarts() > sc.gateSpeechMark) {
+                    if (sc.gateAwait && sc.gateMarked && !sc.paused && !sc.actors.empty() &&
+                        NarrationTiming::Completions() > sc.gateCompletionMark) {
                         sc.gateAwait = false;
                         webui_log::info("OrgasmEngine: scene {} gate voice started, to the final stage", sid);
                         fx.advances.push_back(sc.actors.front());
@@ -1272,10 +1278,10 @@ namespace OrgasmEngine
         if (it == g_scenes.end() || !it->second.gateAwait) {
             return;
         }
-        it->second.gateSpeechMark = NarrationTiming::SpeechStarts();
+        it->second.gateCompletionMark = NarrationTiming::Completions();
         it->second.gateMarked = true;
         webui_log::info("OrgasmEngine: scene {} gate narration sent, waiting for speech (mark {})", sid,
-            it->second.gateSpeechMark);
+            it->second.gateCompletionMark);
     }
 
     float FinalStageRemaining(std::int32_t sid)
@@ -1851,6 +1857,9 @@ namespace OrgasmEngine
             intfc->WriteRecordData(sc.leadIn);
             intfc->WriteRecordData(sc.paused);
             intfc->WriteRecordData(sc.finalElapsed);
+            // v4: gate state, so a mid-hold save does not re-roll the gate for the same actors on load.
+            intfc->WriteRecordData(sc.gateDone);
+            intfc->WriteRecordData(sc.gateAwait);
             intfc->WriteRecordData(static_cast<std::uint32_t>(sc.actors.size()));
             for (const auto id : sc.actors) {
                 const auto at = g_actors.find(id);
@@ -1868,6 +1877,7 @@ namespace OrgasmEngine
                 intfc->WriteRecordData(st.domProgress);
                 intfc->WriteRecordData(st.domStepAcc);
                 intfc->WriteRecordData(st.domPrepaid);
+                intfc->WriteRecordData(st.rushing);
                 const float since = st.lastOrgasm < 0.0 ? -1.0f : static_cast<float>(now - st.lastOrgasm);
                 intfc->WriteRecordData(since);
                 intfc->WriteRecordData(static_cast<std::uint32_t>(st.blocks.size()));
@@ -1928,6 +1938,12 @@ namespace OrgasmEngine
                 }
                 ApplyStageTimers(sc, secs, leadIn);
             }
+            if (version >= 4) {
+                if (!intfc->ReadRecordData(sc.gateDone) || !intfc->ReadRecordData(sc.gateAwait)) {
+                    webui_log::error("OrgasmEngine: co-save truncated");
+                    return;
+                }
+            }
             if (!intfc->ReadRecordData(actorCount)) {
                 webui_log::error("OrgasmEngine: co-save truncated");
                 return;
@@ -1946,6 +1962,7 @@ namespace OrgasmEngine
                     (version >= 3 &&
                         (!intfc->ReadRecordData(st.jitter) || !intfc->ReadRecordData(st.domProgress) ||
                             !intfc->ReadRecordData(st.domStepAcc) || !intfc->ReadRecordData(st.domPrepaid))) ||
+                    (version >= 4 && !intfc->ReadRecordData(st.rushing)) ||
                     !intfc->ReadRecordData(since) || !intfc->ReadRecordData(n)) {
                     webui_log::error("OrgasmEngine: co-save truncated");
                     return;

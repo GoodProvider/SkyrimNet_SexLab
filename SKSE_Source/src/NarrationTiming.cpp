@@ -39,6 +39,7 @@ namespace NarrationTiming
         int g_overlapped = 0;
         int g_missed = 0;
         std::atomic<std::uint64_t> g_speechStarts{ 0 };
+        std::atomic<std::uint64_t> g_completions{ 0 };
 
         // Caller holds g_lock.
         void ExpireStale(Clock::time_point now)
@@ -97,6 +98,7 @@ namespace NarrationTiming
                 g_pending->extra_sends,
                 g_pending->preview, StatsLine());
             g_pending.reset();
+            g_completions.fetch_add(1);
         }
 
         class SpeechSink : public RE::BSTEventSink<SKSE::ModCallbackEvent>
@@ -182,5 +184,10 @@ namespace NarrationTiming
     std::uint64_t SpeechStarts()
     {
         return g_speechStarts.load();
+    }
+
+    std::uint64_t Completions()
+    {
+        return g_completions.load();
     }
 }

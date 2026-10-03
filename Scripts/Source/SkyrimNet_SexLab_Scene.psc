@@ -61,6 +61,10 @@ float gate_hold_started = 0.0
 ; Real-time stamp when the Combined DOM window first armed; ArmOrgasmWindow
 ; will not extend past 2x orgasm_delay from this start.
 float orgasm_window_started_at = 0.0
+; A gate narration arrived while NarrateOrgasmStash was busy: the deferred flush must still go out
+; as a DirectNarration (never Optional) and tell the engine once it actually sends.
+bool gate_pending_force = false
+bool gate_pending_notify = false
 
 String storage_prefix = "skyrimnet_sexlab_scene"
 String storage_obj_key = "skyrimnet_sexlab_scene_actor_position_obj"
@@ -1823,8 +1827,14 @@ Function Engine_GatePassed(Actor[] actors, bool hold_stage)
             RegisterForSingleUpdate(1.0)
         endif
     endif
-    NarrateOrgasmStash(first, FirstOtherPosition(first), force_direct=True)
-    SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid)
+    bool sent = NarrateOrgasmStash(first, FirstOtherPosition(first), force_direct=True)
+    if sent
+        SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid)
+    else
+        ; NarrateOrgasmStash was busy: the window will flush this force_direct and notify the
+        ; engine once it actually goes out (FlushOrgasmWindow).
+        gate_pending_notify = true
+    endif
     if hold_stage
         Gate_Hold()
     elseif !ending_done && !thread.LeadIn
@@ -1853,7 +1863,13 @@ Function Gate_Release()
     endif
     gate_holding = false
     if gate_hold_timer && thread != None
-        thread.UpdateTimer((Utility.GetCurrentRealTime() - gate_hold_started) - PAUSE_HOLD_SECONDS)
+        ; A save/load mid-hold resets GetCurrentRealTime(): a negative gap would push the timer far
+        ; out instead of releasing it; treat it as "no time held" instead.
+        float held = Utility.GetCurrentRealTime() - gate_hold_started
+        if held < 0.0
+            held = 0.0
+        endif
+        thread.UpdateTimer(held - PAUSE_HOLD_SECONDS)
         thread.ResolveTimers()
     endif
     gate_hold_timer = false
@@ -1864,9 +1880,17 @@ Function Gate_Poll()
     if !gate_holding
         return
     endif
+    if scene_paused
+        ; Freeze the countdown while paused (the hotkey pause, not a save/load); re-check next tick.
+        gate_hold_started += 1.0
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
     float held = Utility.GetCurrentRealTime() - gate_hold_started
     float wait_max = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.gate_wait_max", 20.0)
-    if held < wait_max
+    ; held < 0: a save/load reset the real-time clock mid-wait; stop waiting instead of holding for
+    ; up to the old gate_hold_started's worth of real seconds.
+    if held >= 0.0 && held < wait_max
         RegisterForSingleUpdate(1.0)
         return
     endif
@@ -1903,6 +1927,15 @@ Function Ending_ToFinal()
 EndFunction
 
 Function Ending_StageStart()
+    ; A new animation started while the gate hold was active: the engine already dropped gateAwait /
+    ; rushing on this SetStage (stage < stageCount-1), so the old hold is stale. Drop it without
+    ; touching this animation's fresh timer or forcing it to its final stage.
+    if gate_holding && pending_animation_change
+        Trace("Ending_StageStart", "--- animation changed mid gate-hold, dropping the stale hold")
+        gate_holding = false
+        gate_hold_timer = false
+        gate_hold_started = 0.0
+    endif
     ; SexLab (or a manual advance) reached the final stage before the gate voice: GoToStage already
     ; reset the held timer; hold the final stage for the dialogue instead.
     if gate_holding && thread != None && thread.Animation != None && thread.Stage >= thread.Animation.StageCount()
@@ -2338,8 +2371,9 @@ Function StageStart()
             if change_scene
                 RegisterEventForce("change", narration, sender, receiver)
             endif
-        elseif IsFinalStage()
-            ; The orgasm / finish DN is coming: no continue DN to race it, a scene change is an event.
+        elseif IsFinalStage() && (gate_holding || ending_done || animdb.GetHasDescriptionOrgasmExpected(thread)[1])
+            ; An orgasm / finish DN is coming (gate passed, ending reached, or someone expects one):
+            ; no continue DN to race it, a scene change is an event.
             if change_scene
                 RegisterEventForce("change", narration, sender, receiver)
             endif
@@ -2967,20 +3001,30 @@ Function FlushOrgasmWindow()
     if thread == None
         Trace("FlushOrgasmWindow", "--- thread is None, clearing stash")
         ClearOrgasmStash()
+        gate_pending_force = false
+        gate_pending_notify = false
         return
     endif
-    NarrateOrgasmStash(sender, receiver)
+    bool force = gate_pending_force
+    gate_pending_force = false
+    bool sent = NarrateOrgasmStash(sender, receiver, force)
+    if sent && gate_pending_notify
+        gate_pending_notify = false
+        SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid)
+    endif
 EndFunction
 
 ; One DirectNarration for everything stashed, then the parts that did not fit as one event.
 ; force_direct: always a DirectNarration, NPC-only scenes too (gate pass: the voice times the stage).
-Function NarrateOrgasmStash(Actor source, Actor target, bool force_direct = false)
+; Returns true once the narration actually went out (false: deferred to the window, or nothing stashed).
+bool Function NarrateOrgasmStash(Actor source, Actor target, bool force_direct = false)
     ; Two groups narrating at once interleave on the slot arrays (external calls yield): the later
-    ; one leaves its stash for the window.
+    ; one leaves its stash for the window. A deferred force_direct must survive to that flush.
     if orgasm_narrating
         Trace("NarrateOrgasmStash", "--- busy, stash goes to the window")
+        gate_pending_force = gate_pending_force || force_direct
         ArmOrgasmWindow()
-        return
+        return false
     endif
     orgasm_narrating = true
     ; Match StageStart / AnimationEnd: keep actors_objs aligned with positions
@@ -2990,7 +3034,7 @@ Function NarrateOrgasmStash(Actor source, Actor target, bool force_direct = fals
     if orgasm_narration == ""
         orgasm_narrating = false
         Trace("NarrateOrgasmStash", "--- empty stash")
-        return
+        return false
     endif
     Trace("NarrateOrgasmStash", "--- "+orgasm_narration+" | overflow: "+orgasm_overflow)
     if has_player || force_direct
@@ -3000,6 +3044,7 @@ Function NarrateOrgasmStash(Actor source, Actor target, bool force_direct = fals
     endif
     SendOrgasmOverflow(source, target)
     orgasm_narrating = false
+    return true
 EndFunction
 
 ; Lower-priority orgasm parts (cum, not orgasming, arouse / calm) that did not fit the DN budget.

@@ -8332,6 +8332,20 @@
             showYesNoSolo();
         }
 
+        // C++ SceneCreator_Open entry point: hide/clear/configure/show in one Invoke so JS applies
+        // them in order (separate Invokes are not applied in issue order — the same race
+        // openYesNoSolo above fixed for the YesNo dialogue; WebUI_HideAllPanels + configureSceneCreator
+        // + showPanel as three Invokes could land with scene_creator_panel hidden after it was shown).
+        function openSceneCreatorPanel(state, spareTargetMenu) {
+            clearYesNoSolo();
+            for (const id of ['sex_menu_panel', 'yesno_panel',
+                'description_editor_panel', 'settings_panel', 'log_panel'])
+                hidePanel(id);
+            if (!spareTargetMenu) hidePanel('target_menu_panel');
+            configureSceneCreator(state);
+            showPanel('scene_creator_panel');
+        }
+
         // WebUI was closed: dialogue only. Hidden inline too (not only via CSS); showControlPanel no-ops while solo.
         function showYesNoSolo() {
             document.body.classList.add('yesno-solo');
