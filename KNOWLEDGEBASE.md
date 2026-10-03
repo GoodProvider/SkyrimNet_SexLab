@@ -987,3 +987,10 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - Measured 2026-10-02 (4 DNs, OpenRouter + pocket_tts): 0.74–1.20 s from our send to SpeechStarted. 15–35 ms of that is the Papyrus hop (`QueueDirectNarration` → `SkyrimNetApi.DirectNarration`); LLM first chunk → SpeechStarted is 0.1–0.5 s.
 - `NarrationTiming` listens on `SKSE::GetModCallbackEventSource()`. The sink runs on SkyrimNet's sender thread, so its state is mutex-guarded and it only reads `TESForm::GetName()`.
 - The start stamp is in the DLL, not Papyrus: `QueueDirectNarration` returning false (Papyrus then calls `SkyrimNetApi.DirectNarration`), or `NarrationQueue::Flush` for paused narrations.
+
+## Final-stage orgasm narrated twice (2026-10-03)
+
+- **Symptom:** one engine group (Bob fires, Nina joins) produced two DNs: `Bob is orgasming. … Nina is recovering from her orgasm.`, then 5 s later `Nina is orgasming. Bob is recovering from his orgasm.`
+- **Tell from the log:** the first DN has no `NarrateOrgasmStash` trace. It came from `StageStart` (final stage just entered), not from the window.
+- **Cause:** `Orgasm_ApplyGroup` yields in its `ForceOrgasm` loop and arms the window only after the loop. A slow `StageStart` saw `orgasm_messages_set` with the window closed, and took Bob's slot before Nina's was stashed. The window then flushed Nina alone.
+- **Fix:** `orgasm_group_pending` is set over the stash loop until the window is armed or the DN is sent. `StageStart` holds the stash (`hold_stash`, read once) while it, `orgasm_window_open` or `orgasm_narrating` is set, and marks `orgasm_narrating` while it builds. See [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md).

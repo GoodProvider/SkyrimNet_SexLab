@@ -32,6 +32,8 @@ bool orgasm_messages_set = false
 bool orgasm_window_open = false
 ; NarrateOrgasmStash is building / sending: a second caller arms the window instead (slot arrays are shared).
 bool orgasm_narrating = false
+; Orgasm_ApplyGroup is stashing its group (window not armed yet): StageStart must not take a partial stash.
+bool orgasm_group_pending = false
 ; Thread hook OrgasmStart sent on entering the final (non-LeadIn) stage; OrgasmEnd not yet sent.
 bool orgasm_hook_open = false
 ; Pause hotkey: the stage is held with thread.UpdateTimer(PAUSE_HOLD_SECONDS) (StageTimer and
@@ -240,6 +242,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     orgasm_messages_set = false
     orgasm_window_open = false
     orgasm_narrating = false
+    orgasm_group_pending = false
     orgasm_hook_open = false
     scene_paused = false
     Ending_Reset()
@@ -2019,6 +2022,10 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
     endif
     DbgEnter("Orgasm_ApplyGroup", "count:"+actors.length+" individual:"+individual+" source:"+source+" allower:"+GetDisplayName(allower))
     EnsureActorArraysLargeEnough(thread.positions.length)
+    ; The loop yields (ForceOrgasm): a StageStart in between must not narrate half the group.
+    if source != "gate"
+        orgasm_group_pending = true
+    endif
     Actor first = None
     int i = 0
     while i < actors.length
@@ -2049,6 +2056,7 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
         i += 1
     endwhile
     if first == None
+        orgasm_group_pending = false
         DbgEnd("Orgasm_ApplyGroup")
         return
     endif
@@ -2077,6 +2085,8 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
         endif
         NarrateOrgasmStash(first, target)
     endif
+    ; Cleared only now: the window is open or the stash went out (NarrateOrgasmStash).
+    orgasm_group_pending = false
     Ending_Check(actors)
     DbgEnd("Orgasm_ApplyGroup")
 EndFunction
@@ -2252,10 +2262,15 @@ Function StageStart()
     endif
 
     String orgasm_narration = ""
-    if orgasm_window_open && orgasm_messages_set
-        Trace("StageStart", "--- holding orgasm stash for DOM window")
-    else
+    ; Read once: the flags change across the yields below. A group mid-stash (orgasm_group_pending) or
+    ; a NarrateOrgasmStash in progress sends its own DN; taking the stash here split one orgasm into two DNs.
+    bool hold_stash = orgasm_messages_set && (orgasm_window_open || orgasm_group_pending || orgasm_narrating)
+    if hold_stash
+        Trace("StageStart", "--- holding orgasm stash window:"+orgasm_window_open+" group:"+orgasm_group_pending+" narrating:"+orgasm_narrating)
+    elseif !orgasm_narrating && !orgasm_group_pending
+        orgasm_narrating = true
         orgasm_narration = OrgasmMessagesToNarration()
+        orgasm_narrating = false
     endif
     String desc = GetDescription()
     int cur_stage = thread.stage
@@ -2265,7 +2280,7 @@ Function StageStart()
     ; GetDescription: stage JSON, else tag fallback (raw GetStageDescription alone leaves initiates: empty)
     if status != STATUS_ACTIVE
         status = STATUS_ACTIVE
-        if orgasm_window_open && orgasm_messages_set
+        if hold_stash
             RegisterEvent("sexlab update", desc, sender, receiver)
         else
             String narration = desc + orgasm_narration
@@ -2314,8 +2329,8 @@ Function StageStart()
             else 
                 desc = ""
             endif 
-        endif 
-        if orgasm_window_open && orgasm_messages_set
+        endif
+        if hold_stash
             if change_scene
                 RegisterEventForce("change", narration, sender, receiver)
             endif
