@@ -29,17 +29,18 @@ namespace Hud
             bool miniGame;  // false = controls group
         };
 
-        // Dashboard hotkeys (VK). Focus keys 1-4 are fixed.
+        // Dashboard hotkeys (VK), defaults on the numpad (Num 3 is SexLab's free camera).
+        // Focus keys 1-4 are fixed.
         constexpr KeyBinding kBindings[] = {
-            { "end", "sexlab.hud.key_end", VK_END, false },
-            { "previous", "sexlab.hud.key_previous", VK_LEFT, false },
-            { "next", "sexlab.hud.key_next", VK_RIGHT, false },
-            { "slower", "sexlab.hud.key_slower", VK_DOWN, false },
-            { "faster", "sexlab.hud.key_faster", VK_UP, false },
-            { "pause", "sexlab.hud.key_pause", VK_HOME, false },
-            { "calm", "sexlab.minigame.key_calm", VK_LBUTTON, true },
-            { "arouse", "sexlab.minigame.key_arouse", VK_RBUTTON, true },
-            { "deny", "sexlab.hud.key_deny", VK_NEXT, false },
+            { "end", "sexlab.hud.key_end", VK_NUMPAD1, false },
+            { "previous", "sexlab.hud.key_previous", VK_NUMPAD7, false },
+            { "next", "sexlab.hud.key_next", VK_NUMPAD9, false },
+            { "slower", "sexlab.hud.key_slower", VK_SUBTRACT, false },
+            { "faster", "sexlab.hud.key_faster", VK_ADD, false },
+            { "pause", "sexlab.hud.key_pause", VK_NUMPAD8, false },
+            { "calm", "sexlab.minigame.key_calm", VK_NUMPAD4, true },
+            { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD5, true },
+            { "deny", "sexlab.hud.key_deny", VK_NUMPAD6, false },
         };
 
         PRISMA_UI_API::IVPrismaUI1* g_prisma = nullptr;
@@ -51,6 +52,7 @@ namespace Hud
         bool g_showEnjoyment = true;
         bool g_showControls = true;
         bool g_miniGame = false;
+        std::map<std::string, int> g_keyVk;            // control -> VK (dashboard value)
         std::map<std::string, std::uint32_t> g_keyDx;  // control -> DX
         std::map<std::string, std::string> g_keyLabel;
 
@@ -69,49 +71,6 @@ namespace Hud
             using namespace std::chrono;
             static const auto start = steady_clock::now();
             return duration<double>(steady_clock::now() - start).count();
-        }
-
-        std::string DxLabel(std::uint32_t dx)
-        {
-            switch (dx) {
-            case 256:
-                return "LMB";
-            case 257:
-                return "RMB";
-            case 258:
-                return "MMB";
-            // hud.html draws arrows for Up / Down / Left / Right.
-            case 0xC8:
-                return "Up";
-            case 0xD0:
-                return "Down";
-            case 0xCB:
-                return "Left";
-            case 0xCD:
-                return "Right";
-            case 0xCF:
-                return "End";
-            case 0xC7:
-                return "Home";
-            case 0xC9:
-                return "PgUp";
-            case 0xD1:
-                return "PgDn";
-            case 0xD2:
-                return "Ins";
-            case 0xD3:
-                return "Del";
-            case 0xC5:
-                return "Pause";
-            default:
-                break;
-            }
-            char buf[64] = {};
-            const LONG lparam = static_cast<LONG>((dx & 0x7F) << 16) | ((dx & 0x80) ? (1 << 24) : 0);
-            if (dx != 0 && GetKeyNameTextA(lparam, buf, sizeof(buf)) > 0) {
-                return buf;
-            }
-            return "?";
         }
 
         RE::Actor* ActorFor(RE::FormID id)
@@ -311,6 +270,49 @@ namespace Hud
         }
     }
 
+    std::string DxLabel(std::uint32_t dx)
+    {
+        switch (dx) {
+        case 256:
+            return "LMB";
+        case 257:
+            return "RMB";
+        case 258:
+            return "MMB";
+        // hud.html draws arrows for Up / Down / Left / Right.
+        case 0xC8:
+            return "Up";
+        case 0xD0:
+            return "Down";
+        case 0xCB:
+            return "Left";
+        case 0xCD:
+            return "Right";
+        case 0xCF:
+            return "End";
+        case 0xC7:
+            return "Home";
+        case 0xC9:
+            return "PgUp";
+        case 0xD1:
+            return "PgDn";
+        case 0xD2:
+            return "Ins";
+        case 0xD3:
+            return "Del";
+        case 0xC5:
+            return "Pause";
+        default:
+            break;
+        }
+        char buf[64] = {};
+        const LONG lparam = static_cast<LONG>((dx & 0x7F) << 16) | ((dx & 0x80) ? (1 << 24) : 0);
+        if (dx != 0 && GetKeyNameTextA(lparam, buf, sizeof(buf)) > 0) {
+            return buf;
+        }
+        return "?";
+    }
+
     void Init()
     {
         static std::once_flag once;
@@ -345,11 +347,13 @@ namespace Hud
             g_showEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.enjoyment", true);
             g_showControls = SexLabNet::GetConfigBool("sexlab.hud.controls", true);
             g_miniGame = SexLabNet::GetConfigBool("sexlab.minigame.enabled", false);
+            g_keyVk.clear();
             g_keyDx.clear();
             g_keyLabel.clear();
             for (const auto& b : kBindings) {
                 const int vk = SexLabNet::GetConfigInt(b.path, b.defaultVk);
                 const auto dx = SexLabNet::HotkeyVkToDx(vk);
+                g_keyVk[b.control] = vk;
                 g_keyDx[b.control] = dx;
                 g_keyLabel[b.control] = dx ? DxLabel(dx) : "";
             }
@@ -358,6 +362,36 @@ namespace Hud
                 g_miniGame);
         }
         RebindKeys();
+    }
+
+    nlohmann::json HotkeyMapJson()
+    {
+        std::lock_guard lock(g_lock);
+        nlohmann::json out = nlohmann::json::array();
+        for (const auto& b : kBindings) {
+            const std::uint32_t dx = g_keyDx.count(b.control) ? g_keyDx.at(b.control) : 0;
+            out.push_back({
+                { "control", b.control },
+                { "path", b.path },
+                { "group", b.miniGame ? "minigame" : "controls" },
+                { "vk", g_keyVk.count(b.control) ? g_keyVk.at(b.control) : b.defaultVk },
+                { "dx", dx },
+                { "key", g_keyLabel.count(b.control) ? g_keyLabel.at(b.control) : "" },
+                { "enabled", dx != 0 && (b.miniGame ? g_miniGame : g_showControls) },
+            });
+        }
+        // Fixed focus keys 1-4 (DX 0x02..0x05), mini-game only.
+        for (std::uint32_t i = 0; i < 4; ++i) {
+            out.push_back({
+                { "control", "focus" + std::to_string(i + 1) },
+                { "group", "minigame" },
+                { "fixed", true },
+                { "dx", 0x02 + i },
+                { "key", std::to_string(i + 1) },
+                { "enabled", g_miniGame },
+            });
+        }
+        return out;
     }
 
     void Reset()

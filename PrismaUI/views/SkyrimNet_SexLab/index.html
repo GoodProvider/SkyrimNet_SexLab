@@ -4887,8 +4887,8 @@
             'comfort': 'comforting'
         };
         const SS_SETTINGS = [
-            'nonsexual', 'nonsexual_kissing', 'nonsexual_male_position_0', 'nonsexual_male_position_1',
-            'nonsexual_male_position_2', 'default', 'no_penis', 'pleasure_pain',
+            'nonsexual', 'nonsexual_platonic', 'nonsexual_kissing', 'nonsexual_male_position_0', 'nonsexual_male_position_1',
+            'nonsexual_male_position_2', 'default', 'consensual', 'no_penis', 'pleasure_pain',
             'punish_spanking', 'punish_spanking_victim_nude', 'punish_whipping_oral', 'punish_pleasure_pain_rape'
         ];
         const SS_AFFECTION_METHODS = SS_AFFECTION_LEAVES.reduce((acc, l) => (acc[l.wire] = 1, acc), {});
@@ -5336,6 +5336,13 @@
                         p._victim = Number(victimArr[i]) ? 1 : 0;
                 });
             }
+            // Synonym clusters for this setting's lookups (absent → keep; default.json says broad).
+            const synonyms = ssSettingField(data, 'synonyms', 'synonyms');
+            if (synonyms != null && String(synonyms).trim() !== '')
+                state._synonyms = String(synonyms).trim().toLowerCase();
+            // gender_match:false (punish): never narrow the random pick by the cast's genders.
+            if (ssSettingField(data, 'gender_match', 'gender_match') === false)
+                state._gender_match = false;
         }
 
         function ssToPos(a, victim) {
@@ -5490,6 +5497,9 @@
                 _num_actors: positions.length,
                 _positions: positions,
                 _scene_presets: [settingName],
+                // Active setting: C++ applies its tags_any / tags_prefer / exclude_settings on every query.
+                _scene_setting: settingName === 'default' ? '' : settingName,
+                _synonyms: SC_SYNONYM_DEFAULT,
                 _group_tags: {},
                 _group_order: []
             };
@@ -5555,7 +5565,9 @@
                     ssRandomQuery({
                         id: 'x' + (++ssRandomQueryId),
                         state: state,
-                        genders: true,
+                        genders: state._gender_match !== false,
+                        // Any worn heavy-bondage DD: the setting's tags_suppress_unless_bound is dropped.
+                        bound: dd.length > 0,
                         dd: dd.filter(t => !have.includes(t))
                     });
                 });
@@ -5567,7 +5579,7 @@
         }
 
         // pending.dd: the cast's worn DD tags still on probation (dropped from the end when nothing matches).
-        function ssRandomFilter(state, withGenders, dd) {
+        function ssRandomFilter(state, withGenders, dd, bound) {
             const split = ssSplitTags;
             const must = split(state._tags).concat(dd || []);
             const positions = state._positions || [];
@@ -5575,7 +5587,10 @@
                 _must_tags: must,
                 _suppress_tags: split(state._tags_suppress),
                 _require_all: must.length > 0,
-                _actor_count: positions.length
+                _actor_count: positions.length,
+                _synonyms: state._synonyms || SC_SYNONYM_DEFAULT,
+                _setting: state._scene_setting || 'default',
+                _bound: !!bound
             };
             const genders = positions.map(p => scPosGender(p));
             filter._creature = genders.some(g => g != null && g >= 2) ? 'require' : 'exclude';
@@ -5594,7 +5609,7 @@
             window.onAnimDbQuery(JSON.stringify({
                 _request_id: pending.id,
                 _type: 'anims',
-                _filter: ssRandomFilter(pending.state, pending.genders, pending.dd),
+                _filter: ssRandomFilter(pending.state, pending.genders, pending.dd, pending.bound),
                 _n: 200
             }));
         }
@@ -5689,6 +5704,15 @@
                 renderTargetMenu();
         }
 
+        // Option `methodSettings` {leaf: setting} swaps the scene setting for that method leaf
+        // (punish whip → punish_whipping_oral); otherwise the panel's setting.
+        function ssSettingForMethod(opt) {
+            const map = opt && (opt.methodSettings || opt.methodsettings);
+            const leaf = String(ssUi.method || '').toLowerCase();
+            if (map && leaf && map[leaf]) return String(map[leaf]);
+            return ssUi.settingName || 'default';
+        }
+
         function ssStart(opt) {
             const pool = ssActorPool();
             const cast = ssResolveCast(pool);
@@ -5700,7 +5724,7 @@
                 direction: ssWireDirection(ssUi.direction, ssUi.method),
                 intent: ssPapyrusIntent(),
                 style: ssUi.style || 'normally',
-                settingName: ssUi.settingName || 'default'
+                settingName: ssSettingForMethod(opt)
             }, ssWireMethod(ssUi.method));
         }
 
@@ -5714,11 +5738,13 @@
                 ssResolvePending = null;
                 return;
             }
+            // `_setting`: C++ resolves against that scene setting (and its synonym mode).
             window.onAnimDbResolveTags(JSON.stringify({
                 _request_id: pending.id,
                 _tags: tag,
                 _actor_count: ssActorCount(pending.cast),
-                _form_ids: ssCastFormIds(pending.cast)
+                _form_ids: ssCastFormIds(pending.cast),
+                _setting: pending.settingName || 'default'
             }));
         }
 
@@ -8213,6 +8239,8 @@
                 this.positionOverride = false;
                 this.tags = [];
                 this.suppress = [];
+                this.sceneSetting = '';
+                this.synonyms = '';
                 this.inThreadRegistries = [];
                 this.lastAnims = [];
                 this.activeRegistry = '';
@@ -8276,6 +8304,8 @@
                         ? state._tags_suppress.split(',').map(s => s.trim()).filter(Boolean)
                         : (state._tags_suppress || []).slice();
                 }
+                if (state._scene_setting != null) this.sceneSetting = state._scene_setting || '';
+                if (state._synonyms != null) this.synonyms = state._synonyms || '';
                 if (state._in_thread_registries) {
                     this.inThreadRegistries = Array.isArray(state._in_thread_registries)
                         ? state._in_thread_registries.slice() : [];
@@ -8326,6 +8356,8 @@
                     _position_override: this.positionOverride === false ? 0 : 1,
                     _tags: (this.tags || []).join(','),
                     _tags_suppress: (this.suppress || []).join(','),
+                    _scene_setting: this.sceneSetting || '',
+                    _synonyms: this.synonyms || SC_SYNONYM_DEFAULT,
                     _in_thread_registries: this.inThreadRegistries,
                     _active_registry: this.activeRegistry,
                     _next_registry: this.nextRegistry || this.activeRegistry,
@@ -8434,6 +8466,7 @@
             SC.filterByOnce = '';
             SC.hasDescription = 'any';
             SC.synonyms = SC_SYNONYM_DEFAULT;
+            SC.sceneSetting = '';
             SC.ddAuto = [];
             SC.ddProbe = false;
             SC.ddDismissed = new Set();
@@ -8587,6 +8620,8 @@
             SC.positionOverride = info.positionOverride === true;
             SC.tags = (info.tags || []).slice();
             SC.suppress = (info.suppress || []).slice();
+            SC.sceneSetting = info.sceneSetting || '';
+            if (info.synonyms) SC.synonyms = info.synonyms;
             SC.ddAuto = SC.ddAuto.filter(t => SC.tags.includes(t));
             SC.inThreadRegistries = (info.inThreadRegistries || []).slice();
             SC.lastAnims = sceneInfoClone(info.lastAnims || []);
@@ -8613,6 +8648,8 @@
             info.positionOverride = SC.positionOverride !== false;
             info.tags = (SC.tags || []).slice();
             info.suppress = (SC.suppress || []).slice();
+            info.sceneSetting = SC.sceneSetting || '';
+            info.synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
             info.inThreadRegistries = (SC.inThreadRegistries || []).slice();
             info.lastAnims = sceneInfoClone(SC.lastAnims || []);
             info.activeRegistry = SC.activeRegistry || '';
@@ -9740,6 +9777,12 @@
             if (typeof deFilterTabActive === 'function' && deFilterTabActive() && DE.animNameFilter)
                 filter._name_contains = DE.animNameFilter;
             filter._synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
+            // Scene start draft: the TargetMenu scene setting's tags_any / tags_prefer / exclude_settings
+            // (C++ reads them by name). Bound = the cast wears DD (auto DD tags, kept or dismissed).
+            if (SC.mode !== 'active' && SC.sceneSetting) {
+                filter._setting = SC.sceneSetting;
+                filter._bound = (SC.ddAuto || []).length > 0 || (SC.ddDismissed && SC.ddDismissed.size > 0);
+            }
             return filter;
         }
 
@@ -10222,6 +10265,7 @@
                 _tags: SC.tags.join(','),
                 _tags_suppress: SC.suppress.join(','),
                 _synonyms: SC.synonyms || SC_SYNONYM_DEFAULT,
+                _scene_setting: SC.sceneSetting || '',
                 _positions: SC.positions,
                 _selected_registries: scSelectedRegistries(),
                 _event_hook: SC.event_hook || ''

@@ -1,5 +1,9 @@
 Unreleased ⚗️
 
+- Target Menu: **cuddle** is now **affection** (romantic, can kiss), and the new **platonic** option is for friends and family (cuddle, hug, head pat, hold hands, no kissing). **sex** only picks consensual sex animations, **punish** spanks any genders, and **rapes** picks anything except affection animations, aggressive ones first. Pressing Start without choosing a method now stays inside the option instead of picking any animation.
+- Animations made for Devious Devices bondage are only chosen when someone in the scene is wearing it.
+- Scene setting files can use tag synonyms (broad by default) and new keys such as `tags_any` and `exclude_settings`; see the scene settings doc.
+- Scene keys moved to the numpad: 7 previous, 8 pause, 9 next, 4 calm, 5 arouse, 6 deny, - slower, + faster, 1 end (3 stays SexLab's free camera). They work with NumLock on or off. The style hotkey is gone; use slower / faster. The game writes your current keys to `SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json`; see the README for the layout.
 - Enjoyment rises much more slowly, so actors no longer orgasm over and over. Without the mini-game, everyone (except victims) orgasms once near the end of the scene. If you saved the Enjoyment settings before, reset them to get the new defaults. Pausing a stage now also pauses enjoyment.
 - Tag synonyms: searching animations by tag now also finds that tag's synonyms. For example, "doggy" finds "doggystyle" animations, and "titjob" finds "boobjob". This applies to LLM scene starts and to the Scene Creator / Description Editor animation filters. A new **synonyms** pulldown in those filters picks broad (default), strict, or none (exact tags only). You can edit the lists in `SKSE/Plugins/SkyrimNet_SexLab/synonyms-broad.json` and `synonyms-strict.json`; the edits load when you load a save.
 - Scenes started from tags now choose randomly among all matching animations, not the same alphabetical few.

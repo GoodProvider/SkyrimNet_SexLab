@@ -103,35 +103,6 @@ Function ProcessHotkey(int key_code)
     endif
 EndFunction
 
-; Style hotkey (C++ KeyHandler): cycle gently -> normally -> forcefully on the player's
-; scene, else the crosshair actor's. Animation speed follows the style.
-Function CycleStyleHotkey()
-    Actor player = Game.GetPlayer()
-    SkyrimNet_SexLab_Scene sl_scene = None
-    if main.sexlab.IsActorActive(player)
-        sl_scene = manager.GetSceneByActor(player)
-    endif
-    if sl_scene == None
-        Actor target = Game.GetCurrentCrosshairRef() as Actor
-        if target != None && main.sexlab.IsActorActive(target)
-            sl_scene = manager.GetSceneByActor(target)
-        endif
-    endif
-    if sl_scene == None
-        Trace("CycleStyleHotkey", "no active scene")
-        return
-    endif
-    String style = sl_scene.GetStyle()
-    String next_style = sl_scene.STYLE_NORMALLY
-    if style == sl_scene.STYLE_NORMALLY
-        next_style = sl_scene.STYLE_FORCEFULLY
-    elseif style == sl_scene.STYLE_FORCEFULLY
-        next_style = sl_scene.STYLE_GENTLY
-    endif
-    sl_scene.ChangeStyle(player, next_style)
-    Trace("CycleStyleHotkey", style+" -> "+next_style, true)
-EndFunction
-
 ; Scene HUD keys (C++ Hud): SexLab thread operations on the player's scene. calm / arouse / focus /
 ; slower / faster never reach Papyrus (OrgasmEngine + AnimSpeed in C++).
 ; focus: the HUD's focus actor (deny key); None for the other keys.

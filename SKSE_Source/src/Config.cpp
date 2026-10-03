@@ -1,5 +1,6 @@
 #include "Config.h"
 #include "Hud.h"
+#include "JsonUtil.h"
 #include "OrgasmEngine.h"
 #include "PublicAPI.h"
 #include "WebUI.h"
@@ -10,6 +11,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <string_view>
 
@@ -93,6 +95,17 @@ std::int32_t VkToDx(int vk)
     return dx != 0 ? static_cast<std::int32_t>(dx) : 0x2B;
 }
 
+int MenuHotkeyVk()
+{
+    const int vk = GetInt("sexlab.editor.hotkey", 220);
+    // Pre-VK dashboard saves stored DX 43 (backslash). type:hotkey now stores VK 220.
+    if (vk == 43) {
+        webui_log::info("MenuHotkeyVk: leftover DX 43 mapped to VK 220");
+        return 220;
+    }
+    return vk;
+}
+
 }  // namespace
 
 bool GetConfigBool(const char* path, bool def)
@@ -171,7 +184,6 @@ void Config::ApplyFromConfig()
 {
     ApplyGlobals();
     ApplyMenuHotkey();
-    ApplyStyleHotkey();
     ApplyHudConfig();
 }
 
@@ -191,30 +203,64 @@ void Config::ApplyGlobals()
 void Config::ApplyMenuHotkey()
 {
     const bool enabled = GetBool("sexlab.editor.hotkey_enabled", false);
-    int vk = GetInt("sexlab.editor.hotkey", 220);
-    // Pre-VK dashboard saves stored DX 43 (backslash). type:hotkey now stores VK 220.
-    if (vk == 43) {
-        webui_log::info("ApplyMenuHotkey: leftover DX 43 mapped to VK 220");
-        vk = 220;
-    }
+    const int vk = MenuHotkeyVk();
     const auto dx = static_cast<uint32_t>(VkToDx(vk));
     webui_log::info("ApplyMenuHotkey: enabled={} vk={} dx={:#x}", enabled, vk, dx);
     WebUI_SetMenuHotkey(dx, enabled);
-}
-
-void Config::ApplyStyleHotkey()
-{
-    const bool enabled = GetBool("sexlab.style.hotkey_enabled", false);
-    const int vk = GetInt("sexlab.style.hotkey", 221);
-    const auto dx = static_cast<uint32_t>(VkToDx(vk));
-    webui_log::info("ApplyStyleHotkey: enabled={} vk={} dx={:#x}", enabled, vk, dx);
-    WebUI_SetStyleHotkey(dx, enabled);
 }
 
 void Config::ApplyHudConfig()
 {
     OrgasmEngine::ReloadConfig();
     Hud::ApplyConfig();
+    WriteHotkeyMap();
+}
+
+void Config::WriteHotkeyMap()
+{
+    const bool menuEnabled = GetBool("sexlab.editor.hotkey_enabled", false);
+    const int menuVk = MenuHotkeyVk();
+    const auto menuDx = static_cast<uint32_t>(VkToDx(menuVk));
+
+    nlohmann::json keys = nlohmann::json::array();
+    keys.push_back({
+        { "control", "menu" },
+        { "path", "sexlab.editor.hotkey" },
+        { "group", "menu" },
+        { "vk", menuVk },
+        { "dx", menuDx },
+        { "key", Hud::DxLabel(menuDx) },
+        { "enabled", menuEnabled },
+    });
+    keys.push_back({
+        { "control", "escape" },
+        { "group", "menu" },
+        { "fixed", true },
+        { "dx", 0x01 },
+        { "key", "Esc" },
+        { "enabled", true },
+    });
+    for (auto& entry : Hud::HotkeyMapJson()) {
+        keys.push_back(std::move(entry));
+    }
+
+    nlohmann::json j = nlohmann::json::object();
+    j["hotkeys"] = std::move(keys);
+    j["sexlab"] = { { "free_camera", "SexLab's own Toggle Free Camera key (default Num 3); not managed here" } };
+
+    const char* path = "Data/SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json";
+    try {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << SafeDump(j, 2);
+        if (!out) {
+            webui_log::warn("WriteHotkeyMap: cannot write {}", path);
+            return;
+        }
+    } catch (...) {
+        webui_log::warn("WriteHotkeyMap: cannot write {}", path);
+        return;
+    }
+    webui_log::info("WriteHotkeyMap: wrote {}", path);
 }
 
 }  // namespace SexLabNet

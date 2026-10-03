@@ -27,7 +27,6 @@ static std::atomic<bool> g_webuiGamePaused{true};
 static std::mutex g_invokeMutex;
 static std::deque<std::string> g_pendingInvokes;
 static std::atomic<uint32_t> g_menuHotkey{0};
-static std::atomic<uint32_t> g_styleHotkey{0};
 static std::mutex g_rebuildTsMutex;
 static std::string g_lastRebuildTimestamp;
 static std::mutex g_logFileMutex;
@@ -1313,38 +1312,4 @@ void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled)
         PapyrusBindings_WebUI::Call_ProcessHotkey(static_cast<std::int32_t>(dxScanCode));
     });
     webui_log::info("WebUI menu hotkey registered dx={:#x}.", dxScanCode);
-}
-
-/// Dashboard enable/remap: bind dxScanCode to Menu.CycleStyleHotkey, or clear when disabled.
-/// KeyHandler keeps one callback per key, so a key shared with the menu hotkey is refused.
-void WebUI_SetStyleHotkey(uint32_t dxScanCode, bool enabled)
-{
-    const uint32_t prev = g_styleHotkey.exchange(0);
-    if (prev != 0 && prev != 0x01 && prev != g_menuHotkey.load())
-        KeyHandler::GetSingleton()->Unregister(prev);
-
-    if (!enabled || dxScanCode == 0 || dxScanCode == 0x01) {
-        webui_log::info("Style hotkey disabled (prev={:#x}).", prev);
-        return;
-    }
-    if (dxScanCode == g_menuHotkey.load()) {
-        webui_log::error("Style hotkey dx={:#x} is the menu hotkey; style hotkey not registered.", dxScanCode);
-        return;
-    }
-
-    g_styleHotkey = dxScanCode;
-    KeyHandler::GetSingleton()->Register(dxScanCode, []() {
-        if (!g_gameReady) {
-            return;
-        }
-        // Overlay open (typing) or a game menu/console pausing the game: leave the key alone.
-        if (!WebUI_IsHidden()) {
-            return;
-        }
-        if (auto* ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) {
-            return;
-        }
-        PapyrusBindings_WebUI::Call_CycleStyleHotkey();
-    });
-    webui_log::info("Style hotkey registered dx={:#x}.", dxScanCode);
 }

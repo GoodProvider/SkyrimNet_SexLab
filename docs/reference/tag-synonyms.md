@@ -48,6 +48,7 @@ To pick up an edit, reload a save. A restart is not needed.
 | `AnimDb_ResolveTags(tags_csv, actor_count, synonyms = "broad")` | 3rd argument | same |
 | WebUI `onAnimDbResolveTags` | `_synonyms` | same |
 | Scene Creator handoff (`scBuildResult`) → `Scene_Creator.ApplyWebUIState` | `_synonyms` | same; stored in `synonyms_mode` |
+| Scene setting JSON ([scene-settings.md](scene-settings.md)) | `synonyms` | same; `default.json` sets `broad`. Widens the setting's `tags`, `tags_suppress`, `tags_any`, `tags_prefer` and `exclude_settings` filters. TargetMenu resolve/random and Papyrus `LoadSetting` adopt it; an explicit `_synonyms` (Scene Creator pulldown) wins |
 | C++ `AnimationDB::FilterSpec::synonyms`, `ResolveTags(…, mode)`, `AppendMatchingTags(…, mode)` | `SynonymMode` | `Broad` (default) · `Strict` · `None` |
 
 Matching rules:

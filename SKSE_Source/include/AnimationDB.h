@@ -70,6 +70,27 @@ namespace AnimationDB
         std::string name_contains; // lowercase; case-insensitive substring of AnimRow::name
         SynonymMode synonyms = SynonymMode::Broad;
         bool shuffle = false; // QueryTopNAnims: random order before truncating to n
+        /// Scene-setting `tags_any`: row must match ≥1 (each widened to its cluster).
+        std::vector<std::string> any_tags;
+        /// Scene-setting `tags_prefer`: QueryTopNAnims returns only rows matching ≥1 when any do.
+        std::vector<std::string> prefer_tags;
+        /// Scene-setting `exclude_settings`: a row matching any of these tag filters is dropped.
+        std::vector<FilterSpec> exclude_filters;
+    };
+
+    /// Tag-filter keys of one scenes/<name>.json (default.json merged under it; the named file wins per key).
+    struct SceneSettingFilter
+    {
+        bool found = false;
+        std::optional<SynonymMode> synonyms;
+        std::vector<std::string> tags;
+        std::vector<std::string> tags_suppress;
+        std::vector<std::string> tags_any;
+        std::vector<std::string> tags_prefer;
+        std::vector<std::string> tags_suppress_unless_bound;
+        /// `assume_bound`: treat the cast as bound (tags_suppress_unless_bound never applies).
+        bool assume_bound = false;
+        std::vector<std::string> exclude_settings;
     };
 
     struct TagCount
@@ -117,12 +138,26 @@ namespace AnimationDB
     std::vector<std::string> ParseSanitizeTagsCsv(const std::string& csv);
     /// Largest front-preferring subset matching ≥1 enabled anim. Empty input → "". actor_count≤0 ignores count.
     /// Returns the requested words (not their synonyms); `mode` only widens what counts as a match.
-    std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode = SynonymMode::Broad);
+    /// `base` (optional) adds a scene setting's constraints (suppress / any / exclude / fixed must) to every probe.
+    std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode = SynonymMode::Broad,
+        const FilterSpec* base = nullptr);
     /// resolved_csv plus each `extra` tag (in order) that still leaves ≥1 enabled anim with all tags.
     /// Keeps resolved_csv first (narration method = first tag). Use for optional tags (DD) instead of
     /// ResolveTags, whose subset search can drop the method in favour of the extras.
     std::string AppendMatchingTags(const std::string& resolved_csv, const std::vector<std::string>& extra,
-        int actor_count, SynonymMode mode = SynonymMode::Broad);
+        int actor_count, SynonymMode mode = SynonymMode::Broad, const FilterSpec* base = nullptr);
+
+    /// scenes/<name>.json over scenes/default.json (cached; cleared by LoadSynonyms). Empty name → default only.
+    SceneSettingFilter LoadSceneSettingFilter(const std::string& name);
+    /// Adds a setting's tags_any / tags_prefer / exclude_settings to `spec`, plus tags_suppress_unless_bound
+    /// when `bound` is false. Does not touch must/suppress (callers already send the setting's tags/suppress).
+    void ApplySceneSetting(FilterSpec& spec, const std::string& name, bool bound);
+    /// Base spec for ResolveTags on a scene start: setting tags (must), tags_suppress (+ unless_bound when
+    /// unbound), tags_any, exclude_settings, and its synonym mode.
+    FilterSpec SceneSettingResolveBase(const std::string& name, bool bound);
+    /// Parses the scene-setting filter keys shared by Papyrus and WebUI filter JSON:
+    /// `_any_tags`, `_prefer_tags`, `_exclude_settings`, and `_setting` (+ `_bound`, default false).
+    void ParseSceneFilterKeys(const nlohmann::json& j, FilterSpec& spec, std::optional<bool> bound_override = std::nullopt);
 
     /// "strict" / "none" (case-insensitive); anything else (incl. empty) → Broad.
     SynonymMode ParseSynonymMode(const std::string& s);
@@ -130,7 +165,7 @@ namespace AnimationDB
     void LoadSynonyms();
     /// Cluster containing `tag` under `mode` (always includes `tag` itself).
     std::vector<std::string> SynonymsOf(const std::string& tag, SynonymMode mode);
-    /// True if needle (sanitized) is an element of tags_csv (sanitized elements).
+    /// True if needle (sanitized) or a member of its strict synonym cluster is an element of tags_csv.
     bool CsvHasTag(const std::string& tags_csv, const std::string& tag);
 
     std::filesystem::path PluginDataDir();

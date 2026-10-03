@@ -2,5 +2,7 @@
     "array_defaults":{
         "speaking_modifiers":"_pleasure_"
     },
-    "speaking_modifiers":["_pain_,_pleasure_"]
+    "speaking_modifiers":["_pain_,_pleasure_"],
+    "tags_prefer":"aggressive",
+    "exclude_settings":"nonsexual,nonsexual_platonic"
 }

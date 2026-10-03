@@ -4,13 +4,17 @@
 
 ### OrgasmEngine
 - Slower default enjoyment: `sexlab.enjoyment.passive_mult` 1.0 → 0.4, `aggressor_mult` 1.15 → 0.45, `victim_mult` 0.8 → 0.3, `jitter_max` 1.2 → 1.1. Logs showed scenes running 2–3.5× their stage timers (narration / LLM pacing), so actors orgasmed every ~50 s. Saved configs keep their old values; reset the **Enjoyment** settings to pick up the new defaults
-- Passive gain stops while the stage is paused (Home key)
+- Passive gain stops while the stage is paused (pause key)
 - Safety net, mini-game off: every non-victim expected to orgasm who has not yet fires at 90% of the final stage, regardless of enjoyment, so each actor comes once. Victims and the mini-game still need 90
 
 ### Animation speed
 - Scene style now sets animation playback speed: gently 0.75×, normally 1.0×, forcefully 1.4× (dashboard **Animation speed**: `sexlab.speed.enabled`, `sexlab.speed.gently|normally|forcefully`). Speed only: stage length, orgasm timing and voices are unchanged. Native `UpdateAnimation` hook in `SkyrimNet_SexLab.dll` (`AnimSpeed.cpp`); Papyrus `SkyrimNet_SexLab_Utilities.SetAnimSpeed` / `ClearAnimSpeed` / `GetAnimSpeed`
 - New LLM action `SexLab_Change_Style` (speaker + `forcefully|normally|gently`) changes the style of the speaker's live scene, with one DirectNarration
-- New **Style hotkey** (`sexlab.style.hotkey_enabled`, `sexlab.style.hotkey`, default `]`) cycles gently → normally → forcefully on the player's scene (else the crosshair actor's). The WebUI style control also changes speed live
+- The WebUI style control also changes speed live. The style hotkey (`sexlab.style.hotkey*`, `]`) was removed; the HUD slower / faster keys cover it
+
+### Hotkeys
+- Scene keys default to the numpad: previous Num 7, pause Num 8, next Num 9, calm Num 4, arouse Num 5, deny Num 6, slower Num -, faster Num +, end Num 1. Num 3 stays SexLab's free camera. Manifest `defaultValue`s and `Hud.cpp` `kBindings` changed; `\` (menu) unchanged
+- New `Data/SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json`, written by `Config::WriteHotkeyMap` on game start, load and dashboard save, lists every live binding (control, dashboard path, VK, DX, key name, enabled)
 
 ### Narration
 - A scene stopped by someone (Stop dialog, TargetMenu stop, LLM `SEXLAB_STOP`) now narrates who stopped it before the finish text: "Bob gently stops showing affection. Bob and Camilla Valerius finish showing affection." (`forcefully` / `gently` shown, `normally` omitted). A custom / explain stop adds the reason: "Bob stops the scene, because <reason>. Bob and Camilla Valerius finish." Natural scene ends are unchanged
@@ -23,6 +27,9 @@
 - SexLab moans now follow speaking modifiers: an actor moans only while its modifiers include `_pleasure_` or `_pain_`; no modifiers, `_gagged_`, or `_kissing_` force the actor silent (`thread.SetVoice(..., ForceSilent)`). Re-applied at scene setup, every `StageStart`, live speaking edits, and after a load. Dashboard toggle **SexLab moans follow speaking modifiers** (`sexlab.voice.follow_speaking`, default on). See [docs/reference/protocol-tokens.md](docs/reference/protocol-tokens.md#sexlab-voice)
 
 ### AnimDB
+- Scene settings gain `tags_any` (at least one), `tags_prefer` (soft OR), `tags_suppress_unless_bound` (only while nobody wears DD heavy bondage), `exclude_settings` (drop animations another setting would pick), `synonyms` (default `broad`; widens every tag key, suppress included), `strict` (the fallback never drops suppress / `tags_any` / `exclude_settings`) and `gender_match`. C++ `AnimationDB::ApplySceneSetting` applies them on every query that carries `_setting` (Papyrus `QuerySexLabAnimsFromAnimDb`, TargetMenu random/resolve, `ExecuteAction`, Scene Creator draft filter); `ResolveTags` / `AppendMatchingTags` take the setting as a base so a method leaf never resolves to tags the setting then empties. See [docs/reference/scene-settings.md](docs/reference/scene-settings.md)
+- TargetMenu review: on Start (method random) only the scene setting filtered, so sex and rapes drew from all 411 two-actor animations and cuddle/punish from pools full of sex animations. New `consensual` (sex), `nonsexual` rewritten as **affection** (was *cuddle*), new **platonic** option + `nonsexual_platonic` (no kissing), `punish_spanking*` strict + any gender, `punish_pleasure_pain_rape` = everything but affection/platonic, preferring aggressive. `default.json`: `synonyms: broad`, `tags_suppress_unless_bound: armbinder,yoke,cuffs,bound`. Punish option `methodSettings` sends **whip** to `punish_whipping_oral`, which sets new key `assume_bound` so its DD-only whip animations are never gated
+- `AnimDb_CsvHasTag` matches through strict clusters (`kiss` = `kissing`). The kissing → `nonsexual_kissing` switch skips `nonsexual_platonic`
 - Tag synonyms: `synonyms-strict.json` (true equivalents) and `synonyms-broad.json` (default; adds families) in `SKSE/Plugins/SkyrimNet_SexLab/` group tags into clusters. A must or suppress tag matches every animation tagged with any member of its cluster. The clusters were curated from all 274 tags in the 531-animation AnimDB. Mode parameter `_synonyms` (`broad|strict|none`) on AnimDB filters, `AnimDb_ResolveTags(…, synonyms = "broad")` and `onAnimDbResolveTags`. Reloaded at `kDataLoaded`, on every game load, and on AnimDB sync/rebuild. See [docs/reference/tag-synonyms.md](docs/reference/tag-synonyms.md)
 - New **synonyms** pulldown in the Scene Creator and Description Editor animation filters (shared state, resets to `broad` on close). Scene Creator starts pass the mode to Papyrus (`_synonyms` → `Scene_Creator.synonyms_mode`)
 - Scene starts no longer call `SexLab.GetAnimationsByTags` (literal tags only). All tag-based selection goes through AnimDB (`SelectAnimationsFromAnimDb`, formerly `SelectAnimationsAnimDbNoneFallback`) with a new `_shuffle` filter key, so starts pick a random 32 matches instead of the alphabetically first 32

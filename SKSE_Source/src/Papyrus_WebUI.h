@@ -133,9 +133,6 @@ namespace PapyrusBindings_WebUI {
     /// Hotkey path: Papyrus Menu.ProcessHotkey(keyCode).
     void Call_ProcessHotkey(std::int32_t keyCode);
 
-    /// Style hotkey path: Papyrus Menu.CycleStyleHotkey().
-    void Call_CycleStyleHotkey();
-
     extern std::int32_t YesNo_Creator_Sid;
 
     void DispatchManagerMethodIntInt(const char* method, std::int32_t a, std::int32_t b);

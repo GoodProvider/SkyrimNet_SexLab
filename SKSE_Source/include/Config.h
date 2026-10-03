@@ -41,9 +41,8 @@ public:
     static Config& GetSingleton();
 
     void ApplyFromConfig();
-    /// Also called from WebUI_SetHotkey so a dashboard save rebinds it after the menu key.
-    void ApplyStyleHotkey();
     /// Scene HUD + mini-game keys and OrgasmEngine tuning (sexlab.hud.* / sexlab.minigame.* / sexlab.enjoyment.*).
+    /// Ends with WriteHotkeyMap, so game start, load and dashboard save all refresh hotkey-map.json.
     void ApplyHudConfig();
     int FrameworkPlayerIndex() const { return frameworkPlayerIndex_; }
 
@@ -52,6 +51,8 @@ private:
 
     void ApplyGlobals();
     void ApplyMenuHotkey();
+    /// Data/SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json: every live binding (menu, Escape, HUD keys).
+    void WriteHotkeyMap();
 
     int frameworkPlayerIndex_ = 0;
 };

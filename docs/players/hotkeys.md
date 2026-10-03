@@ -27,21 +27,42 @@ In-game PrismaUI target / sex menus (SKSE DLL). Build and paths: [../developers/
 
 While this overlay is open, other mods’ hotkeys (including SexLab stage/adjust keys) are ignored so you can type in description fields. The mouse still moves and WebUI text fields accept typing. Escape and this mod’s menu hotkey still work.
 
+## Scene keys (numpad)
+
+These keys work while you control a scene: you are in it, or you took control of the crosshair scene with SexLab's `N`. They work with NumLock on or off.
+
+```
+-------------------------------------------------------
+| 7 previous | 8 pause  | 9 next        | - slower |
+| 4 calm     | 5 arouse | 6 deny        | + faster |
+| 1 end      | 2        | 3 free camera |          |
+-------------------------------------------------------
+```
+
+Num 3 is SexLab's own **Toggle Free Camera** key, set in the SexLab MCM; this mod doesn't bind it. Num 2, Num 0 and Num Enter are free.
+
+To rebind a key, open the SkyrimNet dashboard (**Scene HUD** / **Mini-game**) and press the new key. Keep NumLock **on** while you do this, or the browser records Num 7 as Home. Each time the game starts, loads a save, or saves dashboard settings, the mod writes every current binding to `Data/SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json` (with MO2, look in the overwrite folder).
+
 ## Scene HUD (player scenes)
 
 While you are in a SexLab scene, a small HUD appears in the upper left, where the WebUI ControlPanel sits. It has no background, it doesn't pause the game, and it hides whenever a menu or the WebUI is open. Each group can be switched on or off in the dashboard (**Scene HUD** / **Mini-game**):
 
 - **Enjoyment:** one bar per actor. The bar pulses near orgasm and flashes during one.
-- **Controls:** **End** ends the scene; **Home** pauses the current stage (the HUD shows *Paused*; press again to resume with the rest of the stage's time); **←/→** go to the previous/next stage; **Page Down** denies or allows the focus actor's orgasm (the button at the end of the row reads *deny* or *allow*; a denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm); **↓/↑** step the scene one speed level slower/faster: *slow and gentle* (50%), *gentle* (75%), *normal* (100%), *forceful* (125%), *fast and forceful* (150%). The current level shows between *slower* and *faster*; the scene style sets the starting level (gently / normally / forcefully) and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are fast and forcefully …").
+- **Controls:**
+  - **Num 1** ends the scene.
+  - **Num 8** pauses the current stage. The HUD shows *Paused*; press again to resume with the rest of the stage's time.
+  - **Num 7 / Num 9** go to the previous / next stage.
+  - **Num 6** denies or allows the focus actor's orgasm. The button at the end of the row reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm.
+  - **Num - / Num +** step the scene one speed level slower / faster: *slow and gentle* (50%), *gentle* (75%), *normal* (100%), *forceful* (125%), *fast and forceful* (150%). The current level shows between *slower* and *faster*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are fast and forcefully …").
 - **How long it takes:** without the mini-game, a scene ends much like plain SexLab. Each actor normally orgasms once near the end, and some a little earlier. A victim usually doesn't. Faster raises the pace and can bring a second orgasm; slower can leave someone short. Pausing or repeating a stage adds time, so it adds enjoyment too.
 - **Mini-game** (off by default):
   - Each actor's row shows a blue **magicka** bar and a green **stamina** bar in front of the enjoyment bar. These are the resources the game spends.
   - **1–4** pick who you act on (▶ marks them).
-  - **Right mouse button** arouses that actor (costs stamina).
-  - **Left mouse button** calms them (costs magicka). Calming someone at 90% or more holds off their orgasm for a few seconds.
+  - **Num 5** arouses that actor (costs stamina).
+  - **Num 4** calms them (costs magicka). Calming someone at 90% or more holds off their orgasm for a few seconds.
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.
   - The optional **mental break** drains the magicka of whoever is being aroused; when it runs out they can't hold back.
 
-All HUD keys are rebindable in the dashboard. While the HUD is up they don't reach SexLab or the game, so `End` doesn't also trigger SexLab's own end key and the mouse buttons don't attack.
+All HUD keys are rebindable in the dashboard. While the HUD is up they don't reach SexLab or the game, so a key you share with a SexLab key only does the HUD action.

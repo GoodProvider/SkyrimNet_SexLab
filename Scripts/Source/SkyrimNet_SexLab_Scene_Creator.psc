@@ -72,6 +72,14 @@ String[] tags_suppress = None
 ; AnimDB synonym clusters for tag lookups: "broad" | "strict" | "none" (WebUI synonyms pulldown).
 String synonyms_mode = "broad"
 
+; Active non-default scene setting (scenes/<name>.json). C++ applies its tags_any / tags_prefer /
+; exclude_settings / tags_suppress_unless_bound to every AnimDB query (filter key `_setting`).
+String scene_setting_name = ""
+; Setting "strict": the AnimDB peel never drops suppress tags (step 3).
+bool setting_strict = false
+; Setting has tags_any / tags_prefer / exclude_settings: query AnimDB even with no tags/suppress.
+bool setting_has_filter = false
+
 ; -------------------------------------
 ; Actor Locks 
 ; -------------------------------------
@@ -212,6 +220,9 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
     num_tags = 0
     num_tags_suppress = 0
     synonyms_mode = "broad"
+    scene_setting_name = ""
+    setting_strict = false
+    setting_has_filter = false
     style = STYLE_NORMALLY
     scene_creator_menu_called = false
     position_override = false
@@ -222,7 +233,9 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
             setting_name = "pleasure_pain"
         endif
     endif
-    if SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "kissing")
+    ; Kissing switches to the kissing setting, except under platonic, which suppresses kissing
+    ; (its strict filter then finds nothing instead of playing a kiss).
+    if SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "kissing") && setting_name != "nonsexual_platonic"
         setting_name = "nonsexual_kissing"
     endif
 
@@ -278,6 +291,9 @@ Function Release()
     num_tags = 0
     num_tags_suppress = 0
     synonyms_mode = "broad"
+    scene_setting_name = ""
+    setting_strict = false
+    setting_has_filter = false
     event_hook = ""
     speaker = None
     target = None
@@ -348,7 +364,7 @@ EndFunction
 SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     DbgEnter("FinishStartScene")
     ; Tags/suppress drive anim type — empty list must not SexLab-random into something else.
-    if (num_tags > 0 || num_tags_suppress > 0) && (animations == manager.empty || !animations || animations.length == 0)
+    if (num_tags > 0 || num_tags_suppress > 0 || setting_has_filter) && (animations == manager.empty || !animations || animations.length == 0)
         Trace("FinishStartScene", "no animations with tags/suppress active — aborting (no SexLab random)", True)
         Release()
         DbgReturn("FinishStartScene", "None")
@@ -983,6 +999,17 @@ Function LoadSetting(String setting_name)
         event_hook = JMap.getStr(setting_id, "event_hook", event_hook)
     endif
 
+    ; Synonym clusters for this setting's tag lookups (default.json: "broad").
+    if JMap.HasKey(setting_id, "synonyms")
+        synonyms_mode = JMap.getStr(setting_id, "synonyms", synonyms_mode)
+    endif
+    ; C++ reads tags_any / tags_prefer / exclude_settings itself from `_setting`; keep only the flags here.
+    if setting_name != "default"
+        scene_setting_name = setting_name
+        setting_strict = JMap.getInt(setting_id, "strict") != 0
+        setting_has_filter = JMap.HasKey(setting_id, "tags_any") || JMap.HasKey(setting_id, "tags_prefer") || JMap.HasKey(setting_id, "exclude_settings")
+    endif
+
     ; ------------------------------
     ; Array values 
     ; ------------------------------
@@ -1384,6 +1411,8 @@ int Function BuildWebUIObject()
     JMap.setInt(obj, "_position_override", position_override as int)
     JMap.setStr(obj, "_tags", JoinStrings(tags, num_tags))
     JMap.setStr(obj, "_tags_suppress", JoinStrings(tags_suppress, num_tags_suppress))
+    JMap.setStr(obj, "_synonyms", synonyms_mode)
+    JMap.setStr(obj, "_scene_setting", scene_setting_name)
     String[] presets = manager.GetSceneSettings()
     int preset_arr = JArray.object()
     i = 0
@@ -1450,6 +1479,9 @@ Function ApplyWebUIState(int obj)
     endif
     if JMap.hasKey(obj, "_synonyms")
         synonyms_mode = JMap.getStr(obj, "_synonyms", "broad")
+    endif
+    if JMap.hasKey(obj, "_scene_setting")
+        ReadSettingFlags(JMap.getStr(obj, "_scene_setting", ""))
     endif
     if JMap.hasKey(obj, "_position_override")
         position_override = JMap.getInt(obj, "_position_override", 1) != 0
@@ -1558,6 +1590,31 @@ Function ApplyWebUIState(int obj)
     endif
 EndFunction
 
+; Scene setting chosen in the WebUI without reloading its arrays: only the C++ filter flags.
+Function ReadSettingFlags(String setting_name)
+    scene_setting_name = ""
+    setting_strict = false
+    setting_has_filter = false
+    if setting_name == "" || setting_name == "default"
+        return
+    endif
+    String filename = manager.GetSceneSettingFilename(setting_name)
+    if !MiscUtil.FileExists(filename)
+        Trace("ReadSettingFlags", filename+" doesn't exist")
+        return
+    endif
+    int setting_id = JValue.readFromFile(filename)
+    if setting_id < 1
+        Trace("ReadSettingFlags", filename+" couldn't be parsed")
+        return
+    endif
+    scene_setting_name = setting_name
+    setting_strict = JMap.getInt(setting_id, "strict") != 0
+    setting_has_filter = JMap.HasKey(setting_id, "tags_any") || JMap.HasKey(setting_id, "tags_prefer") || JMap.HasKey(setting_id, "exclude_settings")
+    JValue.release(setting_id)
+    Trace("ReadSettingFlags", setting_name+" strict:"+setting_strict+" has_filter:"+setting_has_filter)
+EndFunction
+
 Function LoadPresetFromWebUI(String setting_name)
     DbgEnter("LoadPresetFromWebUI", "name:"+setting_name)
     if setting_name != ""
@@ -1662,7 +1719,7 @@ EndFunction
 
 ; No tags/suppress → manager.empty (SexLab picks). Otherwise AnimDB lookup with peel.
 sslBaseAnimation[] Function ResolveAnimationsFromTags()
-    if num_tags == 0 && num_tags_suppress == 0
+    if num_tags == 0 && num_tags_suppress == 0 && !setting_has_filter
         Trace("ResolveAnimationsFromTags", "no tags; SexLab picks")
         return manager.empty
     endif
@@ -1729,7 +1786,7 @@ sslBaseAnimation[] Function SelectAnimations()
     ; Empty tags must not return every N-actor anim: on P+ that list becomes
     ; GetPlayingScenes() and enjoyment-wait hops forever.
     if animations == manager.empty || !animations || animations.length == 0
-        if num_tags == 0 && num_tags_suppress == 0
+        if num_tags == 0 && num_tags_suppress == 0 && !setting_has_filter
             Trace("SelectAnimations", "no tags; SexLab picks")
             DbgReturn("SelectAnimations", "manager.empty")
             return manager.empty
@@ -1741,7 +1798,7 @@ sslBaseAnimation[] Function SelectAnimations()
     ; empty = no forced list; StartScene skips SetAnimations and SexLab randomly selects
     ; unless tags/suppress are set (FinishStartScene aborts instead).
     if animations == manager.empty || !animations || animations.length == 0
-        if num_tags > 0 || num_tags_suppress > 0
+        if num_tags > 0 || num_tags_suppress > 0 || setting_has_filter
             Trace("SelectAnimations", "no animations matching tags/suppress", True)
         endif
         DbgReturn("SelectAnimations", "manager.empty")
@@ -1771,7 +1828,7 @@ sslBaseAnimation[] Function SelectAnimationsFromAnimDb()
     DbgEnter("SelectAnimationsFromAnimDb")
     int mustMax = num_tags
     int suppressMax = num_tags_suppress
-    if mustMax <= 0 && suppressMax <= 0
+    if mustMax <= 0 && suppressMax <= 0 && !setting_has_filter
         DbgReturn("SelectAnimationsFromAnimDb", "no tags")
         return manager.empty
     endif
@@ -1801,7 +1858,12 @@ sslBaseAnimation[] Function SelectAnimationsFromAnimDb()
     if mustMax > 0
         mustKeep = 1
     endif
+    ; A strict setting never drops its suppress tags.
     int s = suppressMax - 1
+    if setting_strict
+        Trace("SelectAnimationsFromAnimDb", "step3 skipped: setting "+scene_setting_name+" is strict")
+        s = -1
+    endif
     while s >= 0
         Trace("SelectAnimationsFromAnimDb", "step3 must="+mustKeep+" suppress="+s)
         found = QuerySexLabAnimsFromAnimDb(mustKeep, s)
@@ -1813,7 +1875,8 @@ sslBaseAnimation[] Function SelectAnimationsFromAnimDb()
     endwhile
 
     ; Step 4: drop front must-tag; keep full suppress if any (unconstrained skipped).
-    if mustMax > 0 && suppressMax > 0
+    ; The setting's tags_any / exclude_settings still apply, so that is not unconstrained either.
+    if mustMax > 0 && (suppressMax > 0 || setting_has_filter)
         Trace("SelectAnimationsFromAnimDb", "step4 must=0 suppress="+suppressMax)
         found = QuerySexLabAnimsFromAnimDb(0, suppressMax)
         if HasAnimList(found)
@@ -1841,7 +1904,7 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     if suppressCount > num_tags_suppress
         suppressCount = num_tags_suppress
     endif
-    if mustCount <= 0 && suppressCount <= 0
+    if mustCount <= 0 && suppressCount <= 0 && !setting_has_filter
         return manager.empty
     endif
 
@@ -1851,6 +1914,22 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     JMap.setStr(filter, "_synonyms", synonyms_mode)
     ; Random 32 of the matches (not the alphabetically first 32).
     JMap.setInt(filter, "_shuffle", 1)
+    ; Scene setting: C++ adds its tags_any / tags_prefer / exclude_settings, and its
+    ; tags_suppress_unless_bound unless the cast (_form_ids) wears heavy-bondage DD.
+    String setting_for_query = scene_setting_name
+    if setting_for_query == ""
+        setting_for_query = "default"
+    endif
+    JMap.setStr(filter, "_setting", setting_for_query)
+    int cast_arr = JArray.object()
+    int ci = 0
+    while ci < num_actors
+        if actors[ci]
+            JArray.addInt(cast_arr, actors[ci].GetFormID())
+        endif
+        ci += 1
+    endwhile
+    JMap.setObj(filter, "_form_ids", cast_arr)
 
     int must_arr = JArray.object()
     int mi = 0
@@ -2035,7 +2114,7 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
 
         tags_string = JoinStrings(tags, num_tags)
         tags_suppress_string = JoinStrings(tags_suppress, num_tags_suppress)
-        if num_tags == 0 && num_tags_suppress == 0
+        if num_tags == 0 && num_tags_suppress == 0 && !setting_has_filter
             if groups_owned
                 JValue.release(groups)
             endif

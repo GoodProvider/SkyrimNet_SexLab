@@ -1,4 +1,5 @@
 #include "AnimationDB.h"
+#include "Config.h"
 #include "JsonUtil.h"
 #include "WebUI_Log.h"
 
@@ -26,6 +27,7 @@ namespace AnimationDB
         /// tag → its cluster's members (incl. itself). [0] = strict, [1] = broad. Guarded by g_mutex.
         using SynonymMap = std::unordered_map<std::string, std::shared_ptr<const std::vector<std::string>>>;
         SynonymMap g_syn[2];
+        std::unordered_map<std::string, SceneSettingFilter> g_scene_filters; // scenes/<name>.json as written; under g_mutex
 
         const SynonymMap* SynonymMapFor(SynonymMode mode)
         {
@@ -834,6 +836,9 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         {
             std::vector<std::vector<std::string>> must;
             std::vector<std::vector<std::string>> suppress;
+            std::vector<std::string> any;    // tags_any, all clusters flattened
+            std::vector<std::string> prefer; // tags_prefer, all clusters flattened
+            std::vector<ExpandedTags> exclude; // one per spec.exclude_filters entry
         };
 
         std::vector<std::string> ExpandTagLocked(const std::string& raw, SynonymMode mode)
@@ -855,6 +860,17 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             ex.suppress.reserve(spec.suppress_tags.size());
             for (const auto& s : spec.suppress_tags)
                 ex.suppress.push_back(ExpandTagLocked(s, spec.synonyms));
+            for (const auto& a : spec.any_tags) {
+                for (auto& t : ExpandTagLocked(a, spec.synonyms))
+                    ex.any.push_back(std::move(t));
+            }
+            for (const auto& p : spec.prefer_tags) {
+                for (auto& t : ExpandTagLocked(p, spec.synonyms))
+                    ex.prefer.push_back(std::move(t));
+            }
+            ex.exclude.reserve(spec.exclude_filters.size());
+            for (const auto& sub : spec.exclude_filters)
+                ex.exclude.push_back(ExpandSpecTagsLocked(sub));
             return ex;
         }
 
@@ -867,19 +883,9 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             return false;
         }
 
-        bool MatchesFilter(const AnimRow& row, const FilterSpec& spec, const ExpandedTags& ex)
+        /// Tag part of a filter only (suppress, must AND/OR, any, exclude). Empty filter → true.
+        bool TagsMatch(const std::unordered_set<std::string>& tagset, const FilterSpec& spec, const ExpandedTags& ex)
         {
-            if (spec.enabled_only && !row.enabled)
-                return false;
-            if (spec.actor_count && *spec.actor_count > 0 && row.position_count != *spec.actor_count)
-                return false;
-            if (spec.creature == 1 && !row.has_creature)
-                return false;
-            if (spec.creature == 2 && row.has_creature)
-                return false;
-
-            // Within a cluster any member matches; require_all is AND/OR across requested tags.
-            std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
             for (const auto& s : ex.suppress) {
                 if (HasAnyOf(tagset, s))
                     return false;
@@ -902,6 +908,34 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                         return false;
                 }
             }
+            if (!ex.any.empty() && !HasAnyOf(tagset, ex.any))
+                return false;
+            for (size_t i = 0; i < ex.exclude.size() && i < spec.exclude_filters.size(); ++i) {
+                const auto& sub = ex.exclude[i];
+                // An exclude filter with no positive tags would exclude everything; skip it.
+                if (sub.must.empty() && sub.any.empty())
+                    continue;
+                if (TagsMatch(tagset, spec.exclude_filters[i], sub))
+                    return false;
+            }
+            return true;
+        }
+
+        bool MatchesFilter(const AnimRow& row, const FilterSpec& spec, const ExpandedTags& ex)
+        {
+            if (spec.enabled_only && !row.enabled)
+                return false;
+            if (spec.actor_count && *spec.actor_count > 0 && row.position_count != *spec.actor_count)
+                return false;
+            if (spec.creature == 1 && !row.has_creature)
+                return false;
+            if (spec.creature == 2 && row.has_creature)
+                return false;
+
+            // Within a cluster any member matches; require_all is AND/OR across requested tags.
+            std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
+            if (!TagsMatch(tagset, spec, ex))
+                return false;
 
             if (spec.position_match) {
                 if (static_cast<int>(spec.pos_genders.size()) != row.position_count)
@@ -1041,10 +1075,11 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     namespace
     {
-        bool AnyAnimHasAllTagsLocked(const std::vector<std::string>& must, int actor_count, SynonymMode mode)
+        bool AnyAnimHasAllTagsLocked(const std::vector<std::string>& must, int actor_count, SynonymMode mode,
+            const FilterSpec* base)
         {
-            FilterSpec spec;
-            spec.must_tags = must;
+            FilterSpec spec = base ? *base : FilterSpec{};
+            spec.must_tags.insert(spec.must_tags.end(), must.begin(), must.end());
             spec.require_all = true;
             spec.enabled_only = true;
             spec.synonyms = mode;
@@ -1152,6 +1187,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         std::lock_guard lock(g_mutex);
         g_syn[0] = std::move(strict);
         g_syn[1] = std::move(broad);
+        g_scene_filters.clear(); // scene settings reload at the same points as the synonym files
     }
 
     std::vector<std::string> SynonymsOf(const std::string& tag, SynonymMode mode)
@@ -1160,7 +1196,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         return ExpandTagLocked(tag, mode);
     }
 
-    std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode)
+    std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode, const FilterSpec* base)
     {
         auto tags = ParseSanitizeTagsCsv(tags_csv);
         if (tags.empty())
@@ -1178,7 +1214,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 subset.reserve(static_cast<size_t>(k));
                 for (int i : idx)
                     subset.push_back(tags[static_cast<size_t>(i)]);
-                if (AnyAnimHasAllTagsLocked(subset, actor_count, mode))
+                if (AnyAnimHasAllTagsLocked(subset, actor_count, mode, base))
                     return TagsCsv(subset);
 
                 // next combination in lex order
@@ -1196,7 +1232,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     }
 
     std::string AppendMatchingTags(const std::string& resolved_csv, const std::vector<std::string>& extra,
-        int actor_count, SynonymMode mode)
+        int actor_count, SynonymMode mode, const FilterSpec* base)
     {
         auto tags = ParseSanitizeTagsCsv(resolved_csv);
         if (tags.empty() || extra.empty())
@@ -1209,7 +1245,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             if (tag.empty() || std::find(tags.begin(), tags.end(), tag) != tags.end())
                 continue;
             tags.push_back(tag);
-            if (AnyAnimHasAllTagsLocked(tags, actor_count, mode))
+            if (AnyAnimHasAllTagsLocked(tags, actor_count, mode, base))
                 added = true;
             else
                 tags.pop_back();
@@ -1222,11 +1258,190 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         const std::string needle = SanitizeTag(tag);
         if (needle.empty())
             return false;
+        // Strict clusters only (true equivalents: kiss = kissing); hug stays apart from cuddling.
+        std::vector<std::string> cluster;
+        {
+            std::lock_guard lock(g_mutex);
+            cluster = ExpandTagLocked(needle, SynonymMode::Strict);
+        }
         for (const auto& t : ParseSanitizeTagsCsv(tags_csv)) {
-            if (t == needle)
+            if (std::find(cluster.begin(), cluster.end(), t) != cluster.end())
                 return true;
         }
         return false;
+    }
+
+    namespace
+    {
+
+        std::vector<std::string> SceneCsvOrArray(const nlohmann::json& v)
+        {
+            std::vector<std::string> out;
+            auto add = [&](const std::string& raw) {
+                std::string t = TrimLower(raw);
+                if (!t.empty() && std::find(out.begin(), out.end(), t) == out.end())
+                    out.push_back(std::move(t));
+            };
+            if (v.is_string()) {
+                for (const auto& p : SplitCsv(v.get<std::string>()))
+                    add(p);
+            } else if (v.is_array()) {
+                for (const auto& el : v) {
+                    if (el.is_string())
+                        add(el.get<std::string>());
+                }
+            }
+            return out;
+        }
+
+        /// One scenes/<name>.json as written (no default merge). Missing/bad file → found=false.
+        SceneSettingFilter ReadSceneSettingFileLocked(const std::string& name)
+        {
+            const std::string key = TrimLower(name);
+            if (auto it = g_scene_filters.find(key); it != g_scene_filters.end())
+                return it->second;
+            SceneSettingFilter f;
+            const auto path = PluginDataDir() / "scenes" / (key + ".json");
+            std::error_code ec;
+            if (!key.empty() && std::filesystem::exists(path, ec)) {
+                try {
+                    std::ifstream in(path);
+                    const auto j = nlohmann::json::parse(in);
+                    f.found = true;
+                    if (j.contains("synonyms") && j["synonyms"].is_string())
+                        f.synonyms = ParseSynonymMode(j["synonyms"].get<std::string>());
+                    if (j.contains("tags"))
+                        f.tags = SceneCsvOrArray(j["tags"]);
+                    if (j.contains("tags_suppress"))
+                        f.tags_suppress = SceneCsvOrArray(j["tags_suppress"]);
+                    if (j.contains("tags_any"))
+                        f.tags_any = SceneCsvOrArray(j["tags_any"]);
+                    if (j.contains("tags_prefer"))
+                        f.tags_prefer = SceneCsvOrArray(j["tags_prefer"]);
+                    if (j.contains("tags_suppress_unless_bound"))
+                        f.tags_suppress_unless_bound = SceneCsvOrArray(j["tags_suppress_unless_bound"]);
+                    if (j.contains("assume_bound"))
+                        f.assume_bound = j["assume_bound"].is_boolean() ? j["assume_bound"].get<bool>()
+                                         : j["assume_bound"].is_number() && j["assume_bound"].get<double>() != 0;
+                    if (j.contains("exclude_settings"))
+                        f.exclude_settings = SceneCsvOrArray(j["exclude_settings"]);
+                } catch (const std::exception& e) {
+                    webui_log::warn("AnimationDB: scene setting {} parse failed: {}", path.string(), e.what());
+                    f = SceneSettingFilter{};
+                }
+            }
+            g_scene_filters[key] = f;
+            return f;
+        }
+
+        /// Tag filter an `exclude_settings` entry stands for: its own tags / tags_any / tags_suppress.
+        std::optional<FilterSpec> ExcludeFilterForLocked(const std::string& name)
+        {
+            const auto f = ReadSceneSettingFileLocked(name);
+            if (!f.found || (f.tags.empty() && f.tags_any.empty())) {
+                webui_log::warn("AnimationDB: exclude_settings '{}' has no tags/tags_any (ignored)", name);
+                return std::nullopt;
+            }
+            FilterSpec sub;
+            sub.must_tags = f.tags;
+            sub.require_all = true;
+            sub.any_tags = f.tags_any;
+            sub.suppress_tags = f.tags_suppress;
+            sub.synonyms = f.synonyms.value_or(SynonymMode::Broad);
+            return sub;
+        }
+    }
+
+    SceneSettingFilter LoadSceneSettingFilter(const std::string& name)
+    {
+        std::lock_guard lock(g_mutex);
+        SceneSettingFilter out = ReadSceneSettingFileLocked("default");
+        const std::string key = TrimLower(name);
+        if (key.empty() || key == "default")
+            return out;
+        const auto named = ReadSceneSettingFileLocked(key);
+        if (!named.found)
+            return out;
+        // Named file wins per key it sets (same layering as Papyrus LoadSetting default → setting).
+        out.found = true;
+        if (named.synonyms)
+            out.synonyms = named.synonyms;
+        if (!named.tags.empty())
+            out.tags = named.tags;
+        if (!named.tags_suppress.empty())
+            out.tags_suppress = named.tags_suppress;
+        if (!named.tags_any.empty())
+            out.tags_any = named.tags_any;
+        if (!named.tags_prefer.empty())
+            out.tags_prefer = named.tags_prefer;
+        if (!named.tags_suppress_unless_bound.empty())
+            out.tags_suppress_unless_bound = named.tags_suppress_unless_bound;
+        out.assume_bound = named.assume_bound;
+        if (!named.exclude_settings.empty())
+            out.exclude_settings = named.exclude_settings;
+        return out;
+    }
+
+    void ApplySceneSetting(FilterSpec& spec, const std::string& name, bool bound)
+    {
+        const auto f = LoadSceneSettingFilter(name);
+        auto append = [](std::vector<std::string>& dst, const std::vector<std::string>& src) {
+            for (const auto& t : src) {
+                if (std::find(dst.begin(), dst.end(), t) == dst.end())
+                    dst.push_back(t);
+            }
+        };
+        append(spec.any_tags, f.tags_any);
+        append(spec.prefer_tags, f.tags_prefer);
+        // With DD tag filtering off the worn scan reports nothing, so never gate DD animations then.
+        if (f.assume_bound)
+            bound = true;
+        if (!bound && SexLabNet::GetConfigBool("sexlab.tags.filter_by_devious_devices", true))
+            append(spec.suppress_tags, f.tags_suppress_unless_bound);
+        std::lock_guard lock(g_mutex);
+        for (const auto& ex : f.exclude_settings) {
+            if (auto sub = ExcludeFilterForLocked(ex))
+                spec.exclude_filters.push_back(std::move(*sub));
+        }
+    }
+
+    FilterSpec SceneSettingResolveBase(const std::string& name, bool bound)
+    {
+        FilterSpec base;
+        const auto f = LoadSceneSettingFilter(name);
+        base.must_tags = f.tags;
+        base.suppress_tags = f.tags_suppress;
+        base.synonyms = f.synonyms.value_or(SynonymMode::Broad);
+        ApplySceneSetting(base, name, bound);
+        // ResolveTags only asks "does any animation exist"; preference never empties a probe.
+        base.prefer_tags.clear();
+        return base;
+    }
+
+    void ParseSceneFilterKeys(const nlohmann::json& j, FilterSpec& spec, std::optional<bool> bound_override)
+    {
+        if (j.contains("_any_tags"))
+            for (auto& t : SceneCsvOrArray(j["_any_tags"]))
+                spec.any_tags.push_back(std::move(t));
+        if (j.contains("_prefer_tags"))
+            for (auto& t : SceneCsvOrArray(j["_prefer_tags"]))
+                spec.prefer_tags.push_back(std::move(t));
+        if (j.contains("_exclude_settings")) {
+            std::lock_guard lock(g_mutex);
+            for (const auto& name : SceneCsvOrArray(j["_exclude_settings"])) {
+                if (auto sub = ExcludeFilterForLocked(name))
+                    spec.exclude_filters.push_back(std::move(*sub));
+            }
+        }
+        if (j.contains("_setting") && j["_setting"].is_string()) {
+            bool bound = false;
+            if (bound_override)
+                bound = *bound_override;
+            else if (j.contains("_bound"))
+                bound = j["_bound"].is_boolean() ? j["_bound"].get<bool>()
+                        : j["_bound"].is_number() && j["_bound"].get<double>() != 0;
+            ApplySceneSetting(spec, j["_setting"].get<std::string>(), bound);
+        }
     }
 
     std::filesystem::path PluginDataDir()
@@ -1566,10 +1781,20 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         std::lock_guard lock(g_mutex);
         const auto ex = ExpandSpecTagsLocked(spec);
         std::vector<AnimRow> out;
+        std::vector<AnimRow> preferred;
         for (const auto& [reg, row] : g_rows) {
-            if (MatchesFilter(row, spec, ex))
-                out.push_back(row);
+            if (!MatchesFilter(row, spec, ex))
+                continue;
+            if (!ex.prefer.empty()) {
+                std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
+                if (HasAnyOf(tagset, ex.prefer))
+                    preferred.push_back(row);
+            }
+            out.push_back(row);
         }
+        // tags_prefer is soft: narrow to the preferred rows only when there are some.
+        if (!preferred.empty())
+            out = std::move(preferred);
         if (spec.shuffle) {
             static std::mt19937 rng{ std::random_device{}() };
             std::shuffle(out.begin(), out.end(), rng);

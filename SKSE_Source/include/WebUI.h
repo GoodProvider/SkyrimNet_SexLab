@@ -68,5 +68,3 @@ void WebUI_Reset();
 void Reset_To_Default();
 /// MCM-driven menu hotkey: register dxScanCode when enabled, else unregister.
 void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled);
-/// Bind dxScanCode to Menu.CycleStyleHotkey, or clear when disabled. Never shares the menu hotkey.
-void WebUI_SetStyleHotkey(uint32_t dxScanCode, bool enabled);

@@ -48,6 +48,19 @@ SkyrimNet is not seeing Actions functions.
 
 Scene files via `setting_name`: [../reference/scene-settings.md](../reference/scene-settings.md).
 
+**TargetMenu scene starts** (Start with method **random** picks from the option's scene setting alone):
+
+| Option | Picks |
+|--------|-------|
+| sex | Consensual sex: any sex act, nothing aggressive, no cuddle/kiss animations |
+| affection | Romantic but not sexual: cuddle, hug, spoon, kiss, head pat, hold hands. Clothed, no orgasm |
+| platonic | What friends or family could share: cuddle, hug, head pat, hold hands. No kissing. Clothed, no orgasm, silent |
+| punish | Spanking for any genders. Whip always uses the whipping animations (they are bondage animations; the target is assumed bound) |
+| masturbation | Solo |
+| rapes | Anything except affection/platonic animations, aggressive ones first |
+
+Animations made for Devious Devices bondage are only picked when someone in the scene wears it. If an option finds nothing (for example platonic + kissing), you get "No matching animations" instead of a looser pick.
+
 **Tag synonyms:** an animation tag search also matches that tag's synonyms. For example, `doggy` finds animations tagged `doggystyle`, and `titjob` finds `boobjob`. The Scene Creator and Description Editor animation filters have a **synonyms** pulldown: **broad** (default) matches wider families such as every gallows variant, **strict** only true equivalents, and **none** literal tags. The lists are `SKSE/Plugins/SkyrimNet_SexLab/synonyms-broad.json` and `synonyms-strict.json`. You can edit them, and the edits load when you load a save.
 
 ## Settings (SkyrimNet dashboard)

@@ -1,6 +1,7 @@
 #include "Papyrus_AnimationDB.h"
 #include "JsonUtil.h"
 #include "AnimationDB.h"
+#include "BondageCatalog.h"
 #include "WebUI_Log.h"
 
 #include <nlohmann/json.hpp>
@@ -85,6 +86,23 @@ namespace PapyrusBindings_AnimationDB
                 if (j.contains("_shuffle"))
                     spec.shuffle = j["_shuffle"].is_boolean() ? j["_shuffle"].get<bool>()
                                    : j["_shuffle"].is_number() && j["_shuffle"].get<double>() != 0;
+                // Scene-setting keys. Papyrus natives run on the main thread, so `_form_ids` (the cast)
+                // can be scanned for worn DD here to decide tags_suppress_unless_bound.
+                std::optional<bool> bound;
+                if (!j.contains("_bound") && j.contains("_form_ids") && j["_form_ids"].is_array()) {
+                    std::vector<RE::Actor*> cast;
+                    for (const auto& el : j["_form_ids"]) {
+                        if (!el.is_number())
+                            continue;
+                        const auto formId = el.is_number_integer()
+                                                ? static_cast<std::uint32_t>(el.get<std::int64_t>())
+                                                : static_cast<std::uint32_t>(el.get<double>());
+                        if (auto* actor = formId ? RE::TESForm::LookupByID<RE::Actor>(formId) : nullptr)
+                            cast.push_back(actor);
+                    }
+                    bound = !BondageCatalog::WornAnimationTags(cast).empty();
+                }
+                AnimationDB::ParseSceneFilterKeys(j, spec, bound);
             } catch (...) {
                 webui_log::warn("AnimationDB: bad filter JSON");
             }

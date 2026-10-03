@@ -1,6 +1,6 @@
 {
   "type": "papyrus",
-  "label": "cuddle",
+  "label": "platonic",
   "panel": "scene_start",
   "plugin": "SkyrimNet_SexLab.esp",
   "questFormId": "0x800",
@@ -10,11 +10,11 @@
     "participant2": "player",
     "participant3": "none",
     "victim": "none",
-    "intent": "show affection",
+    "intent": "comfort",
     "direction": "random",
     "method": "cuddling",
     "style": "gently",
-    "settingName": "nonsexual"
+    "settingName": "nonsexual_platonic"
   },
   "parameterMapping": [
     {

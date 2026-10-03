@@ -1,29 +1,26 @@
 {
   "type": "papyrus",
-  "label": "punish",
+  "label": "affection",
   "panel": "scene_start",
   "plugin": "SkyrimNet_SexLab.esp",
   "questFormId": "0x800",
   "scriptName": "SkyrimNet_SexLab_Actions",
-  "executionFunctionName": "StartScene_Nonconsensual_Two_TargetVictim",
+  "executionFunctionName": "StartScene_Consensual_Two",
   "panelDefaults": {
     "participant2": "player",
     "participant3": "none",
-    "victim": "currentActor",
-    "intent": "punish",
+    "victim": "none",
+    "intent": "show affection",
     "direction": "random",
-    "method": "spanking",
-    "style": "forcefully",
-    "settingName": "punish_spanking"
-  },
-  "methodSettings": {
-    "whip": "punish_whipping_oral"
+    "method": "cuddling",
+    "style": "gently",
+    "settingName": "nonsexual"
   },
   "parameterMapping": [
     {
       "type": "dynamic",
       "name": "intent",
-      "description": "punish"
+      "description": "showing affection|comforting|cuddling"
     },
     {
       "type": "speaker",

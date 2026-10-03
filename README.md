@@ -16,6 +16,37 @@ Adds SkyrimNet (LLM) support to SexLab Framework.
 2. Put `SkyrimNet_SexLab.esp` last; enable narration in SkyrimNet. On 0.25+, plugin `goodprovider.sexlab` should appear under Plugins (External).
 3. If Actions fail: Game Data Explorer → `_sexlab` → Refresh (see [FAQ](docs/players/overview.md)).
 
+## Scene keys
+
+These keys work while you control a scene: you are in it, or you took control of the crosshair scene with SexLab's `N`. They sit on the numpad and work with NumLock on or off.
+
+```
+-------------------------------------------------------
+| 7 previous | 8 pause  | 9 next        | - slower |
+| 4 calm     | 5 arouse | 6 deny        | + faster |
+| 1 end      | 2        | 3 free camera |          |
+-------------------------------------------------------
+```
+
+| command  | key     |
+|----------|---------|
+| previous | Num 7   |
+| pause    | Num 8   |
+| next     | Num 9   |
+| calm     | Num 4   |
+| arouse   | Num 5   |
+| deny     | Num 6   |
+| slower   | Num -   |
+| faster   | Num +   |
+| end      | Num 1   |
+| free camera | Num 3 (SexLab's own key) |
+
+- Calm and arouse are mini-game keys. Mini-game keys 1–4 (top row) pick who you act on.
+- `\` opens Start Sex / Edit Stage at any time once it is enabled in the dashboard.
+- Every key except free camera can be rebound in the SkyrimNet dashboard. On game start the mod writes the current bindings to `SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json`.
+
+More detail: [docs/players/hotkeys.md](docs/players/hotkeys.md).
+
 ## Extending
 
 | Task | Doc |

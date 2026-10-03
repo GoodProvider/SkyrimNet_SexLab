@@ -274,6 +274,8 @@ namespace PapyrusBindings_WebUI
             if (j.contains("_shuffle"))
                 spec.shuffle = j["_shuffle"].is_boolean() ? j["_shuffle"].get<bool>()
                                : j["_shuffle"].is_number() && j["_shuffle"].get<double>() != 0;
+            // Scene-setting keys; JS sends `_bound` (from its DD probe), never scanned here (UI thread).
+            AnimationDB::ParseSceneFilterKeys(j, spec);
         } catch (...) {
             webui_log::warn("ParseFilterJson failed");
         }
@@ -559,8 +561,6 @@ namespace PapyrusBindings_WebUI
     {
         webui_log::info("WebUI_SetHotkey dx={:#x} enabled={}", static_cast<uint32_t>(dxScanCode), enabled);
         WebUI_SetMenuHotkey(static_cast<uint32_t>(dxScanCode), enabled);
-        // Dashboard save lands here (MCM.ApplyHotkey); rebind the style hotkey after the menu key.
-        SexLabNet::Config::GetSingleton().ApplyStyleHotkey();
     }
 
     void WebUI_SetLastRebuildTimestamp(RE::StaticFunctionTag*, RE::BSFixedString timestamp)
@@ -1419,20 +1419,36 @@ namespace PapyrusBindings_WebUI
             const std::string request_id = j.value("_request_id", "");
             const std::string tags = j.value("_tags", "");
             const int actor_count = j.value("_actor_count", 0);
-            const auto mode = AnimationDB::ParseSynonymMode(j.value("_synonyms", ""));
+            // `_setting`: resolve against that scene setting so a leaf never resolves to tags it then empties.
+            // Without an explicit `_synonyms` the setting's own mode applies (broad when it names none).
+            const std::string setting = j.contains("_setting") && j["_setting"].is_string()
+                                            ? j["_setting"].get<std::string>() : std::string();
+            std::optional<AnimationDB::SynonymMode> explicitMode;
+            if (j.contains("_synonyms") && j["_synonyms"].is_string())
+                explicitMode = AnimationDB::ParseSynonymMode(j["_synonyms"].get<std::string>());
             if (!j.contains("_form_ids")) {
-                InvokeResolveTagsResult(request_id, tags, AnimationDB::ResolveTags(tags, actor_count, mode));
+                std::optional<AnimationDB::FilterSpec> base;
+                if (!setting.empty())
+                    base = AnimationDB::SceneSettingResolveBase(setting, false);
+                const auto mode = explicitMode.value_or(base ? base->synonyms : AnimationDB::SynonymMode::Broad);
+                InvokeResolveTagsResult(request_id, tags,
+                    AnimationDB::ResolveTags(tags, actor_count, mode, base ? &*base : nullptr));
                 return;
             }
             // TargetMenu scene start: append the cast's worn DD tags that still match (main thread for the scan).
             const auto formIds = ParseFormIds(j);
-            SKSE::GetTaskInterface()->AddTask([request_id, tags, actor_count, mode, formIds]() {
-                std::string resolved = AnimationDB::ResolveTags(tags, actor_count, mode);
+            SKSE::GetTaskInterface()->AddTask([request_id, tags, actor_count, explicitMode, formIds, setting]() {
                 const auto dd = BondageCatalog::WornAnimationTags(ActorsFromFormIds(formIds));
+                std::optional<AnimationDB::FilterSpec> base;
+                if (!setting.empty())
+                    base = AnimationDB::SceneSettingResolveBase(setting, !dd.empty());
+                const auto mode = explicitMode.value_or(base ? base->synonyms : AnimationDB::SynonymMode::Broad);
+                const auto* pbase = base ? &*base : nullptr;
+                std::string resolved = AnimationDB::ResolveTags(tags, actor_count, mode, pbase);
                 if (!resolved.empty() && !dd.empty())
-                    resolved = AnimationDB::AppendMatchingTags(resolved, dd, actor_count, mode);
-                webui_log::info("HandleAnimDbResolveTags id={} tags={} dd={} resolved={}",
-                    request_id, tags, JoinTags(dd), resolved);
+                    resolved = AnimationDB::AppendMatchingTags(resolved, dd, actor_count, mode, pbase);
+                webui_log::info("HandleAnimDbResolveTags id={} tags={} setting={} dd={} resolved={}",
+                    request_id, tags, setting, JoinTags(dd), resolved);
                 InvokeResolveTagsResult(request_id, tags, resolved);
             });
         } catch (...) {
@@ -1614,37 +1630,6 @@ namespace PapyrusBindings_WebUI
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             vm->DispatchMethodCall(scriptObject, RE::BSFixedString("ProcessHotkey"), args, callback);
             webui_log::info("Call_ProcessHotkey: dispatched key={}", keyCode);
-        });
-    }
-
-    void Call_CycleStyleHotkey()
-    {
-        SKSE::GetTaskInterface()->AddTask([]() {
-            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            if (!vm) {
-                webui_log::error("Call_CycleStyleHotkey: no VM");
-                return;
-            }
-
-            RE::TESQuest* quest = FindMainQuest();
-            if (!quest) {
-                webui_log::error("Call_CycleStyleHotkey: quest not found");
-                return;
-            }
-
-            auto handle = vm->GetObjectHandlePolicy()->GetHandleForObject(
-                static_cast<RE::VMTypeID>(quest->GetFormType()), quest);
-            RE::BSTSmartPointer<RE::BSScript::Object> scriptObject;
-            vm->FindBoundObject(handle, "SkyrimNet_SexLab_Menu", scriptObject);
-            if (!scriptObject) {
-                webui_log::error("Call_CycleStyleHotkey: Menu script not bound");
-                return;
-            }
-
-            auto* args = RE::MakeFunctionArguments();
-            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
-            vm->DispatchMethodCall(scriptObject, RE::BSFixedString("CycleStyleHotkey"), args, callback);
-            webui_log::info("Call_CycleStyleHotkey: dispatched");
         });
     }
 

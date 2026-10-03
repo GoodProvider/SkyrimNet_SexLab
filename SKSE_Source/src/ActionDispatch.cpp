@@ -313,6 +313,7 @@ namespace ActionCatalog
 
         auto args = std::make_shared<DynamicArgs>();
         int tagsIndex = -1;  // StartScene_* tags/method arg: worn DD tags are appended on the main thread
+        int settingIndex = -1;  // StartScene_* setting_name arg: tags resolve against that scene setting
 
         for (auto& pm : def->parameterMapping) {
             if (pm.name.empty())
@@ -373,6 +374,8 @@ namespace ActionCatalog
 
             if (EqualsIgnoreCase(pm.name, "tags") || EqualsIgnoreCase(pm.name, "method"))
                 tagsIndex = static_cast<int>(args->items.size());
+            if (EqualsIgnoreCase(pm.name, "setting_name"))
+                settingIndex = static_cast<int>(args->items.size());
             DynamicArgs::Item item;
             item.kind = DynamicArgs::Kind::String;
             item.str = value;
@@ -404,7 +407,7 @@ namespace ActionCatalog
         const std::string questPlugin = def->questPlugin;
         const std::uint32_t questFormId = def->questFormId;
 
-        SKSE::GetTaskInterface()->AddTask([captured, scriptName, functionName, questEditorId, questPlugin, questFormId, actionName, tagsIndex]() {
+        SKSE::GetTaskInterface()->AddTask([captured, scriptName, functionName, questEditorId, questPlugin, questFormId, actionName, tagsIndex, settingIndex]() {
             auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
             if (!vm) {
                 webui_log::error("ExecuteAction: no VM");
@@ -423,13 +426,19 @@ namespace ActionCatalog
                 }
                 const int n = static_cast<int>(cast.size());
                 const std::string& tags = captured[tagsIndex].str;
-                startTags = AnimationDB::ResolveTags(tags, n);
                 const auto dd = BondageCatalog::WornAnimationTags(cast);
+                // Resolve against the scene setting (its suppress / tags_any / exclude, synonym mode) so the
+                // method never resolves to tags the setting then empties in Papyrus.
+                const std::string setting = settingIndex >= 0 && settingIndex < static_cast<int>(captured.size())
+                                                ? captured[settingIndex].str : std::string();
+                const auto base = AnimationDB::SceneSettingResolveBase(setting, !dd.empty());
+                startTags = AnimationDB::ResolveTags(tags, n, base.synonyms, &base);
                 if (startTags.empty())
                     startTags = tags;
                 else if (!dd.empty())
-                    startTags = AnimationDB::AppendMatchingTags(startTags, dd, n);
-                webui_log::info("ExecuteAction: {} tags={} dd={} -> {}", actionName, tags, dd.size(), startTags);
+                    startTags = AnimationDB::AppendMatchingTags(startTags, dd, n, base.synonyms, &base);
+                webui_log::info("ExecuteAction: {} tags={} setting={} dd={} -> {}",
+                    actionName, tags, setting, dd.size(), startTags);
             }
             auto* quest = FindQuest(questFormId, questEditorId, questPlugin);
             if (!quest) {
