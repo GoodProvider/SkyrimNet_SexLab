@@ -876,8 +876,50 @@
             flex-shrink: 0;
         }
 
+        /* Gating dialogue: centered layer on top so an open WebUI view stays as it was.
+           Own inset:0 sibling under #ui-shell (like #stop-dialog-overlay): a fixed child of the
+           scrolling #overlay-panels is clipped in PrismaUI. Transparent to clicks except the panel. */
+        #ui-shell > #yesno-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            pointer-events: none;
+        }
+
         #yesno-panel {
+            pointer-events: auto;
             min-width: 320px;
+        }
+
+        #yesno-panel .btn-row {
+            align-items: flex-start;
+        }
+
+        #yesno-explain-text {
+            margin: var(--space-sm) 0 var(--space-md);
+        }
+
+        /* Yes clicked with the WebUI closed: placeholder until Scene Creator arrives. */
+        #yesno-panel.busy .btn-row {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        #yesno-panel .option-cancel {
+            margin-top: 0;
+            border-top: none;
+            padding: var(--space-xs) var(--space-md);
+            border: 1px solid rgba(229, 69, 69, 0.25);
+            border-radius: var(--radius);
+        }
+
+        /* Gating dialogue opened with the WebUI closed: only the dialogue shows. */
+        body.yesno-solo #left-column,
+        body.yesno-solo #main-panel-host {
+            display: none !important;
         }
 
         .yesno-question {
@@ -1254,7 +1296,8 @@
             border-radius: var(--radius-lg);
         }
 
-        #stop-dialog-text {
+        #stop-dialog-text,
+        #yesno-explain-text {
             width: 100%;
             min-height: 80px;
             box-sizing: border-box;
@@ -1267,7 +1310,8 @@
             font-family: var(--font-ui);
         }
 
-        #stop-dialog-submit.de-disabled {
+        #stop-dialog-submit.de-disabled,
+        #yesno-explain-accept.de-disabled {
             opacity: 0.4;
             pointer-events: none;
         }
@@ -2119,18 +2163,31 @@
         </div>
 
     </div>
-
+    </div><!-- #overlay-panels -->
+    <div id="yesno-overlay">
     <div id="yesno-panel" class="panel" style="display:none">
-        <div class="target-row">Confirm</div>
-        <div id="yesno-question" class="yesno-question"></div>
-        <div class="btn-row">
-            <div class="action-btn" onclick="yesNoClick(0)">Yes</div>
-            <div class="action-btn" onclick="yesNoClick(1)">Yes (Random)</div>
-            <div class="option-cancel" onclick="yesNoClick(2)">No (Silent)</div>
-            <div class="option-cancel" onclick="yesNoClick(3)">No</div>
+        <div id="yesno-choices">
+            <div class="target-row">Confirm</div>
+            <div id="yesno-question" class="yesno-question"></div>
+            <div class="btn-row">
+                <div class="action-btn" onclick="yesNoClick(0)">Yes</div>
+                <div class="action-btn" onclick="yesNoClick(1)">Yes (Random)</div>
+                <div class="option-cancel" onclick="yesNoClick(2)">No (Silent)</div>
+                <div class="option-cancel" onclick="yesNoClick(3)">No</div>
+                <div class="option-cancel" onmousedown="event.preventDefault()" onclick="yesNoShowExplain()">No, explain</div>
+            </div>
+        </div>
+        <!-- No, explain: Accept narrates "<player> rejects <requester>'s request for <intent>, because <text>". -->
+        <div id="yesno-explain" style="display:none">
+            <div class="target-row">Explain why</div>
+            <textarea id="yesno-explain-text" oninput="yesNoExplainUpdate()"></textarea>
+            <div class="btn-row">
+                <div class="action-btn de-disabled" id="yesno-explain-accept" onmousedown="event.preventDefault()" onclick="yesNoExplainAccept()">Accept</div>
+                <div class="option-cancel" onmousedown="event.preventDefault()" onclick="yesNoExplainCancel()">Cancel</div>
+            </div>
         </div>
     </div>
-    </div><!-- #overlay-panels -->
+    </div><!-- #yesno-overlay -->
     <!-- Stop dialog (Description Editor stop, TargetMenu stop explain): "Stop scene" choices / "Explain why". -->
     <div id="stop-dialog-overlay">
         <div class="stop-dialog" id="stop-dialog-choices">
@@ -2344,6 +2401,8 @@
         }
 
         function showControlPanel() {
+            // Gating dialogue opened with the WebUI closed stands alone; clearYesNoSolo ends that.
+            if (document.body.classList.contains('yesno-solo')) return;
             const el = document.getElementById('control-panel');
             if (el) el.style.display = 'flex';
             renderControlModePulldown();
@@ -2830,10 +2889,9 @@
         }
 
         function showPanel(id) {
-            // Spare TargetMenu row when opening Scene Creator / YesNo beside it.
+            // Spare TargetMenu row when opening Scene Creator beside it (YesNo gating stands alone).
             const spareTarget =
-                id === 'scene_creator_panel' || id === 'scene-creator-panel' ||
-                id === 'yesno_panel' || id === 'yesno-panel';
+                id === 'scene_creator_panel' || id === 'scene-creator-panel';
             const isMainBuiltin =
                 isScenePanelKey(id) ||
                 id === 'settings_panel' || id === 'settings-panel' ||
@@ -3037,7 +3095,16 @@
                 return;
             }
             if (overlayElIsOpen('yesno-panel')) {
-                yesNoClick(2);
+                if (yesNoIsBusy()) {
+                    // Waiting on Scene Creator: Escape just closes the WebUI.
+                    hidePanel('yesno_panel');
+                    clearYesNoSolo();
+                    requestWebUIHide(false);
+                } else if (yesNoExplainIsOpen()) {
+                    yesNoExplainCancel();
+                } else {
+                    yesNoClick(2);
+                }
                 return;
             }
             if (overlayElIsOpen('sex-menu-panel')) {
@@ -8201,13 +8268,107 @@
         function configureYesNo(cfg) {
             YESNO = cfg || {};
             document.getElementById('yesno-question').textContent = YESNO._question || YESNO.question || '';
+            document.getElementById('yesno-panel').classList.remove('busy');
+            yesNoExplainCancel();
         }
 
-        function yesNoClick(button) {
+        function yesNoIsBusy() {
+            return document.getElementById('yesno-panel').classList.contains('busy');
+        }
+
+        function yesNoExplainIsOpen() {
+            return document.getElementById('yesno-explain').style.display !== 'none';
+        }
+
+        function yesNoShowExplain() {
+            document.getElementById('yesno-choices').style.display = 'none';
+            document.getElementById('yesno-explain').style.display = '';
+            yesNoExplainUpdate();
+            document.getElementById('yesno-explain-text').focus();
+        }
+
+        // Back to the Yes/No choices (Cancel / Escape).
+        function yesNoExplainCancel() {
+            document.getElementById('yesno-explain-text').value = '';
+            document.getElementById('yesno-explain').style.display = 'none';
+            document.getElementById('yesno-choices').style.display = '';
+            yesNoExplainUpdate();
+        }
+
+        function yesNoExplainUpdate() {
+            const text = (document.getElementById('yesno-explain-text').value || '').trim();
+            document.getElementById('yesno-explain-accept').classList.toggle('de-disabled', !text);
+        }
+
+        function yesNoExplainAccept() {
+            const text = (document.getElementById('yesno-explain-text').value || '').trim();
+            if (text) yesNoClick(4, text);
+        }
+
+        function clearYesNoSolo() {
+            document.body.classList.remove('yesno-solo');
+            const host = document.getElementById('main-panel-host');
+            if (host) host.style.display = '';
+        }
+
+        // WebUI already open: show the dialogue without touching other panels.
+        function showYesNoDialog() {
+            document.getElementById('yesno-panel').style.display = 'block';
+        }
+
+        // C++ YesNo_Open entry points. One Invoke each: separate PrismaUI Invokes are not applied in
+        // issue order, so a hide/clear sent before the dialogue could land after it (logs 2026-10-03).
+        function openYesNoOnTop(cfg) {
+            configureYesNo(cfg);
+            showYesNoDialog();
+        }
+
+        // WebUI closed: every panel down, then the dialogue alone.
+        function openYesNoSolo(cfg) {
+            configureYesNo(cfg);
+            for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
+                'description_editor_panel', 'settings_panel', 'log_panel'])
+                hidePanel(id);
+            showYesNoSolo();
+        }
+
+        // WebUI was closed: dialogue only. Hidden inline too (not only via CSS); showControlPanel no-ops while solo.
+        function showYesNoSolo() {
+            document.body.classList.add('yesno-solo');
+            hideControlPanel();
+            hideTargetMenuRow();
+            const host = document.getElementById('main-panel-host');
+            if (host) host.style.display = 'none';
+            document.getElementById('yesno-panel').style.display = 'block';
+            // DEBUG-DELETE
+            setTimeout(() => {
+                if (typeof window.onDebugLog !== 'function') return;
+                const desc = (id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return id + '=missing';
+                    const r = el.getBoundingClientRect();
+                    return id + '=' + getComputedStyle(el).display + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+                        '@' + Math.round(r.left) + ',' + Math.round(r.top);
+                };
+                window.onDebugLog('yesno solo ' + desc('yesno-panel') + ' ' + desc('left-column') + ' ' +
+                    desc('control-panel') + ' ' + desc('main-panel-host'));
+            }, 150);
+            // DEBUG-DELETE end
+        }
+
+        // button: 0 Yes, 1 Yes (Random), 2 No (Silent), 3 No, 4 No, explain (reason = text).
+        function yesNoClick(button, reason) {
             if (typeof window.onYesNoResult !== 'function') return;
+            if (yesNoIsBusy()) return;
+            if (button === 0 && document.body.classList.contains('yesno-solo')) {
+                // WebUI was closed: hold the dialogue as a placeholder until SceneCreator_Open replaces it.
+                document.getElementById('yesno-question').textContent = 'Opening Scene Creator…';
+                document.getElementById('yesno-panel').classList.add('busy');
+            }
             window.onYesNoResult(JSON.stringify({
                 button,
-                creator_sid: YESNO._creator_sid != null ? YESNO._creator_sid : YESNO.creator_sid
+                creator_sid: YESNO._creator_sid != null ? YESNO._creator_sid : YESNO.creator_sid,
+                reason: reason || ''
             }));
         }
 

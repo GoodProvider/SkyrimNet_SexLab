@@ -304,6 +304,74 @@ schema:
       defaultValue: 95
       category: "Enjoyment"
 
+    - name: "Stage advance enjoyment"
+      path: "sexlab.enjoyment.stage_spike"
+      type: "float"
+      description: "Enjoyment added to every actor expected to orgasm each time the scene moves to the next stage."
+      min: 0
+      max: 30
+      defaultValue: 5
+      category: "Enjoyment"
+
+    - name: "Orgasm targets end the scene"
+      path: "sexlab.ending.enabled"
+      type: "bool"
+      description: "The scene's lead (the aggressor when there is a victim, otherwise the initiator) has a target number of orgasms, rolled at scene start. As soon as they reach it, the scene jumps to the last stage."
+      defaultValue: true
+      category: "Scene ending"
+
+    - name: "Male orgasm target minimum"
+      path: "sexlab.ending.target_male_min"
+      type: "int"
+      description: "Fewest orgasms a male lead needs before the scene jumps to the last stage. 0: never jumps."
+      min: 0
+      max: 5
+      defaultValue: 1
+      category: "Scene ending"
+
+    - name: "Male orgasm target maximum"
+      path: "sexlab.ending.target_male_max"
+      type: "int"
+      description: "Most orgasms a male lead needs. The target is rolled between the minimum and maximum."
+      min: 0
+      max: 5
+      defaultValue: 1
+      category: "Scene ending"
+
+    - name: "Female orgasm target minimum"
+      path: "sexlab.ending.target_female_min"
+      type: "int"
+      description: "Fewest orgasms a female lead needs before the scene jumps to the last stage. 0: never jumps."
+      min: 0
+      max: 5
+      defaultValue: 1
+      category: "Scene ending"
+
+    - name: "Female orgasm target maximum"
+      path: "sexlab.ending.target_female_max"
+      type: "int"
+      description: "Most orgasms a female lead needs. The target is rolled between the minimum and maximum."
+      min: 0
+      max: 5
+      defaultValue: 2
+      category: "Scene ending"
+
+    - name: "Orgasm check before the last stage"
+      path: "sexlab.ending.gate"
+      type: "bool"
+      description: "Just before the scene would move to the last stage, each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. Anyone who passes orgasms and the scene moves to the last stage. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm."
+      defaultValue: true
+      category: "Scene ending"
+
+    - name: "Hold last stage for orgasm dialogue"
+      path: "sexlab.ending.dialogue_hold_max"
+      type: "float"
+      description: "After the orgasm that ends the scene, the last stage is held until the orgasm dialogue has played, for at most this many seconds. 0: no hold."
+      min: 0
+      max: 120
+      defaultValue: 45
+      category: "Scene ending"
+
     - name: "DOM arousal per scene"
       path: "sexlab.dom.arousal_scale"
       type: "float"
@@ -325,7 +393,7 @@ schema:
     - name: "Enable orgasm mini-game"
       path: "sexlab.minigame.enabled"
       type: "bool"
-      description: "Player controls enjoyment: focus with 1-4, calm (edge) and arouse. Enables the SexLab_Arouse / SexLab_Calm LLM actions. Near the end of the final stage, actors who have not orgasmed still orgasm: with it off, everyone except victims (victims need 90%+); with it on, only actors at 90%+ who were not calmed in that stage. Turning it back on after off needs a save and reload for the LLM actions."
+      description: "Player controls enjoyment: focus with 1-4, calm (edge) and arouse. Enables the SexLab_Arouse / SexLab_Calm LLM actions. Whether actors orgasm at the end is decided by the Scene ending settings, with it on or off. Turning it back on after off needs a save and reload for the LLM actions."
       defaultValue: false
       category: "Mini-game"
 

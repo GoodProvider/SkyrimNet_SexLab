@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+### WebUI
+- LLM-started scene gating dialogue (`YesNo_Open`) is now a centered modal. WebUI open: shown on top (`showYesNoDialog`), answers leave the view as it was (`YesNo_OverlayWasOpen`). WebUI closed: dialogue only (one Invoke `openYesNoSolo(cfg)` before `WebUI_Visibility_Show(false)`; separate hide/show Invokes arrived out of order and sometimes hid the dialogue; hides the ControlPanel / main panels inline and makes `showControlPanel` a no-op until `clearYesNoSolo`; the dialogue lives in its own `#yesno-overlay` layer because a fixed panel inside `#overlay-panels` rendered invisible); Yes keeps it as an "Opening Scene Creator…" placeholder until `SceneCreator_Open`; Yes (Random) / No (Silent) / No close the WebUI. New **No, explain** (button 4): textarea + Accept / Cancel; Accept → `Manager.WebUI_OnYesNoExplain` → `Creator.RejectWithReason` DirectNarration "<player> rejects <requester>'s request for <intent>, because <reason>.", no scene. Buttons top-aligned
+
 ### OrgasmEngine
 - Slower default enjoyment: `sexlab.enjoyment.passive_mult` 1.0 → 0.4, `aggressor_mult` 1.15 → 0.45, `victim_mult` 0.8 → 0.3, `jitter_max` 1.2 → 1.1. Logs showed scenes running 2–3.5× their stage timers (narration / LLM pacing), so actors orgasmed every ~50 s. Saved configs keep their old values; reset the **Enjoyment** settings to pick up the new defaults
 - Passive gain stops while the stage is paused (pause key)
-- Safety net, mini-game off: every non-victim expected to orgasm who has not yet fires at 90% of the final stage, regardless of enjoyment, so each actor comes once. Victims and the mini-game still need 90
+- New **Scene ending** settings (`sexlab.ending.*`). The lead (aggressor with a victim, else the initiator) gets a target orgasm count at scene start (male 1-1, female 1-2, ranges configurable); reaching it jumps the scene to the final stage (`Scene.Ending_Check` → `GoToStage`)
+- The final stage is then held until the orgasm dialogue has played (SkyrimNet speech queue empty + audio ended), at most `sexlab.ending.dialogue_hold_max` (45 s)
+- Orgasm gate replaces the final-stage safety net for timed scenes (`sexlab.ending.gate`): at 90% of the second-to-last stage, each actor who hasn't orgasmed rolls once, chance = enjoyment %. A pass orgasms and jumps to the final stage (`Effect_AdvanceToFinal`); all fail: no orgasm. Logs showed the old net (needs 90) skipping everyone at 38-86
+- Each stage advance adds `sexlab.enjoyment.stage_spike` (5) enjoyment
 
 ### Animation speed
 - Scene style now sets animation playback speed: gently 0.75×, normally 1.0×, forcefully 1.4× (dashboard **Animation speed**: `sexlab.speed.enabled`, `sexlab.speed.gently|normally|forcefully`). Speed only: stage length, orgasm timing and voices are unchanged. Native `UpdateAnimation` hook in `SkyrimNet_SexLab.dll` (`AnimSpeed.cpp`); Papyrus `SkyrimNet_SexLab_Utilities.SetAnimSpeed` / `ClearAnimSpeed` / `GetAnimSpeed`
@@ -22,6 +28,7 @@
 - Scenes with a victim but no intent now narrate "Camilla Valerius and Bob start / finish." instead of "Bob finish Camilla Valerius."
 - Fixed a scene started from the WebUI sometimes getting a second, intent-less scene on the same SexLab thread (a lookup during `StartThread` adopted the thread before the creator bound it), so a stop could narrate "Bob and Camilla Valerius finish." with no intent. `GetSceneByThread` no longer adopts a thread while its actors are creator-locked
 - DirectNarrations made while the game is paused (WebUI overlay or a pausing menu) are queued in the DLL and sent as one joined DirectNarration once the game unpauses. Fixes NPC responses failing ("failed to generate a response") after WebUI actions such as the Description Editor style pulldown, because SkyrimNet cannot run Papyrus decorators while paused
+- DirectNarration → first speech latency is logged (`NarrationTiming.cpp`). The DLL stamps each DirectNarration it hands to SkyrimNet and stops the clock on SkyrimNet's `SkyrimNet_SpeechStarted` mod event. Each sample is one `NarrationTiming: DN->speech` line in `SkyrimNet_SexLab.log` with the speaker, the message and running clean-sample mean / median / p90 / min / max. Samples sent while speech was already playing (`busy`) or with more narrations sent before the speech (`overlapped`) are counted but kept out of the stats; no speech within 60 s counts as `missed`
 
 ### Voice
 - SexLab moans now follow speaking modifiers: an actor moans only while its modifiers include `_pleasure_` or `_pain_`; no modifiers, `_gagged_`, or `_kissing_` force the actor silent (`thread.SetVoice(..., ForceSilent)`). Re-applied at scene setup, every `StageStart`, live speaking edits, and after a load. Dashboard toggle **SexLab moans follow speaking modifiers** (`sexlab.voice.follow_speaking`, default on). See [docs/reference/protocol-tokens.md](docs/reference/protocol-tokens.md#sexlab-voice)

@@ -654,6 +654,16 @@ Function WebUI_OnYesNoResult(int creator_sid, int button)
     endif
 EndFunction
 
+; Gating dialogue "No, explain" Accept (C++ onYesNoResult button 4).
+Function WebUI_OnYesNoExplain(int creator_sid, String reason)
+    SkyrimNet_SexLab_Scene_Creator creator = GetCreatorBySid(creator_sid)
+    if creator
+        creator.RejectWithReason(reason)
+    else
+        Trace("WebUI_OnYesNoExplain", "no active creator for sid:"+creator_sid, true)
+    endif
+EndFunction
+
 Function WebUI_OnSceneCreatorResult(int creator_sid, String json)
     SkyrimNet_SexLab_Scene_Creator creator = GetCreatorBySid(creator_sid)
     if creator

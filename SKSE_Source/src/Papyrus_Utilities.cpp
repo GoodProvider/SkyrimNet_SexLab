@@ -2,6 +2,7 @@
 #include "JsonUtil.h"
 #include "AnimSpeed.h"
 #include "NarrationQueue.h"
+#include "NarrationTiming.h"
 #include "WebUI_Log.h"
 
 #include <Windows.h>
@@ -171,7 +172,12 @@ namespace PapyrusBindings_Utilities
     bool QueueDirectNarration(RE::StaticFunctionTag*, RE::BSFixedString msg, RE::Actor* source,
         RE::Actor* target, bool purgeDialogue)
     {
-        return NarrationQueue::Enqueue(msg.c_str() ? msg.c_str() : "", source, target, purgeDialogue);
+        const char* raw = msg.c_str() ? msg.c_str() : "";
+        if (NarrationQueue::Enqueue(raw, source, target, purgeDialogue))
+            return true;
+        // Not paused: Papyrus sends it to SkyrimNet right after this returns.
+        NarrationTiming::MarkSent(raw);
+        return false;
     }
 
     /// Binds JsonLowerCaseKeys on SkyrimNet_SexLab_Utilities.

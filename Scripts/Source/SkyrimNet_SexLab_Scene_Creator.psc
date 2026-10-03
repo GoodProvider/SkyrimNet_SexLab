@@ -40,6 +40,8 @@ String Property speaking_modifiers_default_current = "_pleasure_" AUTO
 String[] Property speaking_modifiers AUTO
 
 String pending_rejection = ""
+; "No, explain": "<player> rejects <requester>'s request for <intent>, because " + reason.
+String pending_reject_prefix = ""
 bool start_scene_pending = false
 ; True after Scene Creator was opened for this creator; blocks a second open.
 ; Copied onto SkyrimNet_SexLab_Scene when FinishStartScene binds the SexLab thread.
@@ -1298,6 +1300,10 @@ String Function BuildYesNoQuestion()
     if method != "" && method != intent
         intent_method += " by "+method
     endif
+    String requester = ""
+    if speaker != None && speaker != player
+        requester = speaker.GetDisplayName()
+    endif
     if num_victims == 0
         int[] player_mask = Utility.CreateIntArray(num_actors, 1)
         int i = 0
@@ -1310,15 +1316,25 @@ String Function BuildYesNoQuestion()
         String names = JoinActorsMasked(actors, player_mask, num_actors)
         question = "Would you like to start "+intent_method+" with "+names+"?"
         pending_rejection = player_name+" refuses to start "+intent_method+" with "+names+"."
+        if requester == ""
+            requester = names
+        endif
     else
         if player_is_victim
             question = "Will you allow "+assailant_names+" to start "+intent_method+" with you?"
             pending_rejection = player_name+" prevents "+assailant_names+" from starting "+intent_method+" with them."
-        else 
+            if requester == ""
+                requester = assailant_names
+            endif
+        else
             question = "Would you like to start "+intent_method+" "+victim_names+"?"
             pending_rejection = player_name+" refuses to start "+intent_method+" "+victim_names+"."
-        endif 
-    endif 
+            if requester == ""
+                requester = victim_names
+            endif
+        endif
+    endif
+    pending_reject_prefix = player_name+" rejects "+requester+"'s request for "+intent_method+", because "
     return question
 EndFunction
 
@@ -1352,6 +1368,26 @@ Function ContinueAfterYesNo(int button)
         Trace("ContinueAfterYesNo", "FinishStartScene returned None")
     endif
     DbgEnd("ContinueAfterYesNo")
+EndFunction
+
+; Gating dialogue "No, explain": narrate the player's reason and release without starting a scene.
+Function RejectWithReason(String reason)
+    DbgEnter("RejectWithReason", "reason:"+reason)
+    start_scene_pending = false
+    String text = pending_reject_prefix + reason
+    int len = StringUtil.GetLength(reason)
+    String last = ""
+    if len > 0
+        last = StringUtil.Substring(reason, len - 1, 1)
+    endif
+    if last != "." && last != "!" && last != "?"
+        text += "."
+    endif
+    if pending_reject_prefix != ""
+        DirectNarration(text, Game.GetPlayer(), actors[0])
+    endif
+    Release()
+    DbgEnd("RejectWithReason")
 EndFunction
 
 Function ContinueAfterSceneCreator(String json)

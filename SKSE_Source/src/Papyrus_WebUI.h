@@ -134,6 +134,8 @@ namespace PapyrusBindings_WebUI {
     void Call_ProcessHotkey(std::int32_t keyCode);
 
     extern std::int32_t YesNo_Creator_Sid;
+    /// True when YesNo_Open found the overlay already visible (dialogue shown on top; answer leaves it open).
+    extern bool YesNo_OverlayWasOpen;
 
     void DispatchManagerMethodIntInt(const char* method, std::int32_t a, std::int32_t b);
     void DispatchManagerMethodIntStr(const char* method, std::int32_t a, const std::string& b);

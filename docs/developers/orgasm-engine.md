@@ -27,8 +27,8 @@ For each managed scene:
    - **Anim speed:** `AnimSpeed::Get`, which is the style speed multiplied by the HUD's faster/slower scale.
    - **Not expected to orgasm:** positions with AnimDB `orgasm_expected` 0, or the scene's `no_orgasm` 1, get no passive gain. Not expected is **not** a block: orgasm checks run as normal. `Scene.ApplySexLabVoice` keeps SexLab silent below 50 enjoyment (`VOICE_GATE_ENJOYMENT`, re-checked in `Mirror_Apply`). The only scene block (`SetSceneBlocked`) is the player's `deny_orgasm` (HUD `sexlab.hud.key_deny` → `Menu.Hud_OnKey("deny", focus)` → `Scene.ToggleDenyOrgasm`; Description Editor `_deny_pos`). Positions with AnimDB `orgasm_expected` 0 get no passive gain (DOM slaves: no `domProgress`). `Engine_SetSkills` sends `SetOrgasmExpected(actor, expected)` at start and on each animation change; missing data counts as expected. Mini-game Arouse / Calm still move their enjoyment, and the no-timer safety net still needs 90 for them.
    - Expected results at normal speed with no mini-game:
-     - A normal actor usually reaches 100 late in the scene; anyone who has not is fired by the safety net, so each actor orgasms once.
-     - A victim orgasms only if they reach 90 by the safety net.
+     - A normal actor usually stays below 100; the gate before the final stage decides the orgasm (chance = enjoyment %).
+     - Each stage advance adds `sexlab.enjoyment.stage_spike` (5) to every expected actor (`SetStage`; DOM: `domProgress`).
 2. **Orgasm test:**
    - The test value is `enjoyment`. With the mini-game on, once a second it becomes `enjoyment + random(0, random_bonus)`.
    - An orgasm fires at 100 or more when:
@@ -39,14 +39,9 @@ For each managed scene:
      - the cooldown has passed (SexLab's rule: 10 s female, 20 s male, +10 s creature).
    - A blocked actor at 100 sends `OrgasmDenied` once per climb.
    - A **forced** request (the WebUI orgasm button, `RequestOrgasm(…, true, …)`) skips every gate.
-3. **Safety net (mini-game on or off, never in LeadIn):** at 90% of the final stage's timer, counting only animating, unpaused time, each non-DOM actor is fired as *combined* when all of these hold:
-   - the actor has not orgasmed yet in this scene,
-   - enjoyment is 90 or more (mini-game off: not needed, except for victims and actors not expected to orgasm),
-   - there is no block,
-   - the actor is not edging, and
-   - the actor was not calmed during the final stage.
+3. **Gate (`sexlab.ending.gate`, timed scenes, never in LeadIn):** at 90% of the second-to-last stage's timer (animating, unpaused time), or on reaching the final stage first, each actor who has not orgasmed in this scene, is expected to orgasm and passes `CanOrgasmNow` rolls once: `uniform(0, 100) < enjoyment`. Passes fire as `source=gate` (individual). If anyone passed while still in the second-to-last stage, `Effect_AdvanceToFinal` → `Scene.Engine_AdvanceToFinal` jumps to the final stage and arms the dialogue hold (see [Scene ending](#scene-ending)). All fail: SexLab advances normally, no orgasm.
 
-   Otherwise, below 90 the actor does not orgasm; this is the natural miss for a victim. The orgasms are stashed and flushed as one narration through `ArmOrgasmWindow`. With no timers, the net fires on entering the final stage, and it fires everyone when the mini-game is off (the old rule).
+   **Safety net (gate off, or no timers):** at 90% of the final stage's timer, each non-DOM actor at 90 or more who has not orgasmed, is not blocked or edging and was not calmed in the final stage fires as *combined*. With no timers it fires on entering the final stage, everyone when the mini-game is off.
 4. **Group (`JoinGroup`):** everyone fired in this scene in this tick (steps 2 and 3, forced included) is one group. Every other actor joins it when all of these hold:
    - not a DOM slave,
    - not blocked,
@@ -208,3 +203,12 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
   - On the next mirror, if SexLab moved by 3 or more (`MIRROR_EXTERNAL_THRESHOLD`), that move is added to the engine (`AddEnjoyment(…, "sexlab")`) before mirroring, so it is kept rather than overwritten.
   - SexLab's own small time drift stays under the threshold.
   - The baseline is dropped where SexLab jumps by itself: after an orgasm (the `QuitEnjoyment` reset) and on every stage change (the stage term).
+
+## Scene ending
+
+`Scene.psc` `Ending_*` (settings `sexlab.ending.*`):
+
+- **Target:** `Ending_RollTarget` (from `Engine_BeginScene`, once per scene) picks the lead: `initiator` (`PickNonVictimInitiator` makes it the aggressor when there is a victim), else position 0. Target = `RandomInt(target_male_min, target_male_max)` for SexLab gender 0, else the female range. 0 = never jumps.
+- **Jump:** `Ending_Check` (end of `Orgasm_ApplyGroup`) compares `OrgasmEngine.GetOrgasmCount(lead)` with the target; reaching it calls `Ending_ToFinal` → `thread.GoToStage(final)`. The gate's `Engine_AdvanceToFinal` does the same. Once per scene (`ending_done`), never in LeadIn.
+- **Dialogue hold:** on the final stage's `StageStart` (`Ending_StageStart` → `Ending_Hold`) the stage is held with `thread.UpdateTimer(PAUSE_HOLD_SECONDS)`, as the pause key does. `Ending_Poll` (shares `OnUpdate` with the orgasm window, 1 s) releases when the orgasm window is closed, `SkyrimNetApi.GetSpeechQueueSize() == 0`, and `GetTimeSinceLastAudioEnded()` shows audio ended at least 1 s after the narration (min 3 s), or at `dialogue_hold_max` (45 s; 0 = no hold). Release pulls the timer back by the held time, so the final stage then plays its remaining time. While the pause key holds the stage the timer is left to the pause.
+

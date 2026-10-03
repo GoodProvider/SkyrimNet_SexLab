@@ -533,7 +533,7 @@ bool WebUI_IsReady()
 
 /// Shows and focuses the PrismaUI overlay after refreshing nearby actors for the menu.
 /// No-ops if PrismaUI is missing, no game is loaded, DomReady has not fired, or the view is invalid.
-void WebUI_Visibility_Show()
+void WebUI_Visibility_Show(bool showControlPanel)
 {
     if (!PrismaUI) return;
     if (!g_gameReady) {
@@ -557,7 +557,8 @@ void WebUI_Visibility_Show()
     WebUI_Invoke("setGamePaused(true);");
     // Start / Cancel hide ControlPanel in JS. Show must restore it — same-actor
     // Target_Menu_Open used to skip showPanel and left a blank left column.
-    WebUI_Invoke("showControlPanel();");
+    if (showControlPanel)
+        WebUI_Invoke("showControlPanel();");
     DispatchMenuNoArg("WebUI_SeedSceneInfos");
 }
 
@@ -568,6 +569,7 @@ static void WebUI_Visibility_HideImpl(bool commit)
     else
         WebUI_Invoke("discardSceneInfos();");
     WebUI_Invoke("bondageReleaseAll();");
+    WebUI_Invoke("clearYesNoSolo();");
     DispatchHandlerBondageClosed();
     if (!PrismaUI) return;
     PrismaUI->Unfocus(g_view);
@@ -731,12 +733,19 @@ void InitWebUI()
                     auto j = nlohmann::json::parse(value);
                     const int button = j.value("button", 2);
                     const int creator_sid = j.value("creator_sid", PapyrusBindings_WebUI::YesNo_Creator_Sid);
-                    webui_log::info("onYesNoResult button={} creator_sid={}", button, creator_sid);
-                    WebUI_Invoke("hidePanel('yesno_panel');");
-                    // Yes (0) opens SceneCreator next — keep overlay focused. Random/No hide unless TargetMenu stays.
-                    if (button != 0 && !PapyrusBindings_WebUI::TargetMenuSessionActive)
+                    const std::string reason = j.value("reason", std::string{});
+                    const bool wasOpen = PapyrusBindings_WebUI::YesNo_OverlayWasOpen;
+                    webui_log::info("onYesNoResult button={} creator_sid={} was_open={}", button, creator_sid, wasOpen);
+                    // Yes (0) with the WebUI closed: JS keeps the dialogue as a placeholder until SceneCreator_Open.
+                    if (button != 0 || wasOpen)
+                        WebUI_Invoke("hidePanel('yesno_panel');");
+                    // Random/No/explain close the overlay only if YesNo_Open opened it; an open WebUI stays as it was.
+                    if (button != 0 && !wasOpen)
                         WebUI_Visibility_HideWithoutCommit();
-                    PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnYesNoResult", creator_sid, button);
+                    if (button == 4)
+                        PapyrusBindings_WebUI::DispatchManagerMethodIntStr("WebUI_OnYesNoExplain", creator_sid, reason);
+                    else
+                        PapyrusBindings_WebUI::DispatchManagerMethodIntInt("WebUI_OnYesNoResult", creator_sid, button);
                 } catch (...) {
                     webui_log::warn("onYesNoResult: bad JSON");
                 }

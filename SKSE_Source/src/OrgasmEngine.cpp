@@ -63,6 +63,8 @@ namespace OrgasmEngine
             float randomBonus = 10.0f;
             float narrateWindow = 3.0f;
             float groupJoin = 95.0f;  // someone orgasms: others at this enjoyment or more join them
+            float stageSpike = 5.0f;  // enjoyment added on each stage advance
+            bool gate = true;         // orgasm roll just before the final stage
         };
 
         struct ActorState
@@ -123,6 +125,9 @@ namespace OrgasmEngine
             bool paused = false;
             double finalStageAt = 0.0;  // Now() on entering the final stage
             double finalElapsed = 0.0;  // animating, unpaused seconds in the final stage
+            bool staged = false;        // SetStage seen once (no spike for the first stage)
+            bool gateDone = false;      // gate rolled for this pass through the last two stages
+            double gateElapsed = 0.0;   // animating, unpaused seconds in the second-to-last stage
         };
 
         // Work collected under the lock, run after it is released (Papyrus dispatch / events / HUD).
@@ -175,9 +180,11 @@ namespace OrgasmEngine
             std::vector<NarrateFx> narrations;
             std::vector<EventFx> events;
             std::vector<DomSyncFx> domSyncs;
+            std::vector<RE::FormID> advances;  // gate passed: push the scene to its final stage
             bool empty() const
             {
-                return orgasms.empty() && mirrors.empty() && narrations.empty() && events.empty() && domSyncs.empty();
+                return orgasms.empty() && mirrors.empty() && narrations.empty() && events.empty() &&
+                       domSyncs.empty() && advances.empty();
             }
         };
 
@@ -551,6 +558,11 @@ namespace OrgasmEngine
                         RE::BSFixedString(g.source.c_str()), ActorFor(g.allower), ActorFor(g.allowed),
                         RE::BSFixedString(g.extras.c_str())));
             }
+            for (const auto id : fx.advances) {
+                if (auto* a = ActorFor(id)) {
+                    DispatchShell("Effect_AdvanceToFinal", RE::MakeFunctionArguments(std::move(a)));
+                }
+            }
             for (const auto& m : fx.mirrors) {
                 if (auto* a = ActorFor(m.actor)) {
                     DispatchShell("Effect_Mirror",
@@ -789,15 +801,57 @@ namespace OrgasmEngine
                         }
                     }
 
-                    // 4. Safety net: at 90% of the final stage's timer (animating, unpaused time), fire
-                    // each non-DOM actor who has not finished. Mini-game off: every non-victim who is
-                    // expected to orgasm fires (one orgasm each). Victims and the mini-game need
-                    // kSafetyMin (below: the natural miss). No LeadIn. Without timers: at final-stage entry.
-                    if (finalStage && !sc.finalDone && !sc.leadIn) {
+                    // 4a. Gate (timed, no LeadIn): at 90% of the second-to-last stage's timer (animating,
+                    // unpaused time), or on reaching the final stage first, each actor who has not
+                    // orgasmed rolls once: chance = enjoyment %. A pass orgasms and pushes the scene to
+                    // its final stage; all fail: SexLab advances as normal, no orgasm.
+                    const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
+                    const bool useGate = g_settings.gate && timedScene && !sc.leadIn;
+                    if (useGate && !sc.gateDone && sc.stage >= sc.stageCount - 1) {
+                        const bool penultimate = sc.stage == sc.stageCount - 1;
+                        if (penultimate && !sc.paused) {
+                            sc.gateElapsed += dt;
+                        }
+                        const float gateSecs = sc.stageSecs[sc.stageSecs.size() - 2];
+                        if (!penultimate || sc.gateElapsed >= kSafetyAt * gateSecs) {
+                            sc.gateDone = true;
+                            std::uniform_real_distribution<float> roll(0.0f, kMaxEnjoyment);
+                            for (const auto id : sc.actors) {
+                                auto at = g_actors.find(id);
+                                if (at == g_actors.end()) {
+                                    continue;
+                                }
+                                ActorState& st = at->second;
+                                if (st.orgasmCount != 0 || !st.orgasmExpected || !CanOrgasmNow(st, now) ||
+                                    std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end()) {
+                                    webui_log::info("OrgasmEngine: gate skips {:#x} enjoyment={:.1f} count={} "
+                                                    "expected={} dom={}",
+                                        id, st.enjoyment, st.orgasmCount, st.orgasmExpected, st.dom);
+                                    continue;
+                                }
+                                const float r = roll(g_rng);
+                                const bool pass = r < st.enjoyment;
+                                webui_log::info("OrgasmEngine: gate {:#x} enjoyment={:.1f} roll={:.1f} pass={}", id,
+                                    st.enjoyment, r, pass);
+                                if (pass) {
+                                    Fire(st, group, true, "gate", now, fx);
+                                }
+                            }
+                            if (penultimate && !group.actors.empty()) {
+                                fx.advances.push_back(group.actors.front());
+                            }
+                        }
+                    }
+
+                    // 4b. Safety net (gate off, or no timers): at 90% of the final stage's timer, each
+                    // non-DOM actor at kSafetyMin or more who has not finished. Without timers: at
+                    // final-stage entry, everyone when the mini-game is off (the old rule). No LeadIn.
+                    if (!useGate && finalStage && !sc.finalDone && !sc.leadIn) {
                         const float finalSecs = sc.stageSecs.empty() ? 0.0f : sc.stageSecs.back();
                         const bool timed = sc.baseRate > 0.0f && finalSecs > 0.0f;
                         if (!timed || sc.finalElapsed >= kSafetyAt * finalSecs) {
                             sc.finalDone = true;
+                            const float needed = timed || g_settings.miniGame ? kSafetyMin : 0.0f;
                             for (const auto id : sc.actors) {
                                 auto at = g_actors.find(id);
                                 if (at == g_actors.end()) {
@@ -806,10 +860,8 @@ namespace OrgasmEngine
                                 ActorState& st = at->second;
                                 const bool edging = now < st.edgeUntil;
                                 const bool calmed = st.lastCalmAt >= sc.finalStageAt;
-                                const bool sure =
-                                    !g_settings.miniGame && st.orgasmExpected && st.role != Role::kVictim;
                                 if (st.dom || st.orgasmCount != 0 || AnyBlock(st) || edging || calmed ||
-                                    st.enjoyment < (sure ? 0.0f : kSafetyMin)) {
+                                    st.enjoyment < (st.orgasmExpected ? needed : kSafetyMin)) {
                                     webui_log::info("OrgasmEngine: safety net skips {:#x} enjoyment={:.1f} "
                                                     "count={} dom={} edging={} calmed={}",
                                         id, st.enjoyment, st.orgasmCount, st.dom, edging, calmed);
@@ -943,6 +995,8 @@ namespace OrgasmEngine
         s.randomBonus = GetConfigFloat("sexlab.minigame.random_bonus", 10.0f);
         s.narrateWindow = GetConfigFloat("sexlab.minigame.narrate_window", 3.0f);
         s.groupJoin = std::clamp(GetConfigFloat("sexlab.enjoyment.group_join", 95.0f), 0.0f, kMaxEnjoyment);
+        s.stageSpike = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_spike", 5.0f));
+        s.gate = GetConfigBool("sexlab.ending.gate", true);
         {
             std::lock_guard lock(g_lock);
             g_settings = s;
@@ -950,10 +1004,10 @@ namespace OrgasmEngine
         }
         webui_log::info(
             "OrgasmEngine: config minigame={} role mults={}/{}/{} jitter={}-{} dom scale={}/{} arouse={} calm={} "
-            "cost={}/{} edge={}s break={} drain={} random={} window={}s group_join={}",
+            "cost={}/{} edge={}s break={} drain={} random={} window={}s group_join={} stage_spike={} gate={}",
             s.miniGame, s.passiveRate, s.aggressorRate, s.victimRate, s.jitterMin, s.jitterMax, s.domArousalScale,
             s.domArousalScalePlayer, s.arouseAmount, s.calmAmount, s.staminaCost, s.magickaCost, s.edgeSeconds,
-            s.mentalBreak, s.breakDrain, s.randomBonus, s.narrateWindow, s.groupJoin);
+            s.mentalBreak, s.breakDrain, s.randomBonus, s.narrateWindow, s.groupJoin, s.stageSpike, s.gate);
     }
 
     bool IsMiniGameEnabled()
@@ -1025,6 +1079,31 @@ namespace OrgasmEngine
         }
         SceneState& sc = it->second;
         const bool changed = sc.stage != stage || sc.stageCount != stageCount;
+        // Stage advance in the same animation: a small enjoyment spike (SexLab's stage term).
+        if (sc.staged && stageCount == sc.stageCount && stage > sc.stage && g_settings.stageSpike > 0.0f) {
+            for (const auto id : sc.actors) {
+                auto at = g_actors.find(id);
+                if (at == g_actors.end() || !at->second.orgasmExpected) {
+                    continue;
+                }
+                ActorState& st = at->second;
+                if (st.dom) {
+                    st.domProgress += g_settings.stageSpike;
+                    st.domStepAcc += g_settings.stageSpike;
+                } else {
+                    st.enjoyment = std::clamp(st.enjoyment + g_settings.stageSpike, 0.0f, kMaxEnjoyment);
+                }
+            }
+            webui_log::info("OrgasmEngine: scene {} stage {}/{} stage spike +{}", sid, stage, stageCount,
+                g_settings.stageSpike);
+        }
+        sc.staged = true;
+        if (changed && stageCount >= 2 && stage == stageCount - 1) {
+            sc.gateElapsed = 0.0;
+        }
+        if (stageCount >= 2 && stage < stageCount - 1) {
+            sc.gateDone = false;
+        }
         sc.stage = stage;
         sc.stageCount = stageCount;
         if (stageCount > 0 && stage < stageCount) {

@@ -161,6 +161,7 @@ namespace PapyrusBindings_WebUI
     }
     std::string FocusKind;
     std::int32_t YesNo_Creator_Sid = -1;
+    bool YesNo_OverlayWasOpen = false;
     bool EditTagsPlayer = true;
     bool EditTagsNonPlayer = false;
     bool SceneCreatorOpenedForPending = false;
@@ -196,6 +197,7 @@ namespace PapyrusBindings_WebUI
         SceneCreatorOpenedForPending = false;
         SkipSceneCreatorOnce = false;
         YesNo_Creator_Sid = -1;
+        YesNo_OverlayWasOpen = false;
     }
 
     bool ConsumeSkipSceneCreator(RE::StaticFunctionTag*)
@@ -333,6 +335,7 @@ namespace PapyrusBindings_WebUI
         ActionCatalog::ClearMainPanelSelection();
         WebUI_Invoke("hidePanel('sex_menu_panel');");
         WebUI_Invoke("hidePanel('yesno_panel');");
+        WebUI_Invoke("clearYesNoSolo();");
         WebUI_Invoke("hidePanel('scene_creator_panel');");
         WebUI_Invoke("hidePanel('description_editor_panel');");
         WebUI_Invoke("hidePanel('settings_panel');");
@@ -466,14 +469,23 @@ namespace PapyrusBindings_WebUI
     void YesNo_Open(RE::StaticFunctionTag*, RE::BSFixedString question, std::int32_t creator_sid)
     {
         YesNo_Creator_Sid = creator_sid;
-        webui_log::info("YesNo_Open creator_sid={}", creator_sid);
-        WebUI_HideAllPanels(nullptr);
+        YesNo_OverlayWasOpen = !WebUI_IsHidden();
+        webui_log::info("YesNo_Open creator_sid={} overlay_was_open={}", creator_sid, YesNo_OverlayWasOpen);
         nlohmann::json cfg;
         cfg["_question"] = question.c_str() ? question.c_str() : "";
         cfg["_creator_sid"] = creator_sid;
-        WebUI_Invoke("configureYesNo(" + SafeDump(cfg) + ");");
-        WebUI_Invoke("showPanel('yesno_panel');");
-        WebUI_Visibility_Show();
+        // One Invoke per path: separate Invokes are not applied in issue order, so a WebUI_HideAllPanels
+        // clearYesNoSolo / hidePanel('yesno_panel') could land after the dialogue and hide it.
+        if (YesNo_OverlayWasOpen) {
+            // WebUI already open: dialogue on top, current view untouched.
+            WebUI_Invoke("openYesNoOnTop(" + SafeDump(cfg) + ");");
+            return;
+        }
+        // WebUI closed: the dialogue only (JS hides every panel + ControlPanel, then shows it), before Show
+        // so the first frame is already the bare dialogue.
+        ActionCatalog::ClearMainPanelSelection();
+        WebUI_Invoke("openYesNoSolo(" + SafeDump(cfg) + ");");
+        WebUI_Visibility_Show(false);
     }
 
     void SceneCreator_Open(RE::StaticFunctionTag*, RE::BSFixedString state_json)

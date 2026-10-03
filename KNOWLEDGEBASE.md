@@ -907,7 +907,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 
 **Cause:** the passive base rate is `100 / targetSecs` from SexLab's stage timers, but held stages (narration, LLM pacing, pause) made scenes last ~200-285 s against a 58-88 s target. Passive gain also kept running while paused.
 
-**Fix:** defaults `passive_mult` 0.4 / `aggressor_mult` 0.45 / `victim_mult` 0.3 / `jitter_max` 1.1; no gain while `sc.paused`; mini-game off, the safety net fires every non-victim expected actor who has not orgasmed, at any enjoyment. Rule: tune rates against observed real scene length, not stage timers.
+**Fix:** defaults `passive_mult` 0.4 / `aggressor_mult` 0.45 / `victim_mult` 0.3 / `jitter_max` 1.1; no gain while `sc.paused`. With those rates the final-stage safety net (needs 90) then skipped everyone (38-86), so orgasms are now decided by the gate before the final stage (chance = enjoyment %), the lead's orgasm target (`sexlab.ending.*`) and +5 per stage advance. Rule: tune rates against observed real scene length, not stage timers; don't gate the ending orgasm on a hard enjoyment threshold.
 
 ## OrgasmEngine owns orgasms; SexLab trigger off (2026-09-29)
 
@@ -958,3 +958,21 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **`exclude_settings` files need positive tags:** an excluded setting with no `tags` / `tags_any` is ignored (it would exclude everything); C++ logs a warning.
 - **Papyrus `strict` is read with `JMap.getInt`** (JContainers stores JSON `true` as 1). `setting_has_filter` lets a start with no tags still query AnimDB when the setting has `tags_any` / `tags_prefer` / `exclude_settings`; `tags_suppress_unless_bound` alone never forces a query, so untagged LLM starts keep SexLab's own pick.
 - **Kissing switch:** `Setup` forces `nonsexual_kissing` for a kissing tag except under `nonsexual_platonic`. LLM General/Cuddle actions pass `nonsexual_male_position_1` and still need the switch for the `_kissing_` speaking token.
+
+## PrismaUI modals: own full-screen layer, hide imperatively (2026-10-03)
+
+- LLM player start with the WebUI closed showed only the ControlPanel, no Confirm dialogue. Logs: `YesNo_Open … overlay_was_open=false` (solo path), no JS / Papyrus errors.
+- `#yesno-panel` had been made `position:fixed` + `transform` while still inside `#overlay-panels` (`position:absolute; overflow-y:auto`, otherwise empty, so 0×0). It never showed in PrismaUI. **Rule:** a modal goes in its own `inset:0` sibling under `#ui-shell` (`#yesno-overlay`, `#stop-dialog-overlay`), never as a fixed child of a scroll container.
+- **Separate `PrismaUI->Invoke` calls are not applied in issue order** (async; seen across the hidden→Show switch). `YesNo_Open` sent `WebUI_HideAllPanels` (`hidePanel('yesno_panel')`, `clearYesNoSolo()`) before `showYesNoSolo()`, yet 150 ms after solo a JS probe found the solo class gone and `#main-panel-host` back. One run showed the dialogue, the next hid it (`yesno-panel=none`). **Rule:** a state change that must not interleave goes out as **one** Invoke calling a JS entry point (`openYesNoSolo(cfg)` / `openYesNoOnTop(cfg)`), never as a sequence of hide/show Invokes.
+- Also: `WebUI_Visibility_Show` re-shows the ControlPanel. The solo path uses `WebUI_Visibility_Show(false)`, and `showControlPanel()` no-ops while `body.yesno-solo` is set.
+
+## DirectNarration → speech latency (2026-10-02)
+
+- **`SkyrimNet_SpeechStarted` is the playback signal.** SkyrimNet's `ModEventSender` sends it as its streaming text processor flips `hasStartedPlayback=true` (TTS for the first sentence starting), not when the LLM's first chunk arrives. Example: DN 06.372 → first LLM chunk 07.210 → SpeechStarted 07.494. `SkyrimNet_SpeechComplete` pairs with it. `sender` is the **speaker**, who can differ from the DN source (DN source Bob → Nina speaks).
+- One DN can produce several SpeechStarted events (narrator line, then dialogue line); only the first counts as the response.
+- **SpeechStarted fires per sentence, SpeechComplete once per response.** Track "speaking" as a flag, never a Started−Complete counter (a counter only climbs, flagging every sample busy).
+- The player's own voiced line sends SpeechStarted with `sender=0x00000014`; it must not stop the DN timer.
+- `sender` is the placed reference: `TESForm::GetName()` returns empty for it; use `As<RE::Actor>()->GetDisplayFullName()`.
+- Measured 2026-10-02 (4 DNs, OpenRouter + pocket_tts): 0.74–1.20 s from our send to SpeechStarted. 15–35 ms of that is the Papyrus hop (`QueueDirectNarration` → `SkyrimNetApi.DirectNarration`); LLM first chunk → SpeechStarted is 0.1–0.5 s.
+- `NarrationTiming` listens on `SKSE::GetModCallbackEventSource()`. The sink runs on SkyrimNet's sender thread, so its state is mutex-guarded and it only reads `TESForm::GetName()`.
+- The start stamp is in the DLL, not Papyrus: `QueueDirectNarration` returning false (Papyrus then calls `SkyrimNetApi.DirectNarration`), or `NarrationQueue::Flush` for paused narrations.

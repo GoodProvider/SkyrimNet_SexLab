@@ -1,4 +1,5 @@
 #include "NarrationQueue.h"
+#include "NarrationTiming.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
 
@@ -84,6 +85,7 @@ namespace NarrationQueue
                 ActorFor(source), ActorFor(target), static_cast<bool>(purge));
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             vm->DispatchStaticCall("SkyrimNet_SexLab_Utilities", "DirectNarration_Flush", args, callback);
+            NarrationTiming::MarkSent(joined);
             webui_log::info("NarrationQueue: flushed {} narration(s): {}", entries.size(), joined);
         }
 

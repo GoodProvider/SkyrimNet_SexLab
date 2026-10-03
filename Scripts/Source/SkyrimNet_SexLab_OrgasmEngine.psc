@@ -89,6 +89,18 @@ Function Effect_OrgasmGroup(Actor[] actors, int[] forced, bool individual, Strin
     sl_scene.Orgasm_ApplyGroup(actors, forced, individual, source, allower, allowed, extras)
 EndFunction
 
+; Gate passed just before the final stage: push the actor's scene to its final stage.
+Function Effect_AdvanceToFinal(Actor akActor) global
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager == None || akActor == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(akActor)
+    if sl_scene != None
+        sl_scene.Engine_AdvanceToFinal()
+    endif
+EndFunction
+
 Function Effect_Mirror(Actor akActor, int value) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()
     if manager == None || akActor == None

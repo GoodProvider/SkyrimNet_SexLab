@@ -45,7 +45,8 @@ private:
 
 void InitWebUI();
 void WebUI_SetGameReady();
-void WebUI_Visibility_Show();
+/// showControlPanel=false: YesNo solo (gating dialogue alone while the WebUI was closed).
+void WebUI_Visibility_Show(bool showControlPanel = true);
 void WebUI_Visibility_Hide();
 /// Hide overlay without applying SceneInfo drafts (Cancel / Escape).
 void WebUI_Visibility_HideWithoutCommit();

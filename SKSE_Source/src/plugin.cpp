@@ -16,6 +16,7 @@
 #include "Config.h"
 #include "AnimSpeed.h"
 #include "NarrationQueue.h"
+#include "NarrationTiming.h"
 #include "OrgasmEngine.h"
 #include "Hud.h"
 #include "Papyrus_OrgasmEngine.h"
@@ -125,6 +126,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             Hud::Init();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
             OrgasmEngine::Install();
+            NarrationTiming::Install();
             JsonStore_SelfTest();
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
@@ -133,6 +135,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             PapyrusBindings_WebUI::ClearOnGameLoad();
             AnimSpeed::ClearAll();
             NarrationQueue::Clear();
+            NarrationTiming::Clear();
             Hud::Reset();
             WebUI_SetGameReady();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
