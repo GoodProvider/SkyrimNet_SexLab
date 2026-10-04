@@ -1839,7 +1839,12 @@ namespace PapyrusBindings_WebUI
 
     void WebUI_MaybeRestoreScenePanel(RE::StaticFunctionTag*)
     {
-        if (!TargetCurrent() || !ActionCatalog::IsShowScenePanel())
+        auto* target = TargetCurrent();
+        if (!target)
+            return;
+        // An in-scene target always opens the Scene view (Description Editor); otherwise only restore it
+        // when show_scene_panel is set.
+        if (!IsSexLabAnimatingFocus(target) && !ActionCatalog::IsShowScenePanel())
             return;
         // SwitchMainPanel re-resolves an already-selected Scene view, so a target change or a scene
         // start/end flips it between Description Editor and Scene Creator. No WebUI_ConfigureFocusScene:

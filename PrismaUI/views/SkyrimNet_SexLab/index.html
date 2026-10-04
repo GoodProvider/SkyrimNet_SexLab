@@ -2362,7 +2362,7 @@
         // show_scene_panel alone: the Scene view still restores on the next open when that flag is set.
         // hiddenKey: the builtin just concealed; only drops when it is the selected panel (a switch sets the
         // new key before C++ conceals the old one). changed: the caller already cleared MAIN_SELECTED_KEY
-        // (TargetMenu Custom/Editor need a re-render).
+        // (TargetMenu Custom needs a re-render).
         function syncMainPanelPulldown(hiddenKey, changed) {
             if (hiddenKey && MAIN_SELECTED_KEY && domIdForPanelKey(hiddenKey) === domIdForPanelKey(MAIN_SELECTED_KEY)) {
                 MAIN_SELECTED_KEY = '';
@@ -2444,13 +2444,14 @@
             return d === 'flex' || d === 'block';
         }
 
-        // Scene view up (Description Editor or Scene Creator): TargetMenu Custom / Editor rows highlight.
+        // Scene view up (Description Editor or Scene Creator): TargetMenu Custom row highlights.
         function tmScenePanelIsOpen() {
             return MAIN_SELECTED_KEY === 'scene_panel';
         }
 
-        // TargetMenu Custom (actor root, type scene_creator) and Editor (scene root, type scene_editor) both
-        // toggle the Scene view, and so C++ show_scene_panel: close = main-panel Close, open = select Scene.
+        // TargetMenu Custom (actor root, type scene_creator) toggles the Scene view, and so C++
+        // show_scene_panel: close = main-panel Close, open = select Scene. In-scene targets get the
+        // Description Editor automatically (C++ WebUI_MaybeRestoreScenePanel).
         function tmToggleScenePanel(opt) {
             if (typeof tmCascadeIsOpen === 'function' && tmCascadeIsOpen()) {
                 closeTargetPulldowns();
@@ -2461,16 +2462,12 @@
                 mainPanelClose();
                 return;
             }
-            if (opt && opt.type === 'scene_editor') {
-                showPanel('scene_panel');
-            } else {
-                if (typeof ensureCreatorSceneInfo === 'function')
-                    ensureCreatorSceneInfo();
-                selectedSceneInfoKey = 'new';
-                showPanel('scene_creator_panel');
-                if (typeof bindVisiblePanelsFromSceneInfo === 'function')
-                    bindVisiblePanelsFromSceneInfo();
-            }
+            if (typeof ensureCreatorSceneInfo === 'function')
+                ensureCreatorSceneInfo();
+            selectedSceneInfoKey = 'new';
+            showPanel('scene_creator_panel');
+            if (typeof bindVisiblePanelsFromSceneInfo === 'function')
+                bindVisiblePanelsFromSceneInfo();
             if (typeof renderTargetMenu === 'function')
                 renderTargetMenu();
         }
@@ -4219,7 +4216,7 @@
                     ));
                     continue;
                 }
-                if (opt.type === 'scene_creator' || opt.type === 'scene_editor') {
+                if (opt.type === 'scene_creator') {
                     const row = document.createElement('div');
                     row.className = 'option' + (tmScenePanelIsOpen() ? ' selected' : '');
                     decorateTargetOption(row, opt);
@@ -6064,6 +6061,19 @@
                 nodes.forEach((node, idx) => list.appendChild(ssCascadeRow(spec, node, idx, level)));
                 panel.appendChild(list);
                 host.appendChild(panel);
+            }
+            // The bondage panel is position:absolute (out of the host's flex flow), so
+            // chain cascade columns absolutely to its right instead of over it.
+            const anchor = host.querySelector('.target-bondage-panel');
+            if (anchor) {
+                const gap = cssPxToken('--space-md', 14);
+                let prev = anchor;
+                host.querySelectorAll('.target-field-cascade').forEach(col => {
+                    col.style.position = 'absolute';
+                    col.style.top = '0';
+                    col.style.left = (prev.offsetLeft + prev.offsetWidth + gap) + 'px';
+                    prev = col;
+                });
             }
         }
 

@@ -1,5 +1,6 @@
 Unreleased ⚗️
 
+- Target Menu: **bondage** is now available during a scene too. Opening the menu on someone in a scene always opens the Description Editor, so the **Editor** row is gone.
 - Fixed NPC cuddle / comfort / affection actions sometimes starting a sex animation. They now only pick cuddling, hugging, spooning, kissing, head pat, holding hands or lap pillow animations.
 - Target Menu: **cuddle** is now **affection** (romantic, can kiss), and the new **platonic** option is for friends and family (cuddle, hug, head pat, hold hands, no kissing). **sex** only picks consensual sex animations, **punish** spanks any genders, and **rapes** picks anything except affection animations, aggressive ones first. Pressing Start without choosing a method now stays inside the option instead of picking any animation.
 - Animations made for Devious Devices bondage are only chosen when someone in the scene is wearing it.
