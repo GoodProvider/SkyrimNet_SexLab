@@ -55,7 +55,7 @@ Function SetDomMeter(Actor akActor, float meter) global native
 Function SetActorSkills(Actor akActor, int skill, int lewd) global native
 Function EndScene(int sid) global native
 Function ResetSpeedScale(Actor akActor) global native
-; Speed level of the actor's effective animation speed: 0 slow and gentle, 1 gentle, 2 normal, 3 forceful, 4 fast and forceful.
+; Speed level of the actor's effective animation speed: 0 gentle, 1 normal, 2 forceful.
 int Function GetSpeedLevel(Actor akActor) global native
 ; SexLabOrgasm bookkeeping (Scene_Manager.OrgasmIndividual): our own vs another plugin's ForceOrgasm.
 bool Function ConsumeOwnOrgasm(Actor akActor) global native

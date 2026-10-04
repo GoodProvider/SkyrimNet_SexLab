@@ -220,7 +220,7 @@ schema:
     - name: "Slower key"
       path: "sexlab.hud.key_slower"
       type: "hotkey"
-      description: "Steps the scene down one speed level (slow and gentle 50%, gentle 75%, normal 100%, forceful 125%, fast and forceful 150%). Default Num -."
+      description: "Steps the scene down one speed level (gentle 75%, normal 100%, forceful 125%). Default Num -."
       min: 1
       max: 255
       required: false
@@ -231,7 +231,7 @@ schema:
     - name: "Faster key"
       path: "sexlab.hud.key_faster"
       type: "hotkey"
-      description: "Steps the scene up one speed level (slow and gentle 50%, gentle 75%, normal 100%, forceful 125%, fast and forceful 150%). Default Num +."
+      description: "Steps the scene up one speed level (gentle 75%, normal 100%, forceful 125%). Default Num +."
       min: 1
       max: 255
       required: false

@@ -1506,7 +1506,7 @@ String Function GetIntentMessage(int intent_stage = -1)
     elseif intent_stage == INTENT_STAGE_END 
         verb = "finish"
     endif
-    ; Start / ongoing carry the pace: "Bob and Alice are fast and forcefully ..." (normal: no adverb).
+    ; Start / ongoing carry the pace: "Bob and Alice are forcefully ..." (normal: no adverb).
     if intent_stage != INTENT_STAGE_END
         String adverb = GetSpeedAdverb()
         if adverb != ""
@@ -3591,29 +3591,25 @@ float Function GetStyleSpeed()
 EndFunction
 
 ; Speed level (OrgasmEngine) of the scene's effective animation speed: style speed x HUD slower/faster.
-; 0 slow and gentle, 1 gentle, 2 normal, 3 forceful, 4 fast and forceful. No thread: from the style.
+; 0 gentle, 1 normal, 2 forceful. No thread: from the style.
 int Function GetSpeedLevel()
     if thread != None && thread.positions.length > 0 && thread.positions[0] != None
         return SkyrimNet_SexLab_OrgasmEngine.GetSpeedLevel(thread.positions[0])
     endif
     if style == STYLE_GENTLY
-        return 1
+        return 0
     elseif style == STYLE_FORCEFULLY
-        return 3
+        return 2
     endif
-    return 2
+    return 1
 EndFunction
 
 String Function GetSpeedName()
     int level = GetSpeedLevel()
     if level == 0
-        return "slow and gentle"
-    elseif level == 1
         return "gentle"
-    elseif level == 3
+    elseif level == 2
         return "forceful"
-    elseif level == 4
-        return "fast and forceful"
     endif
     return "normal"
 EndFunction
@@ -3621,13 +3617,9 @@ EndFunction
 String Function GetSpeedAdverb()
     int level = GetSpeedLevel()
     if level == 0
-        return "slowly and gently"
-    elseif level == 1
         return "gently"
-    elseif level == 3
+    elseif level == 2
         return "forcefully"
-    elseif level == 4
-        return "fast and forcefully"
     endif
     return ""
 EndFunction

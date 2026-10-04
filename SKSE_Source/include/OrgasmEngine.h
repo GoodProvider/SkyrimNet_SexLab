@@ -108,11 +108,10 @@ namespace OrgasmEngine
     };
     /// Actors of the scene the player is in, in SexLab position order. False when none.
     bool GetPlayerScene(std::vector<ActorView>& out);
-    /// Speed levels extend the scene style: slow and gentle, gentle, normal, forceful, fast and forceful.
-    inline constexpr int kSpeedLevelCount = 5;
-    inline constexpr float kSpeedLevels[kSpeedLevelCount] = { 0.5f, 0.75f, 1.0f, 1.25f, 1.5f };
-    inline constexpr const char* kSpeedLevelNames[kSpeedLevelCount] = { "slow and gentle", "gentle", "normal",
-        "forceful", "fast and forceful" };
+    /// Speed levels match the scene styles: gentle, normal, forceful.
+    inline constexpr int kSpeedLevelCount = 3;
+    inline constexpr float kSpeedLevels[kSpeedLevelCount] = { 0.75f, 1.0f, 1.25f };
+    inline constexpr const char* kSpeedLevelNames[kSpeedLevelCount] = { "gentle", "normal", "forceful" };
     /// Level closest to an effective animation speed.
     int NearestSpeedLevel(float speed);
     /// Moves the player's scene one speed level up (dir > 0) or down (dir < 0), clamped to the ends.

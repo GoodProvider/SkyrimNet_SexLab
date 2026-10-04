@@ -43,6 +43,7 @@ namespace Hud
             { "deny", "sexlab.hud.key_deny", VK_NUMPAD1, false },
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
+        constexpr std::uint32_t kSkyrimNetDx = 0x47;   // Num 7
 
         PRISMA_UI_API::IVPrismaUI1* g_prisma = nullptr;
         PrismaView g_view = 0;
@@ -474,9 +475,13 @@ namespace Hud
                 keys[ctl] = label;
             }
             keys["free"] = DxLabel(kFreeCameraDx);
+            keys["skyrimnet"] = DxLabel(kSkyrimNetDx);
             j["keys"] = std::move(keys);
         }
         j["paused"] = OrgasmEngine::IsPlayerScenePaused();
+        // SexLab's free camera on: Num 3 reads "lock" (a press returns to the normal camera).
+        const auto* camera = RE::PlayerCamera::GetSingleton();
+        j["freeCam"] = camera && camera->IsInFreeCameraMode();
         int stage = 0, stageCount = 0;
         OrgasmEngine::GetPlayerSceneStage(stage, stageCount);
         j["stage"] = stage;

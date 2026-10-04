@@ -53,17 +53,22 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
 - **Controls:** a fixed grid laid out like the numpad. Each label names what pressing its key will do.
 
   ```
-   Num 8    Num 9    Num 1    Num 3    Num -
-   calm     arouse   deny     free 📷  gentle
-   previous pause    next     end      forceful
-   Num 4    Num 5    Num 6    Num 2    Num +
+   Num 7    Num 8    Num 9    Num -
+            calm     arouse   gentle
+   Num 4    Num 5    Num 6    Num +
+   prev     pause    next     forceful
+   Num 1    Num 2    Num 3
+   deny     end      free 📷
   ```
+
+  Num 7 is dimmed with no label (it belongs to SkyrimNet).
 
   - **Num 2** ends the scene.
   - **Num 5** pauses the current stage; the cell then reads *play*. Press again to resume with the rest of the stage's time.
   - **Num 4 / Num 6** go to the previous / next stage.
   - **Num 1** denies or allows the focus actor's orgasm. The cell reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm.
-  - **Num - / Num +** step the scene one speed level slower / faster: *slow and gentle* (50%), *gentle* (75%), *normal* (100%), *forceful* (125%), *fast and forceful* (150%). Each cell shows the level a press switches to (at *normal*: *gentle* / *forceful*); at the slowest or fastest level it shows a dimmed *—*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are fast and forcefully …").
+  - **Num 3** is SexLab's free camera. While it is on, the cell reads *lock*; press Num 3 again to go back to the normal camera.
+  - **Num - / Num +** step the scene one speed level slower / faster: *gentle* (75%), *normal* (100%), *forceful* (125%). Each cell shows the level a press switches to (at *normal*: *gentle* / *forceful*); at the slowest or fastest level it shows a dimmed *—*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are forcefully …").
 - **How long it takes:** without the mini-game, a scene ends much like plain SexLab. Each actor normally orgasms once near the end, and some a little earlier. A victim usually doesn't. Faster raises the pace and can bring a second orgasm; slower can leave someone short. Pausing or repeating a stage adds time, so it adds enjoyment too.
 - **Mini-game** (off by default):
   - Each actor's row shows a blue **magicka** bar and a green **stamina** bar in front of the enjoyment bar. These are the resources the game spends.

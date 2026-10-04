@@ -6,8 +6,9 @@
     <title>SkyrimNet SexLab HUD</title>
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
-        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys (+ free: SexLab free camera, display only), blocked, paused,
-        slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine tick when it changes.
+        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
+        blocked, paused, freeCam, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
+        tick when it changes.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -114,35 +115,39 @@
             100% { background-color: #ff4fa3; }
         }
 
-        /* Controls: 5 x 2 grid laid out like the numpad. Top row "[key] over label", bottom row "label over [key]". */
+        /* Controls: 4 x 3 grid laid out like the numpad (7 8 9 - / 4 5 6 + / 1 2 3); each cell is one box, key over label.
+           Equal 1fr columns in a max-content grid: every box is as wide as the widest cell. */
         #controls {
             display: grid;
             visibility: hidden;
-            grid-template-columns: repeat(5, max-content);
-            justify-content: start;
-            gap: var(--space-xs) var(--space-md);
+            width: max-content;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-sm);
             font-size: var(--text-sm);
         }
         #controls.visible { visibility: visible; }
-        .ctl { display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
-        .ctl.speed { align-items: flex-start; }
-        /* Every label a column can show is stacked invisibly in the cell, so the column is always as wide as its longest label. */
-        .label { display: grid; justify-items: center; }
-        .ctl.speed .label { justify-items: start; }
-        .label > span { grid-area: 1 / 1; }
-        .label > .sizer { visibility: hidden; }
-        .key {
-            display: inline-block;
-            min-width: 3.6em;  /* "Num 8" etc. all render the same width */
-            padding: 0 5px;
+        .ctl {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2px var(--space-sm);
             border: 1px solid rgba(201, 168, 76, 0.6);
             border-radius: 4px;
             background: rgba(0, 0, 0, 0.45);
+            white-space: nowrap;
+            line-height: 1.2;
+        }
+        /* Every label a column can show is stacked invisibly in the cell, so the column is always as wide as its longest label. */
+        .label { display: grid; justify-items: center; }
+        .label > span { grid-area: 1 / 1; }
+        .label > .sizer { visibility: hidden; }
+        .key {
             color: var(--accent);
             font-size: 24px;
             text-align: center;
-            line-height: 1.5;
         }
+        /* Smaller emoji so "free 📷" is no wider than the other labels. */
+        .label .emoji { font-size: 0.75em; }
         .ctl.blocked, .ctl.dim { opacity: 0.4; }
         td.lock { width: 1.2em; text-align: center; }
         .ctl.blocked .label .text { text-decoration: line-through; }
@@ -212,30 +217,39 @@
         }
 
         // Speed level names, slowest first. Mirrors OrgasmEngine::kSpeedLevelNames (SKSE_Source/include/OrgasmEngine.h).
-        const SPEED_NAMES = ['slow and gentle', 'gentle', 'normal', 'forceful', 'fast and forceful'];
+        const SPEED_NAMES = ['gentle', 'normal', 'forceful'];
         const NO_STEP = '—';
+        const CAM = '📷';
 
         // Every label each grid column can show; each cell carries them as invisible sizers so widths never change.
         const COLUMN_LABELS = [
-            ['calm', 'broken', 'previous'],
-            ['arouse', 'pause', 'play'],
-            ['deny', 'allow', 'next'],
-            ['free 📷', 'end'],
+            ['', 'prev', 'deny', 'allow'],
+            ['calm', 'broken', 'pause', 'play', 'end'],
+            ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM],
             SPEED_NAMES.concat([NO_STEP]),
         ];
 
-        // One grid cell. top: key over label (else label over key). col: 0-based grid column (sizer set).
+        // Label text; a trailing camera emoji is drawn smaller.
+        function labelHtml(s) {
+            s = String(s);
+            if (s.endsWith(CAM)) {
+                return esc(s.slice(0, -CAM.length)) + '<span class="emoji">' + CAM + '</span>';
+            }
+            return esc(s) || '&nbsp;';
+        }
+
+        // One grid cell, key over label. col: 0-based grid column (sizer set).
         // off: render invisibly so the slot keeps its size; blocked: dim + strike; dim: dim only.
-        function ctl(keys, control, label, col, top, opts) {
+        function ctl(keys, control, label, col, opts) {
             opts = opts || {};
             const k = keyLabel(keys, control);
             const key = '<span class="key' + (k ? '' : ' off') + '">' + esc(k || '?') + '</span>';
             let lab = '<span class="label">';
-            COLUMN_LABELS[col].forEach(function (s) { lab += '<span class="sizer">' + esc(s) + '</span>'; });
-            lab += '<span class="text">' + esc(label) + '</span></span>';
-            const cls = (col === 4 ? ' speed' : '') + (opts.blocked ? ' blocked' : '') + (opts.dim ? ' dim' : '') +
+            COLUMN_LABELS[col].forEach(function (s) { lab += '<span class="sizer">' + labelHtml(s) + '</span>'; });
+            lab += '<span class="text">' + labelHtml(label) + '</span></span>';
+            const cls = (opts.blocked ? ' blocked' : '') + (opts.dim ? ' dim' : '') +
                 (opts.off || !k ? ' off' : '');
-            return '<span class="ctl' + cls + '">' + (top ? key + lab : lab + key) + '</span>';
+            return '<span class="ctl' + cls + '">' + key + lab + '</span>';
         }
 
         function hudUpdate(state) {
@@ -286,24 +300,27 @@
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
             // Controls part, numpad grid. Each label names what a press does.
-            //   calm      arouse  deny  free 📷  <slower step>
-            //   previous  pause   next  end      <faster step>
+            //   (Num 7)  calm   arouse   <slower step>
+            //   prev     pause  next     <faster step>
+            //   deny     end    free 📷
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
             const fa = actors[state.focus];
             const slower = state.slower || '', faster = state.faster || '';
             let c = '';
-            c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 0, true, { blocked: blocked.calm, off: mgcOff });
-            c += ctl(keys, 'arouse', 'arouse', 1, true, { blocked: blocked.arouse, off: mgcOff });
-            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 2, true, { off: cOff });
-            c += ctl(keys, 'free', 'free 📷', 3, true, { off: cOff });
-            c += ctl(keys, 'slower', slower || NO_STEP, 4, true, { dim: !slower, off: cOff });
-            c += ctl(keys, 'previous', 'previous', 0, false, { off: cOff });
-            c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 1, false, { off: cOff });
-            c += ctl(keys, 'next', 'next', 2, false, { off: cOff });
-            c += ctl(keys, 'end', 'end', 3, false, { off: cOff });
-            c += ctl(keys, 'faster', faster || NO_STEP, 4, false, { dim: !faster, off: cOff });
+            c += ctl(keys, 'skyrimnet', '', 0, { dim: true, off: cOff });
+            c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 1, { blocked: blocked.calm, off: mgcOff });
+            c += ctl(keys, 'arouse', 'arouse', 2, { blocked: blocked.arouse, off: mgcOff });
+            c += ctl(keys, 'slower', slower || NO_STEP, 3, { dim: !slower, off: cOff });
+            c += ctl(keys, 'previous', 'prev', 0, { off: cOff });
+            c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 1, { off: cOff });
+            c += ctl(keys, 'next', 'next', 2, { off: cOff });
+            c += ctl(keys, 'faster', faster || NO_STEP, 3, { dim: !faster, off: cOff });
+            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 0, { off: cOff });
+            c += ctl(keys, 'end', 'end', 1, { off: cOff });
+            c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 2, { off: cOff });
+            c += ctl(keys, '', '', 3, { off: true });
             const controlsOn = !!g.controls;
             const controls = document.getElementById('controls');
             controls.innerHTML = c;
