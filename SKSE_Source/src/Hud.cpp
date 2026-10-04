@@ -29,19 +29,20 @@ namespace Hud
             bool miniGame;  // false = controls group
         };
 
-        // Dashboard hotkeys (VK), defaults on the numpad (Num 3 is SexLab's free camera).
-        // Focus keys 1-4 are fixed.
+        // Dashboard hotkeys (VK), defaults on the numpad laid out like the HUD grid.
+        // Num 3 is SexLab's free camera (display only), Num 7 is SkyrimNet's. Focus keys 1-4 are fixed.
         constexpr KeyBinding kBindings[] = {
-            { "end", "sexlab.hud.key_end", VK_NUMPAD1, false },
-            { "previous", "sexlab.hud.key_previous", VK_NUMPAD7, false },
-            { "next", "sexlab.hud.key_next", VK_NUMPAD9, false },
+            { "end", "sexlab.hud.key_end", VK_NUMPAD2, false },
+            { "previous", "sexlab.hud.key_previous", VK_NUMPAD4, false },
+            { "next", "sexlab.hud.key_next", VK_NUMPAD6, false },
             { "slower", "sexlab.hud.key_slower", VK_SUBTRACT, false },
             { "faster", "sexlab.hud.key_faster", VK_ADD, false },
-            { "pause", "sexlab.hud.key_pause", VK_NUMPAD8, false },
-            { "calm", "sexlab.minigame.key_calm", VK_NUMPAD4, true },
-            { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD5, true },
-            { "deny", "sexlab.hud.key_deny", VK_NUMPAD6, false },
+            { "pause", "sexlab.hud.key_pause", VK_NUMPAD5, false },
+            { "calm", "sexlab.minigame.key_calm", VK_NUMPAD8, true },
+            { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD9, true },
+            { "deny", "sexlab.hud.key_deny", VK_NUMPAD1, false },
         };
+        constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
 
         PRISMA_UI_API::IVPrismaUI1* g_prisma = nullptr;
         PrismaView g_view = 0;
@@ -472,6 +473,7 @@ namespace Hud
             for (const auto& [ctl, label] : g_keyLabel) {
                 keys[ctl] = label;
             }
+            keys["free"] = DxLabel(kFreeCameraDx);
             j["keys"] = std::move(keys);
         }
         j["paused"] = OrgasmEngine::IsPlayerScenePaused();
@@ -480,7 +482,11 @@ namespace Hud
         j["stage"] = stage;
         j["stages"] = stageCount;
         const int speedLevel = OrgasmEngine::GetPlayerSceneSpeedLevel();
-        j["speed"] = speedLevel >= 0 ? OrgasmEngine::kSpeedLevelNames[speedLevel] : "";
+        // Slower / faster labels name the level a press steps to; "" at either end.
+        j["slower"] = speedLevel > 0 ? OrgasmEngine::kSpeedLevelNames[speedLevel - 1] : "";
+        j["faster"] = speedLevel >= 0 && speedLevel + 1 < OrgasmEngine::kSpeedLevelCount
+                          ? OrgasmEngine::kSpeedLevelNames[speedLevel + 1]
+                          : "";
         j["blocked"] = { { "arouse", !OrgasmEngine::CanArouse(player) }, { "calm", !OrgasmEngine::CanCalm(player) },
             { "broken", OrgasmEngine::IsMentallyBroken(player) } };
 

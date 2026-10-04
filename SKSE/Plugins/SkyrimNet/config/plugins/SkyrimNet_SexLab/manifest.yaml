@@ -176,44 +176,44 @@ schema:
     - name: "End scene key"
       path: "sexlab.hud.key_end"
       type: "hotkey"
-      description: "Ends the player's scene (same as stop). Default Num 1."
+      description: "Ends the player's scene (same as stop). Default Num 2."
       min: 1
       max: 255
       required: false
-      defaultValue: 97
+      defaultValue: 98
       category: "Scene HUD"
       supportsOverride: false
 
     - name: "Previous stage key"
       path: "sexlab.hud.key_previous"
       type: "hotkey"
-      description: "Goes back one stage. Default Num 7."
+      description: "Goes back one stage. Default Num 4."
       min: 1
       max: 255
       required: false
-      defaultValue: 103
+      defaultValue: 100
       category: "Scene HUD"
       supportsOverride: false
 
     - name: "Pause on current stage key"
       path: "sexlab.hud.key_pause"
       type: "hotkey"
-      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment holds while paused. Default Num 8."
+      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment holds while paused. Default Num 5."
       min: 1
       max: 255
       required: false
-      defaultValue: 104
+      defaultValue: 101
       category: "Scene HUD"
       supportsOverride: false
 
     - name: "Next stage key"
       path: "sexlab.hud.key_next"
       type: "hotkey"
-      description: "Advances one stage. Default Num 9."
+      description: "Advances one stage. Default Num 6."
       min: 1
       max: 255
       required: false
-      defaultValue: 105
+      defaultValue: 102
       category: "Scene HUD"
       supportsOverride: false
 
@@ -242,11 +242,11 @@ schema:
     - name: "Deny / allow orgasm key"
       path: "sexlab.hud.key_deny"
       type: "hotkey"
-      description: "Toggles orgasm denial for the HUD's focus actor (🔒). A denied actor gains enjoyment as normal but cannot orgasm. Default Num 6."
+      description: "Toggles orgasm denial for the HUD's focus actor (🔒). A denied actor gains enjoyment as normal but cannot orgasm. Default Num 1."
       min: 1
       max: 255
       required: false
-      defaultValue: 102
+      defaultValue: 97
       category: "Scene HUD"
       supportsOverride: false
 
@@ -418,22 +418,22 @@ schema:
     - name: "Calm key"
       path: "sexlab.minigame.key_calm"
       type: "hotkey"
-      description: "Calms the focused actor (costs your magicka). At 90%+ enjoyment it also edges (holds off the orgasm). Default Num 4."
+      description: "Calms the focused actor (costs your magicka). At 90%+ enjoyment it also edges (holds off the orgasm). Default Num 8."
       min: 1
       max: 255
       required: false
-      defaultValue: 100
+      defaultValue: 104
       category: "Mini-game"
       supportsOverride: false
 
     - name: "Arouse key"
       path: "sexlab.minigame.key_arouse"
       type: "hotkey"
-      description: "Arouses the focused actor (costs your stamina). Default Num 5."
+      description: "Arouses the focused actor (costs your stamina). Default Num 9."
       min: 1
       max: 255
       required: false
-      defaultValue: 101
+      defaultValue: 105
       category: "Mini-game"
       supportsOverride: false
 

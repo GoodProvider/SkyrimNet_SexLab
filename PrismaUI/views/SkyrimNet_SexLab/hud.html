@@ -6,7 +6,8 @@
     <title>SkyrimNet SexLab HUD</title>
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
-        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys, blocked, paused, speed, stage, stages}) each engine tick when it changes.
+        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys (+ free: SexLab free camera, display only), blocked, paused,
+        slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine tick when it changes.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -19,8 +20,8 @@
             --accent:        #c9a84c;
             --danger:        #e54545;
             --font-ui:       'Segoe UI', 'Microsoft YaHei UI', 'Meiryo', system-ui, sans-serif;
-            --text-sm:       14px;
-            --text-base:     15px;
+            --text-sm:       28px;
+            --text-base:     30px;
             --space-xs:      4px;
             --space-sm:      8px;
             --space-md:      14px;
@@ -113,37 +114,38 @@
             100% { background-color: #ff4fa3; }
         }
 
-        /* Controls: "[key] label" on the left of a pair, "label [key]" on the right */
+        /* Controls: 5 x 2 grid laid out like the numpad. Top row "[key] over label", bottom row "label over [key]". */
         #controls {
-            display: flex;
+            display: grid;
             visibility: hidden;
-            flex-wrap: wrap;
-            align-items: center;
+            grid-template-columns: repeat(5, max-content);
+            justify-content: start;
             gap: var(--space-xs) var(--space-md);
             font-size: var(--text-sm);
         }
         #controls.visible { visibility: visible; }
-        /* Labels that swap text (pause/resume, calm/broken, deny/allow) keep a fixed width. */
-        #controls .label.swap { display: inline-block; min-width: 3.6em; }
-        .ctl { display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; }
-        .pair { display: inline-flex; gap: var(--space-sm); }
+        .ctl { display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+        .ctl.speed { align-items: flex-start; }
+        /* Every label a column can show is stacked invisibly in the cell, so the column is always as wide as its longest label. */
+        .label { display: grid; justify-items: center; }
+        .ctl.speed .label { justify-items: start; }
+        .label > span { grid-area: 1 / 1; }
+        .label > .sizer { visibility: hidden; }
         .key {
             display: inline-block;
-            min-width: 1.6em;
+            min-width: 3.6em;  /* "Num 8" etc. all render the same width */
             padding: 0 5px;
             border: 1px solid rgba(201, 168, 76, 0.6);
             border-radius: 4px;
             background: rgba(0, 0, 0, 0.45);
             color: var(--accent);
-            font-size: 12px;
+            font-size: 24px;
             text-align: center;
             line-height: 1.5;
         }
-        .ctl.blocked { opacity: 0.4; }
+        .ctl.blocked, .ctl.dim { opacity: 0.4; }
         td.lock { width: 1.2em; text-align: center; }
-        .paused-tag { color: var(--accent); font-weight: 600; letter-spacing: 0.05em; }
-        .speed-tag { color: var(--text-secondary); font-style: italic; white-space: nowrap; }
-        .ctl.blocked .label { text-decoration: line-through; }
+        .ctl.blocked .label .text { text-decoration: line-through; }
     </style>
 </head>
 <body>
@@ -209,15 +211,31 @@
                 Math.max(0, Math.min(100, Number(pct) || 0)) + '%"></div></div></td>';
         }
 
-        // side: 'left' = "[key] label", 'right' = "label [key]"
-        // off: render invisibly so the slot keeps its size; swap: label alternates text (fixed min-width).
-        function ctl(keys, control, label, side, blocked, off, swap) {
+        // Speed level names, slowest first. Mirrors OrgasmEngine::kSpeedLevelNames (SKSE_Source/include/OrgasmEngine.h).
+        const SPEED_NAMES = ['slow and gentle', 'gentle', 'normal', 'forceful', 'fast and forceful'];
+        const NO_STEP = '—';
+
+        // Every label each grid column can show; each cell carries them as invisible sizers so widths never change.
+        const COLUMN_LABELS = [
+            ['calm', 'broken', 'previous'],
+            ['arouse', 'pause', 'play'],
+            ['deny', 'allow', 'next'],
+            ['free 📷', 'end'],
+            SPEED_NAMES.concat([NO_STEP]),
+        ];
+
+        // One grid cell. top: key over label (else label over key). col: 0-based grid column (sizer set).
+        // off: render invisibly so the slot keeps its size; blocked: dim + strike; dim: dim only.
+        function ctl(keys, control, label, col, top, opts) {
+            opts = opts || {};
             const k = keyLabel(keys, control);
-            if (!k) return '';
-            const key = '<span class="key">' + esc(k) + '</span>';
-            const lab = '<span class="label' + (swap ? ' swap' : '') + '">' + esc(label) + '</span>';
-            return '<span class="ctl' + (blocked ? ' blocked' : '') + (off ? ' off' : '') + '">' +
-                (side === 'left' ? key + lab : lab + key) + '</span>';
+            const key = '<span class="key' + (k ? '' : ' off') + '">' + esc(k || '?') + '</span>';
+            let lab = '<span class="label">';
+            COLUMN_LABELS[col].forEach(function (s) { lab += '<span class="sizer">' + esc(s) + '</span>'; });
+            lab += '<span class="text">' + esc(label) + '</span></span>';
+            const cls = (col === 4 ? ' speed' : '') + (opts.blocked ? ' blocked' : '') + (opts.dim ? ' dim' : '') +
+                (opts.off || !k ? ' off' : '');
+            return '<span class="ctl' + cls + '">' + (top ? key + lab : lab + key) + '</span>';
         }
 
         function hudUpdate(state) {
@@ -267,25 +285,26 @@
             const enjoyOn = !!g.enjoyment && html !== '';
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
-            // Controls part: [Paused]  end  previous/pause/next  slower <speed> faster  calm/arouse
+            // Controls part, numpad grid. Each label names what a press does.
+            //   calm      arouse  deny  free 📷  <slower step>
+            //   previous  pause   next  end      <faster step>
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
-            let c = '<span class="paused-tag' + (state.paused ? '' : ' off') + '">Paused</span>';
-            c += ctl(keys, 'end', 'end', 'left', false, cOff);
-            c += '<span class="pair">' + ctl(keys, 'previous', 'previous', 'left', false, cOff) +
-                ctl(keys, 'pause', state.paused ? 'resume' : 'pause', 'left', false, cOff, true) +
-                ctl(keys, 'next', 'next', 'right', false, cOff) + '</span>';
-            c += '<span class="pair">' + ctl(keys, 'slower', 'slower', 'left', false, cOff) +
-                '<span class="speed-tag' + (cOff || !state.speed ? ' off' : '') + '">' + esc(state.speed || '1.0x') + '</span>' +
-                ctl(keys, 'faster', 'faster', 'right', false, cOff) + '</span>';
-            const calmLabel = blocked.broken ? 'broken' : 'calm';
-            c += '<span class="pair">' + ctl(keys, 'calm', calmLabel, 'left', blocked.calm, mgcOff, true) +
-                ctl(keys, 'arouse', 'arouse', 'right', blocked.arouse, mgcOff) + '</span>';
-            // Deny / allow for the focus actor: last in the row.
             const fa = actors[state.focus];
-            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 'left', false, cOff, true);
-            const controlsOn = !!g.controls || !!state.paused;
+            const slower = state.slower || '', faster = state.faster || '';
+            let c = '';
+            c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 0, true, { blocked: blocked.calm, off: mgcOff });
+            c += ctl(keys, 'arouse', 'arouse', 1, true, { blocked: blocked.arouse, off: mgcOff });
+            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 2, true, { off: cOff });
+            c += ctl(keys, 'free', 'free 📷', 3, true, { off: cOff });
+            c += ctl(keys, 'slower', slower || NO_STEP, 4, true, { dim: !slower, off: cOff });
+            c += ctl(keys, 'previous', 'previous', 0, false, { off: cOff });
+            c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 1, false, { off: cOff });
+            c += ctl(keys, 'next', 'next', 2, false, { off: cOff });
+            c += ctl(keys, 'end', 'end', 3, false, { off: cOff });
+            c += ctl(keys, 'faster', faster || NO_STEP, 4, false, { dim: !faster, off: cOff });
+            const controlsOn = !!g.controls;
             const controls = document.getElementById('controls');
             controls.innerHTML = c;
             controls.classList.toggle('visible', controlsOn);

@@ -77,7 +77,7 @@ For each managed scene:
 
 ## Pause
 
-- The HUD key `sexlab.hud.key_pause` (default Home) goes through `Menu.Hud_OnKey("pause")` to `Scene.TogglePause`.
+- The HUD key `sexlab.hud.key_pause` (default Num 5) goes through `Menu.Hud_OnKey("pause")` to `Scene.TogglePause`.
 - `StageTimer` and `TimedStage` are private to `sslThreadController`, so the Scene uses its public functions instead:
   - **Pause:** `thread.UpdateTimer(100000)` pushes the stage's timer far out.
   - **Resume:** `thread.UpdateTimer(held − 100000)` puts back the remaining time, then `thread.ResolveTimers()` restores `TimedStage = Animation.HasTimer(Stage)`.

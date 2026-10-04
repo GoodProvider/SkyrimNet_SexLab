@@ -30,7 +30,8 @@
 - The WebUI style control also changes speed live. The style hotkey (`sexlab.style.hotkey*`, `]`) was removed; the HUD slower / faster keys cover it
 
 ### Hotkeys
-- Scene keys default to the numpad: previous Num 7, pause Num 8, next Num 9, calm Num 4, arouse Num 5, deny Num 6, slower Num -, faster Num +, end Num 1. Num 3 stays SexLab's free camera. Manifest `defaultValue`s and `Hud.cpp` `kBindings` changed; `\` (menu) unchanged
+- Scene keys default to the numpad, laid out like the HUD grid: calm Num 8, arouse Num 9, deny Num 1, slower Num -; previous Num 4, pause Num 5, next Num 6, end Num 2, faster Num +. Num 3 stays SexLab's free camera (shown in the HUD, not bound); Num 7 is left to SkyrimNet. Manifest `defaultValue`s and `Hud.cpp` `kBindings` changed; `\` (menu) unchanged. Saved dashboard keys are not migrated
+- HUD controls are a fixed 5 x 2 grid (`hud.html`): `calm arouse deny free📷 <slower>` over `previous pause next end <faster>`, keys above the top row and below the bottom row. Every cell carries all labels its column can show as hidden sizers, so column widths never change. Labels name what a press does: pause / play; slower / faster show the speed level they step to (`Hud.cpp` sends `slower` / `faster`, `""` → dimmed `—` at either end) in place of the old `Paused` tag and speed readout. `keys.free` is SexLab's free camera (Num 3), display only
 - New `Data/SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json`, written by `Config::WriteHotkeyMap` on game start, load and dashboard save, lists every live binding (control, dashboard path, VK, DX, key name, enabled)
 
 ### Narration

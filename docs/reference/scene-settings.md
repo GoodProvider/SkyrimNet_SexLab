@@ -33,7 +33,7 @@ Settings layer like Papyrus `LoadSetting`: `default.json` first, then the named 
 **Animation change mid-scene** (SexLab switching animations, SL Tools, or the Description Editor's animation filter): each actor's orgasm and speaking modifiers are reloaded from the new animation's defaults, but dressing only goes toward undressed. An actor the new animation wants undressed is stripped; an actor already undressed stays undressed even when the new animation defaults them to clothed (A dressed in animation 1, undressed in animation 2: 1 → 2 undresses A, 2 → 1 does not re-dress A). Turning "override animation settings" off on a live scene is the exception: it reapplies the animation's dressed flags both ways.
 
 **Orgasm denied** (`deny_orgasm`, with the denier's name in `deny_by`) is not a scene-setting key. It is live scene state, set in either of two ways:
-- by the player, with the HUD deny key (default Num 6, on the focus actor) or the Description Editor's 🔓/🔒 column;
+- by the player, with the HUD deny key (default Num 1, on the focus actor) or the Description Editor's 🔓/🔒 column;
 - by an aggressor NPC, with the LLM actions `SexLab_DenyOrgasm` / `SexLab_AllowOrgasm`.
 
 A denied actor gains enjoyment as normal but cannot orgasm. It survives animation changes.

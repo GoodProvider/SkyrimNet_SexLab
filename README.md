@@ -21,25 +21,27 @@ Adds SkyrimNet (LLM) support to SexLab Framework.
 These keys work while you control a scene: you are in it, or you took control of the crosshair scene with SexLab's `N`. They sit on the numpad and work with NumLock on or off.
 
 ```
--------------------------------------------------------
-| 7 previous | 8 pause  | 9 next        | - slower |
-| 4 calm     | 5 arouse | 6 deny        | + faster |
-| 1 end      | 2        | 3 free camera |          |
--------------------------------------------------------
+--------------------------------------------------------
+| 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
+| 4 previous    | 5 pause | 6 next        | + faster |
+| 1 deny        | 2 end   | 3 free camera |          |
+--------------------------------------------------------
 ```
 
 | command  | key     |
 |----------|---------|
-| previous | Num 7   |
-| pause    | Num 8   |
-| next     | Num 9   |
-| calm     | Num 4   |
-| arouse   | Num 5   |
-| deny     | Num 6   |
-| slower   | Num -   |
-| faster   | Num +   |
-| end      | Num 1   |
+| calm     | Num 8   |
+| arouse   | Num 9   |
+| deny     | Num 1   |
 | free camera | Num 3 (SexLab's own key) |
+| slower   | Num -   |
+| previous | Num 4   |
+| pause    | Num 5   |
+| next     | Num 6   |
+| end      | Num 2   |
+| faster   | Num +   |
+
+Num 7 is left free for SkyrimNet.
 
 - Calm and arouse are mini-game keys. Mini-game keys 1–4 (top row) pick who you act on.
 - `\` opens Start Sex / Edit Stage at any time once it is enabled in the dashboard.
