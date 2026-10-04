@@ -39,6 +39,7 @@ release:
 	if exist "$(subst /,\\,handler_udng)" rmdir /s /q "$(subst /,\\,handler_udng)"	
 	mkdir handler_udng 
 	powershell -NoProfile -Command "Copy-Item -Path 'SkyrimNet_SexLab_Handler_UDNG.esp' -Destination 'handler_udng/.' -Recurse -Force"
+	powershell -NoProfile -Command "foreach ($$f in 'webui/TargetMenu/Actor/options/0600_sexlab_bondage.json','webui/TargetMenu/Scene/options/0600_sexlab_bondage.json','bondage/group-devices.json') { $$d = Split-Path (Join-Path 'handler_udng/SKSE/Plugins/SkyrimNet_SexLab' $$f); New-Item -ItemType Directory -Force $$d | Out-Null; Copy-Item (Join-Path 'SKSE/Plugins/SkyrimNet_SexLab' $$f) $$d -Force }"
 
 	if exist "$(subst /,\\,handler_dom)" rmdir /s /q "$(subst /,\\,handler_dom)"	
 	mkdir handler_dom 

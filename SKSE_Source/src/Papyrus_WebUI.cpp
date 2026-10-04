@@ -1844,14 +1844,19 @@ namespace PapyrusBindings_WebUI
             return;
         // An in-scene target always opens the Scene view (Description Editor); otherwise only restore it
         // when show_scene_panel is set.
-        if (!IsSexLabAnimatingFocus(target) && !ActionCatalog::IsShowScenePanel())
+        const bool wasShown = ActionCatalog::IsShowScenePanel();
+        if (!IsSexLabAnimatingFocus(target) && !wasShown)
             return;
         // SwitchMainPanel re-resolves an already-selected Scene view, so a target change or a scene
         // start/end flips it between Description Editor and Scene Creator. No WebUI_ConfigureFocusScene:
         // WebUI_SeedSceneInfos already sent every scene's full state on overlay Show, and
         // mainPanelDidOpen binds the panel from that cache.
-        webui_log::info("WebUI_MaybeRestoreScenePanel: show_scene_panel -> Scene");
+        webui_log::info("WebUI_MaybeRestoreScenePanel: {} -> Scene",
+            wasShown ? "show_scene_panel" : "in-scene auto-open");
         ActionCatalog::SwitchMainPanel("scene_panel");
+        // SwitchMainPanel sets show_scene_panel; an in-scene auto-open must not make it sticky.
+        if (!wasShown)
+            ActionCatalog::SetShowScenePanel(false);
     }
 
     void WebUI_RerouteScenePanel(RE::StaticFunctionTag*, bool inScene)
