@@ -1,0 +1,33 @@
+{# Cum left on mouth / pussy / ass after an orgasm (SkyrimNet_SexLab_Decorators.Cum).
+   Warm for 1 game hour, drying until sexlab.cum.duration_hours. No plugin gate: renders with UDNG too. #}
+{% if render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "dialogue_target" %}
+  {% if papyrus_util("GetFloatValue", actorUUID, "skyrimnet_sexlab_cum_time", 0) > 0 %}
+    {% set cum = sexlab_cum(actorUUID) %}
+    {% set cum_name = decnpc(actorUUID).name %}
+    {% set cum_his = "her" %}
+    {% if lower(decnpc(actorUUID).sex) == "male" %}{% set cum_his = "his" %}{% endif %}
+    {% set cum_inside = (render_mode != "dialogue_target") %}
+    {% set cum_clothed = worn_has_keyword(actorUUID, "ArmorCuirass") or worn_has_keyword(actorUUID, "ClothingBody") %}
+    {% set cum_warm = "" %}
+    {% set cum_drying = "" %}
+    {% if cum_inside or not cum_clothed %}
+      {% set cum_warm = cum.warm %}
+      {% set cum_drying = cum.drying %}
+    {% else %}
+      {% if cum.warm_mouth == 1 %}{% set cum_warm = "mouth" %}{% endif %}
+      {% if cum.drying_mouth == 1 %}{% set cum_drying = "mouth" %}{% endif %}
+    {% endif %}
+    {% if cum_warm != "" or cum_drying != "" %}
+      {% if cum_inside %}
+      {{ "### Cum" }}
+
+      {% endif %}
+      {% if cum_warm != "" %}
+    - Warm, sticky cum still drips from {{ cum_name }}'s {{ cum_warm }}, fresh from a recent orgasm.
+      {% endif %}
+      {% if cum_drying != "" %}
+    - Drying cum is crusted on and around {{ cum_name }}'s {{ cum_drying }}, leaving {{ cum_his }} skin tacky and smelling of sex.
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endif %}
