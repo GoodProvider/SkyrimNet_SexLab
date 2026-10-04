@@ -64,7 +64,7 @@ For each managed scene:
   - clears the scene block,
   - fires every actor in the scene who can orgasm and is at 100,
   - runs the group join,
-  - tags the group with `allower` / `allowed`, which gives the `"<allower> allows <actor> to orgasm. "` prefix.
+  - tags the group with `allower` / `allowed`, which gives the `"<allower> allowed <actor> to orgasm. "` prefix.
 
   It returns whether anyone fired.
 - **External orgasms** (`NoteExternalOrgasm`) run the group join too. The joiners go out as a non-individual group (stash + window), while the caller narrates the external actor, so both share one DN.
@@ -86,7 +86,7 @@ For each managed scene:
 
 ## Mini-game
 
-`Arouse(who, target, mult)` / `Calm(who, target, mult)` are shared by the HUD keys (`mult` 1), the LLM actions `SexLab_Arouse` / `SexLab_Calm` (`mult` = `sexlab.minigame.llm_multiplier`) and the plugin API.
+`Arouse(who, target, mult)` / `Calm(who, target, mult)` are shared by the HUD keys (`mult` 1; also LMB calm / RMB arouse when `sexlab.minigame.mouse` is on), the LLM actions `SexLab_Arouse` / `SexLab_Calm` (`mult` = `sexlab.minigame.llm_multiplier`) and the plugin API.
 
 | | Effect |
 |---|---|

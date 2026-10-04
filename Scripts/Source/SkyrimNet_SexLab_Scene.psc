@@ -23,7 +23,7 @@ int victim_faction_forms
 String[] orgasm_messages
 ; Per slot, what orgasm_messages[i] holds (ORGASM_KIND_*). DOM melt: the text with the name as {n}.
 int[] orgasm_kinds
-; Pending parts of the one orgasm message: "<allower> allows <allowed> to orgasm. " and folded
+; Pending parts of the one orgasm message: "<allower> allowed <allowed> to orgasm. " and folded
 ; arouse / calm narrations. orgasm_overflow: parts that did not fit the budget (sent as an event).
 String orgasm_prefix = ""
 String orgasm_extras = ""
@@ -1361,6 +1361,46 @@ String Function NamesClause(String[] names, int count, String single, String plu
     return JoinNames(names, count)+" "+plural+" "
 EndFunction
 
+; OrgasmEngine's live enjoyment (0-100), or SexLab's for unmanaged actors.
+int Function LiveEnjoyment(Actor a)
+    if a == None
+        return 0
+    endif
+    if SkyrimNet_SexLab_OrgasmEngine.IsManaged(a)
+        return SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(a) as int
+    endif
+    if thread != None
+        sslActorAlias actorAlias = thread.ActorAlias(a)
+        if actorAlias != None
+            return actorAlias.GetEnjoyment()
+        endif
+    endif
+    return 0
+EndFunction
+
+; Enjoyment band for the not-orgasming / denied lead-ins: 0 (<=30), 1 (<=60), 2 (<90), 3 (90+).
+int Function EnjoymentBand(int e)
+    if e <= 30
+        return 0
+    elseif e <= 60
+        return 1
+    elseif e < 90
+        return 2
+    endif
+    return 3
+EndFunction
+
+String Function BandLeadIn(int band)
+    if band == 1
+        return "Though aroused, "
+    elseif band == 2
+        return "Although close, "
+    elseif band == 3
+        return "Although on the edge, "
+    endif
+    return ""
+EndFunction
+
 String Function ReplaceAll(String s, String find, String rep)
     if s == "" || find == ""
         return s
@@ -2083,7 +2123,7 @@ EndFunction
 ; ForceOrgasm runs SexLab's cum/sound/SexLabOrgasm and resets its build-up for each.
 ; individual: narrate the group now as one DN; else (safety net / joiners of an external orgasm) or
 ; while a window is open: stash and let the window flush one DN.
-; allower: deny 1 -> 0 -> "<allower> allows <allowed> to orgasm. " leads the message.
+; allower: deny 1 -> 0 -> "<allower> allowed <allowed> to orgasm. " leads the message.
 Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String source, Actor allower, Actor allowed, String extras)
     if thread == None || !actors
         Trace("Orgasm_ApplyGroup", "no thread or actors")
@@ -2135,7 +2175,7 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
         return
     endif
     if allower != None && allowed != None
-        orgasm_prefix = GetDisplayName(allower)+" allows "+GetDisplayName(allowed)+" to orgasm. "
+        orgasm_prefix = GetDisplayName(allower)+" allowed "+GetDisplayName(allowed)+" to orgasm. "
     endif
     if extras != ""
         if orgasm_extras != ""
@@ -2773,8 +2813,10 @@ String Function OrgasmMessagesToNarration(int reserve = 0)
     String[] again_names = Utility.CreateStringArray(n)
     String[] denied_names = Utility.CreateStringArray(n)
     String[] denied_by = Utility.CreateStringArray(n)
+    int[] denied_band = Utility.CreateIntArray(n)
     String[] recovering_names = Utility.CreateStringArray(n)
     String[] idle_names = Utility.CreateStringArray(n)
+    int[] idle_band = Utility.CreateIntArray(n)
     int forced_n = 0
     int orgasm_n = 0
     int again_n = 0
@@ -2846,6 +2888,7 @@ String Function OrgasmMessagesToNarration(int reserve = 0)
             endif
             denied_names[denied_n] = name
             denied_by[denied_n] = by
+            denied_band[denied_n] = EnjoymentBand(LiveEnjoyment(a))
             denied_n += 1
         elseif orgasm_expected.length > k && orgasm_expected[k] == 1 && SNSL_JMap.getInt(obj, "dom_slave") == 1 && GetTotalOrgasms(a) < 1 && SNSL_JMap.getInt(obj, "total_orgasm") < 1
             dom_not += main.handler_dom.HandleOrgasmDenied(a)
@@ -2855,6 +2898,7 @@ String Function OrgasmMessagesToNarration(int reserve = 0)
             recovering_one = a
         else
             idle_names[idle_n] = name
+            idle_band[idle_n] = EnjoymentBand(LiveEnjoyment(a))
             idle_n += 1
         endif
         k += 1
@@ -2887,24 +2931,25 @@ String Function OrgasmMessagesToNarration(int reserve = 0)
         m += 1
     endwhile
 
-    ; Denied, grouped by who denied them.
+    ; Denied, grouped by who denied them and enjoyment band (BandLeadIn).
     String denied = ""
     int d = 0
     while d < denied_n
         if denied_by[d] != ""
             String denier = denied_by[d]
+            int band = denied_band[d]
             String[] group = Utility.CreateStringArray(denied_n)
             int group_n = 0
             int e = d
             while e < denied_n
-                if denied_by[e] == denier
+                if denied_by[e] == denier && denied_band[e] == band
                     group[group_n] = denied_names[e]
                     group_n += 1
                     denied_by[e] = ""
                 endif
                 e += 1
             endwhile
-            denied += NamesClause(group, group_n, "is denied orgasm by "+denier+".", "are denied orgasm by "+denier+".")
+            denied += BandLeadIn(band) + NamesClause(group, group_n, "was denied an orgasm by "+denier+".", "were denied an orgasm by "+denier+".")
         endif
         d += 1
     endwhile
@@ -2926,7 +2971,24 @@ String Function OrgasmMessagesToNarration(int reserve = 0)
     else
         others += NamesClause(recovering_names, recovering_n, "", "are recovering from their orgasms.")
     endif
-    others += NamesClause(idle_names, idle_n, "isn't orgasming right now.", "aren't orgasming right now.")
+    ; Not orgasming, one sentence per enjoyment band, lowest first (BandLeadIn).
+    int band_i = 0
+    while band_i < 4
+        String[] band_names = Utility.CreateStringArray(n)
+        int band_n = 0
+        int b = 0
+        while b < idle_n
+            if idle_band[b] == band_i
+                band_names[band_n] = idle_names[b]
+                band_n += 1
+            endif
+            b += 1
+        endwhile
+        if band_n > 0
+            others += BandLeadIn(band_i) + NamesClause(band_names, band_n, "is not orgasming right now.", "are not orgasming right now.")
+        endif
+        band_i += 1
+    endwhile
     others += dom_not
 
     String cum = ""
@@ -3200,6 +3262,11 @@ String Function AddCum(int position, Actor akActor, String name)
     endif 
 
     if places != ""
+        ; Remember where for the character bio (0416_sexlab_cum.prompt).
+        bool on_mouth = cumId == sslObjectFactory.oral() || cumId == sslObjectFactory.VaginalOral() || cumId == sslObjectFactory.OralAnal() || cumId == sslObjectFactory.VaginalOralAnal()
+        bool on_pussy = has_pussy && (cumId == sslObjectFactory.vaginal() || cumId == sslObjectFactory.VaginalOral() || cumId == sslObjectFactory.VaginalAnal() || cumId == sslObjectFactory.VaginalOralAnal())
+        bool on_ass = cumId == sslObjectFactory.anal() || cumId == sslObjectFactory.VaginalAnal() || cumId == sslObjectFactory.OralAnal() || cumId == sslObjectFactory.VaginalOralAnal()
+        SkyrimNet_SexLab_Decorators.RecordCum(akActor, on_mouth, on_pussy, on_ass)
         DbgReturn("AddCum", "cum message")
         String cum_fallback = name+"'s "+places+" is dripping with warm sticky cum. "
         int cum_obj = JMap.object()
@@ -4293,24 +4360,28 @@ Function WebUI_OnNarrate(String json)
 EndFunction
 
 ; Player orgasm denial toggle (HUD deny key, Description Editor deny column).
-Function ToggleDenyOrgasm(Actor akActor)
+; from_hotkey: HUD deny key, spoken via Transform when sexlab.hud.deny_transform is on.
+Function ToggleDenyOrgasm(Actor akActor, bool from_hotkey = false)
     int obj = GetObjFromActor(akActor)
     if obj <= 0
         Trace("ToggleDenyOrgasm", "no obj")
         return
     endif
-    SetDenyOrgasm(akActor, SNSL_JMap.getInt(obj, "deny_orgasm") != 1, Game.GetPlayer())
+    SetDenyOrgasm(akActor, SNSL_JMap.getInt(obj, "deny_orgasm") != 1, Game.GetPlayer(), transform = from_hotkey)
 EndFunction
 
 ; Orgasm denial: the player (HUD / Description Editor / TargetMenu) or an aggressor NPC (LLM actions
 ; SexLab_DenyOrgasm / SexLab_AllowOrgasm). Scene state, not animation metadata: survives animation
 ; changes. The denied actor gains enjoyment as normal but cannot orgasm.
-; Allow (1 -> 0) checks every actor at once (OrgasmEngine.AllowOrgasm): when anyone orgasms, the
-; group's one DN starts "<denier> allows <actor> to orgasm. "; otherwise the plain allow is narrated.
+; Allow (1 -> 0) tests akActor with the normal orgasm rule and checks every other actor at once
+; (OrgasmEngine.AllowOrgasm): when anyone orgasms, the group's normal orgasm DN starts
+; "<denier> allowed <actor> to orgasm. "; otherwise the plain allow is narrated.
 ; from_llm: the NPC's own line already says it, so the plain deny / allow is an event, not a DN.
 ; narrate false: no plain deny / allow narration (an orgasm on allow still narrates).
+; transform (HUD deny key) + sexlab.hud.deny_transform: the plain deny / allow is the player saying
+; "You may not orgasm." / "You may orgasm." (TransformDialogue). Not for the player's own focus.
 ; Returns false when the state already matched (nothing changed).
-bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_llm = false, bool narrate = true)
+bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_llm = false, bool narrate = true, bool transform = false)
     int obj = GetObjFromActor(akActor)
     if thread == None || akActor == None || obj <= 0
         Trace("SetDenyOrgasm", "no thread / actor / obj")
@@ -4324,6 +4395,8 @@ bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_ll
         return false
     endif
     SNSL_JMap.setInt(obj, "deny_orgasm", deny as int)
+    bool use_transform = transform && !from_llm && akActor != Game.GetPlayer() \
+        && SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.hud.deny_transform", true)
     String msg = ""
     bool fired = false
     if deny
@@ -4334,16 +4407,27 @@ bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_ll
         SNSL_JMap.setStr(obj, "deny_by", "")
         thread.DisableOrgasm(akActor, false)
         SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(akActor, main.handler_dom.IsDOMSlave(akActor))
-        ; Unblocks in the engine and fires anyone at 100 (+ the group join) in one step.
+        ; Unblocks in the engine, tests akActor with the normal orgasm rule and fires anyone else at
+        ; 100 (+ the group join) in one step.
         fired = SkyrimNet_SexLab_OrgasmEngine.AllowOrgasm(akActor, denier)
         msg = GetDisplayName(denier)+" allows "+GetDisplayName(akActor)+" to orgasm."
     endif
     PersistPositions()
     manager.SaveThreadsJson()
-    Trace("SetDenyOrgasm", GetDisplayName(akActor)+" deny:"+deny+" by:"+GetDisplayName(denier)+" fired:"+fired+" llm:"+from_llm)
+    Trace("SetDenyOrgasm", GetDisplayName(akActor)+" deny:"+deny+" by:"+GetDisplayName(denier)+" fired:"+fired+" llm:"+from_llm+" transform:"+use_transform)
     if fired || !narrate
         ; The group orgasm DN carries the allow prefix.
         return true
+    endif
+    if use_transform
+        String line = "You may orgasm."
+        if deny
+            line = "You may not orgasm."
+        endif
+        if SkyrimNetApi.TransformDialogue(line) == 0
+            return true
+        endif
+        Trace("SetDenyOrgasm", "TransformDialogue failed, narrating")
     endif
     if from_llm
         RegisterEvent("sexlab update", msg, denier, akActor)
@@ -5110,7 +5194,7 @@ Function TM_ApplyOrgasmMode(Actor akActor, String mode)
                 SetOrgasmDisabled(akActor, true)
             elseif old_deny == 1
                 ; 1 -> 0: the allow path checks every actor; silent unless someone orgasms (then the
-                ; group DN starts "<player> allows <actor> to orgasm. ").
+                ; group DN starts "<player> allowed <actor> to orgasm. ").
                 SNSL_JMap.setInt(position_objs[i], "deny_orgasm", 1)
                 SetDenyOrgasm(akActor, false, Game.GetPlayer(), false, false)
             else

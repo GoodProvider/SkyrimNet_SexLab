@@ -9,6 +9,7 @@
 - LLM-started scene gating dialogue (`YesNo_Open`) is now a centered modal. WebUI open: shown on top (`showYesNoDialog`), answers leave the view as it was (`YesNo_OverlayWasOpen`). WebUI closed: dialogue only (one Invoke `openYesNoSolo(cfg)` before `WebUI_Visibility_Show(false)`; separate hide/show Invokes arrived out of order and sometimes hid the dialogue; hides the ControlPanel / main panels inline and makes `showControlPanel` a no-op until `clearYesNoSolo`; the dialogue lives in its own `#yesno-overlay` layer because a fixed panel inside `#overlay-panels` rendered invisible); Yes keeps it as an "Opening Scene Creator…" placeholder until `SceneCreator_Open`; Yes (Random) / No (Silent) / No close the WebUI. New **No, explain** (button 4): textarea + Accept / Cancel; Accept → `Manager.WebUI_OnYesNoExplain` → `Creator.RejectWithReason` DirectNarration "<player> rejects <requester>'s request for <intent>, because <reason>.", no scene. Buttons top-aligned
 
 ### OrgasmEngine
+- New `sexlab.minigame.mouse` (**Allow right mouse to arouse and left mouse to calm**, off): with the mini-game on, RMB arouses and LMB calms the HUD focus actor alongside the numpad keys. Fixed HUD keys (DX 257 / 256), swallowed while the HUD is up; listed in `hotkey-map.json` as `arouse_mouse` / `calm_mouse`
 - Slower default enjoyment: `sexlab.enjoyment.passive_mult` 1.0 → 0.4, `aggressor_mult` 1.15 → 0.45, `victim_mult` 0.8 → 0.3, `jitter_max` 1.2 → 1.1. Logs showed scenes running 2–3.5× their stage timers (narration / LLM pacing), so actors orgasmed every ~50 s. Saved configs keep their old values; reset the **Enjoyment** settings to pick up the new defaults
 - Passive gain stops while the stage is paused (pause key)
 - New **Scene ending** settings (`sexlab.ending.*`). The lead (aggressor with a victim, else the initiator) gets a target orgasm count at scene start (male 1-1, female 1-2, ranges configurable); reaching it jumps the scene to the final stage (`Scene.Ending_Check` → `GoToStage`)
@@ -22,6 +23,7 @@
 - The lead's target jumps to the final stage only from the second-to-last stage; earlier, the scene runs on
 - An aggressive NPC lead reaching their target, at any stage, holds the stage until the orgasm dialogue has played, then ends the animation
 - `sexlab.enjoyment.group_join_final` default 80 → 90 (now only the gate-pass join)
+- Orgasm narration: the not-orgasming and denied sentences scale with live enjoyment. 0–30 `Nina is not orgasming right now.`, 31–60 `Though aroused, …`, 61–89 `Although close, …`, 90+ `Although on the edge, …`. Denied now reads `<lead-in>Nina was denied an orgasm by Bob.` Actors are grouped per band (`Scene.EnjoymentBand` / `BandLeadIn`)
 - `Scene.Setup`: receiver falls back to the first other position when it equals sender (WebUI initiator pulldown gave "Bob and Bob")
 
 ### Animation speed

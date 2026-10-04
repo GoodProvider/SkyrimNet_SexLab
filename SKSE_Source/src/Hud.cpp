@@ -44,6 +44,8 @@ namespace Hud
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
         constexpr std::uint32_t kSkyrimNetDx = 0x47;   // Num 7
+        constexpr std::uint32_t kMouseCalmDx = 256;    // LMB (sexlab.minigame.mouse)
+        constexpr std::uint32_t kMouseArouseDx = 257;  // RMB
 
         PRISMA_UI_API::IVPrismaUI1* g_prisma = nullptr;
         PrismaView g_view = 0;
@@ -54,6 +56,7 @@ namespace Hud
         bool g_showEnjoyment = true;
         bool g_showControls = true;
         bool g_miniGame = false;
+        bool g_miniGameMouse = false;  // LMB calm / RMB arouse
         std::map<std::string, int> g_keyVk;            // control -> VK (dashboard value)
         std::map<std::string, std::uint32_t> g_keyDx;  // control -> DX
         std::map<std::string, std::string> g_keyLabel;
@@ -223,11 +226,13 @@ namespace Hud
             std::map<std::string, std::uint32_t> dx;
             bool controls = false;
             bool miniGame = false;
+            bool mouse = false;
             {
                 std::lock_guard lock(g_lock);
                 dx = g_keyDx;
                 controls = g_showControls;
                 miniGame = g_miniGame;
+                mouse = g_miniGameMouse;
             }
             for (const auto& b : kBindings) {
                 const auto it = dx.find(b.control);
@@ -266,6 +271,11 @@ namespace Hud
                 // Fixed focus keys 1-4 (DX 0x02..0x05) select positions 0-3.
                 for (std::size_t i = 0; i < 4; ++i) {
                     keys[static_cast<std::uint32_t>(0x02 + i)] = [i]() { SetFocusIndex(i); };
+                }
+                if (mouse) {
+                    // LMB calms, RMB arouses (alongside the dashboard keys).
+                    keys[kMouseCalmDx] = []() { OnArouseOrCalm(false); };
+                    keys[kMouseArouseDx] = []() { OnArouseOrCalm(true); };
                 }
             }
             KeyHandler::GetSingleton()->SetHudKeys(std::move(keys));
@@ -349,6 +359,7 @@ namespace Hud
             g_showEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.enjoyment", true);
             g_showControls = SexLabNet::GetConfigBool("sexlab.hud.controls", true);
             g_miniGame = SexLabNet::GetConfigBool("sexlab.minigame.enabled", false);
+            g_miniGameMouse = SexLabNet::GetConfigBool("sexlab.minigame.mouse", false);
             g_keyVk.clear();
             g_keyDx.clear();
             g_keyLabel.clear();
@@ -360,8 +371,8 @@ namespace Hud
                 g_keyLabel[b.control] = dx ? DxLabel(dx) : "";
             }
             g_lastPush.clear();
-            webui_log::info("Hud: config enjoyment={} controls={} minigame={}", g_showEnjoyment, g_showControls,
-                g_miniGame);
+            webui_log::info("Hud: config enjoyment={} controls={} minigame={} mouse={}", g_showEnjoyment,
+                g_showControls, g_miniGame, g_miniGameMouse);
         }
         RebindKeys();
     }
@@ -391,6 +402,18 @@ namespace Hud
                 { "dx", 0x02 + i },
                 { "key", std::to_string(i + 1) },
                 { "enabled", g_miniGame },
+            });
+        }
+        // Fixed mouse buttons, mini-game + sexlab.minigame.mouse only.
+        for (const auto& [ctl, dx] : { std::pair{ "calm_mouse", kMouseCalmDx }, std::pair{ "arouse_mouse", kMouseArouseDx } }) {
+            out.push_back({
+                { "control", ctl },
+                { "path", "sexlab.minigame.mouse" },
+                { "group", "minigame" },
+                { "fixed", true },
+                { "dx", dx },
+                { "key", DxLabel(dx) },
+                { "enabled", g_miniGame && g_miniGameMouse },
             });
         }
         return out;

@@ -61,7 +61,7 @@ int Function GetSpeedLevel(Actor akActor) global native
 bool Function ConsumeOwnOrgasm(Actor akActor) global native
 int Function NoteExternalOrgasm(Actor akActor, String source) global native
 ; deny_orgasm 1 -> 0: unblock and, in one step, fire everyone in the scene at 100 (+ group join at 95).
-; True: Effect_OrgasmGroup narrates with "<allower> allows <akActor> to orgasm. "; false: caller narrates.
+; True: Effect_OrgasmGroup narrates with "<allower> allowed <akActor> to orgasm. "; false: caller narrates.
 bool Function AllowOrgasm(Actor akActor, Actor allower) global native
 
 ; ---- Shell: dispatched by the engine ----

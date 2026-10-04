@@ -22,6 +22,7 @@ Function RegisterDecorators() global
     SkyrimNetApi.RegisterDecorator("sexlab_intent", "SkyrimNet_SexLab_Decorators", "Intent")
     SkyrimNetApi.RegisterDecorator("sexlab_activities", "SkyrimNet_SexLab_Decorators", "Activities")
     SkyrimNetApi.RegisterDecorator("sexlab_ostim_player", "SkyrimNet_SexLab_Decorators", "Ostim_Player")
+    SkyrimNetApi.RegisterDecorator("sexlab_cum", "SkyrimNet_SexLab_Decorators", "Cum")
     ;SkyrimNetApi.RegisterDecorator("sexlab_nudity", "SkyrimNet_SexLab_Decorators", "Is_Nudity")
     ;SkyrimNetApi.RegisterDecorator("sexlab_speaker_info", "SkyrimNet_SexLab_Decorators", "Speaker_Info")
 EndFunction
@@ -98,7 +99,94 @@ String Function Ostim_Player(Actor akActor) global
     return ""+value
 EndFunction
 
-String Function Player_LOS_Distance(Actor akActor) global 
+;----------------------------------------------------------------------------------------------------
+; Cum left on an actor after an orgasm (StorageUtil, game-time days per place)
+;   skyrimnet_sexlab_cum_time is the prompt's cheap gate; unset once every place has expired.
+;----------------------------------------------------------------------------------------------------
+Function RecordCum(Actor akActor, bool on_mouth, bool on_pussy, bool on_ass) global
+    if akActor == None || !(on_mouth || on_pussy || on_ass)
+        return
+    endif
+    float now = Utility.GetCurrentGameTime()
+    if on_mouth
+        StorageUtil.SetFloatValue(akActor, "skyrimnet_sexlab_cum_mouth", now)
+    endif
+    if on_pussy
+        StorageUtil.SetFloatValue(akActor, "skyrimnet_sexlab_cum_pussy", now)
+    endif
+    if on_ass
+        StorageUtil.SetFloatValue(akActor, "skyrimnet_sexlab_cum_ass", now)
+    endif
+    StorageUtil.SetFloatValue(akActor, "skyrimnet_sexlab_cum_time", now)
+EndFunction
+
+; 0 = cleared/none, 1 = warm (< 1 game hour), 2 = drying (until duration)
+int Function CumAge(Actor akActor, String storage_key, float now, float duration, bool wash) global
+    float t = StorageUtil.GetFloatValue(akActor, storage_key, 0.0)
+    if t <= 0.0
+        return 0
+    endif
+    float hours = (now - t) * 24.0
+    if wash || hours >= duration || hours < 0.0
+        StorageUtil.UnsetFloatValue(akActor, storage_key)
+        return 0
+    elseif hours < 1.0
+        return 1
+    endif
+    return 2
+EndFunction
+
+String Function CumPlaces(bool mouth, bool pussy, bool ass) global
+    String[] p = Utility.CreateStringArray(3)
+    int n = 0
+    if pussy
+        p[n] = "pussy"
+        n += 1
+    endif
+    if mouth
+        p[n] = "mouth"
+        n += 1
+    endif
+    if ass
+        p[n] = "ass"
+        n += 1
+    endif
+    if n == 1
+        return p[0]
+    elseif n == 2
+        return p[0]+" and "+p[1]
+    elseif n == 3
+        return p[0]+", "+p[1]+", and "+p[2]
+    endif
+    return ""
+EndFunction
+
+String Function Cum(Actor akActor) global
+    if akActor == None
+        return "{}"
+    endif
+    float duration = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.cum.duration_hours", 4.0)
+    bool wash = duration <= 0.0 || akActor.IsSwimming()
+    float now = Utility.GetCurrentGameTime()
+    int mouth = CumAge(akActor, "skyrimnet_sexlab_cum_mouth", now, duration, wash)
+    int pussy = CumAge(akActor, "skyrimnet_sexlab_cum_pussy", now, duration, wash)
+    int ass = CumAge(akActor, "skyrimnet_sexlab_cum_ass", now, duration, wash)
+    if mouth == 0 && pussy == 0 && ass == 0
+        StorageUtil.UnsetFloatValue(akActor, "skyrimnet_sexlab_cum_time")
+    endif
+
+    int obj = JMap.object()
+    ; warm/drying: every place; *_mouth: the only place still visible on a clothed actor
+    JMap.setStr(obj, "warm", CumPlaces(mouth == 1, pussy == 1, ass == 1))
+    JMap.setStr(obj, "drying", CumPlaces(mouth == 2, pussy == 2, ass == 2))
+    JMap.setInt(obj, "warm_mouth", (mouth == 1) as int)
+    JMap.setInt(obj, "drying_mouth", (mouth == 2) as int)
+    String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(obj)
+    JValue.release(obj)
+    return json
+EndFunction
+
+String Function Player_LOS_Distance(Actor akActor) global
     Actor player = Game.GetPlayer() 
     float distance = player.GetDistance(akActor) 
     int los 

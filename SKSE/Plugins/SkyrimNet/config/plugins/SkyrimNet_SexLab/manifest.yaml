@@ -125,6 +125,15 @@ schema:
       defaultValue: 350
       category: "Narration"
 
+    - name: "Cum lasts (game hours)"
+      path: "sexlab.cum.duration_hours"
+      type: "float"
+      description: "How long cum left on a mouth, pussy or ass after an orgasm stays in the character bio. Warm for the first game hour, then drying until this runs out. Swimming washes it off. 0 = off."
+      min: 0
+      max: 48
+      defaultValue: 4.0
+      category: "Narration"
+
     - name: "SexLab moans follow speaking modifiers"
       path: "sexlab.voice.follow_speaking"
       type: "bool"
@@ -249,6 +258,13 @@ schema:
       defaultValue: 97
       category: "Scene HUD"
       supportsOverride: false
+
+    - name: "Transform allow and deny orgasm"
+      path: "sexlab.hud.deny_transform"
+      type: "bool"
+      description: "The deny / allow orgasm key makes you say \"You may not orgasm.\" / \"You may orgasm.\" (SkyrimNet Transform Dialogue) instead of a narration. Allowing tests the actor for orgasm; if they orgasm, the normal orgasm narration is sent instead, starting \"<you> allowed <them> to orgasm.\" Off: narrated as before."
+      defaultValue: true
+      category: "Scene HUD"
 
     - name: "Normal enjoyment multiplier"
       path: "sexlab.enjoyment.passive_mult"
@@ -436,6 +452,13 @@ schema:
       defaultValue: 105
       category: "Mini-game"
       supportsOverride: false
+
+    - name: "Allow right mouse to arouse and left mouse to calm"
+      path: "sexlab.minigame.mouse"
+      type: "bool"
+      description: "With the mini-game on, right mouse button arouses and left mouse button calms the focused actor (alongside the arouse / calm keys). Clicks are captured only while the scene HUD is up."
+      defaultValue: false
+      category: "Mini-game"
 
     - name: "Arouse amount"
       path: "sexlab.minigame.arouse_amount"

@@ -1,5 +1,9 @@
 # Knowledgebase
 
+## Cum in the character bio: SexLab-only, game hours, no UDNG gate (2026-10-03)
+
+`0416_sexlab_cum.prompt` reads StorageUtil timestamps written by `Scene.AddCum`, so only SexLab orgasms with a stage CumId (and an actor with a penis in the window) record cum. OStim scenes don't. The timing uses `Utility.GetCurrentGameTime()` (game hours, so waiting or sleeping ages it), not `gameTimeNumeric`, whose units differ between mods. Expiry happens lazily inside the `sexlab_cum` decorator: the keys stay until the bio is next rendered for that actor. Unlike `0415`, it is deliberately not gated on `SkyrimNetUDNG.esp`.
+
 ## Gate hold: speech-count race, stale hold across animation/pause/save, double narration (2026-10-03)
 
 **Symptom (code review, not yet seen live):** the gate rush (`Engine_GatePassed` / `Gate_Hold`) could jump to the final stage before its own narration's voice played, get stuck across an animation change, ignore the pause hotkey, double-roll after a save/load mid-hold, and occasionally lose the player's "no continue DN" guard for a gate/non-gate final stage.
@@ -828,7 +832,7 @@ Upstream schema: [WORKFLOW_ACTIONS.md](https://github.com/MinLL/SkyrimNet-GamePl
 
 **Contract**:
 - Orgasming actors’ clauses in Combined/custom narration must include `" is orgasming."`.
-- Non-orgasming / denied clauses must not (e.g. Combined and Separate `name+" is not orgasming right now. "`, `HandleOrgasmDenied`, “did not orgasm”, afterglow “failed to orgasm”). Combined flush and `OrgasmIndividual` name every non-orgasming actor; do not use a generic “only listed actors” sentence. Actors with scene totals > 0 get `" is recovering from her orgasm. "` via `Scene.NotOrgasmingClause`.
+- Non-orgasming / denied clauses must not (e.g. Combined and Separate `<lead-in>name+" is not orgasming right now. "` / `<lead-in>name+" was denied an orgasm by <denier>. "` with the enjoyment lead-in `Scene.BandLeadIn` — "Though aroused, " / "Although close, " / "Although on the edge, " — `HandleOrgasmDenied`, “did not orgasm”, afterglow “failed to orgasm”). Combined flush and `OrgasmIndividual` name every non-orgasming actor; do not use a generic “only listed actors” sentence. Actors with scene totals > 0 get `" is recovering from her orgasm. "` via `Scene.NotOrgasmingClause`.
 - Dom custom path: `Handler_DOM.DOMSlave_Orgasmed` → `Scene_Manager.OrgasmCustom` appends `". "+name+" is orgasming."` before Scene stashes/sends. Required for the prompt gate.
 - Dom Combined fallback: when `_dom_slave`, `orgasm_expected==1`, totals > 0, and custom message empty, Scene still appends `name+" is orgasming. "` so the prompt gate fires if Dom feed raced past Combined.
 - Dom feed: sibling `SkyrimNet_DOM_Events.OnNotificationSent` (Ext3 on) routes **melt** phrasing (`brain melts` / `mind melts` / `overwhelmed by orgasm` / `submerged by orgasm`, not `your orgasm`) to `DOMSlave_Orgasmed`. Do not match bare `"orgasm"`. The player-climax tease (`squirms under your grasp as your orgasm submerges you`) is skipped in Dom `OnNotifcationSkip` and again in `Handler_DOM.DOMSlave_Orgasmed` (no OrgasmCustom / DN). Prefer notifications over `DOMOnOrgasm` (faster; leave Orgasm unregistered). Dom `SexLab_AnimationStart` may `DisableOrgasm` on Dom actors so SexLab hooks alone will not narrate them. If Ext3 is off: Dom melt HUD can fire while DN denies the slave or narrates other actors only — see SkyrimNet_DOM KNOWLEDGEBASE “Dom melt without DirectNarration”.

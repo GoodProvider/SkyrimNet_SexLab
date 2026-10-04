@@ -126,7 +126,7 @@ Function Hud_OnKey(String control, Actor focus = None)
     elseif control == "deny"
         SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(player)
         if deny_scene != None && focus != None
-            deny_scene.ToggleDenyOrgasm(focus)
+            deny_scene.ToggleDenyOrgasm(focus, true)
         endif
     endif
 EndFunction

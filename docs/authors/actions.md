@@ -126,6 +126,6 @@ Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_all
   - the target is not the player.
 - **Deny:** `deny_orgasm` 1 and `deny_by` = the speaker. The narration is the event `"<speaker> denies <target> release."`, because the NPC's own line already says it.
 - **Allow:** every actor is checked at once (`OrgasmEngine.AllowOrgasm`).
-  - If anyone orgasms, the one orgasm DN starts `"<speaker> allows <target> to orgasm. "`.
+  - If anyone orgasms, the one orgasm DN starts `"<speaker> allowed <target> to orgasm. "`.
   - Otherwise the event `"<speaker> allows <target> to orgasm."` is sent.
 - See [../reference/orgasm-narration.md](../reference/orgasm-narration.md).

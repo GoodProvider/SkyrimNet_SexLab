@@ -22,9 +22,18 @@ The LLM cannot answer an endless prompt, so every orgasm moment produces **one**
 | Forced orgasm | WebUI forced request (`RequestOrgasm(…, true, "webui")`) | `Nina is forced to orgasm by Bob. ` | `Nina and Ann are forced to orgasm by Bob. ` | always DN |
 | DOM melt | `OrgasmCustom` with DOM's text | `<melt text>. Nina is orgasming. ` | one `<melt text>` with `Nina and Ann`, then `Nina and Ann are orgasming. ` | always DN |
 | Orgasming | fired in this group | `Nina is orgasming. ` / `Nina is orgasming. again. ` | `Nina and Ann are orgasming. ` / `… are orgasming again. ` | always DN |
-| Denied | not fired, `deny_orgasm` 1 | `Nina is denied orgasm by Bob. ` | `Nina and Ann are denied orgasm by Bob. ` | always DN |
+| Denied | not fired, `deny_orgasm` 1 | `<lead-in>Nina was denied an orgasm by Bob. ` | `<lead-in>Nina and Ann were denied an orgasm by Bob. ` | always DN |
 | Recovering | not fired, orgasmed earlier this scene | `Nina is recovering from her orgasm. ` | `Nina and Ann are recovering from their orgasms. ` | budget |
-| Not orgasming | everyone else | `Nina isn't orgasming right now. ` | `Nina and Ann aren't orgasming right now. ` | budget |
+| Not orgasming | everyone else | `<lead-in>Nina is not orgasming right now. ` | `<lead-in>Nina and Ann are not orgasming right now. ` | budget |
+
+**Lead-in** (`Scene.EnjoymentBand` / `BandLeadIn`, live enjoyment from `Scene.LiveEnjoyment`). Denied and not-orgasming actors are grouped by band, so each band gets its own sentence (lowest first; denied is grouped by denier and then by band):
+
+| Enjoyment | Lead-in |
+|-----------|---------|
+| 0–30 | *(none)* |
+| 31–60 | `Though aroused, ` |
+| 61–89 | `Although close, ` |
+| 90+ | `Although on the edge, ` |
 
 **Order** (`Scene.OrgasmMessagesToNarration`):
 1. Always in the DN: allow prefix, then forced, DOM melt, orgasming and denied.
@@ -33,8 +42,9 @@ The LLM cannot answer an endless prompt, so every orgasm moment produces **one**
 The tentacles line is added once.
 
 - **Allow prefix.** `deny_orgasm` 1 → 0 calls `OrgasmEngine.AllowOrgasm(actor, denier)`, which unblocks the actor and checks every actor at once.
-  - If anyone is at 100, they fire (plus the group join), and the DN starts with `"<denier> allows <actor> to orgasm. "`.
+  - The allowed actor takes the normal orgasm test at once (enjoyment + the mini-game random bonus ≥ 100, or a pending request; not cooling / edging / out after the final roll). Everyone else fires only at 100. Whoever fires (plus the group join) gets the normal orgasm DN, starting with `"<denier> allowed <actor> to orgasm. "`.
   - Otherwise the plain `"<denier> allows <actor> to orgasm."` is sent. That is a DN for the player, or an event for the LLM action.
+  - **HUD deny key + `sexlab.hud.deny_transform`** (default on; not when the focus actor is the player): the plain deny / allow is spoken by the player via `SkyrimNetApi.TransformDialogue`: `"You may not orgasm."` / `"You may orgasm."`. A failed Transform falls back to the DN. An allow that fires still uses the normal orgasm DN.
 - **Denier.** Stored as `deny_by` on the position obj and persisted beside `deny_orgasm`. It is the player (HUD, Description Editor, TargetMenu) or an aggressor NPC (LLM `SexLab_DenyOrgasm` / `SexLab_AllowOrgasm`; see [../authors/actions.md](../authors/actions.md)). An empty value falls back to the player's name.
 - **Folded mini-game lines.** Pending arouse/calm narrations about anyone in the group are taken out of the engine's narrate queue and appended (budget) instead of racing the orgasm DN as their own DN.
 - **DOM melt grouping.** `Scene.MeltKey` drops the manager's `". <name> is orgasming."` clause and turns the slave's name into `{n}`. Slaves with the same key share one melt sentence.
@@ -91,6 +101,7 @@ If you change the gate in the prompt, update every Papyrus site that builds an o
 must += NamesClause(forced_names, forced_n, "is forced to orgasm by "+player_name+".", "are forced to orgasm by "+player_name+".")
 must += melts
 must += NamesClause(orgasm_names, orgasm_n, "is orgasming.", "are orgasming.")
-must += denied
-others += NamesClause(idle_names, idle_n, "isn't orgasming right now.", "aren't orgasming right now.")
+must += denied   ; BandLeadIn(band) + "was denied an orgasm by <denier>." per (denier, band)
+; per enjoyment band, lowest first:
+others += BandLeadIn(band_i) + NamesClause(band_names, band_n, "is not orgasming right now.", "are not orgasming right now.")
 ```

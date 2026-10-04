@@ -162,7 +162,7 @@ namespace OrgasmEngine
             std::vector<std::int32_t> forced;  // per actor: 1 = forced by the player (WebUI)
             bool individual = false;           // false: only safety-net / external joins (stash + window)
             std::string source;
-            RE::FormID allower = 0;  // AllowOrgasm: "<allower> allows <allowed> to orgasm."
+            RE::FormID allower = 0;  // AllowOrgasm: "<allower> allowed <allowed> to orgasm."
             RE::FormID allowed = 0;
             std::string extras;  // pending arouse / calm narrations folded into the orgasm message
         };
@@ -444,6 +444,19 @@ namespace OrgasmEngine
         bool CanOrgasmNow(const ActorState& st, double now)
         {
             return !st.dom && !AnyBlock(st) && !st.finalRollFailed && now >= st.edgeUntil && !IsCooling(st, now);
+        }
+
+        // Caller holds g_lock. The normal orgasm test: enjoyment (+ the mini-game random bonus, rolled once per
+        // kRollInterval, or now with rollNow) reaches 100, or a pending request. Gates are CanOrgasmNow's.
+        bool WantsOrgasm(ActorState& st, double now, bool rollNow)
+        {
+            float test = st.enjoyment;
+            if (g_settings.miniGame && (rollNow || now - st.lastRollAt >= kRollInterval)) {
+                st.lastRollAt = now;
+                std::uniform_real_distribution<float> roll(0.0f, std::max(0.0f, g_settings.randomBonus));
+                test += roll(g_rng);
+            }
+            return test >= kMaxEnjoyment || st.pending;
         }
 
         // Caller holds g_lock. Passive gain per second (before speed and pause): fixed rate from the stage
@@ -888,13 +901,7 @@ namespace OrgasmEngine
                                     st.lastDomSyncAt = now;
                                 }
                             } else {
-                                float test = st.enjoyment;
-                                if (g_settings.miniGame && now - st.lastRollAt >= kRollInterval) {
-                                    st.lastRollAt = now;
-                                    std::uniform_real_distribution<float> roll(0.0f, std::max(0.0f, g_settings.randomBonus));
-                                    test += roll(g_rng);
-                                }
-                                const bool wants = test >= kMaxEnjoyment || st.pending;
+                                const bool wants = WantsOrgasm(st, now, false);
                                 const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
                                 const bool edging = now < st.edgeUntil;
                                 if (wants && !cooling && !edging) {
@@ -1532,7 +1539,9 @@ namespace OrgasmEngine
                     continue;
                 }
                 ActorState& other = at->second;
-                if (CanOrgasmNow(other, now) && other.enjoyment >= kMaxEnjoyment) {
+                // The allowed actor takes the normal orgasm test now, so a pass carries the allow prefix.
+                const bool wants = id == st->id ? WantsOrgasm(other, now, true) : other.enjoyment >= kMaxEnjoyment;
+                if (CanOrgasmNow(other, now) && wants) {
                     Fire(other, group, true, "allow", now, fx);
                 }
             }

@@ -62,8 +62,9 @@ namespace OrgasmEngine
     /// SexLabOrgasm the engine did not fire (another plugin called SexLab): record it like our own
     /// (reset, count, cooldown, flash, events). Returns the new count, 0 when unmanaged.
     std::int32_t NoteExternalOrgasm(RE::Actor* actor, const std::string& source);
-    /// deny_orgasm 1 -> 0: unblock the actor and, in the same lock, fire everyone in the scene at 100 (plus
-    /// the group join). The group carries allower / allowed for the "allows ... to orgasm." prefix.
+    /// deny_orgasm 1 -> 0: unblock the actor and, in the same lock, test them with the normal orgasm rule
+    /// (enjoyment + mini-game bonus, pending request) and fire everyone else at 100 (plus the group join).
+    /// The group carries allower / allowed for the "allowed ... to orgasm." prefix.
     /// True when anyone fired (Effect_OrgasmGroup narrates); false: the caller narrates the plain allow.
     bool AllowOrgasm(RE::Actor* actor, RE::Actor* allower);
     /// Scene style changed: faster/slower scale back to 1.0.
