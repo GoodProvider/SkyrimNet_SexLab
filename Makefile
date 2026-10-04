@@ -34,7 +34,7 @@ release:
 
 	if exist "$(subst /,\\,core)" rmdir /s /q "$(subst /,\\,core)"	
 	mkdir core 
-	powershell -NoProfile -Command "Copy-Item -Path 'Scripts','SKSE','SkyrimNet_SexLab.esp' -Destination 'core/.' -Recurse -Force"
+	powershell -NoProfile -Command "Copy-Item -Path 'Scripts','SKSE','SkyrimNet_SexLab.esp','PrismaUI' -Destination 'core/.' -Recurse -Force"
 
 	if exist "$(subst /,\\,handler_udng)" rmdir /s /q "$(subst /,\\,handler_udng)"	
 	mkdir handler_udng 
