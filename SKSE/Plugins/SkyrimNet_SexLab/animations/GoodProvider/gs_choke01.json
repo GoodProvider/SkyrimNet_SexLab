@@ -8,11 +8,13 @@
         0
     ],
     "speaking_modifiers": [
-        [],
+        [
+            "_pain_"
+        ],
         []
     ],
     "stage 1": {
-        "description": "{{sl.actors.0}} stands holding {{sl.actors.1}} in a warm embrase kissing each other."
+        "description": ""
     },
     "stage 2": {
         "description": ""

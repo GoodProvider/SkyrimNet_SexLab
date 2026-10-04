@@ -12,7 +12,7 @@
         []
     ],
     "stage 1": {
-        "description": "{{sl.actors.0}} stands holding {{sl.actors.1}} in a warm embrase kissing each other."
+        "description": "{{sl.actors.1}} and {{sl.actors.0}} face each other, clasp hands, and look into each other's eyes."
     },
     "stage 2": {
         "description": ""

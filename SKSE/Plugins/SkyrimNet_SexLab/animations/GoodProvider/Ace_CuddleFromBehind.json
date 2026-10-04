@@ -1,12 +1,24 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.1}} hugs {{sl.actors.0}} from behind with arms wrapped around {{sl.actors.0}}'s waist."
-  },
-  "stage 2": {
-    "description": "{{sl.actors.1}} hugs {{sl.actors.0}}. {{sl.actors.1}} pulls {{sl.actors.0}} a bit closer with one arm moving just above there breasts and the other at {{sl.actors.0}}'s waist."
-  },
-  "stage 3": {
-    "description": "{{sl.actors.1}} hugs {{sl.actors.0}}. {{sl.actors.0}}'s head moves to be closer to {{sl.actors.1}}, as {{sl.actors.1}} moves from chest to waist and release the other hand."
-  }
+    "clothed": [
+        1,
+        1
+    ],
+    "orgasm_expected": [
+        0,
+        0
+    ],
+    "speaking_modifiers": [
+        [],
+        []
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} moves behind {{sl.actors.0}}, wrapping arms around {{sl.actors.0}}'s waist, and pulls {{sl.actors.0}} agaisnt chest into a hug. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} moves arm from {{sl.actors.0}}'s waist up to just below {{sl.actors.0}}'s neck, other on {{sl.actors.0}}'s waist. {{sl.actors.0}} stands facing away wrapped in {{sl.actors.1}}'s embrase. "
+    },
+    "stage 3": {
+        "description": "{{sl.actors.1}} arms drop with one hand finally resting on {{sl.actors.0}}'s waist. {{sl.actors.0}} lowers arms to side. "
+    },
+    "version": "3.0"
 }

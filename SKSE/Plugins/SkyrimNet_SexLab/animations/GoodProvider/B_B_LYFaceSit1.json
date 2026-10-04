@@ -1,12 +1,26 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "sitting on the mouth and getting oral from a yoke bound"
-  },
-  "stage 2": {
-    "description": "{{sl.actors.0}} lays on back lock into a yoke. {{sl.actors.1}} squats with hands on knees and grinds pussy into {{sl.actors.0}}'s face."
-  },
-  "stage 5": {
-    "description": "legs twitching, arms on head, kneeling over mouth,  and orgasming into oral from a yoke bound"
-  }
+    "clothed": [
+        0,
+        0
+    ],
+    "orgasm_expected": [
+        1,
+        1
+    ],
+    "speaking_modifiers": [
+        [],
+        [
+            "_pleasure_"
+        ]
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} locks {{sl.actors.0}}'s arm in a yoke, pushes {{sl.actors.0}} onto back on the ground, and then squats of {{sl.actors.0}}'s mouth. {{sl.actors.0}} begins to lick {{sl.actors.1}}'s pussy."
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} rests hand on knees, squats over {{sl.actors.0}}'s mouth, and grids pussy into {{sl.actors.0}}'s licking mouth.  {{sl.actors.0}} lays on back with head and arms locked in heavy yoke."
+    },
+    "stage 5": {
+        "description": "legs twitching, arms on head, kneeling over mouth,  and orgasming into oral from a yoke bound"
+    },
+    "version": "3.0"
 }

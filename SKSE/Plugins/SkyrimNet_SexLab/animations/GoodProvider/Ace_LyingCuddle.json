@@ -1,9 +1,21 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.0}} has eyes closed and lays on back cuddling with {{sl.actors.0}}. {{sl.actors.0}} rests head on {{sl.actors.1}}'s shoulder."
-  },
-  "stage 2": {
-    "description": "{{sl.actors.0}} and {{sl.actors.1}} lay cuddling and kissing."
-  }
+    "clothed": [
+        1,
+        1
+    ],
+    "orgasm_expected": [
+        0,
+        0
+    ],
+    "speaking_modifiers": [
+        [],
+        []
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} lays down onto back, reaching out with arm and pulling {{sl.actors.0}} on to {{sl.actors.0}}'s side into a hug against {{sl.actors.1}}'s side. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} and {{sl.actors.0}} lay together facing each other, and lean up and begin to kiss."
+    },
+    "version": "3.0"
 }

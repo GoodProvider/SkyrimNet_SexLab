@@ -1,9 +1,21 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.1}} lays on ground, raised up on elbows. {{sl.actors.0}} sits on {{sl.actors.1}}'s waist with knees to both sides, hands on {{sl.actors.1}}'s shoulder, and looking into {{sl.actors.1}}'s eyes."
-  },
-  "stage 2": {
-    "description": "{{sl.actors.1}} lays on ground, raised up on elbows. {{sl.actors.0}} sits on {{sl.actors.1}}'s waist with knees to both sides, hands on {{sl.actors.1}}'s shoulder, and deep kissing {{sl.actors.1}}."
-  }
+    "clothed": [
+        1,
+        1
+    ],
+    "orgasm_expected": [
+        0,
+        0
+    ],
+    "speaking_modifiers": [
+        [],
+        []
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} lays down on the ground, then raises up onto arms. {{sl.actors.0}} moves to {{sl.actors.1}} and straddles {{sl.actors.1}}'s body kneeling. {{sl.actors.0}} and {{sl.actors.1}} look into each other's eyes. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} lays down on the ground, then raises up onto arms. {{sl.actors.0}} straddles {{sl.actors.1}}'s body, then leans into to start a kiss."
+    },
+    "version": "3.0"
 }

@@ -1,12 +1,24 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.0}} lays on side, looking over shoulder at {{sl.actors.1}}. {{sl.actors.1}} is raised on one arm, the other arm hugs {{sl.actors.0}}, and looks into {{sl.actors.0}}'s eyes. "
-  },
-  "stage 2": {
-    "description": "{{sl.actors.0}} lays on side with eyes closed, head turned towards {{sl.actors.1}}. {{sl.actors.1}} is raised on one arm, the other arm hugs {{sl.actors.0}}, and kisses {{sl.actors.0}}'s. "
-  },
-  "stage 3": {
-    "description": "{{sl.actors.0}} lays on side with eyes closed and head resting on {{sl.actors.1}}'s arm. {{sl.actors.1}} is raised on one arm, the other arm hugs {{sl.actors.0}}, and head resting on {{sl.actors.0}}'s shoulder. "
-  }
+    "clothed": [
+        1,
+        1
+    ],
+    "orgasm_expected": [
+        0,
+        0
+    ],
+    "speaking_modifiers": [
+        [],
+        []
+    ],
+    "version": "3.0",
+    "stage 1": {
+        "description": "{{sl.actors.0}} lays on side, looking over shoulder at {{sl.actors.1}}. {{sl.actors.1}} is raised on one arm, the other arm hugs {{sl.actors.0}}, and looks into {{sl.actors.0}}'s eyes. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.0}} lays on side with eyes closed, head turned towards {{sl.actors.1}}. {{sl.actors.1}} is raised on one arm, the other arm hugs {{sl.actors.0}}, and kisses {{sl.actors.0}}'s. "
+    },
+    "stage 3": {
+        "description": "{{sl.actors.0}} lays on side with eyes closed and head resting on {{sl.actors.1}}'s arm. {{sl.actors.1}} is raised on one arm, the other arm hugs {{sl.actors.0}}, and head resting on {{sl.actors.0}}'s shoulder. "
+    }
 }

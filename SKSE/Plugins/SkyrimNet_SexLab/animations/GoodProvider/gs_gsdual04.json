@@ -1,0 +1,21 @@
+{
+    "clothed": [
+        1,
+        1
+    ],
+    "orgasm_expected": [
+        1,
+        1
+    ],
+    "speaking_modifiers": [
+        [],
+        []
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.0}} and {{sl.actors.1}} stand side to side, arms wrapped around each other's waist, hips swaying side to side in union, heads gentle swaying to the beat, and one arm raised with hand closed swaying. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.0}} moves in front of {{sl.actors.1}}, puts hands on knees, looks back over shoulder, and bends over at the waist. {{sl.actors.1}} moves hands to rest on {{sl.actors.0}}'s sides, and looks into {{sl.actors.0}}'s eyes. {{sl.actors.0}} and {{sl.actors.1}} sway side to side in uion to a beat."
+    },
+    "version": "3.0"
+}

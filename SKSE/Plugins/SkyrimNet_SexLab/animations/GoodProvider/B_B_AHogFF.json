@@ -1,9 +1,34 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.1}} sits on the floor with {{sl.actors.0}} between their legs given oral sex.  {{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back."
-  },
-  "stage 2": {
-    "description": "{{sl.actors.1}} kneeling with a hand guiding {{sl.actors.0}} as they give oral sex. {{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back."
-  }
+    "clothed": [
+        0,
+        0
+    ],
+    "orgasm_expected": [
+        0,
+        1
+    ],
+    "speaking_modifiers": [
+        [
+            "_gagged_"
+        ],
+        [
+            "_pleasure_"
+        ]
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} sits on the floor with {{sl.actors.0}} between their legs given oral sex, right hand on right knee, lookingdown at {{sl.actors.0}}.  {{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back."
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} moves to kneeling postion, a hand to {{sl.actors.0}}'s head, and starts guiding {{sl.actors.0}}'s head on {{sl.actors.1}}'s penis. {{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back."
+    },
+    "stage 3": {
+        "description": "{{sl.actors.1}} moves to stand with knees bent, a hands holding{{sl.actors.0}}'s head in place, and the stand allowing him to thrust into {{sl.actors.0}}'s mouth. {{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back."
+    },
+    "stage 4": {
+        "description": "{{sl.actors.1}} thrusts fast nearing climax, a hand tighening in {{sl.actors.0}}'s hair, the hand moving {{sl.actors.0}}'s head to match each thrust and the stand allowing him to thrust into {{sl.actors.0}}'s mouth. {{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back. A growing pain in kneck, throat, limbs, and bent back."
+    },
+    "stage 5": {
+        "description": "{{sl.actors.1}} hand pulls  {{sl.actors.0}}'s hair, dragging {{sl.actors.0}}'s head to the balls, the penis so deep {{sl.actors.0}} can't breath. {{sl.actors.1}} raises a clentched right fist.{{sl.actors.0}} hogtied on their stomach with arms bound in a armbinder behind their back. A growing pain in kneck, throat, limbs, and bent back."
+    },
+    "version": "3.0"
 }

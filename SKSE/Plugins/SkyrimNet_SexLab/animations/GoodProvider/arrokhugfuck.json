@@ -12,10 +12,16 @@
         []
     ],
     "stage 1": {
-        "description": "{{sl.actors.1}} moves to face {{sl.actors.0}} and starts patting {{sl.actors.0}}'s head."
+        "description": ""
+    },
+    "stage 2": {
+        "description": ""
+    },
+    "stage 3": {
+        "description": ""
     },
     "stage 4": {
-        "description": "{{sl.actors.1}} pats {{sl.actors.0}}'s head slightly faster."
+        "description": ""
     },
     "version": "3.0"
 }

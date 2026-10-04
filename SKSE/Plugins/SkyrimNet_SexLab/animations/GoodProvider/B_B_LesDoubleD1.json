@@ -1,12 +1,34 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.0}} kneels on the ground, ass in the air, and face on the ground. {{sl.actors.1}} sits on {{sl.actors.0}} and fucks them with a dildo"
-  },
-  "stage 2": {
-    "description": "{{sl.actors.0}} kneels on the ground and ass in the air. {{sl.actors.1}} kneels facing away with hands on knees. {{sl.actors.0}} and {{sl.actors.1}} mutually fuck with a two sided dildo."
-  },
-  "stage 3": {
-    "description": "{{sl.actors.0}} kneels on the ground and ass in the air. {{sl.actors.1}} kneels facing away. {{sl.actors.0}} and {{sl.actors.1}} mutually fuck with a two sided dildo."
-  }
+    "clothed": [
+        0,
+        0
+    ],
+    "orgasm_expected": [
+        1,
+        1
+    ],
+    "speaking_modifiers": [
+        [
+            "_pleasure_"
+        ],
+        [
+            "_pleasure_"
+        ]
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.0}} kneels on the ground, ass in the air, and face on the ground. {{sl.actors.1}} sits on {{sl.actors.0}} and fucks them with a dildo"
+    },
+    "stage 2": {
+        "description": "{{sl.actors.0}} raise from the ground onto hands and knees. {{sl.actors.1}} turns away and kneels facing away with hands on knees. {{sl.actors.1}} slides the dildo into {{sl.actors.1}}'s pussy, and then begins to fuck {{sl.actors.0}} and themselves on it."
+    },
+    "stage 3": {
+        "description": "{{sl.actors.0}} kneels on the ground and ass in the air. {{sl.actors.1}} kneels facing away. {{sl.actors.1}} goes to all fours, the dildo now aligned with her depths. {{sl.actors.0}} and {{sl.actors.1}} increase the speed."
+    },
+    "stage 4": {
+        "description": "{{sl.actors.0}} and {{sl.actors.1}} bend at the waist putting heads to the ground. {{sl.actors.0}} and {{sl.actors.1}} fuck each other even faster. "
+    },
+    "stage 5": {
+        "description": "{{sl.actors.0}} and {{sl.actors.1}} reach back to grasp a hand. {{sl.actors.0}} and {{sl.actors.1}} have one final thrust pushing the dildo deep into their pussy. {{sl.actors.0}} and {{sl.actors.1}} legs begin to twitch as they stand on all fours."
+    },
+    "version": "3.0"
 }

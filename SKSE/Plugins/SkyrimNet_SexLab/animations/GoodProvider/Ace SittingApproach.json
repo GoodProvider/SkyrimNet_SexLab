@@ -1,0 +1,10 @@
+{
+    "Stage 1": {
+        "description": "{{sl.actors.0}} is kneeling, facing {{sl.actors.1}}, holding hair, and looking in a kneeling {{sl.actors.1}}'s eyes. {{sl.actors.1}} has a hand on {{sl.actors.0}}'s knee.",
+        "Version": "2.0"
+    },
+    "Stage 2": {
+        "description": "{{sl.actors.1}} sits with arms wrapped around {{sl.actors.0}}. {{sl.actors.0}} sits in {{sl.actors.1}}'s lab, with legs to either side, facing {{sl.actors.1}}, kissing {{sl.actors.1}}, and a hand behind {{sl.actors.1}}'s head. ",
+        "Version": "2.0"
+    }
+}

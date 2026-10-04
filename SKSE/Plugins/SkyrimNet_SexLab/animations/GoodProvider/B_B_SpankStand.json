@@ -1,15 +1,25 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.0}} stands hugging {{sl.actors.1}}.  The only sexual contact is {{sl.actors.1}} gently pre-spanking caressing of {{sl.actors.0}}'s ass."
-  },
-  "stage 2": {
-    "description": "{{sl.actors.1}} stands with {{sl.actors.0}} bent over {{sl.actors.1}}'s knee.  The only sexual contact is {{sl.actors.1}} slapping {{sl.actors.0}}'s ass."
-  },
-  "stage 4": {
-    "description": "{{sl.actors.1}} stands with {{sl.actors.0}} bent over {{sl.actors.1}}'s knee.  The only sexual contact is {{sl.actors.1}} slapping {{sl.actors.0}}'s ass fast and hard. {{sl.actors.0}} covers {{sl.actors.0}}'s mouth. "
-  },
-  "stage 5": {
-    "description": "{{sl.actors.0}} stands and caressing their own ass. {{sl.actors.1}} is examining {{sl.actors.1}}'s red hand prints on {{sl.actors.0}}'s ass."
-  }
+    "orgasm_expected": [
+        0,
+        0
+    ],
+    "speaking_modifiers": [
+        [
+            "_pain_"
+        ],
+        []
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} brings {{sl.actors.0}} into to a hug.  {{sl.actors.1}}'s hand gently pets {{sl.actors.0}}'s ass, letting her focus on the pain to come. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} moves {{sl.actors.0}} over bended knee.bent over {{sl.actors.1}}'s knee.  {{sl.actors.1}}'s hand begins to spank {{sl.actors.0}}'s ass."
+    },
+    "stage 4": {
+        "description": "{{sl.actors.1}} stands with {{sl.actors.0}} bent over {{sl.actors.1}}'s knee.  The only sexual contact is {{sl.actors.1}} slapping {{sl.actors.0}}'s ass fast and hard. {{sl.actors.0}} covers {{sl.actors.0}}'s mouth. "
+    },
+    "stage 5": {
+        "description": "{{sl.actors.0}} stands and caressing their own ass. {{sl.actors.1}} is examining {{sl.actors.1}}'s red hand prints on {{sl.actors.0}}'s ass."
+    },
+    "version": "3.0"
 }

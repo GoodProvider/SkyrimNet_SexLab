@@ -1,9 +1,34 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "{{sl.actors.1}} holds {{sl.actors.0}} by the head and stroke cock."
-  },
-  "stage 2": {
-    "description": "{{sl.actors.1}} holds {{sl.actors.0}} by the ass and moving {{sl.actors.0}} up and down on cock. {{sl.actors.0}} arms are bound behind back and legs wrapped around {{sl.actors.1}}."
-  }
+    "clothed": [
+        0,
+        0
+    ],
+    "orgasm_expected": [
+        1,
+        1
+    ],
+    "speaking_modifiers": [
+        [
+            "_pleasure_"
+        ],
+        [
+            "_pleasure_"
+        ]
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} moves to stand in front of {{sl.actors.0}} and then pulls {{sl.actors.0}}'s head in for a kiss, while {{sl.actors.1}} stokes {{sl.actors.1}}'s penis."
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} grabs {{sl.actors.0}} by the waist lifts {{sl.actors.0}} up and moves {{sl.actors.0}} onto {{sl.actors.1}}'s penis, then begins to lift {{sl.actors.0}} up and down along {{sl.actors.1}}'s penis."
+    },
+    "stage 3": {
+        "description": ""
+    },
+    "stage 4": {
+        "description": ""
+    },
+    "stage 5": {
+        "description": ""
+    },
+    "version": "3.0"
 }

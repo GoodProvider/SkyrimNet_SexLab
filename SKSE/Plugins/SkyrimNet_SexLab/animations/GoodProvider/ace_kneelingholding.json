@@ -1,0 +1,21 @@
+{
+    "clothed": [
+        1,
+        1
+    ],
+    "orgasm_expected": [
+        0,
+        0
+    ],
+    "speaking_modifiers": [
+        [],
+        []
+    ],
+    "stage 1": {
+        "description": "{{sl.actors.1}} sits on {{sl.actors.1}}'s heels, with legs parted. {{sl.actors.0}} kneels between {{sl.actors.1}}'s legs with hands on {{sl.actors.1}}'s chest. "
+    },
+    "stage 2": {
+        "description": "{{sl.actors.1}} sits on {{sl.actors.1}}'s heels, with legs parted. {{sl.actors.1}} moves one hands around {{sl.actors.0}}'s waist. {{sl.actors.0}} moves to sit on {{sl.actors.1}}'s left leg and rest head on {{sl.actors.1}}'s shoulder.. {{sl.actors.0}} moves a hand to {{sl.actors.1}}'s chest."
+    },
+    "version": "3.0"
+}

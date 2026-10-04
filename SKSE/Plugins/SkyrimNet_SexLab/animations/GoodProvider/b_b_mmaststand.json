@@ -1,21 +1,4 @@
 {
-    "clothed": [
-        0,
-        0
-    ],
-    "orgasm_expected": [
-        0,
-        1
-    ],
-    "speaking_modifiers": [
-        [
-            "_pain_",
-            "_pleasure_"
-        ],
-        [
-            "_pleasure_"
-        ]
-    ],
     "stage 1": {
         "description": ""
     },
