@@ -1014,3 +1014,19 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Tell from the log:** the first DN has no `NarrateOrgasmStash` trace. It came from `StageStart` (final stage just entered), not from the window.
 - **Cause:** `Orgasm_ApplyGroup` yields in its `ForceOrgasm` loop and arms the window only after the loop. A slow `StageStart` saw `orgasm_messages_set` with the window closed, and took Bob's slot before Nina's was stashed. The window then flushed Nina alone.
 - **Fix:** `orgasm_group_pending` is set over the stash loop until the window is armed or the DN is sent. `StageStart` holds the stash (`hold_stash`, read once) while it, `orgasm_window_open` or `orgasm_narrating` is set, and marks `orgasm_narrating` while it builds. See [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md).
+
+## CommonLibSSE-NG pin and Skyrim 1.7.x (2026-10-04)
+
+- `SKSE_Source/lib/CommonLibSSE-NG` is a submodule of `https://github.com/alandtse/CommonLibSSE-NG.git` (branch `ng`; the old `alandtse/CommonLibVR` URL redirects there). It's pinned to tag **v11.0.0** (`94faaed`), which supports 1.7.99 / Address Library format 5. It was on v4.10.0+1 (`293e038`) before.
+- **The plugin needs no runtime list.** `add_commonlibsse_plugin` emits `VersionIndependence::AddressLibrary` + `StructCompatibility::Independent`, so a CommonLib bump is all it takes to support a new runtime. Players still need the Address Library build for their runtime.
+- **License:** CommonLib v5+ is GPL-3.0-or-later with the Skyrim Modding Exception (was MIT).
+- After cloning or bumping: `git submodule update --init --recursive` (nested `extern/openvr`). Plain `git submodule update` from the superproject resets the checkout to the **recorded** pointer. To bump, `git checkout <tag>` inside the submodule, then stage the pointer.
+- Before a bump, grep `SKSE_Source/src` + `include` for symbols named in upstream `BREAKING CHANGE:` commit notes (`git log --format=%B <old>..<new> | grep -A8 'BREAKING CHANGE'`). For v4.10→v11 none applied (package, HitData, BSShaderAccumulator, BSGraphics::State frame fields, MagicTarget::GetActiveEffectList, VR layouts).
+- The only engine hook is `AnimSpeed.cpp` `UpdateAnimation` at vtable `0x7D` on `VTABLE_Character` / `VTABLE_PlayerCharacter`. Actor.h still has it at `07D` in v11 (AE1799 `VersionShift` touches PlayerCharacter data only). Recheck it on every bump.
+
+## SkyrimNet beta26 rc4: PublicAPI.h needs a header the zip omits (2026-10-04)
+
+- **Symptom:** `Config.cpp` fails with `cannot open include file 'PublicAPIDiaryQuery.h'`.
+- **Cause:** beta26 rc4's `PublicAPI.h` (API v12) includes `PublicAPIDiaryQuery.h`, but `skyrimnet-beta26-rc4.zip` and `skyrimnet-devkit-beta26-rc4.zip` ship only `PublicAPI.h` and `PublicAPIMemoryQuery.h`.
+- **Fix:** `SKSE_Source/include/PublicAPIDiaryQuery.h` is a minimal stand-in (`DiaryOrder`, `DiaryQuery`, `DiaryQueryToJSON`). `include/` precedes the devkit path, so it wins. Delete it once upstream ships the real header.
+- **Compat:** the symbols this plugin uses (`PublicGetVersion`, `PublicFormIDToUUID`, `PublicGetActorNameByUUID`, `PublicGetPluginConfigValue`) and the Papyrus API we call are unchanged from rc7; v11/v12 only add functions. `PublicGetRecentEvents` / dialogue history JSON changed (`text` -> `data`, `speaker` is a role, `npcName` added); we don't call them.

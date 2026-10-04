@@ -1,11 +1,14 @@
 https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0
 
-Requires SkyrimNet 0.25.0 (Beta 25 rc7) or later. **After updating:** reset the dashboard scene keys and **Enjoyment** settings to pick up the new defaults.
+Requires SkyrimNet 0.25.0 or later.
 
-- **New scene keys on the numpad**, laid out like the HUD grid: 8 calm, 9 arouse, 1 deny, - slower; 4 previous, 5 pause, 6 next, 2 end, + faster (3 stays SexLab's free camera, 7 is left to SkyrimNet). Optional: right mouse arouses, left mouse calms. Your current keys are written to `SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json`.
+- **Prisma Hotkey**: new Prisma hotkey overlay with improved ability to animation and control a scene
+- **Scene hotkeys**: when a scene is active the user will be able to effect it using the num lock hotkeys. You can change this mapping in the Plugin seetings. 
+    - **hotkey overlay**: there is an optional hotkey overlay which show the current hotkey mapping during a scene
+    - **NPCs can play the arousal mini-game** (when the mini-game is on): they can arouse or calm someone, and an aggressor can allow or deny orgasm. Narration now says how close someone was ("Though aroused…", "Although on the edge…").
+- **orgasm minigame**: there is now an optional mini-game that allows the user to delay or encourage other actors from orgasming.
 - **Style sets animation speed**: gentle, normal and forceful play slower or faster. Change it with slower / faster, the WebUI style control, or let an NPC change it (new LLM action). The old style hotkey is gone.
 - **Better scene endings**: enjoyment rises more slowly, each stage change gives a small boost, and pausing pauses enjoyment. The lead needs 1 orgasm if male or 1-2 if female (adjustable **Scene ending** settings), then the scene moves to the last stage and waits there until the orgasm dialogue has played. Before the last stage, anyone who hasn't come gets one chance based on how close they are, and their climax is narrated together with the spoken reaction.
-- **NPCs can play the arousal mini-game** (when the mini-game is on): they can arouse or calm someone, and an aggressor can allow or deny orgasm. Narration now says how close someone was ("Though aroused…", "Although on the edge…").
 - **Moans follow speaking modifiers**: actors moan only when pleasure or pain is set; gagged or kissing actors stay quiet.
 - **Right animations for the TargetMenu choice**: **cuddle** is now **affection** (romantic, can kiss), and the new **platonic** option is for friends and family. **Sex** picks consensual animations and **rapes** picks anything but affection, aggressive ones first. NPC cuddle / comfort actions no longer start sex animations.
 - **Tag synonyms**: searching by tag also finds its synonyms ("doggy" finds "doggystyle"), with a **synonyms** pulldown (broad, strict, none) in the animation filters. Tag-based starts now pick randomly among all matches.

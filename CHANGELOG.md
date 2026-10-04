@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### SKSE / WebUI
+- Aligned with SkyrimNet beta26 rc4 (PublicAPI v12). Every API symbol this plugin uses is unchanged. The rc4 `PublicAPI.h` includes `PublicAPIDiaryQuery.h`, which neither rc4 zip ships, so `SKSE_Source/include/PublicAPIDiaryQuery.h` is a local stand-in (delete it once upstream ships the real file)
+- CommonLibSSE-NG submodule bumped from v4.10.0 to v11.0.0 (`alandtse/CommonLibSSE-NG`, branch `ng`) for Skyrim 1.7.x / 1.7.99 (Address Library format 5). `.gitmodules` URL now uses the repo's current name (was `CommonLibVR`). CommonLib is GPL-3.0-or-later with the Skyrim Modding Exception from v5 on
 - TargetMenu Scene catalog: removed `0100_stop`, `0200_stage`, `0300_position`, `0400_animation` and their dead panel JS (`tmRenderStopPanel` / `tmRenderStagePanel` / `tmRenderPositionPanel`, cast-draft helpers, `tmCastDraft`). The Description Editor covers stop / stage / actor order / animation. Manual (non-MO2) upgrades should delete those four files
 - Description Editor **continue scene** closes the WebUI (`requestWebUIHide(true)`) after sending its DirectNarration
 - New HUD scene keys **PosUp** / **PosDn** (`sexlab.hud.key_pos_up` PgUp, `sexlab.hud.key_pos_down` PgDn) in a new column left of Num 7 / Num 4; the HUD controls grid is now 5 x 3. `Menu.Hud_OnKey pos_up|pos_down` → `Scene.HotkeyChangePositions` (SexLab `ChangePositions`, then `AlignActors`). New `sexlab.hud.pos_narration` (**Narrate position changes**, on) narrates "The scene changes to <stage description>" with the new roles
