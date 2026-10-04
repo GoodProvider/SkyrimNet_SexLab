@@ -12,10 +12,10 @@
     <project>SkyrimNet_SexLab</project>
     <summary>Bridge mod between SkyrimNet (LLM) and SexLab Framework.</summary>
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
-    <updated>2026-09-14</updated>
-    <base_tag>0.34.0</base_tag>
-    <next_version>0.34.1</next_version>
-    <version_status>Makefile VERSION=0.34.1 (authoritative); plugin manifest.json and settings manifest.yaml 0.34.1; info.json / FOMOD written by make release; git tags include 0.33.0 and 0.34.0; 0.34.1 not tagged</version_status>
+    <updated>2026-10-04</updated>
+    <base_tag>0.34.1</base_tag>
+    <next_version>0.35.0</next_version>
+    <version_status>Makefile VERSION=0.35.0 (authoritative); plugin manifest.json and settings manifest.yaml 0.35.0; info.json / FOMOD written by make release; latest git tag 0.34.1; 0.35.0 not tagged</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -44,6 +44,8 @@
     <file>docs/players/overview.md</file>
     <file>docs/players/hotkeys.md</file>
     <file>docs/players/requirements.md</file>
+    <file>docs/developers/orgasm-engine.md</file>
+    <file>docs/developers/anidescriber.md</file>
     <file>docs/authors/actions.md</file>
     <file>docs/authors/prompts.md</file>
     <file>docs/authors/animations.md</file>
@@ -54,12 +56,14 @@
     <file>docs/reference/json-keys.md</file>
     <file>docs/reference/orgasm-narration.md</file>
     <file>docs/reference/scene-settings.md</file>
+    <file>docs/reference/tag-synonyms.md</file>
     <file>release-checkpoint.xml</file>
     <file>release-guide.md</file>
     <file>.cursor/skills/release/SKILL.md</file>
   </doc_files>
 
   <status>
+    <note>2026-10-04: 0.35.0 since tagged 0.34.1. skse-scene fast-forwarded into main (HEAD 924468f). Delta: OrgasmEngine scene ending / gate / numpad HUD / animation speed / mini-game LLM actions, AnimDB scene-setting keys + tag synonyms + DD-aware tags, one Scene view (Description Editor / Scene Creator), C++ JsonStore (JContainers still required), 0416_sexlab_cum bio prompt, DLL hardening. Docs already current in-branch; superseded DE scene-pulldown / Editor-row bullets folded into final state. Omit: descriptor/, tools/_*, zz-plan.md, dom-checkpoint.md, review-checkout.xml, release-todo.md, release-guide.xml, guides/, reviews/, z-*. pyro then make release; 0.35.0 untagged.</note>
     <note>2026-09-14: Rebuild 0.34.1 since tagged 0.34.0 (HEAD 798f752). Added eligibility `get_global_value` / `skyrimnet_sexlab_ostim_player` and `GetThreadByActor`/`GetSceneByThread` caller arity to changelogs. pyro then make release. SKSE DLL and handler ESPs unchanged. Omit: reviews/, y-MIGRATING_TO_BETA25.md, z-*. 0.34.1 still untagged.</note>
     <note>2026-09-13: 0.34.1 since untagged 0.34.0. Delta: five main commits (DOM Combined window / orgasm_narrated / tease skip / delayed melt / synthetic masturbate thread / JC JSON walk). pex committed in 33f84e1. SKSE DLL and handler ESPs unchanged. Omit: reviews/, y-MIGRATING_TO_BETA25.md, z-*. Last git tag still 0.31.5.</note>
     <note>2026-09-13: Retitled untagged 0.33.0 ship as 0.34.0 since tagged 0.31.5. Same delta; no new feature bullets. Branch main. Omit: reviews/, y-MIGRATING_TO_BETA25.md.</note>
