@@ -834,8 +834,9 @@ namespace OrgasmEngine
                             }
                         } else {
                             // 1. Passive gain: fixed rate from the stage timers, so extra time (repeated stage) or
-                            // speed adds enjoyment; a paused stage holds. Not expected to orgasm: mini-game only.
-                            const float rate = sc.paused ? 0.0f : PassiveRate(sc, st);
+                            // speed adds enjoyment; pausing the stage advance does not hold gain. Not expected to
+                            // orgasm: mini-game only.
+                            const float rate = PassiveRate(sc, st);
                             const float gain = static_cast<float>(rate * dt) * speed;
                             if (st.dom) {
                                 st.domProgress += gain;

@@ -126,8 +126,15 @@ Function Hud_OnKey(String control, Actor focus = None)
     elseif control == "deny"
         SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(player)
         if deny_scene != None && focus != None
-            deny_scene.ToggleDenyOrgasm(focus, true)
+            deny_scene.ToggleDenyOrgasm(focus)
         endif
+    elseif control == "camera_lock"
+        ; SexLab's free camera just went off mid-scene: normal third-person camera, look/camera-switch enabled.
+        ; Movement stays disabled and the player stays AI-driven (the scene keeps running).
+        if Game.GetCameraState() == 0
+            Game.ForceThirdPerson()
+        endif
+        Game.EnablePlayerControls(false, false, true, true, false, false, false, false, 0)
     elseif control == "pos_up" || control == "pos_down"
         SkyrimNet_SexLab_Scene pos_scene = manager.GetSceneByActor(player)
         if pos_scene != None

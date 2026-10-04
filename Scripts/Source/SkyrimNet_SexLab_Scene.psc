@@ -4395,14 +4395,13 @@ Function HotkeyChangePositions(bool backwards)
 EndFunction
 
 ; Player orgasm denial toggle (HUD deny key, Description Editor deny column).
-; from_hotkey: HUD deny key, spoken via Transform when sexlab.hud.deny_transform is on.
-Function ToggleDenyOrgasm(Actor akActor, bool from_hotkey = false)
+Function ToggleDenyOrgasm(Actor akActor)
     int obj = GetObjFromActor(akActor)
     if obj <= 0
         Trace("ToggleDenyOrgasm", "no obj")
         return
     endif
-    SetDenyOrgasm(akActor, SNSL_JMap.getInt(obj, "deny_orgasm") != 1, Game.GetPlayer(), transform = from_hotkey)
+    SetDenyOrgasm(akActor, SNSL_JMap.getInt(obj, "deny_orgasm") != 1, Game.GetPlayer())
 EndFunction
 
 ; Orgasm denial: the player (HUD / Description Editor / TargetMenu) or an aggressor NPC (LLM actions
@@ -4411,12 +4410,11 @@ EndFunction
 ; Allow (1 -> 0) tests akActor with the normal orgasm rule and checks every other actor at once
 ; (OrgasmEngine.AllowOrgasm): when anyone orgasms, the group's normal orgasm DN starts
 ; "<denier> allowed <actor> to orgasm. "; otherwise the plain allow is narrated.
-; from_llm: the NPC's own line already says it, so the plain deny / allow is an event, not a DN.
-; narrate false: no plain deny / allow narration (an orgasm on allow still narrates).
-; transform (HUD deny key) + sexlab.hud.deny_transform: the plain deny / allow is the player saying
-; "You may not orgasm." / "You may orgasm." (TransformDialogue). Not for the player's own focus.
+; The plain deny / allow is always an event ("<denier> forbids <actor> from orgasming without
+; permission." / "<denier> permits <actor> to orgasm."), never a DN. from_llm is informational (trace only).
+; narrate false: no plain deny / allow event (an orgasm on allow still narrates).
 ; Returns false when the state already matched (nothing changed).
-bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_llm = false, bool narrate = true, bool transform = false)
+bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_llm = false, bool narrate = true)
     int obj = GetObjFromActor(akActor)
     if thread == None || akActor == None || obj <= 0
         Trace("SetDenyOrgasm", "no thread / actor / obj")
@@ -4430,14 +4428,12 @@ bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_ll
         return false
     endif
     SNSL_JMap.setInt(obj, "deny_orgasm", deny as int)
-    bool use_transform = transform && !from_llm && akActor != Game.GetPlayer() \
-        && SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.hud.deny_transform", true)
     String msg = ""
     bool fired = false
     if deny
         SNSL_JMap.setStr(obj, "deny_by", GetDisplayName(denier))
         SetOrgasmDisabled(akActor, true)
-        msg = GetDisplayName(denier)+" denies "+GetDisplayName(akActor)+" release."
+        msg = GetDisplayName(denier)+" forbids "+GetDisplayName(akActor)+" from orgasming without permission."
     else
         SNSL_JMap.setStr(obj, "deny_by", "")
         thread.DisableOrgasm(akActor, false)
@@ -4445,30 +4441,16 @@ bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_ll
         ; Unblocks in the engine, tests akActor with the normal orgasm rule and fires anyone else at
         ; 100 (+ the group join) in one step.
         fired = SkyrimNet_SexLab_OrgasmEngine.AllowOrgasm(akActor, denier)
-        msg = GetDisplayName(denier)+" allows "+GetDisplayName(akActor)+" to orgasm."
+        msg = GetDisplayName(denier)+" permits "+GetDisplayName(akActor)+" to orgasm."
     endif
     PersistPositions()
     manager.SaveThreadsJson()
-    Trace("SetDenyOrgasm", GetDisplayName(akActor)+" deny:"+deny+" by:"+GetDisplayName(denier)+" fired:"+fired+" llm:"+from_llm+" transform:"+use_transform)
+    Trace("SetDenyOrgasm", GetDisplayName(akActor)+" deny:"+deny+" by:"+GetDisplayName(denier)+" fired:"+fired+" llm:"+from_llm)
     if fired || !narrate
         ; The group orgasm DN carries the allow prefix.
         return true
     endif
-    if use_transform
-        String line = "You may orgasm."
-        if deny
-            line = "You may not orgasm."
-        endif
-        if SkyrimNetApi.TransformDialogue(line) == 0
-            return true
-        endif
-        Trace("SetDenyOrgasm", "TransformDialogue failed, narrating")
-    endif
-    if from_llm
-        RegisterEvent("sexlab update", msg, denier, akActor)
-    else
-        DirectNarration(msg, denier, akActor)
-    endif
+    RegisterEvent("sexlab update", msg, denier, akActor)
     return true
 EndFunction
 

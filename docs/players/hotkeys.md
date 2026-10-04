@@ -67,7 +67,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - **Num 5** pauses the current stage; the cell then reads *play*. Press again to resume with the rest of the stage's time.
   - **Num 4 / Num 6** go to the previous / next stage.
   - **PgUp / PgDn** (*PosUp* / *PosDn*) swap the actors' roles forward / back (SexLab's swap positions; nothing happens in solo or creature scenes). With **Narrate position changes** on (default), the current stage description is narrated with the actors in their new roles.
-  - **Num 1** denies or allows the focus actor's orgasm. The cell reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm. With **Transform allow and deny orgasm** on (default), you say "You may not orgasm." / "You may orgasm." in character instead of a narration. Allowing tests them for orgasm; if they orgasm, the normal orgasm narration starts "You allowed them to orgasm."
+  - **Num 1** denies or allows the focus actor's orgasm. The cell reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm. The change is sent as an event: "<you> forbids <them> from orgasming without permission." / "<you> permits <them> to orgasm." Allowing tests them for orgasm; if they orgasm, the normal orgasm narration starts "You allowed them to orgasm."
   - **Num 3** is SexLab's free camera. While it is on, the cell reads *lock*; press Num 3 again to go back to the normal camera.
   - **Num - / Num +** step the scene one speed level slower / faster: *gentle* (75%), *normal* (100%), *forceful* (125%). Each cell shows the level a press switches to (at *normal*: *gentle* / *forceful*); at the slowest or fastest level it shows a dimmed *—*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are forcefully …").
 - **How long it takes:** without the mini-game, a scene ends much like plain SexLab. Each actor normally orgasms once near the end, and some a little earlier. A victim usually doesn't. Faster raises the pace and can bring a second orgasm; slower can leave someone short. Pausing or repeating a stage adds time, so it adds enjoyment too.
@@ -76,7 +76,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - **1–4** pick who you act on (▶ marks them).
   - **Num 9** arouses that actor (costs stamina).
   - **Num 8** calms them (costs magicka). Calming someone at 90% or more holds off their orgasm for a few seconds.
-  - With **Allow right mouse to arouse and left mouse to calm** on (off by default), the **right mouse button** arouses and the **left mouse button** calms too. Clicks are only captured while the HUD is up.
+  - With **Allow right mouse to arouse and left mouse to calm** on (the default), the **right mouse button** arouses and the **left mouse button** calms too. Clicks are only captured while the HUD is up, so they don't attack or block then.
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.

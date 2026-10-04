@@ -250,6 +250,17 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
 
     ; Lone hug -> idle
     if resolved == "hug" && target != None && pa_HugA != None
+        ; Paired idle with a drawn weapon desyncs the player's graph (can't attack after).
+        Bool sheathed = CalmForPairedIdle(speaker)
+        sheathed = CalmForPairedIdle(target) || sheathed
+        if sheathed
+            int waits = 0
+            while waits < 15 && (speaker.IsWeaponDrawn() || target.IsWeaponDrawn())
+                Utility.Wait(0.1)
+                waits += 1
+            endwhile
+        endif
+        Trace("StartScene_Event", "lone hug pa_HugA target="+target_name+" speaker="+speaker_name+" sheathed="+sheathed)
         target.playIdleWithTarget(pa_HugA, speaker)
         Actor sender = speaker
         Actor receiver = target
@@ -329,8 +340,24 @@ Bool Function IsHugGiverPose(String intent, String tags)
     return False
 EndFunction
 
+; Mirrors DOM_Util.CalmActorFast. Returns True if a weapon sheathe was requested.
+Bool Function CalmForPairedIdle(Actor akActor)
+    if akActor == None
+        return False
+    endif
+    akActor.StopCombatAlarm()
+    if akActor.IsInCombat()
+        akActor.StopCombat()
+    endif
+    if akActor.IsWeaponDrawn()
+        akActor.SheatheWeapon()
+        return True
+    endif
+    return False
+EndFunction
+
 ;--------------------------------------
-; Functions 
+; Functions
 ;--------------------------------------
 
 

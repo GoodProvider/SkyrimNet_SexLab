@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1) — since [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0)
 
 ### SKSE / WebUI
 - Aligned with SkyrimNet beta26 rc4 (PublicAPI v12). Every API symbol this plugin uses is unchanged. The rc4 `PublicAPI.h` includes `PublicAPIDiaryQuery.h`, which neither rc4 zip ships, so `SKSE_Source/include/PublicAPIDiaryQuery.h` is a local stand-in (delete it once upstream ships the real file)
@@ -8,6 +8,12 @@
 - TargetMenu Scene catalog: removed `0100_stop`, `0200_stage`, `0300_position`, `0400_animation` and their dead panel JS (`tmRenderStopPanel` / `tmRenderStagePanel` / `tmRenderPositionPanel`, cast-draft helpers, `tmCastDraft`). The Description Editor covers stop / stage / actor order / animation. Manual (non-MO2) upgrades should delete those four files
 - Description Editor **continue scene** closes the WebUI (`requestWebUIHide(true)`) after sending its DirectNarration
 - New HUD scene keys **PosUp** / **PosDn** (`sexlab.hud.key_pos_up` PgUp, `sexlab.hud.key_pos_down` PgDn) in a new column left of Num 7 / Num 4; the HUD controls grid is now 5 x 3. `Menu.Hud_OnKey pos_up|pos_down` → `Scene.HotkeyChangePositions` (SexLab `ChangePositions`, then `AlignActors`). New `sexlab.hud.pos_narration` (**Narrate position changes**, on) narrates "The scene changes to <stage description>" with the new roles
+- Camera: `Hud.cpp` `Tick` edge-detects `IsInFreeCameraMode()` true to false mid-scene and calls `Menu.Hud_OnKey("camera_lock")` (ForceThirdPerson if first person, `EnablePlayerControls` look/camswitch only). `Scene_Manager` records `Game.GetCameraState()` on `HookAnimationStarting` (before SexLab forces third person) and on `HookAnimationEnd`, once the player has no active thread, turns TFC off and restores first/third person (`RestoreCameraAfterScene`).
+- `sexlab.minigame.mouse` (**Allow right mouse to arouse and left mouse to calm**) now defaults to on (manifest `defaultValue` + `Hud.cpp` fallback). A value already saved in settings.yaml is kept
+
+- Lone hug (`StartScene_Event` resolved `hug` → `pa_HugA` `playIdleWithTarget`) now stops combat and sheathes both actors first (new `Actions.CalmForPairedIdle`, mirrors DOM `CalmActorFast`) and waits up to 1.5 s for the sheathe. A paired idle played while the player held a drawn weapon (whip) left the player unable to attack afterward. The path now logs a `lone hug pa_HugA` trace
+
+- Removed the HUD deny key's Transform (`sexlab.hud.deny_transform` setting, `TransformDialogue` call, `ToggleDenyOrgasm` `from_hotkey` and `SetDenyOrgasm` `transform` params). Deny / allow orgasm are plain events for every source: "<denier> forbids <actor> from orgasming without permission." / "<denier> permits <actor> to orgasm."
 
 ## [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0) — since [0.34.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1)
 
@@ -29,7 +35,7 @@
 
 ### Orgasm / narration
 - Slower default enjoyment: `sexlab.enjoyment.passive_mult` 1.0 → 0.4, `aggressor_mult` 1.15 → 0.45, `victim_mult` 0.8 → 0.3, `jitter_max` 1.2 → 1.1. Logs showed scenes running 2–3.5× their stage timers (narration / LLM pacing), so actors orgasmed every ~50 s. Saved configs keep their old values; reset the **Enjoyment** settings to pick up the new defaults
-- Passive gain stops while the stage is paused (pause key)
+- Pausing the stage advance (pause key) no longer stops passive enjoyment gain; it continues as normal. The pause still holds the stage timer and the final-stage safety-net clocks
 - New **Scene ending** settings (`sexlab.ending.*`). The lead (aggressor with a victim, else the initiator) gets a target orgasm count at scene start (male 1-1, female 1-2, ranges configurable); reaching it jumps the scene to the final stage (`Scene.Ending_Check` → `GoToStage`)
 - The final stage is then held until the orgasm dialogue has played (SkyrimNet speech queue empty + audio ended), at most `sexlab.ending.dialogue_hold_max` (45 s)
 - Orgasm gate replaces the final-stage safety net for timed scenes (`sexlab.ending.gate`): each actor who hasn't orgasmed rolls once, chance = enjoyment %, `lead` seconds before the second-to-last stage ends (or on reaching the final stage first). `lead` = `NarrationTiming::EstimateSeconds` (median of the last 20 clean DN->speech samples; `sexlab.ending.gate_lead_default` 5 s until 3 exist). A pass sends the combined orgasm DN at once (`Effect_GatePassed` -> `Scene.Engine_GatePassed`, DirectNarration even in NPC-only scenes), holds the stage, and rushes the bar to 98 by the expected voice. The first non-player `SkyrimNet_SpeechStarted` after the DN (`GateNarrationSent` mark, `NarrationTiming::SpeechStarts`) pushes the final stage (`Effect_AdvanceToFinal`); the rush finishes within 1 s there and fires at 97 as a `gate` group (ForceOrgasm only, no second DN). No voice by `sexlab.ending.gate_wait_max` (20 s): advances anyway. All fail: no orgasm. Logs showed the old net (needs 90) skipping everyone at 38-86

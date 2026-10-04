@@ -59,7 +59,7 @@ namespace Hud
         bool g_showEnjoyment = true;
         bool g_showControls = true;
         bool g_miniGame = false;
-        bool g_miniGameMouse = false;  // LMB calm / RMB arouse
+        bool g_miniGameMouse = true;   // LMB calm / RMB arouse
         std::map<std::string, int> g_keyVk;            // control -> VK (dashboard value)
         std::map<std::string, std::uint32_t> g_keyDx;  // control -> DX
         std::map<std::string, std::string> g_keyLabel;
@@ -362,7 +362,7 @@ namespace Hud
             g_showEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.enjoyment", true);
             g_showControls = SexLabNet::GetConfigBool("sexlab.hud.controls", true);
             g_miniGame = SexLabNet::GetConfigBool("sexlab.minigame.enabled", false);
-            g_miniGameMouse = SexLabNet::GetConfigBool("sexlab.minigame.mouse", false);
+            g_miniGameMouse = SexLabNet::GetConfigBool("sexlab.minigame.mouse", true);
             g_keyVk.clear();
             g_keyDx.clear();
             g_keyLabel.clear();
@@ -470,6 +470,16 @@ namespace Hud
         if (!speedMsg.empty()) {
             OrgasmEngine::Narrate("sexlab_speed", speedMsg, player, speedTarget);
         }
+
+        // SexLab's free camera turned off mid-scene: restore the normal camera (Papyrus Menu.Hud_OnKey).
+        // Checked before the visibility early-return so a hidden HUD still catches it.
+        static bool s_wasFreeCam = false;
+        const auto* playerCamera = RE::PlayerCamera::GetSingleton();
+        const bool freeCamNow = inScene && playerCamera && playerCamera->IsInFreeCameraMode();
+        if (s_wasFreeCam && !freeCamNow && inScene) {
+            DispatchMenuKey("camera_lock");
+        }
+        s_wasFreeCam = freeCamNow;
 
         if (!visible || !g_domReady.load()) {
             return;

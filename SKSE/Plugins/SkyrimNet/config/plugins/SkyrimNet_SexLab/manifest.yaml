@@ -1,6 +1,6 @@
 plugin:
   name: "SkyrimNet_SexLab"
-  version: "0.35.0"
+  version: "0.35.1"
   description: "Sexlab-SkyrimNet integration"
   icon: "⚗️"
 
@@ -288,13 +288,6 @@ schema:
       category: "Scene HUD"
       supportsOverride: false
 
-    - name: "Transform allow and deny orgasm"
-      path: "sexlab.hud.deny_transform"
-      type: "bool"
-      description: "The deny / allow orgasm key makes you say \"You may not orgasm.\" / \"You may orgasm.\" (SkyrimNet Transform Dialogue) instead of a narration. Allowing tests the actor for orgasm; if they orgasm, the normal orgasm narration is sent instead, starting \"<you> allowed <them> to orgasm.\" Off: narrated as before."
-      defaultValue: true
-      category: "Scene HUD"
-
     - name: "Normal enjoyment multiplier"
       path: "sexlab.enjoyment.passive_mult"
       type: "float"
@@ -486,7 +479,7 @@ schema:
       path: "sexlab.minigame.mouse"
       type: "bool"
       description: "With the mini-game on, right mouse button arouses and left mouse button calms the focused actor (alongside the arouse / calm keys). Clicks are captured only while the scene HUD is up."
-      defaultValue: false
+      defaultValue: true
       category: "Mini-game"
 
     - name: "Arouse amount"

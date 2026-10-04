@@ -21,7 +21,7 @@ For each managed scene:
      - `baseRate = 100 / targetSecs`. It is fixed per animation, and enjoyment carries over when the animation changes.
      - LeadIn: `targetSecs` = all stages × 1.5, so no one reaches 100.
      - No timers: a flat 0.5/s.
-   - **The rate is fixed; it is not "remaining ÷ time left".** Extra time adds enjoyment: repeating a stage or a slow narration (a paused stage adds none). Real scenes usually run 2–3× their stage timers, which is why the default multipliers are well below 1.0.
+   - **The rate is fixed; it is not "remaining ÷ time left".** Extra time adds enjoyment: repeating a stage or a slow narration (a paused stage still gains at the normal rate). Real scenes usually run 2–3× their stage timers, which is why the default multipliers are well below 1.0.
    - **`roleMult`:** `sexlab.enjoyment.passive_mult` (0.4), `aggressor_mult` (0.45) or `victim_mult` (0.3).
    - **`jitter`:** rolled per actor at `BeginScene`, uniform in [`jitter_min`, `jitter_max`] (0.95–1.1).
    - **Anim speed:** `AnimSpeed::Get`, which is the style speed multiplied by the HUD's faster/slower scale.
@@ -82,7 +82,7 @@ For each managed scene:
   - **Pause:** `thread.UpdateTimer(100000)` pushes the stage's timer far out.
   - **Resume:** `thread.UpdateTimer(held − 100000)` puts back the remaining time, then `thread.ResolveTimers()` restores `TimedStage = Animation.HasTimer(Stage)`.
 - `StageStart` re-applies the hold while paused, because `GoToStage` resets the timer. It is applied once per (animation, stage). Manual previous/next still work.
-- `SetScenePaused` tells the engine. That drives the HUD's "Paused" tag and its **pause**/**resume** label, stops the safety-net clock and stops passive gain.
+- `SetScenePaused` tells the engine. That drives the HUD's "Paused" tag and its **pause**/**resume** label, stops the safety-net clock. It does not affect passive gain, which continues as normal.
 
 ## Mini-game
 

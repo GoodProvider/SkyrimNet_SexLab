@@ -43,8 +43,8 @@ The tentacles line is added once.
 
 - **Allow prefix.** `deny_orgasm` 1 → 0 calls `OrgasmEngine.AllowOrgasm(actor, denier)`, which unblocks the actor and checks every actor at once.
   - The allowed actor takes the normal orgasm test at once (enjoyment + the mini-game random bonus ≥ 100, or a pending request; not cooling / edging / out after the final roll). Everyone else fires only at 100. Whoever fires (plus the group join) gets the normal orgasm DN, starting with `"<denier> allowed <actor> to orgasm. "`.
-  - Otherwise the plain `"<denier> allows <actor> to orgasm."` is sent. That is a DN for the player, or an event for the LLM action.
-  - **HUD deny key + `sexlab.hud.deny_transform`** (default on; not when the focus actor is the player): the plain deny / allow is spoken by the player via `SkyrimNetApi.TransformDialogue`: `"You may not orgasm."` / `"You may orgasm."`. A failed Transform falls back to the DN. An allow that fires still uses the normal orgasm DN.
+  - Otherwise the plain event `"<denier> permits <actor> to orgasm."` is sent (every source: HUD, Description Editor, LLM action).
+  - Deny sends the event `"<denier> forbids <actor> from orgasming without permission."`
 - **Denier.** Stored as `deny_by` on the position obj and persisted beside `deny_orgasm`. It is the player (HUD, Description Editor, TargetMenu) or an aggressor NPC (LLM `SexLab_DenyOrgasm` / `SexLab_AllowOrgasm`; see [../authors/actions.md](../authors/actions.md)). An empty value falls back to the player's name.
 - **Folded mini-game lines.** Pending arouse/calm narrations about anyone in the group are taken out of the engine's narrate queue and appended (budget) instead of racing the orgasm DN as their own DN.
 - **DOM melt grouping.** `Scene.MeltKey` drops the manager's `". <name> is orgasming."` clause and turns the slave's name into `{n}`. Slaves with the same key share one melt sentence.

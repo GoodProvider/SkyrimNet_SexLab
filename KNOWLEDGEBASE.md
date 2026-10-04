@@ -1,5 +1,13 @@
 # Knowledgebase
 
+## Paired idle with a drawn weapon: player can't attack afterward (2026-10-04)
+
+**Symptom:** after the LLM "single hug" (Nina → Bob/player, `direction: getting`), the player could no longer use the whip. Logs showed no errors. `SkyrimNet_SexLab.log` only had `StartScene_Consensual_Two ... method:Hugging` + `Bob hugs Nina.` and no SexLab thread, and `OnLash` stopped.
+
+**Cause:** a resolved `hug` skips SexLab and plays vanilla `pa_HugA` with `target.playIdleWithTarget(pa_HugA, speaker)` (`Actions.StartScene_Event`). The player still had the whip drawn from the lashing, and the paired idle desynced its weapon state.
+
+**Rule:** before any `playIdleWithTarget` paired idle, stop combat and `SheatheWeapon()` on **both** actors, and wait for `IsWeaponDrawn()` to clear. Use `Actions.CalmForPairedIdle`, which mirrors DOM's `CalmActorFast`, the helper DOM's own hug calls first.
+
 ## Cum in the character bio: SexLab-only, game hours, no UDNG gate (2026-10-03)
 
 `0416_sexlab_cum.prompt` reads StorageUtil timestamps written by `Scene.AddCum`, so only SexLab orgasms with a stage CumId (and an actor with a penis in the window) record cum. OStim scenes don't. The timing uses `Utility.GetCurrentGameTime()` (game hours, so waiting or sleeping ages it), not `gameTimeNumeric`, whose units differ between mods. Expiry happens lazily inside the `sexlab_cum` decorator: the keys stay until the bio is next rendered for that actor. Unlike `0415`, it is deliberately not gated on `SkyrimNetUDNG.esp`.
@@ -1030,3 +1038,10 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Cause:** beta26 rc4's `PublicAPI.h` (API v12) includes `PublicAPIDiaryQuery.h`, but `skyrimnet-beta26-rc4.zip` and `skyrimnet-devkit-beta26-rc4.zip` ship only `PublicAPI.h` and `PublicAPIMemoryQuery.h`.
 - **Fix:** `SKSE_Source/include/PublicAPIDiaryQuery.h` is a minimal stand-in (`DiaryOrder`, `DiaryQuery`, `DiaryQueryToJSON`). `include/` precedes the devkit path, so it wins. Delete it once upstream ships the real header.
 - **Compat:** the symbols this plugin uses (`PublicGetVersion`, `PublicFormIDToUUID`, `PublicGetActorNameByUUID`, `PublicGetPluginConfigValue`) and the Papyrus API we call are unchanged from rc7; v11/v12 only add functions. `PublicGetRecentEvents` / dialogue history JSON changed (`text` -> `data`, `speaker` is a role, `npcName` added); we don't call them.
+
+## SexLab leaves the camera pinned after TFC off and never restores first person (2026-10-04)
+
+- **Symptom:** after toggling SexLab's free camera off mid-scene the camera is locked behind the player; after a scene started in first person the camera stays third person.
+- **Cause:** SexLab keeps the player AI-driven (`SetPlayerAIDriven`) and calls `ForceThirdPerson` at scene setup without saving the previous mode.
+- **Fix:** `Hud.cpp` free-cam edge -> `Hud_OnKey("camera_lock")`; `Scene_Manager.AnimationStarting` saves the camera state and `AnimationEnd` restores it. Untested in game: whether look/orbit works while AI-driven.
+

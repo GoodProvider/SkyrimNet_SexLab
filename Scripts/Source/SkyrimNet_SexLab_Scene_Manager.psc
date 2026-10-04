@@ -1420,6 +1420,9 @@ Function RegisterEventsSexlab()
     Trace("RegisterSexlabEvents","")
     ; SexLabFramework sexlab = Game.GetForm
 
+    ; Before SexLab prepares the player (forces third person): remember the camera to restore at the end.
+    UnRegisterForModEvent("HookAnimationStarting")
+    RegisterForModEvent("HookAnimationStarting", "AnimationStarting")
     UnRegisterForModEvent("HookAnimationStart")
     RegisterForModEvent("HookAnimationStart", "AnimationStart")
     UnRegisterForModEvent("HookStageStart")
@@ -1440,6 +1443,31 @@ Function RegisterEventsSexlab()
     UnRegisterForModEvent("HookOrgasmStart")
     RegisterForModEvent("HookOrgasmStart", "OrgasmCombined")
 EndFunction 
+
+; Game.GetCameraState() when the player's first scene began (-1 = none). SexLab forces third person for the
+; scene and never restores first person.
+Int scene_camera_state = -1
+
+Event AnimationStarting(int ThreadID, bool HasPlayer)
+    if HasPlayer && scene_camera_state < 0
+        scene_camera_state = Game.GetCameraState()
+    endif
+EndEvent
+
+; Back to the camera the player had before the scene (TFC off, first person if that was the start mode).
+Function RestoreCameraAfterScene()
+    Int saved = scene_camera_state
+    scene_camera_state = -1
+    if saved < 0
+        return
+    endif
+    MiscUtil.SetFreeCameraState(false)
+    if saved == 0
+        Game.ForceFirstPerson()
+    elseif Game.GetCameraState() == 0
+        Game.ForceThirdPerson()
+    endif
+EndFunction
 
 ; ----------------------------------------------------------
 Event AnimationStart(int ThreadID, bool HasPlayer)
@@ -1569,9 +1597,12 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
         else 
             main.active_sex = false
         endif
-        sl_scene.AnimationEnd() 
+        sl_scene.AnimationEnd()
     endif
-EndEvent 
+    if HasPlayer && sexlab != None && !sexlab.IsActorActive(Game.GetPlayer())
+        RestoreCameraAfterScene()
+    endif
+EndEvent
 
 ; Function AllowedDeniedOnlyIncrease(Actor[] actors, sslThreadController thread, String status)
     ; if !Game.GetModByName("SexLabAroused.esm")  != 255
