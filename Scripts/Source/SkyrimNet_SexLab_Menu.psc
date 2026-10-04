@@ -128,6 +128,11 @@ Function Hud_OnKey(String control, Actor focus = None)
         if deny_scene != None && focus != None
             deny_scene.ToggleDenyOrgasm(focus, true)
         endif
+    elseif control == "pos_up" || control == "pos_down"
+        SkyrimNet_SexLab_Scene pos_scene = manager.GetSceneByActor(player)
+        if pos_scene != None
+            pos_scene.HotkeyChangePositions(control == "pos_down")
+        endif
     endif
 EndFunction
 

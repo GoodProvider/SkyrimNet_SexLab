@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### SKSE / WebUI
+- TargetMenu Scene catalog: removed `0100_stop`, `0200_stage`, `0300_position`, `0400_animation` and their dead panel JS (`tmRenderStopPanel` / `tmRenderStagePanel` / `tmRenderPositionPanel`, cast-draft helpers, `tmCastDraft`). The Description Editor covers stop / stage / actor order / animation. Manual (non-MO2) upgrades should delete those four files
+- Description Editor **continue scene** closes the WebUI (`requestWebUIHide(true)`) after sending its DirectNarration
+- New HUD scene keys **PosUp** / **PosDn** (`sexlab.hud.key_pos_up` PgUp, `sexlab.hud.key_pos_down` PgDn) in a new column left of Num 7 / Num 4; the HUD controls grid is now 5 x 3. `Menu.Hud_OnKey pos_up|pos_down` → `Scene.HotkeyChangePositions` (SexLab `ChangePositions`, then `AlignActors`). New `sexlab.hud.pos_narration` (**Narrate position changes**, on) narrates "The scene changes to <stage description>" with the new roles
+
 ## [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0) — since [0.34.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1)
 
 ### Actions / scenes

@@ -38,6 +38,8 @@ These keys work while you control a scene: you are in it, or you took control of
 | previous | Num 4   |
 | pause    | Num 5   |
 | next     | Num 6   |
+| PosUp (swap roles) | PgUp |
+| PosDn (swap back)  | PgDn |
 | end      | Num 2   |
 | faster   | Num +   |
 

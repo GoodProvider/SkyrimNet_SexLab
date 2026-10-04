@@ -1269,7 +1269,7 @@
             display: flex;
         }
 
-        /* Stop dialog (Description Editor stop, TargetMenu stop explain): "Stop scene" / "Explain why" over the whole UI. */
+        /* Stop dialog (Description Editor stop, explainPrompt options): "Stop scene" / "Explain why" over the whole UI. */
         #stop-dialog-overlay {
             display: none;
             position: absolute;
@@ -2188,7 +2188,7 @@
         </div>
     </div>
     </div><!-- #yesno-overlay -->
-    <!-- Stop dialog (Description Editor stop, TargetMenu stop explain): "Stop scene" choices / "Explain why". -->
+    <!-- Stop dialog (Description Editor stop, explainPrompt options): "Stop scene" choices / "Explain why". -->
     <div id="stop-dialog-overlay">
         <div class="stop-dialog" id="stop-dialog-choices">
             <div class="target-row">Stop scene</div>
@@ -3172,8 +3172,6 @@
         let selectedActionLabel = null;
         let leftSelectedOpt = null; // root left-column selection (for highlight)
         let papyrusSelectedOpt = null;
-        let tmCastDraft = null; // [{name, formId, in:bool}, ...] for change_actors / rotate
-        let tmStopSpeakerFormId = 0;
         let outfitUi = { pos0: 0, pos1: 0, style: 'normally' };
         const OUTFIT_STYLES = ['forcefully', 'normally', 'gently', 'silently'];
         let bondageUi = { speaker: 0, target: 0, style: 'normally' };
@@ -3677,7 +3675,6 @@
         function selectAction(name, label, optionParameters) {
             rebuildParamDict(optionParameters);
             papyrusSelectedOpt = null;
-            tmCastDraft = null;
             selectedActionName = name;
             selectedActionLabel = label || name;
             seedActionParams(name);
@@ -3872,7 +3869,7 @@
         function tmPapyrusPanelOpen(opt) {
             if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) return true;
             if (!tmSameOpt(leftSelectedOpt, opt)) return false;
-            return opt.panel === 'animation' || !!papyrusSelectedOpt;
+            return !!papyrusSelectedOpt;
         }
 
         function makeNestedPulldownRow(opt, depthIndex) {
@@ -3892,7 +3889,6 @@
                 navStack = navStack.slice(0, depthIndex + 1);
                 navStack.push(opt);
                 papyrusSelectedOpt = null;
-                tmCastDraft = null;
                 selectedActionName = null;
                 selectedActionLabel = null;
                 renderTargetMenu();
@@ -4077,7 +4073,6 @@
             navStack = [];
             leftSelectedOpt = null;
             papyrusSelectedOpt = null;
-            tmCastDraft = null;
             selectedActionName = null;
             selectedActionLabel = null;
             outfitUi.pos0 = 0;
@@ -4095,7 +4090,6 @@
             navStack = [];
             leftSelectedOpt = null;
             papyrusSelectedOpt = null;
-            tmCastDraft = null;
             selectedActionName = null;
             selectedActionLabel = null;
             ssUi.seededForLabel = '';
@@ -4318,24 +4312,11 @@
                     firePapyrusOption(opt, {});
                 return;
             }
-            if (opt.panel === 'animation') {
-                navStack = [];
-                selectedActionName = null;
-                selectedActionLabel = null;
-                papyrusSelectedOpt = null;
-                if (typeof window.onMainPanelChange === 'function')
-                    window.onMainPanelChange(JSON.stringify({ key: 'scene_panel' }));
-                renderTargetMenu();
-                return;
-            }
             if (opt.explainPrompt) {
                 stopDialogOpen('tm', (style, narration) => firePapyrusOption(opt, { narration }), true);
                 return;
             }
             if (opt.panel) {
-                tmCastDraft = null;
-                if (opt.panel === 'position')
-                    tmCastDraft = tmBuildCastDraft(true);
                 if (opt.panel === 'fields') {
                     const staticFields = opt.panelFields || opt.panelfields;
                     if (!staticFields || !staticFields.length) {
@@ -4382,522 +4363,8 @@
             renderTargetMenu();
         }
 
-        function tmFormId(p) {
-            return Number((p && (p._form_id != null ? p._form_id : p.formId)) || 0);
-        }
-
-        function tmActorName(p) {
-            return (p && (p._name || p.name)) || '?';
-        }
-
-        function tmBuildCastDraft(sameCastOnly) {
-            const inCast = (SC.positions || []).map((p, i) => ({
-                name: tmActorName(p),
-                formId: tmFormId(p),
-                in: true,
-                order: i
-            })).filter(a => a.formId);
-            if (sameCastOnly) return inCast;
-            const inIds = new Set(inCast.map(a => a.formId));
-            const out = [];
-            const addOut = (name, formId) => {
-                const fid = Number(formId || 0);
-                if (!fid || inIds.has(fid) || out.some(x => x.formId === fid)) return;
-                out.push({ name: name || '?', formId: fid, in: false, order: 999 });
-            };
-            if (playerActor) addOut(playerActor.name, playerActor.formId);
-            if (targetActor) addOut(targetActor.name, targetActor.formId);
-            softNearbyActors().forEach(a => addOut(a.name, a.formId));
-            return inCast.concat(out);
-        }
-
-        function tmInCastOrdered() {
-            return (tmCastDraft || []).filter(a => a.in).sort((a, b) => a.order - b.order);
-        }
-
-        function tmApplyCastOrder() {
-            const ordered = tmInCastOrdered();
-            ordered.forEach((a, i) => { a.order = i; });
-        }
-
-        function tmMoveInCast(formId, dir) {
-            const ordered = tmInCastOrdered();
-            const i = ordered.findIndex(a => a.formId === formId);
-            const j = i + dir;
-            if (i < 0 || j < 0 || j >= ordered.length) return;
-            const tmp = ordered[i].order;
-            ordered[i].order = ordered[j].order;
-            ordered[j].order = tmp;
-            renderPapyrusPanel();
-        }
-
-        function tmToggleInOut(formId) {
-            const row = (tmCastDraft || []).find(a => a.formId === formId);
-            if (!row) return;
-            const inCount = tmInCastOrdered().length;
-            if (row.in) {
-                if (inCount <= 1) return;
-                row.in = false;
-                row.order = 999;
-            } else {
-                if (inCount >= 5) return;
-                row.in = true;
-                row.order = inCount;
-            }
-            tmApplyCastOrder();
-            renderPapyrusPanel();
-        }
-
-        function tmFireChangeActors(opt) {
-            const ordered = tmInCastOrdered();
-            if (!ordered.length || !opt) return;
-            const formIdsCsv = ordered.map(a => String(a.formId)).join(',');
-            firePapyrusOption(opt, { formIdsCsv });
-        }
-
-        function tmFireForActor(opt, formId, extra) {
-            firePapyrusOption(opt, Object.assign({ formIdStr: String(formId) }, extra || {}));
-        }
-
-        function tmOrgasmMode(p) {
-            if (p && Number(p._deny_orgasm) === 1) return 'deny';
-            if (p && Number(p._no_orgasm) === 1) return 'not_expected';
-            return 'expect';
-        }
-
-        function tmPapyrusFn(opt, fn, extraMapping) {
-            return {
-                plugin: opt.plugin,
-                questFormId: opt.questFormId,
-                scriptName: opt.scriptName,
-                executionFunctionName: fn,
-                parameterMapping: [
-                    { type: 'speaker', name: 'speaker' },
-                    { type: 'target', name: 'target' }
-                ].concat(extraMapping || [])
-            };
-        }
-
         function tmActorParam(formId) {
             return { type: 'Actor', formId: Number(formId) || 0 };
-        }
-
-        function tmSceneTargetFormId() {
-            const focusFid = Number((targetActor && targetActor.formId) || 0);
-            const inCast = (SC.positions || []).some(p => tmFormId(p) === focusFid);
-            if (inCast) return focusFid;
-            return tmFormId((SC.positions || [])[0]) || focusFid;
-        }
-
-        function tmStopSpeakerChoices() {
-            const out = [];
-            const seen = new Set();
-            (SC.positions || []).forEach((p, i) => {
-                const fid = tmFormId(p);
-                if (!fid || seen.has(fid)) return;
-                seen.add(fid);
-                out.push({
-                    formId: fid,
-                    label: i + '  ' + tmActorName(p),
-                    dist: -1
-                });
-            });
-            const nearby = (nearbyActors || []).filter(a => a && a.selectable).slice()
-                .sort((a, b) => (Number(a.dist) || 0) - (Number(b.dist) || 0));
-            nearby.forEach(a => {
-                const fid = Number(a.formId || 0);
-                if (!fid || seen.has(fid)) return;
-                seen.add(fid);
-                out.push({
-                    formId: fid,
-                    label: (a.name || a.label || '?'),
-                    dist: Number(a.dist) || 0
-                });
-            });
-            return out;
-        }
-
-        function tmFireStop(opt, fn, extra) {
-            const speakers = tmStopSpeakerChoices();
-            let speakerFid = Number(tmStopSpeakerFormId || 0);
-            if (!speakerFid && speakers.length)
-                speakerFid = speakers[0].formId;
-            let style = 'stop';
-            if (fn === 'TM_StopSilent') style = 'silent';
-            if (fn === 'TM_StopExplain') style = 'explain';
-            // Write straight to the target's live SceneInfo: copying the SC draft (applySceneMenuDraftToSceneInfo)
-            // committed _scene_sid -1 whenever SC was not bound to the live scene, and Papyrus dropped it.
-            const info = tmLiveSceneInfo();
-            if (!info) {
-                notifyPlayer('No active scene to stop');
-                return;
-            }
-            info.pendingStop = true;
-            info.stopStyle = style;
-            info.stopNarration = (extra && extra.narration) || '';
-            info.stopSpeakerFormId = speakerFid;
-            info.dirty = true;
-            requestWebUIHide(true);
-        }
-
-        // Live scene for the TargetMenu stop: the one with the target actor, else the one SC is bound to.
-        function tmLiveSceneInfo() {
-            const fids = [Number((targetActor && targetActor.formId) || 0), tmSceneTargetFormId()];
-            let found = null;
-            fids.forEach(fid => sceneInfoByKey.forEach((info, key) => {
-                if (!found && fid && key !== 'new' && info && info.mode === 'active' && info.scene_sid >= 0 && info.hasActor(fid))
-                    found = info;
-            }));
-            if (found) return found;
-            const bound = SC.scene_sid >= 0 ? sceneInfoByKey.get('scene:' + SC.scene_sid) : null;
-            return bound && bound.mode === 'active' ? bound : null;
-        }
-
-        function tmRenderStopPanel(body, opt) {
-            const speakers = tmStopSpeakerChoices();
-            const defaultFid = tmSceneTargetFormId();
-            if (!tmStopSpeakerFormId)
-                tmStopSpeakerFormId = defaultFid || (speakers[0] && speakers[0].formId) || 0;
-            const current = speakers.find(s => s.formId === tmStopSpeakerFormId) || speakers[0];
-            const labels = speakers.map(s => s.label);
-            const row = document.createElement('div');
-            row.className = 'compact-row';
-            const lab = document.createElement('span');
-            lab.textContent = 'speaker';
-            row.appendChild(lab);
-            row.appendChild(createPulldown(labels, current ? current.label : '', (v) => {
-                const s = speakers.find(x => x.label === v);
-                tmStopSpeakerFormId = s ? s.formId : 0;
-            }));
-            const btns = document.createElement('div');
-            btns.className = 'bottom-bar top-bar';
-            const silent = document.createElement('div');
-            silent.className = 'action-btn';
-            silent.textContent = 'silent';
-            silent.onclick = () => tmFireStop(opt, 'TM_StopSilent');
-            const stop = document.createElement('div');
-            stop.className = 'action-btn';
-            stop.textContent = 'stop';
-            stop.onclick = () => tmFireStop(opt, 'TM_Stop');
-            const explain = document.createElement('div');
-            explain.className = 'action-btn';
-            explain.textContent = 'explain';
-            explain.onclick = () => stopDialogOpen('tm', (style, narration) =>
-                tmFireStop(opt, 'TM_StopExplain', { narration }), true);
-            btns.appendChild(silent);
-            btns.appendChild(stop);
-            btns.appendChild(explain);
-            body.appendChild(btns);
-            body.appendChild(row);
-        }
-
-        function tmStageList() {
-            if (Array.isArray(SC.stages) && SC.stages.length)
-                return SC.stages;
-            const n = Number(SC.stageCount) || 0;
-            const cur = Number(SC.stage) || 1;
-            const out = [];
-            for (let s = 1; s <= n; s++)
-                out.push({ _stage: s, _template: '', _preview: '', _current: s === cur ? 1 : 0 });
-            return out;
-        }
-
-        function tmStageSeedTemplate(stages, idx) {
-            const st = stages[idx];
-            if (st && st._template) return st._template;
-            for (let j = idx - 1; j >= 0; j--) {
-                if (stages[j] && stages[j]._template) return stages[j]._template;
-            }
-            return '';
-        }
-
-        function tmClosePapyrusPanel() {
-            papyrusSelectedOpt = null;
-            tmCastDraft = null;
-            renderTargetMenu();
-        }
-
-        function tmPapyrusConfirmBar(onDone) {
-            const bar = document.createElement('div');
-            bar.className = 'bottom-bar';
-            const cancel = document.createElement('div');
-            cancel.className = 'option-cancel';
-            cancel.textContent = 'Cancel';
-            cancel.onclick = () => tmClosePapyrusPanel();
-            const done = document.createElement('div');
-            done.className = 'action-btn';
-            done.textContent = 'Done';
-            done.onclick = () => {
-                if (onDone) onDone();
-                tmClosePapyrusPanel();
-            };
-            bar.appendChild(cancel);
-            bar.appendChild(done);
-            return bar;
-        }
-        function tmRenderStagePanel(body, opt) {
-            const stages = tmStageList();
-            const table = document.createElement('table');
-            table.className = 'data-table';
-            const thead = document.createElement('thead');
-            thead.innerHTML = '<tr><th class="col-idx">#</th><th>description</th></tr>';
-            table.appendChild(thead);
-            const tbody = document.createElement('tbody');
-            stages.forEach((st, idx) => {
-                const n = Number(st._stage != null ? st._stage : idx + 1);
-                const tr = document.createElement('tr');
-                if (Number(st._current) || n === Number(SC.stage))
-                    tr.className = 'current';
-                const tdIdx = document.createElement('td');
-                tdIdx.className = 'col-idx';
-                tdIdx.textContent = String(n);
-                tdIdx.onclick = (e) => {
-                    e.stopPropagation();
-                    SC.stage = n;
-                    stages.forEach(s => { s._current = Number(s._stage) === n ? 1 : 0; });
-                    SC.stages = stages;
-                    renderPapyrusPanel();
-                };
-                const tdDesc = document.createElement('td');
-                const shown = st._preview || st._template || '';
-                tdDesc.textContent = shown;
-                tdDesc.onclick = (e) => {
-                    e.stopPropagation();
-                    if (tdDesc.querySelector('input')) return;
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.style.width = '100%';
-                    input.value = st._template || tmStageSeedTemplate(stages, idx);
-                    const commit = () => {
-                        st._template = input.value;
-                        SC.stages = stages;
-                    };
-                    input.onblur = commit;
-                    input.onkeydown = (ev) => {
-                        if (ev.key === 'Enter') {
-                            ev.preventDefault();
-                            input.blur();
-                        }
-                    };
-                    tdDesc.textContent = '';
-                    tdDesc.appendChild(input);
-                    input.focus();
-                };
-                tr.appendChild(tdIdx);
-                tr.appendChild(tdDesc);
-                tbody.appendChild(tr);
-            });
-            table.appendChild(tbody);
-            body.appendChild(table);
-            body.appendChild(tmPapyrusConfirmBar(() => {
-                SC.stages = stages;
-                commitSceneInfoNow(applySceneMenuDraftToSceneInfo({}));
-            }));
-        }
-
-        function tmPositionFormIds() {
-            return (SC.positions || []).map(tmFormId).filter(Boolean);
-        }
-
-        function tmFirePositions(opt, ids) {
-            if (!ids.length) return;
-            const byId = new Map((SC.positions || []).map(p => [tmFormId(p), p]));
-            SC.positions = ids.map(fid => {
-                if (byId.has(fid)) return byId.get(fid);
-                const a = (nearbyActors || []).find(x => Number(x.formId) === fid)
-                    || (playerActor && formIdU32(playerActor.formId) === fid ? playerActor : null)
-                    || (targetActor && formIdU32(targetActor.formId) === fid ? targetActor : null)
-                    || {};
-                return {
-                    _form_id: fid,
-                    _name: a.name || a.label || '?',
-                    _dressed: 0,
-                    _no_orgasm: 0,
-                    _deny_orgasm: 0,
-                    _victim: 0,
-                    _speaking: ''
-                };
-            });
-            renderPapyrusPanel();
-        }
-
-        function tmRenderPositionPanel(body, opt) {
-            const table = document.createElement('table');
-            table.className = 'data-table';
-            table.id = 'tm-positions-table';
-            const thead = document.createElement('thead');
-            thead.innerHTML = '<tr>' +
-                '<th class="col-idx">#</th><th class="col-move"></th><th class="col-name">name</th>' +
-                '<th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-v">V</th>' +
-                '<th class="col-mods">modifiers</th></tr>';
-            table.appendChild(thead);
-            const tbody = document.createElement('tbody');
-            const positions = SC.positions || [];
-            const ids = tmPositionFormIds();
-            const emptyTd = (cls) => {
-                const td = document.createElement('td');
-                if (cls) td.className = cls;
-                return td;
-            };
-
-            const removeAt = (i) => {
-                if (ids.length <= 1) return;
-                const removed = ids[i];
-                const next = ids.filter((_, j) => j !== i);
-                tmFirePositions(opt, next);
-                const focusFid = Number((targetActor && targetActor.formId) || 0);
-                if (removed === focusFid && next.length) {
-                    const keep = positions.find(p => tmFormId(p) === next[0]);
-                    if (keep && typeof requestControlActorFocus === 'function')
-                        requestControlActorFocus({ formId: next[0], name: tmActorName(keep) }, { force: true });
-                }
-            };
-            const addActor = (a) => {
-                if (ids.length >= 5) return;
-                const fid = Number(a.formId || 0);
-                if (!fid || ids.includes(fid)) return;
-                tmFirePositions(opt, ids.concat([fid]));
-            };
-            const move = (i, dir) => {
-                const j = i + dir;
-                if (j < 0 || j >= ids.length) return;
-                const next = ids.slice();
-                const tmp = next[i];
-                next[i] = next[j];
-                next[j] = tmp;
-                tmFirePositions(opt, next);
-            };
-
-            positions.forEach((p, i) => {
-                const fid = tmFormId(p);
-                const mods = scParseMods(p);
-                const tr = document.createElement('tr');
-                const tdIdx = document.createElement('td');
-                tdIdx.className = 'col-idx';
-                tdIdx.textContent = String(i);
-                tdIdx.onclick = (e) => { e.stopPropagation(); removeAt(i); };
-                const tdMove = document.createElement('td');
-                tdMove.className = 'col-move';
-                const moveBox = document.createElement('div');
-                moveBox.className = 'pos-move';
-                if (i > 0) {
-                    const up = document.createElement('span');
-                    up.textContent = '▲';
-                    up.onclick = (e) => { e.stopPropagation(); move(i, -1); };
-                    moveBox.appendChild(up);
-                }
-                if (i < positions.length - 1) {
-                    const down = document.createElement('span');
-                    down.textContent = '▼';
-                    down.onclick = (e) => { e.stopPropagation(); move(i, 1); };
-                    moveBox.appendChild(down);
-                }
-                tdMove.appendChild(moveBox);
-                const tdName = document.createElement('td');
-                tdName.className = 'col-name';
-                tdName.textContent = tmActorName(p);
-                tdName.onclick = (e) => { e.stopPropagation(); removeAt(i); };
-
-                const tdDressed = document.createElement('td');
-                tdDressed.className = 'col-dressed';
-                const dressedOn = !!Number(p._dressed);
-                tdDressed.innerHTML = `<span class="cell-toggle ${dressedOn ? 'on' : ''}">${dressedOn ? '👕' : '—'}</span>`;
-                tdDressed.querySelector('span').onclick = (e) => {
-                    e.stopPropagation();
-                    p._dressed = dressedOn ? 0 : 1;
-                    renderPapyrusPanel();
-                };
-
-                const tdO = document.createElement('td');
-                tdO.className = 'col-o';
-                const noOrg = !!Number(p._no_orgasm);
-                tdO.innerHTML = `<span class="cell-toggle ${noOrg ? 'on' : ''}">O</span>`;
-                tdO.querySelector('span').onclick = (e) => {
-                    e.stopPropagation();
-                    p._no_orgasm = noOrg ? 0 : 1;
-                    renderPapyrusPanel();
-                };
-
-                const tdV = document.createElement('td');
-                tdV.className = 'col-v';
-                const vic = !!Number(p._victim);
-                tdV.innerHTML = `<span class="cell-toggle ${vic ? 'on' : ''}">${vic ? 'V' : '—'}</span>`;
-                tdV.querySelector('span').onclick = (e) => {
-                    e.stopPropagation();
-                    p._victim = vic ? 0 : 1;
-                    renderPapyrusPanel();
-                };
-
-                const tdMods = document.createElement('td');
-                tdMods.className = 'col-mods';
-                const list = document.createElement('div');
-                list.className = 'mod-chip-list';
-                const fireSpeaking = (nextMods) => {
-                    scSetMods(p, nextMods);
-                    renderPapyrusPanel();
-                };
-                mods.forEach(m => {
-                    const chip = document.createElement('span');
-                    chip.className = 'tag-chip';
-                    chip.textContent = m;
-                    chip.onclick = (e) => {
-                        e.stopPropagation();
-                        fireSpeaking(mods.filter(x => x !== m));
-                    };
-                    list.appendChild(chip);
-                });
-                const available = SC_SPEAKING_MODS.filter(m => !mods.includes(m));
-                if (available.length) {
-                    list.appendChild(createPulldown(available, 'add', v => {
-                        if (!v || mods.includes(v)) return;
-                        fireSpeaking(mods.concat([v]));
-                    }));
-                }
-                tdMods.appendChild(list);
-
-                tr.appendChild(tdIdx);
-                tr.appendChild(tdMove);
-                tr.appendChild(tdName);
-                tr.appendChild(tdDressed);
-                tr.appendChild(tdO);
-                tr.appendChild(tdV);
-                tr.appendChild(tdMods);
-                tbody.appendChild(tr);
-            });
-
-            const inIds = new Set(ids);
-            const excluded = (nearbyActors || []).filter(a => {
-                const fid = Number(a.formId || 0);
-                if (!fid || inIds.has(fid)) return false;
-                if (a.selectable === false) return false;
-                const st = a.status || 'ok';
-                return st === 'ok' || st === 'sexlab';
-            }).sort((a, b) => (Number(a.dist) || 0) - (Number(b.dist) || 0));
-            excluded.forEach(a => {
-                const tr = document.createElement('tr');
-                tr.className = 'pos-excluded';
-                const tdIdx = document.createElement('td');
-                tdIdx.className = 'col-idx';
-                tdIdx.onclick = (e) => { e.stopPropagation(); addActor(a); };
-                const tdName = document.createElement('td');
-                tdName.className = 'col-name';
-                tdName.textContent = a.name || a.label || '?';
-                tdName.onclick = (e) => { e.stopPropagation(); addActor(a); };
-                tr.appendChild(tdIdx);
-                tr.appendChild(emptyTd('col-move'));
-                tr.appendChild(tdName);
-                tr.appendChild(emptyTd('col-dressed'));
-                tr.appendChild(emptyTd('col-o'));
-                tr.appendChild(emptyTd('col-v'));
-                tr.appendChild(emptyTd('col-mods'));
-                tbody.appendChild(tr);
-            });
-            table.appendChild(tbody);
-            const wrap = document.createElement('div');
-            wrap.className = 'sc-positions-scroll';
-            wrap.appendChild(table);
-            body.appendChild(wrap);
-            body.appendChild(tmPapyrusConfirmBar(() => commitSceneInfoNow(applySceneMenuDraftToSceneInfo({}))));
         }
 
         // Each leaf: display key/label, the AnimDB tag it fires (wire), and which legacy
@@ -7514,7 +6981,7 @@
             applySourceTint(panel, navEffectiveSource(opt));
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
-                || kind === 'outfit' || kind === 'bondage' || kind === 'leash' || kind === 'stop'
+                || kind === 'outfit' || kind === 'bondage' || kind === 'leash'
                 || kind === 'fields';
             if (!skipHeader) {
                 const header = document.createElement('div');
@@ -7535,12 +7002,6 @@
 
             if (kind === 'fields') {
                 renderFieldsPanelBody(body, opt);
-            } else if (kind === 'stop') {
-                tmRenderStopPanel(body, opt);
-            } else if (kind === 'stage') {
-                tmRenderStagePanel(body, opt);
-            } else if (kind === 'position') {
-                tmRenderPositionPanel(body, opt);
             } else if (kind === 'outfit') {
                 renderOutfitPanelBody(body, opt);
             } else if (kind === 'bondage') {
@@ -7561,7 +7022,6 @@
             ssCascade = null;
             leftSelectedOpt = opt;
             papyrusSelectedOpt = null;
-            tmCastDraft = null;
             navStack = [opt];
             selectedActionName = null;
             selectedActionLabel = null;
@@ -11172,7 +10632,8 @@
             requestWebUIHide(true);
         }
 
-        // Send the active stage's rendered description to SkyrimNet as "The scene changes to ...".
+        // Send the active stage's rendered description to SkyrimNet as "The scene changes to ...",
+        // then close the WebUI (commit close, like Save).
         function deContinueScene() {
             deAutoSave();
             const info = deSceneInfoForPick();
@@ -11182,6 +10643,7 @@
             if (!text) return;
             if (typeof window.onSceneNarrate === 'function')
                 window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _text: text }));
+            requestWebUIHide(true);
         }
 
         // Orgasm button: Scene.WebUI_ForceOrgasm runs SexLab ForceOrgasm on thread position i

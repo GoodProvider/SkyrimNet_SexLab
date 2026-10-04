@@ -9,6 +9,7 @@
         C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
         blocked, paused, freeCam, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
+        Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -121,7 +122,7 @@
             display: grid;
             visibility: hidden;
             width: max-content;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: var(--space-sm);
             font-size: var(--text-sm);
         }
@@ -223,6 +224,7 @@
 
         // Every label each grid column can show; each cell carries them as invisible sizers so widths never change.
         const COLUMN_LABELS = [
+            ['', 'PosUp', 'PosDn'],
             ['', 'prev', 'deny', 'allow'],
             ['calm', 'broken', 'pause', 'play', 'end'],
             ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM],
@@ -299,28 +301,31 @@
             const enjoyOn = !!g.enjoyment && html !== '';
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
-            // Controls part, numpad grid. Each label names what a press does.
-            //   (Num 7)  calm   arouse   <slower step>
-            //   prev     pause  next     <faster step>
-            //   deny     end    free 📷
+            // Controls part, PgUp/PgDn column + numpad grid. Each label names what a press does.
+            //   PosUp   (Num 7)  calm   arouse   <slower step>
+            //   PosDn   prev     pause  next     <faster step>
+            //           deny     end    free 📷
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
             const fa = actors[state.focus];
             const slower = state.slower || '', faster = state.faster || '';
             let c = '';
-            c += ctl(keys, 'skyrimnet', '', 0, { dim: true, off: cOff });
-            c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 1, { blocked: blocked.calm, off: mgcOff });
-            c += ctl(keys, 'arouse', 'arouse', 2, { blocked: blocked.arouse, off: mgcOff });
-            c += ctl(keys, 'slower', slower || NO_STEP, 3, { dim: !slower, off: cOff });
-            c += ctl(keys, 'previous', 'prev', 0, { off: cOff });
-            c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 1, { off: cOff });
-            c += ctl(keys, 'next', 'next', 2, { off: cOff });
-            c += ctl(keys, 'faster', faster || NO_STEP, 3, { dim: !faster, off: cOff });
-            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 0, { off: cOff });
-            c += ctl(keys, 'end', 'end', 1, { off: cOff });
-            c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 2, { off: cOff });
-            c += ctl(keys, '', '', 3, { off: true });
+            c += ctl(keys, 'pos_up', 'PosUp', 0, { off: cOff });
+            c += ctl(keys, 'skyrimnet', '', 1, { dim: true, off: cOff });
+            c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 2, { blocked: blocked.calm, off: mgcOff });
+            c += ctl(keys, 'arouse', 'arouse', 3, { blocked: blocked.arouse, off: mgcOff });
+            c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower, off: cOff });
+            c += ctl(keys, 'pos_down', 'PosDn', 0, { off: cOff });
+            c += ctl(keys, 'previous', 'prev', 1, { off: cOff });
+            c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 2, { off: cOff });
+            c += ctl(keys, 'next', 'next', 3, { off: cOff });
+            c += ctl(keys, 'faster', faster || NO_STEP, 4, { dim: !faster, off: cOff });
+            c += ctl(keys, '', '', 0, { off: true });
+            c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 1, { off: cOff });
+            c += ctl(keys, 'end', 'end', 2, { off: cOff });
+            c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 3, { off: cOff });
+            c += ctl(keys, '', '', 4, { off: true });
             const controlsOn = !!g.controls;
             const controls = document.getElementById('controls');
             controls.innerHTML = c;

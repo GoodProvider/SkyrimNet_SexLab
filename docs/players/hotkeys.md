@@ -27,16 +27,16 @@ In-game PrismaUI target / sex menus (SKSE DLL). Build and paths: [../developers/
 
 While this overlay is open, other mods’ hotkeys (including SexLab stage/adjust keys) are ignored so you can type in description fields. The mouse still moves and WebUI text fields accept typing. Escape and this mod’s menu hotkey still work.
 
-## Scene keys (numpad)
+## Scene keys (numpad + PgUp / PgDn)
 
 These keys work while you control a scene: you are in it, or you took control of the crosshair scene with SexLab's `N`. They work with NumLock on or off.
 
 ```
---------------------------------------------------------
-| 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
-| 4 previous    | 5 pause | 6 next        | + faster |
-| 1 deny        | 2 end   | 3 free camera |          |
---------------------------------------------------------
+---------------------------------------------------------------------
+| PgUp PosUp | 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
+| PgDn PosDn | 4 previous    | 5 pause | 6 next        | + faster |
+|            | 1 deny        | 2 end   | 3 free camera |          |
+---------------------------------------------------------------------
 ```
 
 Num 3 is SexLab's own **Toggle Free Camera** key, set in the SexLab MCM; this mod doesn't bind it, but the HUD shows it. Num 7 is left for SkyrimNet. Num 0 and Num Enter are free.
@@ -53,12 +53,12 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
 - **Controls:** a fixed grid laid out like the numpad. Each label names what pressing its key will do.
 
   ```
-   Num 7    Num 8    Num 9    Num -
-            calm     arouse   gentle
-   Num 4    Num 5    Num 6    Num +
-   prev     pause    next     forceful
-   Num 1    Num 2    Num 3
-   deny     end      free 📷
+   PgUp     Num 7    Num 8    Num 9    Num -
+   PosUp             calm     arouse   gentle
+   PgDn     Num 4    Num 5    Num 6    Num +
+   PosDn    prev     pause    next     forceful
+            Num 1    Num 2    Num 3
+            deny     end      free 📷
   ```
 
   Num 7 is dimmed with no label (it belongs to SkyrimNet).
@@ -66,6 +66,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - **Num 2** ends the scene.
   - **Num 5** pauses the current stage; the cell then reads *play*. Press again to resume with the rest of the stage's time.
   - **Num 4 / Num 6** go to the previous / next stage.
+  - **PgUp / PgDn** (*PosUp* / *PosDn*) swap the actors' roles forward / back (SexLab's swap positions; nothing happens in solo or creature scenes). With **Narrate position changes** on (default), the current stage description is narrated with the actors in their new roles.
   - **Num 1** denies or allows the focus actor's orgasm. The cell reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm. With **Transform allow and deny orgasm** on (default), you say "You may not orgasm." / "You may orgasm." in character instead of a narration. Allowing tests them for orgasm; if they orgasm, the normal orgasm narration starts "You allowed them to orgasm."
   - **Num 3** is SexLab's free camera. While it is on, the cell reads *lock*; press Num 3 again to go back to the normal camera.
   - **Num - / Num +** step the scene one speed level slower / faster: *gentle* (75%), *normal* (100%), *forceful* (125%). Each cell shows the level a press switches to (at *normal*: *gentle* / *forceful*); at the slowest or fastest level it shows a dimmed *—*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are forcefully …").

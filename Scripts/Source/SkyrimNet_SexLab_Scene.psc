@@ -4359,6 +4359,41 @@ Function WebUI_OnNarrate(String json)
     DirectNarration("The scene changes to "+text, sender, receiver)
 EndFunction
 
+; HUD PosUp / PosDn (PgUp / PgDn): SexLab's swap positions. sexlab.hud.pos_narration narrates the
+; current stage description with the actors in their new roles, worded like "continue scene".
+Function HotkeyChangePositions(bool backwards)
+    if thread == None
+        return
+    endif
+    Actor[] before = PapyrusUtil.ActorArray(thread.Positions.length)
+    int i = 0
+    while i < before.length
+        before[i] = thread.Positions[i]
+        i += 1
+    endwhile
+    thread.ChangePositions(backwards)
+    bool changed = false
+    i = 0
+    while i < before.length && !changed
+        if i >= thread.Positions.length || before[i] != thread.Positions[i]
+            changed = true
+        endif
+        i += 1
+    endwhile
+    if !changed
+        Trace("HotkeyChangePositions", "no change (solo / creature) backwards:"+backwards)
+        return
+    endif
+    AlignActors()
+    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.hud.pos_narration", true)
+        return
+    endif
+    String desc = GetDescription()
+    if desc != ""
+        DirectNarration("The scene changes to "+desc, sender, receiver)
+    endif
+EndFunction
+
 ; Player orgasm denial toggle (HUD deny key, Description Editor deny column).
 ; from_hotkey: HUD deny key, spoken via Transform when sexlab.hud.deny_transform is on.
 Function ToggleDenyOrgasm(Actor akActor, bool from_hotkey = false)

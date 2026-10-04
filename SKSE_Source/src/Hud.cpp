@@ -29,9 +29,12 @@ namespace Hud
             bool miniGame;  // false = controls group
         };
 
-        // Dashboard hotkeys (VK), defaults on the numpad laid out like the HUD grid.
+        // Dashboard hotkeys (VK), defaults on the numpad laid out like the HUD grid, plus PgUp / PgDn
+        // (pos_up / pos_down) in a column left of it.
         // Num 3 is SexLab's free camera (display only), Num 7 is SkyrimNet's. Focus keys 1-4 are fixed.
         constexpr KeyBinding kBindings[] = {
+            { "pos_up", "sexlab.hud.key_pos_up", VK_PRIOR, false },
+            { "pos_down", "sexlab.hud.key_pos_down", VK_NEXT, false },
             { "end", "sexlab.hud.key_end", VK_NUMPAD2, false },
             { "previous", "sexlab.hud.key_previous", VK_NUMPAD4, false },
             { "next", "sexlab.hud.key_next", VK_NUMPAD6, false },
@@ -100,7 +103,7 @@ namespace Hud
             return quest;
         }
 
-        // end / previous / next / pause / deny are SexLab thread operations: Papyrus Menu.Hud_OnKey.
+        // end / previous / next / pause / deny / pos_up / pos_down are SexLab thread operations: Papyrus Menu.Hud_OnKey.
         // focus: the HUD focus actor (deny), 0 for the rest.
         void DispatchMenuKey(const char* control, RE::FormID focus = 0)
         {

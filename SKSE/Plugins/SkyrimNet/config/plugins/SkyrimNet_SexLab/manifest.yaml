@@ -178,7 +178,7 @@ schema:
     - name: "Show scene controls"
       path: "sexlab.hud.controls"
       type: "bool"
-      description: "Scene HUD: end / previous / pause / next / slower / faster hotkeys and their labels. Off also disables those keys."
+      description: "Scene HUD: end / previous / pause / next / slower / faster / PosUp / PosDn hotkeys and their labels. Off also disables those keys."
       defaultValue: true
       category: "Scene HUD"
 
@@ -225,6 +225,35 @@ schema:
       defaultValue: 102
       category: "Scene HUD"
       supportsOverride: false
+
+    - name: "Position up key"
+      path: "sexlab.hud.key_pos_up"
+      type: "hotkey"
+      description: "PosUp: swaps the actors' roles forward (SexLab's swap positions). Does nothing in solo or creature scenes. Default PgUp."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 33
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Position down key"
+      path: "sexlab.hud.key_pos_down"
+      type: "hotkey"
+      description: "PosDn: swaps the actors' roles back. Default PgDn."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 34
+      category: "Scene HUD"
+      supportsOverride: false
+
+    - name: "Narrate position changes"
+      path: "sexlab.hud.pos_narration"
+      type: "bool"
+      description: "After PosUp / PosDn, narrate \"The scene changes to ...\" with the current stage description and the actors in their new roles."
+      defaultValue: true
+      category: "Scene HUD"
 
     - name: "Slower key"
       path: "sexlab.hud.key_slower"
