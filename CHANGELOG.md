@@ -2,6 +2,12 @@
 
 ## [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1) — since [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0)
 
+### Actions / scenes
+- Lone hug (`StartScene_Event` resolved `hug` → `pa_HugA` `playIdleWithTarget`) now stops combat and sheathes both actors first (new `Actions.CalmForPairedIdle`, mirrors DOM `CalmActorFast`) and waits up to 1.5 s for the sheathe. A paired idle played while the player held a drawn weapon (whip) left the player unable to attack afterward. The path now logs a `lone hug pa_HugA` trace
+
+### Orgasm / narration
+- Removed the HUD deny key's Transform (`sexlab.hud.deny_transform` setting, `TransformDialogue` call, `ToggleDenyOrgasm` `from_hotkey` and `SetDenyOrgasm` `transform` params). Deny / allow orgasm are plain events for every source: "<denier> forbids <actor> from orgasming without permission." / "<denier> permits <actor> to orgasm."
+
 ### SKSE / WebUI
 - Aligned with SkyrimNet beta26 rc4 (PublicAPI v12). Every API symbol this plugin uses is unchanged. The rc4 `PublicAPI.h` includes `PublicAPIDiaryQuery.h`, which neither rc4 zip ships, so `SKSE_Source/include/PublicAPIDiaryQuery.h` is a local stand-in (delete it once upstream ships the real file)
 - CommonLibSSE-NG submodule bumped from v4.10.0 to v11.0.0 (`alandtse/CommonLibSSE-NG`, branch `ng`) for Skyrim 1.7.x / 1.7.99 (Address Library format 5). `.gitmodules` URL now uses the repo's current name (was `CommonLibVR`). CommonLib is GPL-3.0-or-later with the Skyrim Modding Exception from v5 on
@@ -10,10 +16,6 @@
 - New HUD scene keys **PosUp** / **PosDn** (`sexlab.hud.key_pos_up` PgUp, `sexlab.hud.key_pos_down` PgDn) in a new column left of Num 7 / Num 4; the HUD controls grid is now 5 x 3. `Menu.Hud_OnKey pos_up|pos_down` → `Scene.HotkeyChangePositions` (SexLab `ChangePositions`, then `AlignActors`). New `sexlab.hud.pos_narration` (**Narrate position changes**, on) narrates "The scene changes to <stage description>" with the new roles
 - Camera: `Hud.cpp` `Tick` edge-detects `IsInFreeCameraMode()` true to false mid-scene and calls `Menu.Hud_OnKey("camera_lock")` (ForceThirdPerson if first person, `EnablePlayerControls` look/camswitch only). `Scene_Manager` records `Game.GetCameraState()` on `HookAnimationStarting` (before SexLab forces third person) and on `HookAnimationEnd`, once the player has no active thread, turns TFC off and restores first/third person (`RestoreCameraAfterScene`).
 - `sexlab.minigame.mouse` (**Allow right mouse to arouse and left mouse to calm**) now defaults to on (manifest `defaultValue` + `Hud.cpp` fallback). A value already saved in settings.yaml is kept
-
-- Lone hug (`StartScene_Event` resolved `hug` → `pa_HugA` `playIdleWithTarget`) now stops combat and sheathes both actors first (new `Actions.CalmForPairedIdle`, mirrors DOM `CalmActorFast`) and waits up to 1.5 s for the sheathe. A paired idle played while the player held a drawn weapon (whip) left the player unable to attack afterward. The path now logs a `lone hug pa_HugA` trace
-
-- Removed the HUD deny key's Transform (`sexlab.hud.deny_transform` setting, `TransformDialogue` call, `ToggleDenyOrgasm` `from_hotkey` and `SetDenyOrgasm` `transform` params). Deny / allow orgasm are plain events for every source: "<denier> forbids <actor> from orgasming without permission." / "<denier> permits <actor> to orgasm."
 
 ## [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0) — since [0.34.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.34.1)
 

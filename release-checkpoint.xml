@@ -15,7 +15,7 @@
     <updated>2026-10-04</updated>
     <base_tag>0.35.0</base_tag>
     <next_version>0.35.1</next_version>
-    <version_status>Makefile VERSION=0.35.1 (authoritative); plugin manifest.json and settings manifest.yaml 0.35.1; info.json / FOMOD still 0.35.0 until make release; latest git tag 0.35.0; 0.35.1 not tagged</version_status>
+    <version_status>Makefile VERSION=0.35.1 (authoritative); info.json, FOMOD info.xml / ModuleConfig.xml, plugin manifest.json all 0.35.1; latest git tag 0.35.0; 0.35.1 not tagged</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -63,6 +63,7 @@
   </doc_files>
 
   <status>
+    <note>2026-10-04: 0.35.1 docs pass at HEAD f31f65b (adds camera restore after TFC / scene end and sexlab.minigame.mouse default on). CHANGELOG.md 0.35.1 regrouped into Actions / scenes (lone hug CalmForPairedIdle), Orgasm / narration (deny Transform removed), SKSE / WebUI. Camera documented in hotkeys.md, papyrus.md, webui.md. Pex and DLL rebuilt in f31f65b. Omit: %SystemDrive%/, checkpoints/full/, extern/JContainers/, z-*, reviews/. Next: make release, tag 0.35.1, GitHub Release.</note>
     <note>2026-10-04: 0.35.1 since tagged 0.35.0 (HEAD 4ebea86). Delta: SkyrimNet beta26 rc4 (API v12) alignment, CommonLibSSE-NG v11.0.0 (Skyrim 1.7.x), TargetMenu Scene stop/stage/position/animation removed, Description Editor continue closes WebUI, HUD PosUp/PosDn + pos_narration. Docs (hotkeys.md, webui.md) already current. Omit: z-*, reviews/, extern/JContainers, checkpoints/full, %SystemDrive%/. pyro then make release; 0.35.1 untagged.</note>
     <note>2026-10-04: 0.35.0 since tagged 0.34.1. skse-scene fast-forwarded into main (HEAD 924468f). Delta: OrgasmEngine scene ending / gate / numpad HUD / animation speed / mini-game LLM actions, AnimDB scene-setting keys + tag synonyms + DD-aware tags, one Scene view (Description Editor / Scene Creator), C++ JsonStore (JContainers still required), 0416_sexlab_cum bio prompt, DLL hardening. Docs already current in-branch; superseded DE scene-pulldown / Editor-row bullets folded into final state. Omit: descriptor/, tools/_*, zz-plan.md, dom-checkpoint.md, review-checkout.xml, release-todo.md, release-guide.xml, guides/, reviews/, z-*. pyro then make release; 0.35.0 untagged.</note>
     <note>2026-09-14: Rebuild 0.34.1 since tagged 0.34.0 (HEAD 798f752). Added eligibility `get_global_value` / `skyrimnet_sexlab_ostim_player` and `GetThreadByActor`/`GetSceneByThread` caller arity to changelogs. pyro then make release. SKSE DLL and handler ESPs unchanged. Omit: reviews/, y-MIGRATING_TO_BETA25.md, z-*. 0.34.1 still untagged.</note>
@@ -72,7 +73,7 @@
     <note>2026-09-12: Beta 25 content plugin `goodprovider.sexlab` (external layer). Actions renamed to match in-file `name`. Settings schema stays at config/plugins. y-MIGRATING_TO_BETA25.md remains user scratch, not shipped.</note>
     <note>2026-09-12: Release docs since tagged 0.31.5 (7fad407). Delta: RenderSlPrompt afterglow/cum, P+ PickOneAnimation + 120s duration cap + empty-tag skip (SelectAnimations and SelectAnimationsDialog), leash MCM/menu/WebUI handoff, orgasm "is not orgasming right now", helper path helpers/sexlab/. Handler ESPs unchanged. Omitted from changelog: OStimNet gitlink, webui/MainPanels stubs, TargetMenu split JSON (ActionCatalog loads target_options.json only), bondage/group-devices.json, Scripts.zip, reviews/, y-MIGRATING_TO_BETA25.md.</note>
     <note>2026-09-01: Replaced release-guide.xml with release-guide.md (human) + .cursor/skills/release/SKILL.md (agent). Checkpoint is session state only.</note>
-    <note>Open: commit changelog/pex if the rebuild dirtied the tree. Pack: versions/SkyrimNet_SexLab 0.34.1.7z. Then git tag 0.34.1, GitHub Release. Leftover versions/ 0.33.0.7z and 0.34.0.7z are local packs.</note>
+    <note>Open: pack versions/SkyrimNet_SexLab 0.35.1.7z (make release), then git tag 0.35.1, GitHub Release.</note>
   </status>
 
   <conventions>
