@@ -2,6 +2,8 @@
 
 Enable the optional hot key in the SkyrimNet dashboard plugin settings (**Enable Start Sex / Edit Stage hotkey**, default **backslash** `\\`). A dashboard save rebinds the key in-game; you do not need to open the MCM or reload. The in-game MCM only points at that page. Do not bind this to the same key as SkyrimNet_Leashed’s leash panel.
 
+The first time you press it on a save, if the animation database does not match SexLab's animation count, a dialog warns of a likely problem and offers to rebuild the database. Press the hotkey again to open the overlay.
+
 ## Out of animation
 
 - Start a sexual act with crosshair NPC, or between NPCs not under crosshair

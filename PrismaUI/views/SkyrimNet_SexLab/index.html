@@ -2088,6 +2088,13 @@
             <span>Last rebuild:</span>
             <span id="settings-last-rebuild">never</span>
         </div>
+        <div class="compact-row" style="margin-bottom:8px">
+            <span>Animations in database / in SexLab:</span>
+            <span id="settings-anim-counts">?</span>
+        </div>
+        <div id="settings-count-warning" style="display:none;font-size:200%;font-weight:bold;color:#ff5555;margin-bottom:8px">
+            Animation counts do not match. Reload (rebuild) the animation database.
+        </div>
         <div class="compact-row" style="margin-bottom:12px">
             <div class="action-btn" id="settings-btn-rebuild" onclick="settingsRebuild()">Rebuild Animation Database</div>
         </div>
@@ -2494,12 +2501,33 @@
         let CONTROL_FOCUS_KIND = '';
         let FOREIGN_PANEL_DISPATCH = null;
         let controlModePulldownBusy = false;
+        let ANIMDB_MISMATCH = false;  // set by configureSettingsPanel (AnimDB rows != SexLab slots, or DB empty)
+        let ANIMDB_EMPTY = false;     // set by configureSettingsPanel (AnimDB has no rows)
 
         function renderControlModePulldown() {
             const host = document.getElementById('control-mode-pulldown');
-            if (!host || typeof createPulldown !== 'function') return;
+            if (!host) return;
+            if (ANIMDB_MISMATCH) {
+                host.innerHTML = '';
+                const btn = document.createElement('div');
+                btn.className = 'action-btn';
+                btn.textContent = ANIMDB_EMPTY ? 'Build DB' : 'Rebuild DB';
+                btn.title = ANIMDB_EMPTY
+                    ? 'Animation database is empty. Build it.'
+                    : 'Animation database does not match SexLab. Rebuild it.';
+                btn.style.cssText = 'color:#ff5555;font-weight:bold;text-align:center';
+                btn.onclick = settingsRebuild;
+                host.appendChild(btn);
+                return;
+            }
+            if (typeof createPulldown !== 'function') return;
             const modes = CONTROL_MODES.length ? CONTROL_MODES : [{ id: 'sexlab', label: 'SkyrimNet SexLab' }];
             host.innerHTML = '';
+            if (modes.length <= 1) {
+                const m = modes[0];
+                host.textContent = (m && (m.label || m.id)) || 'SkyrimNet SexLab';
+                return;
+            }
             const labels = modes.map(m => m.label || m.id);
             const cur = modes.find(m => m.id === CONTROL_MODE_ID) || modes[0];
             const seed = cur ? (cur.label || cur.id) : labels[0];
@@ -2990,6 +3018,25 @@
                 versionEl.textContent = 'v' + ((cfg && cfg.version) ? cfg.version : '?');
             if (rebuildEl)
                 rebuildEl.textContent = (cfg && cfg.lastRebuild) ? cfg.lastRebuild : 'never';
+            const countsEl = document.getElementById('settings-anim-counts');
+            const warnEl = document.getElementById('settings-count-warning');
+            if (countsEl && cfg) {
+                const sl = (cfg.sexlabCount >= 0) ? cfg.sexlabCount : '?';
+                countsEl.textContent = (cfg.animdbCount ?? '?') + ' / ' + sl;
+            }
+            const mismatch = !!(cfg && cfg.countMismatch);
+            const empty = !!(cfg && cfg.dbEmpty);
+            if (warnEl) {
+                warnEl.textContent = empty
+                    ? 'Animation database is empty. Build the animation database.'
+                    : 'Animation counts do not match. Reload (rebuild) the animation database.';
+                warnEl.style.display = mismatch ? 'block' : 'none';
+            }
+            if (mismatch !== ANIMDB_MISMATCH || empty !== ANIMDB_EMPTY) {
+                ANIMDB_MISMATCH = mismatch;
+                ANIMDB_EMPTY = empty;
+                renderControlModePulldown();
+            }
             if (urlEl)
                 urlEl.textContent = (cfg && cfg.docsUrl) ? cfg.docsUrl : 'https://github.com/GoodProvider/SkyrimNet_SexLab';
             loadDashboardUiScale();

@@ -5,6 +5,7 @@
 #include "ActionCatalog.h"
 #include "ActionDispatch.h"
 #include "Config.h"
+#include "AnimationDB.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -29,6 +30,7 @@ static std::deque<std::string> g_pendingInvokes;
 static std::atomic<uint32_t> g_menuHotkey{0};
 static std::mutex g_rebuildTsMutex;
 static std::string g_lastRebuildTimestamp;
+static int g_sexlabAnimCount = -1;  // -1 = not yet reported by Papyrus
 static std::mutex g_logFileMutex;
 static std::uintmax_t g_logFileOffset = 0;
 
@@ -256,14 +258,26 @@ std::string GetLastRebuildTimestamp()
     return g_lastRebuildTimestamp;
 }
 
+void SetSexLabAnimCount(int sexlabCount)
+{
+    std::lock_guard lock(g_rebuildTsMutex);
+    g_sexlabAnimCount = sexlabCount;
+}
+
 void InvokeConfigureSettingsPanel()
 {
     nlohmann::json j;
     j["version"] = ReadPluginVersionFromInfoJson();
     j["docsUrl"] = Config::kDocsUrl;
+    const int dbCount = static_cast<int>(AnimationDB::TotalCount());
     {
         std::lock_guard lock(g_rebuildTsMutex);
         j["lastRebuild"] = g_lastRebuildTimestamp.empty() ? "never" : g_lastRebuildTimestamp;
+        j["animdbCount"] = dbCount;
+        j["sexlabCount"] = g_sexlabAnimCount;
+        // Empty DB is always a mismatch, even before Papyrus has reported the SexLab count (-1).
+        j["dbEmpty"] = dbCount == 0;
+        j["countMismatch"] = dbCount == 0 || (g_sexlabAnimCount >= 0 && dbCount != g_sexlabAnimCount);
     }
     WebUI_Invoke("configureSettingsPanel(" + SafeDump(j) + ");");
 }
@@ -548,6 +562,7 @@ void WebUI_Visibility_Show(bool showControlPanel)
 
     PapyrusBindings_WebUI::PopulateNearbyActors();
     WebUI_InvokeFrameworkToggle();
+    SexLabNet::InvokeConfigureSettingsPanel();  // AnimDB mismatch → ControlPanel Rebuild DB button
 
     webui_log::info("WebUI Show + Focus.");
     PrismaUI->Show(g_view);
@@ -1243,8 +1258,14 @@ void InitWebUI()
         PrismaUI->RegisterJSListener(g_view, "onSettingsRebuild", [](const char*) {
             RunGuarded("onSettingsRebuild", [&] {
                 webui_log::info("onSettingsRebuild");
+                // Close the WebUI so the game unpauses and the cooperative walk runs.
+                ActionCatalog::ClearMainPanelSelection();
+                WebUI_Invoke("hidePanel('target_menu_panel');");
+                WebUI_Invoke("hidePanel('sex_menu_panel');");
+                WebUI_Invoke("hidePanel('yesno_panel');");
+                PapyrusBindings_WebUI::ClearTargetMenuSession();
+                WebUI_Visibility_Hide();
                 Call_RebuildAnimDb();
-                ActionCatalog::SwitchMainPanel("log_panel");
             });
         });
 

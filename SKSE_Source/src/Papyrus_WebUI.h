@@ -79,6 +79,7 @@ namespace PapyrusBindings_WebUI {
 
     /// Papyrus: push last AnimDb rebuild timestamp for Settings panel.
     void WebUI_SetLastRebuildTimestamp(RE::StaticFunctionTag*, RE::BSFixedString timestamp);
+    void WebUI_SetSexLabAnimCount(RE::StaticFunctionTag*, std::int32_t sexlabCount);
 
     /// Papyrus native: format and write a script log line via SKSE::log.
     RE::BSFixedString TraceLog(RE::StaticFunctionTag*, RE::BSFixedString script_name,

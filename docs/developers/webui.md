@@ -144,6 +144,8 @@ One JSON object per file; **order = lexicographic filename**. Optional `requires
 | type | Fields | Role |
 |------|--------|------|
 | `builtin` | `label`, `panel` | Panel already in PrismaUI (`log_panel`, `settings_panel`, `scene_panel` = Scene view) |
+
+**Settings / AnimDB mismatch:** `configureSettingsPanel(cfg)` (sent on every overlay show and Settings reveal) carries `animdbCount`, `sexlabCount` (-1 until Papyrus reports it; `Menu.ProcessHotkey` pushes it on every open via `AnimDb.PushSexLabCount`), `dbEmpty` and `countMismatch` (true when the DB is empty, or when `sexlabCount >= 0` and the counts differ). Empty DB labels the button **Build DB** and the warning "Animation database is empty". Mismatch shows a 200% warning in Settings and replaces the ControlPanel mode pulldown (`#control-mode-pulldown`) with a **Rebuild DB** button. Both rebuild buttons call `settingsRebuild()` → `onSettingsRebuild`, which closes the WebUI and dispatches `RebuildDatabase`.
 | `papyrus` | `label`, `id`, `plugin`, `questFormId`, `scriptName`, `openFunction`, `closeFunction` | Zero-arg Papyrus open/close on that quest script |
 | `data_table` | same quest fields as `papyrus`, plus `columns` (`id`/`label`) | Generic table host (`#data-table-panel`). Open still calls `openFunction`; rows arrive via `WebUI_PushMainPanelData`. |
 | `actor_detail` | same quest fields as `papyrus` | Generic key/value + control host (`#actor-detail-panel`). Payload `fields` + `controls`. |
@@ -197,7 +199,7 @@ Example drop-in (fields are generic; any plugin can use them):
 
 | Field | Role |
 |-------|------|
-| `id` / `label` | Mode pulldown (replaces the old hardcoded `SkyrimNet SexLab` title) |
+| `id` / `label` | Mode pulldown entry. With only the built-in `sexlab` mode the title is plain text `SkyrimNet SexLab` (no pulldown) |
 | `requiresPlugin` | Omit the mode if that ESP is not loaded |
 | `catalogRoot` | Data-relative folder with that plugin’s `TargetMenu/Actor/` + `MainPanels/` |
 | `plugin` / `questFormId` / `scriptName` | Quest script for `openFunction` / `closeFunction` (zero-arg) |

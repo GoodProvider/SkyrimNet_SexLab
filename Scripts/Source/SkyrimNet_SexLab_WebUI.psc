@@ -38,6 +38,7 @@ Function WebUI_RerouteScenePanel(Bool inScene) global native
 Bool Function WebUI_IsOverlayVisible() global native
 ; Push last AnimDb rebuild timestamp into C++ for Settings panel.
 Function WebUI_SetLastRebuildTimestamp(String timestamp) global native
+Function WebUI_SetSexLabAnimCount(int sexlabCount) global native
 ; Push SexLab gender + race_key enrich result to Scene Creator JS (actorAnimMetaResult).
 Function ActorAnimMeta_Result(String json) global native
 ; TargetMenu Start: consume one-shot skip so this scene does not open Scene Creator.

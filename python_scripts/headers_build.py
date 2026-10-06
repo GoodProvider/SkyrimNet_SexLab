@@ -17,6 +17,13 @@ RE_IMPORT = re.compile(r'^\s*Import\s+(\w+)', re.IGNORECASE)
 RE_CLASS_USAGE = re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b')
 # Captures 'TypeName' from 'TypeName varName ='
 RE_ASSIGNMENT_DECLARATION = re.compile(r'^\s*([a-zA-Z0-9_]+)\s+[a-zA-Z0-9_]+\s+=\s+([^\s^\=]+)', re.MULTILINE | re.IGNORECASE)
+# Papyrus string literal (with \" escapes); group 1 of RE_COMMENT keeps strings, so ';' inside them isn't a comment
+RE_STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"')
+RE_COMMENT = re.compile(r'("(?:\\.|[^"\\])*")|;.*')
+RE_DOC_COMMENT = re.compile(r'\{[^}]*\}')
+
+def strip_comment(line):
+    return RE_COMMENT.sub(lambda m: m.group(1) or '', line).strip()
 
 def get_logical_lines(lines):
     """Joins lines ending with backslash '\' into single logical lines."""
@@ -62,13 +69,26 @@ def identify_used_classes(source_dir, class_filename, used_seen):
             with open(os.path.join(source_dir, filename), 'r', encoding='utf-8', errors='ignore') as f:
                 # Use logical lines to ensure we don't miss assignments split by '\'
                 lines = get_logical_lines(f.readlines())
-                comment_block = False 
+                comment_block = False
+                doc_block = False
                 for i,line in enumerate(lines):
-                    if ";/" in line: 
+                    if ";/" in line:
                         comment_block = True
                     if "/;" in line:
-                        comment_block = False 
-                    stripped = re.sub(r'\;.*', '', line).strip()
+                        comment_block = False
+                    # Blank string contents so message text (e.g. "treating as Yes") isn't parsed as code
+                    stripped = RE_STRING_LITERAL.sub('""', strip_comment(line))
+                    # Drop {doc comments}, which may span lines
+                    if doc_block:
+                        if '}' not in stripped:
+                            continue
+                        stripped = stripped.split('}', 1)[1]
+                        doc_block = False
+                    stripped = RE_DOC_COMMENT.sub('', stripped)
+                    if '{' in stripped:
+                        stripped = stripped.split('{', 1)[0]
+                        doc_block = True
+                    stripped = stripped.strip()
                     if not stripped or comment_block:
                         continue
 
@@ -109,7 +129,7 @@ def identify_used_classes(source_dir, class_filename, used_seen):
 
                     if len(unseen_values) > 0:
                         print ("----------------------------- ERROR: Unseen class usage -----------------------------")
-                        print (f"{source_dir}\{filename}[{i+1}]\n  {line}\n  {stripped}")
+                        print (f"{os.path.join(source_dir, filename)}[{i+1}]\n  {line}\n  {stripped}")
                         for class_name, value  in unseen_values.items():
                             #print (f"   {class_name[filename.split('.')[0]]}")
                             print (f"     {class_name} ({value})")
@@ -131,10 +151,10 @@ def strip_file(src_path):
 
     for line in logical_lines:
         # Strip comments
-        stripped = re.sub(r'\;.*', '', line).strip()
+        stripped = strip_comment(line)
         if not stripped:
             continue
-        
+
         if RE_SCRIPTNAME.match(stripped):
             out.append(f"{stripped}\n")
         elif RE_PROPERTY_BLOCK.search(stripped):

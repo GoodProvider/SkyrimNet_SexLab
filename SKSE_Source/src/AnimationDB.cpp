@@ -21,6 +21,8 @@ namespace AnimationDB
         sqlite3* g_db = nullptr;
         std::int64_t g_sync_gen = 0;
         bool g_force_rebuild = false;
+        int g_sync_collisions = 0;
+        int g_sync_upsert_failures = 0;
         std::unordered_map<std::string, AnimRow> g_rows;
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
 
@@ -483,8 +485,12 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 "pos_clothed=excluded.pos_clothed,stage_speaking=excluded.stage_speaking,"
                 "stage_clothed=excluded.stage_clothed,stage_tags=excluded.stage_tags,"
                 "transitions=excluded.transitions,file_tags=excluded.file_tags,creator=excluded.creator";
-            if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+            if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+                ++g_sync_upsert_failures;
+                webui_log::warn("AnimationDB: upsert prepare failed for '{}': {}", row.registry,
+                    sqlite3_errmsg(g_db));
                 return;
+            }
 
             nlohmann::json stage_desc = nlohmann::json::object();
             for (const auto& [k, v] : row.stage_descriptions)
@@ -521,11 +527,19 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             bind_text(JsonDump(row.transitions.is_object() ? row.transitions : nlohmann::json::object()));
             bind_text(JsonDump(VecStrToJson(row.file_tags)));
             bind_text(row.creator);
-            sqlite3_step(stmt);
+            if (sqlite3_step(stmt) != SQLITE_DONE) {
+                ++g_sync_upsert_failures;
+                webui_log::warn("AnimationDB: upsert failed for '{}': {}", row.registry, sqlite3_errmsg(g_db));
+            }
             sqlite3_finalize(stmt);
 
-            sqlite3_exec(g_db, ("DELETE FROM animation_tags WHERE registry='" + row.registry + "'").c_str(),
-                nullptr, nullptr, nullptr);
+            sqlite3_stmt* dstmt = nullptr;
+            if (sqlite3_prepare_v2(g_db, "DELETE FROM animation_tags WHERE registry=?", -1, &dstmt, nullptr) ==
+                SQLITE_OK) {
+                sqlite3_bind_text(dstmt, 1, row.registry.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(dstmt);
+                sqlite3_finalize(dstmt);
+            }
             for (const auto& tag : row.tags) {
                 sqlite3_stmt* tstmt = nullptr;
                 if (sqlite3_prepare_v2(g_db, "INSERT OR IGNORE INTO animation_tags(registry,tag) VALUES(?,?)",
@@ -1596,6 +1610,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             return 0;
         g_force_rebuild = force_rebuild;
         g_sync_gen += 1;
+        g_sync_collisions = 0;
+        g_sync_upsert_failures = 0;
         if (g_force_rebuild) {
             Exec("DELETE FROM animations");
             Exec("DELETE FROM animation_tags");
@@ -1670,6 +1686,16 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             row.tags = JsonToVecStr(anim["tags"]);
         else if (anim.contains("_tags") && anim["_tags"].is_string())
             row.tags = SplitCsv(anim["_tags"].get<std::string>());
+
+        // Same registry already pushed this sync: later row overwrites the earlier one.
+        {
+            auto dup = g_rows.find(row.registry);
+            if (dup != g_rows.end() && dup->second.sync_gen == g_sync_gen) {
+                if (++g_sync_collisions <= 20)
+                    webui_log::warn("AnimationDB: duplicate registry '{}' in sync (kept '{}', replaced '{}')",
+                        row.registry, row.name, dup->second.name);
+            }
+        }
 
         // skip if unchanged and not force
         if (!g_force_rebuild) {
@@ -1771,7 +1797,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         }
         Exec("DELETE FROM animation_tags WHERE registry NOT IN (SELECT registry FROM animations)");
         LoadAllRowsLocked();
-        webui_log::info("AnimationDB: EndSync gen={} rows={}", g_sync_gen, g_rows.size());
+        webui_log::info("AnimationDB: EndSync gen={} rows={} duplicate_registries={} upsert_failures={}",
+            g_sync_gen, g_rows.size(), g_sync_collisions, g_sync_upsert_failures);
         LoadSynonyms();
         return true;
     }

@@ -59,6 +59,15 @@ Bool Function Setup_CheckLinks()
 EndFunction
 
 Function ProcessHotkey(int key_code)
+    ; First hotkey use: warn before the overlay opens if the AnimDB doesn't match SexLab.
+    ; Deferred (flag left unset) while a sync or prompt is in progress or SexLab isn't enabled.
+    if !animdb.hotkey_db_checked && animdb.CanCheckAlignment()
+        animdb.hotkey_db_checked = true
+        if !animdb.IsAligned()
+            animdb.PromptHotkeyMismatch()
+            return
+        endif
+    endif
     ; Both players need to be in the crosshair to have SkyrimNet load them into the cache
     ; so the parseJsonActor works
     Actor target = Game.GetCurrentCrosshairRef() as Actor
@@ -98,6 +107,7 @@ Function ProcessHotkey(int key_code)
     Trace("ProcessHotkey","target: "+target_name+" preferExplicit:"+preferExplicit)
 
     if target != None
+        animdb.PushSexLabCount() ; Settings shows db / SexLab counts even before SexLab is enabled
         Open_WebUI_Target(target)
         SkyrimNet_SexLab_WebUI.WebUI_AfterTargetOpen(target, preferExplicit)
     endif

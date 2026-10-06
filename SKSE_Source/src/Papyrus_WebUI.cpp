@@ -600,6 +600,12 @@ namespace PapyrusBindings_WebUI
         SexLabNet::InvokeConfigureSettingsPanel();
     }
 
+    void WebUI_SetSexLabAnimCount(RE::StaticFunctionTag*, std::int32_t sexlabCount)
+    {
+        SexLabNet::SetSexLabAnimCount(sexlabCount);
+        SexLabNet::InvokeConfigureSettingsPanel();
+    }
+
     void Animation_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, RE::TESForm* sl_scene)
     {
         if (!thread || !sl_scene) {
@@ -1905,6 +1911,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("WebUI_IsOverlayVisible", scriptName, WebUI_IsOverlayVisible);
         a_vm->RegisterFunction("WebUI_IsMainPanelOpen", scriptName, WebUI_IsMainPanelOpen);
         a_vm->RegisterFunction("WebUI_SetLastRebuildTimestamp", scriptName, WebUI_SetLastRebuildTimestamp);
+        a_vm->RegisterFunction("WebUI_SetSexLabAnimCount", scriptName, WebUI_SetSexLabAnimCount);
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog);

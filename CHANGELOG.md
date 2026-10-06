@@ -2,6 +2,17 @@
 
 ## [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1) — since [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0)
 
+### AnimDB
+- WebUI Settings panel shows the AnimDB animation count next to SexLab's slot count, with a 200% red warning to rebuild whenever they differ (strict compare)
+- When the counts differ, the ControlPanel title (mode pulldown) is replaced by a red **Rebuild DB** button
+- The ControlPanel title is plain text "SkyrimNet SexLab" when no extra control modes (`ControlPanel/*.json`) are installed; the mode pulldown only appears with two or more modes
+- Every WebUI rebuild button (ControlPanel, Settings) closes the WebUI and starts the rebuild; Settings no longer switches to the Log panel
+- The first time the menu hotkey is pressed on a save, a mismatch shows a "There is likely a problem" dialog offering to rebuild, instead of opening the overlay (`AnimDb.IsAligned`, `hotkey_db_checked`). The check waits while a rebuild or prompt is in progress or SexLab isn't enabled. The load-time prompt keeps its explained-gap exemption
+- AnimDB loaded fewer animations than SexLab slotted (2588 of 2844) with no explanation. The sync now traces per-reason skip counts (null, unregistered, empty registry) with the first 10 names, and the SKSE side warns on duplicate registries and failed upserts. `EndSync` logs `duplicate_registries` / `upsert_failures`
+- The "animations doesn't match" prompt no longer repeats when SexLab's slot count and the DB row count are unchanged since the last completed sync (an explained gap); any slot-count change re-prompts
+- Tag cleanup on upsert uses a bound statement (a registry containing `'` broke it)
+- New game with no AnimDB: the WebUI showed no warning and no **Rebuild DB** button, and the counts read `0 / ?`, because the SexLab count was only pushed once SexLab was enabled. An empty DB now always counts as a mismatch (Settings warning "Animation database is empty", ControlPanel **Build DB**), and the menu hotkey pushes the SexLab slot count on every open (`AnimDb.PushSexLabCount`)
+
 ### Actions / scenes
 - Lone hug (`StartScene_Event` resolved `hug` → `pa_HugA` `playIdleWithTarget`) now stops combat and sheathes both actors first (new `Actions.CalmForPairedIdle`, mirrors DOM `CalmActorFast`) and waits up to 1.5 s for the sheathe. A paired idle played while the player held a drawn weapon (whip) left the player unable to attack afterward. The path now logs a `lone hug pa_HugA` trace
 - Lone hug narration is always "<speaker> hugs <target>." The `direction: getting` swap was dropped: Nina calling a hug with `getting` narrated "Bob hugs Nina."

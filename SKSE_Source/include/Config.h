@@ -20,6 +20,7 @@ void InitSkyrimNetAPI();
 
 void SetLastRebuildTimestamp(std::string ts);
 std::string GetLastRebuildTimestamp();
+void SetSexLabAnimCount(int sexlabCount);
 void InvokeConfigureSettingsPanel();
 void InvokeLogPanelOpen();
 void PushLogPanelPoll();

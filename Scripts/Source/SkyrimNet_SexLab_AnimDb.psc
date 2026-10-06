@@ -98,16 +98,51 @@ int Function RefreshSlotCounts()
     return walk_slots_total
 EndFunction
 
+; Pushes the SexLab slot count to the WebUI (Settings counts / warning, ControlPanel Rebuild DB button).
+; No Enabled gate: Slotted reads 0 until SexLab registers animations.
+int Function PushSexLabCount()
+    int sl_count = RefreshSlotCounts()
+    SkyrimNet_SexLab_WebUI.WebUI_SetSexLabAnimCount(sl_count)
+    return sl_count
+EndFunction
+
+; Strict: True only when the DB row count equals SexLab's slot count.
+Bool Function IsAligned()
+    int sl_count = PushSexLabCount()
+    int db_count = AnimDb_TotalCount()
+    Trace("IsAligned", "db_count="+db_count+" registered="+sl_count)
+    return db_count == sl_count
+EndFunction
+
+; Safe to compare/prompt: no sync running, no prompt open, SexLab enabled.
+Bool Function CanCheckAlignment()
+    return !walk_active && sync_phase == 0 && align_mbox_id == 0 && sexlab && sexlab.Enabled
+EndFunction
+
+; Load-time prompt keeps the explained-gap exemption (unchanged pair since last sync) so loads don't nag.
 Function PromptAlignmentIfNeeded()
     align_check_pending = False
     UnregisterForModEvent("SexLabEnabled")
-    int sl_count = RefreshSlotCounts()
-    int db_count = AnimDb_TotalCount()
-    if db_count == sl_count
-        Trace("PromptAlignmentIfNeeded", "aligned db_count="+db_count+" registered="+sl_count)
+    if IsAligned()
         return
     endif
-    Trace("PromptAlignmentIfNeeded", "SkyrimNet SexLab # animations doesn't match", True)
+    int db_count = AnimDb_TotalCount()
+    if db_count > 0 && walk_slots_total == last_sync_slots_total && db_count == last_sync_db_count
+        Trace("PromptAlignmentIfNeeded", "explained gap from last sync db_count="+db_count+" slots="+walk_slots_total)
+        return
+    endif
+    ShowMismatchPrompt(False)
+EndFunction
+
+; First hotkey use: warn that the DB likely needs updating.
+Function PromptHotkeyMismatch()
+    ShowMismatchPrompt(True)
+EndFunction
+
+Function ShowMismatchPrompt(Bool likely_problem)
+    int sl_count = walk_slots_total
+    int db_count = AnimDb_TotalCount()
+    Trace("ShowMismatchPrompt", "SkyrimNet SexLab # animations doesn't match", True)
     String[] buttons = new String[2]
     String msg
     if db_count == 0
@@ -119,9 +154,12 @@ Function PromptAlignmentIfNeeded()
         buttons[0] = "Rebuild AnimDB"
         buttons[1] = "Close"
     endif
+    if likely_problem
+        msg = "There is likely a problem. " + msg + ". Update the animation database."
+    endif
     align_mbox_id = SkyMessage.ShowArray_NonBlocking(msg, buttons)
     if align_mbox_id == 0
-        Trace("PromptAlignmentIfNeeded", "SkyMessage failed", True)
+        Trace("ShowMismatchPrompt", "SkyMessage failed", True)
         return
     endif
     RegisterForSingleUpdate(0.1)
@@ -189,6 +227,10 @@ Function BeginWalk()
     walk_source = 0
     walk_index = 0
     walk_total = 0
+    walk_skip_null = 0
+    walk_skip_unreg = 0
+    walk_skip_empty = 0
+    walk_skip_logged = 0
     progress_last_time = Utility.GetCurrentRealTime()
     AnimDb_BeginSync(walk_force)
     Trace("BeginWalk", "SkyrimNet SexLab loading", True)
@@ -251,7 +293,12 @@ Event OnUpdate()
     while walk_index < slotted && batch_count < BATCH_SIZE
         sslBaseAnimation anim = slots.GetBySlot(walk_index)
         walk_index += 1
-        if anim && anim.Registered
+        if !anim
+            walk_skip_null += 1
+        elseif !anim.Registered
+            walk_skip_unreg += 1
+            LogWalkSkip("unregistered", anim)
+        else
             String piece = BuildAnimJson(anim, walk_source)
             if piece != ""
                 if !first
@@ -261,6 +308,9 @@ Event OnUpdate()
                 first = False
                 batch_count += 1
                 walk_total += 1
+            else
+                walk_skip_empty += 1
+                LogWalkSkip("empty registry", anim)
             endif
         endif
     endwhile
@@ -294,6 +344,14 @@ Event OnUpdate()
     endif
 EndEvent
 
+Function LogWalkSkip(String reason, sslBaseAnimation anim)
+    if walk_skip_logged >= 10
+        return
+    endif
+    walk_skip_logged += 1
+    Trace("OnUpdate", "skipped ("+reason+") source="+walk_source+" name="+anim.Name+" registry="+anim.Registry)
+EndFunction
+
 Function FinishSourceOrDone()
     if walk_source == 0
         walk_source = 1
@@ -304,8 +362,13 @@ Function FinishSourceOrDone()
     AnimDb_EndSync()
     walk_active = False
     sync_phase = 0
+    int db_count = AnimDb_TotalCount()
+    last_sync_slots_total = walk_slots_total
+    last_sync_db_count = db_count
+    Trace("FinishSourceOrDone", "total_pushed="+walk_total+" slots="+walk_slots_total+" db_rows="+db_count+" skip_null="+walk_skip_null+" skip_unregistered="+walk_skip_unreg+" skip_empty_registry="+walk_skip_empty+" duplicates="+(walk_total - db_count))
     Trace("FinishSourceOrDone", "total_pushed="+walk_total)
     Trace("FinishSourceOrDone", "SkyrimNet_SexLab is ready", True)
+    IsAligned() ; push fresh counts to the Settings panel
     if walk_force
         last_rebuild_timestamp = "game day " + Utility.GetCurrentGameTime()
         SkyrimNet_SexLab_WebUI.WebUI_SetLastRebuildTimestamp(last_rebuild_timestamp)
@@ -423,7 +486,7 @@ String Function EscapeJson(String s) global
         if ch == "\\"
             out += "\\\\"
         elseif ch == "\""
-            out += "\\\""
+            out += "\\" + "\"" ; split: papyrus.exe mis-lexes "\\\"" and breaks later strings
         else
             out += ch
         endif
@@ -478,6 +541,15 @@ EndFunction
 
 Bool Property hide_help = false Auto
 String Property last_rebuild_timestamp = "never" Auto
+; Set after the first hotkey press has checked DB vs SexLab counts
+Bool Property hotkey_db_checked = false Auto
+; Slot/DB counts recorded after a completed sync; an unchanged pair means the gap is explained (skips/duplicates)
+int Property last_sync_slots_total = 0 Auto
+int Property last_sync_db_count = 0 Auto
+int walk_skip_null = 0
+int walk_skip_unreg = 0
+int walk_skip_empty = 0
+int walk_skip_logged = 0
 
 String Function GetThreadStageDescription(sslThreadController thread, int stage_override = -1)
     if !thread || !thread.animation

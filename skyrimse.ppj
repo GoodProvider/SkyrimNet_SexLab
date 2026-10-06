@@ -43,8 +43,7 @@
         <Import>@ModsFolder\UIExtensions\scripts\Source</Import>
         <Import>@ModsFolder\FNIS Behavior SE 7_6\source\scripts</Import>
 
-        <Import>@ModsFolder\SexLab Separate Orgasm\Scripts\Source</Import>
-        <Import>@ModsFolder\SexLabFrameworkAE_v166b\scripts\Source</Import>
+        <Import>@ModsFolder\SexLabFrameworkAE\scripts\Source</Import>
 
         <!--
         <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
