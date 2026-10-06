@@ -3182,6 +3182,8 @@
             style: 'normally',
             action: 'give to',
             tiePoint: 'floor',
+            leashType: 'rope',
+            bodyPart: 'neck',
             isLeashed: false,
             statusHolderFormId: 0,
             statusHolderName: ''
@@ -3191,6 +3193,13 @@
         const LEASH_DIST_DEFAULT = 'middle';
         const LEASH_TYPE_DEFAULT = 'rope';
         const LEASH_BODY_DEFAULT = 'neck';
+        const LEASH_TYPES = ['chain', 'rope', 'magic'];
+        const LEASH_BODY_PARTS = ['neck', 'wrists', 'waist'];
+        // Leash.esm meshes per body part (Leashed LeashIdFor): wrists = chain, waist = rope.
+        const LEASH_BODY_KINDS = { neck: ['chain', 'rope', 'magic'], wrists: ['chain'], waist: ['rope'] };
+        function leashBodyValid(body, kind) {
+            return (LEASH_BODY_KINDS[body] || []).includes(kind);
+        }
         let bondageState = { groups: [] };
         let bondageConfigured = false;
         const BONDAGE_GROUP_ORDER = [
@@ -6381,8 +6390,8 @@
             const holder = tmActorParam(leashUi.holder);
             const style = leashUi.style || 'normally';
             const dist = LEASH_DIST_DEFAULT;
-            const kind = LEASH_TYPE_DEFAULT;
-            const body = LEASH_BODY_DEFAULT;
+            const kind = leashUi.leashType || LEASH_TYPE_DEFAULT;
+            const body = leashUi.bodyPart || LEASH_BODY_DEFAULT;
             let fn = 'LeashedToHolder';
             let mapping = [
                 { type: 'speaker', name: 'subject' },
@@ -6487,6 +6496,22 @@
             });
         }
 
+        // ssListCascade with per-value greying (disabled leaves are unclickable).
+        function leashListCascade(key, caption, values, current, isDisabled, onPick) {
+            return createPulldownCascade({
+                key: key,
+                caption: caption,
+                display: current,
+                tree: values.map(v => ({
+                    label: v,
+                    value: v,
+                    current: v === current,
+                    disabled: isDisabled(v)
+                })),
+                onPick: (node) => onPick(node.value)
+            });
+        }
+
         function leashCanStart() {
             return !!leashUi.subject && !!leashUi.leashed
                 && (leashUi.action !== 'give to' || (leashUi.holder && leashUi.holder !== leashUi.leashed));
@@ -6553,6 +6578,10 @@
                 leashUi.style = 'normally';
             if (!LEASH_TIE_POINTS.includes(leashUi.tiePoint))
                 leashUi.tiePoint = 'floor';
+            if (!LEASH_TYPES.includes(leashUi.leashType))
+                leashUi.leashType = LEASH_TYPE_DEFAULT;
+            if (!leashBodyValid(leashUi.bodyPart, leashUi.leashType))
+                leashUi.bodyPart = LEASH_BODY_DEFAULT;
             leashSeedAction();
 
             const holderPool = pool.filter(a => formIdU32(a.formId) !== formIdU32(leashUi.leashed));
@@ -6612,6 +6641,21 @@
                     statusVal.textContent = 'world';
                     addField('is tied to', statusVal);
                 }
+            }
+            // type/body only reach Papyrus for a new leash or a tie-to; above action
+            // because an action leaf starts at once.
+            if (!leashUi.isLeashed || leashUi.action === 'tie to') {
+                addField('type', ssListCascade('leash_type', 'type', LEASH_TYPES, leashUi.leashType, (v) => {
+                    leashUi.leashType = v;
+                    if (!leashBodyValid(leashUi.bodyPart, v))
+                        leashUi.bodyPart = LEASH_BODY_DEFAULT;
+                    renderPapyrusPanel();
+                }));
+                addField('body', leashListCascade('leash_body', 'body', LEASH_BODY_PARTS, leashUi.bodyPart,
+                    (b) => !leashBodyValid(b, leashUi.leashType), (v) => {
+                        leashUi.bodyPart = v;
+                        renderPapyrusPanel();
+                    }));
             }
             addField('action', leashActionCascade(opt, holderPool));
             body.appendChild(fields);

@@ -4,6 +4,7 @@
 
 ### Actions / scenes
 - Lone hug (`StartScene_Event` resolved `hug` → `pa_HugA` `playIdleWithTarget`) now stops combat and sheathes both actors first (new `Actions.CalmForPairedIdle`, mirrors DOM `CalmActorFast`) and waits up to 1.5 s for the sheathe. A paired idle played while the player held a drawn weapon (whip) left the player unable to attack afterward. The path now logs a `lone hug pa_HugA` trace
+- Lone hug narration is always "<speaker> hugs <target>." The `direction: getting` swap was dropped: Nina calling a hug with `getting` narrated "Bob hugs Nina."
 
 ### Orgasm / narration
 - Removed the HUD deny key's Transform (`sexlab.hud.deny_transform` setting, `TransformDialogue` call, `ToggleDenyOrgasm` `from_hotkey` and `SetDenyOrgasm` `transform` params). Deny / allow orgasm are plain events for every source: "<denier> forbids <actor> from orgasming without permission." / "<denier> permits <actor> to orgasm."

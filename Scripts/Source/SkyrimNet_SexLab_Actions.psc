@@ -262,13 +262,8 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
         endif
         Trace("StartScene_Event", "lone hug pa_HugA target="+target_name+" speaker="+speaker_name+" sheathed="+sheathed)
         target.playIdleWithTarget(pa_HugA, speaker)
-        Actor sender = speaker
-        Actor receiver = target
-        if direction == "get" || direction == "getting"
-            sender = target
-            receiver = speaker
-        endif
-        String msg = sender.GetDisplayName()+" hugs "+receiver.GetDisplayName()+"."
+        ; The actor who called the action is always the hugger, whatever the direction.
+        String msg = speaker_name+" hugs "+target_name+"."
         DirectNarration(msg, speaker, target)
         return True
     endif
