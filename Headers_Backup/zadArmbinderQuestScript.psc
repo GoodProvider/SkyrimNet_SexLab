@@ -1,0 +1,18 @@
+scriptname zadarmbinderquestscript extends zadheavybondagequestscript conditional
+scene property postrapescene auto
+zaddreliableforcegreet property fg auto
+referencealias property armbinderrescuer auto
+message property zad_armbinderremovelockedmsg auto
+message property zad_armbinderremoveunlockedmsg auto
+message property zad_armbinderremoveloosemsg auto
+message property zad_armbinderstrugglemsg auto
+message property zad_armbinderstruggleloosemsg auto
+message property zad_armbinderimpossiblestrugglemsg auto
+function devicemenuremove() Native
+function devicemenupoststruggle() Native
+function devicemenuendurebonds() Native
+function devicemenuext(int msgchoice=0) Native
+function sexscene(objectreference akspeaker, bool aggressive) Native
+function consensualsex(objectreference akspeaker) Native
+function rapesex(objectreference akspeaker) Native
+function postrape(objectreference akspeaker) Native
