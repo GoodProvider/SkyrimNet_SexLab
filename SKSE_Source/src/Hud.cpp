@@ -44,6 +44,7 @@ namespace Hud
             { "calm", "sexlab.minigame.key_calm", VK_NUMPAD8, true },
             { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD9, true },
             { "deny", "sexlab.hud.key_deny", VK_NUMPAD1, false },
+            { "force", "sexlab.minigame.key_force", VK_DECIMAL, true },
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
         constexpr std::uint32_t kSkyrimNetDx = 0x47;   // Num 7
@@ -196,6 +197,32 @@ namespace Hud
             }
         }
 
+        // Force key (player aggressor): the Force panel, solo in the WebUI. Victims and their strategies
+        // come from the engine; the panel replies through WebUI onForceResult.
+        void OnForce()
+        {
+            std::vector<OrgasmEngine::ForceVictim> victims;
+            if (!OrgasmEngine::GetPlayerForceInfo(victims) || victims.empty()) {
+                webui_log::info("Hud: force ignored (player not aggressor / no victim)");
+                return;
+            }
+            nlohmann::json cfg;
+            nlohmann::json list = nlohmann::json::array();
+            for (const auto& v : victims) {
+                nlohmann::json strategies = nlohmann::json::array();
+                for (const auto& [key, label] : v.strategies) {
+                    strategies.push_back({ { "key", key }, { "label", label } });
+                }
+                list.push_back({ { "id", v.id }, { "name", v.name }, { "strategies", std::move(strategies) } });
+            }
+            cfg["victims"] = std::move(list);
+            const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            SKSE::GetTaskInterface()->AddTask([payload]() {
+                WebUI_Invoke("openForcePanel(" + payload + ");");
+                WebUI_Visibility_Show(false);
+            });
+        }
+
         bool BlockingMenuOpen()
         {
             auto* ui = RE::UI::GetSingleton();
@@ -255,6 +282,8 @@ namespace Hud
                     cb = []() { OnSpeed(false); };
                 } else if (ctl == "faster") {
                     cb = []() { OnSpeed(true); };
+                } else if (ctl == "force") {
+                    cb = []() { OnForce(); };
                 } else if (ctl == "deny") {
                     cb = []() {
                         RE::FormID focus = 0;
@@ -317,6 +346,8 @@ namespace Hud
             return "Del";
         case 0xC5:
             return "Pause";
+        case 0x53:
+            return "Num .";
         default:
             break;
         }
@@ -361,7 +392,7 @@ namespace Hud
             std::lock_guard lock(g_lock);
             g_showEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.enjoyment", true);
             g_showControls = SexLabNet::GetConfigBool("sexlab.hud.controls", true);
-            g_miniGame = SexLabNet::GetConfigBool("sexlab.minigame.enabled", false);
+            g_miniGame = SexLabNet::IsMiniGameMode();
             g_miniGameMouse = SexLabNet::GetConfigBool("sexlab.minigame.mouse", true);
             g_keyVk.clear();
             g_keyDx.clear();
@@ -500,7 +531,7 @@ namespace Hud
                 }
                 rows.push_back({ { "pos", i }, { "name", a.name },
                     { "enjoyment", static_cast<int>(a.enjoyment + 0.5f) }, { "flash", a.flashing },
-                    { "near", a.enjoyment >= 90.0f }, { "broken", a.broken }, { "dom", a.dom }, { "denied", a.denied },
+                    { "near", a.enjoyment >= 90.0f }, { "broken", a.broken }, { "dom", a.dom }, { "denied", a.denied }, { "strategy", a.strategy },
                     { "magicka", static_cast<int>(a.magicka + 0.5f) },
                     { "stamina", static_cast<int>(a.stamina + 0.5f) } });
             }
@@ -513,6 +544,12 @@ namespace Hud
             keys["free"] = DxLabel(kFreeCameraDx);
             keys["skyrimnet"] = DxLabel(kSkyrimNetDx);
             j["keys"] = std::move(keys);
+        }
+        // Force cell: shown while the player is an aggressor, greyed out without a non-player victim.
+        {
+            std::vector<OrgasmEngine::ForceVictim> victims;
+            const bool aggressor = OrgasmEngine::GetPlayerForceInfo(victims);
+            j["force"] = { { "show", aggressor }, { "enabled", aggressor && !victims.empty() } };
         }
         j["paused"] = OrgasmEngine::IsPlayerScenePaused();
         // SexLab's free camera on: Num 3 reads "lock" (a press returns to the normal camera).

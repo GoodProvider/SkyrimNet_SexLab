@@ -38,6 +38,7 @@ These keys work while you control a scene: you are in it, or you took control of
 | PgUp PosUp | 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
 | PgDn PosDn | 4 previous    | 5 pause | 6 next        | + faster |
 |            | 1 deny        | 2 end   | 3 free camera |          |
+|            |               |         | . force       |          |
 ---------------------------------------------------------------------
 ```
 
@@ -61,6 +62,8 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
    PosDn    prev     pause    next     forceful
             Num 1    Num 2    Num 3
             deny     end      free 📷
+                              Num .
+                              force
   ```
 
   Num 7 is dimmed with no label (it belongs to SkyrimNet).
@@ -73,7 +76,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - **Num 3** is SexLab's free camera. While it is on, the cell reads *lock*; press Num 3 again to go back to the normal third-person camera with mouse look. When the scene ends, the camera returns to first or third person, whichever it was when the scene began.
   - **Num - / Num +** step the scene one speed level slower / faster: *gentle* (75%), *normal* (100%), *forceful* (125%). Each cell shows the level a press switches to (at *normal*: *gentle* / *forceful*); at the slowest or fastest level it shows a dimmed *—*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are forcefully …").
 - **How long it takes:** without the mini-game, a scene ends much like plain SexLab. Each actor normally orgasms once near the end, and some a little earlier. A victim usually doesn't. Faster raises the pace and can bring a second orgasm; slower can leave someone short. Pausing or repeating a stage adds time, so it adds enjoyment too.
-- **Mini-game** (off by default):
+- **Mini-game** (on by default; **Orgasm mode** = Multi-Orgasm Mini-game):
   - Each actor's row shows a blue **magicka** bar and a green **stamina** bar in front of the enjoyment bar. These are the resources the game spends.
   - **1–4** pick who you act on (▶ marks them).
   - **Num 9** arouses that actor (costs stamina).
@@ -82,6 +85,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.
+  - **Num .** (*force*, shown only while you are an aggressor) opens the **Force** panel: "You force *victim* to *strategy* by *method*." Pick a victim, what they are forced to do (default: please you), and a method: slap face, pinch nipple, cover mouth, punch, pull hair, or **custom** (type your own). It is narrated ("Bob punches Nina in the face and forces Nina to please him."). For **Fear cooldown** seconds (Mini-game settings, default 30) the victim can only give in; after that the AI may let them resist. Without a non-player victim the cell is greyed out.
   - The optional **mental break** drains the magicka of whoever is being aroused; when it runs out they can't hold back.
 
 All HUD keys are rebindable in the dashboard. While the HUD is up they don't reach SexLab or the game, so a key you share with a SexLab key only does the HUD action.

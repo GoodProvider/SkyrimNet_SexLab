@@ -190,10 +190,10 @@ namespace PapyrusBindings_Utilities
 
         constexpr std::string_view scriptName = "SkyrimNet_SexLab_Utilities";
 
-        a_vm->RegisterFunction("JsonLowerCaseKeys", scriptName, JsonLowerCaseKeys);
-        a_vm->RegisterFunction("VkToDxScanCode", scriptName, VkToDxScanCode);
-        a_vm->RegisterFunction("JsonQuote", scriptName, JsonQuote);
-        a_vm->RegisterFunction("UuidToDecimalString", scriptName, UuidToDecimalString);
+        a_vm->RegisterFunction("JsonLowerCaseKeys", scriptName, JsonLowerCaseKeys, true);
+        a_vm->RegisterFunction("VkToDxScanCode", scriptName, VkToDxScanCode, true);
+        a_vm->RegisterFunction("JsonQuote", scriptName, JsonQuote, true);
+        a_vm->RegisterFunction("UuidToDecimalString", scriptName, UuidToDecimalString, true);
         a_vm->RegisterFunction("SetAnimSpeed", scriptName, SetAnimSpeed);
         a_vm->RegisterFunction("ClearAnimSpeed", scriptName, ClearAnimSpeed);
         a_vm->RegisterFunction("GetAnimSpeed", scriptName, GetAnimSpeed);

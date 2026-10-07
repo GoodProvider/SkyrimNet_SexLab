@@ -1,5 +1,21 @@
 # Knowledgebase
 
+## Group orgasm roll was a percent chance (2026-10-06)
+
+**Symptom:** Skadi, giving oral (`orgasm expected false`), orgasmed with Bob. Log: `group roll 0xfe04e83c enjoyment=30.0 roll=7.6 pass=true`.
+
+**Cause:** `JoinGroup` (and the gate and early final roll) used `uniform(0,100) < enjoyment`, so 30 enjoyment meant a 30% chance. The intended rule is a threshold: `enjoyment + random(0, random_bonus) ≥ 100`, plus `stage_spike` for gate/final rolls.
+
+**Fix:** `RollOrgasm` in `OrgasmEngine.cpp` used by all three rolls. Look for `roll=+N` in the log (the random part only).
+
+## Plugin natives waited a frame per call (2026-10-06)
+
+**Symptom:** the WebUI overlay sat on "loading..." before the Description Editor showed a live scene. The log showed 0.9 s from `DispatchMenuNoArg: WebUI_SeedSceneInfos` to `[JS DEBUG] seed after bind`, even with **no** scene running.
+
+**Cause:** every `a_vm->RegisterFunction` in `SKSE_Source/src` omitted the 4th argument `a_callableFromTasklets` (CommonLib default `false`). Such a native waits for the next frame on every call (`RE/N/NativeLatentFunction.h`). The overlay seed and scene pushes are built from hundreds of `SNSL_J*` store calls plus `TraceLog`, so each build cost hundreds of frames. JContainers, which the store replaced, registers its natives as tasklet-callable, which is why the move to the store made it slower.
+
+**Rule:** register a native with `true` when it is thread-safe: it touches only plugin data under its own mutex (`JsonStore` `g_mutex`, `AnimationDB` `g_mutex`) or is a pure function. Leave it `false` when it reads or writes game objects (forms, actors, UI `Invoke`), or for the AnimDB sync / save natives. Keep Papyrus hot paths (seed, `BuildWebUISceneMenuObject`, Cancel snapshot) free of debug walks such as `DbgAnimList`.
+
 ## Paired idle with a drawn weapon: player can't attack afterward (2026-10-04)
 
 **Symptom:** after the LLM "single hug" (Nina → Bob/player, `direction: getting`), the player could no longer use the whip. Logs showed no errors. `SkyrimNet_SexLab.log` only had `StartScene_Consensual_Two ... method:Hugging` + `Bob hugs Nina.` and no SexLab thread, and `OnLash` stopped.
@@ -397,9 +413,10 @@ Enabled hotkey did nothing after `main`→`skse` merge. Papyrus: `Unbound native
 
 ## Leash TargetMenu panel (2026-09-02)
 
-- TargetMenu **leash** is `panel: leash`. The option JSON (`0700_leashed_panel.json`, `requiresPlugin: SkyrimNet_Leashed.esp`) ships in SkyrimNet_Leashed, not here; the panel renderer + `onLeashStatus` live in the core SKSE tree. The old `0700_sexlab_leash.json` (stale `SkyrimNet_Leash.esp`) and `0700_leash.json` (unhandled `type: handoff`) were removed (2026-09-28).
-- Start-only ParameterPanel. Action pulldown is its own row (label column): not leashed → `tie to` / `give to`; leashed → `unleash` / `tie to` / `give to`. Control column: location if `tie to`, holder otherwise, empty if `unleash`.
-- Status from C++ `onLeashStatus` → `LeashFramework.IsLeashed` / `GetLeashHolder` (faction 0xD6A fallback). Do not copy YAML leash decorators. Start dispatches `SkyrimNet_Leashed_Actions` (no YAML / `actions_index`). No refuses.
+- TargetMenu **leash** is `panel: leash`. SkyrimNet_Leashed ships the option JSON (`0700_leashed_panel.json`, `requiresPlugin: SkyrimNet_Leashed.esp`) **and** the panel script (`panelScript`). As of 0.35.2 the core overlay has no leash renderer, and `onLeashStatus` was removed. The old `0700_sexlab_leash.json` (stale `SkyrimNet_Leash.esp`) and `0700_leash.json` (unhandled `type: handoff`) were removed (2026-09-28).
+- An older Leashed without `panelScript` shows "Unknown panel: leash". Leashed and SexLab 0.35.2+ must be updated together.
+- Extension panels read mod state through `papyrusQuery` → C++ `onPapyrusQuery` (generic `script.fn(Actor)` String call), not through bespoke C++ bridges. Contract: [docs/reference/extension-panels.md](docs/reference/extension-panels.md).
+- A panel script that loads but never calls `registerTargetPanel` for its kind is not re-run, because top-level `let`/`const` would throw on a second run. Only a failed `<script>` load is retried.
 
 ## AddActor -11 ForbiddenFaction after Edit Tags (2026-09-14)
 
@@ -1047,3 +1064,10 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Cause:** SexLab keeps the player AI-driven (`SetPlayerAIDriven`) and calls `ForceThirdPerson` at scene setup without saving the previous mode.
 - **Fix:** `Hud.cpp` free-cam edge -> `Hud_OnKey("camera_lock")`; `Scene_Manager.AnimationStarting` saves the camera state and `AnimationEnd` restores it. Untested in game: whether look/orbit works while AI-driven.
 
+## Orgasm modes and NPC strategies (2026-10-06)
+
+- **Mode key:** `sexlab.enjoyment.mode` (select) replaces `sexlab.minigame.enabled`. The manifest select has its own default (Mini-game), so an old save with the bool off comes up in Mini-game mode; the bool (default true) is only read when the mode is unset. Read it in C++ through `SexLabNet::IsMiniGameMode()` (engine + HUD) and in Papyrus through `OrgasmEngine.IsMiniGameEnabled()` after `ReloadConfig` (MCM `ApplyPluginConfig` reloads the engine before `ApplyMiniGameActions`).
+- **Eligibility without a custom decorator:** strategy actions use `papyrus_util HasIntValue currentActor skyrimnet_sexlab_strategy_<key>`; the engine owns the rules and pushes the keys (`Effect_StrategyEligibility`) only when an actor's mask changes. Keys stay in StorageUtil across saves; `SexLabAnimatingFaction > 0` in every rule guards stale ones.
+- **Papyrus identifiers:** `none` (= `None`) and `key` are rejected as variable / parameter names by the compiler.
+- **Together curve:** closing a share of the gap (not adding a fixed amount) is what makes carried-over, external and post-animation-change enjoyment still land on 100 at the end of the second-to-last stage. The final-stage finish only lifts actors held at 98, so the curve never causes a repeat orgasm.
+- Untested in game: SkyrimNet static action parameters reaching `MiniGame_Strategy(..., String strategy)`, and the select pulldown round-trip through `PatchConfig`.

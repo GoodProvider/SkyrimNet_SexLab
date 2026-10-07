@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <map>
@@ -70,6 +71,18 @@ namespace OrgasmEngine
             float stageSpike = 5.0f;  // enjoyment added on each stage advance
             bool gate = true;         // orgasm roll just before the final stage
             float gateLeadDefault = 5.0f;  // DN -> speech seconds until NarrationTiming has samples
+            // SexLab bonus (skill, Lewd/Pure, victim/aggressor, relationship rank): see ComputeBonus.
+            float bonusScale = 0.5f;
+            float bonusClamp = 0.75f;
+            float togetherK = 2.0f;          // Together: curve exponent k = 1 + togetherK x bonus
+            float miniGameBonusMult = 1.0f;  // Mini-game: passive gain x (1 + this x bonus)
+            float npcInterval = 2.0f;        // Mini-game: seconds between an NPC's strategy steps
+            float npcStepMin = 5.0f;         // Mini-game: enjoyment per NPC step, random in [min, max]
+            float npcStepMax = 10.0f;
+            Strategy defaultNormal = Strategy::kMutual;
+            Strategy defaultAggressor = Strategy::kSelfish;
+            Strategy defaultVictim = Strategy::kPassive;
+            float fearCooldown = 30.0f;  // player Force: seconds the victim can only give in
         };
 
         struct ActorState
@@ -117,6 +130,21 @@ namespace OrgasmEngine
             bool domPrepaid = false;  // DOM's own recurring adds cancelled for this scene
             double lastDomSyncAt = 0.0;
             bool domSyncNow = false;
+            // SexLab's starting-enjoyment terms as one factor, about -bonusClamp..+bonusClamp (ComputeBonus).
+            float bonus = 0.0f;
+            // Together: scene progress (0..1) already credited by the curve.
+            float curveP = 0.0f;
+            // Mini-game NPC strategy. forcedBy: Greedy / ForcedOrgasm forcer; forcedAction what AcceptForce plays.
+            Strategy strategy = Strategy::kPassive;
+            RE::FormID strategyTarget = 0;
+            RE::FormID forcedBy = 0;
+            ForcedAction forcedAction = ForcedAction::kNone;
+            Strategy forcedStrategy = Strategy::kPassive;  // kPlayStrategy: what AcceptForce plays
+            std::string forceMethod;  // "a slap to the face"; narrated with AcceptForce / RejectForce
+            double fearUntil = 0.0;   // player Force: only AcceptForce offered until then
+            double nextStepAt = 0.0;
+            bool brokenOverride = false;  // broken: strategy set aside, arousing self
+            std::uint32_t allowedMask = 0xFFFFFFFF;  // last mask pushed to Papyrus (eligibility keys)
         };
 
         struct SceneState
@@ -135,7 +163,7 @@ namespace OrgasmEngine
             float baseRate = 0.0f;  // 0: no timers, kFallbackRate
             bool leadIn = false;
             bool paused = false;
-            double finalStageAt = 0.0;  // Now() on entering the final stage
+            double finalStageAt = 0.0;  // Now() (unpaused clock) on entering the final stage
             double finalElapsed = 0.0;  // animating, unpaused seconds in the final stage
             bool staged = false;        // SetStage seen once (no spike for the first stage)
             bool gateDone = false;      // gate rolled for this pass through the last two stages
@@ -152,6 +180,8 @@ namespace OrgasmEngine
             bool gateAwait = false;
             bool gateMarked = false;  // GateNarrationSent seen
             std::uint64_t gateCompletionMark = 0;
+            // Together: animating, unpaused seconds in the current stage (progress clock).
+            double stageElapsed = 0.0;
         };
 
         // Work collected under the lock, run after it is released (Papyrus dispatch / events / HUD).
@@ -203,6 +233,21 @@ namespace OrgasmEngine
             std::vector<RE::FormID> actors;
             bool holdStage;  // still in the second-to-last stage
         };
+        // Strategy change: narrated (optional path); a notification too in player scenes.
+        struct StrategyFx
+        {
+            RE::FormID actor;
+            RE::FormID target;
+            std::string msg;
+            bool notify;
+        };
+        // Eligibility keys (StorageUtil int on the actor) for the strategy actions' papyrus_util rules.
+        struct EligibilityFx
+        {
+            RE::FormID actor;
+            std::vector<std::string> allow;
+            std::vector<std::string> deny;
+        };
         struct Effects
         {
             std::vector<OrgasmGroupFx> orgasms;
@@ -212,10 +257,13 @@ namespace OrgasmEngine
             std::vector<DomSyncFx> domSyncs;
             std::vector<GatePassFx> gatePasses;
             std::vector<RE::FormID> advances;  // voice started after a gate pass: push the scene to its final stage
+            std::vector<StrategyFx> strategies;
+            std::vector<EligibilityFx> eligibility;
             bool empty() const
             {
                 return orgasms.empty() && mirrors.empty() && narrations.empty() && events.empty() &&
-                       domSyncs.empty() && gatePasses.empty() && advances.empty();
+                       domSyncs.empty() && gatePasses.empty() && advances.empty() && strategies.empty() &&
+                       eligibility.empty();
             }
         };
 
@@ -243,11 +291,22 @@ namespace OrgasmEngine
         std::mt19937 g_rng{ std::random_device{}() };
         RE::TESFaction* g_animatingFaction = nullptr;
 
-        double Now()
+        // Wall clock: only the source of Tick's delta.
+        double GameNow()
         {
             using namespace std::chrono;
             static const auto start = steady_clock::now();
             return duration<double>(steady_clock::now() - start).count();
+        }
+
+        // Engine clock: unpaused seconds, advanced only by Tick. Frozen while the game or the WebUI is paused,
+        // so gain, cooldowns, edging and narration windows all run on unpaused game time. Starts high so
+        // timestamps rebuilt from saved "seconds since" stay positive (negative = never).
+        std::atomic<double> g_gameClock{ 100000.0 };
+
+        double Now()
+        {
+            return g_gameClock.load();
         }
 
         RE::Actor* ActorFor(RE::FormID id)
@@ -267,6 +326,17 @@ namespace OrgasmEngine
         bool IsPlayer(RE::Actor* actor)
         {
             return actor && actor == RE::PlayerCharacter::GetSingleton();
+        }
+
+        bool IsFemale(RE::Actor* actor)
+        {
+            const auto* base = actor ? actor->GetActorBase() : nullptr;
+            return base && base->GetSex() == RE::SEX::kFemale;
+        }
+
+        std::string Reflexive(RE::Actor* actor)
+        {
+            return IsFemale(actor) ? "herself" : "himself";
         }
 
         float OrgasmCooldown(RE::Actor* actor)
@@ -459,6 +529,15 @@ namespace OrgasmEngine
             return test >= kMaxEnjoyment || st.pending;
         }
 
+        // Caller holds g_lock. Threshold roll (group, gate, final): enjoyment + random(0, random_bonus) + bonus
+        // reaches 100. `rolled` is the random part, for the log.
+        bool RollOrgasm(const ActorState& st, float bonus, float& rolled)
+        {
+            std::uniform_real_distribution<float> roll(0.0f, std::max(0.0f, g_settings.randomBonus));
+            rolled = roll(g_rng);
+            return st.enjoyment + rolled + bonus >= kMaxEnjoyment;
+        }
+
         // Caller holds g_lock. Passive gain per second (before speed and pause): fixed rate from the stage
         // timers. Not expected to orgasm: mini-game only.
         float PassiveRate(const SceneState& sc, const ActorState& st)
@@ -471,7 +550,606 @@ namespace OrgasmEngine
             for (const auto& [src, m] : st.rateMods) {
                 rate *= m;
             }
+            // Mini-game: the SexLab bonus is a constant rate factor.
+            if (g_settings.miniGame) {
+                rate *= std::max(0.0f, 1.0f + g_settings.miniGameBonusMult * st.bonus);
+            }
             return rate;
+        }
+
+        void NoteNarration(RE::FormID who, RE::FormID target, bool arouse, double now);
+
+        // ---- SexLab bonus ----
+        // sslActorAlias StartAnimating (SexLab 1.6x): BaseEnjoyment += S x RandomInt(1, 10), with S from the
+        // relationship rank and Lewd/Pure, by victim / aggressor / normal branch; unskilled actors (creatures)
+        // use the rank only. The random factor is replaced by its mean (5.5); 50 points = 1.0. The act skill
+        // of the partner (SexLab bases skills on the partner, or the player when present) drives
+        // CalcEnjoyment's growth there: (level - 2) / 6 here. Indices: GetSkillLevels (4 Pure, 5 Lewd).
+        float ComputeBonus(const std::vector<float>& own, const std::vector<float>& partner, std::int32_t low,
+            std::int32_t high, std::int32_t actSkill, Role role)
+        {
+            constexpr std::size_t kPure = 4;
+            constexpr std::size_t kLewd = 5;
+            const bool skilled = own.size() > kLewd && partner.size() > kLewd;
+            float s = 0.0f;
+            if (skilled) {
+                const float ownLp = own[kLewd] - own[kPure];
+                const float partnerLp = partner[kLewd] - partner[kPure];
+                switch (role) {
+                case Role::kVictim:
+                    s = static_cast<float>(low - 3) + std::clamp(ownLp, -6.0f, 6.0f);
+                    break;
+                case Role::kAggressor:
+                    s = -(static_cast<float>(high - 4) + std::clamp(partnerLp - ownLp, -6.0f, 6.0f));
+                    break;
+                default:
+                    s = static_cast<float>(high) + std::clamp((partner[kLewd] + own[kLewd]) * 0.5f -
+                                                                  (partner[kPure] + own[kPure]) * 0.5f,
+                                                       0.0f, 6.0f);
+                    break;
+                }
+            } else {
+                switch (role) {
+                case Role::kVictim:
+                    s = static_cast<float>(low - 3);
+                    break;
+                case Role::kAggressor:
+                    s = -static_cast<float>(high - 4);
+                    break;
+                default:
+                    s = static_cast<float>(high + 3);
+                    break;
+                }
+            }
+            const float relation = std::clamp(s * 5.5f / 50.0f, -1.0f, 1.0f);
+            float skill = 0.0f;
+            if (skilled && actSkill >= 0 && static_cast<std::size_t>(actSkill) < partner.size()) {
+                skill = (partner[static_cast<std::size_t>(actSkill)] - 2.0f) / 6.0f;
+            }
+            const float clampTo = std::max(0.0f, g_settings.bonusClamp);
+            return std::clamp(g_settings.bonusScale * (relation + skill), -clampTo, clampTo);
+        }
+
+        // ---- Together: enjoyment follows a curve that reaches 100 at the end of the second-to-last stage ----
+        // p: completed stages + this stage's share of its timer, over stages 1..N-1. A stage that runs long
+        // waits at its boundary. Untimed: by stage index.
+        float SceneProgress(const SceneState& sc)
+        {
+            const std::int32_t denom = std::max(1, sc.stageCount - 1);
+            const std::int32_t stage = std::max(1, sc.stage);
+            const std::int32_t completed = std::min(stage - 1, denom);
+            float frac = 0.0f;
+            if (stage <= denom && static_cast<std::size_t>(stage - 1) < sc.stageSecs.size()) {
+                const float secs = sc.stageSecs[static_cast<std::size_t>(stage - 1)];
+                frac = secs > 0.0f ? std::clamp(static_cast<float>(sc.stageElapsed / secs), 0.0f, 1.0f) : 0.0f;
+            }
+            return std::clamp((static_cast<float>(completed) + frac) / static_cast<float>(denom), 0.0f, 1.0f);
+        }
+
+        // Caller holds g_lock. E(p) = 1 - (1 - p)^k, k = 1 + togetherK x bonus: a positive bonus rises fast and
+        // flattens, a negative one starts slow. Each step closes the matching share of the gap to the target,
+        // so carried-over or external enjoyment still lands on the target at p = 1. Before the final stage the
+        // curve stops at kRushHover, so nobody fires before the gate.
+        void ApplyTogetherCurve(const SceneState& sc, ActorState& st, bool finalStage)
+        {
+            const float p = SceneProgress(sc);
+            const float target = sc.leadIn ? kMaxEnjoyment / kLeadInStretch : kMaxEnjoyment;
+            // Final stage, curve done and held at kRushHover (no gate rush): finish now. Not after an orgasm
+            // (enjoyment back at 0), so the curve never makes a repeat orgasm.
+            if (finalStage && p >= 1.0f && st.enjoyment >= kRushHover - 0.01f && st.enjoyment < target) {
+                st.enjoyment = target;
+                st.curveP = p;
+                return;
+            }
+            if (p <= st.curveP) {
+                st.curveP = p;  // stage back or a new animation: rebase
+                return;
+            }
+            const float k = std::clamp(1.0f + g_settings.togetherK * st.bonus, 0.5f, 2.5f);
+            const auto curve = [k](float x) { return 1.0f - std::pow(1.0f - x, k); };
+            const float e0 = curve(st.curveP);
+            const float e1 = curve(p);
+            const float share = e0 < 1.0f ? std::clamp((e1 - e0) / (1.0f - e0), 0.0f, 1.0f) : 1.0f;
+            st.curveP = p;
+            if (st.enjoyment < target) {
+                float next = st.enjoyment + (target - st.enjoyment) * share;
+                if (!finalStage) {
+                    next = std::min(next, std::max(st.enjoyment, kRushHover));
+                }
+                st.enjoyment = std::clamp(next, 0.0f, kMaxEnjoyment);
+            }
+        }
+
+        // ---- Mini-game NPC strategies ----
+        struct StrategyInfo
+        {
+            const char* key;    // action / eligibility key suffix
+            const char* label;  // HUD tag
+            const char* text;   // third person, after the name; {target} / {forcer} / {name} filled in
+        };
+        constexpr StrategyInfo kStrategies[] = {
+            { "passive", "passive", "lets things happen" },
+            { "mutual", "mutual", "focuses efforts on mutual enjoyment" },
+            { "selfish", "selfish", "focuses on self enjoyment" },
+            { "selfless", "selfless", "focuses on the enjoyment of others" },
+            { "together", "together", "paces themselves to finish together" },
+            { "tease", "tease", "teases {target}, holding them at the edge" },
+            { "reject", "reject", "focuses effort on not orgasming" },
+            { "cumquick", "cum quick", "is focused on making them cum so it ends" },
+            { "greedy", "greedy", "focuses on their own pleasure and forces {target} to focus on {name}'s pleasure" },
+            { "forcedorgasm", "forcing", "focuses on forcing {target} to orgasm" },
+            { "acceptforce", "forced", "gives in to {forcer}" },
+        };
+        static_assert(std::size(kStrategies) == static_cast<std::size_t>(Strategy::kCount));
+        constexpr const char* kEligibilityPrefix = "skyrimnet_sexlab_strategy_";
+        constexpr const char* kRejectForceKey = "rejectforce";
+        constexpr std::uint32_t kRejectForceBit = 1u << static_cast<std::uint32_t>(Strategy::kCount);
+
+        const StrategyInfo& InfoOf(Strategy s)
+        {
+            const auto i = static_cast<std::size_t>(std::clamp(static_cast<std::int32_t>(s), 0,
+                static_cast<std::int32_t>(Strategy::kCount) - 1));
+            return kStrategies[i];
+        }
+
+        // Dashboard pulldown value ("Mutual", "Cum quick", ...) -> strategy; def when unknown.
+        Strategy ParseStrategy(std::string value, Strategy def)
+        {
+            std::string v;
+            for (const unsigned char c : value) {
+                if (std::isalnum(c)) {
+                    v.push_back(static_cast<char>(std::tolower(c)));
+                }
+            }
+            for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
+                if (v == kStrategies[i].key) {
+                    return static_cast<Strategy>(i);
+                }
+            }
+            return def;
+        }
+
+        bool NeedsTarget(Strategy s)
+        {
+            return s == Strategy::kTease || s == Strategy::kGreedy || s == Strategy::kForcedOrgasm;
+        }
+
+        bool AnyOtherVictim(const SceneState& sc, RE::FormID self)
+        {
+            for (const auto id : sc.actors) {
+                if (id == self) {
+                    continue;
+                }
+                if (const auto at = g_actors.find(id); at != g_actors.end() && at->second.role == Role::kVictim) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Caller holds g_lock. Mini-game mode, NPCs only. Forced: AcceptForce, or Selfish / Reject (RejectForce).
+        bool StrategyAllowed(const SceneState& sc, const ActorState& st, Strategy s)
+        {
+            if (!g_settings.miniGame || IsPlayer(ActorFor(st.id)) || s < Strategy::kPassive || s >= Strategy::kCount) {
+                return false;
+            }
+            if (st.forcedBy != 0) {
+                if (Now() < st.fearUntil) {
+                    return s == Strategy::kAcceptForce;
+                }
+                return s == Strategy::kAcceptForce || s == Strategy::kSelfish || s == Strategy::kReject;
+            }
+            const bool victim = st.role == Role::kVictim;
+            const bool others = sc.actors.size() > 1;
+            switch (s) {
+            case Strategy::kAcceptForce:
+                return false;
+            case Strategy::kReject:
+            case Strategy::kCumQuick:
+                return victim;
+            case Strategy::kTease:
+            case Strategy::kForcedOrgasm:
+                return !victim && others;
+            case Strategy::kGreedy:
+                return !victim && AnyOtherVictim(sc, st.id);
+            case Strategy::kMutual:
+            case Strategy::kSelfless:
+            case Strategy::kTogether:
+                return others;
+            default:
+                return true;
+            }
+        }
+
+        std::uint32_t AllowedMask(const SceneState& sc, const ActorState& st)
+        {
+            if (!g_settings.miniGame || IsPlayer(ActorFor(st.id))) {
+                return 0;
+            }
+            if (st.forcedBy != 0) {
+                const std::uint32_t accept = 1u << static_cast<std::uint32_t>(Strategy::kAcceptForce);
+                // Player Force fear cooldown: give in is the only choice.
+                return Now() < st.fearUntil ? accept : accept | kRejectForceBit;
+            }
+            std::uint32_t mask = 0;
+            for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
+                if (StrategyAllowed(sc, st, static_cast<Strategy>(i))) {
+                    mask |= 1u << static_cast<std::uint32_t>(i);
+                }
+            }
+            return mask;
+        }
+
+        // Caller holds g_lock. Push the actor's eligibility keys when they changed (mask 0: deny all).
+        void PushEligibility(ActorState& st, std::uint32_t mask, Effects& fx)
+        {
+            if (mask == st.allowedMask) {
+                return;
+            }
+            st.allowedMask = mask;
+            EligibilityFx e{ st.id, {}, {} };
+            for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
+                const std::string key = std::string(kEligibilityPrefix) + kStrategies[i].key;
+                (mask & (1u << static_cast<std::uint32_t>(i)) ? e.allow : e.deny).push_back(key);
+            }
+            const std::string reject = std::string(kEligibilityPrefix) + kRejectForceKey;
+            (mask & kRejectForceBit ? e.allow : e.deny).push_back(reject);
+            fx.eligibility.push_back(std::move(e));
+        }
+
+        void RefreshEligibility(const SceneState& sc, Effects& fx)
+        {
+            for (const auto id : sc.actors) {
+                if (auto at = g_actors.find(id); at != g_actors.end()) {
+                    PushEligibility(at->second, AllowedMask(sc, at->second), fx);
+                }
+            }
+        }
+
+        Strategy DefaultStrategy(const SceneState& sc, const ActorState& st)
+        {
+            Strategy s = g_settings.defaultNormal;
+            if (st.role == Role::kAggressor) {
+                s = g_settings.defaultAggressor;
+            } else if (st.role == Role::kVictim) {
+                s = g_settings.defaultVictim;
+            }
+            // Role defaults never force anyone and need no target.
+            if (NeedsTarget(s) || !StrategyAllowed(sc, st, s)) {
+                return Strategy::kPassive;
+            }
+            return s;
+        }
+
+        void ReplaceAll(std::string& s, const std::string& from, const std::string& to)
+        {
+            for (std::size_t pos = s.find(from); pos != std::string::npos; pos = s.find(from, pos + to.size())) {
+                s.replace(pos, from.size(), to);
+            }
+        }
+
+        // Player Force: what the victim is forced to do, after "forces <victim> to" / "gives in to <forcer> and".
+        // {forcer} is the player ("you" on the panel); {self} the victim's reflexive pronoun.
+        const char* ForcedPhrase(Strategy s)
+        {
+            switch (s) {
+            case Strategy::kPassive:
+                return "lie still and take it";
+            case Strategy::kMutual:
+                return "chase pleasure with {forcer}";
+            case Strategy::kSelfish:
+                return "pleasure {self}";
+            case Strategy::kSelfless:
+                return "please {forcer}";
+            case Strategy::kTogether:
+                return "finish together with {forcer}";
+            case Strategy::kReject:
+                return "hold back their orgasm";
+            case Strategy::kCumQuick:
+                return "make {forcer} cum quickly";
+            default:
+                return InfoOf(s).text;
+            }
+        }
+
+        // Caller holds g_lock. Third-person phrase for the actor's strategy (no leading name).
+        std::string StrategyPhrase(const ActorState& st)
+        {
+            const StrategyInfo& info = InfoOf(st.strategy);
+            std::string text = info.text;
+            const std::string by = st.forceMethod.empty() ? "" : " despite " + st.forceMethod;
+            if (st.forcedBy != 0 && (st.strategy == Strategy::kSelfish || st.strategy == Strategy::kReject)) {
+                text = "resists {forcer}" + by + " and " + text;
+            } else if (st.strategy == Strategy::kAcceptForce && !st.forceMethod.empty()) {
+                text += ", cowed by " + st.forceMethod;
+            }
+            if (st.strategy == Strategy::kAcceptForce && st.forcedAction == ForcedAction::kPlayStrategy) {
+                text += " and " + std::string(ForcedPhrase(st.forcedStrategy));
+            }
+            ReplaceAll(text, "{target}", NameOf(ActorFor(st.strategyTarget)));
+            ReplaceAll(text, "{forcer}", NameOf(ActorFor(st.forcedBy)));
+            ReplaceAll(text, "{name}", NameOf(ActorFor(st.id)));
+            ReplaceAll(text, "{self}", Reflexive(ActorFor(st.id)));
+            return text;
+        }
+
+        void Announce(const SceneState& sc, const ActorState& st, const std::string& phrase, Effects& fx)
+        {
+            const std::string name = NameOf(ActorFor(st.id));
+            if (name.empty() || phrase.empty()) {
+                return;
+            }
+            fx.strategies.push_back({ st.id, st.strategyTarget, name + " " + phrase + ".", sc.hasPlayer });
+        }
+
+        // Caller holds g_lock. Ends the forced state this actor put on its target (Greedy / ForcedOrgasm).
+        void ReleaseForced(const SceneState& sc, ActorState& forcer, Effects& fx)
+        {
+            if (forcer.strategy != Strategy::kGreedy && forcer.strategy != Strategy::kForcedOrgasm) {
+                return;
+            }
+            const auto at = g_actors.find(forcer.strategyTarget);
+            if (at == g_actors.end() || at->second.forcedBy != forcer.id) {
+                return;
+            }
+            ActorState& t = at->second;
+            const std::string forcerName = NameOf(ActorFor(forcer.id));
+            t.forcedBy = 0;
+            t.forcedAction = ForcedAction::kNone;
+            t.forceMethod.clear();
+            t.fearUntil = 0.0;
+            t.strategy = DefaultStrategy(sc, t);
+            t.strategyTarget = 0;
+            Announce(sc, t, "is no longer forced by " + forcerName, fx);
+            webui_log::info("OrgasmEngine: {:#x} released from forced by {:#x} -> {}", t.id, forcer.id,
+                InfoOf(t.strategy).key);
+        }
+
+        // Caller holds g_lock. Sets the strategy (already allowed), forcing the target for Greedy / ForcedOrgasm.
+        void ApplyStrategy(const SceneState& sc, ActorState& st, Strategy s, RE::FormID target, bool announce,
+            Effects& fx)
+        {
+            if (st.strategy != s || st.strategyTarget != target) {
+                ReleaseForced(sc, st, fx);
+            }
+            st.strategy = s;
+            st.strategyTarget = NeedsTarget(s) ? target : 0;
+            st.nextStepAt = Now();
+            if (s == Strategy::kGreedy || s == Strategy::kForcedOrgasm) {
+                auto at = g_actors.find(target);
+                // The player plays their own mini-game: never forced.
+                if (at != g_actors.end() && at->second.sid == st.sid && !IsPlayer(ActorFor(target))) {
+                    ActorState& t = at->second;
+                    if (t.forcedBy != 0 && t.forcedBy != st.id) {
+                        if (auto old = g_actors.find(t.forcedBy); old != g_actors.end()) {
+                            ReleaseForced(sc, old->second, fx);
+                        }
+                    }
+                    ReleaseForced(sc, t, fx);  // a forced actor drops what it was forcing
+                    t.forcedBy = st.id;
+                    t.forceMethod.clear();
+                    t.fearUntil = 0.0;
+                    t.forcedAction = s == Strategy::kGreedy ? ForcedAction::kArouseForcer : ForcedAction::kArouseSelf;
+                    t.strategy = Strategy::kAcceptForce;
+                    t.strategyTarget = 0;
+                    t.nextStepAt = Now();
+                }
+            }
+            webui_log::info("OrgasmEngine: {:#x} strategy {} target {:#x} forcedBy {:#x}", st.id, InfoOf(s).key,
+                st.strategyTarget, st.forcedBy);
+            if (announce) {
+                Announce(sc, st, StrategyPhrase(st), fx);
+            }
+        }
+
+        // Caller holds g_lock. Mini-game press with an explicit base amount (skill factor, cost, mental-break
+        // drain applied). narrate: queue the coalesced "<A> arouses <B>" line (player keys / LLM / API).
+        bool ArouseLocked(RE::Actor* who, RE::Actor* target, ActorState& tst, float base, bool narrate, Effects& fx)
+        {
+            const auto* wst = Find(who);
+            const float skill = wst ? static_cast<float>(wst->skill) : 0.0f;
+            const float cost = ArouseCost(wst);
+            if (CurrentAv(who, RE::ActorValue::kStamina) < cost) {
+                return false;
+            }
+            DamageAv(who, RE::ActorValue::kStamina, cost);
+            const float before = tst.enjoyment;
+            const float amount = std::max(0.0f, base) * (1.0f + 0.1f * skill);
+            if (tst.dom) {
+                tst.domDelta += amount;
+                tst.domShare += amount / kMaxEnjoyment;
+                tst.domSyncNow = true;
+            } else {
+                tst.enjoyment = std::clamp(before + amount, 0.0f, kMaxEnjoyment);
+            }
+            if (g_settings.mentalBreak && who != target) {
+                const float drain = g_settings.breakDrain * (before / kMaxEnjoyment) * (1.0f + 0.1f * skill) *
+                                    (1.0f + static_cast<float>(tst.orgasmCount));
+                DamageAv(target, RE::ActorValue::kMagicka, drain);
+                UpdateBroken(tst, target, who->GetFormID(), "minigame", fx);
+            }
+            if (narrate) {
+                NoteNarration(who->GetFormID(), target->GetFormID(), true, Now());
+            }
+            webui_log::info("OrgasmEngine: arouse {:#x}->{:#x} +{} cost={} -> {}", who->GetFormID(),
+                target->GetFormID(), amount, cost, tst.enjoyment);
+            return true;
+        }
+
+        bool CalmLocked(RE::Actor* who, RE::Actor* target, ActorState& tst, float base, bool narrate, Effects& fx)
+        {
+            const auto* wst = Find(who);
+            if (wst && wst->broken) {
+                return false;
+            }
+            const float cost = CalmCost(wst);
+            if (CurrentAv(who, RE::ActorValue::kMagicka) < cost) {
+                return false;
+            }
+            DamageAv(who, RE::ActorValue::kMagicka, cost);
+            const double now = Now();
+            tst.lastCalmAt = now;
+            const float before = tst.enjoyment;
+            const float amount = std::max(0.0f, base);
+            if (tst.dom) {
+                tst.domDelta -= amount;
+                tst.domSyncNow = true;
+            } else {
+                tst.enjoyment = std::max(0.0f, before - amount);
+            }
+            if (before >= kEdgeThreshold) {
+                tst.edgeUntil = now + g_settings.edgeSeconds;
+                fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kEdge, tst.id, who->GetFormID(),
+                    "minigame", g_settings.edgeSeconds, tst.orgasmCount });
+            }
+            if (narrate) {
+                NoteNarration(who->GetFormID(), target->GetFormID(), false, now);
+            }
+            webui_log::info("OrgasmEngine: calm {:#x}->{:#x} cost={} {} -> {}{}", who->GetFormID(),
+                target->GetFormID(), cost, before, tst.enjoyment, before >= kEdgeThreshold ? " (edge)" : "");
+            return true;
+        }
+
+        // Caller holds g_lock. Another actor of the scene by enjoyment (lowest or highest); 0 when none.
+        // role: only that role (kNormal = any).
+        RE::FormID PickOther(const SceneState& sc, RE::FormID self, bool lowest, bool includeSelf,
+            Role role = Role::kNormal)
+        {
+            RE::FormID best = 0;
+            float bestValue = 0.0f;
+            for (const auto id : sc.actors) {
+                if (id == self && !includeSelf) {
+                    continue;
+                }
+                const auto at = g_actors.find(id);
+                if (at == g_actors.end() || (role != Role::kNormal && at->second.role != role)) {
+                    continue;
+                }
+                const float v = at->second.enjoyment;
+                if (!best || (lowest ? v < bestValue : v > bestValue)) {
+                    best = id;
+                    bestValue = v;
+                }
+            }
+            return best;
+        }
+
+        bool InScene(const SceneState& sc, RE::FormID id)
+        {
+            return id && std::find(sc.actors.begin(), sc.actors.end(), id) != sc.actors.end();
+        }
+
+        // Caller holds g_lock. One mini-game step for an NPC with a strategy, every npc_interval seconds.
+        // Each step moves enjoyment by random(npc_step_min, npc_step_max) (arouse x skill factor); costs,
+        // mental break and edging as for a player press. Not narrated (the strategy choice is).
+        void StrategyStep(const SceneState& sc, ActorState& st, double now, Effects& fx)
+        {
+            RE::Actor* self = ActorFor(st.id);
+            if (!g_settings.miniGame || !self || IsPlayer(self) || now < st.nextStepAt) {
+                return;
+            }
+            st.nextStepAt = now + std::max(0.25f, g_settings.npcInterval);
+
+            if (st.broken != st.brokenOverride) {
+                st.brokenOverride = st.broken;
+                Announce(sc, st,
+                    st.broken ? "is overwhelmed and can only seek their own pleasure"
+                              : "recovers and " + StrategyPhrase(st),
+                    fx);
+            }
+            const float lo = std::max(0.0f, std::min(g_settings.npcStepMin, g_settings.npcStepMax));
+            const float hi = std::max(lo, g_settings.npcStepMax);
+            std::uniform_real_distribution<float> roll(lo, hi);
+            const float amount = roll(g_rng);
+
+            const auto arouse = [&](RE::FormID id) {
+                auto at = g_actors.find(id);
+                RE::Actor* target = ActorFor(id);
+                if (at != g_actors.end() && target && InScene(sc, id)) {
+                    ArouseLocked(self, target, at->second, amount, false, fx);
+                }
+            };
+            const auto calm = [&](RE::FormID id) {
+                auto at = g_actors.find(id);
+                RE::Actor* target = ActorFor(id);
+                if (at != g_actors.end() && target && InScene(sc, id)) {
+                    CalmLocked(self, target, at->second, amount, false, fx);
+                }
+            };
+
+            // Broken: tries to arouse self, whatever the strategy.
+            if (st.broken) {
+                arouse(st.id);
+                return;
+            }
+            Strategy play = st.strategy;
+            if (play == Strategy::kAcceptForce && st.forcedAction == ForcedAction::kPlayStrategy) {
+                play = st.forcedStrategy;
+                // Forced to please the player: the player, not the lowest other.
+                if (play == Strategy::kSelfless && InScene(sc, st.forcedBy)) {
+                    arouse(st.forcedBy);
+                    return;
+                }
+            }
+            switch (play) {
+            case Strategy::kAcceptForce:
+                if (st.forcedAction == ForcedAction::kArouseForcer) {
+                    arouse(st.forcedBy);
+                } else if (st.forcedAction == ForcedAction::kArouseSelf) {
+                    arouse(st.id);
+                }
+                break;
+            case Strategy::kMutual:
+                arouse(PickOther(sc, st.id, true, true));
+                break;
+            case Strategy::kSelfish:
+            case Strategy::kGreedy:
+                arouse(st.id);
+                break;
+            case Strategy::kSelfless:
+                arouse(PickOther(sc, st.id, true, false));
+                break;
+            case Strategy::kTogether: {
+                const RE::FormID partner = PickOther(sc, st.id, true, false);
+                const auto pt = g_actors.find(partner);
+                const float diff = pt != g_actors.end() ? st.enjoyment - pt->second.enjoyment : 0.0f;
+                if (diff > 5.0f) {
+                    calm(st.id);
+                } else if (diff < -5.0f) {
+                    arouse(st.id);
+                }
+                break;
+            }
+            case Strategy::kTease: {
+                const RE::FormID target =
+                    InScene(sc, st.strategyTarget) ? st.strategyTarget : PickOther(sc, st.id, true, false);
+                const auto tt = g_actors.find(target);
+                if (tt != g_actors.end()) {
+                    if (tt->second.enjoyment < kEdgeThreshold) {
+                        arouse(target);
+                    } else {
+                        calm(target);
+                    }
+                }
+                break;
+            }
+            case Strategy::kReject:
+                calm(st.id);
+                break;
+            case Strategy::kCumQuick: {
+                RE::FormID target = PickOther(sc, st.id, false, false, Role::kAggressor);
+                if (!target) {
+                    target = PickOther(sc, st.id, false, false);
+                }
+                arouse(target);
+                break;
+            }
+            case Strategy::kForcedOrgasm:
+                arouse(InScene(sc, st.strategyTarget) ? st.strategyTarget : PickOther(sc, st.id, true, false));
+                break;
+            default:
+                break;
+            }
         }
 
         bool InGroup(const OrgasmGroupFx& group, RE::FormID id)
@@ -479,13 +1157,12 @@ namespace OrgasmEngine
             return std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end();
         }
 
-        // Caller holds g_lock. Someone in the scene orgasmed: everyone else rolls once (chance = enjoyment %).
+        // Caller holds g_lock. Someone in the scene orgasmed: everyone else rolls once (RollOrgasm, no bonus).
         // Second-to-last stage, and the lead just reached their target (the Scene jumps to the final
-        // stage): everyone still out rolls again with the passive gain left until the scene ends, so
+        // stage): everyone still out rolls again with the stage spike as bonus, so
         // whoever would finish in the final stage goes into this one DN. A fail there is final.
         void JoinGroup(const SceneState& sc, OrgasmGroupFx& group, double now, Effects& fx)
         {
-            std::uniform_real_distribution<float> roll(0.0f, kMaxEnjoyment);
             // Rushing: already gate-passed and narrated for this orgasm; a join would narrate it twice.
             const auto canJoin = [&](RE::FormID id) -> ActorState* {
                 if (InGroup(group, id)) {
@@ -502,9 +1179,9 @@ namespace OrgasmEngine
                 if (!st) {
                     continue;
                 }
-                const float r = roll(g_rng);
-                const bool passed = r < st->enjoyment;
-                webui_log::info("OrgasmEngine: group roll {:#x} enjoyment={:.1f} roll={:.1f} pass={}", id,
+                float r = 0.0f;
+                const bool passed = RollOrgasm(*st, 0.0f, r);
+                webui_log::info("OrgasmEngine: group roll {:#x} enjoyment={:.1f} roll=+{:.1f} pass={}", id,
                     st->enjoyment, r, passed);
                 if (passed) {
                     Fire(*st, group, false, "group", now, fx);
@@ -519,19 +1196,15 @@ namespace OrgasmEngine
             if (lead == g_actors.end() || lead->second.orgasmCount < sc.endingTarget) {
                 return;
             }
-            const float leftSecs =
-                static_cast<float>(std::max(0.0, sc.stageSecs[sc.stageSecs.size() - 2] - sc.penultElapsed)) +
-                std::max(0.0f, sc.stageSecs.back());
             for (const auto id : sc.actors) {
                 ActorState* st = canJoin(id);
                 if (!st) {
                     continue;
                 }
-                const float topup = PassiveRate(sc, *st) * leftSecs;
-                const float r = roll(g_rng);
-                const bool passed = r < st->enjoyment + topup;
-                webui_log::info("OrgasmEngine: final roll {:#x} enjoyment={:.1f} topup={:.1f} roll={:.1f} pass={}", id,
-                    st->enjoyment, topup, r, passed);
+                float r = 0.0f;
+                const bool passed = RollOrgasm(*st, g_settings.stageSpike, r);
+                webui_log::info("OrgasmEngine: final roll {:#x} enjoyment={:.1f} bonus={:.1f} roll=+{:.1f} pass={}",
+                    id, st->enjoyment, g_settings.stageSpike, r, passed);
                 if (passed) {
                     Fire(*st, group, false, "group", now, fx);
                 } else {
@@ -698,6 +1371,21 @@ namespace OrgasmEngine
             for (const auto& n : fx.narrations) {
                 Narrate(n.eventType, n.msg, ActorFor(n.source), ActorFor(n.target));
             }
+            for (const auto& e : fx.eligibility) {
+                if (auto* a = ActorFor(e.actor)) {
+                    std::vector<RE::BSFixedString> allow(e.allow.begin(), e.allow.end());
+                    std::vector<RE::BSFixedString> deny(e.deny.begin(), e.deny.end());
+                    DispatchShell("Effect_StrategyEligibility",
+                        RE::MakeFunctionArguments(std::move(a), std::move(allow), std::move(deny)));
+                }
+            }
+            for (const auto& s : fx.strategies) {
+                if (auto* a = ActorFor(s.actor)) {
+                    DispatchShell("Effect_StrategyChanged",
+                        RE::MakeFunctionArguments(std::move(a), ActorFor(s.target), RE::BSFixedString(s.msg.c_str()),
+                            static_cast<bool>(s.notify)));
+                }
+            }
             std::vector<SKYRIMNET_SEXLAB_API::EngineEventCallback> callbacks;
             {
                 std::lock_guard lock(g_lock);
@@ -745,7 +1433,7 @@ namespace OrgasmEngine
             return false;
         }
 
-        void DropSceneLocked(std::int32_t sid)
+        void DropSceneLocked(std::int32_t sid, Effects& fx)
         {
             const auto it = g_scenes.find(sid);
             if (it == g_scenes.end()) {
@@ -755,6 +1443,7 @@ namespace OrgasmEngine
                 AnimSpeed::SetScale(ActorFor(id), 1.0f);
                 const auto at = g_actors.find(id);
                 if (at != g_actors.end() && at->second.sid == sid) {
+                    PushEligibility(at->second, 0, fx);  // strategy actions off for this actor
                     g_actors.erase(at);
                 }
             }
@@ -771,10 +1460,13 @@ namespace OrgasmEngine
         // Game thread, every kTickInterval.
         void Tick()
         {
-            const double now = Now();
+            const double wall = GameNow();
             const bool paused = NarrationQueue::IsPaused();
-            const double dt = paused ? 0.0 : std::clamp(now - g_lastTick, 0.0, 1.0);
-            g_lastTick = now;
+            // Clamp to two ticks so a save/load hitch credits little.
+            const double dt = paused ? 0.0 : std::clamp(wall - g_lastTick, 0.0, 0.5);
+            g_lastTick = wall;
+            g_gameClock.store(g_gameClock.load() + dt);
+            const double now = Now();
 
             Effects fx;
             if (!paused) {
@@ -800,6 +1492,11 @@ namespace OrgasmEngine
                     if (sc.stageCount >= 2 && sc.stage == sc.stageCount - 1 && !sc.paused) {
                         sc.penultElapsed += dt;
                     }
+                    // Together progress clock: SexLab's stage timer does not run while paused.
+                    if (!sc.paused) {
+                        sc.stageElapsed += dt;
+                    }
+                    RefreshEligibility(sc, fx);
                     // Everyone who orgasms in this scene this tick: one group, one message.
                     OrgasmGroupFx group;
                     // Gate passers reaching kRushFireAt: already narrated, so their own group, no join.
@@ -833,22 +1530,33 @@ namespace OrgasmEngine
                                 Fire(st, rushGroup, true, "gate", now, fx);
                             }
                         } else {
-                            // 1. Passive gain: fixed rate from the stage timers, so extra time (repeated stage) or
-                            // speed adds enjoyment; pausing the stage advance does not hold gain. Not expected to
-                            // orgasm: mini-game only.
-                            const float rate = PassiveRate(sc, st);
-                            const float gain = static_cast<float>(rate * dt) * speed;
-                            if (st.dom) {
-                                st.domProgress += gain;
-                                st.domStepAcc += gain;
+                            // 1. Passive gain. Together (mini-game off): the bonus-shaped curve that reaches 100
+                            // at the end of the second-to-last stage. Mini-game (and DOM slaves): fixed rate from
+                            // the stage timers, so extra time (repeated stage) or speed adds enjoyment; pausing
+                            // the stage advance does not hold gain. Not expected to orgasm: no gain.
+                            if (!g_settings.miniGame && !st.dom) {
+                                if (st.orgasmExpected) {
+                                    ApplyTogetherCurve(sc, st, finalStage);
+                                } else {
+                                    st.curveP = SceneProgress(sc);
+                                }
                             } else {
-                                st.enjoyment = std::clamp(st.enjoyment + gain, 0.0f, kMaxEnjoyment);
+                                const float rate = PassiveRate(sc, st);
+                                const float gain = static_cast<float>(rate * dt) * speed;
+                                if (st.dom) {
+                                    st.domProgress += gain;
+                                    st.domStepAcc += gain;
+                                } else {
+                                    st.enjoyment = std::clamp(st.enjoyment + gain, 0.0f, kMaxEnjoyment);
+                                }
                             }
 
                             // Mental break recovers as magicka regenerates.
                             if (st.broken || g_settings.mentalBreak) {
                                 UpdateBroken(st, actor, 0, "minigame", fx);
                             }
+                            // Mini-game: NPCs play their strategy.
+                            StrategyStep(sc, st, now, fx);
 
                             // 2. Orgasm test.
                             if (st.pending && st.pendingForce) {
@@ -940,19 +1648,21 @@ namespace OrgasmEngine
 
                     // 4a. Gate (timed, no LeadIn): in the second-to-last stage, `lead` seconds (the measured
                     // DN -> speech time) before its timer ends, or on reaching the final stage first, each
-                    // actor who has not orgasmed rolls once: chance = enjoyment %. Passers rush (bars reach
+                    // actor who has not orgasmed rolls once (RollOrgasm + stage spike). Passers rush (bars reach
                     // kRushHover by the expected voice) and the Scene narrates them at once and holds the
                     // stage; the voice starting pushes the final stage, where the rush fires the orgasm. All
                     // fail: SexLab advances as normal, no orgasm.
                     const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
-                    const bool useGate = g_settings.gate && timedScene && !sc.leadIn;
+                    // Mini-game: no gate and no safety net, so several orgasms or none are possible.
+                    // Together: everyone expected passes the gate (no roll) and finishes together.
+                    const bool together = !g_settings.miniGame;
+                    const bool useGate = together && g_settings.gate && timedScene && !sc.leadIn;
                     if (useGate && !sc.gateDone && sc.stage >= sc.stageCount - 1) {
                         const bool penultimate = sc.stage == sc.stageCount - 1;
                         const float gateSecs = sc.stageSecs[sc.stageSecs.size() - 2];
                         const double lead = NarrationTiming::EstimateSeconds(g_settings.gateLeadDefault);
                         if (!penultimate || sc.penultElapsed >= std::max(0.0, gateSecs - lead)) {
                             sc.gateDone = true;
-                            std::uniform_real_distribution<float> roll(0.0f, kMaxEnjoyment);
                             GatePassFx pass{ {}, penultimate };
                             for (const auto id : sc.actors) {
                                 auto at = g_actors.find(id);
@@ -960,7 +1670,8 @@ namespace OrgasmEngine
                                     continue;
                                 }
                                 ActorState& st = at->second;
-                                if (st.orgasmCount != 0 || !st.orgasmExpected || st.rushing || !CanOrgasmNow(st, now) ||
+                                if ((st.orgasmCount != 0 && !together) || !st.orgasmExpected || st.rushing ||
+                                    !CanOrgasmNow(st, now) ||
                                     std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
                                     std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
                                         rushGroup.actors.end()) {
@@ -969,11 +1680,11 @@ namespace OrgasmEngine
                                         id, st.enjoyment, st.orgasmCount, st.orgasmExpected, st.dom);
                                     continue;
                                 }
-                                const float r = roll(g_rng);
-                                const bool passed = r < st.enjoyment;
-                                webui_log::info("OrgasmEngine: gate {:#x} enjoyment={:.1f} roll={:.1f} pass={} "
-                                                "lead={:.2f}s penultimate={}",
-                                    id, st.enjoyment, r, passed, lead, penultimate);
+                                float r = 0.0f;
+                                const bool passed = together || RollOrgasm(st, g_settings.stageSpike, r);
+                                webui_log::info("OrgasmEngine: gate {:#x} enjoyment={:.1f} bonus={:.1f} roll=+{:.1f} "
+                                                "pass={} lead={:.2f}s penultimate={} together={}",
+                                    id, st.enjoyment, g_settings.stageSpike, r, passed, lead, penultimate, together);
                                 if (passed) {
                                     st.rushing = true;
                                     st.rushRate = std::max(0.0f, kRushHover - st.enjoyment) / static_cast<float>(lead);
@@ -1024,7 +1735,7 @@ namespace OrgasmEngine
                     // 4b. Safety net (gate off, or no timers): at 90% of the final stage's timer, each
                     // non-DOM actor at kSafetyMin or more who has not finished. Without timers: at
                     // final-stage entry, everyone when the mini-game is off (the old rule). No LeadIn.
-                    if (!useGate && finalStage && !sc.finalDone && !sc.leadIn) {
+                    if (together && !useGate && finalStage && !sc.finalDone && !sc.leadIn) {
                         const float finalSecs = sc.stageSecs.empty() ? 0.0f : sc.stageSecs.back();
                         const bool timed = sc.baseRate > 0.0f && finalSecs > 0.0f;
                         if (!timed || sc.finalElapsed >= kSafetyAt * finalSecs) {
@@ -1062,7 +1773,7 @@ namespace OrgasmEngine
                 }
                 for (const auto sid : stale) {
                     webui_log::info("OrgasmEngine: scene {} no longer animating, dropped", sid);
-                    DropSceneLocked(sid);
+                    DropSceneLocked(sid, fx);
                 }
                 FlushNarrations(now, false, fx);
             }
@@ -1070,7 +1781,7 @@ namespace OrgasmEngine
             Hud::Tick();
         }
 
-        class Interface final : public SKYRIMNET_SEXLAB_API::IOrgasmEngineV1
+        class Interface final : public SKYRIMNET_SEXLAB_API::IOrgasmEngineV2
         {
         public:
             float GetEnjoyment(RE::Actor* a) noexcept override { return OrgasmEngine::GetEnjoyment(a); }
@@ -1115,6 +1826,14 @@ namespace OrgasmEngine
                 return OrgasmEngine::RegisterEventCallback(cb);
             }
             void UnregisterEventCallback(std::uint32_t h) noexcept override { OrgasmEngine::UnregisterEventCallback(h); }
+            bool SetStrategy(RE::Actor* a, SKYRIMNET_SEXLAB_API::Strategy s, RE::Actor* t) noexcept override
+            {
+                return OrgasmEngine::SetStrategy(a, static_cast<Strategy>(s), t);
+            }
+            SKYRIMNET_SEXLAB_API::Strategy GetStrategy(RE::Actor* a) noexcept override
+            {
+                return static_cast<SKYRIMNET_SEXLAB_API::Strategy>(OrgasmEngine::GetStrategy(a));
+            }
         };
 
         Interface g_interface;
@@ -1141,7 +1860,7 @@ namespace OrgasmEngine
     {
         static std::once_flag once;
         std::call_once(once, []() {
-            g_lastTick = Now();
+            g_lastTick = GameNow();
             std::thread([]() {
                 while (true) {
                     std::this_thread::sleep_for(kTickInterval);
@@ -1159,7 +1878,7 @@ namespace OrgasmEngine
         using SexLabNet::GetConfigBool;
         using SexLabNet::GetConfigFloat;
         Settings s;
-        s.miniGame = GetConfigBool("sexlab.minigame.enabled", false);
+        s.miniGame = SexLabNet::IsMiniGameMode();
         s.passiveRate = GetConfigFloat("sexlab.enjoyment.passive_mult", 0.4f);
         s.aggressorRate = GetConfigFloat("sexlab.enjoyment.aggressor_mult", 0.45f);
         s.victimRate = GetConfigFloat("sexlab.enjoyment.victim_mult", 0.3f);
@@ -1181,6 +1900,20 @@ namespace OrgasmEngine
         s.stageSpike = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_spike", 5.0f));
         s.gate = GetConfigBool("sexlab.ending.gate", true);
         s.gateLeadDefault = std::clamp(GetConfigFloat("sexlab.ending.gate_lead_default", 5.0f), 1.0f, 30.0f);
+        s.bonusScale = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.bonus_scale", 0.5f));
+        s.bonusClamp = std::clamp(GetConfigFloat("sexlab.enjoyment.bonus_clamp", 0.75f), 0.0f, 1.0f);
+        s.togetherK = std::clamp(GetConfigFloat("sexlab.enjoyment.together_k_range", 2.0f), 0.0f, 5.0f);
+        s.miniGameBonusMult = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.minigame_bonus_mult", 1.0f));
+        s.npcInterval = std::clamp(GetConfigFloat("sexlab.minigame.npc_interval", 2.0f), 0.25f, 60.0f);
+        s.npcStepMin = std::clamp(GetConfigFloat("sexlab.minigame.npc_step_min", 5.0f), 0.0f, 100.0f);
+        s.npcStepMax = std::clamp(GetConfigFloat("sexlab.minigame.npc_step_max", 10.0f), s.npcStepMin, 100.0f);
+        s.defaultNormal = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_normal", "Mutual"),
+            Strategy::kMutual);
+        s.defaultAggressor = ParseStrategy(
+            SexLabNet::GetConfigString("sexlab.minigame.default_strategy_aggressor", "Selfish"), Strategy::kSelfish);
+        s.fearCooldown = std::clamp(GetConfigFloat("sexlab.minigame.fear_cooldown", 30.0f), 0.0f, 600.0f);
+        s.defaultVictim = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_victim", "Passive"),
+            Strategy::kPassive);
         {
             std::lock_guard lock(g_lock);
             g_settings = s;
@@ -1192,6 +1925,11 @@ namespace OrgasmEngine
             s.miniGame, s.passiveRate, s.aggressorRate, s.victimRate, s.jitterMin, s.jitterMax, s.domArousalScale,
             s.domArousalScalePlayer, s.arouseAmount, s.calmAmount, s.staminaCost, s.magickaCost, s.edgeSeconds,
             s.mentalBreak, s.breakDrain, s.randomBonus, s.narrateWindow, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
+        webui_log::info("OrgasmEngine: config mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
+                        "interval={}s step={}-{} defaults={}/{}/{}",
+            s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
+            s.npcInterval, s.npcStepMin, s.npcStepMax, InfoOf(s.defaultNormal).key, InfoOf(s.defaultAggressor).key,
+            InfoOf(s.defaultVictim).key);
     }
 
     bool IsMiniGameEnabled()
@@ -1203,6 +1941,7 @@ namespace OrgasmEngine
     void BeginScene(std::int32_t sid, const std::vector<RE::Actor*>& actors, const std::vector<std::int32_t>& roles,
         const std::vector<float>& seeds, bool hasPlayer)
     {
+        Effects fx;
         std::lock_guard lock(g_lock);
         SceneState& sc = g_scenes[sid];
         const bool resumed = !sc.actors.empty();
@@ -1211,6 +1950,7 @@ namespace OrgasmEngine
         sc.staleSince = 0.0;
 
         std::vector<RE::FormID> ids;
+        std::vector<RE::FormID> newcomers;
         for (std::size_t i = 0; i < actors.size(); ++i) {
             RE::Actor* a = actors[i];
             if (!a) {
@@ -1230,6 +1970,7 @@ namespace OrgasmEngine
             st.role = i < roles.size() ? static_cast<Role>(std::clamp(roles[i], 0, 2)) : Role::kNormal;
             st.cooldown = OrgasmCooldown(a);
             if (inserted) {
+                newcomers.push_back(id);
                 st.enjoyment = std::clamp(i < seeds.size() ? seeds[i] : 0.0f, 0.0f, kMaxEnjoyment);
                 std::uniform_real_distribution<float> jitter(g_settings.jitterMin, g_settings.jitterMax);
                 st.jitter = jitter(g_rng);
@@ -1245,11 +1986,33 @@ namespace OrgasmEngine
                 const auto at = g_actors.find(old);
                 if (at != g_actors.end() && at->second.sid == sid) {
                     AnimSpeed::SetScale(ActorFor(old), 1.0f);
+                    ReleaseForced(sc, at->second, fx);
+                    PushEligibility(at->second, 0, fx);
                     g_actors.erase(at);
                 }
             }
         }
         sc.actors = std::move(ids);
+        // Forced by someone who left: free again.
+        for (const auto id : sc.actors) {
+            auto at = g_actors.find(id);
+            if (at != g_actors.end() && at->second.forcedBy != 0 && !InScene(sc, at->second.forcedBy)) {
+                at->second.forcedBy = 0;
+                at->second.forcedAction = ForcedAction::kNone;
+                at->second.forceMethod.clear();
+                at->second.fearUntil = 0.0;
+                at->second.strategy = Strategy::kPassive;
+            }
+        }
+        // Role defaults for new actors (after the roster, so Greedy-style checks see everyone). Not announced.
+        for (const auto id : newcomers) {
+            if (auto at = g_actors.find(id); at != g_actors.end()) {
+                at->second.strategy = DefaultStrategy(sc, at->second);
+                webui_log::info("OrgasmEngine: {:#x} default strategy {}", id, InfoOf(at->second.strategy).key);
+            }
+        }
+        RefreshEligibility(sc, fx);
+        PostEffects(std::move(fx));
         webui_log::info("OrgasmEngine: {} scene {} actors={} player={}", resumed ? "resumed" : "began", sid,
             sc.actors.size(), hasPlayer);
     }
@@ -1263,7 +2026,11 @@ namespace OrgasmEngine
         }
         SceneState& sc = it->second;
         const bool changed = sc.stage != stage || sc.stageCount != stageCount;
-        // Stage advance in the same animation: a small enjoyment spike (SexLab's stage term).
+        if (changed) {
+            sc.stageElapsed = 0.0;
+        }
+        // Stage advance in the same animation: a small enjoyment spike (SexLab's stage term). Together: the
+        // curve already holds the stage term (only DOM slaves, on the passive rate, still get it).
         if (sc.staged && stageCount == sc.stageCount && stage > sc.stage && g_settings.stageSpike > 0.0f) {
             for (const auto id : sc.actors) {
                 auto at = g_actors.find(id);
@@ -1274,7 +2041,7 @@ namespace OrgasmEngine
                 if (st.dom) {
                     st.domProgress += g_settings.stageSpike;
                     st.domStepAcc += g_settings.stageSpike;
-                } else {
+                } else if (g_settings.miniGame) {
                     st.enjoyment = std::clamp(st.enjoyment + g_settings.stageSpike, 0.0f, kMaxEnjoyment);
                 }
             }
@@ -1325,6 +2092,13 @@ namespace OrgasmEngine
             return;
         }
         ApplyStageTimers(sc, stageSecs, leadIn);
+        // New animation: the Together curve starts over from each actor's current enjoyment.
+        sc.stageElapsed = 0.0;
+        for (const auto id : sc.actors) {
+            if (auto at = g_actors.find(id); at != g_actors.end()) {
+                at->second.curveP = 0.0f;
+            }
+        }
         webui_log::info("OrgasmEngine: scene {} stages={} leadIn={} targetSecs={:.1f} baseRate={:.3f}/s{}", sid,
             stageSecs.size(), leadIn, sc.targetSecs, sc.baseRate > 0.0f ? sc.baseRate : kFallbackRate,
             sc.baseRate > 0.0f ? "" : " (fallback)");
@@ -1452,13 +2226,236 @@ namespace OrgasmEngine
         }
     }
 
+    void SetBonusInputs(RE::Actor* actor, const std::vector<float>& ownSkills, const std::vector<float>& partnerSkills,
+        std::int32_t lowestRank, std::int32_t highestRank, std::int32_t actSkill)
+    {
+        std::lock_guard lock(g_lock);
+        if (auto* st = Find(actor)) {
+            st->bonus = ComputeBonus(ownSkills, partnerSkills, lowestRank, highestRank, actSkill, st->role);
+            webui_log::info("OrgasmEngine: {:#x} bonus {:.3f} (role {} ranks {}/{} act {} skilled {})", st->id,
+                st->bonus, static_cast<std::int32_t>(st->role), lowestRank, highestRank, actSkill,
+                ownSkills.size() > 5 && partnerSkills.size() > 5);
+        }
+    }
+
+    bool SetStrategy(RE::Actor* actor, Strategy strategy, RE::Actor* target)
+    {
+        Effects fx;
+        bool ok = false;
+        {
+            std::lock_guard lock(g_lock);
+            auto* st = Find(actor);
+            const SceneState* sc = st ? SceneOf(*st) : nullptr;
+            if (!st || !sc) {
+                webui_log::warn("OrgasmEngine: SetStrategy for unmanaged actor {:#x}", actor ? actor->GetFormID() : 0);
+                return false;
+            }
+            if (!StrategyAllowed(*sc, *st, strategy)) {
+                webui_log::info("OrgasmEngine: {:#x} strategy {} not allowed (role {} forcedBy {:#x} minigame {})",
+                    st->id, InfoOf(strategy).key, static_cast<std::int32_t>(st->role), st->forcedBy,
+                    g_settings.miniGame);
+                return false;
+            }
+            RE::FormID targetId = target ? target->GetFormID() : 0;
+            if (NeedsTarget(strategy)) {
+                const auto valid = [&](RE::FormID id) {
+                    const auto at = g_actors.find(id);
+                    return id != st->id && InScene(*sc, id) && at != g_actors.end() &&
+                           (strategy != Strategy::kGreedy || at->second.role == Role::kVictim);
+                };
+                if (!valid(targetId)) {
+                    targetId = strategy == Strategy::kGreedy ? PickOther(*sc, st->id, true, false, Role::kVictim)
+                                                             : PickOther(*sc, st->id, true, false);
+                }
+                if (!valid(targetId)) {
+                    return false;
+                }
+            }
+            ApplyStrategy(*sc, *st, strategy, targetId, true, fx);
+            RefreshEligibility(*sc, fx);
+            ok = true;
+        }
+        PostEffects(std::move(fx));
+        return ok;
+    }
+
+    Strategy GetStrategy(RE::Actor* actor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(actor);
+        return st ? st->strategy : Strategy::kPassive;
+    }
+
+    std::string GetStrategyText(RE::Actor* actor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(actor);
+        if (!st || !g_settings.miniGame || IsPlayer(actor)) {
+            return "";
+        }
+        return st->broken ? "is overwhelmed and can only seek their own pleasure" : StrategyPhrase(*st);
+    }
+
+    RE::Actor* GetForcedBy(RE::Actor* actor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(actor);
+        return st ? ActorFor(st->forcedBy) : nullptr;
+    }
+
+    void SetForceMethod(RE::Actor* actor, const std::string& method)
+    {
+        std::lock_guard lock(g_lock);
+        if (auto* st = Find(actor); st && st->forcedBy != 0) {
+            st->forceMethod = method;
+        }
+    }
+
+    namespace
+    {
+        struct ForceMethod
+        {
+            const char* key;
+            const char* act;   // "<forcer> <act>" with {victim}
+            const char* noun;  // "cowed by <noun>"
+        };
+        constexpr ForceMethod kForceMethods[] = {
+            { "slap face", "slaps {victim} across the face", "a slap to the face" },
+            { "pinch nipple", "pinches {victim}'s nipple", "a pinched nipple" },
+            { "cover mouth", "clamps a hand over {victim}'s mouth", "a hand over the mouth" },
+            { "punch", "punches {victim} in the face", "a punch to the face" },
+            { "pull hair", "pulls {victim}'s hair", "a yank of the hair" },
+        };
+
+        // Caller holds g_lock. The player's scene when the player is an aggressor in mini-game mode.
+        const SceneState* PlayerAggressorScene()
+        {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            const auto* pst = Find(player);
+            if (!g_settings.miniGame || !pst || pst->role != Role::kAggressor) {
+                return nullptr;
+            }
+            const auto it = g_scenes.find(pst->sid);
+            return it != g_scenes.end() ? &it->second : nullptr;
+        }
+
+        // Caller holds g_lock. What a victim may be forced into: its own victim choices, no target needed.
+        bool ForceableStrategy(const SceneState& sc, const ActorState& victim, Strategy s)
+        {
+            if (NeedsTarget(s) || s == Strategy::kAcceptForce) {
+                return false;
+            }
+            ActorState free = victim;
+            free.forcedBy = 0;
+            return StrategyAllowed(sc, free, s);
+        }
+    }
+
+    bool GetPlayerForceInfo(std::vector<ForceVictim>& victims)
+    {
+        victims.clear();
+        std::lock_guard lock(g_lock);
+        const SceneState* sc = PlayerAggressorScene();
+        if (!sc) {
+            return false;
+        }
+        for (const auto id : sc->actors) {
+            const auto at = g_actors.find(id);
+            RE::Actor* actor = ActorFor(id);
+            if (at == g_actors.end() || at->second.role != Role::kVictim || !actor || IsPlayer(actor)) {
+                continue;
+            }
+            ForceVictim v;
+            v.id = id;
+            v.name = NameOf(actor);
+            for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
+                const auto s = static_cast<Strategy>(i);
+                if (ForceableStrategy(*sc, at->second, s)) {
+                    std::string label = ForcedPhrase(s);
+                    ReplaceAll(label, "{forcer}", "you");
+                    ReplaceAll(label, "{self}", IsFemale(actor) ? "herself" : "himself");
+                    v.strategies.emplace_back(kStrategies[i].key, std::move(label));
+                }
+            }
+            victims.push_back(std::move(v));
+        }
+        return true;
+    }
+
+    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method)
+    {
+        Effects fx;
+        std::string line;
+        {
+            std::lock_guard lock(g_lock);
+            const SceneState* sc = PlayerAggressorScene();
+            auto at = g_actors.find(victim);
+            if (!sc || at == g_actors.end() || !InScene(*sc, victim) || at->second.role != Role::kVictim) {
+                webui_log::warn("OrgasmEngine: PlayerForce refused for {:#x} (no aggressor scene / not a victim)", victim);
+                return "";
+            }
+            ActorState& t = at->second;
+            const Strategy s = ParseStrategy(strategyKey, Strategy::kCount);
+            if (s == Strategy::kCount || !ForceableStrategy(*sc, t, s)) {
+                webui_log::warn("OrgasmEngine: PlayerForce {:#x} strategy '{}' not allowed", victim, strategyKey);
+                return "";
+            }
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            const std::string forcer = NameOf(player);
+            const std::string name = NameOf(ActorFor(victim));
+
+            // Preset: "<forcer> punches <victim> in the face and forces <victim> to ...". Free text: "... by <text>".
+            std::string act;
+            std::string noun = method;
+            for (const auto& m : kForceMethods) {
+                if (method == m.key) {
+                    act = m.act;
+                    noun = m.noun;
+                }
+            }
+            ReplaceAll(act, "{victim}", name);
+
+            // A forced victim drops what it was forcing; an NPC forcer lets go.
+            ReleaseForced(*sc, t, fx);
+            if (t.forcedBy != 0 && t.forcedBy != player->GetFormID()) {
+                if (auto old = g_actors.find(t.forcedBy); old != g_actors.end()) {
+                    ReleaseForced(*sc, old->second, fx);
+                }
+            }
+            t.forcedBy = player->GetFormID();
+            t.forcedAction = ForcedAction::kPlayStrategy;
+            t.forcedStrategy = s;
+            t.forceMethod = noun;
+            t.strategy = Strategy::kAcceptForce;
+            t.strategyTarget = 0;
+            t.fearUntil = Now() + g_settings.fearCooldown;
+            t.nextStepAt = Now();
+
+            std::string what = ForcedPhrase(s);
+            ReplaceAll(what, "{forcer}", IsFemale(player) ? "her" : "him");
+            ReplaceAll(what, "{self}", Reflexive(ActorFor(victim)));
+            if (!act.empty()) {
+                line = forcer + " " + act + " and forces " + name + " to " + what + ".";
+            } else if (!method.empty()) {
+                line = forcer + " forces " + name + " to " + what + " by " + method + ".";
+            } else {
+                line = forcer + " forces " + name + " to " + what + ".";
+            }
+            webui_log::info("OrgasmEngine: player forces {:#x} -> {} by '{}' (fear {:.0f}s)", victim, InfoOf(s).key,
+                method, g_settings.fearCooldown);
+            RefreshEligibility(*sc, fx);
+        }
+        PostEffects(std::move(fx));
+        return line;
+    }
+
     void EndScene(std::int32_t sid)
     {
         Effects fx;
         {
             std::lock_guard lock(g_lock);
             FlushNarrations(Now(), true, fx);
-            DropSceneLocked(sid);
+            DropSceneLocked(sid, fx);
         }
         webui_log::info("OrgasmEngine: ended scene {}", sid);
         PostEffects(std::move(fx));
@@ -1605,40 +2602,17 @@ namespace OrgasmEngine
             return false;
         }
         Effects fx;
+        bool ok = false;
         {
             std::lock_guard lock(g_lock);
             auto* tst = Find(target);
             if (!tst) {
                 return false;
             }
-            const auto* wst = Find(who);
-            const float skill = wst ? static_cast<float>(wst->skill) : 0.0f;
-            const float cost = ArouseCost(wst);
-            if (CurrentAv(who, RE::ActorValue::kStamina) < cost) {
-                return false;
-            }
-            DamageAv(who, RE::ActorValue::kStamina, cost);
-            const float before = tst->enjoyment;
-            const float amount = g_settings.arouseAmount * std::max(0.0f, mult) * (1.0f + 0.1f * skill);
-            if (tst->dom) {
-                tst->domDelta += amount;
-                tst->domShare += amount / kMaxEnjoyment;
-                tst->domSyncNow = true;
-            } else {
-                tst->enjoyment = std::clamp(before + amount, 0.0f, kMaxEnjoyment);
-            }
-            if (g_settings.mentalBreak && who != target) {
-                const float drain = g_settings.breakDrain * (before / kMaxEnjoyment) * (1.0f + 0.1f * skill) *
-                                    (1.0f + static_cast<float>(tst->orgasmCount));
-                DamageAv(target, RE::ActorValue::kMagicka, drain);
-                UpdateBroken(*tst, target, who->GetFormID(), "minigame", fx);
-            }
-            NoteNarration(who->GetFormID(), target->GetFormID(), true, Now());
-            webui_log::info("OrgasmEngine: arouse {:#x}->{:#x} +{} cost={} -> {}", who->GetFormID(),
-                target->GetFormID(), amount, cost, tst->enjoyment);
+            ok = ArouseLocked(who, target, *tst, g_settings.arouseAmount * std::max(0.0f, mult), true, fx);
         }
         PostEffects(std::move(fx));
-        return true;
+        return ok;
     }
 
     bool Calm(RE::Actor* who, RE::Actor* target, float mult)
@@ -1647,42 +2621,17 @@ namespace OrgasmEngine
             return false;
         }
         Effects fx;
+        bool ok = false;
         {
             std::lock_guard lock(g_lock);
             auto* tst = Find(target);
             if (!tst) {
                 return false;
             }
-            const auto* wst = Find(who);
-            if (wst && wst->broken) {
-                return false;
-            }
-            const float cost = CalmCost(wst);
-            if (CurrentAv(who, RE::ActorValue::kMagicka) < cost) {
-                return false;
-            }
-            DamageAv(who, RE::ActorValue::kMagicka, cost);
-            const double now = Now();
-            tst->lastCalmAt = now;
-            const float before = tst->enjoyment;
-            const float amount = g_settings.calmAmount * std::max(0.0f, mult);
-            if (tst->dom) {
-                tst->domDelta -= amount;
-                tst->domSyncNow = true;
-            } else {
-                tst->enjoyment = std::max(0.0f, before - amount);
-            }
-            if (before >= kEdgeThreshold) {
-                tst->edgeUntil = now + g_settings.edgeSeconds;
-                fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kEdge, tst->id, who->GetFormID(),
-                    "minigame", g_settings.edgeSeconds, tst->orgasmCount });
-            }
-            NoteNarration(who->GetFormID(), target->GetFormID(), false, now);
-            webui_log::info("OrgasmEngine: calm {:#x}->{:#x} cost={} {} -> {}{}", who->GetFormID(),
-                target->GetFormID(), cost, before, tst->enjoyment, before >= kEdgeThreshold ? " (edge)" : "");
+            ok = CalmLocked(who, target, *tst, g_settings.calmAmount * std::max(0.0f, mult), true, fx);
         }
         PostEffects(std::move(fx));
-        return true;
+        return ok;
     }
 
     void Edge(RE::Actor* actor, float seconds, const std::string& source)
@@ -1857,6 +2806,9 @@ namespace OrgasmEngine
             v.broken = at->second.broken;
             v.dom = at->second.dom;
             v.denied = at->second.sceneBlocked;
+            if (g_settings.miniGame && !IsPlayer(actor)) {
+                v.strategy = at->second.broken ? "broken" : InfoOf(at->second.strategy).label;
+            }
             v.magicka = pct(RE::ActorValue::kMagicka);
             v.stamina = pct(RE::ActorValue::kStamina);
             out.push_back(std::move(v));
@@ -1922,6 +2874,15 @@ namespace OrgasmEngine
                 std::move(source), std::move(target)));
     }
 
+    void NarrateDirect(const std::string& msg, RE::Actor* source, RE::Actor* target)
+    {
+        if (msg.empty()) {
+            return;
+        }
+        DispatchShell("Effect_NarrateDirect",
+            RE::MakeFunctionArguments(RE::BSFixedString(msg.c_str()), std::move(source), std::move(target)));
+    }
+
     void Save(SKSE::SerializationInterface* intfc)
     {
         std::lock_guard lock(g_lock);
@@ -1948,6 +2909,8 @@ namespace OrgasmEngine
             // v4: gate state, so a mid-hold save does not re-roll the gate for the same actors on load.
             intfc->WriteRecordData(sc.gateDone);
             intfc->WriteRecordData(sc.gateAwait);
+            // v5: Together progress clock.
+            intfc->WriteRecordData(sc.stageElapsed);
             intfc->WriteRecordData(static_cast<std::uint32_t>(sc.actors.size()));
             for (const auto id : sc.actors) {
                 const auto at = g_actors.find(id);
@@ -1978,6 +2941,18 @@ namespace OrgasmEngine
                     WriteString(intfc, src);
                     intfc->WriteRecordData(m);
                 }
+                // v5: bonus, Together curve, mini-game strategy.
+                intfc->WriteRecordData(st.bonus);
+                intfc->WriteRecordData(st.curveP);
+                intfc->WriteRecordData(static_cast<std::int32_t>(st.strategy));
+                intfc->WriteRecordData(st.strategyTarget);
+                intfc->WriteRecordData(st.forcedBy);
+                // kPlayStrategy saves as kPlayStrategy + forced strategy (no record version bump).
+                std::int32_t forced = static_cast<std::int32_t>(st.forcedAction);
+                if (st.forcedAction == ForcedAction::kPlayStrategy) {
+                    forced += static_cast<std::int32_t>(st.forcedStrategy);
+                }
+                intfc->WriteRecordData(forced);
             }
         }
     }
@@ -2032,6 +3007,10 @@ namespace OrgasmEngine
                     return;
                 }
             }
+            if (version >= 5 && !intfc->ReadRecordData(sc.stageElapsed)) {
+                webui_log::error("OrgasmEngine: co-save truncated");
+                return;
+            }
             if (!intfc->ReadRecordData(actorCount)) {
                 webui_log::error("OrgasmEngine: co-save truncated");
                 return;
@@ -2074,6 +3053,35 @@ namespace OrgasmEngine
                     }
                     st.rateMods[src] = mult;
                 }
+                if (version >= 5) {
+                    std::int32_t strategy = 0;
+                    std::int32_t forcedAction = 0;
+                    RE::FormID target = 0;
+                    RE::FormID forcer = 0;
+                    if (!intfc->ReadRecordData(st.bonus) || !intfc->ReadRecordData(st.curveP) ||
+                        !intfc->ReadRecordData(strategy) || !intfc->ReadRecordData(target) ||
+                        !intfc->ReadRecordData(forcer) || !intfc->ReadRecordData(forcedAction)) {
+                        webui_log::error("OrgasmEngine: co-save truncated");
+                        return;
+                    }
+                    st.strategy = static_cast<Strategy>(
+                        std::clamp(strategy, 0, static_cast<std::int32_t>(Strategy::kCount) - 1));
+                    constexpr auto kPlay = static_cast<std::int32_t>(ForcedAction::kPlayStrategy);
+                    if (forcedAction >= kPlay) {
+                        st.forcedAction = ForcedAction::kPlayStrategy;
+                        st.forcedStrategy = static_cast<Strategy>(std::clamp(forcedAction - kPlay, 0,
+                            static_cast<std::int32_t>(Strategy::kCount) - 1));
+                    } else {
+                        st.forcedAction = static_cast<ForcedAction>(std::clamp(forcedAction, 0, kPlay - 1));
+                    }
+                    if (!target || !intfc->ResolveFormID(target, st.strategyTarget)) {
+                        st.strategyTarget = 0;
+                    }
+                    if (!forcer || !intfc->ResolveFormID(forcer, st.forcedBy)) {
+                        st.forcedBy = 0;
+                        st.forcedAction = ForcedAction::kNone;
+                    }
+                }
                 RE::FormID id = 0;
                 if (!intfc->ResolveFormID(oldId, id)) {
                     continue;
@@ -2085,6 +3093,12 @@ namespace OrgasmEngine
                 st.cooldown = OrgasmCooldown(ActorFor(id));
                 sc.actors.push_back(id);
                 g_actors[id] = std::move(st);
+            }
+            if (version < 5) {
+                // No saved curve progress: start it where the scene is, so the first tick does not jump.
+                for (const auto id : sc.actors) {
+                    g_actors[id].curveP = SceneProgress(sc);
+                }
             }
             if (!sc.actors.empty()) {
                 g_scenes[sc.sid] = std::move(sc);
@@ -2101,7 +3115,7 @@ namespace OrgasmEngine
         g_narrateDue.clear();
     }
 
-    SKYRIMNET_SEXLAB_API::IOrgasmEngineV1* GetInterface()
+    SKYRIMNET_SEXLAB_API::IOrgasmEngineV2* GetInterface()
     {
         return &g_interface;
     }
@@ -2109,7 +3123,11 @@ namespace OrgasmEngine
 
 extern "C" __declspec(dllexport) void* RequestOrgasmEngineAPI(SKYRIMNET_SEXLAB_API::InterfaceVersion a_version)
 {
+    // V2 extends V1 (same object, appended vtable), so V1 callers get it too.
     if (a_version == SKYRIMNET_SEXLAB_API::InterfaceVersion::V1) {
+        return static_cast<SKYRIMNET_SEXLAB_API::IOrgasmEngineV1*>(OrgasmEngine::GetInterface());
+    }
+    if (a_version == SKYRIMNET_SEXLAB_API::InterfaceVersion::V2) {
         return OrgasmEngine::GetInterface();
     }
     return nullptr;

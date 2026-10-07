@@ -565,8 +565,9 @@ Function TM_GoToStage(Actor speaker, Actor target, String stageStr)
         return
     endif
     th.GoToStage(stage)
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl.BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl.BuildWebUIAnimationMenuState())
+    String scene_state_json = sl.BuildWebUISceneMenuState()
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
 EndFunction
 
 Function TM_SetStageDescription(Actor speaker, Actor target, String stageStr, String description)
@@ -635,8 +636,9 @@ Function TM_ChangeActors(Actor speaker, Actor target, String formIdsCsv)
         next = trimmed
     endif
     th.ChangeActors(next)
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl.BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl.BuildWebUIAnimationMenuState())
+    String scene_state_json = sl.BuildWebUISceneMenuState()
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
 EndFunction
 
 Function TM_SetAnimationIndex(Actor speaker, Actor target, String indexStr)
@@ -657,8 +659,9 @@ Function TM_SetAnimationIndex(Actor speaker, Actor target, String indexStr)
     endif
     th.SetAnimation(idx)
     sl.CheckAnimationChange()
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl.BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl.BuildWebUIAnimationMenuState())
+    String scene_state_json = sl.BuildWebUISceneMenuState()
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
 EndFunction
 
 Function TM_SyncSceneState(Actor speaker, Actor target)
@@ -752,6 +755,42 @@ Function MiniGame_Act(Actor speaker, Actor target, bool arouse)
         ok = SkyrimNet_SexLab_OrgasmEngine.Calm(speaker, target, mult)
     endif
     Trace("MiniGame_Act", GetDisplayName(speaker)+" "+arouse+" "+GetDisplayName(target)+" mult:"+mult+" ok:"+ok)
+EndFunction
+
+;-------------------------------------------
+; Mini-game NPC strategies (LLM actions SexLab_Strategy_*). The engine checks the mode, role and forced
+; state, narrates the choice (notification in player scenes) and plays the mini-game for the NPC.
+; strategy: static action parameter, the strategy key ("selfish", "acceptforce", ...).
+;-------------------------------------------
+
+Function MiniGame_Strategy(Actor speaker, Actor target, String strategy)
+    if speaker == None
+        return
+    endif
+    int id = SkyrimNet_SexLab_OrgasmEngine.StrategyId(strategy)
+    if id < 0
+        Trace("MiniGame_Strategy", "unknown strategy '"+strategy+"'")
+        return
+    endif
+    if target == speaker
+        target = None
+    endif
+    bool ok = SkyrimNet_SexLab_OrgasmEngine.SetStrategy(speaker, id, target)
+    Trace("MiniGame_Strategy", GetDisplayName(speaker)+" "+strategy+" target:"+GetDisplayName(target)+" ok:"+ok)
+EndFunction
+
+; Greedy / ForcedOrgasm: method is how the speaker forces the target ("slaps her face"), narrated when the
+; target gives in or resists.
+Function MiniGame_StrategyForce(Actor speaker, Actor target, String strategy, String method)
+    MiniGame_Strategy(speaker, target, strategy)
+    Actor forced = target
+    if forced != None && method != "" && SkyrimNet_SexLab_OrgasmEngine.GetForcedBy(forced) == speaker
+        SkyrimNet_SexLab_OrgasmEngine.SetForceMethod(forced, method)
+    endif
+EndFunction
+
+Function MiniGame_StrategySelf(Actor speaker, String strategy)
+    MiniGame_Strategy(speaker, None, strategy)
 EndFunction
 
 ;-------------------------------------------

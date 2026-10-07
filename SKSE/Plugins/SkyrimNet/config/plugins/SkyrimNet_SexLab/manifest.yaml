@@ -288,6 +288,52 @@ schema:
       category: "Scene HUD"
       supportsOverride: false
 
+    - name: "Orgasm mode"
+      path: "sexlab.enjoyment.mode"
+      type: "select"
+      description: "Always Orgasm Together at the end: SexLab's skill, Lewd/Pure, victim/aggressor and relationship rank make enjoyment rise faster (or slower); everyone reaches 100 just before the final stage and orgasms together. Multi-Orgasm Mini-game: that bonus is a constant rate factor; several orgasms or none are possible; the player plays the mini-game and NPCs pick strategies through LLM actions. Same setting as the pulldown in the SkyrimNet_SexLab MCM. Switching back to the mini-game needs a save and reload for its LLM actions."
+      options:
+        - "Always Orgasm Together at the end"
+        - "Multi-Orgasm Mini-game"
+      defaultValue: "Multi-Orgasm Mini-game"
+      category: "Enjoyment"
+
+    - name: "SexLab bonus scale"
+      path: "sexlab.enjoyment.bonus_scale"
+      type: "float"
+      description: "How strongly SexLab's starting-enjoyment terms (relationship rank, Lewd/Pure by victim / aggressor / normal, partner's act skill) shape enjoyment. 0 = everyone the same."
+      min: 0
+      max: 2
+      defaultValue: 0.5
+      category: "Enjoyment"
+
+    - name: "SexLab bonus limit"
+      path: "sexlab.enjoyment.bonus_clamp"
+      type: "float"
+      description: "Largest bonus (plus or minus) an actor can get."
+      min: 0
+      max: 1
+      defaultValue: 0.75
+      category: "Enjoyment"
+
+    - name: "Together curve strength"
+      path: "sexlab.enjoyment.together_k_range"
+      type: "float"
+      description: "Always Orgasm Together: how much the bonus bends the curve. A positive bonus rises fast and stays high; a negative one starts slow. Everyone still reaches 100 just before the final stage."
+      min: 0
+      max: 5
+      defaultValue: 2
+      category: "Enjoyment"
+
+    - name: "Mini-game bonus strength"
+      path: "sexlab.enjoyment.minigame_bonus_mult"
+      type: "float"
+      description: "Multi-Orgasm Mini-game: passive gain x (1 + this x bonus)."
+      min: 0
+      max: 5
+      defaultValue: 1
+      category: "Enjoyment"
+
     - name: "Normal enjoyment multiplier"
       path: "sexlab.enjoyment.passive_mult"
       type: "float"
@@ -336,7 +382,7 @@ schema:
     - name: "Gate group orgasm threshold"
       path: "sexlab.enjoyment.group_join_final"
       type: "float"
-      description: "When someone passes the orgasm gate, every other actor at this enjoyment or more joins them, in one narration. (Any other orgasm makes everyone else roll: chance = enjoyment %.)"
+      description: "When someone passes the orgasm gate, every other actor at this enjoyment or more joins them, in one narration. (Any other orgasm makes everyone else roll: enjoyment + random bonus must reach 100.)"
       min: 0
       max: 100
       defaultValue: 90
@@ -345,10 +391,19 @@ schema:
     - name: "Stage advance enjoyment"
       path: "sexlab.enjoyment.stage_spike"
       type: "float"
-      description: "Enjoyment added to every actor expected to orgasm each time the scene moves to the next stage."
+      description: "Enjoyment added to every actor expected to orgasm each time the scene moves to the next stage. Also added to the ending gate and final-stage orgasm rolls."
       min: 0
       max: 30
       defaultValue: 5
+      category: "Enjoyment"
+
+    - name: "Orgasm roll random bonus"
+      path: "sexlab.minigame.random_bonus"
+      type: "float"
+      description: "Every orgasm roll (partner's orgasm, ending gate, final stage, and the mini-game's once-a-second test) adds a random 0 to this much to enjoyment. An orgasm lands when the total reaches 100. Final-stage rolls also add Stage advance enjoyment."
+      min: 0
+      max: 30
+      defaultValue: 10
       category: "Enjoyment"
 
     - name: "Orgasm targets end the scene"
@@ -446,13 +501,6 @@ schema:
       defaultValue: 0.2
       category: "Enjoyment"
 
-    - name: "Enable orgasm mini-game"
-      path: "sexlab.minigame.enabled"
-      type: "bool"
-      description: "Player controls enjoyment: focus with 1-4, calm (edge) and arouse. Enables the SexLab_Arouse / SexLab_Calm LLM actions. Whether actors orgasm at the end is decided by the Scene ending settings, with it on or off. Turning it back on after off needs a save and reload for the LLM actions."
-      defaultValue: false
-      category: "Mini-game"
-
     - name: "Calm key"
       path: "sexlab.minigame.key_calm"
       type: "hotkey"
@@ -472,6 +520,17 @@ schema:
       max: 255
       required: false
       defaultValue: 105
+      category: "Mini-game"
+      supportsOverride: false
+
+    - name: "Force hotkey"
+      path: "sexlab.minigame.key_force"
+      type: "hotkey"
+      description: "When you are the aggressor, opens the Force panel: force a victim into a strategy by a method (slap, punch, ...). Greyed out on the HUD without a non-player victim. Default Num ."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 110
       category: "Mini-game"
       supportsOverride: false
 
@@ -527,15 +586,6 @@ schema:
       defaultValue: 4
       category: "Mini-game"
 
-    - name: "Random orgasm bonus (%)"
-      path: "sexlab.minigame.random_bonus"
-      type: "float"
-      description: "With the mini-game on, once a second each actor's orgasm test adds a random 0 to this much, so an orgasm can land from 90%."
-      min: 0
-      max: 30
-      defaultValue: 10
-      category: "Mini-game"
-
     - name: "Mental break"
       path: "sexlab.minigame.mental_break"
       type: "bool"
@@ -559,6 +609,83 @@ schema:
       min: 0
       max: 30
       defaultValue: 3
+      category: "Mini-game"
+
+    - name: "NPC strategy step interval (sec)"
+      path: "sexlab.minigame.npc_interval"
+      type: "float"
+      description: "Seconds between an NPC's mini-game moves for its strategy."
+      min: 0.25
+      max: 30
+      defaultValue: 2
+      category: "Mini-game"
+
+    - name: "Fear cooldown"
+      path: "sexlab.minigame.fear_cooldown"
+      type: "float"
+      description: "Seconds after you force a victim (Force hotkey) during which the victim can only give in, not resist."
+      min: 0
+      max: 600
+      defaultValue: 30
+      category: "Mini-game"
+
+    - name: "NPC step minimum"
+      path: "sexlab.minigame.npc_step_min"
+      type: "float"
+      description: "Each NPC strategy move changes enjoyment by a random amount between the minimum and maximum (percent of 100). Arouse also scales with skill."
+      min: 0
+      max: 50
+      defaultValue: 5
+      category: "Mini-game"
+
+    - name: "NPC step maximum"
+      path: "sexlab.minigame.npc_step_max"
+      type: "float"
+      description: "Upper end of an NPC strategy move."
+      min: 0
+      max: 50
+      defaultValue: 10
+      category: "Mini-game"
+
+    - name: "Default strategy (normal)"
+      path: "sexlab.minigame.default_strategy_normal"
+      type: "select"
+      description: "Strategy NPCs start with in consensual scenes, until the LLM picks another."
+      options:
+        - "Mutual"
+        - "Selfish"
+        - "Selfless"
+        - "Together"
+        - "Passive"
+      defaultValue: "Mutual"
+      category: "Mini-game"
+
+    - name: "Default strategy (aggressor)"
+      path: "sexlab.minigame.default_strategy_aggressor"
+      type: "select"
+      description: "Strategy aggressors start with, until the LLM picks another."
+      options:
+        - "Selfish"
+        - "Mutual"
+        - "Selfless"
+        - "Together"
+        - "Passive"
+      defaultValue: "Selfish"
+      category: "Mini-game"
+
+    - name: "Default strategy (victim)"
+      path: "sexlab.minigame.default_strategy_victim"
+      type: "select"
+      description: "Strategy victims start with, until the LLM picks another."
+      options:
+        - "Passive"
+        - "Reject"
+        - "Cum quick"
+        - "Selfish"
+        - "Mutual"
+        - "Selfless"
+        - "Together"
+      defaultValue: "Passive"
       category: "Mini-game"
 
     - name: "LLM mini-game strength"

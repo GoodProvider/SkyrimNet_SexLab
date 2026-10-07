@@ -7,7 +7,7 @@
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
         C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
-        blocked, paused, freeCam, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
+        blocked, paused, freeCam, force {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
@@ -241,7 +241,7 @@
         }
 
         // One grid cell, key over label. col: 0-based grid column (sizer set).
-        // off: render invisibly so the slot keeps its size; blocked: dim + strike; dim: dim only.
+        // off: render invisibly so the slot keeps its size; blocked: dim + strike; dim: dim only; title: tooltip.
         function ctl(keys, control, label, col, opts) {
             opts = opts || {};
             const k = keyLabel(keys, control);
@@ -251,7 +251,8 @@
             lab += '<span class="text">' + labelHtml(label) + '</span></span>';
             const cls = (opts.blocked ? ' blocked' : '') + (opts.dim ? ' dim' : '') +
                 (opts.off || !k ? ' off' : '');
-            return '<span class="ctl' + cls + '">' + key + lab + '</span>';
+            const title = opts.title ? ' title="' + esc(opts.title) + '"' : '';
+            return '<span class="ctl' + cls + '"' + title + '>' + key + lab + '</span>';
         }
 
         function hudUpdate(state) {
@@ -274,7 +275,8 @@
                     const cls = (a.flash ? ' flash' : '') + (!a.flash && a.near ? ' near' : '');
                     html += '<tr class="' + (a.broken ? 'broken' : '') + '">' +
                         '<td class="focus' + (i === state.focus ? ' on' : '') + mgOff + '">' + focus + '</td>' +
-                        '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') + '</td>' +
+                        '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') +
+                            (a.strategy ? ' <span class="dom" title="mini-game strategy">' + esc(a.strategy) + '</span>' : '') + '</td>' +
                         resBar('magicka', a.magicka, mgOff) + resBar('stamina', a.stamina, mgOff) +
                         '<td class="barcell"><div class="bar' + cls + '"><div class="fill" style="width:' +
                         Math.max(0, Math.min(100, a.enjoyment)) + '%;background-color:' + barColor(a.enjoyment) +
@@ -305,6 +307,7 @@
             //   PosUp   (Num 7)  calm   arouse   <slower step>
             //   PosDn   prev     pause  next     <faster step>
             //           deny     end    free 📷
+            //                           force           (Num .; player aggressor + mini-game only)
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
@@ -326,6 +329,16 @@
             c += ctl(keys, 'end', 'end', 2, { off: cOff });
             c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 3, { off: cOff });
             c += ctl(keys, '', '', 4, { off: true });
+            // Force row: only while the player is an aggressor; greyed out without a non-player victim.
+            const force = state.force || {};
+            if (force.show && !mgcOff) {
+                c += ctl(keys, '', '', 0, { off: true });
+                c += ctl(keys, '', '', 1, { off: true });
+                c += ctl(keys, '', '', 2, { off: true });
+                c += ctl(keys, 'force', 'force', 3, force.enabled ? {} :
+                    { dim: true, title: 'scene must have at least one non-player victim' });
+                c += ctl(keys, '', '', 4, { off: true });
+            }
             const controlsOn = !!g.controls;
             const controls = document.getElementById('controls');
             controls.innerHTML = c;

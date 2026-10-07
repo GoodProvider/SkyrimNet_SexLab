@@ -1671,14 +1671,19 @@ Function Engine_SetSkills()
         return
     endif
     String skill_name = "Foreplay"
+    int act_skill = 0
     if thread.Animation.HasTag("Vaginal")
         skill_name = "Vaginal"
+        act_skill = 1
     elseif thread.Animation.HasTag("Anal")
         skill_name = "Anal"
+        act_skill = 2
     elseif thread.Animation.HasTag("Oral") || thread.Animation.HasTag("Blowjob") || thread.Animation.HasTag("Cunnilingus")
         skill_name = "Oral"
+        act_skill = 3
     endif
     Actor[] positions = thread.Positions
+    Engine_SetBonusInputs(positions, act_skill)
     ; Not expected to orgasm (AnimDB orgasm_expected 0, or the scene's no_orgasm): no passive gain,
     ; mini-game only. Missing: expected.
     int[] orgasm = animdb.GetOrgasmExpected(thread)
@@ -1697,6 +1702,37 @@ Function Engine_SetSkills()
             if obj > 0
                 SNSL_JMap.setInt(obj, "orgasm_expected", expected as int)
             endif
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+; SexLab's starting-enjoyment inputs per actor (sslActorAlias StartAnimating): skills of the actor and of
+; the partner SexLab bases them on (the player when present, else the next position), and the present
+; relationship ranks. Creatures are unskilled (empty arrays). The engine applies SexLab's formula.
+Function Engine_SetBonusInputs(Actor[] positions, int act_skill)
+    Actor player = Game.GetPlayer()
+    float[] unskilled = Utility.CreateFloatArray(0)
+    int n = positions.length
+    int i = 0
+    while i < n
+        Actor a = positions[i]
+        if a != None
+            Actor partner = a
+            if a != player && positions.Find(player) >= 0
+                partner = player
+            elseif n > 1
+                partner = positions[(i + 1) % n]
+            endif
+            float[] own = unskilled
+            float[] other = unskilled
+            if partner != None && a.HasKeywordString("ActorTypeNPC") && partner.HasKeywordString("ActorTypeNPC")
+                own = sexlab.Stats.GetSkillLevels(a)
+                other = sexlab.Stats.GetSkillLevels(partner)
+            endif
+            int low = thread.GetLowestPresentRelationshipRank(a)
+            int high = thread.GetHighestPresentRelationshipRank(a)
+            SkyrimNet_SexLab_OrgasmEngine.SetBonusInputs(a, own, other, low, high, act_skill)
         endif
         i += 1
     endwhile
@@ -3336,6 +3372,8 @@ int Function GetThreadObj(Actor speaker)
         ; Live OrgasmEngine enjoyment for sexlab_get_threads / 0050 prompt.
         if i < position_objs.length && position_objs[i] > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(thread.positions[i])
             SNSL_JMap.setInt(position_objs[i], "enjoyment", SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(thread.positions[i]) as int)
+            ; Mini-game NPC strategy phrase ("focuses on self enjoyment"); "" in Together mode.
+            SNSL_JMap.setStr(position_objs[i], "strategy", SkyrimNet_SexLab_OrgasmEngine.GetStrategyText(thread.positions[i]))
         endif
         i += 1
     endwhile
@@ -3550,7 +3588,6 @@ Function BuildInThreadAnims(sslThreadController _thread, int in_thread, int in_t
     if skipped > 0
         Trace("BuildInThreadAnims", "skipped "+skipped+"/"+anims.length+" anims, first at index "+first_skipped)
     endif
-    Trace("BuildInThreadAnims", "DEBUG sent:"+SNSL_JArray.count(in_thread)+" "+SNSL_JValue.dump(in_thread)+" sexlab "+DbgAnimList()) ; DEBUG-DELETE
 EndFunction
 
 
@@ -3770,104 +3807,13 @@ Function WebUI_ExportAnimationMenuState(sslThreadController _thread)
     SkyrimNet_SexLab_WebUI.Animation_Menu_Show(BuildWebUIAnimationMenuState())
 EndFunction
 
+; Same object as the Scene Menu push (BuildWebUISceneMenuObject carries the Description
+; Editor fields), so one build serves both views.
 String Function BuildWebUIAnimationMenuState()
     if thread == None
         return "{}"
     endif
-    CheckAnimationChange()
-    sslBaseAnimation anim = thread.animation
-    int obj = JMap.object()
-    JMap.setStr(obj, "_mode", "active")
-    JMap.setInt(obj, "_scene_sid", sid)
-    JMap.setStr(obj, "_connection", "scene:"+sid)
-    JMap.setInt(obj, "_stage", thread.stage)
-    if anim != None
-        String registry = anim.Registry
-        JMap.setStr(obj, "_registry", registry)
-        JMap.setStr(obj, "_active_registry", registry)
-        NotePlayedRegistry(registry)
-        ; Prefer meaningful registry as title; keep display name as subtitle.
-        if registry != "" && StringUtil.GetLength(registry) > 2
-            JMap.setStr(obj, "_title", registry)
-            JMap.setStr(obj, "_subtitle", anim.name)
-        else
-            JMap.setStr(obj, "_title", anim.name)
-            JMap.setStr(obj, "_subtitle", registry)
-        endif
-        JMap.setStr(obj, "_anim_name", anim.name)
-        JMap.setInt(obj, "_stage_count", anim.StageCount())
-        JMap.setStr(obj, "_tags", GetTagsString(anim))
-    endif
-    ; obj (this function) is still a JContainers map -- BuildInThreadAnims now builds its two
-    ; arrays in the C++ store, so bridge them across with a JSON round-trip (one native dump,
-    ; one native parse; not the slow Papyrus walker this whole change exists to avoid).
-    int in_thread = SNSL_JArray.object()
-    int in_thread_anims = SNSL_JArray.object()
-    BuildInThreadAnims(thread, in_thread, in_thread_anims)
-    JMap.setObj(obj, "_in_thread_registries", JValue.objectFromPrototype(SNSL_JValue.dump(in_thread)))
-    JMap.setObj(obj, "_in_thread_anims", JValue.objectFromPrototype(SNSL_JValue.dump(in_thread_anims)))
-    SNSL_JValue.release(in_thread)
-    SNSL_JValue.release(in_thread_anims)
-    JMap.setStr(obj, "_intent", intent)
-    JMap.setStr(obj, "_style", style)
-    JMap.setStr(obj, "_activity", intent)
-    Actor[] positions = thread.Positions
-    int n = 0
-    if positions
-        n = positions.length
-    endif
-    int[] orgasm = animdb.GetOrgasmExpected(thread)
-    int pos_arr = JArray.object()
-    int i = 0
-    while i < n
-        int po = JMap.object()
-        Actor ak = positions[i]
-        JMap.setStr(po, "_name", ak.GetDisplayName())
-        JMap.setStr(po, "_uuid", GetUUID(ak))
-        JMap.setInt(po, "_form_id", ak.GetFormID())
-        int no_org = 0
-        int dressed = 0
-        String speaking = ""
-        if i < position_objs.length && position_objs[i] > 0
-            no_org = SNSL_JMap.getInt(position_objs[i], "no_orgasm", 0)
-            dressed = SNSL_JMap.getInt(position_objs[i], "dressed", 0)
-            int speaking_obj = SNSL_JMap.getObj(position_objs[i], "speaking_modifiers")
-            if speaking_obj > 0
-                int sc = SNSL_JArray.count(speaking_obj)
-                int si = 0
-                while si < sc
-                    String tok = SNSL_JArray.getStr(speaking_obj, si, "")
-                    if tok != ""
-                        if speaking != ""
-                            speaking += ","
-                        endif
-                        speaking += tok
-                    endif
-                    si += 1
-                endwhile
-            endif
-        endif
-        JMap.setInt(po, "_no_orgasm", no_org)
-        JMap.setInt(po, "_dressed", dressed)
-        JMap.setInt(po, "_victim", thread.IsVictim(ak) as int)
-        JMap.setStr(po, "_speaking", speaking)
-        if i < orgasm.length
-            JMap.setInt(po, "_orgasm_expected", orgasm[i])
-        endif
-        JArray.addObj(pos_arr, po)
-        i += 1
-    endwhile
-    JMap.setObj(obj, "_positions", pos_arr)
-    if anim != None
-        int stage_count = anim.StageCount()
-        int stages_arr = JValue.objectFromPrototype(animdb.GetThreadStagesJson(thread, stage_count))
-        if stages_arr
-            JMap.setObj(obj, "_stages", stages_arr)
-        endif
-    endif
-    String json = ObjectToLowerCaseKeyJson(obj)
-    JValue.release(obj)
-    return json
+    return BuildWebUISceneMenuState()
 EndFunction
 
 Function WebUI_OnMenuClose(String json)
@@ -4264,6 +4210,10 @@ int Function BuildWebUISceneMenuObject()
     if thread && thread.animation
         active_reg = thread.animation.Registry
         NotePlayedRegistry(active_reg)
+        ; Description Editor fields (this object also feeds Animation_Menu_Configure).
+        SNSL_JMap.setStr(obj, "_registry", active_reg)
+        SNSL_JMap.setStr(obj, "_anim_name", thread.animation.name)
+        SNSL_JMap.setStr(obj, "_tags", GetTagsString(thread.animation))
     endif
     SNSL_JMap.setStr(obj, "_active_registry", active_reg)
     int in_thread_anims = SNSL_JArray.object()
@@ -4486,6 +4436,20 @@ Function WebUI_OnAnimUpdate(String json)
     if obj == 0
         return
     endif
+    ; Description Editor actor table: live scene values only (Save writes them to disk).
+    if JMap.hasKey(obj, "_positions")
+        WebUI_ApplyLivePositions(obj, true)
+        cancel_dirty = true
+    endif
+    ; Description Editor Load: back to the animation's AnimDB defaults, re-dressing included.
+    if JMap.getInt(obj, "_reload_defaults", 0) == 1 && thread.animation
+        ClearUserAnimDefaults(thread.animation.Registry)
+        ReloadAnimationDefaults(false)
+        Engine_SetSkills()
+        ApplySexLabVoices()
+        cancel_dirty = true
+        WebUI_ConfigureIfOverlayVisible()
+    endif
     String next_reg = JMap.getStr(obj, "_next_registry", "")
     JValue.release(obj)
     if next_reg == ""
@@ -4663,6 +4627,7 @@ int[] snap_undressed
 int[] snap_orgasm_locked
 int[] snap_speaking_locked
 int[] snap_dressed_locked
+int[] snap_victim
 String[] snap_speaking
 
 Function WebUI_TakeCancelSnapshot()
@@ -4704,12 +4669,16 @@ Function WebUI_TakeCancelSnapshot()
     snap_speaking_locked = PapyrusUtil.IntArray(pn)
     snap_dressed_locked = PapyrusUtil.IntArray(pn)
     snap_speaking = PapyrusUtil.StringArray(pn)
+    snap_victim = PapyrusUtil.IntArray(pn)
     i = 0
     while i < pn
         Actor a = positions[i]
         snap_actors[i] = a
         if a && StorageUtil.HasIntValue(a, storage_undressed_key)
             snap_undressed[i] = 1
+        endif
+        if a && thread.IsVictim(a)
+            snap_victim[i] = 1
         endif
         if position_objs && i < position_objs.length && position_objs[i] > 0
             int po = position_objs[i]
@@ -4725,7 +4694,6 @@ Function WebUI_TakeCancelSnapshot()
     endwhile
     snap_valid = true
     Trace("WebUI_TakeCancelSnapshot", "anim:"+snap_active_reg+" stage:"+snap_stage+" anims:"+n+" actors:"+pn)
-    Trace("WebUI_TakeCancelSnapshot", "DEBUG "+DbgAnimList()) ; DEBUG-DELETE
 EndFunction
 
 Function WebUI_RestoreCancelSnapshot()
@@ -4780,6 +4748,7 @@ Function WebUI_RestoreCancelSnapshot()
     endif
     ; Per-actor settings, matched by actor (not slot).
     Actor[] positions = thread.positions
+    Bool victim_restored = false
     i = 0
     while i < snap_actors.length
         Actor a = snap_actors[i]
@@ -4799,10 +4768,22 @@ Function WebUI_RestoreCancelSnapshot()
             SetOrgasmDisabled(a, snap_deny[i] == 1)
             if snap_undressed[i] == 0 && StorageUtil.HasIntValue(a, storage_undressed_key)
                 ApplyDressedToActor(a, true)
+            elseif snap_undressed[i] == 1 && !StorageUtil.HasIntValue(a, storage_undressed_key)
+                ApplyDressedToActor(a, false)
+            endif
+            ; Description Editor V column: restore silently (no victim narration).
+            if i < snap_victim.length && thread.IsVictim(a) != (snap_victim[i] == 1)
+                thread.SetVictim(a, snap_victim[i] == 1)
+                victim_restored = true
             endif
         endif
         i += 1
     endwhile
+    if victim_restored
+        RefreshVictimRoles()
+    endif
+    Engine_SetSkills()
+    ApplySexLabVoices()
     PersistPositions()
     if snap_stage >= 1 && thread.animation && snap_stage != thread.stage && snap_stage <= thread.animation.StageCount()
         thread.GoToStage(snap_stage)
@@ -4969,7 +4950,6 @@ Function ApplyWebUICommit(int obj)
     if active_reg == ""
         active_reg = JMap.getStr(obj, "_next_registry", "")
     endif
-    Trace("ApplyWebUICommit", "DEBUG active_reg:"+active_reg+" reseed:"+JMap.getInt(obj, "_reseed_defaults", 0)+" "+DbgAnimList()) ; DEBUG-DELETE
     if active_reg != "" && (thread.animation == None || thread.animation.Registry != active_reg)
         ; _reseed_defaults (Description Editor switch): the new animation's defaults replace the actors'
         ; orgasm/speaking, dressing only toward undressed. Without it (Scene Menu Update) the user's
@@ -5340,10 +5320,11 @@ Function WebUI_ConfigureIfOverlayVisible()
     if !SkyrimNet_SexLab_WebUI.WebUI_IsOverlayVisible()
         return
     endif
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
-    ; The Animation state only feeds the Description Editor; the Scene state above already refreshes SceneInfo.
+    ; One build feeds both views; the Animation push only matters to an open Description Editor.
+    String scene_state_json = BuildWebUISceneMenuState()
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
     if SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("description_editor_panel")
-        SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
+        SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
     endif
 EndFunction
 
@@ -5378,6 +5359,7 @@ Function TM_SetStageDescription(String stageStr, String description)
     String save_json = ObjectToLowerCaseKeyJson(payload)
     JValue.release(payload)
     animdb.SaveAnimLocal(thread.animation.Registry, save_json)
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(BuildWebUIAnimationMenuState())
+    String scene_state_json = BuildWebUISceneMenuState()
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
 EndFunction

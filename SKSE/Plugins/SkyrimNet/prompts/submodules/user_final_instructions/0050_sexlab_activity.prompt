@@ -60,7 +60,8 @@
                          if actor_record.creature_description != "" %} {{ actor_record.creature_description }} {% endif %} {% 
                          if actor_record.wearing_strapon %} {{ actor_record.name }} is wearing a strap on dildo. {% endif %}{%
                          if existsIn(actor_record, "enjoyment") and to_number(actor_record.uuid) != npc.UUID %} {{ actor_record.name }} is {%
-                              if actor_record.enjoyment >= 90 %}on the verge of orgasm{% else if actor_record.enjoyment >= 75 %}close to orgasm{% else if actor_record.enjoyment >= 50 %}very aroused{% else if actor_record.enjoyment >= 25 %}aroused{% else %}barely aroused{% endif %}. {% endif %}
+                              if actor_record.enjoyment >= 90 %}on the verge of orgasm{% else if actor_record.enjoyment >= 75 %}close to orgasm{% else if actor_record.enjoyment >= 50 %}very aroused{% else if actor_record.enjoyment >= 25 %}aroused{% else %}barely aroused{% endif %}. {% endif %}{%
+                         if existsIn(actor_record, "strategy") and actor_record.strategy != "" and to_number(actor_record.uuid) != npc.UUID %} {{ actor_record.name }} {{ actor_record.strategy }}. {% endif %}
                     {% endfor %}
           {% else if _notice_level == 1 %} 
                - You can tell someone is having sex{% if _includes_creatures %}, which includes creatures{% endif %}.
@@ -85,6 +86,9 @@ Match your feelings of desire, vulnerability, playfulness, intensity, connection
          {% endif %} 
          {% if existsIn(speaker, "enjoyment") %}
 You are {% if speaker.enjoyment >= 90 %}on the verge of orgasm{% else if speaker.enjoyment >= 75 %}close to orgasm{% else if speaker.enjoyment >= 50 %}very aroused{% else if speaker.enjoyment >= 25 %}aroused{% else %}barely aroused{% endif %}.
+         {% endif %}
+         {% if existsIn(speaker, "strategy") and speaker.strategy != "" %}
+Your current approach: {{ speaker.name }} {{ speaker.strategy }}. You may change it with a strategy action.
          {% endif %}
          {% if is_narration_enabled() %}
          {% endif %}

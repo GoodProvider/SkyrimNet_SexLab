@@ -21,6 +21,32 @@ namespace OrgasmEngine
         kVictim = 2,
     };
 
+    /// Mini-game NPC strategy (Papyrus SetStrategy id). The engine plays the mini-game for the NPC.
+    enum class Strategy : std::int32_t
+    {
+        kPassive = 0,       // no presses
+        kMutual = 1,        // arouse the lowest-enjoyment actor (self included)
+        kSelfish = 2,       // arouse self
+        kSelfless = 3,      // arouse the lowest-enjoyment other actor
+        kTogether = 4,      // calm self when ahead, arouse self when behind
+        kTease = 5,         // arouse the target below 90, calm (edge) them at 90+
+        kReject = 6,        // calm self (victims; or forced via RejectForce)
+        kCumQuick = 7,      // arouse the aggressor (victims)
+        kGreedy = 8,        // arouse self; the target is forced to arouse the speaker
+        kForcedOrgasm = 9,  // arouse the target; the target is forced to arouse self
+        kAcceptForce = 10,  // forced: play the forced action
+        kCount = 11,
+    };
+
+    /// What a forced actor's AcceptForce plays.
+    enum class ForcedAction : std::int32_t
+    {
+        kNone = 0,
+        kArouseForcer = 1,  // Greedy
+        kArouseSelf = 2,    // ForcedOrgasm
+        kPlayStrategy = 3,  // player Force (HUD): play the strategy the player chose
+    };
+
     /// Starts the tick thread. Call once at kDataLoaded.
     void Install();
 
@@ -56,6 +82,35 @@ namespace OrgasmEngine
     /// DOM slave: the 0-100 meter Papyrus computed from DOM's orgasm values (HUD bar + SexLab mirror).
     void SetDomMeter(RE::Actor* actor, float meter);
     void SetActorSkills(RE::Actor* actor, std::int32_t skill, std::int32_t lewd);
+    /// SexLab's starting-enjoyment inputs (sslActorAlias StartAnimating): GetSkillLevels arrays of the actor
+    /// and of the partner SexLab bases skills on (empty: unskilled, e.g. creatures), the lowest / highest
+    /// present relationship rank, and the act skill index (0 foreplay, 1 vaginal, 2 anal, 3 oral).
+    /// The engine turns them into the actor's bonus (SexLab's formula, see ComputeBonus).
+    void SetBonusInputs(RE::Actor* actor, const std::vector<float>& ownSkills, const std::vector<float>& partnerSkills,
+        std::int32_t lowestRank, std::int32_t highestRank, std::int32_t actSkill);
+    /// Mini-game: the NPC's strategy (and its target for Tease / Greedy / ForcedOrgasm). Narrated, and a
+    /// notification in player scenes. False when not allowed for the actor (mode, role, forced state).
+    bool SetStrategy(RE::Actor* actor, Strategy strategy, RE::Actor* target);
+    Strategy GetStrategy(RE::Actor* actor);
+    /// Third-person phrase for the current strategy ("focuses on self enjoyment"), "" when none / Together mode.
+    std::string GetStrategyText(RE::Actor* actor);
+    RE::Actor* GetForcedBy(RE::Actor* actor);
+    /// How the forcer forced the actor ("a slap to the face"), shown in AcceptForce / RejectForce narration.
+    /// Kept until the forced state ends. "" clears.
+    void SetForceMethod(RE::Actor* actor, const std::string& method);
+
+    /// Player Force (HUD key): a victim the player can force and the strategies it can be forced into.
+    struct ForceVictim
+    {
+        RE::FormID id = 0;
+        std::string name;
+        std::vector<std::pair<std::string, std::string>> strategies;  // key, panel label ("please you")
+    };
+    /// False when the player is not an aggressor in a managed mini-game scene. victims: non-player victims.
+    bool GetPlayerForceInfo(std::vector<ForceVictim>& victims);
+    /// The player forces victim into strategyKey by method (preset key or free text). Starts the fear
+    /// cooldown (only AcceptForce offered). Returns the narration line, "" when refused.
+    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method);
     void EndScene(std::int32_t sid);
     /// SexLabOrgasm arrived: true (and consumed) when the engine fired it itself.
     bool ConsumeOwnOrgasm(RE::Actor* actor);
@@ -104,6 +159,7 @@ namespace OrgasmEngine
         bool broken = false;
         bool dom = false;  // DOM slave: bar is DOM's orgasm meter, DOM decides
         bool denied = false;  // player's deny_orgasm (SetSceneBlocked)
+        std::string strategy;  // mini-game NPC strategy label ("selfish", "forced"), "" when none
         float magicka = 0.0f;  // 0..100 % of max (calm cost, mental break)
         float stamina = 0.0f;  // 0..100 % of max (arouse cost)
     };
@@ -124,6 +180,8 @@ namespace OrgasmEngine
     /// Shell narration with the mod's rule: DirectNarration when the player is source or target,
     /// else DirectNarration_Optional(event_type, ...) which falls back to RegisterEvent (never dropped).
     void Narrate(const std::string& eventType, const std::string& msg, RE::Actor* source, RE::Actor* target);
+    /// Always DirectNarration (player Force: the player's own deliberate act).
+    void NarrateDirect(const std::string& msg, RE::Actor* source, RE::Actor* target);
 
     // ---- Co-save ----
     void Save(SKSE::SerializationInterface* intfc);
@@ -132,9 +190,10 @@ namespace OrgasmEngine
     constexpr std::uint32_t kRecord = 'ORGE';
     // 2: + per-actor dom flag. 3: + stage timers, pause, final clock; jitter, DOM step state.
     // 4: + gateDone/gateAwait per scene, rushing per actor (a mid-hold save no longer re-rolls the
-    // gate on load). Older still load.
-    constexpr std::uint32_t kRecordVersion = 4;
+    // gate on load). 5: + stage clock per scene; bonus, curve progress, strategy, target, forcer per actor.
+    // Older still load.
+    constexpr std::uint32_t kRecordVersion = 5;
 
     /// The exported C++ interface (RequestOrgasmEngineAPI).
-    SKYRIMNET_SEXLAB_API::IOrgasmEngineV1* GetInterface();
+    SKYRIMNET_SEXLAB_API::IOrgasmEngineV2* GetInterface();
 }

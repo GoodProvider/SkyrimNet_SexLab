@@ -150,8 +150,9 @@ namespace PapyrusBindings_WebUI {
     /// JS: onNotify({msg}) → RE::DebugNotification
     void HandleNotify(const char* value);
 
-    /// JS: onLeashStatus({formId}) → leashStatusResult({formId, isLeashed, holderFormId, holderName})
-    void HandleLeashStatus(const char* value);
+    /// JS: onPapyrusQuery({requestId, script, fn, formId}) → script.fn(Actor) Global returning String
+    /// → papyrusQueryResult({requestId, ok, value}). Lets extension panels read mod state.
+    void HandlePapyrusQuery(const char* value);
 
     /// JS: onResolveDeviousTags({_request_id, _form_ids}) → deviousTagsResult({_request_id, _tags})
     /// Worn DD heavy-bondage keywords → animation tags; empty when sexlab.tags.filter_by_devious_devices is off.

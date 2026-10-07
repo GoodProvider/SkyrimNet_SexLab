@@ -115,6 +115,31 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetActorSkills(a, skill, lewd);
         }
+        void SetBonusInputs(RE::StaticFunctionTag*, RE::Actor* a, std::vector<float> own, std::vector<float> partner,
+            std::int32_t lowestRank, std::int32_t highestRank, std::int32_t actSkill)
+        {
+            OrgasmEngine::SetBonusInputs(a, own, partner, lowestRank, highestRank, actSkill);
+        }
+        bool SetStrategy(RE::StaticFunctionTag*, RE::Actor* a, std::int32_t strategy, RE::Actor* target)
+        {
+            if (strategy < 0 || strategy >= static_cast<std::int32_t>(OrgasmEngine::Strategy::kCount)) {
+                return false;
+            }
+            return OrgasmEngine::SetStrategy(a, static_cast<OrgasmEngine::Strategy>(strategy), target);
+        }
+        std::int32_t GetStrategy(RE::StaticFunctionTag*, RE::Actor* a)
+        {
+            return static_cast<std::int32_t>(OrgasmEngine::GetStrategy(a));
+        }
+        RE::BSFixedString GetStrategyText(RE::StaticFunctionTag*, RE::Actor* a)
+        {
+            return RE::BSFixedString(OrgasmEngine::GetStrategyText(a).c_str());
+        }
+        RE::Actor* GetForcedBy(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::GetForcedBy(a); }
+        void SetForceMethod(RE::StaticFunctionTag*, RE::Actor* a, RE::BSFixedString method)
+        {
+            OrgasmEngine::SetForceMethod(a, method.c_str() ? method.c_str() : "");
+        }
         void EndScene(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::EndScene(sid); }
         void ResetSpeedScale(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ResetSpeedScale(a); }
         std::int32_t GetSpeedLevel(RE::StaticFunctionTag*, RE::Actor* a)
@@ -171,6 +196,12 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetDomSlave", s, SetDomSlave);
         a_vm->RegisterFunction("SetDomMeter", s, SetDomMeter);
         a_vm->RegisterFunction("SetActorSkills", s, SetActorSkills);
+        a_vm->RegisterFunction("SetBonusInputs", s, SetBonusInputs);
+        a_vm->RegisterFunction("SetStrategy", s, SetStrategy);
+        a_vm->RegisterFunction("GetStrategy", s, GetStrategy);
+        a_vm->RegisterFunction("GetStrategyText", s, GetStrategyText);
+        a_vm->RegisterFunction("GetForcedBy", s, GetForcedBy);
+        a_vm->RegisterFunction("SetForceMethod", s, SetForceMethod);
         a_vm->RegisterFunction("EndScene", s, EndScene);
         a_vm->RegisterFunction("ResetSpeedScale", s, ResetSpeedScale);
         a_vm->RegisterFunction("GetSpeedLevel", s, GetSpeedLevel);

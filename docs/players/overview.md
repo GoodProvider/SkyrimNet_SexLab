@@ -44,7 +44,7 @@ SkyrimNet is not seeing Actions functions.
 | nonsexual / comfort | Kiss, hug, cuddle, spoon, headpat; 3-actor nonsexual |
 | punish | Spanking, nude spanking, whipping; punish-rape |
 | none | Stop; dress/undress (`dresses`/`undresses`, silent OK) |
-| mini-game | `SexLab_Arouse` / `SexLab_Calm` (only while **Enable orgasm mini-game** is on) |
+| mini-game | `SexLab_Arouse` / `SexLab_Calm` and the NPC strategies `SexLab_Strategy_*` (only in the **Multi-Orgasm Mini-game** orgasm mode) |
 
 Scene files via `setting_name`: [../reference/scene-settings.md](../reference/scene-settings.md).
 

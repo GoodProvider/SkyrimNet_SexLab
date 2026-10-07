@@ -65,6 +65,7 @@ Papyrus (general code): C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Specia
 | External JSON keys | [docs/reference/json-keys.md](docs/reference/json-keys.md) |
 | Orgasm narration gate | [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md) |
 | Scene JSON keys | [docs/reference/scene-settings.md](docs/reference/scene-settings.md) |
+| TargetMenu extension panels | [docs/reference/extension-panels.md](docs/reference/extension-panels.md) |
 | Animation data (anidata) 3.0 | [docs/developers/anidata-schema.md](docs/developers/anidata-schema.md) |
 
 ## Compile

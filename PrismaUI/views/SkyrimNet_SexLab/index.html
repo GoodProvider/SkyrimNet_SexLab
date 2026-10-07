@@ -653,6 +653,12 @@
             pointer-events: none;
         }
 
+        /* Actor table while an animation pick is pending: live values, read-only. */
+        #de-actors-table .cell-toggle.de-disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
         .de-name-hint {
             font-size: var(--text-sm);
             opacity: 0.7;
@@ -909,6 +915,51 @@
         }
 
         #yesno-panel .option-cancel {
+            margin-top: 0;
+            border-top: none;
+            padding: var(--space-xs) var(--space-md);
+            border: 1px solid rgba(229, 69, 69, 0.25);
+            border-radius: var(--radius);
+        }
+
+        #force-panel {
+            pointer-events: auto;
+            min-width: 420px;
+        }
+
+        .force-sentence {
+            font-family: var(--font-ui);
+            font-size: var(--text-lg);
+            color: var(--text-primary);
+            margin: var(--space-sm) 0 var(--space-md);
+            line-height: 2.2;
+        }
+
+        .force-sentence .pulldown {
+            display: inline-block;
+            min-width: 140px;
+            vertical-align: middle;
+        }
+
+        #force-custom-text {
+            width: 100%;
+            min-height: 60px;
+            box-sizing: border-box;
+            margin: 0 0 var(--space-md);
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            padding: var(--space-sm);
+            font-family: var(--font-ui);
+        }
+
+        #force-accept.de-disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        #force-panel .option-cancel {
             margin-top: 0;
             border-top: none;
             padding: var(--space-xs) var(--space-md);
@@ -1998,6 +2049,7 @@
             <div id="de-action-bar">
                 <div id="de-style-pulldown"></div>
                 <div class="action-btn" id="de-btn-save" onclick="deSave()">Save</div>
+                <div class="action-btn" id="de-btn-load" style="display:none" onmousedown="event.preventDefault()" onclick="deLoadDefaults()">Load</div>
                 <div class="action-btn" id="de-btn-stop" style="display:none" onmousedown="event.preventDefault()" onclick="deStopScene()">Stop</div>
                 <div class="option-cancel" id="de-btn-cancel" onclick="deCancel()">Cancel</div>
             </div>
@@ -2192,6 +2244,20 @@
                 <div class="action-btn de-disabled" id="yesno-explain-accept" onmousedown="event.preventDefault()" onclick="yesNoExplainAccept()">Accept</div>
                 <div class="option-cancel" onmousedown="event.preventDefault()" onclick="yesNoExplainCancel()">Cancel</div>
             </div>
+        </div>
+    </div>
+    <!-- Force (HUD force key, player aggressor): "You force <victim> to <strategy> by <method>." -->
+    <div id="force-panel" class="panel" style="display:none">
+        <div class="target-row">Force</div>
+        <div class="force-sentence">
+            You force <span id="force-victim"></span>
+            to <span id="force-strategy"></span>
+            by <span id="force-method"></span>.
+        </div>
+        <textarea id="force-custom-text" style="display:none" placeholder="threatening them with a knife" oninput="forceUpdate()"></textarea>
+        <div class="btn-row">
+            <div class="action-btn" id="force-accept" onmousedown="event.preventDefault()" onclick="forceAccept()">Force</div>
+            <div class="option-cancel" onmousedown="event.preventDefault()" onclick="forceCancel()">Cancel</div>
         </div>
     </div>
     </div><!-- #yesno-overlay -->
@@ -3138,6 +3204,10 @@
                     ssCloseIntentPanel();
                 return;
             }
+            if (forceIsOpen()) {
+                forceCancel();
+                return;
+            }
             if (overlayElIsOpen('yesno-panel')) {
                 if (yesNoIsBusy()) {
                     // Waiting on Scene Creator: Escape just closes the WebUI.
@@ -3222,30 +3292,86 @@
         let outfitUi = { pos0: 0, pos1: 0, style: 'normally' };
         const OUTFIT_STYLES = ['forcefully', 'normally', 'gently', 'silently'];
         let bondageUi = { speaker: 0, target: 0, style: 'normally' };
-        let leashUi = {
-            subject: 0,
-            leashed: 0,
-            holder: 0,
-            style: 'normally',
-            action: 'give to',
-            tiePoint: 'floor',
-            leashType: 'rope',
-            bodyPart: 'neck',
-            isLeashed: false,
-            statusHolderFormId: 0,
-            statusHolderName: ''
-        };
-        const LEASH_STYLES = ['forcefully', 'normally', 'gently'];
-        const LEASH_TIE_POINTS = ['floor', 'left', 'back', 'front', 'right', 'wall'];
-        const LEASH_DIST_DEFAULT = 'middle';
-        const LEASH_TYPE_DEFAULT = 'rope';
-        const LEASH_BODY_DEFAULT = 'neck';
-        const LEASH_TYPES = ['chain', 'rope', 'magic'];
-        const LEASH_BODY_PARTS = ['neck', 'wrists', 'waist'];
-        // Leash.esm meshes per body part (Leashed LeashIdFor): wrists = chain, waist = rope.
-        const LEASH_BODY_KINDS = { neck: ['chain', 'rope', 'magic'], wrists: ['chain'], waist: ['rope'] };
-        function leashBodyValid(body, kind) {
-            return (LEASH_BODY_KINDS[body] || []).includes(kind);
+        // Extension panels: another mod ships the renderer as PrismaUI/views/SkyrimNet_SexLab/<panelScript>
+        // (MO2 overlay; option JSON "panelScript"). The script calls
+        // registerTargetPanel(kind, { render(body, opt), onOpen(opt), skipHeader }).
+        const extPanels = {};
+        const extPanelScripts = {};   // src → 'loading' | 'loaded' | 'failed'
+        const extPanelWaiters = {};   // src → [{ opt, onReady }] queued while loading
+        function registerTargetPanel(kind, def) {
+            if (!kind || !def || typeof def.render !== 'function') return;
+            extPanels[kind] = def;
+        }
+        window.registerTargetPanel = registerTargetPanel;
+
+        // onReady(def) runs at once when registered, else after opt.panelScript loads.
+        // Every open while the script loads is queued, so options sharing one script all get onOpen.
+        // A network failure ('failed') is retried on the next open; a script that loaded but never
+        // registered the kind is not re-run (top-level let/const would throw) and renders "Unknown panel".
+        function extPanelEnsure(opt, onReady) {
+            const def = extPanels[opt.panel];
+            if (def) {
+                onReady(def);
+                return;
+            }
+            const src = opt.panelScript;
+            if (!src) return;
+            const state = extPanelScripts[src];
+            if (state === 'loaded') return;
+            (extPanelWaiters[src] = extPanelWaiters[src] || []).push({ opt: opt, onReady: onReady });
+            if (state === 'loading') return;
+            extPanelScripts[src] = 'loading';
+            const el = document.createElement('script');
+            el.src = src;
+            el.onload = () => {
+                extPanelScripts[src] = 'loaded';
+                const waiters = extPanelWaiters[src] || [];
+                delete extPanelWaiters[src];
+                for (const w of waiters) {
+                    const d = extPanels[w.opt.panel];
+                    if (!d) {
+                        console.warn('[SkyrimNet_SexLab] ' + src + ' loaded but did not registerTargetPanel("' + w.opt.panel + '")');
+                    } else if (papyrusSelectedOpt && papyrusSelectedOpt.panel === w.opt.panel) {
+                        w.onReady(d);
+                    }
+                }
+                renderPapyrusPanel();
+            };
+            el.onerror = () => {
+                extPanelScripts[src] = 'failed';
+                delete extPanelWaiters[src];
+                el.remove();
+                console.warn('[SkyrimNet_SexLab] failed to load panel script ' + src);
+                renderPapyrusPanel();
+            };
+            document.head.appendChild(el);
+        }
+
+        // Extension panels read mod state: script.fn(Actor) Global returning String.
+        // Resolves the string, or null when the call failed.
+        let papyrusQuerySeq = 0;
+        const papyrusQueryPending = {};
+        function papyrusQuery(script, fn, formId) {
+            return new Promise((resolve) => {
+                if (typeof window.onPapyrusQuery !== 'function') {
+                    resolve(null);
+                    return;
+                }
+                const requestId = ++papyrusQuerySeq;
+                papyrusQueryPending[requestId] = resolve;
+                window.onPapyrusQuery(JSON.stringify({
+                    requestId: requestId, script: script, fn: fn, formId: formIdU32(formId)
+                }));
+            });
+        }
+        window.papyrusQuery = papyrusQuery;
+
+        function papyrusQueryResult(payload) {
+            const src = payload && typeof payload === 'object' ? payload : {};
+            const resolve = papyrusQueryPending[src.requestId];
+            if (!resolve) return;
+            delete papyrusQueryPending[src.requestId];
+            resolve(src.ok ? String(src.value || '') : null);
         }
         let bondageState = { groups: [] };
         let bondageConfigured = false;
@@ -4400,18 +4526,9 @@
                         closeWebUI: false
                     });
                 }
-                if (opt.panel === 'leash') {
-                    const pool = eligibleParamActors();
-                    if (!outfitFindActor(pool, leashUi.leashed))
-                        leashUi.leashed = formIdU32(targetActor && targetActor.formId)
-                            || (pool[0] && pool[0].formId) || 0;
-                    if (!outfitFindActor(pool, leashUi.subject))
-                        leashUi.subject = formIdU32(playerActor && playerActor.formId)
-                            || leashUi.leashed;
-                    if (!outfitFindActor(pool, leashUi.holder))
-                        leashUi.holder = leashUi.subject;
-                    leashRequestStatus(leashUi.leashed);
-                }
+                extPanelEnsure(opt, (def) => {
+                    if (typeof def.onOpen === 'function') def.onOpen(opt);
+                });
                 renderTargetMenu();
                 return;
             }
@@ -6397,317 +6514,6 @@
             body.appendChild(devicesHost);
         }
 
-        function leashActionValues() {
-            return leashUi.isLeashed ? ['unleash', 'tie to', 'give to'] : ['tie to', 'give to'];
-        }
-
-        function leashSeedAction() {
-            if (!leashUi.isLeashed && leashUi.action === 'unleash')
-                leashUi.action = 'give to';
-        }
-
-        function leashRequestStatus(formId) {
-            const fid = formIdU32(formId);
-            if (!fid) {
-                leashUi.isLeashed = false;
-                leashUi.statusHolderFormId = 0;
-                leashUi.statusHolderName = '';
-                return;
-            }
-            if (typeof window.onLeashStatus === 'function')
-                window.onLeashStatus(JSON.stringify({ formId: fid }));
-        }
-
-        function leashStatusResult(payload) {
-            const src = payload && typeof payload === 'object' ? payload : {};
-            const fid = formIdU32(src.formId);
-            if (fid !== formIdU32(leashUi.leashed))
-                return;
-            leashUi.isLeashed = !!src.isLeashed;
-            leashUi.statusHolderFormId = formIdU32(src.holderFormId);
-            leashUi.statusHolderName = src.holderName ? String(src.holderName) : '';
-            leashSeedAction();
-            if (papyrusSelectedOpt && papyrusSelectedOpt.panel === 'leash')
-                renderPapyrusPanel();
-        }
-
-        function leashFireStart(opt) {
-            const subject = tmActorParam(leashUi.subject);
-            const leashed = tmActorParam(leashUi.leashed);
-            const holder = tmActorParam(leashUi.holder);
-            const style = leashUi.style || 'normally';
-            const dist = LEASH_DIST_DEFAULT;
-            const kind = leashUi.leashType || LEASH_TYPE_DEFAULT;
-            const body = leashUi.bodyPart || LEASH_BODY_DEFAULT;
-            let fn = 'LeashedToHolder';
-            let mapping = [
-                { type: 'speaker', name: 'subject' },
-                { type: 'target', name: 'leashed' },
-                { type: 'speaker', name: 'holder' },
-                { type: 'dynamic', name: 'style' },
-                { type: 'dynamic', name: 'leashDistance' },
-                { type: 'dynamic', name: 'leashType' },
-                { type: 'dynamic', name: 'body_part' }
-            ];
-            let parameters = {
-                subject: subject,
-                leashed: leashed,
-                holder: holder,
-                style: style,
-                leashDistance: dist,
-                leashType: kind,
-                body_part: body,
-                closeWebUI: true
-            };
-            if (leashUi.action === 'unleash') {
-                if (formIdU32(leashUi.subject) === formIdU32(leashUi.leashed)) {
-                    fn = 'UnleashSpeakerExecute';
-                    mapping = [{ type: 'speaker', name: 'subject' }];
-                    parameters = { subject: subject, closeWebUI: true };
-                } else {
-                    fn = 'UnleashTargetExecute';
-                    mapping = [
-                        { type: 'speaker', name: 'subject' },
-                        { type: 'target', name: 'target' }
-                    ];
-                    parameters = { subject: subject, target: leashed, closeWebUI: true };
-                }
-            } else if (leashUi.action === 'tie to') {
-                fn = 'LeashedToTiePoint';
-                mapping = [
-                    { type: 'speaker', name: 'subject' },
-                    { type: 'target', name: 'leashed' },
-                    { type: 'dynamic', name: 'style' },
-                    { type: 'dynamic', name: 'leashDistance' },
-                    { type: 'dynamic', name: 'leashType' },
-                    { type: 'dynamic', name: 'body_part' },
-                    { type: 'dynamic', name: 'tiePoint' }
-                ];
-                parameters = {
-                    subject: subject,
-                    leashed: leashed,
-                    style: style,
-                    leashDistance: dist,
-                    leashType: kind,
-                    body_part: body,
-                    tiePoint: leashUi.tiePoint || 'floor',
-                    closeWebUI: true
-                };
-            } else if (leashUi.isLeashed) {
-                if (formIdU32(leashUi.holder) === formIdU32(leashUi.subject)) {
-                    fn = 'TakeLeash';
-                    mapping = [
-                        { type: 'speaker', name: 'subject' },
-                        { type: 'target', name: 'leashed' }
-                    ];
-                    parameters = { subject: subject, leashed: leashed, closeWebUI: true };
-                } else {
-                    fn = 'GiveLeash';
-                    mapping = [
-                        { type: 'speaker', name: 'subject' },
-                        { type: 'target', name: 'leashed' },
-                        { type: 'target', name: 'receiver' }
-                    ];
-                    parameters = {
-                        subject: subject,
-                        leashed: leashed,
-                        receiver: holder,
-                        closeWebUI: true
-                    };
-                }
-            }
-            firePapyrusOption(opt, Object.assign({
-                executionFunctionName: fn,
-                parameterMapping: mapping
-            }, parameters));
-            if (typeof hidePanel === 'function') {
-                hidePanel('target_menu_panel');
-                hidePanel('control_panel');
-            }
-        }
-
-        // Actor pulldown_cascade over a pool (no "none" row, unlike ssFidCascade).
-        function leashActorCascade(key, caption, pool, currentFid, onPick) {
-            const cur = formIdU32(currentFid);
-            const hit = cur ? pool.find(a => formIdU32(a.formId) === cur) : null;
-            return createPulldownCascade({
-                key: key,
-                caption: caption,
-                display: hit ? hit.label : '—',
-                tree: pool.map(a => ({
-                    label: a.label,
-                    value: formIdU32(a.formId),
-                    current: formIdU32(a.formId) === cur
-                })),
-                onPick: (node) => onPick(node.value)
-            });
-        }
-
-        // ssListCascade with per-value greying (disabled leaves are unclickable).
-        function leashListCascade(key, caption, values, current, isDisabled, onPick) {
-            return createPulldownCascade({
-                key: key,
-                caption: caption,
-                display: current,
-                tree: values.map(v => ({
-                    label: v,
-                    value: v,
-                    current: v === current,
-                    disabled: isDisabled(v)
-                })),
-                onPick: (node) => onPick(node.value)
-            });
-        }
-
-        function leashCanStart() {
-            return !!leashUi.subject && !!leashUi.leashed
-                && (leashUi.action !== 'give to' || (leashUi.holder && leashUi.holder !== leashUi.leashed));
-        }
-
-        // action row = verb → object tree (like the scene-start method row); a leaf sets
-        // action + holder/tiePoint and starts at once.
-        function leashActionCascade(opt, holderPool) {
-            const actionOf = (v) => leashUi.action === v;
-            const tieNodes = LEASH_TIE_POINTS.map(t => ({
-                label: t,
-                value: { action: 'tie to', tiePoint: t },
-                current: actionOf('tie to') && leashUi.tiePoint === t
-            }));
-            const holderNodes = holderPool.map(a => ({
-                label: a.label,
-                value: { action: 'give to', holder: formIdU32(a.formId) },
-                current: actionOf('give to') && formIdU32(a.formId) === formIdU32(leashUi.holder)
-            }));
-            const tree = [];
-            if (leashUi.isLeashed)
-                tree.push({ label: 'unleash', value: { action: 'unleash' }, current: actionOf('unleash') });
-            tree.push({ label: 'tie to', current: actionOf('tie to'), children: tieNodes });
-            tree.push({ label: 'give to', current: actionOf('give to'), children: holderNodes });
-
-            let display = leashUi.action;
-            if (actionOf('tie to')) {
-                display = 'tie to: ' + leashUi.tiePoint;
-            } else if (actionOf('give to')) {
-                const h = holderPool.find(a => formIdU32(a.formId) === formIdU32(leashUi.holder));
-                display = 'give to: ' + (h ? h.label : '—');
-            }
-            return createPulldownCascade({
-                key: 'leash_action',
-                caption: 'action',
-                display: display,
-                tree: tree,
-                onPick: (node) => {
-                    const v = node.value || {};
-                    leashUi.action = v.action;
-                    if (v.tiePoint) leashUi.tiePoint = v.tiePoint;
-                    if (v.holder) leashUi.holder = v.holder;
-                    if (leashCanStart()) leashFireStart(opt);
-                    else renderPapyrusPanel();
-                }
-            });
-        }
-
-        // Layout (pulldown_cascade, like renderSceneStartPanelBody): [Start] style /
-        // subject / leashed / (is leashed by | is tied to) / action.
-        function renderLeashPanelBody(body, opt) {
-            const pool = eligibleParamActors();
-            let subject = outfitFindActor(pool, leashUi.subject)
-                || outfitFindActor(pool, playerActor && playerActor.formId)
-                || pool[0]
-                || null;
-            let leashed = outfitFindActor(pool, leashUi.leashed)
-                || outfitFindActor(pool, targetActor && targetActor.formId)
-                || pool[0]
-                || null;
-            if (subject) leashUi.subject = formIdU32(subject.formId);
-            if (leashed) leashUi.leashed = formIdU32(leashed.formId);
-            if (!LEASH_STYLES.includes(leashUi.style))
-                leashUi.style = 'normally';
-            if (!LEASH_TIE_POINTS.includes(leashUi.tiePoint))
-                leashUi.tiePoint = 'floor';
-            if (!LEASH_TYPES.includes(leashUi.leashType))
-                leashUi.leashType = LEASH_TYPE_DEFAULT;
-            if (!leashBodyValid(leashUi.bodyPart, leashUi.leashType))
-                leashUi.bodyPart = LEASH_BODY_DEFAULT;
-            leashSeedAction();
-
-            const holderPool = pool.filter(a => formIdU32(a.formId) !== formIdU32(leashUi.leashed));
-            const holder = outfitFindActor(holderPool, leashUi.holder)
-                || outfitFindActor(holderPool, leashUi.subject)
-                || holderPool[0]
-                || null;
-            leashUi.holder = holder ? formIdU32(holder.formId) : 0;
-
-            const bar = document.createElement('div');
-            bar.className = 'bottom-bar top-bar';
-            const startBtn = document.createElement('div');
-            startBtn.className = 'action-btn';
-            startBtn.textContent = 'Start';
-            if (!leashCanStart()) startBtn.classList.add('disabled');
-            startBtn.onclick = () => {
-                if (startBtn.classList.contains('disabled')) return;
-                leashFireStart(opt);
-            };
-            bar.appendChild(startBtn);
-            bar.appendChild(ssListCascade('leash_style', 'style', LEASH_STYLES, leashUi.style, (v) => {
-                leashUi.style = v;
-                renderPapyrusPanel();
-            }));
-            body.appendChild(bar);
-
-            const fields = document.createElement('div');
-            fields.className = 'labeled-fields';
-            const addField = (labelText, node) => {
-                const field = document.createElement('div');
-                field.className = 'dyn-field';
-                const lab = document.createElement('label');
-                lab.textContent = labelText || ' ';
-                field.appendChild(lab);
-                if (node) field.appendChild(node);
-                fields.appendChild(field);
-            };
-
-            addField('subject', leashActorCascade('leash_subject', 'subject', pool, leashUi.subject, (fid) => {
-                leashUi.subject = fid;
-                renderPapyrusPanel();
-            }));
-            addField('leashed', leashActorCascade('leash_leashed', 'leashed', pool, leashUi.leashed, (fid) => {
-                leashUi.leashed = fid;
-                leashUi.isLeashed = false;
-                leashUi.statusHolderFormId = 0;
-                leashUi.statusHolderName = '';
-                leashRequestStatus(leashUi.leashed);
-                renderPapyrusPanel();
-            }));
-            if (leashUi.isLeashed) {
-                const statusVal = document.createElement('span');
-                if (leashUi.statusHolderFormId) {
-                    statusVal.textContent = leashUi.statusHolderName || '?';
-                    addField('is leashed by', statusVal);
-                } else {
-                    statusVal.textContent = 'world';
-                    addField('is tied to', statusVal);
-                }
-            }
-            // type/body only reach Papyrus for a new leash or a tie-to; above action
-            // because an action leaf starts at once.
-            if (!leashUi.isLeashed || leashUi.action === 'tie to') {
-                addField('type', ssListCascade('leash_type', 'type', LEASH_TYPES, leashUi.leashType, (v) => {
-                    leashUi.leashType = v;
-                    if (!leashBodyValid(leashUi.bodyPart, v))
-                        leashUi.bodyPart = LEASH_BODY_DEFAULT;
-                    renderPapyrusPanel();
-                }));
-                addField('body', leashListCascade('leash_body', 'body', LEASH_BODY_PARTS, leashUi.bodyPart,
-                    (b) => !leashBodyValid(b, leashUi.leashType), (v) => {
-                        leashUi.bodyPart = v;
-                        renderPapyrusPanel();
-                    }));
-            }
-            addField('action', leashActionCascade(opt, holderPool));
-            body.appendChild(fields);
-        }
-
         // --- panel: fields (DOM follow / walking / punish / restrain variants) ---
         let fieldsUi = {
             seededKey: '',
@@ -7072,8 +6878,8 @@
             applySourceTint(panel, navEffectiveSource(opt));
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
-                || kind === 'outfit' || kind === 'bondage' || kind === 'leash'
-                || kind === 'fields';
+                || kind === 'outfit' || kind === 'bondage' || kind === 'fields'
+                || !!(extPanels[kind] && extPanels[kind].skipHeader);
             if (!skipHeader) {
                 const header = document.createElement('div');
                 header.className = 'section-header';
@@ -7098,8 +6904,10 @@
             } else if (kind === 'bondage') {
                 panel.classList.add('target-bondage-panel');
                 renderBondagePanelBody(body, opt);
-            } else if (kind === 'leash') {
-                renderLeashPanelBody(body, opt);
+            } else if (extPanels[kind]) {
+                extPanels[kind].render(body, opt);
+            } else if (opt.panelScript && extPanelScripts[opt.panelScript] === 'loading') {
+                body.textContent = 'Loading…';
             } else {
                 body.textContent = 'Unknown panel: ' + kind;
             }
@@ -7945,6 +7753,99 @@
                 creator_sid: YESNO._creator_sid != null ? YESNO._creator_sid : YESNO.creator_sid,
                 reason: reason || ''
             }));
+        }
+
+        // ── Force (HUD force key) ────────────────────────────────
+        // C++ Hud OnForce: {victims: [{id, name, strategies: [{key, label}]}]}. Reply: onForceResult.
+        const FORCE_METHODS = ['slap face', 'pinch nipple', 'cover mouth', 'punch', 'pull hair', 'custom'];
+        const FORCE_DEFAULT_STRATEGY = 'selfless';
+        let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_METHODS[0] };
+
+        function forceVictim() {
+            return FORCE.victims[FORCE.victim] || null;
+        }
+
+        function forceRenderStrategy() {
+            const host = document.getElementById('force-strategy');
+            host.innerHTML = '';
+            const v = forceVictim();
+            const list = v ? (v.strategies || []) : [];
+            const pick = list.find(s => s.key === FORCE.strategy)
+                || list.find(s => s.key === FORCE_DEFAULT_STRATEGY) || list[0];
+            FORCE.strategy = pick ? pick.key : '';
+            host.appendChild(createPulldown(list.map(s => s.label), pick ? pick.label : '', (_, i) => {
+                FORCE.strategy = list[i].key;
+                forceUpdate();
+            }));
+        }
+
+        function forceUpdate() {
+            const custom = FORCE.method === 'custom';
+            const text = document.getElementById('force-custom-text');
+            text.style.display = custom ? '' : 'none';
+            const ok = !!forceVictim() && !!FORCE.strategy && (!custom || text.value.trim() !== '');
+            document.getElementById('force-accept').classList.toggle('de-disabled', !ok);
+        }
+
+        function openForcePanel(cfg) {
+            FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY, method: FORCE_METHODS[0] };
+            for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
+                'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
+                hidePanel(id);
+            const victimHost = document.getElementById('force-victim');
+            victimHost.innerHTML = '';
+            victimHost.appendChild(createPulldown(FORCE.victims.map(v => v.name), (FORCE.victims[0] || {}).name || '', (_, i) => {
+                FORCE.victim = i;
+                forceRenderStrategy();
+                forceUpdate();
+            }));
+            forceRenderStrategy();
+            const methodHost = document.getElementById('force-method');
+            methodHost.innerHTML = '';
+            methodHost.appendChild(createPulldown(FORCE_METHODS, FORCE.method, (v) => {
+                FORCE.method = v;
+                forceUpdate();
+                if (v === 'custom') document.getElementById('force-custom-text').focus();
+            }));
+            document.getElementById('force-custom-text').value = '';
+            // Same solo layout as the gating dialogue: only this panel shows.
+            document.body.classList.add('yesno-solo');
+            hideControlPanel();
+            hideTargetMenuRow();
+            const host = document.getElementById('main-panel-host');
+            if (host) host.style.display = 'none';
+            document.getElementById('force-panel').style.display = 'block';
+            forceUpdate();
+        }
+
+        function hideForcePanel() {
+            document.getElementById('force-panel').style.display = 'none';
+            closeAllPulldowns();
+            clearYesNoSolo();
+        }
+
+        function forceIsOpen() {
+            return document.getElementById('force-panel').style.display === 'block';
+        }
+
+        function forceSend(payload) {
+            if (typeof window.onForceResult === 'function')
+                window.onForceResult(JSON.stringify(payload));
+            else
+                hideForcePanel();
+        }
+
+        function forceAccept() {
+            const v = forceVictim();
+            if (!v || document.getElementById('force-accept').classList.contains('de-disabled')) return;
+            const method = FORCE.method === 'custom'
+                ? document.getElementById('force-custom-text').value.trim()
+                : FORCE.method;
+            forceSend({ victim: v.id, strategy: FORCE.strategy, method });
+        }
+
+        function forceCancel() {
+            forceSend({ cancel: true });
         }
 
         // ── SceneInfo store (one per live thread + one Scene Creator draft) ──
@@ -10067,10 +9968,9 @@
             pendingSwitch: null,
             stagesDraft: [],
             loadedStages: [],
-            // Per-actor animation defaults: [{_no_orgasm, _speaking}]; only sent on Save when posDirty.
+            // Actor table rows: the live scene's per-actor values [{_no_orgasm, _speaking, _dressed, _victim}].
+            // Edits go to the scene at once (deSendLivePositions); only Save writes them to disk.
             posDraft: [],
-            loadedPos: [],
-            posDirty: false,
             rowQueryId: 0,
             lastEditStage: 0,
             dirty: false
@@ -10300,9 +10200,7 @@
                 DE.stagesDraft = [];
                 DE.loadedStages = [];
                 DE.posDraft = [];
-                DE.loadedPos = [];
                 DE.dirty = false;
-                DE.posDirty = false;
                 deRenderStages();
             } else {
                 DE.scene_sid = info.scene_sid;
@@ -10339,6 +10237,11 @@
             const pend = DE.pendingSwitch;
             if (!pend) return;
             const row = pend.row || { _registry: pend.reg, _name: pend.reg };
+            // Loaded-list rows are stubs: fetch the AnimDB row for the pick's stage text.
+            if (!row._stage_descriptions && !pend.rowRequested) {
+                pend.rowRequested = true;
+                deRequestAnimRow(pend.reg);
+            }
             DE.focusRegistry = pend.reg;
             deSetCurrentAnimation(pend.reg);
             // Shared object: deSaveToDisk updates it, so a later re-preview shows the saved text.
@@ -10362,35 +10265,20 @@
             return v == null ? '' : String(v).split(',').map(s => s.trim()).filter(Boolean).join(',');
         }
 
-        // Draft of the per-actor state shown in the actor table: the live scene's values (real
-        // dressed/no_orgasm/speaking for this running scene, not the registry's generic template). While an
-        // animation pick is pending: its AnimDB defaults, dressed only where the actor is dressed now and the
-        // animation keeps them dressed (a switch never re-dresses). A stub row fetches the DB row first.
+        // Actor table rows = the live scene's per-actor values (SceneInfo positions). No AnimDB read: a
+        // pending pick shows the live values read-only until the scene reseeds the new animation.
         function deLoadPosDraft() {
-            DE.posDirty = false;
             DE.posDraft = [];
-            if (!deIsSceneBound()) {
-                DE.loadedPos = [];
-                return;
-            }
-            const pend = dePendingActive() ? DE.pendingSwitch : null;
-            const row = pend && pend.row && pend.row._position_count != null ? pend.row : null;
-            if (pend && !row) deRequestAnimRow(pend.reg);
-            const positions = SC.positions || [];
-            for (let i = 0; i < positions.length; i++) {
-                const p = positions[i] || {};
-                let noOrg = p._no_orgasm ? 1 : 0;
-                let speaking = deNormSpeaking(p._speaking);
-                let dressed = p._dressed ? 1 : 0;
-                if (row) {
-                    const clothed = row._clothed || row._pos_clothed || [];
-                    noOrg = (row._pos_no_orgasm || [])[i] ? 1 : 0;
-                    speaking = deNormSpeaking((row._pos_speaking_modifiers || [])[i]);
-                    dressed = dressed && clothed[i] ? 1 : 0;
-                }
-                DE.posDraft.push({ _no_orgasm: noOrg, _speaking: speaking, _dressed: dressed, _victim: p._victim ? 1 : 0 });
-            }
-            DE.loadedPos = sceneInfoClone(DE.posDraft);
+            if (!deIsSceneBound()) return;
+            (SC.positions || []).forEach(p => {
+                p = p || {};
+                DE.posDraft.push({
+                    _no_orgasm: p._no_orgasm ? 1 : 0,
+                    _speaking: deNormSpeaking(p._speaking),
+                    _dressed: p._dressed ? 1 : 0,
+                    _victim: p._victim ? 1 : 0
+                });
+            });
         }
 
         function deRequestAnimRow(reg) {
@@ -10403,29 +10291,16 @@
             return String(a || '').toLowerCase() === String(b || '').toLowerCase();
         }
 
+        // Full AnimDB row for a pending pick (loaded-list rows are stubs): preview its stage text.
         function deOnAnimRowResult(payload, rid) {
             const anims = payload._anims || [];
-            // Full AnimDB row for a pending pick (loaded-list rows are stubs): preview its stages + defaults.
             const pend = DE.pendingSwitch;
-            if (pend && dePendingActive()) {
-                const full = anims.find(x => deRegEq(x._registry, pend.reg));
-                if (full && full._position_count != null && !DE.dirty && !DE.posDirty) {
-                    pend.row = full;
-                    deLoadPendingPreview();
-                }
-                return;
+            if (!pend || !dePendingActive()) return;
+            const full = anims.find(x => deRegEq(x._registry, pend.reg));
+            if (full && !DE.dirty) {
+                pend.row = full;
+                deLoadPendingPreview();
             }
-            if (DE.posDirty || !DE.focusRegistry) return;
-            const row = anims.find(x => deRegEq(x._registry, DE.focusRegistry));
-            const a = deFindAnim(DE.focusRegistry);
-            if (!row || !a || row._position_count == null) return;
-            a._position_count = row._position_count;
-            a._pos_genders = row._pos_genders;
-            a._pos_no_orgasm = row._pos_no_orgasm;
-            a._pos_speaking_modifiers = row._pos_speaking_modifiers;
-            a._pos_clothed = row._clothed;
-            deLoadPosDraft();
-            deRenderActors();
         }
 
         function deRenderActors() {
@@ -10438,6 +10313,10 @@
             const liveInfo = deStopLiveInfo();
             const live = !!liveInfo;
             const liveCount = live ? (liveInfo.positions || []).length : 0;
+            // Live values are editable only while no animation pick is pending.
+            const editable = live && !dePendingActive();
+            const toggle = (fn, i) => editable ? `onclick="${fn}(${i})"` : '';
+            const offCls = editable ? '' : ' de-disabled';
             DE.posDraft.forEach((p, i) => {
                 const mods = scParseMods(p);
                 const tr = document.createElement('tr');
@@ -10474,11 +10353,11 @@
                 tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(names[i] || 'actor ' + i)}</div>`;
                 const tdDressed = document.createElement('td');
                 tdDressed.className = 'col-dressed';
-                tdDressed.innerHTML = `<span class="cell-toggle ${p._dressed ? 'on' : ''}" title="${p._dressed ? 'clothed' : 'unclothed'}" onclick="deTogglePosDressed(${i})">${p._dressed ? '\u{1F455}' : '—'}</span>`;
+                tdDressed.innerHTML = `<span class="cell-toggle ${p._dressed ? 'on' : ''}${offCls}" title="${p._dressed ? 'clothed' : 'unclothed'}" ${toggle('deTogglePosDressed', i)}>${p._dressed ? '\u{1F455}' : '—'}</span>`;
                 const tdO = document.createElement('td');
                 tdO.className = 'col-o';
                 const expected = !p._no_orgasm;
-                tdO.innerHTML = `<span class="cell-toggle ${expected ? '' : 'on'}" title="${expected ? 'orgasm expected' : 'orgasm not expected'}" onclick="deTogglePosO(${i})">${expected ? 'O' : '-'}</span>`;
+                tdO.innerHTML = `<span class="cell-toggle ${expected ? '' : 'on'}${offCls}" title="${expected ? 'orgasm expected' : 'orgasm not expected'}" ${toggle('deTogglePosO', i)}>${expected ? 'O' : '-'}</span>`;
                 // Deny: live scene state (not animation metadata), sent at once; not part of posDraft.
                 const tdDeny = document.createElement('td');
                 tdDeny.className = 'col-deny';
@@ -10488,7 +10367,7 @@
                 }
                 const tdVictim = document.createElement('td');
                 tdVictim.className = 'col-v';
-                tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}" title="${p._victim ? 'victim' : 'not victim'}" onclick="deTogglePosVictim(${i})">${p._victim ? 'V' : '—'}</span>`;
+                tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}${offCls}" title="${p._victim ? 'victim' : 'not victim'}" ${toggle('deTogglePosVictim', i)}>${p._victim ? 'V' : '—'}</span>`;
                 const tdMods = document.createElement('td');
                 tdMods.className = 'col-mods';
                 const list = document.createElement('div');
@@ -10497,11 +10376,11 @@
                     const chip = document.createElement('span');
                     chip.className = 'tag-chip';
                     chip.textContent = m;
-                    chip.onclick = () => deRemovePosMod(i, m);
+                    if (editable) chip.onclick = () => deRemovePosMod(i, m);
                     list.appendChild(chip);
                 });
                 const available = SC_SPEAKING_MODS.filter(m => !mods.includes(m));
-                if (available.length)
+                if (editable && available.length)
                     list.appendChild(createPulldown(available, 'add', v => deAddPosMod(i, v)));
                 tdMods.appendChild(list);
                 tr.appendChild(tdOrg);
@@ -10517,42 +10396,83 @@
             });
         }
 
+        // Live edit target: the bound scene, never while a pick is pending (its values aren't live yet).
+        function deEditablePos(i) {
+            if (!deStopLiveInfo() || dePendingActive()) return null;
+            return DE.posDraft[i] || null;
+        }
+
+        // An actor-table edit changes only the live scene (Scene.WebUI_OnAnimUpdate -> WebUI_ApplyLivePositions).
+        // SceneInfo positions follow so a rebind shows it; Save writes the values to disk, Cancel rolls them back.
         function dePosEdited() {
-            DE.posDirty = true;
-            DE.dirty = true;
+            deSendLivePositions();
             deRenderActors();
         }
 
+        function deSendLivePositions() {
+            const info = deStopLiveInfo();
+            if (!info) return;
+            // Rows follow thread.Positions; after an uncommitted ▲/▼ the SceneInfo order differs, so only the
+            // scene gets the values then (its next push resyncs SceneInfo).
+            if (!info.pendingReorder) DE.posDraft.forEach((d, i) => {
+                [info.positions, selectedSceneInfo() === info ? SC.positions : null].forEach(arr => {
+                    const p = arr && arr[i];
+                    if (!p) return;
+                    p._no_orgasm = d._no_orgasm;
+                    p._dressed = d._dressed;
+                    p._speaking = d._speaking || '';
+                    p._victim = d._victim;
+                });
+            });
+            if (typeof window.onSceneAnimUpdate !== 'function') return;
+            window.onSceneAnimUpdate(JSON.stringify({
+                _scene_sid: info.scene_sid,
+                _positions: DE.posDraft.map(p => ({
+                    _no_orgasm: p._no_orgasm ? 1 : 0,
+                    _dressed: p._dressed ? 1 : 0,
+                    _speaking: p._speaking || '',
+                    _victim: p._victim ? 1 : 0
+                }))
+            }));
+        }
+
+        // Load: the scene reloads this animation's AnimDB defaults; its push refreshes the table.
+        function deLoadDefaults() {
+            const info = deStopLiveInfo();
+            if (!info || dePendingActive() || typeof window.onSceneAnimUpdate !== 'function') return;
+            window.onSceneAnimUpdate(JSON.stringify({ _scene_sid: info.scene_sid, _reload_defaults: 1 }));
+        }
+
         function deTogglePosO(i) {
-            const p = DE.posDraft[i];
+            const p = deEditablePos(i);
             if (!p) return;
             p._no_orgasm = p._no_orgasm ? 0 : 1;
             dePosEdited();
         }
 
         function deTogglePosDressed(i) {
-            const p = DE.posDraft[i];
+            const p = deEditablePos(i);
             if (!p) return;
             p._dressed = p._dressed ? 0 : 1;
             dePosEdited();
         }
 
         function deTogglePosVictim(i) {
-            const p = DE.posDraft[i];
+            const p = deEditablePos(i);
             if (!p) return;
             p._victim = p._victim ? 0 : 1;
             dePosEdited();
         }
 
         function deRemovePosMod(i, token) {
-            const p = DE.posDraft[i];
+            const p = deEditablePos(i);
             if (!p) return;
             scSetMods(p, scParseMods(p).filter(m => m !== token));
             dePosEdited();
         }
 
         function deAddPosMod(i, token) {
-            const p = DE.posDraft[i];
+            const p = deEditablePos(i);
             if (!p || !token) return;
             const mods = scParseMods(p);
             if (mods.includes(token)) return;
@@ -10613,6 +10533,8 @@
             set('de-btn-continue', pending);
             const stopBtn = document.getElementById('de-btn-stop');
             if (stopBtn) stopBtn.style.display = deStopLiveInfo() ? '' : 'none';
+            const loadBtn = document.getElementById('de-btn-load');
+            if (loadBtn) loadBtn.style.display = deStopLiveInfo() && !pending ? '' : 'none';
         }
 
         function deStageStep(dir) {
@@ -11183,29 +11105,29 @@
             return false;
         }
 
-        // Save to disk without closing; skipped when nothing changed.
+        // Stage text autosaves to disk without closing; skipped when unchanged. Actor values never autosave.
         function deAutoSave() {
-            if (DE.focusRegistry && (DE.dirty || DE.posDirty))
-                deSaveToDisk();
+            if (DE.focusRegistry && DE.dirty)
+                deSaveToDisk(false);
         }
 
+        // Save: stage text plus the actor table's live values become the animation's JSON / AnimDB defaults.
         function deSave() {
             if (!DE.focusRegistry) return;
-            deSaveToDisk();
+            deSaveToDisk(true);
             requestWebUIHide(true);
         }
 
-        function deSaveToDisk() {
+        function deSaveToDisk(withPositions) {
             if (!DE.focusRegistry) return;
             const payload = {
                 _registry: DE.focusRegistry,
                 _stages: sceneInfoClone(DE.stagesDraft)
             };
-            if (DE.posDirty) {
-                payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '', _dressed: p._dressed ? 1 : 0, _victim: p._victim ? 1 : 0 }));
-                const boundScene = deActiveSceneForRegistry(DE.focusRegistry);
-                if (boundScene) payload._scene_sid = boundScene.scene_sid;
-            }
+            // A pending pick's table still shows the old animation's live values: never save them onto the pick.
+            const savePos = !!withPositions && !!deStopLiveInfo() && !dePendingActive() && DE.posDraft.length > 0;
+            if (savePos)
+                payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '', _dressed: p._dressed ? 1 : 0 }));
             if (typeof window.onAnimRegistrySave === 'function')
                 window.onAnimRegistrySave(JSON.stringify(payload));
             DE.loadedStages = sceneInfoClone(DE.stagesDraft);
@@ -11220,14 +11142,12 @@
                 });
                 a._stage_descriptions = sd;
                 a._stage_has_description = sh;
-                if (DE.posDirty) {
+                if (savePos) {
                     a._pos_no_orgasm = DE.posDraft.map(p => (p._no_orgasm ? 1 : 0));
                     a._pos_speaking_modifiers = DE.posDraft.map(p => p._speaking || '');
                     a._pos_clothed = DE.posDraft.map(p => (p._dressed ? 1 : 0));
                 }
             }
-            DE.loadedPos = sceneInfoClone(DE.posDraft);
-            DE.posDirty = false;
             deRenderAnimList();
         }
 
@@ -11235,8 +11155,6 @@
         // discardSceneInfos has every live scene restore the state it had when the overlay opened.
         function deCancel() {
             DE.stagesDraft = sceneInfoClone(DE.loadedStages);
-            DE.posDraft = sceneInfoClone(DE.loadedPos);
-            DE.posDirty = false;
             DE.dirty = false;
             DE.pendingSwitch = null;
             requestWebUIHide(false);
@@ -11304,8 +11222,14 @@
             // previews a pending pick): a full push must not reload drafts, or it erases what the user is typing.
             const sameAnim = hadInfo && deRegEq(prevReg, info.activeRegistry) && DE.stagesDraft.length > 0;
             const keepDrafts = !switched && (dePendingActive()
-                || (sameAnim && ((info.stage | 0) === prevStage || DE.dirty || DE.posDirty)));
+                || (sameAnim && ((info.stage | 0) === prevStage || DE.dirty)));
             if (keepDrafts) {
+                // The actor table mirrors the live scene (e.g. after Load): refresh it, keep stage drafts.
+                if (!dePendingActive()) {
+                    SC.positions = sceneInfoClone(info.positions || []);
+                    deLoadPosDraft();
+                    deRenderActors();
+                }
                 deUpdateActiveStageRow();
                 deRenderLoadedList();
                 if (DE.bottomTab === 'filter') deRenderAnimList();

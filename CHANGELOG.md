@@ -1,21 +1,47 @@
 # Changelog
 
-## [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1) — since [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0)
+## [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2) — since [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1)
 
-### AnimDB
-- WebUI Settings panel shows the AnimDB animation count next to SexLab's slot count, with a 200% red warning to rebuild whenever they differ (strict compare)
-- When the counts differ, the ControlPanel title (mode pulldown) is replaced by a red **Rebuild DB** button
-- The ControlPanel title is plain text "SkyrimNet SexLab" when no extra control modes (`ControlPanel/*.json`) are installed; the mode pulldown only appears with two or more modes
-- Every WebUI rebuild button (ControlPanel, Settings) closes the WebUI and starts the rebuild; Settings no longer switches to the Log panel
+### Orgasm engine
+- Two modes, `sexlab.enjoyment.mode` (select; replaces the `sexlab.minigame.enabled` bool, which is only read when the mode is unset; manifest default and unset fallback are Multi-Orgasm Mini-game), also an MCM **Orgasm mode** menu option that writes the same key (`PatchConfig`). See [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#modes-and-the-sexlab-bonus)
+  - SexLab bonus per actor, computed in C++ from SexLab's `StartAnimating` formula (relationship rank, Lewd/Pure by victim / aggressor / normal, partner act skill): new native `SetBonusInputs`, sent by `Scene.Engine_SetBonusInputs` from `Engine_SetSkills`. Settings `sexlab.enjoyment.bonus_scale` / `bonus_clamp` / `together_k_range` / `minigame_bonus_mult`
+  - **Always Orgasm Together**: enjoyment follows `1 − (1 − p)^k` over stages 1..N−1 (stage clock `stageElapsed`, k from the bonus), capped at 98 until the final stage; the gate passes every expected actor without a roll; no stage spike. Replaces the passive rate (DOM slaves keep it)
+  - **Multi-Orgasm Mini-game**: passive rate × `(1 + minigame_bonus_mult × bonus)`; no gate, no safety net
+  - NPC strategies: 13 `SexLab_Strategy_*` actions (both action folders, `actions_index.json` regenerated), `Actions.MiniGame_Strategy` / `MiniGame_StrategySelf`, natives `SetStrategy` / `GetStrategy` / `GetStrategyText` / `GetForcedBy`, shell `StrategyId`, `Effect_StrategyChanged` (optional narration + notification in player scenes), `Effect_StrategyEligibility` (StorageUtil `skyrimnet_sexlab_strategy_<key>` keys for the actions' `papyrus_util HasIntValue` rules). Steps every `sexlab.minigame.npc_interval` by `random(npc_step_min, npc_step_max)`; role defaults `sexlab.minigame.default_strategy_normal` / `_aggressor` / `_victim`. Greedy / ForcedOrgasm force the target (AcceptForce, or the `sexlab_strategy_rejectforce` category). Broken actors arouse themselves
+  - Player **Force** key (`sexlab.minigame.key_force`, default Num .; HUD cell under Num 3 while the player is an aggressor, greyed out without a non-player victim). Opens the WebUI Force panel (`openForcePanel` / `onForceResult`): victim, strategy (`GetPlayerForceInfo`: the victim's own allowed strategies, default selfless), method (slap face / pinch nipple / cover mouth / punch / pull hair / custom text). `PlayerForce` sets AcceptForce with `ForcedAction::kPlayStrategy` (saved as `3 + strategy`, no co-save bump) and the fear cooldown `sexlab.minigame.fear_cooldown` (AcceptForce only, no rejectforce). Narrated through new `Effect_NarrateDirect`
+  - Greedy / ForcedOrgasm actions take a `method` parameter (`Actions.MiniGame_StrategyForce`, native `SetForceMethod`); AcceptForce / RejectForce narration names it
+  - 0050 activity prompt shows each actor's strategy (position obj `strategy`); scene HUD tag
+  - Co-save `'ORGE'` v5 (stage clock; bonus, curve progress, strategy, target, forcer). C++ API `IOrgasmEngineV2` (`SetStrategy` / `GetStrategy`)
+- Group, gate and final-stage orgasm rolls are thresholds, not percent chances: `enjoyment + random(0, random_bonus) [+ stage_spike for gate/final] ≥ 100` (`RollOrgasm`). Was `uniform(0,100) < enjoyment`, so an oral giver at 30 enjoyment joined her partner's orgasm. The final roll drops its passive-gain top-up. `random_bonus` moves to the Enjoyment settings category (same key).
+- Passive gain, cooldowns, edging, stale-scene and narration windows run on an unpaused engine clock (`Now()` advances only by the tick `dt`, which is 0 while the game or WebUI is paused). The tick `dt` clamp drops from 1.0 s to 0.5 s so a save/load hitch credits little
+
+### Actions / scenes
+- Lone hug narration is always "<speaker> hugs <target>." The `direction: getting` swap was dropped: Nina calling a hug with `getting` narrated "Bob hugs Nina."
+
+### Papyrus
 - The first time the menu hotkey is pressed on a save, a mismatch shows a "There is likely a problem" dialog offering to rebuild, instead of opening the overlay (`AnimDb.IsAligned`, `hotkey_db_checked`). The check waits while a rebuild or prompt is in progress or SexLab isn't enabled. The load-time prompt keeps its explained-gap exemption
 - AnimDB loaded fewer animations than SexLab slotted (2588 of 2844) with no explanation. The sync now traces per-reason skip counts (null, unregistered, empty registry) with the first 10 names, and the SKSE side warns on duplicate registries and failed upserts. `EndSync` logs `duplicate_registries` / `upsert_failures`
 - The "animations doesn't match" prompt no longer repeats when SexLab's slot count and the DB row count are unchanged since the last completed sync (an explained gap); any slot-count change re-prompts
-- Tag cleanup on upsert uses a bound statement (a registry containing `'` broke it)
+
+### SKSE / WebUI
+- WebUI Settings panel shows the AnimDB animation count next to SexLab's slot count, with a 200% red warning to rebuild whenever they differ (strict compare)
+- When the counts differ, the ControlPanel title (mode pulldown) is replaced by a red **Rebuild DB** button
 - New game with no AnimDB: the WebUI showed no warning and no **Rebuild DB** button, and the counts read `0 / ?`, because the SexLab count was only pushed once SexLab was enabled. An empty DB now always counts as a mismatch (Settings warning "Animation database is empty", ControlPanel **Build DB**), and the menu hotkey pushes the SexLab slot count on every open (`AnimDb.PushSexLabCount`)
+- Every WebUI rebuild button (ControlPanel, Settings) closes the WebUI and starts the rebuild; Settings no longer switches to the Log panel
+- The ControlPanel title is plain text "SkyrimNet SexLab" when no extra control modes (`ControlPanel/*.json`) are installed; the mode pulldown only appears with two or more modes
+- AnimDB tag cleanup on upsert uses a bound statement (a registry containing `'` broke it)
+- Overlay open and scene pushes were slow because every plugin native waited a frame per call (registered without `callableFromTasklets`). Thread-safe natives now register with it: the `SNSL_JValue` / `SNSL_JMap` / `SNSL_JArray` store (not the form-keyed calls), `JsonLowerCaseKeys` / `JsonQuote` / `UuidToDecimalString` / `VkToDxScanCode`, `TraceLog`, and the read-only AnimDB queries. Sync / save natives are unchanged
+- Each scene push builds the scene state once (`BuildWebUISceneMenuState`, now carrying `_registry` / `_anim_name` / `_tags`) and sends it to both the Scene Menu and the Description Editor; `BuildWebUIAnimationMenuState` delegates to it. Removed the per-open `DbgAnimList` debug traces from `BuildInThreadAnims`, `WebUI_TakeCancelSnapshot` and `ApplyWebUICommit`
+- Description Editor actor table (O / dressed / V / speaking) now shows and edits only the live scene, applied at once via `onSceneAnimUpdate` → `Scene.WebUI_OnAnimUpdate` → `WebUI_ApplyLivePositions`. It no longer reads AnimDB rows for it. Only **Save** writes the values to the JSON / AnimDB; stage text still autosaves. `WebUI_OnAnimRegistrySave` is disk-only (dropped its `_scene_sid` live-apply branch)
+- New Description Editor **Load** button (right of Save): `ClearUserAnimDefaults` + `ReloadAnimationDefaults(false)` reloads the animation's AnimDB defaults into the scene, re-dressing included
+- While an animation pick is pending, the actor table shows the live values read-only (no AnimDB defaults preview); the pick's stage text is still previewed
+- Cancel snapshot also restores victim status (silently) and re-strips an actor dressed since the overlay opened; actor-table edits and Load mark it dirty
+- Leash panel moved out of the core overlay into SkyrimNet_Leashed. New extension-panel API: option JSON `panelScript` loads a script from `PrismaUI/views/SkyrimNet_SexLab/` that calls `registerTargetPanel(kind, {render, onOpen, skipHeader})`; `papyrusQuery(script, fn, formId)` → C++ `onPapyrusQuery` calls `script.fn(Actor) Global` returning String. Replaces `onLeashStatus` / `leashStatusResult`. See [docs/reference/extension-panels.md](docs/reference/extension-panels.md)
+
+## [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1) — since [0.35.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.0)
 
 ### Actions / scenes
 - Lone hug (`StartScene_Event` resolved `hug` → `pa_HugA` `playIdleWithTarget`) now stops combat and sheathes both actors first (new `Actions.CalmForPairedIdle`, mirrors DOM `CalmActorFast`) and waits up to 1.5 s for the sheathe. A paired idle played while the player held a drawn weapon (whip) left the player unable to attack afterward. The path now logs a `lone hug pa_HugA` trace
-- Lone hug narration is always "<speaker> hugs <target>." The `direction: getting` swap was dropped: Nina calling a hug with `getting` narrated "Bob hugs Nina."
 
 ### Orgasm / narration
 - Removed the HUD deny key's Transform (`sexlab.hud.deny_transform` setting, `TransformDialogue` call, `ToggleDenyOrgasm` `from_hotkey` and `SetDenyOrgasm` `transform` params). Deny / allow orgasm are plain events for every source: "<denier> forbids <actor> from orgasming without permission." / "<denier> permits <actor> to orgasm."

@@ -6,6 +6,7 @@
 #include "ActionDispatch.h"
 #include "Config.h"
 #include "AnimationDB.h"
+#include "OrgasmEngine.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -767,6 +768,31 @@ void InitWebUI()
             });
         });
 
+        // Force panel (HUD force key): {cancel} or {victim, strategy, method}. Narrated directly.
+        PrismaUI->RegisterJSListener(g_view, "onForceResult", [](const char* value) {
+            RunGuarded("onForceResult", [&] {
+                WebUI_Invoke("hideForcePanel();");
+                WebUI_Visibility_HideWithoutCommit();
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    if (j.value("cancel", false))
+                        return;
+                    const auto victim = j.value("victim", static_cast<RE::FormID>(0));
+                    const std::string strategy = j.value("strategy", std::string{});
+                    const std::string method = j.value("method", std::string{});
+                    webui_log::info("onForceResult victim={:#x} strategy={} method='{}'", victim, strategy, method);
+                    const std::string line = OrgasmEngine::PlayerForce(victim, strategy, method);
+                    if (!line.empty())
+                        OrgasmEngine::NarrateDirect(line, RE::PlayerCharacter::GetSingleton(),
+                            RE::TESForm::LookupByID<RE::Actor>(victim));
+                } catch (...) {
+                    webui_log::warn("onForceResult: bad JSON");
+                }
+            });
+        });
+
         PrismaUI->RegisterJSListener(g_view, "onSceneCreatorResult", [](const char* value) {
             RunGuarded("onSceneCreatorResult", [&] {
                 if (!value)
@@ -994,9 +1020,9 @@ void InitWebUI()
                 PapyrusBindings_WebUI::HandleNotify(value);
             });
         });
-        PrismaUI->RegisterJSListener(g_view, "onLeashStatus", [](const char* value) {
-            RunGuarded("onLeashStatus", [&] {
-                PapyrusBindings_WebUI::HandleLeashStatus(value);
+        PrismaUI->RegisterJSListener(g_view, "onPapyrusQuery", [](const char* value) {
+            RunGuarded("onPapyrusQuery", [&] {
+                PapyrusBindings_WebUI::HandlePapyrusQuery(value);
             });
         });
 

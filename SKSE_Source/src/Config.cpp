@@ -123,6 +123,23 @@ float GetConfigFloat(const char* path, float def)
     return GetFloat(path, def);
 }
 
+std::string GetConfigString(const char* path, const char* def)
+{
+    return GetRaw(path, def);
+}
+
+bool IsMiniGameMode()
+{
+    std::string mode = GetRaw("sexlab.enjoyment.mode", "");
+    std::transform(mode.begin(), mode.end(), mode.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (mode.find("mini") != std::string::npos)
+        return true;
+    if (mode.find("together") != std::string::npos)
+        return false;
+    return GetBool("sexlab.minigame.enabled", true);
+}
+
 std::uint32_t HotkeyVkToDx(int vk)
 {
     switch (vk) {

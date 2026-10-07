@@ -13,7 +13,7 @@
 | Stage descriptor prototype (Billyy / SLAL → anidata) | descriptor/README.md |
 | Anidata schema 3.0 | docs/developers/anidata-schema.md |
 | Develop Papyrus / ESP | docs/developers/papyrus.md, docs/reference/papyrus-rules.md |
-| Develop WebUI / SKSE | docs/developers/webui.md (ControlPanel modes, target sentinels, foreign `data_table` / `actor_detail` hosts) |
+| Develop WebUI / SKSE | docs/developers/webui.md (ControlPanel modes, target sentinels, foreign `data_table` / `actor_detail` hosts), docs/reference/extension-panels.md |
 | Orgasm / enjoyment / mini-game / Scene HUD / plugin API | docs/developers/orgasm-engine.md |
 | Agent policy | AGENTS.md (safety, confidence, commits) |
 | Quirks | KNOWLEDGEBASE.md |

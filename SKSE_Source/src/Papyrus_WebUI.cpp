@@ -10,6 +10,7 @@
 #include "RE/V/VirtualMachine.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -845,92 +846,45 @@ namespace PapyrusBindings_WebUI
             });
         }
 
-        class BoolVmCallback : public RE::BSScript::IStackCallbackFunctor
+        /// Papyrus script / function names: letters, digits, underscore only.
+        bool IsPapyrusIdentifier(const std::string& s)
+        {
+            if (s.empty() || s.size() > 128)
+                return false;
+            for (char c : s) {
+                if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_'))
+                    return false;
+            }
+            return true;
+        }
+
+        /// Async String result → papyrusQueryResult({requestId, ok, value}) on the main thread.
+        class PapyrusQueryCallback : public RE::BSScript::IStackCallbackFunctor
         {
         public:
+            explicit PapyrusQueryCallback(std::int64_t a_requestId) : requestId(a_requestId) {}
+
             void operator()(RE::BSScript::Variable a_result) override
             {
-                if (a_result.IsBool())
-                    value = a_result.GetBool();
-                done = true;
+                nlohmann::json out;
+                out["requestId"] = requestId;
+                out["ok"] = true;
+                out["value"] = a_result.IsString() ? std::string(a_result.GetString()) : std::string();
+                std::string js = std::string("papyrusQueryResult(") + SafeDump(out) + ");";
+                SKSE::GetTaskInterface()->AddTask([js = std::move(js)]() { WebUI_Invoke(js); });
             }
             void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
 
-            bool value = false;
-            bool done = false;
+            std::int64_t requestId = 0;
         };
 
-        class ActorVmCallback : public RE::BSScript::IStackCallbackFunctor
+        void PapyrusQueryFail(std::int64_t requestId)
         {
-        public:
-            void operator()(RE::BSScript::Variable a_result) override
-            {
-                if (a_result.IsObject() && !a_result.IsNoneObject())
-                    actor = a_result.Unpack<RE::Actor*>();
-                done = true;
-            }
-            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
-
-            RE::Actor* actor = nullptr;
-            bool done = false;
-        };
-
-        bool PumpVm(RE::BSScript::Internal::VirtualMachine* vm, bool& done)
-        {
-            if (!vm)
-                return false;
-            for (int i = 0; i < 64 && !done; ++i)
-                vm->Update(0.0f);
-            return done;
-        }
-
-        bool FactionIsLeashed(RE::Actor* actor)
-        {
-            auto* dh = RE::TESDataHandler::GetSingleton();
-            if (!dh || !actor)
-                return false;
-            if (!dh->LookupModByName("Leash.esm"))
-                return false;
-            auto* fac = dh->LookupForm<RE::TESFaction>(0xD6A, "Leash.esm");
-            return fac && actor->IsInFaction(fac);
-        }
-
-        bool NativeIsLeashed(RE::Actor* actor, bool& nativeOk)
-        {
-            nativeOk = false;
-            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            if (!vm || !actor)
-                return false;
-            auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new BoolVmCallback() };
-            auto* cb = static_cast<BoolVmCallback*>(cbPtr.get());
-            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor));
-            if (!vm->DispatchStaticCall(
-                    RE::BSFixedString("LeashFramework"), RE::BSFixedString("IsLeashed"), args, cbPtr)) {
-                return false;
-            }
-            if (!PumpVm(vm, cb->done))
-                return false;
-            nativeOk = true;
-            return cb->value;
-        }
-
-        RE::Actor* NativeGetLeashHolder(RE::Actor* actor)
-        {
-            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            if (!vm || !actor)
-                return nullptr;
-            auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new ActorVmCallback() };
-            auto* cb = static_cast<ActorVmCallback*>(cbPtr.get());
-            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor));
-            if (!vm->DispatchStaticCall(
-                    RE::BSFixedString("LeashFramework"),
-                    RE::BSFixedString("GetLeashHolder"),
-                    args,
-                    cbPtr)) {
-                return nullptr;
-            }
-            PumpVm(vm, cb->done);
-            return cb->actor;
+            nlohmann::json out;
+            out["requestId"] = requestId;
+            out["ok"] = false;
+            out["value"] = "";
+            WebUI_Invoke(std::string("papyrusQueryResult(") + SafeDump(out) + ");");
         }
     }
 
@@ -1536,11 +1490,16 @@ namespace PapyrusBindings_WebUI
         });
     }
 
-    void HandleLeashStatus(const char* value)
+    void HandlePapyrusQuery(const char* value)
     {
+        std::int64_t requestId = 0;
         std::uint32_t formId = 0;
+        std::string script;
+        std::string fn;
         try {
             auto j = nlohmann::json::parse(value ? value : "");
+            if (j.contains("requestId") && j["requestId"].is_number())
+                requestId = static_cast<std::int64_t>(j["requestId"].get<double>());
             if (j.contains("formId") && j["formId"].is_number()) {
                 if (j["formId"].is_number_unsigned())
                     formId = j["formId"].get<std::uint32_t>();
@@ -1549,32 +1508,31 @@ namespace PapyrusBindings_WebUI
                 else
                     formId = static_cast<std::uint32_t>(j["formId"].get<double>());
             }
+            script = j.value("script", "");
+            fn = j.value("fn", "");
         } catch (...) {
-            webui_log::warn("HandleLeashStatus: parse failed");
+            webui_log::warn("HandlePapyrusQuery: parse failed");
+            return;
+        }
+        if (!IsPapyrusIdentifier(script) || !IsPapyrusIdentifier(fn)) {
+            webui_log::warn("HandlePapyrusQuery: bad script/fn '{}'.'{}'", script, fn);
+            PapyrusQueryFail(requestId);
             return;
         }
 
-        SKSE::GetTaskInterface()->AddTask([formId]() {
-            nlohmann::json out;
-            out["formId"] = formId;
-            out["isLeashed"] = false;
-            out["holderFormId"] = 0;
-            out["holderName"] = "";
+        SKSE::GetTaskInterface()->AddTask([requestId, formId, script, fn]() {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
             auto* actor = formId ? RE::TESForm::LookupByID<RE::Actor>(formId) : nullptr;
-            if (actor) {
-                bool nativeOk = false;
-                bool leashed = NativeIsLeashed(actor, nativeOk);
-                if (!nativeOk)
-                    leashed = FactionIsLeashed(actor);
-                out["isLeashed"] = leashed;
-                if (leashed) {
-                    if (auto* holder = NativeGetLeashHolder(actor)) {
-                        out["holderFormId"] = holder->GetFormID();
-                        out["holderName"] = ActorDisplayNameLocal(holder);
-                    }
-                }
+            if (!vm || !actor) {
+                PapyrusQueryFail(requestId);
+                return;
             }
-            WebUI_Invoke(std::string("leashStatusResult(") + SafeDump(out) + ");");
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{ new PapyrusQueryCallback(requestId) };
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor));
+            if (!vm->DispatchStaticCall(RE::BSFixedString(script.c_str()), RE::BSFixedString(fn.c_str()), args, callback)) {
+                webui_log::warn("HandlePapyrusQuery: DispatchStaticCall {}.{} failed", script, fn);
+                PapyrusQueryFail(requestId);
+            }
         });
     }
 
@@ -1914,7 +1872,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("WebUI_SetSexLabAnimCount", scriptName, WebUI_SetSexLabAnimCount);
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);
-        a_vm->RegisterFunction("TraceLog", scriptName, TraceLog);
+        a_vm->RegisterFunction("TraceLog", scriptName, TraceLog, true);
         a_vm->RegisterFunction("SetNearbyActorsJson", scriptName, SetNearbyActorsJson);
         a_vm->RegisterFunction("IsAvailableActor", scriptName, IsAvailableActor_Native);
         a_vm->RegisterFunction("WebUI_PushMainPanelData", scriptName, WebUI_PushMainPanelData);

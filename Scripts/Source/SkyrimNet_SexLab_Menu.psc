@@ -197,8 +197,9 @@ Function WebUI_ConfigureFocusScene()
     if sl == None || !sl.GetThreadActive()
         return
     endif
-    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl.BuildWebUISceneMenuState())
-    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl.BuildWebUIAnimationMenuState())
+    String scene_state_json = sl.BuildWebUISceneMenuState()
+    SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
 EndFunction
 
 Function WebUI_SeedSceneInfos()

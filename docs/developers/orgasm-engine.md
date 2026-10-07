@@ -6,16 +6,54 @@ The C++ OrgasmEngine owns enjoyment and orgasms for **every** SexLab scene, incl
 
 | Layer | Role |
 |-------|------|
-| `SKSE_Source/src/OrgasmEngine.cpp` | Holds the state: enjoyment (0–100), passive gain, mini-game, gates, when an orgasm fires, co-save record `'ORGE'`. Runs a 250 ms tick on the game thread; the tick is skipped while the game is paused. |
+| `SKSE_Source/src/OrgasmEngine.cpp` | Holds the state: enjoyment (0–100), passive gain, mini-game, gates, when an orgasm fires, co-save record `'ORGE'`. Runs a 250 ms tick on the game thread; the tick is skipped while the game or WebUI is paused. All engine timers (gain, cooldown, edging, narration windows) use `Now()`, an unpaused clock advanced only by the tick `dt` (clamped to 0.5 s); `GameNow()` is the wall clock that feeds `dt`. |
 | `SKSE_Source/src/Hud.cpp` + `PrismaUI/views/SkyrimNet_SexLab/hud.html` | Scene HUD: a second PrismaUI view that is shown but never focused, so the game keeps running. HUD key handling. |
 | `Scripts/Source/SkyrimNet_SexLab_OrgasmEngine.psc` | **Shell only.** Native API declarations, plus the `Effect_*` globals the engine dispatches for SexLab side effects. |
 | `SkyrimNet_SexLab_Scene.psc` | Adapter. Sends scene facts into the engine (`Engine_BeginScene`, `Engine_SetStage`, `Engine_SetSkills`, `SetOrgasmDisabled`, `EndScene`). Performs `Orgasm_ApplyGroup` (ForceOrgasm per actor + one narration), `SetDenyOrgasm` (deny / allow) and `Mirror_Apply` (AdjustEnjoyment). |
+
+## Modes and the SexLab bonus
+
+`sexlab.enjoyment.mode` (select; also the MCM **Orgasm mode** pulldown, which writes the same key with `PatchConfig`; unset falls back to the old `sexlab.minigame.enabled` bool, see `SexLabNet::IsMiniGameMode`):
+
+| Mode | Gain | Ending |
+|------|------|--------|
+| **Always Orgasm Together at the end** | Bonus-shaped curve reaching 100 at the end of the second-to-last stage | Gate passes every expected, unblocked actor without a roll (repeat orgasms included); safety net as fallback |
+| **Multi-Orgasm Mini-game** (default) | Passive rate x `(1 + minigame_bonus_mult x bonus)` | No gate, no safety net: only reaching 100 (and the group join) fires, so several orgasms or none |
+
+**Bonus** (`ActorState.bonus`, `ComputeBonus`): `Scene.Engine_SetBonusInputs` (from `Engine_SetSkills`, start and animation change) sends `SetBonusInputs(actor, ownSkills[], partnerSkills[], lowestRank, highestRank, actSkill)`: `Stats.GetSkillLevels` of the actor and of the partner SexLab bases skills on (the player when present, else the next position; creatures send empty arrays = unskilled), the present relationship ranks, and the act skill (0 foreplay, 1 vaginal, 2 anal, 3 oral). The engine applies SexLab's `StartAnimating` formula (victim: `lowest − 3 + clamp(ownLewd − ownPure, ±6)`; aggressor: `−((highest − 4) + clamp(partnerLP − ownLP, ±6))`; normal: `highest + clamp(avgLewd − avgPure, 0, 6)`; unskilled: rank terms only) with `RandomInt(1,10)` replaced by 5.5, 50 points = 1.0, plus `(partner act skill − 2) / 6`, times `bonus_scale` (0.5), clamped to ±`bonus_clamp` (0.75).
+
+**Together curve** (`ApplyTogetherCurve`): progress `p` = (completed stages + `min(1, stage elapsed / stage timer)`) / (N − 1), on the scene's animating, unpaused stage clock (`stageElapsed`; untimed: stage index). `E(p) = 1 − (1 − p)^k`, `k = clamp(1 + together_k_range × bonus, 0.5, 2.5)`. Each tick closes the matching share of the gap to 100 (`(E(p) − E(p0)) / (1 − E(p0))`), so carried-over or external enjoyment still lands on 100 at `p = 1`. Capped at `kRushHover` (98) before the final stage; in the final stage an actor held at 98 goes to 100. A new animation (`SetStageTimers` change) or stepping back rebases the curve. No stage spike in this mode (the curve holds it); DOM slaves keep the passive rate.
+
+## NPC strategies (Multi-Orgasm Mini-game)
+
+The LLM picks a strategy per NPC with the `SexLab_Strategy_*` actions (`Actions.MiniGame_Strategy` / `MiniGame_StrategySelf`, static `strategy` key → `OrgasmEngine.StrategyId` → `SetStrategy`). Every `sexlab.minigame.npc_interval` s (2) the tick plays one step per NPC (`StrategyStep`): enjoyment moves by `random(npc_step_min, npc_step_max)` (5–10; arouse × skill factor), through the same cost / mental-break / edge code as a key press (`ArouseLocked` / `CalmLocked`), not narrated. A step without stamina / magicka is skipped. The player is never automated.
+
+| Strategy | Who | Step |
+|----------|-----|------|
+| Passive | anyone not forced | none |
+| Mutual / Selfless | not forced, 2+ actors | arouse the lowest-enjoyment actor (self included / others only) |
+| Selfish | not forced, or forced via RejectForce | arouse self |
+| Together | not forced, 2+ actors | calm self when > 5 ahead of the least-aroused partner, arouse self when > 5 behind |
+| Tease (target) | non-victims | arouse the target below 90, calm (edge) it at 90+ |
+| Reject | victims, or forced via RejectForce | calm self |
+| CumQuick | victims | arouse the most-aroused aggressor (none: most-aroused other) |
+| Greedy (target = victim) | non-victims, a victim present | arouse self; the target is **forced** to arouse the speaker |
+| ForcedOrgasm (target) | non-victims | arouse the target; the target is **forced** to arouse self |
+| AcceptForce | forced | the forced action |
+
+- **Forced** (`forcedBy`, `forcedAction`): only `SexLab_Strategy_AcceptForce` and the `sexlab_strategy_rejectforce` category (`SexLab_Strategy_RejectForce_Selfish` / `_Reject`) are offered. Ends when the forcer picks something else or leaves ("<name> is no longer forced by <forcer>."), or at scene end. The player is never forced.
+- **Broken** (mental break): the strategy is set aside and the NPC arouses itself until it recovers.
+- **Defaults** at `BeginScene` by role: `sexlab.minigame.default_strategy_normal` / `_aggressor` / `_victim` (Mutual / Selfish / Passive). Not announced.
+- **Announce**: `Effect_StrategyChanged(actor, target, msg, notify)` → `DirectNarration_Optional("sexlab_strategy", …)`, plus `Debug.Notification` in player scenes.
+- **Eligibility**: the engine pushes per-actor StorageUtil int keys `skyrimnet_sexlab_strategy_<key>` (`Effect_StrategyEligibility`, on change only; all unset at scene end and in Together mode). Each action's rule is `papyrus_util HasIntValue currentActor <key> == true` plus `SexLabAnimatingFaction > 0`.
+- **Prompt / HUD**: `Scene` writes `GetStrategyText` to the position obj `strategy` (0050 prompt: "<name> focuses on …"); the HUD shows the label as a tag.
+- `MCM.ApplyMiniGameActions` unregisters Arouse / Calm and all strategy actions in Together mode (switching back needs save + reload).
 
 ## Tick
 
 For each managed scene:
 
-1. **Passive gain:** `enjoyment += baseRate × roleMult × jitter × Π rate modifiers × anim speed × dt`.
+1. **Passive gain** (Mini-game mode and DOM slaves; Together uses the curve above): `enjoyment += baseRate × roleMult × jitter × Π rate modifiers × (1 + minigame_bonus_mult × bonus) × anim speed × dt`.
    - **Base rate, from the stage timers.** `Engine_SetStage` sends `SetStageTimers(sid, stageSecs, leadIn)` with each stage's seconds, using `sslThreadController.GetTimer`'s rule: `Animation.GetTimer(s)` when `Animation.HasTimer(s)`, otherwise `thread.Timers`.
      - `targetSecs` = the sum of stages 1..N−1, plus 0.9 × the final stage.
      - `baseRate = 100 / targetSecs`. It is fixed per animation, and enjoyment carries over when the animation changes.
@@ -27,7 +65,7 @@ For each managed scene:
    - **Anim speed:** `AnimSpeed::Get`, which is the style speed multiplied by the HUD's faster/slower scale.
    - **Not expected to orgasm:** positions with AnimDB `orgasm_expected` 0, or the scene's `no_orgasm` 1, get no passive gain. Not expected is **not** a block: orgasm checks run as normal. `Scene.ApplySexLabVoice` keeps SexLab silent below 50 enjoyment (`VOICE_GATE_ENJOYMENT`, re-checked in `Mirror_Apply`). The only scene block (`SetSceneBlocked`) is the player's `deny_orgasm` (HUD `sexlab.hud.key_deny` → `Menu.Hud_OnKey("deny", focus)` → `Scene.ToggleDenyOrgasm`; Description Editor `_deny_pos`). Positions with AnimDB `orgasm_expected` 0 get no passive gain (DOM slaves: no `domProgress`). `Engine_SetSkills` sends `SetOrgasmExpected(actor, expected)` at start and on each animation change; missing data counts as expected. Mini-game Arouse / Calm still move their enjoyment, and the no-timer safety net still needs 90 for them.
    - Expected results at normal speed with no mini-game:
-     - A normal actor usually stays below 100; the gate before the final stage decides the orgasm (chance = enjoyment %).
+     - A normal actor usually stays below 100; the gate before the final stage decides the orgasm (`enjoyment + random(0, random_bonus) + stage_spike ≥ 100`).
      - Each stage advance adds `sexlab.enjoyment.stage_spike` (5) to every expected actor (`SetStage`; DOM: `domProgress`).
 2. **Orgasm test:**
    - The test value is `enjoyment`. With the mini-game on, once a second it becomes `enjoyment + random(0, random_bonus)`.
@@ -39,7 +77,7 @@ For each managed scene:
      - the cooldown has passed (SexLab's rule: 10 s female, 20 s male, +10 s creature).
    - A blocked actor at 100 sends `OrgasmDenied` once per climb.
    - A **forced** request (the WebUI orgasm button, `RequestOrgasm(…, true, …)`) skips every gate.
-3. **Gate (`sexlab.ending.gate`, timed scenes, never in LeadIn):** each actor who has not orgasmed in this scene, is expected to orgasm and passes `CanOrgasmNow` rolls once: `uniform(0, 100) < enjoyment`.
+3. **Gate (Together mode only; `sexlab.ending.gate`, timed scenes, never in LeadIn; Together skips the roll, everyone expected passes):** each actor who has not orgasmed in this scene, is expected to orgasm and passes `CanOrgasmNow` rolls once: `enjoyment + random(0, random_bonus) + stage_spike ≥ 100` (`RollOrgasm`).
    - **When:** `lead` seconds before the second-to-last stage's timer ends (animating, unpaused time; on entering it when `lead` is longer), or on reaching the final stage first. `lead` = `NarrationTiming::EstimateSeconds`: the median of the last 20 clean DN→first-speech samples this session, `sexlab.ending.gate_lead_default` (5 s) until 3 exist, clamped 1–30 s.
    - **A pass does not fire yet.** The actor is *rushing*: enjoyment climbs at `(98 − enjoyment) / lead` per second (no passive gain, pause and speed ignored, capped at 98 before the final stage, no other orgasm test). `Effect_GatePassed(actors, holdStage)` → `Scene.Engine_GatePassed` stashes the passers and sends one DirectNarration at once, then calls `GateNarrationSent(sid)`, which marks `NarrationTiming::SpeechStarts()`.
    - **Before the final stage** the Scene holds the stage (`Gate_Hold`, `UpdateTimer` like the pause key). The first non-player `SkyrimNet_SpeechStarted` after the mark makes the tick dispatch `Effect_AdvanceToFinal` → `Scene.Engine_AdvanceToFinal`: release the hold, `Ending_ToFinal` (final stage + dialogue hold). No voice by `sexlab.ending.gate_wait_max` (20 s): `Gate_Poll` advances anyway. SexLab reaching the final stage first also ends the wait.
@@ -48,9 +86,9 @@ For each managed scene:
    - A block (deny) cancels the rush. A forced request fires through the normal path. Stepping back before the last two stages drops the rush and re-arms the gate. Rushes are not saved.
    - All fail: SexLab advances normally, no orgasm.
 
-   **Safety net (gate off, or no timers):** at 90% of the final stage's timer, each non-DOM actor at 90 or more who has not orgasmed, is not blocked or edging and was not calmed in the final stage fires as *combined*. With no timers it fires on entering the final stage, everyone when the mini-game is off.
-4. **Group (`JoinGroup`):** everyone fired in this scene in this tick (steps 2 and 3, forced included) is one group. Every other actor who passes `CanOrgasmNow` (not a DOM slave, blocked, edging, cooling down or out after a final roll) and isn't rushing rolls once: `uniform(0, 100) < enjoyment`. Passers join the group. Repeat orgasms roll too. Log `group roll`.
-   - **Early final roll:** in the second-to-last stage of a timed, non-LeadIn scene, when the Scene's ending lead (`SetEndingTarget`) is in the group and has reached the target (the Scene is about to jump), everyone still out rolls again with `enjoyment + PassiveRate × (rest of the second-to-last stage's timer + the final stage's timer)`. The top-up is for the roll only. A pass joins this group, so it goes into the same DN. A fail sets `finalRollFailed`: no more orgasms (no denied event either) until the scene steps back before the last two stages, except a forced request. Not saved. Log `final roll`.
+   **Safety net (Together mode; gate off, or no timers):** at 90% of the final stage's timer, each non-DOM actor at 90 or more who has not orgasmed, is not blocked or edging and was not calmed in the final stage fires as *combined*. With no timers it fires on entering the final stage, everyone when the mini-game is off.
+4. **Group (`JoinGroup`):** everyone fired in this scene in this tick (steps 2 and 3, forced included) is one group. Every other actor who passes `CanOrgasmNow` (not a DOM slave, blocked, edging, cooling down or out after a final roll) and isn't rushing rolls once: `enjoyment + random(0, random_bonus) ≥ 100` (`RollOrgasm`, `sexlab.minigame.random_bonus`, default 10). Far from 100 means no chance. Passers join the group. Repeat orgasms roll too. Log `group roll`.
+   - **Early final roll:** in the second-to-last stage of a timed, non-LeadIn scene, when the Scene's ending lead (`SetEndingTarget`) is in the group and has reached the target (the Scene is about to jump), everyone still out rolls again with `enjoyment + random(0, random_bonus) + stage_spike ≥ 100`. A pass joins this group, so it goes into the same DN. A fail sets `finalRollFailed`: no more orgasms (no denied event either) until the scene steps back before the last two stages, except a forced request. Not saved. Log `final roll`.
    - The same `JoinGroup` runs for `NoteExternalOrgasm` and `AllowOrgasm`.
 
    The group is sent as one `Effect_OrgasmGroup`, so it gets one narration. It is `individual` unless every trigger came from the safety net. Pending arouse/calm narrations about the group's actors are folded into it (`extras`).
@@ -155,6 +193,8 @@ RequestOrgasm(Actor, bool force, String source)
 int GetOrgasmCount(Actor)   float GetSecondsSinceOrgasm(Actor)   bool IsManaged(Actor)
 bool IsMentallyBroken(Actor)   bool IsMiniGameEnabled()
 SetRates(float passive, float aggressor, float victim)   ; role multipliers, runtime override until the next config save
+bool SetStrategy(Actor, int strategy, Actor target)  int GetStrategy(Actor)   ; mini-game NPC strategies (ids in the shell)
+String GetStrategyText(Actor)   Actor GetForcedBy(Actor)   int StrategyId(String key)
 ```
 
 The shell-only natives (`BeginScene`, `SetStage`, `SetStageTimers`, `SetScenePaused`, `GateNarrationSent`, `SetEndingTarget`, `SetSceneBlocked`, `SetDomSlave`, `SetDomMeter`, `SetActorSkills`, `EndScene`, `ResetSpeedScale`, `ReloadConfig`, `AllowOrgasm`) are for this mod's own Scene and MCM scripts. `AllowOrgasm` is not in the C++ API.
@@ -183,14 +223,15 @@ if (auto* engine = SKYRIMNET_SEXLAB_API::RequestOrgasmEngine()) {
 }
 ```
 
-`IOrgasmEngineV1` mirrors the Papyrus API and adds event callbacks. Calls are thread-safe. The export is `RequestOrgasmEngineAPI(InterfaceVersion)`.
+`IOrgasmEngineV1` mirrors the Papyrus API and adds event callbacks. `IOrgasmEngineV2` (`RequestOrgasmEngineV2()`, `InterfaceVersion::V2`) adds `SetStrategy` / `GetStrategy`; V1 requests get the same object. Calls are thread-safe. The export is `RequestOrgasmEngineAPI(InterfaceVersion)`.
 
 ## Persistence
 
-- The co-save record `'ORGE'` (version 3) holds:
+- The co-save record `'ORGE'` (version 5) holds:
   - per scene: stage, stage timers, LeadIn, pause and the final-stage clock;
-  - per actor: enjoyment, orgasm count, role, skill, jitter, blocks, rate modifiers and DOM step state.
-- Versions 1 and 2 still load; their scenes use the fallback rate until the next stage.
+  - per actor: enjoyment, orgasm count, role, skill, jitter, blocks, rate modifiers and DOM step state;
+  - v4: gate state; v5: the stage clock, and per actor the bonus, curve progress, strategy, target and forcer.
+- Versions 1 and 2 still load; their scenes use the fallback rate until the next stage. Before v5: bonus 0, Passive, curve rebased to the current progress.
 - A revert (load or new game) clears everything.
 - The faster/slower scale is not saved; style speeds are not restored on load either.
 - A scene with no actor in `SexLabAnimatingFaction` for 10 s is dropped. This is the safety net for a missed `AnimationEnd`.

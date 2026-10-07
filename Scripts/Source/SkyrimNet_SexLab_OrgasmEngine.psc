@@ -53,6 +53,39 @@ Function SetDomSlave(Actor akActor, bool dom) global native
 ; DOM slave: 0-100 meter computed from DOM's orgasm values (HUD bar + SexLab mirror).
 Function SetDomMeter(Actor akActor, float meter) global native
 Function SetActorSkills(Actor akActor, int skill, int lewd) global native
+; SexLab's starting-enjoyment inputs: GetSkillLevels of the actor and of the partner SexLab bases skills on
+; (empty arrays: unskilled), lowest / highest present relationship rank, act skill (0 foreplay 1 vaginal 2 anal
+; 3 oral). The engine computes the actor's bonus with SexLab's formula.
+Function SetBonusInputs(Actor akActor, float[] ownSkills, float[] partnerSkills, int lowestRank, int highestRank, int actSkill) global native
+
+; ---- Mini-game NPC strategies (Multi-Orgasm Mini-game mode) ----
+; ids: 0 passive 1 mutual 2 selfish 3 selfless 4 together 5 tease 6 reject 7 cumquick 8 greedy
+;      9 forcedorgasm 10 acceptforce. target: Tease / Greedy (a victim) / ForcedOrgasm; None picks one.
+; False when not allowed for the actor (mode, role, forced state). Narrated; notification in player scenes.
+bool Function SetStrategy(Actor akActor, int strategy, Actor target) global native
+int Function GetStrategy(Actor akActor) global native
+; Third-person phrase ("focuses on self enjoyment"); "" when none, Together mode or the player.
+String Function GetStrategyText(Actor akActor) global native
+Actor Function GetForcedBy(Actor akActor) global native
+; How the forcer forced akActor ("a slap to the face"); narrated with give in / resist. "" clears.
+Function SetForceMethod(Actor akActor, String method) global native
+
+; Strategy action key (static action parameter) -> id; -1 when unknown.
+int Function StrategyId(String strategy_key) global
+    String[] keys = new String[11]
+    keys[0] = "passive"
+    keys[1] = "mutual"
+    keys[2] = "selfish"
+    keys[3] = "selfless"
+    keys[4] = "together"
+    keys[5] = "tease"
+    keys[6] = "reject"
+    keys[7] = "cumquick"
+    keys[8] = "greedy"
+    keys[9] = "forcedorgasm"
+    keys[10] = "acceptforce"
+    return keys.Find(strategy_key)
+EndFunction
 Function EndScene(int sid) global native
 Function ResetSpeedScale(Actor akActor) global native
 ; Speed level of the actor's effective animation speed: 0 gentle, 1 normal, 2 forceful.
@@ -146,6 +179,43 @@ Function Effect_DomSync(Actor akActor, float miniDelta, float daring, float naiv
         dom.StepRoll(akActor, hasPlayer, share)
     endif
     SetDomMeter(akActor, dom.OrgasmMeter(akActor))
+EndFunction
+
+; Strategy action eligibility: StorageUtil int keys on the actor, read by the actions' papyrus_util
+; HasIntValue rules. allow: set; deny: unset.
+Function Effect_StrategyEligibility(Actor akActor, String[] allow, String[] deny) global
+    if akActor == None
+        return
+    endif
+    int i = 0
+    while i < allow.length
+        StorageUtil.SetIntValue(akActor, allow[i], 1)
+        i += 1
+    endwhile
+    i = 0
+    while i < deny.length
+        StorageUtil.UnsetIntValue(akActor, deny[i])
+        i += 1
+    endwhile
+EndFunction
+
+; Strategy change: optional narration; in player scenes also a notification.
+Function Effect_StrategyChanged(Actor akActor, Actor target, String msg, bool notify) global
+    if msg == ""
+        return
+    endif
+    if notify
+        Debug.Notification(msg)
+    endif
+    SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_strategy", msg, akActor, target, False)
+EndFunction
+
+; Player Force (HUD): always narrated.
+Function Effect_NarrateDirect(String msg, Actor source, Actor target) global
+    if msg == ""
+        return
+    endif
+    SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target)
 EndFunction
 
 ; Speed / mini-game narrations are optional for everyone (player included): standard optional path,

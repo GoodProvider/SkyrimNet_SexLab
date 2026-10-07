@@ -37,7 +37,8 @@ namespace SKYRIMNET_SEXLAB_API
 
     enum class InterfaceVersion : std::uint32_t
     {
-        V1 = 1
+        V1 = 1,
+        V2 = 2,  // + mini-game NPC strategies (IOrgasmEngineV2)
     };
 
     enum class EngineEventType : std::uint32_t
@@ -106,6 +107,34 @@ namespace SKYRIMNET_SEXLAB_API
         virtual void UnregisterEventCallback(std::uint32_t a_handle) noexcept = 0;
     };
 
+    /// Mini-game NPC strategy ids (same as the Papyrus SetStrategy ids).
+    enum class Strategy : std::int32_t
+    {
+        kPassive = 0,
+        kMutual = 1,
+        kSelfish = 2,
+        kSelfless = 3,
+        kTogether = 4,
+        kTease = 5,
+        kReject = 6,
+        kCumQuick = 7,
+        kGreedy = 8,
+        kForcedOrgasm = 9,
+        kAcceptForce = 10,
+    };
+
+    class IOrgasmEngineV2 : public IOrgasmEngineV1
+    {
+    protected:
+        ~IOrgasmEngineV2() = default;
+
+    public:
+        /// Multi-Orgasm Mini-game mode only: the engine plays the mini-game for the NPC with this strategy.
+        /// a_target: Tease / Greedy (a victim) / ForcedOrgasm; nullptr picks one. False when not allowed.
+        virtual bool SetStrategy(RE::Actor* a_actor, Strategy a_strategy, RE::Actor* a_target) noexcept = 0;
+        virtual Strategy GetStrategy(RE::Actor* a_actor) noexcept = 0;
+    };
+
     using RequestOrgasmEngineAPIFunc = void* (*)(InterfaceVersion a_version);
 
     /// Consumer helper. Call at or after SKSE kPostLoad. nullptr when SkyrimNet_SexLab is not loaded.
@@ -117,5 +146,16 @@ namespace SKYRIMNET_SEXLAB_API
         }
         const auto fn = reinterpret_cast<RequestOrgasmEngineAPIFunc>(GetProcAddress(module, RequestFunctionName));
         return fn ? static_cast<IOrgasmEngineV1*>(fn(InterfaceVersion::V1)) : nullptr;
+    }
+
+    /// V2 consumer helper. nullptr when the loaded SkyrimNet_SexLab is older (V1 only) or missing.
+    [[nodiscard]] inline IOrgasmEngineV2* RequestOrgasmEngineV2()
+    {
+        const auto module = GetModuleHandleW(PluginDll);
+        if (!module) {
+            return nullptr;
+        }
+        const auto fn = reinterpret_cast<RequestOrgasmEngineAPIFunc>(GetProcAddress(module, RequestFunctionName));
+        return fn ? static_cast<IOrgasmEngineV2*>(fn(InterfaceVersion::V2)) : nullptr;
     }
 }

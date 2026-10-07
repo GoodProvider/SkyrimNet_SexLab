@@ -1095,8 +1095,9 @@ Function WebUI_OnSceneConnectionChange(String json)
             return
         endif
         ; Soft configure both; do not showPanel (avoids main_panel thrash).
-        SkyrimNet_SexLab_WebUI.SceneCreator_Configure(sl_scene.BuildWebUISceneMenuState())
-        SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(sl_scene.BuildWebUIAnimationMenuState())
+        String scene_state_json = sl_scene.BuildWebUISceneMenuState()
+        SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
+        SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
     endif
     JValue.release(obj)
 EndFunction
@@ -1125,14 +1126,7 @@ Function WebUI_OnAnimRegistrySave(String json)
         JValue.release(obj)
         return
     endif
-    int scene_sid = JMap.getInt(obj, "_scene_sid", -1)
-    if scene_sid >= 0 && JMap.hasKey(obj, "_positions")
-        SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
-        if sl_scene && sl_scene.GetThreadActive()
-            sl_scene.WebUI_ApplyLivePositions(obj, true)
-        endif
-    endif
-    ; obj stays JContainers until Scene.WebUI_ApplyLivePositions migrates (S3b); payload is SNSL.
+    ; Disk only (JSON + AnimDB). Live scene values go through onSceneAnimUpdate, not here.
     int payload = SNSL_JMap.object()
     if JMap.hasKey(obj, "_stages")
         int stages_arr = JMap.getObj(obj, "_stages")

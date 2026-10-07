@@ -153,9 +153,10 @@ Function ApplyPluginConfig()
     endif
 
     ApplyRapeActions()
+    ; Engine first: ApplyMiniGameActions reads the enjoyment mode from it.
+    SkyrimNet_SexLab_OrgasmEngine.ReloadConfig()
     ApplyMiniGameActions()
     ApplyHotkey()
-    SkyrimNet_SexLab_OrgasmEngine.ReloadConfig()
     Trace("ApplyPluginConfig", "rape_allowed:"+main.rape_allowed+" cool_off:"+main.direct_narration_cool_off+" hotkey:"+sex_edit_key+" enabled:"+hot_key_toggle)
 EndFunction
 
@@ -178,11 +179,33 @@ Function ApplyRapeActions()
     Trace("ApplyRapeActions", "unregistered rape LLM actions")
 EndFunction
 
-; Orgasm mini-game LLM actions exist only while sexlab.minigame.enabled (re-enable needs save + reload).
+; Orgasm mini-game LLM actions (arouse / calm and the NPC strategies) exist only in the Multi-Orgasm
+; Mini-game mode (sexlab.enjoyment.mode). Switching back to it needs a save + reload for the actions.
 bool minigame_actions_unregistered = False
 
+String[] Function MiniGameActionNames()
+    String[] names = new String[16]
+    names[0] = "SexLab_Arouse"
+    names[1] = "SexLab_Calm"
+    names[2] = "SexLab_Strategy_Mutual"
+    names[3] = "SexLab_Strategy_Selfish"
+    names[4] = "SexLab_Strategy_Selfless"
+    names[5] = "SexLab_Strategy_Passive"
+    names[6] = "SexLab_Strategy_Together"
+    names[7] = "SexLab_Strategy_Tease"
+    names[8] = "SexLab_Strategy_Reject"
+    names[9] = "SexLab_Strategy_CumQuick"
+    names[10] = "SexLab_Strategy_Greedy"
+    names[11] = "SexLab_Strategy_ForcedOrgasm"
+    names[12] = "SexLab_Strategy_AcceptForce"
+    names[13] = "SexLab_Strategy_RejectForce_Selfish"
+    names[14] = "SexLab_Strategy_RejectForce_Reject"
+    names[15] = ""
+    return names
+EndFunction
+
 Function ApplyMiniGameActions()
-    bool enabled = SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.minigame.enabled", false)
+    bool enabled = SkyrimNet_SexLab_OrgasmEngine.IsMiniGameEnabled()
     if enabled
         if minigame_actions_unregistered
             Trace("ApplyMiniGameActions", "mini-game re-enabled; save and reload to restore LLM actions")
@@ -192,8 +215,14 @@ Function ApplyMiniGameActions()
     if minigame_actions_unregistered
         return
     endif
-    SkyrimNetApi.UnregisterAction("SexLab_Arouse")
-    SkyrimNetApi.UnregisterAction("SexLab_Calm")
+    String[] names = MiniGameActionNames()
+    int i = 0
+    while i < names.length
+        if names[i] != ""
+            SkyrimNetApi.UnregisterAction(names[i])
+        endif
+        i += 1
+    endwhile
     minigame_actions_unregistered = True
     Trace("ApplyMiniGameActions", "unregistered mini-game LLM actions")
 EndFunction
@@ -241,6 +270,9 @@ Function PageOptions()
     AddTextOption("  (main panel pulldown → Settings)", "")
     AddTextOption("Or SkyrimNet plugin interface", "SkyrimNet_SexLab")
     AddTextOption("  (SkyrimNet mod menu)", "")
+
+    AddHeaderOption("Enjoyment")
+    AddMenuOptionST("EnjoymentMode", "Orgasm mode", EnjoymentModeLabel())
 
     AddHeaderOption("Start Sex / Edit Stage hotkey")
     AddToggleOptionST("HotKeyToggle", "Enable hotkey", hot_key_toggle)
@@ -296,6 +328,55 @@ State SexEditKeySet
             "Crosshair on actor not in sex: start sex."+newline \
           + "Crosshair on actor in sex: stage description editor."+newline \
           + "No crosshair: start sex among nearby eligible actors.")
+    EndEvent
+EndState
+
+; Same setting as the dashboard pulldown (sexlab.enjoyment.mode): changing either changes the other.
+String MODE_TOGETHER = "Always Orgasm Together at the end"
+String MODE_MINIGAME = "Multi-Orgasm Mini-game"
+
+String Function EnjoymentModeLabel()
+    if SkyrimNet_SexLab_OrgasmEngine.IsMiniGameEnabled()
+        return MODE_MINIGAME
+    endif
+    return MODE_TOGETHER
+EndFunction
+
+String[] Function EnjoymentModeOptions()
+    String[] options = new String[2]
+    options[0] = MODE_TOGETHER
+    options[1] = MODE_MINIGAME
+    return options
+EndFunction
+
+State EnjoymentMode
+    Event OnMenuOpenST()
+        SetMenuDialogOptions(EnjoymentModeOptions())
+        int start = 0
+        if SkyrimNet_SexLab_OrgasmEngine.IsMiniGameEnabled()
+            start = 1
+        endif
+        SetMenuDialogStartIndex(start)
+        SetMenuDialogDefaultIndex(0)
+    EndEvent
+    Event OnMenuAcceptST(int index)
+        if index < 0 || index > 1
+            return
+        endif
+        String mode = EnjoymentModeOptions()[index]
+        bool ok = SkyrimNetApi.PatchConfig(PLUGIN_CONFIG, "{ \"sexlab\": { \"enjoyment\": { \"mode\": \"" + mode + "\" } } }")
+        Trace("EnjoymentMode", "mode:" + mode + " patched:" + ok)
+        ApplyPluginConfig()
+        SetMenuOptionValueST(EnjoymentModeLabel())
+        if index == 1 && minigame_actions_unregistered
+            ShowMessage("Mini-game LLM actions come back after a save and reload.", false)
+        endif
+    EndEvent
+    Event OnDefaultST()
+        OnMenuAcceptST(0)
+    EndEvent
+    Event OnHighlightST()
+        SetInfoText(             "Always Orgasm Together: SexLab skill, Lewd/Pure, victim/aggressor and relationship shape how fast enjoyment rises; everyone reaches 100 at the end and orgasms together."+newline           + "Multi-Orgasm Mini-game: the bonus is constant; several orgasms or none. NPCs pick strategies (LLM). Also in the SkyrimNet_SexLab settings.")
     EndEvent
 EndState
 
