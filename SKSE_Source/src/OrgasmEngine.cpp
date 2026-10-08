@@ -2811,6 +2811,14 @@ namespace OrgasmEngine
             { "punch", "punches {victim} in the face", "a punch to the face" },
             { "pull hair", "pulls {victim}'s hair", "a yank of the hair" },
         };
+        // HUD Force panel: the body part comes from its own pulldown. {target}: "<victim>" or "<victim>'s <part>";
+        // the noun gains " to the <part>".
+        constexpr ForceMethod kLocatedForceMethods[] = {
+            { "slap", "slaps {target}", "a slap" },
+            { "pinch", "pinches {target}", "a pinch" },
+            { "punch", "punches {target}", "a punch" },
+            { "pull", "pulls {target}", "a yank" },
+        };
 
         // Caller holds g_lock. The player's scene when the player is an aggressor in mini-game mode.
         const SceneState* PlayerAggressorScene()
@@ -2881,8 +2889,10 @@ namespace OrgasmEngine
         }
 
         // Caller holds g_lock (sc from PlayerAggressorScene / ForcerScene). method: preset key, weak spell or text.
+        // location: "" (LLM action, old presets) or the HUD body part ("body": the victim, no part named).
         std::string ForceLocked(const SceneState* sc, RE::Actor* forcerActor, RE::FormID victim,
-            const std::string& strategyKey, const std::string& method, const Aid::WeakSpell* spell, Effects& fx)
+            const std::string& strategyKey, const std::string& method, const std::string& location,
+            const Aid::WeakSpell* spell, Effects& fx)
         {
             auto at = g_actors.find(victim);
             RE::Actor* victimActor = ActorFor(victim);
@@ -2905,18 +2915,32 @@ namespace OrgasmEngine
             // Preset: "<forcer> punches <victim> in the face and forces <victim> to ...". Weak spell: "<forcer> hits
             // <victim> with Sparks; the pain, and the fear of another, force <victim> to ..." (the pain and fear
             // compel, not the spell). Free text: "... by <text>".
+            // HUD body part: "Lydia's ass" as the target, " to the ass" on the noun. "body" names no part.
+            const std::string part = location == "body" ? "" : location;
+            const std::string target = part.empty() ? name : name + "'s " + part;
+            const std::string toPart = part.empty() ? "" : " to the " + part;
             std::string act;
             std::string noun = method;
             if (spell) {
-                noun = "the pain of " + spell->name + " and the fear of another";
+                noun = "the pain of " + spell->name + toPart + " and the fear of another";
             }
-            for (const auto& m : kForceMethods) {
-                if (method == m.key) {
-                    act = m.act;
-                    noun = m.noun;
+            if (location.empty()) {
+                for (const auto& m : kForceMethods) {
+                    if (method == m.key) {
+                        act = m.act;
+                        noun = m.noun;
+                    }
+                }
+            } else {
+                for (const auto& m : kLocatedForceMethods) {
+                    if (method == m.key) {
+                        act = m.act;
+                        noun = std::string(m.noun) + toPart;
+                    }
                 }
             }
             ReplaceAll(act, "{victim}", name);
+            ReplaceAll(act, "{target}", target);
 
             // A forced victim drops what it was forcing; an NPC forcer lets go.
             ReleaseForced(*sc, t, fx);
@@ -2939,22 +2963,23 @@ namespace OrgasmEngine
             ReplaceAll(what, "{self}", Reflexive(victimActor));
             std::string line;
             if (spell) {
-                line = forcer + " hits " + name + " with " + spell->name + "; the pain, and the fear of another, force " +
+                line = forcer + " hits " + target + " with " + spell->name + "; the pain, and the fear of another, force " +
                     name + " to " + what + ".";
             } else if (!act.empty()) {
                 line = forcer + " " + act + " and forces " + name + " to " + what + ".";
             } else if (!method.empty()) {
-                line = forcer + " forces " + name + " to " + what + " by " + method + ".";
+                line = forcer + " forces " + name + " to " + what + " by " + method +
+                    (part.empty() ? "" : " on " + target) + ".";
             } else {
                 line = forcer + " forces " + name + " to " + what + ".";
             }
-            webui_log::info("OrgasmEngine: {:#x} forces {:#x} -> {} by '{}' (fear {:.0f}s)", forcerId, victim,
-                InfoOf(s).key, method, g_settings.fearCooldown);
+            webui_log::info("OrgasmEngine: {:#x} forces {:#x} -> {} by '{}' on '{}' (fear {:.0f}s)", forcerId, victim,
+                InfoOf(s).key, method, location, g_settings.fearCooldown);
             return line;
         }
 
         std::string ForceWith(RE::Actor* forcer, bool player, RE::FormID victim, const std::string& strategyKey,
-            const std::string& method)
+            const std::string& method, const std::string& location)
         {
             // Weak attack spells read the forcer's spell lists outside the engine lock.
             const auto spells = Aid::WeakAttackSpells(forcer);
@@ -2964,19 +2989,20 @@ namespace OrgasmEngine
             {
                 std::lock_guard lock(g_lock);
                 const SceneState* sc = player ? PlayerAggressorScene() : ForcerScene(forcer);
-                line = ForceLocked(sc, forcer, victim, strategyKey, method, spell, fx);
+                line = ForceLocked(sc, forcer, victim, strategyKey, method, location, spell, fx);
             }
             PostEffects(std::move(fx));
             if (!line.empty() && spell) {
-                Aid::QueueWeakSpellHit(ActorFor(victim), spell->minDamage);
+                Aid::QueueWeakSpellHit(forcer, ActorFor(victim), spell->form, spell->minDamage);
             }
             return line;
         }
     }
 
-    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method)
+    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method,
+        const std::string& location)
     {
-        return ForceWith(RE::PlayerCharacter::GetSingleton(), true, victim, strategyKey, method);
+        return ForceWith(RE::PlayerCharacter::GetSingleton(), true, victim, strategyKey, method, location);
     }
 
     std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method)
@@ -2984,7 +3010,7 @@ namespace OrgasmEngine
         if (!forcer || IsPlayer(forcer)) {
             return forcer ? PlayerForce(victim, strategyKey, method) : "";
         }
-        return ForceWith(forcer, false, victim, strategyKey, method);
+        return ForceWith(forcer, false, victim, strategyKey, method, "");
     }
 
     bool CanForce(RE::Actor* actor)

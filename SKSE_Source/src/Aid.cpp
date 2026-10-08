@@ -14,6 +14,8 @@ namespace Aid
         constexpr float kConcentrationSeconds = 3.0f;
         // Novice (0) and Apprentice (25) spells count as weak.
         constexpr std::int32_t kWeakMaxSkill = 25;
+        // Seconds a fire-and-forget spell's or potion's art and shader stay on.
+        constexpr float kVisualSeconds = 2.0f;
 
         std::string NameOf(const RE::TESForm* form)
         {
@@ -114,6 +116,62 @@ namespace Aid
                 owner->RestoreActorValue(RE::ActorValue::kStamina, stamina);
             }
         }
+
+        void PlayEffectSound(RE::Actor* actor, RE::BGSSoundDescriptorForm* sound)
+        {
+            auto* audio = RE::BSAudioManager::GetSingleton();
+            auto* node = actor ? actor->Get3D() : nullptr;
+            if (!audio || !sound || !node) {
+                return;
+            }
+            RE::BSSoundHandle handle;
+            if (audio->GetSoundHandle(handle, sound) && handle.IsValid()) {
+                handle.SetPosition(actor->GetPosition());
+                handle.SetObjectToFollow(node);
+                handle.Play();
+            }
+        }
+
+        // Visual cast (main thread): the item's casting art on the caster's hands (spells), its effect shader and hit
+        // art on the target, and its release / hit sounds. Amounts are applied separately; nothing is cast, so no
+        // combat, no bounty, and a self-delivery spell (Healing) still shows on another actor.
+        void PlaySpellVisuals(RE::Actor* caster, RE::Actor* target, const RE::MagicItem* item, bool potion)
+        {
+            if (!target || !item) {
+                return;
+            }
+            const float dur = IsConcentration(item) ? kConcentrationSeconds : kVisualSeconds;
+            std::unordered_set<const RE::EffectSetting*> seen;
+            std::int32_t art = 0;
+            std::int32_t shaders = 0;
+            std::int32_t sounds = 0;
+            for (const auto* e : item->effects) {
+                auto* mgef = e ? e->baseEffect : nullptr;
+                if (!mgef || !seen.insert(mgef).second) {
+                    continue;
+                }
+                if (!potion && caster && mgef->data.castingArt && caster->ApplyArtObject(mgef->data.castingArt, dur)) {
+                    ++art;
+                }
+                if (mgef->data.effectShader && target->ApplyEffectShader(mgef->data.effectShader, dur)) {
+                    ++shaders;
+                }
+                if (mgef->data.hitEffectArt && target->ApplyArtObject(mgef->data.hitEffectArt, dur)) {
+                    ++art;
+                }
+                for (const auto& pair : mgef->effectSounds) {
+                    if (!potion && pair.id == RE::MagicSystem::SoundID::kRelease) {
+                        PlayEffectSound(caster, pair.sound);
+                        ++sounds;
+                    } else if (pair.id == RE::MagicSystem::SoundID::kHit) {
+                        PlayEffectSound(target, pair.sound);
+                        ++sounds;
+                    }
+                }
+            }
+            webui_log::info("Aid: visuals '{}' {:#x} -> {:#x} art {} shaders {} sounds {} ({:.1f}s)", NameOf(item),
+                caster ? caster->GetFormID() : 0, target->GetFormID(), art, shaders, sounds, dur);
+        }
     }
 
     std::vector<Option> ListOptions(RE::Actor* caster)
@@ -188,7 +246,7 @@ namespace Aid
         return best ? best->form : 0;
     }
 
-    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form)
+    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location)
     {
         if (!caster || !target || !form) {
             return "";
@@ -218,19 +276,27 @@ namespace Aid
                 owner->DamageActorValue(RE::ActorValue::kMagicka, o.cost);
             }
             Restore(t, o.health, o.stamina);
+            PlaySpellVisuals(c, t, RE::TESForm::LookupByID<RE::MagicItem>(o.form), o.potion);
         });
 
         const std::string who = ActorName(caster);
         const std::string whom = ActorName(target);
         const bool self = caster == target;
+        // HUD body part ("body" / "": none) is narration only: "on Lydia's ass" / "on her own ass".
+        const std::string part = location == "body" ? "" : location;
         std::string line;
-        if (o.potion) {
+        if (!part.empty()) {
+            const auto* base = target->GetActorBase();
+            const std::string own = (base && base->GetSex() == RE::SEX::kFemale) ? "her own " : "his own ";
+            const std::string where = (self ? own : whom + "'s ") + part;
+            line = who + (o.potion ? " pours a " : " casts ") + o.name + " on " + where + ".";
+        } else if (o.potion) {
             line = self ? who + " drinks a " + o.name + "." : who + " gives " + whom + " a " + o.name + ".";
         } else {
             line = self ? who + " casts " + o.name + "." : who + " casts " + o.name + " on " + whom + ".";
         }
-        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' health {:.0f} stamina {:.0f} cost {:.0f}", casterId, targetId,
-            o.potion ? "potion" : "spell", o.name, o.health, o.stamina, o.cost);
+        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f}", casterId,
+            targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost);
         return line;
     }
 
@@ -275,13 +341,14 @@ namespace Aid
         return nullptr;
     }
 
-    void QueueWeakSpellHit(RE::Actor* victim, float dmg)
+    void QueueWeakSpellHit(RE::Actor* forcer, RE::Actor* victim, RE::FormID spell, float dmg)
     {
         if (!victim || dmg <= 0.0f) {
             return;
         }
         const RE::FormID id = victim->GetFormID();
-        SKSE::GetTaskInterface()->AddTask([id, dmg]() {
+        const RE::FormID forcerId = forcer ? forcer->GetFormID() : 0;
+        SKSE::GetTaskInterface()->AddTask([id, forcerId, spell, dmg]() {
             auto* v = RE::TESForm::LookupByID<RE::Actor>(id);
             auto* owner = v ? v->AsActorValueOwner() : nullptr;
             if (!owner) {
@@ -292,6 +359,8 @@ namespace Aid
                 owner->DamageActorValue(RE::ActorValue::kHealth, hit);
             }
             webui_log::info("Aid: weak spell hit {:#x} for {:.1f} (asked {:.1f})", id, std::max(hit, 0.0f), dmg);
+            PlaySpellVisuals(forcerId ? RE::TESForm::LookupByID<RE::Actor>(forcerId) : nullptr, v,
+                RE::TESForm::LookupByID<RE::MagicItem>(spell), false);
         });
     }
 }

@@ -239,6 +239,13 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
         endif
     endif
 
+    ; Yaml eligibility only checks the speaker. The lone-hug idle bypasses SexLab and
+    ; would yank an in-scene target out of its animation, so check everyone here.
+    if ActorUnavailable(speaker) || ActorUnavailable(target) || ActorUnavailable(participate_3)
+        Trace("StartScene_Event", "skip: actor busy (in scene/locked) speaker="+speaker_name+" target="+target_name+" participate_3="+participate_3_name)
+        return False
+    endif
+
     String resolved = tags
     if tags != ""
         resolved = SkyrimNet_SexLab_AnimDb.AnimDb_ResolveTags(tags, actor_count)
@@ -313,6 +320,17 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
     ModEvent.Send(handle)
     return True
 EndFunction 
+
+; In a SexLab/OStim scene, dead, in combat, or held by the Scene Creator lock.
+Bool Function ActorUnavailable(Actor a)
+    if a == None
+        return False
+    endif
+    if manager != None && manager.IsBusy(a)
+        return True
+    endif
+    return main != None && StorageUtil.HasIntValue(a, main.storage_actor_lock_key)
+EndFunction
 
 ; Hug/cuddle/kiss giver @ SexLab pos1. Matches YAML long intents, SceneStartPanel short
 ; labels (show affection / comfort), and method tags even when intent is unrelated.

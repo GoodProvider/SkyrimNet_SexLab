@@ -10,6 +10,7 @@
 /// Healing / stamina aid (HUD Aid key, SexLab_Aid action) and the weak attack spells the Force key offers.
 /// A spell is applied as its restore effects (magnitude x duration, a concentration spell as kConcentrationSeconds
 /// of casting) and costs its magicka; a potion is removed from the caster and its restore effects applied.
+/// Nothing is engine-cast (no combat / bounty); the item's casting art, effect shader, hit art and sounds are played.
 namespace Aid
 {
     struct Option
@@ -31,8 +32,8 @@ namespace Aid
     /// Best option for kind ("heal" / "stamina"): the strongest affordable spell, else the strongest potion. 0 when none.
     RE::FormID PickBest(RE::Actor* caster, std::string_view kind);
     /// Applies option form from caster to target (re-validated). Game state changes are queued on the main thread.
-    /// Returns the narration line, "" when refused.
-    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form);
+    /// location: body part named in the narration only ("" / "body": none). Returns the narration line, "" when refused.
+    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location = "");
 
     struct WeakSpell
     {
@@ -44,6 +45,7 @@ namespace Aid
     std::vector<WeakSpell> WeakAttackSpells(RE::Actor* actor);
     /// The weak spell named name (case-insensitive), nullptr when the actor has none by that name.
     const WeakSpell* FindWeakSpell(const std::vector<WeakSpell>& spells, std::string_view name);
-    /// Queues a direct health hit of dmg on the victim, never below 1 health (no cast: no combat, no bounty).
-    void QueueWeakSpellHit(RE::Actor* victim, float dmg);
+    /// Queues a direct health hit of dmg on the victim, never below 1 health, and plays the spell's casting art on the
+    /// forcer and its shader / hit art / sounds on the victim (no cast: no combat, no bounty).
+    void QueueWeakSpellHit(RE::Actor* forcer, RE::Actor* victim, RE::FormID spell, float dmg);
 }

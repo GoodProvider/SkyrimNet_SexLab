@@ -941,7 +941,8 @@
             vertical-align: middle;
         }
 
-        #force-custom-text {
+        #force-custom-text,
+        .part-custom-text {
             width: 100%;
             min-height: 60px;
             box-sizing: border-box;
@@ -2266,27 +2267,30 @@
             </div>
         </div>
     </div>
-    <!-- Force (HUD force key, player aggressor): "You force <victim> to <strategy> by <method>." -->
+    <!-- Force (HUD force key, player aggressor): "You force <victim> to <strategy> by <method> on <part>." -->
     <div id="force-panel" class="panel" style="display:none">
         <div class="target-row">Force</div>
         <div class="force-sentence">
             You force <span id="force-victim"></span>
             to <span id="force-strategy"></span>
-            by <span id="force-method"></span>.
+            by <span id="force-method"></span>
+            on <span id="force-part"></span>.
         </div>
         <textarea id="force-custom-text" style="display:none" placeholder="threatening them with a knife" oninput="forceUpdate()"></textarea>
+        <textarea id="force-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="forceUpdate()"></textarea>
         <div class="btn-row">
             <div class="action-btn" id="force-accept" onmousedown="event.preventDefault()" onclick="forceAccept()">Force</div>
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="forceCancel()">Cancel</div>
         </div>
     </div>
-    <!-- Aid (HUD aid key, mini-game): "<player> <spell / potion> on <actor>." -->
+    <!-- Aid (HUD aid key, mini-game): "<player> <spell / potion> on <actor>'s <part>." -->
     <div id="aid-panel" class="panel" style="display:none">
         <div class="target-row">Aid</div>
         <div class="force-sentence">
             <span id="aid-caster"></span> <span id="aid-option"></span>
-            on <span id="aid-actor"></span>.
+            on <span id="aid-actor"></span>'s <span id="aid-part"></span>.
         </div>
+        <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
         <div id="aid-note" class="aid-note"></div>
         <div class="btn-row">
             <div class="action-btn" id="aid-accept" onmousedown="event.preventDefault()" onclick="aidAccept()">Use</div>
@@ -7794,9 +7798,29 @@
 
         // ── Force (HUD force key) ────────────────────────────────
         // C++ Hud OnForce: {victims: [{id, name, strategies: [{key, label}]}]}. Reply: onForceResult.
-        const FORCE_PRESETS = ['slap face', 'pinch nipple', 'cover mouth', 'punch', 'pull hair'];
+        const FORCE_PRESETS = ['slap', 'pinch', 'punch', 'pull'];
         const FORCE_DEFAULT_STRATEGY = 'selfless';
-        let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_PRESETS[0] };
+        // Force and Aid narrate where on the victim; 'body' keeps the unlocated wording.
+        const BODY_PARTS = ['body', 'pussy', 'ass', 'nipples', 'custom'];
+        let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
+
+        // A body-part pulldown into hostId; custom shows textId. onPick(part) on change.
+        function renderPartPulldown(hostId, textId, onPick) {
+            const host = document.getElementById(hostId);
+            host.innerHTML = '';
+            host.appendChild(createPulldown(BODY_PARTS, BODY_PARTS[0], (v) => {
+                onPick(v);
+                if (v === 'custom') document.getElementById(textId).focus();
+            }));
+            document.getElementById(textId).value = '';
+        }
+
+        // Shows textId for a custom part; '' when custom is empty, else the location to send.
+        function partLocation(part, textId) {
+            const text = document.getElementById(textId);
+            text.style.display = part === 'custom' ? '' : 'none';
+            return part === 'custom' ? text.value.trim() : part;
+        }
 
         function forceVictim() {
             return FORCE.victims[FORCE.victim] || null;
@@ -7820,12 +7844,14 @@
             const custom = FORCE.method === 'custom';
             const text = document.getElementById('force-custom-text');
             text.style.display = custom ? '' : 'none';
-            const ok = !!forceVictim() && !!FORCE.strategy && (!custom || text.value.trim() !== '');
+            const ok = !!forceVictim() && !!FORCE.strategy && (!custom || text.value.trim() !== '') &&
+                partLocation(FORCE.part, 'force-part-text') !== '';
             document.getElementById('force-accept').classList.toggle('de-disabled', !ok);
         }
 
         function openForcePanel(cfg) {
-            FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY, method: FORCE_PRESETS[0] };
+            FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY,
+                method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
             // Presets, then the player's weak attack spells (a non-lethal hit), then custom text.
             const methods = FORCE_PRESETS.concat((cfg && cfg.spells) || [], ['custom']);
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
@@ -7847,6 +7873,10 @@
                 if (v === 'custom') document.getElementById('force-custom-text').focus();
             }));
             document.getElementById('force-custom-text').value = '';
+            renderPartPulldown('force-part', 'force-part-text', (v) => {
+                FORCE.part = v;
+                forceUpdate();
+            });
             // Same solo layout as the gating dialogue: only this panel shows.
             document.body.classList.add('yesno-solo');
             hideControlPanel();
@@ -7880,7 +7910,8 @@
             const method = FORCE.method === 'custom'
                 ? document.getElementById('force-custom-text').value.trim()
                 : FORCE.method;
-            forceSend({ victim: v.id, strategy: FORCE.strategy, method });
+            forceSend({ victim: v.id, strategy: FORCE.strategy, method,
+                location: partLocation(FORCE.part, 'force-part-text') });
         }
 
         function forceCancel() {
@@ -7888,7 +7919,7 @@
         }
 
         // ── Aid panel (HUD aid key): the player's healing / stamina spells and potions on a scene actor ──
-        let AID = { actors: [], options: [], actor: 0, option: -1 };
+        let AID = { actors: [], options: [], actor: 0, option: -1, part: BODY_PARTS[0] };
 
         function aidLabel(o) {
             if (o.potion) return o.count > 1 ? `${o.name} ×${o.count}` : o.name;
@@ -7897,7 +7928,7 @@
 
         function aidUpdate() {
             const o = AID.options[AID.option];
-            const ok = !!o && o.affordable && !!AID.actors[AID.actor];
+            const ok = !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
             document.getElementById('aid-accept').classList.toggle('de-disabled', !ok);
             const what = o ? [o.health ? 'health' : '', o.stamina ? 'stamina' : ''].filter(Boolean).join(' and ') : '';
             document.getElementById('aid-note').textContent = !o
@@ -7906,7 +7937,8 @@
         }
 
         function openAidPanel(cfg) {
-            AID = { actors: (cfg && cfg.actors) || [], options: (cfg && cfg.options) || [], actor: 0, option: -1 };
+            AID = { actors: (cfg && cfg.actors) || [], options: (cfg && cfg.options) || [], actor: 0, option: -1,
+                part: BODY_PARTS[0] };
             AID.option = AID.options.findIndex(o => o.affordable);
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
@@ -7926,6 +7958,10 @@
                 AID.actor = i;
                 aidUpdate();
             }));
+            renderPartPulldown('aid-part', 'aid-part-text', (v) => {
+                AID.part = v;
+                aidUpdate();
+            });
             document.body.classList.add('yesno-solo');
             hideControlPanel();
             hideTargetMenuRow();
@@ -7956,7 +7992,7 @@
             const o = AID.options[AID.option];
             const a = AID.actors[AID.actor];
             if (!o || !a || document.getElementById('aid-accept').classList.contains('de-disabled')) return;
-            aidSend({ target: a.id, option: o.id });
+            aidSend({ target: a.id, option: o.id, location: partLocation(AID.part, 'aid-part-text') });
         }
 
         function aidCancel() {

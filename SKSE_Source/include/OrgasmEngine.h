@@ -178,8 +178,10 @@ namespace OrgasmEngine
     /// False when the player is not an aggressor in a managed mini-game scene. victims: non-player victims.
     bool GetPlayerForceInfo(std::vector<ForceVictim>& victims);
     /// The player forces victim into strategyKey by method (preset key or free text). Starts the fear
-    /// cooldown (only AcceptForce offered). Returns the narration line, "" when refused.
-    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method);
+    /// cooldown (only AcceptForce offered). location: body part named in the narration ("" / "body": none).
+    /// Returns the narration line, "" when refused.
+    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method,
+        const std::string& location = "");
     /// Any non-victim forcer (SexLab_Force action): forces a non-player victim of its mini-game scene. method: a
     /// preset key, one of the forcer's weak attack spells (a non-lethal hit), or free text. "" when refused.
     std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method);

@@ -2,7 +2,9 @@
 
 ## Aid spells and weak Force spells are applied, not cast (2026-10-07)
 
-- **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so the spell or potion's visual effects don't play.
+- **Visual cast:** the amounts below stay direct, but `Aid::PlaySpellVisuals` (main thread, after the restore or hit) plays each effect's `castingArt` on the caster (`ApplyArtObject`; spells only), `effectShader` and `hitEffectArt` on the target, and its `kRelease` (caster) / `kHit` (target) `effectSounds` via `BSAudioManager::GetSoundHandle`. They last 3 s for a concentration spell and 2 s otherwise. Nothing is engine-cast, so a self-delivery heal (Healing) visibly lands on another actor, and an attack spell starts no combat. Log line: `Aid: visuals '<spell>' ... art N shaders N sounds N`.
+
+- **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so no engine cast plays (see Visual cast).
 - **Weak Force spells:** a real hostile cast would start combat or add a bounty, and could kill. Force applies the smallest Damage Health magnitude as `DamageActorValue`, capped at health − 1 (`Aid::QueueWeakSpellHit`).
 - **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Num 0 use does not refresh it, because actions never run for the player.
 
@@ -62,6 +64,14 @@
 **Cause:** every `a_vm->RegisterFunction` in `SKSE_Source/src` omitted the 4th argument `a_callableFromTasklets` (CommonLib default `false`). Such a native waits for the next frame on every call (`RE/N/NativeLatentFunction.h`). The overlay seed and scene pushes are built from hundreds of `SNSL_J*` store calls plus `TraceLog`, so each build cost hundreds of frames. JContainers, which the store replaced, registers its natives as tasklet-callable, which is why the move to the store made it slower.
 
 **Rule:** register a native with `true` when it is thread-safe: it touches only plugin data under its own mutex (`JsonStore` `g_mutex`, `AnimationDB` `g_mutex`) or is a pure function. Leave it `false` when it reads or writes game objects (forms, actors, UI `Invoke`), or for the AnimDB sync / save natives. Keep Papyrus hot paths (seed, `BuildWebUISceneMenuObject`, Cancel snapshot) free of debug walks such as `DbgAnimList`.
+
+## Lone hug pulled a scene victim out of SexLab (2026-10-07)
+
+**Symptom:** Nia (bystander) ran `SexLab_Nonsexual_General` "hugging" on Nina, the victim in an active SexLab thread with Bob. Nina left the SexLab animation. Log: `lone hug pa_HugA target=Nina speaker=Nia The Nerd`.
+
+**Cause:** action yaml `eligibilityRules` only test `currentActor` (the speaker); SkyrimNet can't test the dynamic `target` param. The lone-hug path plays `pa_HugA` directly and never asks SexLab, which would have rejected a busy actor.
+
+**Rule:** `StartScene_Event` checks every actor with `Actions.ActorUnavailable` (`Scene_Manager.IsBusy` + Scene Creator lock) before the hug idle or `SkyrimNet_SexLab_Action_Start`. Any new path that plays idles or starts scenes on a target must check the target in Papyrus.
 
 ## Paired idle with a drawn weapon: player can't attack afterward (2026-10-04)
 

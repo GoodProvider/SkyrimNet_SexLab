@@ -769,7 +769,7 @@ void InitWebUI()
             });
         });
 
-        // Force panel (HUD force key): {cancel} or {victim, strategy, method}. Narrated directly.
+        // Force panel (HUD force key): {cancel} or {victim, strategy, method, location}. Narrated directly.
         PrismaUI->RegisterJSListener(g_view, "onForceResult", [](const char* value) {
             RunGuarded("onForceResult", [&] {
                 WebUI_Invoke("hideForcePanel();");
@@ -783,8 +783,10 @@ void InitWebUI()
                     const auto victim = j.value("victim", static_cast<RE::FormID>(0));
                     const std::string strategy = j.value("strategy", std::string{});
                     const std::string method = j.value("method", std::string{});
-                    webui_log::info("onForceResult victim={:#x} strategy={} method='{}'", victim, strategy, method);
-                    const std::string line = OrgasmEngine::PlayerForce(victim, strategy, method);
+                    const std::string location = j.value("location", std::string{});
+                    webui_log::info("onForceResult victim={:#x} strategy={} method='{}' location='{}'", victim, strategy,
+                        method, location);
+                    const std::string line = OrgasmEngine::PlayerForce(victim, strategy, method, location);
                     if (!line.empty())
                         OrgasmEngine::NarrateDirect(line, RE::PlayerCharacter::GetSingleton(),
                             RE::TESForm::LookupByID<RE::Actor>(victim));
@@ -806,12 +808,13 @@ void InitWebUI()
                         return;
                     const auto target = j.value("target", static_cast<RE::FormID>(0));
                     const auto option = j.value("option", static_cast<RE::FormID>(0));
-                    webui_log::info("onAidResult target={:#x} option={:#x}", target, option);
+                    const std::string location = j.value("location", std::string{});
+                    webui_log::info("onAidResult target={:#x} option={:#x} location='{}'", target, option, location);
                     // Inventory and spell lists are read on the game thread.
-                    SKSE::GetTaskInterface()->AddTask([target, option]() {
+                    SKSE::GetTaskInterface()->AddTask([target, option, location]() {
                         auto* player = RE::PlayerCharacter::GetSingleton();
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
-                        const std::string line = Aid::Apply(player, actor, option);
+                        const std::string line = Aid::Apply(player, actor, option, location);
                         if (!line.empty())
                             OrgasmEngine::NarrateDirect(line, player, actor);
                     });
