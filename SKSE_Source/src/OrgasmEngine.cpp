@@ -2903,12 +2903,12 @@ namespace OrgasmEngine
             const std::string name = NameOf(victimActor);
 
             // Preset: "<forcer> punches <victim> in the face and forces <victim> to ...". Weak spell: "<forcer> hits
-            // <victim> with Sparks and forces ...". Free text: "... by <text>".
+            // <victim> with Sparks; the pain, and the fear of another, force <victim> to ..." (the pain and fear
+            // compel, not the spell). Free text: "... by <text>".
             std::string act;
             std::string noun = method;
             if (spell) {
-                act = "hits {victim} with " + spell->name;
-                noun = "a jolt of " + spell->name;
+                noun = "the pain of " + spell->name + " and the fear of another";
             }
             for (const auto& m : kForceMethods) {
                 if (method == m.key) {
@@ -2938,7 +2938,10 @@ namespace OrgasmEngine
             ReplaceAll(what, "{forcer}", IsFemale(forcerActor) ? "her" : "him");
             ReplaceAll(what, "{self}", Reflexive(victimActor));
             std::string line;
-            if (!act.empty()) {
+            if (spell) {
+                line = forcer + " hits " + name + " with " + spell->name + "; the pain, and the fear of another, force " +
+                    name + " to " + what + ".";
+            } else if (!act.empty()) {
                 line = forcer + " " + act + " and forces " + name + " to " + what + ".";
             } else if (!method.empty()) {
                 line = forcer + " forces " + name + " to " + what + " by " + method + ".";
