@@ -1,0 +1,29 @@
+name: SexLab_Strategy_Tease
+label: "Strategy: Tease"
+description: "[speaker] teases [target] during ongoing sex, holding them at the edge of orgasm."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: MiniGame_Strategy
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: dynamic
+    name: target
+    description: Partner being teased
+  - type: static
+    name: strategy
+    value: tease
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_strategy_tease"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

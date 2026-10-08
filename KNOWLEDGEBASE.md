@@ -1,5 +1,38 @@
 # Knowledgebase
 
+## Mini-game orgasms far too early (2026-10-06)
+
+**Symptom:** player + NPC, both normal role, NPC on Mutual. `SetStageTimers` gave targetSecs 88.1, but the NPC orgasmed 30 s in. Log: NPC steps of +5.8 to +10.4 every 2 s, and `SexLab added 10` (or 14) to both actors 2–3 s before every `SetStage`.
+
+**Causes:**
+- NPC strategy steps were a fixed `random(4, 8) × skill factor` every 2 s (about 3–5/s per actor), unrelated to scene length.
+- SexLab's stage term steps up one mirror before `Engine_SetStage → Mirror_RebaselineAll`. `Mirror_Apply` saw a jump of 3 or more against the old baseline and folded it in as another plugin's change: about +10 per stage on top of our +5 spike.
+
+**Fix:**
+- `CalibrateMiniGame`: per-scene rates from the timers, so all-Mutual reaches 87 at the end of the second-to-last stage.
+- `Mirror_Apply` ignores a baseline taken at another stage or animation (`sl_mirror_stage` / `sl_mirror_anim`).
+
+## Uncalibrated NPC steps at scene start (2026-10-07)
+
+**Symptom:** NPCs on Mutual reached 51 enjoyment 8 s into a 5-stage scene, orgasmed in stage 2, and never again. Log: `arouse ... +7..12` every 2 s before the scene's first `SetStageTimers` line.
+
+**Cause:** SexLab's `thread.Timers` is empty at the first `Engine_SetStage`, so `Engine_StageSeconds` returns `[]`. `SetStageTimers` set `ratesKnown` and returned early (equal to the empty default, no log), and `StrategyStep` ran fixed `random(4, 8) × skill` steps until real timers arrived.
+
+**Fix:** only a non-empty `SetStageTimers` sets `ratesKnown`; `StrategyStep` also starts `kUntimedGrace` (10 s) after `BeginScene` for scenes that never send timers.
+
+## Arousal floor raises SLA exposure, never lowers (2026-10-06)
+
+- SLO Aroused NG arousal is a sum of effects; `SetActorExposure` changes only the legacy exposure part. `Arousal_Floor` (Scene.psc, called from `Mirror_Apply`) adds `enjoyment - GetActorArousal` to exposure when enjoyment is higher. Exposure then decays per SLA settings; SLA's own post-orgasm drop is untouched.
+- Framework looked up once per scene (`sla_checked`, reset in `Engine_BeginScene`) via `SexLabAroused.esm` 0x4290F; OSL Aroused's compat esm uses the same form.
+
+## Close partner missed the group orgasm (2026-10-06)
+
+**Symptom:** Skadi orgasmed; Bob, at 88.7, was narrated "Although close, Bob is not orgasming right now" and then orgasmed alone 4.8 s later. Log: `group roll 0x14 enjoyment=88.7 roll=+1.4 pass=false`.
+
+**Cause:** the threshold roll `enjoyment + random(0, 10) ≥ 100` can never pass below 90.
+
+**Fix:** `sexlab.enjoyment.group_join` (85): `JoinGroup` joins anyone at or above it outright (log `group join`), and rolls the rest.
+
 ## Group orgasm roll was a percent chance (2026-10-06)
 
 **Symptom:** Skadi, giving oral (`orgasm expected false`), orgasmed with Bob. Log: `group roll 0xfe04e83c enjoyment=30.0 roll=7.6 pass=true`.
@@ -1071,3 +1104,15 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Papyrus identifiers:** `none` (= `None`) and `key` are rejected as variable / parameter names by the compiler.
 - **Together curve:** closing a share of the gap (not adding a fixed amount) is what makes carried-over, external and post-animation-change enjoyment still land on 100 at the end of the second-to-last stage. The final-stage finish only lifts actors held at 98, so the curve never causes a repeat orgasm.
 - Untested in game: SkyrimNet static action parameters reaching `MiniGame_Strategy(..., String strategy)`, and the select pulldown round-trip through `PatchConfig`.
+
+## Reading Shift in SKSE: device state, not GetAsyncKeyState (2026-10-07)
+
+- **Why:** with NumLock on, Windows injects a fake Shift-up before a Shift+numpad key, so `GetAsyncKeyState(VK_SHIFT)` reads released during Shift+Num 8 / Num 9.
+- **Use:** `BSInputDeviceManager::GetKeyboard()->GetRuntimeData().curState[dik] & 0x80` (DirectInput state; `RUNTIME_DATA_ACCESSOR` covers the SE/VR offset). `Hud::ShiftHeld` reads LShift 0x2A / RShift 0x36.
+- **Link trap:** calling `BSWin32KeyboardDevice::IsPressed` pulls `BSWin32KeyboardDevice.obj` / `BSKeyboardDevice.obj` from CommonLibSSE.lib, whose device virtuals and destructors are unresolved (LNK2001 / LNK1120). Read `curState` inline instead.
+
+## Scene Creator nearby add stuck pending (2026-10-07)
+
+- **Symptom:** in a 2-actor Scene Creator, clicking a third nearby actor (Nina) did nothing. After removing position 2 the click logged nothing at all. Log: `WebUI_OnResolveActorMeta` with no `HandleResolveDeviousTags`, then `HandleAnimDbQuery actor_count=2` about 190 ms later. The reply landed on `actorAnimMetaResult`'s generic branch, not the `'n'` branch that pushed the pending entry.
+- **Cause:** the add waited in `SC.pendingNearby` for a reply carrying its exact `'n<k>'` id. The id round-trips through a Papyrus `String` / BSFixedString, which is case-insensitive and pooled, so an exact echo is not guaranteed. The stale entry also failed the duplicate check (`pendingAdds.some(...)`), blocking that actor for the session. No Papyrus error is logged.
+- **Fix / rule:** push the position at once and enrich afterwards (`'m<k>'`), matching reply rows by form id, as `scEnsurePositionSeed` does. Do not make JS state depend on Papyrus echoing a string id verbatim. Untested in game: the exact form the id came back in.

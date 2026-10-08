@@ -121,6 +121,7 @@ namespace SKYRIMNET_SEXLAB_API
         kGreedy = 8,
         kForcedOrgasm = 9,
         kAcceptForce = 10,
+        kNonSexual = 11,
     };
 
     class IOrgasmEngineV2 : public IOrgasmEngineV1

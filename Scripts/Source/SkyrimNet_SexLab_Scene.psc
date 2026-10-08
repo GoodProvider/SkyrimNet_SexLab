@@ -28,6 +28,8 @@ int[] orgasm_kinds
 String orgasm_prefix = ""
 String orgasm_extras = ""
 String orgasm_overflow = ""
+; Sex is hard work: non-victims whose exhaustion ends the scene (Scene_Manager.EndExhausted).
+Actor[] exhausted_actors
 bool orgasm_messages_set = false
 bool orgasm_window_open = false
 ; NarrateOrgasmStash is building / sending: a second caller arms the window instead (slot arrays are shared).
@@ -1361,6 +1363,52 @@ String Function NamesClause(String[] names, int count, String single, String plu
     return JoinNames(names, count)+" "+plural+" "
 EndFunction
 
+; Sex is hard work: one sentence per tier of OrgasmEngine stamina regen. >= 90: nothing; 41-89 breathing
+; hard; 1-40 tired; 0 to -10 exhausted. Actors in exhausted_actors are "too tired to continue".
+String Function FatigueText()
+    if thread == None
+        return ""
+    endif
+    int n = thread.positions.length
+    String[] gave_out = Utility.CreateStringArray(n)
+    String[] breath = Utility.CreateStringArray(n)
+    String[] tired = Utility.CreateStringArray(n)
+    String[] spent = Utility.CreateStringArray(n)
+    int c_gave_out = 0
+    int c_breath = 0
+    int c_tired = 0
+    int c_spent = 0
+    int i = 0
+    while i < n
+        Actor a = thread.positions[i]
+        String name = GetDisplayName(a)
+        int regen = SkyrimNet_SexLab_OrgasmEngine.GetStaminaRegen(a) as int
+        if exhausted_actors && exhausted_actors.Find(a) >= 0
+            gave_out[c_gave_out] = name
+            c_gave_out += 1
+        elseif regen <= 0
+            spent[c_spent] = name
+            c_spent += 1
+        elseif regen <= 40
+            tired[c_tired] = name
+            c_tired += 1
+        elseif regen < 90
+            breath[c_breath] = name
+            c_breath += 1
+        endif
+        i += 1
+    endwhile
+    String msg = NamesClause(gave_out, c_gave_out, "is too tired to continue.", "are too tired to continue.")
+    msg += NamesClause(spent, c_spent, "is exhausted.", "are exhausted.")
+    msg += NamesClause(tired, c_tired, "is tired.", "are tired.")
+    msg += NamesClause(breath, c_breath, "is breathing hard.", "are breathing hard.")
+    return msg
+EndFunction
+
+Function SetExhausted(Actor[] actors)
+    exhausted_actors = actors
+EndFunction
+
 ; OrgasmEngine's live enjoyment (0-100), or SexLab's for unmanaged actors.
 int Function LiveEnjoyment(Actor a)
     if a == None
@@ -1646,6 +1694,7 @@ Function Engine_BeginScene()
         endif
         i += 1
     endwhile
+    sla_checked = false
     SkyrimNet_SexLab_OrgasmEngine.BeginScene(sid, positions, roles, seeds, has_player)
     i = 0
     while i < n
@@ -2254,9 +2303,12 @@ Actor Function FirstOtherPosition(Actor akActor)
     return None
 EndFunction
 
-; SexLab enjoyment the last mirror left behind (position obj "sl_mirror_set"; -1 = no baseline).
-; Between mirrors SexLab only drifts a little on its own (time term), so a larger move means another
-; plugin called AdjustEnjoyment: fold it into the engine instead of overwriting it.
+; SexLab enjoyment the last mirror left behind (position obj "sl_mirror_set"; -1 = no baseline), with the
+; stage and animation it was taken at ("sl_mirror_stage" / "sl_mirror_anim"). Within one stage SexLab only
+; drifts a little on its own (time term), so a larger move means another plugin called AdjustEnjoyment:
+; fold it into the engine instead of overwriting it. SexLab's stage term jumps (about +10) on a stage or
+; animation change, often a mirror before Engine_SetStage rebaselines: a baseline from another stage or
+; animation is stale and never folded.
 int Property MIRROR_EXTERNAL_THRESHOLD = 3 AutoReadOnly
 ; Not expected to orgasm: SexLab voice stays silent below this enjoyment.
 int Property VOICE_GATE_ENJOYMENT = 50 AutoReadOnly
@@ -2293,8 +2345,15 @@ Function Mirror_Apply(Actor akActor, int value)
     int current = actorAlias.GetEnjoyment()
     int obj = GetObjFromActor(akActor)
     int baseline = -1
+    String anim_key = ""
+    if thread.Animation != None
+        anim_key = thread.Animation.Registry
+    endif
     if obj > 0
         baseline = SNSL_JMap.getInt(obj, "sl_mirror_set", -1)
+        if SNSL_JMap.getInt(obj, "sl_mirror_stage", -1) != thread.Stage || SNSL_JMap.getStr(obj, "sl_mirror_anim", "") != anim_key
+            baseline = -1
+        endif
     endif
     if baseline >= 0
         int external = current - baseline
@@ -2310,6 +2369,8 @@ Function Mirror_Apply(Actor akActor, int value)
     endif
     if obj > 0
         SNSL_JMap.setInt(obj, "sl_mirror_set", actorAlias.GetEnjoyment())
+        SNSL_JMap.setInt(obj, "sl_mirror_stage", thread.Stage)
+        SNSL_JMap.setStr(obj, "sl_mirror_anim", anim_key)
         ; Not expected: re-voice when enjoyment crosses the gate either way.
         if SNSL_JMap.getInt(obj, "orgasm_expected", 1) == 0
             int above = (value >= VOICE_GATE_ENJOYMENT) as int
@@ -2318,6 +2379,29 @@ Function Mirror_Apply(Actor akActor, int value)
                 ApplySexLabVoice(thread.Positions.Find(akActor))
             endif
         endif
+    endif
+    Arousal_Floor(akActor, value)
+EndFunction
+
+; ---- SLO Aroused NG / OSL Aroused (optional): arousal never below enjoyment ----
+; Raise only: arousal above enjoyment is left alone; below it, exposure is raised by the gap.
+slaFrameworkScr sla_fw = None
+bool sla_checked = false
+
+Function Arousal_Floor(Actor akActor, int enjoyment)
+    if !sla_checked
+        sla_checked = true
+        if Game.GetModByName("SexLabAroused.esm") != 255 && SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.arousal.floor_enjoyment", true)
+            sla_fw = Game.GetFormFromFile(0x4290F, "SexLabAroused.esm") as slaFrameworkScr
+        endif
+    endif
+    if sla_fw == None || akActor == None || sla_fw.IsActorArousalLocked(akActor)
+        return
+    endif
+    int current = sla_fw.GetActorArousal(akActor)
+    if enjoyment > current
+        sla_fw.SetActorExposure(akActor, sla_fw.GetActorExposure(akActor) + (enjoyment - current))
+        Trace("Arousal_Floor", GetDisplayName(akActor)+" arousal "+current+" -> "+enjoyment)
     endif
 EndFunction
 
@@ -2588,6 +2672,9 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         ; Post-activity afterglow (individual orgasms: OrgasmEngine, or SexLab SeparateOrgasms); not ongoing sexual activity
         String afterglow = ""
         bool engine_managed = thread.positions.length > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(thread.positions[0])
+        ; Read before EndScene drops the engine state.
+        String fatigue = FatigueText()
+        exhausted_actors = None
         if orgasm_hook_open
             orgasm_hook_open = false
             thread.SendThreadEvent("OrgasmEnd")
@@ -2627,6 +2714,9 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         String end_message = end_intent
         if orgasm_narration != ""
             end_message = orgasm_narration + " " + end_message
+        endif
+        if fatigue != ""
+            end_message += " " + fatigue
         endif
         if afterglow != ""
             ; Lowest priority of the end DN: over the budget it becomes an event.
@@ -3374,6 +3464,8 @@ int Function GetThreadObj(Actor speaker)
             SNSL_JMap.setInt(position_objs[i], "enjoyment", SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(thread.positions[i]) as int)
             ; Mini-game NPC strategy phrase ("focuses on self enjoyment"); "" in Together mode.
             SNSL_JMap.setStr(position_objs[i], "strategy", SkyrimNet_SexLab_OrgasmEngine.GetStrategyText(thread.positions[i]))
+            ; Stamina regen, percent of default (0550 tiredness tiers).
+            SNSL_JMap.setInt(position_objs[i], "stamina_regen", SkyrimNet_SexLab_OrgasmEngine.GetStaminaRegen(thread.positions[i]) as int)
         endif
         i += 1
     endwhile

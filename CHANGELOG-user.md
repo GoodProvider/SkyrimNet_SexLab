@@ -2,6 +2,9 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+- **Mini-game pacing**: orgasms no longer come in the first half of a scene. Each scene's pace is set from its SexLab stage timers, so when everyone plays Mutual, both partners are close (87%) just before the last stage. Pausing, going back a stage or long dialogue add more, so more orgasms are possible. In your own scenes you have to play your part. New settings **Mini-game Mutual target** and **Mini-game passive share** (Enjoyment).
+- **Shift in the mini-game**: hold **Shift** while arousing or calming to act on the next actor in the list (1→2, 2→1) without changing your focus, so you can arouse your partner and calm yourself without switching back and forth. The HUD shows ⇧ next to who the press hits.
+- **Arousal follows enjoyment** (with SLO Aroused NG or OSL Aroused): during a scene, arousal never stays below enjoyment, so characters read as aroused in conversation. Arousal is only raised, never lowered. Turn off with **Arousal never below enjoyment** (Enjoyment settings).
 - **Orgasm modes**: new **Orgasm mode** pulldown (Enjoyment settings, and the SkyrimNet_SexLab MCM; changing one changes the other).
   - **Always Orgasm Together at the end**: SexLab's skill, Lewd/Pure, victim/aggressor and relationship rank now matter. A skilled lover or a loved partner gets aroused faster and stays high; an unwilling victim starts slow. Everyone still finishes together at the end.
   - **Multi-Orgasm Mini-game** (default): the same bonus is a constant boost. Nobody is guaranteed an orgasm: several, or none. NPCs play the mini-game themselves using a strategy the AI picks: mutual, selfish, selfless, finish together, tease, passive; victims can reject or try to make it end quickly; aggressors can be greedy or force an orgasm, and a forced partner can give in or resist. In your scenes a notification shows each change. Strategies show on the scene HUD.
@@ -12,6 +15,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Animation database check**: Settings shows how many animations the database has next to SexLab's count, and warns when they differ. The control panel title turns into a **Rebuild DB** button (**Build DB** on a new game with no database). Either button closes the menu and starts the rebuild.
 - **Mismatch warning on first open**: the first time you press the menu hotkey on a save, a mismatch shows a dialog offering to rebuild. Press the hotkey again to open the menu.
 - **Simpler title**: the control panel title is plain "SkyrimNet SexLab" unless extra control modes are installed.
+- **Scene Creator adding actors**: clicking a nearby actor adds them again. Before, an actor could fail to join (for example as a third actor) and then stay unclickable until the menu was reopened.
 - **Hug narration**: names the right hugger. When Nina hugs you, it says "Nina hugs Bob", not "Bob hugs Nina".
 - **Faster menu**: the menu and the Description Editor open much faster during a scene, and stage changes refresh without lag.
 - **Description Editor actors**: the orgasm, dressed, victim and speaking toggles now change only the scene you're in, right away. They're saved as the animation's defaults only when you press **Save**. Stage descriptions still save as you go.

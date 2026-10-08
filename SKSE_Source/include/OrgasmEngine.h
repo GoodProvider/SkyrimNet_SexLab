@@ -35,7 +35,8 @@ namespace OrgasmEngine
         kGreedy = 8,        // arouse self; the target is forced to arouse the speaker
         kForcedOrgasm = 9,  // arouse the target; the target is forced to arouse self
         kAcceptForce = 10,  // forced: play the forced action
-        kCount = 11,
+        kNonSexual = 11,    // no presses; the default when no actor expects orgasm
+        kCount = 12,
     };
 
     /// What a forced actor's AcceptForce plays.
@@ -60,6 +61,8 @@ namespace OrgasmEngine
     void SetStage(std::int32_t sid, std::int32_t stage, std::int32_t stageCount);
     /// Seconds per stage (SexLab's GetTimer rule) for the current animation. Sets the fixed base rate:
     /// 100 over stages 1..N-1 + 0.9 x the final stage (LeadIn: all x 1.5). Empty: fallback rate.
+    /// Mini-game: the first main animation also fixes the scene's rates, so every NPC on Mutual reaches
+    /// sexlab.enjoyment.mutual_target at the end of the second-to-last stage (stage spikes included).
     void SetStageTimers(std::int32_t sid, const std::vector<float>& stageSecs, bool leadIn);
     /// Pause hotkey state: HUD label; the safety-net clock stops. Passive gain keeps running.
     void SetScenePaused(std::int32_t sid, bool paused);
@@ -94,6 +97,8 @@ namespace OrgasmEngine
     Strategy GetStrategy(RE::Actor* actor);
     /// Third-person phrase for the current strategy ("focuses on self enjoyment"), "" when none / Together mode.
     std::string GetStrategyText(RE::Actor* actor);
+    // Stamina regen, percent of the actor's default (100 when unmanaged or fatigue is off).
+    float GetStaminaRegen(RE::Actor* actor);
     RE::Actor* GetForcedBy(RE::Actor* actor);
     /// How the forcer forced the actor ("a slap to the face"), shown in AcceptForce / RejectForce narration.
     /// Kept until the forced state ends. "" clears.
@@ -191,8 +196,8 @@ namespace OrgasmEngine
     // 2: + per-actor dom flag. 3: + stage timers, pause, final clock; jitter, DOM step state.
     // 4: + gateDone/gateAwait per scene, rushing per actor (a mid-hold save no longer re-rolls the
     // gate on load). 5: + stage clock per scene; bonus, curve progress, strategy, target, forcer per actor.
-    // Older still load.
-    constexpr std::uint32_t kRecordVersion = 5;
+    // 6: + stamina regen per actor. 7: + mini-game rates per scene (CalibrateMiniGame). Older still load.
+    constexpr std::uint32_t kRecordVersion = 7;
 
     /// The exported C++ interface (RequestOrgasmEngineAPI).
     SKYRIMNET_SEXLAB_API::IOrgasmEngineV2* GetInterface();

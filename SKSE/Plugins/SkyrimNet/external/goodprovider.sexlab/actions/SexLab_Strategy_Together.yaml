@@ -1,0 +1,26 @@
+name: SexLab_Strategy_Together
+label: "Strategy: Finish Together"
+description: "[speaker] paces themselves during ongoing sex to finish together with their partner, holding back when ahead and catching up when behind."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: MiniGame_StrategySelf
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: static
+    name: strategy
+    value: together
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_strategy_together"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

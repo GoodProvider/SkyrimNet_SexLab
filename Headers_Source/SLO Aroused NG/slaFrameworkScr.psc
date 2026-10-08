@@ -8,3 +8,9 @@ EndFunction
 
 Function SetActorArousalLocked(Actor who, Bool isLocked)
 EndFunction
+
+Int Function GetActorArousal(Actor who)
+EndFunction
+
+Bool Function IsActorArousalLocked(Actor who)
+EndFunction

@@ -1,0 +1,26 @@
+name: SexLab_Strategy_Reject
+label: "Strategy: Reject"
+description: "[speaker], a victim of ongoing sex, focuses all effort on not orgasming."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: MiniGame_StrategySelf
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: static
+    name: strategy
+    value: reject
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_strategy_reject"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

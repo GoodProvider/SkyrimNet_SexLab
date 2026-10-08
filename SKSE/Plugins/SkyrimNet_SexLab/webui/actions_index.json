@@ -1356,6 +1356,27 @@
       "file": "SexLab_Strategy_Mutual.yaml"
     },
     {
+      "name": "SexLab_Strategy_NonSexual",
+      "label": "Strategy: Non-sexual",
+      "customCategory": "",
+      "questEditorId": "SkyrimNet_SexLab",
+      "scriptName": "SkyrimNet_SexLab_Actions",
+      "executionFunctionName": "MiniGame_StrategySelf",
+      "parameterMapping": [
+        {
+          "type": "speaker",
+          "name": "speaker",
+          "description": "Speaker Actor parameter (triggering entity)"
+        },
+        {
+          "type": "static",
+          "name": "strategy",
+          "value": "nonsexual"
+        }
+      ],
+      "file": "SexLab_Strategy_NonSexual.yaml"
+    },
+    {
       "name": "SexLab_Strategy_Passive",
       "label": "Strategy: Passive",
       "customCategory": "",

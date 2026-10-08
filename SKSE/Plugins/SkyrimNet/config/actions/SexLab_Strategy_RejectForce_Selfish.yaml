@@ -1,0 +1,27 @@
+customCategory: sexlab_strategy_rejectforce
+name: SexLab_Strategy_RejectForce_Selfish
+label: "Resist: Selfish"
+description: "[speaker] resists being forced during ongoing sex and focuses on their own enjoyment instead."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: MiniGame_StrategySelf
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity)
+  - type: static
+    name: strategy
+    value: selfish
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_strategy_rejectforce"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

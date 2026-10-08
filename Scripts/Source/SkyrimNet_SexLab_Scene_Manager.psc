@@ -1329,6 +1329,24 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
     threadSlots.StopThread(cachedThread)
 EndEvent 
 
+
+; Sex is hard work (OrgasmEngine.Effect_Exhausted): non-victims at 0 stamina regen and 0 stamina end the scene.
+Function EndExhausted(Actor[] actors)
+    if !actors || actors.length == 0 || actors[0] == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(actors[0])
+    if sl_scene == None
+        Trace("EndExhausted", "no scene for "+actors[0].GetDisplayName())
+        return
+    endif
+    Trace("EndExhausted", actors[0].GetDisplayName()+" too tired to continue")
+    sslThreadController cachedThread = sl_scene.GetThread()
+    sl_scene.SetExhausted(actors)
+    sl_scene.AnimationEnd()
+    threadSlots.StopThread(cachedThread)
+EndFunction
+
 Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, \
     string style, string tags, int speaker_position,\ 
     String event_hook, String setting_name,\ 

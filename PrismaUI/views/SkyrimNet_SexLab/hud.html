@@ -6,7 +6,7 @@
     <title>SkyrimNet SexLab HUD</title>
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
-        C++ pushes hudUpdate({groups, focus, actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
+        C++ pushes hudUpdate({groups, focus, shiftTarget (row arouse / calm hit while Shift is held, -1 otherwise), actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
         blocked, paused, freeCam, force {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys.
@@ -271,10 +271,12 @@
             {
                 actors.forEach(function (a, i) {
                     // Number = focus key; the focused actor's number becomes an arrow at its name.
-                    const focus = (i === state.focus) ? '▶' : (i < 4 ? String(i + 1) : '');
+                    // Shift held: ⇧ marks the actor arouse / calm hit instead (the next one after the focus).
+                    const shifted = (i === state.shiftTarget && i !== state.focus);
+                    const focus = shifted ? '⇧' : (i === state.focus) ? '▶' : (i < 4 ? String(i + 1) : '');
                     const cls = (a.flash ? ' flash' : '') + (!a.flash && a.near ? ' near' : '');
                     html += '<tr class="' + (a.broken ? 'broken' : '') + '">' +
-                        '<td class="focus' + (i === state.focus ? ' on' : '') + mgOff + '">' + focus + '</td>' +
+                        '<td class="focus' + (i === state.focus || shifted ? ' on' : '') + mgOff + '">' + focus + '</td>' +
                         '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') +
                             (a.strategy ? ' <span class="dom" title="mini-game strategy">' + esc(a.strategy) + '</span>' : '') + '</td>' +
                         resBar('magicka', a.magicka, mgOff) + resBar('stamina', a.stamina, mgOff) +

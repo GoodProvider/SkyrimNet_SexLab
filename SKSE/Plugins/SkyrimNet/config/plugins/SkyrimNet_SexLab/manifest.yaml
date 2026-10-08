@@ -334,10 +334,28 @@ schema:
       defaultValue: 1
       category: "Enjoyment"
 
+    - name: "Mini-game Mutual target"
+      path: "sexlab.enjoyment.mutual_target"
+      type: "float"
+      description: "Multi-Orgasm Mini-game: the scene's enjoyment rates are set once, from its stage timers, so that with every NPC on Mutual everyone reaches this enjoyment at the end of the second-to-last stage (stage advance enjoyment included). Extra time (pause, going back a stage, long narration) adds more. The player has to play their part: an NPC's moves alone bring a player scene to about 60."
+      min: 50
+      max: 100
+      defaultValue: 87
+      category: "Enjoyment"
+
+    - name: "Mini-game passive share"
+      path: "sexlab.enjoyment.passive_share"
+      type: "float"
+      description: "Multi-Orgasm Mini-game: share of the Mutual target that comes from passive gain. The rest comes from NPC strategy moves, so a Passive actor nobody arouses reaches only this share of the target."
+      min: 0
+      max: 1
+      defaultValue: 0.3
+      category: "Enjoyment"
+
     - name: "Normal enjoyment multiplier"
       path: "sexlab.enjoyment.passive_mult"
       type: "float"
-      description: "Enjoyment rate for consensual actors. The base rate comes from the scene's SexLab stage timers: at 1.0 an actor reaches 100 near the end of the final stage if the stages ran on their timers, but narration and LLM pacing usually make scenes 2-3x longer, so the default is 0.4. Faster / slower and repeating stages change the outcome. The OrgasmEngine triggers every orgasm; SexLab's own trigger is off."
+      description: "Enjoyment rate for consensual actors. Multi-Orgasm Mini-game: only the ratio of the three role multipliers matters (aggressor and victim pace relative to this one); the pace comes from Mini-game Mutual target. DOM slaves and scenes without SexLab stage timers: rate x the stage-timer base rate (at 1.0, 100 near the end of the final stage on its timers; default 0.4 because narration makes scenes 2-3x longer). The OrgasmEngine triggers every orgasm; SexLab's own trigger is off."
       min: 0
       max: 5
       defaultValue: 0.4
@@ -346,7 +364,7 @@ schema:
     - name: "Aggressor enjoyment multiplier"
       path: "sexlab.enjoyment.aggressor_mult"
       type: "float"
-      description: "Enjoyment rate for the aggressor in a non-consensual scene (x the stage-timer base rate)."
+      description: "Enjoyment rate for the aggressor in a non-consensual scene. Mini-game: relative to the normal multiplier (0.45 / 0.4 = 1.125x a consensual actor)."
       min: 0
       max: 5
       defaultValue: 0.45
@@ -355,7 +373,7 @@ schema:
     - name: "Victim enjoyment multiplier"
       path: "sexlab.enjoyment.victim_mult"
       type: "float"
-      description: "Enjoyment rate for a victim (x the stage-timer base rate). Victims only orgasm if they reach 90 by the end."
+      description: "Enjoyment rate for a victim. Mini-game: relative to the normal multiplier (0.3 / 0.4 = 0.75x a consensual actor)."
       min: 0
       max: 5
       defaultValue: 0.3
@@ -379,10 +397,19 @@ schema:
       defaultValue: 1.1
       category: "Enjoyment"
 
+    - name: "Group orgasm threshold"
+      path: "sexlab.enjoyment.group_join"
+      type: "float"
+      description: "When someone orgasms, every other actor at this enjoyment or more joins them, in one narration. Below it, enjoyment + random bonus must reach 100."
+      min: 0
+      max: 100
+      defaultValue: 85
+      category: "Enjoyment"
+
     - name: "Gate group orgasm threshold"
       path: "sexlab.enjoyment.group_join_final"
       type: "float"
-      description: "When someone passes the orgasm gate, every other actor at this enjoyment or more joins them, in one narration. (Any other orgasm makes everyone else roll: enjoyment + random bonus must reach 100.)"
+      description: "When someone passes the orgasm gate, every other actor at this enjoyment or more joins them, in one narration."
       min: 0
       max: 100
       defaultValue: 90
@@ -501,6 +528,13 @@ schema:
       defaultValue: 0.2
       category: "Enjoyment"
 
+    - name: "Arousal never below enjoyment"
+      path: "sexlab.arousal.floor_enjoyment"
+      type: "bool"
+      description: "With SLO Aroused NG (or OSL Aroused) installed, raises arousal to match enjoyment during scenes. Arousal is never lowered."
+      defaultValue: true
+      category: "Enjoyment"
+
     - name: "Calm key"
       path: "sexlab.minigame.key_calm"
       type: "hotkey"
@@ -543,20 +577,20 @@ schema:
 
     - name: "Arouse amount"
       path: "sexlab.minigame.arouse_amount"
-      type: "int"
-      description: "Enjoyment added per arouse (x (1 + 0.1 x skill))."
-      min: 1
+      type: "float"
+      description: "Enjoyment added per arouse (x (1 + 0.1 x skill)). Forced actors add half."
+      min: 0.5
       max: 20
-      defaultValue: 3
+      defaultValue: 2.4
       category: "Mini-game"
 
     - name: "Calm amount"
       path: "sexlab.minigame.calm_amount"
-      type: "int"
-      description: "Enjoyment removed per calm."
-      min: 1
+      type: "float"
+      description: "Enjoyment removed per calm. Forced actors remove half."
+      min: 0.5
       max: 20
-      defaultValue: 4
+      defaultValue: 3.2
       category: "Mini-game"
 
     - name: "Arouse stamina cost"
@@ -626,25 +660,25 @@ schema:
       description: "Seconds after you force a victim (Force hotkey) during which the victim can only give in, not resist."
       min: 0
       max: 600
-      defaultValue: 30
+      defaultValue: 0
       category: "Mini-game"
 
     - name: "NPC step minimum"
       path: "sexlab.minigame.npc_step_min"
       type: "float"
-      description: "Each NPC strategy move changes enjoyment by a random amount between the minimum and maximum (percent of 100). Arouse also scales with skill."
+      description: "Scenes with SexLab stage timers: the size of each NPC strategy move comes from Mini-game Mutual target; the minimum and maximum only set its random spread (4-8: 0.67x to 1.33x). Scenes without timers: each move changes enjoyment by a random amount between the minimum and maximum. Arouse also scales with skill."
       min: 0
       max: 50
-      defaultValue: 5
+      defaultValue: 4
       category: "Mini-game"
 
     - name: "NPC step maximum"
       path: "sexlab.minigame.npc_step_max"
       type: "float"
-      description: "Upper end of an NPC strategy move."
+      description: "Upper end of an NPC strategy move (timed scenes: of its random spread)."
       min: 0
       max: 50
-      defaultValue: 10
+      defaultValue: 8
       category: "Mini-game"
 
     - name: "Default strategy (normal)"

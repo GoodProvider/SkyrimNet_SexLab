@@ -131,6 +131,11 @@ namespace PapyrusBindings_OrgasmEngine
         {
             return static_cast<std::int32_t>(OrgasmEngine::GetStrategy(a));
         }
+        float GetStaminaRegen(RE::StaticFunctionTag*, RE::Actor* a)
+        {
+            return OrgasmEngine::GetStaminaRegen(a);
+        }
+
         RE::BSFixedString GetStrategyText(RE::StaticFunctionTag*, RE::Actor* a)
         {
             return RE::BSFixedString(OrgasmEngine::GetStrategyText(a).c_str());
@@ -200,6 +205,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetStrategy", s, SetStrategy);
         a_vm->RegisterFunction("GetStrategy", s, GetStrategy);
         a_vm->RegisterFunction("GetStrategyText", s, GetStrategyText);
+        a_vm->RegisterFunction("GetStaminaRegen", s, GetStaminaRegen);
         a_vm->RegisterFunction("GetForcedBy", s, GetForcedBy);
         a_vm->RegisterFunction("SetForceMethod", s, SetForceMethod);
         a_vm->RegisterFunction("EndScene", s, EndScene);

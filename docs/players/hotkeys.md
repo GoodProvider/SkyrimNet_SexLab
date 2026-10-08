@@ -82,6 +82,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - **Num 9** arouses that actor (costs stamina).
   - **Num 8** calms them (costs magicka). Calming someone at 90% or more holds off their orgasm for a few seconds.
   - With **Allow right mouse to arouse and left mouse to calm** on (the default), the **right mouse button** arouses and the **left mouse button** calms too. Clicks are only captured while the HUD is up, so they don't attack or block then.
+  - Hold **Shift** while arousing or calming to act on the next actor in the list instead (1→2, 2→3, last→1). Your focus doesn't change, and ⇧ marks who the press hits. Use it to arouse your partner and calm yourself without switching focus.
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.

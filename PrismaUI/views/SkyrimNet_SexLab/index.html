@@ -8420,8 +8420,6 @@
             animQueryId: 0,
             tagQueryId: 0,
             metaQueryId: 0,
-            // Nearby adds waiting on onResolveActorMeta: request id -> position entry.
-            pendingNearby: new Map(),
             inThreadRegistries: [],
             activeRegistry: '',
             nextRegistry: '',
@@ -8566,7 +8564,7 @@
             if (state._stage != null && typeof deOnThreadStage === 'function') deOnThreadStage(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
             SC.selectedRegistries = [];
-            SC.lastAnimRegistries = [];            SC.pendingNearby.clear();
+            SC.lastAnimRegistries = [];
             if (SC.mode === 'active' && SC.inThreadRegistries.length)
                 SC.selectedRegistries = [];
             if (state._scene_presets) {
@@ -8835,9 +8833,8 @@
 
         function scSelectNearby(uuid) {
             const u = String(uuid || '');
-            const pendingAdds = Array.from(SC.pendingNearby.values());
-            if (!u || scSelectedUuidSet().has(u) || pendingAdds.some(p => p._uuid === u)) return;
-            if ((SC.positions || []).length + pendingAdds.length >= 5) return;
+            if (!u || scSelectedUuidSet().has(u)) return;
+            if ((SC.positions || []).length >= 5) return;
             const pool = scEligibleNearbyActors().find(a => a.uuid === u)
                 || scNearbyPool().find(a => a.uuid === u);
             if (!pool) return;
@@ -8853,18 +8850,12 @@
                 _gender: scActorGender(pool),
                 _race_key: pool.race_key || pool._race_key || ''
             };
-            if (formId && typeof window.onResolveActorMeta === 'function') {
-                const id = 'n' + (++SC.metaQueryId);
-                SC.pendingNearby.set(id, entry);
-                window.onResolveActorMeta(JSON.stringify({
-                    _request_id: id,
-                    _form_ids: [formId]
-                }));
-                return;
-            }
+            // Add now; the gender/race enrich reply matches by form id. A pending add keyed on the
+            // request id got stuck when Papyrus did not echo the id verbatim and blocked the actor.
             SC.positions.push(entry);
             scRenderPositions();
             scOnActorCountChanged();
+            if (entry._form_id) scRequestActorMeta([entry._form_id], 'm' + (++SC.metaQueryId));
         }
 
         function scRequestActorMeta(formIds, requestId) {
@@ -8978,25 +8969,6 @@
                 const fid = formIdU32(a._form_id != null ? a._form_id : 0);
                 if (fid) byForm.set(fid, a);
             });
-            if (rid.startsWith('n')) {
-                const entry = SC.pendingNearby.get(rid);
-                if (!entry) return;
-                SC.pendingNearby.delete(rid);
-                const meta = byForm.get(formIdU32(entry._form_id));
-                if (meta) {
-                    if (meta._gender != null && meta._gender !== '')
-                        entry._gender = Number(meta._gender);
-                    if (meta._race_key != null) entry._race_key = meta._race_key;
-                    if (meta._name) entry._name = meta._name;
-                }
-                SC.positions.push(entry);
-                scPersistPositionsToSceneInfo();
-                scRenderPositions();
-                scOnActorCountChanged();
-                if (typeof ssApplyPendingSettingToCreator === 'function')
-                    ssApplyPendingSettingToCreator();
-                return;
-            }
             let changed = false;
             (SC.positions || []).forEach(p => {
                 const meta = byForm.get(formIdU32(p._form_id != null ? p._form_id : p.formId));
@@ -9011,6 +8983,10 @@
                 const rk = meta._race_key != null ? meta._race_key : '';
                 if (p._race_key !== rk) {
                     p._race_key = rk;
+                    changed = true;
+                }
+                if (meta._name && p._name !== meta._name) {
+                    p._name = meta._name;
                     changed = true;
                 }
             });

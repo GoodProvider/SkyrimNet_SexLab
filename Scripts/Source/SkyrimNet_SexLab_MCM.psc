@@ -200,7 +200,7 @@ String[] Function MiniGameActionNames()
     names[12] = "SexLab_Strategy_AcceptForce"
     names[13] = "SexLab_Strategy_RejectForce_Selfish"
     names[14] = "SexLab_Strategy_RejectForce_Reject"
-    names[15] = ""
+    names[15] = "SexLab_Strategy_NonSexual"
     return names
 EndFunction
 

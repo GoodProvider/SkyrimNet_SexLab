@@ -60,19 +60,21 @@ Function SetBonusInputs(Actor akActor, float[] ownSkills, float[] partnerSkills,
 
 ; ---- Mini-game NPC strategies (Multi-Orgasm Mini-game mode) ----
 ; ids: 0 passive 1 mutual 2 selfish 3 selfless 4 together 5 tease 6 reject 7 cumquick 8 greedy
-;      9 forcedorgasm 10 acceptforce. target: Tease / Greedy (a victim) / ForcedOrgasm; None picks one.
-; False when not allowed for the actor (mode, role, forced state). Narrated; notification in player scenes.
+;      9 forcedorgasm 10 acceptforce 11 nonsexual. target: Tease / Greedy (a victim) / ForcedOrgasm; None picks one.
+; False when not allowed for the actor (mode, role, forced state). Narrated; shown on the HUD.
 bool Function SetStrategy(Actor akActor, int strategy, Actor target) global native
 int Function GetStrategy(Actor akActor) global native
 ; Third-person phrase ("focuses on self enjoyment"); "" when none, Together mode or the player.
 String Function GetStrategyText(Actor akActor) global native
 Actor Function GetForcedBy(Actor akActor) global native
+; Sex is hard work: stamina regen, percent of the actor's default (100 when unmanaged or the setting is off).
+float Function GetStaminaRegen(Actor akActor) global native
 ; How the forcer forced akActor ("a slap to the face"); narrated with give in / resist. "" clears.
 Function SetForceMethod(Actor akActor, String method) global native
 
 ; Strategy action key (static action parameter) -> id; -1 when unknown.
 int Function StrategyId(String strategy_key) global
-    String[] keys = new String[11]
+    String[] keys = new String[12]
     keys[0] = "passive"
     keys[1] = "mutual"
     keys[2] = "selfish"
@@ -84,6 +86,7 @@ int Function StrategyId(String strategy_key) global
     keys[8] = "greedy"
     keys[9] = "forcedorgasm"
     keys[10] = "acceptforce"
+    keys[11] = "nonsexual"
     return keys.Find(strategy_key)
 EndFunction
 Function EndScene(int sid) global native
@@ -199,15 +202,20 @@ Function Effect_StrategyEligibility(Actor akActor, String[] allow, String[] deny
     endwhile
 EndFunction
 
-; Strategy change: optional narration; in player scenes also a notification.
+; Strategy change: optional narration (the HUD tag shows the change; notify is unused).
 Function Effect_StrategyChanged(Actor akActor, Actor target, String msg, bool notify) global
     if msg == ""
         return
     endif
-    if notify
-        Debug.Notification(msg)
-    endif
     SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_strategy", msg, akActor, target, False)
+EndFunction
+
+; Sex is hard work: these non-victims are at 0 stamina regen and 0 stamina; the scene ends.
+Function Effect_Exhausted(Actor[] actors) global
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager != None
+        manager.EndExhausted(actors)
+    endif
 EndFunction
 
 ; Player Force (HUD): always narrated.

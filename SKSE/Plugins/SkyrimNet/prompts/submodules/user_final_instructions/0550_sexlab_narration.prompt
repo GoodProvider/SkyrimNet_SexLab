@@ -11,6 +11,8 @@
 {% endif %}
 {# ---------------------------------- #} 
 {% set speaker = {"speaking_modifiers":[], "victim":0, "notice_level":0, "active":false, "arousal":0} %}
+{# Sex is hard work: names per stamina regen tier in the speaker's live thread #}
+{% set _fatigue = {"breath":[], "tired":[], "spent":[]} %}
 {% if existsIn(sexlab,"threads") and length(sexlab.threads) > 0 %}
      {% for thread in sexlab.threads %}
           {% set _thread_live = false %}
@@ -20,8 +22,10 @@
                {% endif %}
           {% endfor %}
           {% if _thread_live %}
-          {% for actor_record in thread.actors %} 
+          {% set _has_npc = false %}
+          {% for actor_record in thread.actors %}
                {% if to_number(actor_record.uuid) == npc.UUID %}
+                    {% set _has_npc = true %}
                     {% set speaker = actor_record %}
                     {% if get_faction_rank(npc.UUID, "SexLabAnimatingFaction") == 1 %}
                          {% set speaker.active = true %}
@@ -29,8 +33,36 @@
                     {% endif %}
                {% endif %}
           {% endfor %}
+          {% if _has_npc %}
+               {% for actor_record in thread.actors %}
+                    {% if existsIn(actor_record, "stamina_regen") and existsIn(actor_record, "name") %}
+                         {% if actor_record.stamina_regen <= 0 %}
+                              {% set _fatigue.spent = append(_fatigue.spent, actor_record.name) %}
+                         {% else if actor_record.stamina_regen <= 40 %}
+                              {% set _fatigue.tired = append(_fatigue.tired, actor_record.name) %}
+                         {% else if actor_record.stamina_regen < 90 %}
+                              {% set _fatigue.breath = append(_fatigue.breath, actor_record.name) %}
+                         {% endif %}
+                    {% endif %}
+               {% endfor %}
+          {% endif %}
           {% endif %}
      {% endfor %}
+{% endif %}
+{% if length(_fatigue.breath) == 1 %}
+{{ join(_fatigue.breath, "") }} is breathing hard.
+{% else if length(_fatigue.breath) > 1 %}
+{{ join(_fatigue.breath, " and ") }} are breathing hard.
+{% endif %}
+{% if length(_fatigue.tired) == 1 %}
+{{ join(_fatigue.tired, "") }} is tired.
+{% else if length(_fatigue.tired) > 1 %}
+{{ join(_fatigue.tired, " and ") }} are tired.
+{% endif %}
+{% if length(_fatigue.spent) == 1 %}
+{{ join(_fatigue.spent, "") }} is exhausted.
+{% else if length(_fatigue.spent) > 1 %}
+{{ join(_fatigue.spent, " and ") }} are exhausted.
 {% endif %}
 {# ---------------------------------- #}
 {# Missing/null on recreated slots: contains() requires an array #}

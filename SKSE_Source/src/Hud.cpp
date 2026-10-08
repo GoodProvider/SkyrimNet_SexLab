@@ -130,12 +130,6 @@ namespace Hud
             });
         }
 
-        RE::Actor* FocusActor()
-        {
-            std::lock_guard lock(g_lock);
-            return ActorFor(g_focus);
-        }
-
         void SetFocusIndex(std::size_t index)
         {
             std::lock_guard lock(g_lock);
@@ -145,10 +139,41 @@ namespace Hud
             }
         }
 
+        // The game's keyboard state (DirectInput). Not GetAsyncKeyState: with NumLock on, Windows sends a fake
+        // Shift-up before a Shift+numpad key. Reads curState inline: BSWin32KeyboardDevice::IsPressed does not
+        // link (its .obj pulls in unresolved device virtuals).
+        bool ShiftHeld()
+        {
+            auto* input = RE::BSInputDeviceManager::GetSingleton();
+            auto* kb = input ? input->GetKeyboard() : nullptr;
+            if (!kb) {
+                return false;
+            }
+            const auto& state = kb->GetRuntimeData().curState;
+            return (state[0x2A] & 0x80) != 0 || (state[0x36] & 0x80) != 0;  // LShift / RShift
+        }
+
+        // Caller holds g_lock. Shift target: the actor after the focus in the list, wrapping (1->2, 2->1).
+        RE::FormID ShiftTargetLocked()
+        {
+            const auto it = std::find(g_sceneActors.begin(), g_sceneActors.end(), g_focus);
+            if (it == g_sceneActors.end()) {
+                return g_focus;
+            }
+            const auto next = static_cast<std::size_t>(it - g_sceneActors.begin() + 1) % g_sceneActors.size();
+            return g_sceneActors[next];
+        }
+
+        // Arouse / calm the focus actor; with Shift held, the next actor instead (focus unchanged).
         void OnArouseOrCalm(bool arouse)
         {
             auto* player = RE::PlayerCharacter::GetSingleton();
-            auto* target = FocusActor();
+            RE::Actor* target = nullptr;
+            {
+                const bool shift = ShiftHeld();
+                std::lock_guard lock(g_lock);
+                target = ActorFor(shift ? ShiftTargetLocked() : g_focus);
+            }
             if (!player || !target) {
                 return;
             }
@@ -536,6 +561,17 @@ namespace Hud
                     { "stamina", static_cast<int>(a.stamina + 0.5f) } });
             }
             j["focus"] = focusPos;
+            // Shift held (mini-game): the row arouse / calm presses go to instead of the focus.
+            int shiftPos = -1;
+            if (g_miniGame && ShiftHeld()) {
+                const RE::FormID shiftId = ShiftTargetLocked();
+                for (std::size_t i = 0; i < actors.size(); ++i) {
+                    if (actors[i].id == shiftId) {
+                        shiftPos = static_cast<int>(i);
+                    }
+                }
+            }
+            j["shiftTarget"] = shiftPos;
             j["actors"] = std::move(rows);
             nlohmann::json keys = nlohmann::json::object();
             for (const auto& [ctl, label] : g_keyLabel) {

@@ -45,7 +45,7 @@ These keys work while you control a scene: you are in it, or you took control of
 
 Num 7 is left free for SkyrimNet.
 
-- Calm and arouse are mini-game keys. Mini-game keys 1–4 (top row) pick who you act on.
+- Calm and arouse are mini-game keys. Mini-game keys 1–4 (top row) pick who you act on; hold Shift to act on the next actor instead without changing focus.
 - `\` opens Start Sex / Edit Stage at any time once it is enabled in the dashboard.
 - Every key except free camera can be rebound in the SkyrimNet dashboard. On game start the mod writes the current bindings to `SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json`.
 
