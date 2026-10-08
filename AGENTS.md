@@ -24,9 +24,9 @@ Documents is OneDrive-redirected — not `%USERPROFILE%\Documents\...`.
 
 | Log | Path |
 |-----|------|
-| Crash Logger | `C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\crash-*.log` |
-| SkyrimNet_SexLab | `C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log` |
-| Papyrus | `C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log` |
+| Crash Logger | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\crash-*.log` |
+| SkyrimNet_SexLab | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log` |
+| Papyrus | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log` |
 | SkyrimNet conversation (dialogue history) | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\conversation_log.log` |
 | SkyrimNet LLM requests (full prompts sent) | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\openrouter_input.log` (rotated: `openrouter_input.<timestamp>.log`) |
 | SkyrimNet LLM responses | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\openrouter_output.log` (rotated: `openrouter_output.<timestamp>.log`) |
@@ -50,10 +50,10 @@ Relative paths for other machines: [docs/reference/papyrus-rules.md](docs/refere
 | Portable doc template (other repos) | [documentation-guide.xml](documentation-guide.xml) |
 
 ## Logs 
-SkyrimNet: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet.log
-SkyrimNet_SexLab: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log
-SkyrimNet_DOM: C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
-Papyrus (general code): C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
+SkyrimNet: %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet.log
+SkyrimNet_SexLab: %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log
+SkyrimNet_DOM: %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
+Papyrus (general code): %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log
 
 
 ### Canonical contracts (do not restate elsewhere)
@@ -86,6 +86,7 @@ First ~72 characters summarize the commit. Prefer multi-line body with concrete 
 - **User scratch:** `z-*` files and directories (repo root) are local scratch. Never ingest, treat as ship set, changelog, or commit.
 - **INI load order:** Skyrim.ini then SkyrimPrefs.ini (last wins).
 - **SE ≠ VR** — never assume parity.
+- **Never commit the Windows username:** write user paths as `%USERPROFILE%\...` (VS Code JSON: `${env:USERPROFILE}`; PowerShell: `$env:USERPROFILE`) and expand at runtime. The real username is in `.secrets.md` (git-ignored) for local reference only. Before committing, `git grep -i <username>` must return nothing in text files.
 
 ### Top gotchas (see KNOWLEDGEBASE for detail)
 

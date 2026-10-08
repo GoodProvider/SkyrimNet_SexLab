@@ -53,7 +53,7 @@ reparents for free. See the comments on `Node::retainCount` and `AttachChild` in
 
 ## 3. Stage S1: migrated the actual failing path
 
-Per the plan (`C:\Users\bhuff\.claude\plans\continue-the-work-spicy-plum.md`, approved this
+Per the plan (`%USERPROFILE%\.claude\plans\continue-the-work-spicy-plum.md`, approved this
 session), only the reported-bug's call chain moved to the new store; everything else in the ~870
 JContainers call sites across this mod stays on JContainers and coexists via small JSON-string
 bridges (`SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(jcHandle))` and back):

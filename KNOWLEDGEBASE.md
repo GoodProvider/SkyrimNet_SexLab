@@ -663,7 +663,7 @@ Always **ignore** files matching `z-*.*` (e.g. `z-plan.md`). Local scratch / not
 - **Cause:** Debug-built `SkyrimNet_SexLab.dll` (~7.96 MB, `/MTd`) against Release SkyrimNet (`/MD`) — `std::string` layout mismatch. Stack shows `0xCCCCCCCC` fill and path `sexlab.controls.editStageHotkeyEnabled`. AV is on return/destructor; memcpy / `.c_str()` after the call cannot help.
 - **Also:** `CMake: Build SKSE (Debug)` copies over `SKSE/Plugins/` (e.g. 2026-08-16 2:39 PM overwrote a 2:17 PM Release). In-game config needs Release.
 - **Fix:** `_DEBUG` skips all SkyrimNet exports that return `std::string` (`CrossDllStdStringSafe` in `Config.h`) and uses hardcoded fallbacks. Ship / test config with `CMake: Build SKSE (Release)` (~2.66 MB).
-- **Crash logs (this machine):** `C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\crash-*.log` (OneDrive Documents).
+- **Crash logs (this machine):** `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\crash-*.log` (OneDrive Documents).
 
 ## Plugin config / control store (2026-08-04)
 
@@ -1100,10 +1100,22 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 ## Orgasm modes and NPC strategies (2026-10-06)
 
 - **Mode key:** `sexlab.enjoyment.mode` (select) replaces `sexlab.minigame.enabled`. The manifest select has its own default (Mini-game), so an old save with the bool off comes up in Mini-game mode; the bool (default true) is only read when the mode is unset. Read it in C++ through `SexLabNet::IsMiniGameMode()` (engine + HUD) and in Papyrus through `OrgasmEngine.IsMiniGameEnabled()` after `ReloadConfig` (MCM `ApplyPluginConfig` reloads the engine before `ApplyMiniGameActions`).
-- **Eligibility without a custom decorator:** strategy actions use `papyrus_util HasIntValue currentActor skyrimnet_sexlab_strategy_<key>`; the engine owns the rules and pushes the keys (`Effect_StrategyEligibility`) only when an actor's mask changes. Keys stay in StorageUtil across saves; `SexLabAnimatingFaction > 0` in every rule guards stale ones.
+- **Eligibility without a custom decorator** (superseded 2026-10-07: strategy actions removed, see below): strategy actions used `papyrus_util HasIntValue currentActor skyrimnet_sexlab_strategy_<key>`. Saves from that time keep stale `skyrimnet_sexlab_strategy_*` StorageUtil keys on actors; nothing reads them now.
 - **Papyrus identifiers:** `none` (= `None`) and `key` are rejected as variable / parameter names by the compiler.
 - **Together curve:** closing a share of the gap (not adding a fixed amount) is what makes carried-over, external and post-animation-change enjoyment still land on 100 at the end of the second-to-last stage. The final-stage finish only lifts actors held at 98, so the curve never causes a repeat orgasm.
-- Untested in game: SkyrimNet static action parameters reaching `MiniGame_Strategy(..., String strategy)`, and the select pulldown round-trip through `PatchConfig`.
+- Untested in game: the select pulldown round-trip through `PatchConfig`.
+
+## Strategy decisions through SkyrimNet's decision model (2026-10-07)
+
+- **What:** the `SexLab_Strategy_*` actions are gone. `StrategyDecision.cpp` sends one `PublicSendCustomDecisionToLLM` request per NPC (template `decisions/sexlab/minigame_strategy`): every NPC when the scene is ready for NPC steps, and the speaker after each `dialogue` / `dialogue_npc` / `dialogue_background` event. See [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#strategy-decisions).
+- **Threading rule:** SkyrimNet runs event callbacks and decision callbacks on its ThreadPool. Copy the strings and `SKSE::GetTaskInterface()->AddTask`; never touch `RE::` or the engine's game-side state there (OStimNet's callbacks do, see `guides/ostimnet-agent-calls.md` gotcha 1).
+- **Stale answers:** the snapshot carries `sid` + `generation`; `BeginScene` bumps the generation when the roster changes, so a late answer for an ended scene or a reused SexLab thread id is dropped.
+- **Option keys are ours:** target strategies are `<key>_p<slot>` and resolve through the snapshot's slot map, so nothing depends on the model copying names.
+- **Headers/ is git-ignored:** `Headers/SkyrimNet_SexLab_Actions.psc` / `_OrgasmEngine.psc` stubs were edited by hand for the removed and changed functions (same output as `python_scripts/headers_build.py`).
+- **Confirmed in game (Jev, 2026-10-07 log):** requests go out and answer in about 0.2–0.4 s. `answers.strategy.choice` and `.confidence` are present. `dialogue` events reach the speaker's request. Answers mostly confirm the current strategy (p 0.78–0.98).
+- **Confidence floor:** one answer changed Mutual → Selfless at p=0.44, so changes now need `sexlab.minigame.decision_min_confidence` (0.6). A "kept" answer is never floored.
+- **Not every strategy change is the model:** stage/scene setting changes call `ApplyStrategy` directly (e.g. to `nonsexual` and back). Only changes next to a `StrategyDecision: … (changed)` line came from the model.
+- Still untested in game: `BGSRelationship::GetRelationship` for leveled actors (template-base fallback).
 
 ## Reading Shift in SKSE: device state, not GetAsyncKeyState (2026-10-07)
 
@@ -1116,3 +1128,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Symptom:** in a 2-actor Scene Creator, clicking a third nearby actor (Nina) did nothing. After removing position 2 the click logged nothing at all. Log: `WebUI_OnResolveActorMeta` with no `HandleResolveDeviousTags`, then `HandleAnimDbQuery actor_count=2` about 190 ms later. The reply landed on `actorAnimMetaResult`'s generic branch, not the `'n'` branch that pushed the pending entry.
 - **Cause:** the add waited in `SC.pendingNearby` for a reply carrying its exact `'n<k>'` id. The id round-trips through a Papyrus `String` / BSFixedString, which is case-insensitive and pooled, so an exact echo is not guaranteed. The stale entry also failed the duplicate check (`pendingAdds.some(...)`), blocking that actor for the session. No Papyrus error is logged.
 - **Fix / rule:** push the position at once and enrich afterwards (`'m<k>'`), matching reply rows by form id, as `scEnsurePositionSeed` does. Do not make JS state depend on Papyrus echoing a string id verbatim. Untested in game: the exact form the id came back in.
+
+## Username privacy (standing rule)
+
+Never commit the Windows username. Use `%USERPROFILE%` in paths. See AGENTS.md Standing rules.

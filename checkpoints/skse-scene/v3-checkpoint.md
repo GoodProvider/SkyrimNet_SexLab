@@ -893,7 +893,7 @@ Log paths on this machine (Documents is OneDrive-redirected):
 
 | Log | Path |
 |---|---|
-| SkyrimNet_SexLab | `C:\Users\bhuff\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log` |
+| SkyrimNet_SexLab | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log` |
 | SkyrimNet | `...\SKSE\SkyrimNet.log` |
 | Papyrus | `...\Skyrim Special Edition\Logs\Script\Papyrus.0.log` |
 | Crash | `...\SKSE\crash-*.log` |

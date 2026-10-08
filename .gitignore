@@ -28,3 +28,6 @@ SSEEdit Cache/
 Papyrus.0.log
 crash-*.log
 *.refcache
+
+# Local secrets (username etc.)
+.secrets.md
