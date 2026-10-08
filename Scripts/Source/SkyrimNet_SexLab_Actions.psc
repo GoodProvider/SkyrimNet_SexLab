@@ -758,42 +758,6 @@ Function MiniGame_Act(Actor speaker, Actor target, bool arouse)
 EndFunction
 
 ;-------------------------------------------
-; Mini-game NPC strategies (LLM actions SexLab_Strategy_*). The engine checks the mode, role and forced
-; state, narrates the choice (notification in player scenes) and plays the mini-game for the NPC.
-; strategy: static action parameter, the strategy key ("selfish", "acceptforce", ...).
-;-------------------------------------------
-
-Function MiniGame_Strategy(Actor speaker, Actor target, String strategy)
-    if speaker == None
-        return
-    endif
-    int id = SkyrimNet_SexLab_OrgasmEngine.StrategyId(strategy)
-    if id < 0
-        Trace("MiniGame_Strategy", "unknown strategy '"+strategy+"'")
-        return
-    endif
-    if target == speaker
-        target = None
-    endif
-    bool ok = SkyrimNet_SexLab_OrgasmEngine.SetStrategy(speaker, id, target)
-    Trace("MiniGame_Strategy", GetDisplayName(speaker)+" "+strategy+" target:"+GetDisplayName(target)+" ok:"+ok)
-EndFunction
-
-; Greedy / ForcedOrgasm: method is how the speaker forces the target ("slaps her face"), narrated when the
-; target gives in or resists.
-Function MiniGame_StrategyForce(Actor speaker, Actor target, String strategy, String method)
-    MiniGame_Strategy(speaker, target, strategy)
-    Actor forced = target
-    if forced != None && method != "" && SkyrimNet_SexLab_OrgasmEngine.GetForcedBy(forced) == speaker
-        SkyrimNet_SexLab_OrgasmEngine.SetForceMethod(forced, method)
-    endif
-EndFunction
-
-Function MiniGame_StrategySelf(Actor speaker, String strategy)
-    MiniGame_Strategy(speaker, None, strategy)
-EndFunction
-
-;-------------------------------------------
 ; Orgasm denial (LLM actions): only the aggressor denies / allows the victim
 ;-------------------------------------------
 

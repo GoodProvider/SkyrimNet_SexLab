@@ -681,10 +681,26 @@ schema:
       defaultValue: 8
       category: "Mini-game"
 
+    - name: "Decision model picks NPC strategies"
+      path: "sexlab.minigame.decision_strategy"
+      type: "bool"
+      description: "SkyrimNet's decision model (e.g. Jev) picks every NPC's strategy when a scene starts, and re-picks an NPC's strategy after each line that NPC speaks in the scene. Needs a decisions provider set up in SkyrimNet; without one, NPCs keep the default strategies below."
+      defaultValue: true
+      category: "Mini-game"
+
+    - name: "Decision minimum confidence"
+      path: "sexlab.minigame.decision_min_confidence"
+      type: "float"
+      description: "The decision model only changes an NPC's strategy when it is at least this sure of its pick (0 to 1). Less sure answers keep the current strategy. 0 accepts every answer."
+      min: 0
+      max: 1
+      defaultValue: 0.6
+      category: "Mini-game"
+
     - name: "Default strategy (normal)"
       path: "sexlab.minigame.default_strategy_normal"
       type: "select"
-      description: "Strategy NPCs start with in consensual scenes, until the LLM picks another."
+      description: "Fallback strategy for NPCs in consensual scenes: used until the decision model's first pick arrives, and always when no decisions provider is set up."
       options:
         - "Mutual"
         - "Selfish"
@@ -697,7 +713,7 @@ schema:
     - name: "Default strategy (aggressor)"
       path: "sexlab.minigame.default_strategy_aggressor"
       type: "select"
-      description: "Strategy aggressors start with, until the LLM picks another."
+      description: "Fallback strategy for aggressors: used until the decision model's first pick arrives, and always when no decisions provider is set up."
       options:
         - "Selfish"
         - "Mutual"
@@ -710,7 +726,7 @@ schema:
     - name: "Default strategy (victim)"
       path: "sexlab.minigame.default_strategy_victim"
       type: "select"
-      description: "Strategy victims start with, until the LLM picks another."
+      description: "Fallback strategy for victims: used until the decision model's first pick arrives, and always when no decisions provider is set up."
       options:
         - "Passive"
         - "Reject"

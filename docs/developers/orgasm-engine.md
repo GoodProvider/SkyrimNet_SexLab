@@ -26,7 +26,7 @@ The C++ OrgasmEngine owns enjoyment and orgasms for **every** SexLab scene, incl
 
 ## NPC strategies (Multi-Orgasm Mini-game)
 
-The LLM picks a strategy per NPC with the `SexLab_Strategy_*` actions (`Actions.MiniGame_Strategy` / `MiniGame_StrategySelf`, static `strategy` key → `OrgasmEngine.StrategyId` → `SetStrategy`). Every `sexlab.minigame.npc_interval` s (2) the tick plays one step per NPC (`StrategyStep`), through the same cost / mental-break / edge code as a key press (`ArouseLocked` / `CalmLocked`), not narrated. A step without stamina / magicka is skipped. No step runs before the scene's first non-empty `SetStageTimers` (SexLab's `thread.Timers` is empty at the first `Engine_SetStage`), or `kUntimedGrace` (10 s) after `BeginScene` for a scene that never sends timers. The player is never automated.
+SkyrimNet's decision model (e.g. Jev) picks a strategy per NPC; see [Strategy decisions](#strategy-decisions). Every `sexlab.minigame.npc_interval` s (2) the tick plays one step per NPC (`StrategyStep`), through the same cost / mental-break / edge code as a key press (`ArouseLocked` / `CalmLocked`), not narrated. A step without stamina / magicka is skipped. No step runs before the scene's first non-empty `SetStageTimers` (SexLab's `thread.Timers` is empty at the first `Engine_SetStage`), or `kUntimedGrace` (10 s) after `BeginScene` for a scene that never sends timers. The player is never automated.
 
 - **Step size, timed scenes:** `mgStepRate × npc_interval × random(npc_step_min, npc_step_max) / mean(min, max)` (4–8: 0.67–1.33×), divided by the scene's mean NPC skill factor `mean(1 + 0.1 × skill)`. Arouse then applies the actor's own skill factor, so skill matters between actors while Mutual stays on budget. See [Mini-game calibration](#mini-game-calibration).
 - **Step size, scenes without timers:** `random(npc_step_min, npc_step_max)` (arouse × skill factor).
@@ -45,13 +45,28 @@ The LLM picks a strategy per NPC with the `SexLab_Strategy_*` actions (`Actions.
 | AcceptForce | forced | the forced action |
 | NonSexual | no actor expects orgasm | nothing (the default while no actor expects orgasm; NPCs on a default switch both ways when that changes, announced) |
 
-- **Forced** (`forcedBy`, `forcedAction`): only `SexLab_Strategy_AcceptForce` and the `sexlab_strategy_rejectforce` category (`SexLab_Strategy_RejectForce_Selfish` / `_Reject`) are offered. Ends when the forcer picks something else or leaves ("<name> is no longer forced by <forcer>."), or at scene end. The player is never forced.
+- **Forced** (`forcedBy`, `forcedAction`): only `acceptforce`, `selfish` and `reject` (resist) are offered; only `acceptforce` during the player Force fear cooldown. Ends when the forcer picks something else or leaves ("<name> is no longer forced by <forcer>."), or at scene end. The player is never forced.
 - **Broken** (mental break): the strategy is set aside and the NPC arouses itself until it recovers.
-- **Defaults** at `BeginScene` by role: `sexlab.minigame.default_strategy_normal` / `_aggressor` / `_victim` (Mutual / Selfish / Passive). Not announced.
-- **Announce**: `Effect_StrategyChanged(actor, target, msg, notify)` → `DirectNarration_Optional("sexlab_strategy", …)`, plus `Debug.Notification` in player scenes.
-- **Eligibility**: the engine pushes per-actor StorageUtil int keys `skyrimnet_sexlab_strategy_<key>` (`Effect_StrategyEligibility`, on change only; all unset at scene end and in Together mode). Each action's rule is `papyrus_util HasIntValue currentActor <key> == true` plus `SexLabAnimatingFaction > 0`.
-- **Prompt / HUD**: `Scene` writes `GetStrategyText` to the position obj `strategy` (0050 prompt: "<name> focuses on …"); the HUD shows the label as a tag.
-- `MCM.ApplyMiniGameActions` unregisters Arouse / Calm and all strategy actions in Together mode (switching back needs save + reload).
+- **Defaults** at `BeginScene` by role: `sexlab.minigame.default_strategy_normal` / `_aggressor` / `_victim` (Mutual / Selfish / Passive). Not announced. They are the fallback until the scene-start decision lands, and always without a decisions provider.
+- **Announce** (every change): `Effect_StrategyChanged(actor, target, msg, observed, narrate)` shows no notification. `narrate` (API / Papyrus `SetStrategy`, forced / released, NonSexual switches): `DirectNarration_Optional("sexlab_strategy", msg, …)`. Decision-made changes (`StrategySource::kDecision`): no narration, `SkyrimNetApi.RegisterEvent("sexlab_strategy", observed, …)`, a short-term event with how it looks to others ("Lydia appears to be focused on her own enjoyment.", `kStrategies[].observed`).
+- **Prompt / HUD**: `Scene` writes `GetStrategyText` to the position obj `strategy` (0050 prompt: "<name> focuses on …"; the speaker's own line ends "Speak and act in line with that approach."); the HUD shows the label as a tag.
+- `MCM.ApplyMiniGameActions` unregisters Arouse / Calm in Together mode (switching back needs save + reload). There are no strategy actions.
+
+### Strategy decisions
+
+`SKSE_Source/src/StrategyDecision.cpp` asks SkyrimNet's decision model through `PublicSendCustomDecisionToLLM` (public API v12+). One request decides one NPC (the *focus*), with the template `prompts/decisions/sexlab/minigame_strategy.prompt` (one `[ question strategy choice ]`). Off with `sexlab.minigame.decision_strategy` or in Together mode.
+
+- **Triggers:**
+  - *Scene start*: the tick marks a scene ready on the same rule as `StrategyStep` (first non-empty `SetStageTimers`, or `kUntimedGrace` after `BeginScene`) and dispatches `OnSceneReady(sid)` → one request per NPC (`SceneNpcs`). Once per scene (`decisionsStarted`); scenes restored from the co-save skip it.
+  - *Dialogue*: `PublicRegisterEventCallback` for `dialogue`, `dialogue_npc` and `dialogue_background`. The originator, if a managed non-player actor, gets a request with the line (`data.text` / `dialogue` / `line`).
+- **Threading:** SkyrimNet calls both callbacks on its ThreadPool. They only copy strings, then `AddTask`; context building, relationship lookups and `ApplyStrategyDecision` run on the game thread.
+- **Push (`contextJson`)**, built from `OrgasmEngine::GetStrategyDecisionInput` under the engine lock: `trigger`, `focus_uuid`, `focus_name`, `last_line_text`, `progress` (start / middle / near the end / final stage), `role` (partner / aggressor / victim), `arousal` (0050 bands), `orgasms`, `expects_orgasm`, `broken`, `current_key`, `approach`, `forced_by`, `force_method`, `partners[]` (`uuid`, `name`, `is_player`, `role`, `arousal`, `orgasms`, `approach`, `relationship`, `relationship_rank`), `options[]` (`key`, `text`).
+  - **Options** are only what `StrategyAllowed` permits now, so the model cannot pick an illegal one. Tease / Greedy / ForcedOrgasm expand to one option per valid target, key `<key>_p<slot>` (1-based SexLab position); the text comes from `kStrategies[].option` with names and pronouns filled in.
+  - **Relationship**: Skyrim's rank between the focus and each partner, `BGSRelationship::GetRelationship` on the actor bases (template bases as a fallback): `4 − level`, labels lovers / allies / confidants / friends / acquaintances / rivals / foes / enemies / archnemeses; no relationship form is `strangers` (0).
+- **Pull (template):** `decnpc` and `render_character_profile("short_inline", …)` for the focus and NPC partners; `sexlab_get_threads(focus_uuid)` for the act and location; `get_recent_events(15, focus_uuid)` + `format_event(…, "compact")`; `last_line_text`.
+- **Answer:** `answers.strategy.choice` and `answers.strategy.confidence` → `ApplyStrategyDecision`, which returns a `DecisionResult`: `kDropped` when the scene ended or its `generation` changed (bumped when the roster changes; a reused sid gets a new one); the `_p<slot>` suffix resolves through the snapshot's `slots`; same key and target = `kKept` (quiet); a change with a reported confidence under `sexlab.minigame.decision_min_confidence` (default 0.6; no confidence reported = no floor) = `kLowConfidence`, current strategy stays; else `SetStrategyLocked` with narrate off (`kChanged`).
+- **Coalescing:** one request in flight per NPC; a line arriving meanwhile is kept and sent once the answer lands.
+- **Failure:** `no_decisions_route` warns once and stops asking until the next load (role defaults stay); other errors are logged. Log lines: `StrategyDecision: send …`, `answer <key> p=… (changed | kept | low confidence, kept current | unknown key | dropped: scene ended or roster changed)`.
 
 ## Tick
 
@@ -210,7 +225,7 @@ RequestOrgasm(Actor, bool force, String source)
 int GetOrgasmCount(Actor)   float GetSecondsSinceOrgasm(Actor)   bool IsManaged(Actor)
 bool IsMentallyBroken(Actor)   bool IsMiniGameEnabled()
 SetRates(float passive, float aggressor, float victim)   ; role multipliers, runtime override until the next config save
-bool SetStrategy(Actor, int strategy, Actor target)  int GetStrategy(Actor)   ; mini-game NPC strategies (ids in the shell)
+bool SetStrategy(Actor, int strategy, Actor target)  int GetStrategy(Actor)   ; mini-game NPC strategies (ids in the shell); narrated
 String GetStrategyText(Actor)   Actor GetForcedBy(Actor)   int StrategyId(String key)
 ```
 

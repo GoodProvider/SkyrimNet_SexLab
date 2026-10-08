@@ -13,6 +13,7 @@
 - [Dragonborn voice over 2](https://www.nexusmods.com/skyrimspecialedition/mods/84329)
 - SkyrimNet (narration enabled). This zip ships LLM content in both layouts: 0.25+ reads plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/`; older SkyrimNet reads `prompts/` and `config/actions/`.
 - SkyrimNet_SexLab (this mod)
+- A **decisions** provider set up in SkyrimNet (for example Jev, `typesafe/jev-*` on OpenRouter), for the Multi-Orgasm Mini-game: it picks each NPC's strategy. Without one, NPCs keep the default strategies (Mini-game settings)
 - Animation utilities: [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232), [XPMSSE](https://www.nexusmods.com/skyrimspecialedition/mods/1988), [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/), [Hug kill move fix for USSEP](https://www.nexusmods.com/skyrimspecialedition/mods/139572)
 - [Ace Animations](https://www.nexusmods.com/skyrimspecialedition/mods/81928) (cuddle/spooning)
 

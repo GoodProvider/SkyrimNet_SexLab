@@ -91,10 +91,74 @@ namespace OrgasmEngine
     /// The engine turns them into the actor's bonus (SexLab's formula, see ComputeBonus).
     void SetBonusInputs(RE::Actor* actor, const std::vector<float>& ownSkills, const std::vector<float>& partnerSkills,
         std::int32_t lowestRank, std::int32_t highestRank, std::int32_t actSkill);
-    /// Mini-game: the NPC's strategy (and its target for Tease / Greedy / ForcedOrgasm). Narrated, and a
-    /// notification in player scenes. False when not allowed for the actor (mode, role, forced state).
-    bool SetStrategy(RE::Actor* actor, Strategy strategy, RE::Actor* target);
+    /// Who changed a strategy. kDecision (the decision model): a short-term event ("<name> appears to be ...")
+    /// instead of narration. Both show a notification.
+    enum class StrategySource : std::int32_t
+    {
+        kAction = 0,
+        kDecision = 1,
+    };
+
+    /// Mini-game: the NPC's strategy (and its target for Tease / Greedy / ForcedOrgasm). Announced (see
+    /// StrategySource). False when not allowed for the actor (mode, role, forced state).
+    bool SetStrategy(RE::Actor* actor, Strategy strategy, RE::Actor* target,
+        StrategySource source = StrategySource::kAction);
     Strategy GetStrategy(RE::Actor* actor);
+
+    /// Strategy decision (StrategyDecision.cpp): the engine's facts about one NPC and the options it may pick.
+    struct DecisionPartner
+    {
+        RE::FormID id = 0;
+        std::string name;
+        bool isPlayer = false;
+        std::string role;     // partner | aggressor | victim
+        std::string arousal;  // 0050 bands: barely aroused ... on the verge of orgasm
+        std::int32_t orgasms = 0;
+        std::string approach;  // GetStrategyText, "" for the player
+    };
+    struct DecisionOption
+    {
+        std::string key;  // strategy key, "<key>_p<slot>" for a target strategy
+        std::string text;
+    };
+    struct DecisionInput
+    {
+        std::int32_t sid = 0;
+        std::uint64_t generation = 0;  // ApplyStrategyDecision drops the answer when it changed
+        RE::FormID id = 0;
+        std::string name;
+        std::string role;
+        std::string arousal;
+        std::int32_t orgasms = 0;
+        bool expectsOrgasm = true;
+        bool broken = false;
+        std::string currentKey;
+        std::string approach;
+        std::string forcedBy;
+        std::string forceMethod;
+        std::string progress;  // start | middle | near the end | final stage
+        std::vector<DecisionPartner> partners;  // everyone else, SexLab position order
+        std::vector<DecisionOption> options;    // only what the engine allows now
+        std::vector<std::pair<std::string, RE::FormID>> slots;  // "p<slot>" -> actor (target suffixes)
+    };
+    /// False when the actor is unmanaged, the player, or not in mini-game mode.
+    bool GetStrategyDecisionInput(RE::Actor* actor, DecisionInput& out);
+    enum class DecisionResult
+    {
+        kChanged,
+        kKept,           // same key and target as now
+        kDropped,        // scene ended, roster changed or mini-game off
+        kLowConfidence,  // under sexlab.minigame.decision_min_confidence
+        kUnknown,        // key not a strategy
+    };
+    /// Applies a decision answer key from `in` (same scene and generation, still allowed). Quiet when the key
+    /// equals the current strategy. `confidence` < 0 = not reported (no floor).
+    DecisionResult ApplyStrategyDecision(RE::Actor* actor, const DecisionInput& in, const std::string& key,
+        double confidence);
+    /// sexlab.minigame.decision_strategy and mini-game mode.
+    bool IsStrategyDecisionEnabled();
+    /// Non-player actors of a managed scene, position order.
+    std::vector<RE::FormID> SceneNpcs(std::int32_t sid);
     /// Third-person phrase for the current strategy ("focuses on self enjoyment"), "" when none / Together mode.
     std::string GetStrategyText(RE::Actor* actor);
     // Stamina regen, percent of the actor's default (100 when unmanaged or fatigue is off).

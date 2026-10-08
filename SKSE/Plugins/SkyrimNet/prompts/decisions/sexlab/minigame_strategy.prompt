@@ -1,0 +1,69 @@
+{# Decision template: how one NPC in a SexLab mini-game scene behaves in the act right now, as one choice
+   over the strategies the engine allows. Sent by SkyrimNet_SexLab.dll (StrategyDecision.cpp) through
+   PublicSendCustomDecisionToLLM: for every NPC when the scene starts, and for the speaker after each line an
+   NPC in the scene speaks. Rendered into a decisions request, never into chat messages.
+
+   Context pushed by the game (C++ snapshot): trigger (scene_start | dialogue), focus_uuid, focus_name,
+   last_line_text, progress, role, arousal, orgasms, expects_orgasm, broken, current_key, approach, forced_by,
+   force_method, partners [uuid, name, is_player, role, arousal, orgasms, approach, relationship,
+   relationship_rank], options [key, text]. Keys are read back by the game: keep {{ o.key }} as given.
+   A criterion is one line; profiles and other multi-line decorators belong in the state blocks. #}
+{% set _focus = decnpc(focus_uuid) %}
+[ state focus ]
+{{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}, is the {{ role }} in this scene{% if not expects_orgasm %} (this act is not expected to bring {{ focus_name }} to orgasm){% endif %}.
+{{ focus_name }} is {{ arousal }}{% if orgasms > 0 %} and has climaxed {{ orgasms }} time{% if orgasms > 1 %}s{% endif %} so far{% endif %}.
+{% if approach != "" %}Current approach: {{ focus_name }} {{ approach }}.{% endif %}
+{% if forced_by != "" %}{{ focus_name }} is being forced by {{ forced_by }}{% if force_method != "" %} ({{ force_method }}){% endif %}.{% endif %}
+{% if broken %}{{ focus_name }} is mentally overwhelmed.{% endif %}
+{{ render_character_profile("short_inline", focus_uuid) }}
+[ end state ]
+
+[ state scene ]
+{% set _sexlab = sexlab_get_threads(focus_uuid) %}
+{% if existsIn(_sexlab, "threads") %}
+{% for thread in _sexlab.threads %}
+{% for actor_record in thread.actors %}
+{% if to_number(actor_record.uuid) == focus_uuid %}
+{% if existsIn(thread, "location") and thread.location != "" %}On {{ thread.location }}, {% endif %}{{ thread.description }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+The scene is at its {{ progress }}{% if progress != "final stage" and progress != "start" %} stage{% endif %}.
+[ end state ]
+
+[ state partners ]
+{% for p in partners %}
+{{ p.name }}{% if p.is_player %} (the player){% endif %}: the {{ p.role }}, {{ p.arousal }}{% if p.orgasms > 0 %}, climaxed {{ p.orgasms }} time{% if p.orgasms > 1 %}s{% endif %}{% endif %}{% if p.approach != "" %}; {{ p.name }} {{ p.approach }}{% endif %}. {{ focus_name }} and {{ p.name }} are {{ p.relationship }}.
+{% if not p.is_player %}- {{ render_character_profile("short_inline", p.uuid) }}
+{% endif %}
+{% endfor %}
+[ end state ]
+
+[ state recent_dialogue ]
+{% set _events = get_recent_events(15, focus_uuid) %}
+{% if length(_events) > 0 %}
+{% for event in _events %}
+{{ format_event(event, "compact") }}
+{% endfor %}
+{% else %}
+Nothing has been said recently.
+{% endif %}
+[ end state ]
+
+[ state last_line ]
+{% if trigger == "dialogue" and last_line_text != "" %}{{ focus_name }} just said: "{{ last_line_text }}"{% else %}The scene has just begun; {{ focus_name }} has not spoken during it yet.{% endif %}
+[ end state ]
+
+[ question strategy choice ]
+Decide how {{ focus_name }} is behaving in the act right now.
+Base it on who {{ focus_name }} is (`focus`), their role, their relationship with each partner (`partners`), and what is happening (`scene`).
+`last_line` weighs most: the behaviour must fit what {{ focus_name }} just said. Then `recent_dialogue`, oldest first, which shows how the scene came about and whether {{ focus_name }} wanted it.
+Keep the current approach ({{ current_key }}) unless what was said or the situation clearly changes it.
+A victim who is resisting does not cooperate. A lover or friend who is lagging behind may be helped. A rival or enemy is unlikely to be generous.
+[ criteria ]
+{% for o in options %}
+{{ o.key }}: {{ o.text }}
+{% endfor %}
+[ end criteria ]
+[ end question ]

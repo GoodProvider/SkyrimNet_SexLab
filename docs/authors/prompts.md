@@ -57,6 +57,14 @@ Keep literals character-for-character or matching breaks.
 
 v0.31.5+ length rules in `0050_sexlab_activity.prompt` when `_pain_` / `_pleasure_` (not `_gagged_`): one to two vocalizations (not every N words); 9-word dialogue cap (vocalizations do not count); if narration is enabled and the speaker is active, one narration sentence ≤ 20 words that should move the action forward. Edit that file; do not copy the full prompt here.
 
+## Strategy decision (`decisions/sexlab/minigame_strategy`)
+
+A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plus one `[ question strategy choice ]` with `[ criteria ]`. The DLL sends it through `PublicSendCustomDecisionToLLM` for one NPC at a time (scene start, and after that NPC speaks). Flow and context keys: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions).
+
+- Keep `{{ o.key }}` exactly as given: the DLL maps the answer back by key (`passive`, `tease_p2`, …).
+- One criterion per line; profiles and other multi-line decorators go in a `[ state ]` block.
+- The pushed context keys are bare lowercase (`focus_uuid`, `last_line_text`, `partners[].relationship`, …), per [../reference/json-keys.md](../reference/json-keys.md).
+
 ## Orgasm gate (`0550`)
 
 See [../reference/orgasm-narration.md](../reference/orgasm-narration.md). Gate:
@@ -73,6 +81,7 @@ contains(_direct_narration, " is orgasming.")
 | `threads` / `actors` JSON | activity + narration |
 | DirectNarration + `" is orgasming."` | `0550_sexlab_narration.prompt` |
 | Scene `RenderSlPrompt` (`afterglow.prompt`, `cum.prompt`) | DirectNarration / RegisterEvent |
+| `StrategyDecision.cpp` context JSON + `options[].key` | `decisions/sexlab/minigame_strategy.prompt` |
 
 ## Checklist
 

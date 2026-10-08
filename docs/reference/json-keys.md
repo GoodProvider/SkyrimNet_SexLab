@@ -12,6 +12,8 @@ Do **not** invent Title Case or leading-`_` keys (`Actors`, `_actors`) for this 
 
 Always serialize via `ObjectToLowerCaseKeyJson` / `JsonLowerCaseKeys` so export casing is stable under Skyrim’s string pool.
 
+The strategy decision context (`StrategyDecision.cpp` → `decisions/sexlab/minigame_strategy.prompt`) is built with nlohmann in C++ and follows the same rule with `_` between words: `trigger`, `focus_uuid`, `focus_name`, `last_line_text`, `progress`, `role`, `arousal`, `orgasms`, `expects_orgasm`, `broken`, `current_key`, `approach`, `forced_by`, `force_method`, `partners[]` (`uuid`, `name`, `is_player`, `role`, `arousal`, `orgasms`, `approach`, `relationship`, `relationship_rank`), `options[]` (`key`, `text`).
+
 Protocol **values** (speaking modifiers) are separate — still `_pain_`, etc. See [protocol-tokens.md](protocol-tokens.md).
 
 ## Implementation

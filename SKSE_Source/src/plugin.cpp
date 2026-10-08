@@ -20,6 +20,7 @@
 #include "OrgasmEngine.h"
 #include "Hud.h"
 #include "Papyrus_OrgasmEngine.h"
+#include "StrategyDecision.h"
 
 using namespace SKSE;
 
@@ -126,6 +127,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             Hud::Init();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
             OrgasmEngine::Install();
+            StrategyDecision::Install();
             NarrationTiming::Install();
             JsonStore_SelfTest();
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
@@ -140,6 +142,8 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             WebUI_SetGameReady();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
             SexLabNet::Json::OnNewSession();
+            StrategyDecision::Reset();
+            StrategyDecision::Install();  // retry when registration failed at kDataLoaded
         }
     });
 

@@ -184,30 +184,18 @@ Function Effect_DomSync(Actor akActor, float miniDelta, float daring, float naiv
     SetDomMeter(akActor, dom.OrgasmMeter(akActor))
 EndFunction
 
-; Strategy action eligibility: StorageUtil int keys on the actor, read by the actions' papyrus_util
-; HasIntValue rules. allow: set; deny: unset.
-Function Effect_StrategyEligibility(Actor akActor, String[] allow, String[] deny) global
-    if akActor == None
-        return
-    endif
-    int i = 0
-    while i < allow.length
-        StorageUtil.SetIntValue(akActor, allow[i], 1)
-        i += 1
-    endwhile
-    i = 0
-    while i < deny.length
-        StorageUtil.UnsetIntValue(akActor, deny[i])
-        i += 1
-    endwhile
-EndFunction
-
-; Strategy change: optional narration (the HUD tag shows the change; notify is unused).
-Function Effect_StrategyChanged(Actor akActor, Actor target, String msg, bool notify) global
+; Strategy change (no notification). narrate: optional narration of msg (LLM / API / forced
+; changes). Else (the decision model changed it) a short-term event with observed, how the change looks
+; to others ("Lydia appears to be focused on her own enjoyment.").
+Function Effect_StrategyChanged(Actor akActor, Actor target, String msg, String observed, bool narrate) global
     if msg == ""
         return
     endif
-    SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_strategy", msg, akActor, target, False)
+    if narrate
+        SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_strategy", msg, akActor, target, False)
+    elseif observed != ""
+        SkyrimNetApi.RegisterEvent("sexlab_strategy", observed, akActor, target)
+    endif
 EndFunction
 
 ; Sex is hard work: these non-victims are at 0 stamina regen and 0 stamina; the scene ends.

@@ -88,7 +88,7 @@ Match your feelings of desire, vulnerability, playfulness, intensity, connection
 You are {% if speaker.enjoyment >= 90 %}on the verge of orgasm{% else if speaker.enjoyment >= 75 %}close to orgasm{% else if speaker.enjoyment >= 50 %}very aroused{% else if speaker.enjoyment >= 25 %}aroused{% else %}barely aroused{% endif %}.
          {% endif %}
          {% if existsIn(speaker, "strategy") and speaker.strategy != "" %}
-Your current approach: {{ speaker.name }} {{ speaker.strategy }}. You may change it with a strategy action.
+Your current approach: {{ speaker.name }} {{ speaker.strategy }}. Speak and act in line with that approach.
          {% endif %}
          {% if is_narration_enabled() %}
          {% endif %}
