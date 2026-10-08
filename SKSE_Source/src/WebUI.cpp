@@ -3,6 +3,7 @@
 #include "Papyrus_WebUI.h"
 #include "WebUI_Log.h"
 #include "ActionCatalog.h"
+#include "Aid.h"
 #include "ActionDispatch.h"
 #include "Config.h"
 #include "AnimationDB.h"
@@ -789,6 +790,33 @@ void InitWebUI()
                             RE::TESForm::LookupByID<RE::Actor>(victim));
                 } catch (...) {
                     webui_log::warn("onForceResult: bad JSON");
+                }
+            });
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onAidResult", [](const char* value) {
+            RunGuarded("onAidResult", [&] {
+                WebUI_Invoke("hideAidPanel();");
+                WebUI_Visibility_HideWithoutCommit();
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    if (j.value("cancel", false))
+                        return;
+                    const auto target = j.value("target", static_cast<RE::FormID>(0));
+                    const auto option = j.value("option", static_cast<RE::FormID>(0));
+                    webui_log::info("onAidResult target={:#x} option={:#x}", target, option);
+                    // Inventory and spell lists are read on the game thread.
+                    SKSE::GetTaskInterface()->AddTask([target, option]() {
+                        auto* player = RE::PlayerCharacter::GetSingleton();
+                        auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
+                        const std::string line = Aid::Apply(player, actor, option);
+                        if (!line.empty())
+                            OrgasmEngine::NarrateDirect(line, player, actor);
+                    });
+                } catch (...) {
+                    webui_log::warn("onAidResult: bad JSON");
                 }
             });
         });

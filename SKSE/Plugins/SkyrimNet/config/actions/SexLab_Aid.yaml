@@ -1,0 +1,29 @@
+name: SexLab_Aid
+label: Aid
+description: "[speaker] heals [target] or restores their stamina during ongoing sex with a healing or stamina spell or potion [speaker] has (target can be the speaker)."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: LLM_Aid
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity), the one casting the spell or giving the potion
+  - type: dynamic
+    name: target
+    description: Actor being healed or restored (can be speaker)
+  - type: dynamic
+    name: kind
+    description: "heal|stamina"
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_can_aid"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

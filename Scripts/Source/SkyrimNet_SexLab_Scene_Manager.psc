@@ -69,6 +69,9 @@ Function Setup()
     endif
 
     Trace("Setup","")
+    ; Bug reports: which SexLab build (1.6x vs P+, SLSO) the log came from.
+    Trace("Setup", "SexLab version:"+SexLabUtil.GetVersion()+" plugin:"+SKSE.GetPluginVersion("SexLabUtil") \
+        +" P+:"+SkyrimNet_SexLab_Utilities.IsSexLabPPlus()+" SLSO:"+(Game.GetModByName("SLSO.esp") != 255))
     ; Auto fills bake into saves. Renaming scenes→sl_scenes / scene_generic→
     ; sl_scene_generic leaves the new names empty on old saves while creators
     ; (unchanged) still work — rebuild every Setup from known FormIDs.
@@ -1448,6 +1451,11 @@ Function RegisterEventsSexlab()
     ;RegisterForModEvent("HookStageEnd", "SexLab_StageEnd")
     UnRegisterForModEvent("HookAnimationEnd")
     RegisterForModEvent("HookAnimationEnd", "AnimationEnd")
+    ; Diagnostics only: SexLab 1.6x ChangeActors / EndLeadIn restart the thread at stage 1.
+    UnRegisterForModEvent("HookActorChangeEnd")
+    RegisterForModEvent("HookActorChangeEnd", "TraceActorChangeEnd")
+    UnRegisterForModEvent("HookLeadInEnd")
+    RegisterForModEvent("HookLeadInEnd", "TraceLeadInEnd")
 
     UnRegisterForModEvent("HookOrgasmStart")
     UnRegisterForModEvent("SexLabOrgasm")
@@ -1561,6 +1569,7 @@ Event AnimationChange(int ThreadID, bool HasPlayer)
     if thread == None
         return
     endif
+    Trace("AnimationChange", "tid:"+ThreadID+" stage:"+thread.Stage)
     SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
     if sl_scene == None
         Trace("AnimationChange","Scene is None for ThreadID "+ThreadID)
@@ -1568,6 +1577,24 @@ Event AnimationChange(int ThreadID, bool HasPlayer)
     endif
     sl_scene.CheckAnimationChange()
 EndEvent
+
+Event TraceActorChangeEnd(int ThreadID, bool HasPlayer)
+    TraceThreadStage("ActorChangeEnd", ThreadID)
+EndEvent
+
+Event TraceLeadInEnd(int ThreadID, bool HasPlayer)
+    TraceThreadStage("LeadInEnd", ThreadID)
+EndEvent
+
+Function TraceThreadStage(String func, int ThreadID)
+    if sexlab == None
+        return
+    endif
+    sslThreadController thread = SexLab.GetController(ThreadID)
+    if thread != None
+        Trace(func, "tid:"+ThreadID+" stage:"+thread.Stage+" state:"+(thread as sslThreadModel).GetState())
+    endif
+EndFunction
 
 ; An animation switch is handled as a stage start (narrates old stage -> new stage).
 Event AnimationChangedStage(int ThreadID)

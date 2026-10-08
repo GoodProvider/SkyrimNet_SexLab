@@ -954,9 +954,29 @@
             font-family: var(--font-ui);
         }
 
-        #force-accept.de-disabled {
+        #force-accept.de-disabled,
+        #aid-accept.de-disabled {
             opacity: 0.4;
             pointer-events: none;
+        }
+
+        #aid-panel {
+            pointer-events: auto;
+            min-width: 420px;
+        }
+
+        #aid-panel .option-cancel {
+            margin-top: 0;
+            border-top: none;
+            padding: var(--space-xs) var(--space-md);
+            border: 1px solid rgba(229, 69, 69, 0.25);
+            border-radius: var(--radius);
+        }
+
+        .aid-note {
+            font-family: var(--font-ui);
+            color: var(--text-secondary);
+            margin: 0 0 var(--space-md);
         }
 
         #force-panel .option-cancel {
@@ -2260,6 +2280,19 @@
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="forceCancel()">Cancel</div>
         </div>
     </div>
+    <!-- Aid (HUD aid key, mini-game): "<player> <spell / potion> on <actor>." -->
+    <div id="aid-panel" class="panel" style="display:none">
+        <div class="target-row">Aid</div>
+        <div class="force-sentence">
+            <span id="aid-caster"></span> <span id="aid-option"></span>
+            on <span id="aid-actor"></span>.
+        </div>
+        <div id="aid-note" class="aid-note"></div>
+        <div class="btn-row">
+            <div class="action-btn" id="aid-accept" onmousedown="event.preventDefault()" onclick="aidAccept()">Use</div>
+            <div class="option-cancel" onmousedown="event.preventDefault()" onclick="aidCancel()">Cancel</div>
+        </div>
+    </div>
     </div><!-- #yesno-overlay -->
     <!-- Stop dialog (Description Editor stop, explainPrompt options): "Stop scene" choices / "Explain why". -->
     <div id="stop-dialog-overlay">
@@ -3206,6 +3239,10 @@
             }
             if (forceIsOpen()) {
                 forceCancel();
+                return;
+            }
+            if (aidIsOpen()) {
+                aidCancel();
                 return;
             }
             if (overlayElIsOpen('yesno-panel')) {
@@ -7757,9 +7794,9 @@
 
         // ── Force (HUD force key) ────────────────────────────────
         // C++ Hud OnForce: {victims: [{id, name, strategies: [{key, label}]}]}. Reply: onForceResult.
-        const FORCE_METHODS = ['slap face', 'pinch nipple', 'cover mouth', 'punch', 'pull hair', 'custom'];
+        const FORCE_PRESETS = ['slap face', 'pinch nipple', 'cover mouth', 'punch', 'pull hair'];
         const FORCE_DEFAULT_STRATEGY = 'selfless';
-        let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_METHODS[0] };
+        let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_PRESETS[0] };
 
         function forceVictim() {
             return FORCE.victims[FORCE.victim] || null;
@@ -7788,7 +7825,9 @@
         }
 
         function openForcePanel(cfg) {
-            FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY, method: FORCE_METHODS[0] };
+            FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY, method: FORCE_PRESETS[0] };
+            // Presets, then the player's weak attack spells (a non-lethal hit), then custom text.
+            const methods = FORCE_PRESETS.concat((cfg && cfg.spells) || [], ['custom']);
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
@@ -7802,7 +7841,7 @@
             forceRenderStrategy();
             const methodHost = document.getElementById('force-method');
             methodHost.innerHTML = '';
-            methodHost.appendChild(createPulldown(FORCE_METHODS, FORCE.method, (v) => {
+            methodHost.appendChild(createPulldown(methods, FORCE.method, (v) => {
                 FORCE.method = v;
                 forceUpdate();
                 if (v === 'custom') document.getElementById('force-custom-text').focus();
@@ -7846,6 +7885,82 @@
 
         function forceCancel() {
             forceSend({ cancel: true });
+        }
+
+        // ── Aid panel (HUD aid key): the player's healing / stamina spells and potions on a scene actor ──
+        let AID = { actors: [], options: [], actor: 0, option: -1 };
+
+        function aidLabel(o) {
+            if (o.potion) return o.count > 1 ? `${o.name} ×${o.count}` : o.name;
+            return `${o.name} (${o.cost} magicka)`;
+        }
+
+        function aidUpdate() {
+            const o = AID.options[AID.option];
+            const ok = !!o && o.affordable && !!AID.actors[AID.actor];
+            document.getElementById('aid-accept').classList.toggle('de-disabled', !ok);
+            const what = o ? [o.health ? 'health' : '', o.stamina ? 'stamina' : ''].filter(Boolean).join(' and ') : '';
+            document.getElementById('aid-note').textContent = !o
+                ? (AID.options.length ? 'Not enough magicka for any of your spells.' : 'No healing or stamina spell or potion.')
+                : (o.potion ? 'Potion' : 'Spell') + ', restores ' + what + '.';
+        }
+
+        function openAidPanel(cfg) {
+            AID = { actors: (cfg && cfg.actors) || [], options: (cfg && cfg.options) || [], actor: 0, option: -1 };
+            AID.option = AID.options.findIndex(o => o.affordable);
+            for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
+                'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
+                hidePanel(id);
+            document.getElementById('aid-caster').textContent = (cfg && cfg.caster && cfg.caster.name) || 'You';
+            const labels = AID.options.map(aidLabel);
+            const disabled = AID.options.filter(o => !o.affordable).map(aidLabel);
+            const optionHost = document.getElementById('aid-option');
+            optionHost.innerHTML = '';
+            optionHost.appendChild(createPulldown(labels, labels[AID.option] || '', (_, i) => {
+                AID.option = i;
+                aidUpdate();
+            }, disabled));
+            const actorHost = document.getElementById('aid-actor');
+            actorHost.innerHTML = '';
+            actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[0] || {}).name || '', (_, i) => {
+                AID.actor = i;
+                aidUpdate();
+            }));
+            document.body.classList.add('yesno-solo');
+            hideControlPanel();
+            hideTargetMenuRow();
+            const host = document.getElementById('main-panel-host');
+            if (host) host.style.display = 'none';
+            document.getElementById('aid-panel').style.display = 'block';
+            aidUpdate();
+        }
+
+        function hideAidPanel() {
+            document.getElementById('aid-panel').style.display = 'none';
+            closeAllPulldowns();
+            clearYesNoSolo();
+        }
+
+        function aidIsOpen() {
+            return document.getElementById('aid-panel').style.display === 'block';
+        }
+
+        function aidSend(payload) {
+            if (typeof window.onAidResult === 'function')
+                window.onAidResult(JSON.stringify(payload));
+            else
+                hideAidPanel();
+        }
+
+        function aidAccept() {
+            const o = AID.options[AID.option];
+            const a = AID.actors[AID.actor];
+            if (!o || !a || document.getElementById('aid-accept').classList.contains('de-disabled')) return;
+            aidSend({ target: a.id, option: o.id });
+        }
+
+        function aidCancel() {
+            aidSend({ cancel: true });
         }
 
         // ── SceneInfo store (one per live thread + one Scene Creator draft) ──

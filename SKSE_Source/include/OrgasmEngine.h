@@ -180,6 +180,11 @@ namespace OrgasmEngine
     /// The player forces victim into strategyKey by method (preset key or free text). Starts the fear
     /// cooldown (only AcceptForce offered). Returns the narration line, "" when refused.
     std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method);
+    /// Any non-victim forcer (SexLab_Force action): forces a non-player victim of its mini-game scene. method: a
+    /// preset key, one of the forcer's weak attack spells (a non-lethal hit), or free text. "" when refused.
+    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method);
+    /// The actor is not a victim in a mini-game scene that has a non-player victim (SexLab_Force eligibility).
+    bool CanForce(RE::Actor* actor);
     void EndScene(std::int32_t sid);
     /// SexLabOrgasm arrived: true (and consumed) when the engine fired it itself.
     bool ConsumeOwnOrgasm(RE::Actor* actor);

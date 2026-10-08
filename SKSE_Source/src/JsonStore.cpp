@@ -127,19 +127,25 @@ namespace SexLabNet::Json
         }
 
         /// Resolves a handle to its live node, or nullptr (logged) if the handle is stale,
-        /// out of range, or from a prior save/load session.
-        Node* Resolve(Handle h)
+        /// out of range, or from a prior save/load session. quiet: validity probes (isExists) skip the log.
+        Node* Resolve(Handle h, bool quiet = false)
         {
             if (h == kInvalidHandle) {
                 return nullptr;
             }
             const auto parts = DecodeHandle(h);
             if (parts.slot == 0 || parts.slot >= g_slots.size()) {
+                if (quiet) {
+                    return nullptr;
+                }
                 webui_log::error("dead handle 0x{:X} (slot {} out of range)", static_cast<std::uint32_t>(h), parts.slot);
                 return nullptr;
             }
             Node& n = g_slots[parts.slot];
             if (!n.alive || n.gen != parts.gen || n.session != parts.session) {
+                if (quiet) {
+                    return nullptr;
+                }
                 webui_log::error("dead handle 0x{:X} (slot={} alive={} gen={}/{} session={}/{})",
                     static_cast<std::uint32_t>(h), parts.slot, n.alive, parts.gen, n.gen, parts.session, n.session);
                 return nullptr;
@@ -475,10 +481,10 @@ namespace SexLabNet::Json
         return h;
     }
 
-    bool IsValid(Handle h) { std::lock_guard lock(g_mutex); return Resolve(h) != nullptr; }
-    bool IsMap(Handle h) { std::lock_guard lock(g_mutex); auto* n = Resolve(h); return n && !n->isArray && !n->isFormMap; }
-    bool IsArray(Handle h) { std::lock_guard lock(g_mutex); auto* n = Resolve(h); return n && n->isArray; }
-    bool IsFormMap(Handle h) { std::lock_guard lock(g_mutex); auto* n = Resolve(h); return n && n->isFormMap; }
+    bool IsValid(Handle h) { std::lock_guard lock(g_mutex); return Resolve(h, true) != nullptr; }
+    bool IsMap(Handle h) { std::lock_guard lock(g_mutex); auto* n = Resolve(h, true); return n && !n->isArray && !n->isFormMap; }
+    bool IsArray(Handle h) { std::lock_guard lock(g_mutex); auto* n = Resolve(h, true); return n && n->isArray; }
+    bool IsFormMap(Handle h) { std::lock_guard lock(g_mutex); auto* n = Resolve(h, true); return n && n->isFormMap; }
 
     std::int32_t Count(Handle h)
     {

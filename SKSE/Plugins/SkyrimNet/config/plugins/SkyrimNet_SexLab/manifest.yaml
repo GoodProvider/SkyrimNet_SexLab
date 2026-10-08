@@ -560,11 +560,22 @@ schema:
     - name: "Force hotkey"
       path: "sexlab.minigame.key_force"
       type: "hotkey"
-      description: "When you are the aggressor, opens the Force panel: force a victim into a strategy by a method (slap, punch, ...). Greyed out on the HUD without a non-player victim. Default Num ."
+      description: "When you are the aggressor, opens the Force panel: force a victim into a strategy by a method (slap, punch, a weak attack spell you know, ...). Greyed out on the HUD without a non-player victim. Default Num ."
       min: 1
       max: 255
       required: false
       defaultValue: 110
+      category: "Mini-game"
+      supportsOverride: false
+
+    - name: "Aid hotkey"
+      path: "sexlab.minigame.key_aid"
+      type: "hotkey"
+      description: "Opens the Aid panel: cast one of your healing or stamina spells (costs magicka) or use a healing or stamina potion on an actor in the scene. Greyed out on the HUD when you have none. Default Num 0"
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 96
       category: "Mini-game"
       supportsOverride: false
 

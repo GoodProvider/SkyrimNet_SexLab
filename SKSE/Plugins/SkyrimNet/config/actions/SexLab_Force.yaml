@@ -1,0 +1,32 @@
+name: SexLab_Force
+label: Force
+description: "[speaker], as the aggressor during ongoing sex, forces the victim [target] to do what [speaker] wants by hurting or intimidating them."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: LLM_Force
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity), the aggressor
+  - type: dynamic
+    name: target
+    description: The victim being forced
+  - type: dynamic
+    name: strategy
+    description: "What the victim is forced to do: selfless (please the speaker)|passive (lie still and take it)|mutual (chase pleasure with the speaker)|together (finish together)|selfish (pleasure themselves)|cumquick (make the speaker cum quickly)|reject (hold back their orgasm). Give only the first word."
+  - type: dynamic
+    name: method
+    description: "How [speaker] forces them: slap face|pinch nipple|cover mouth|punch|pull hair|<the name of a weak attack spell [speaker] knows, e.g. Sparks>|<your own short phrase>"
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_can_force"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

@@ -1,5 +1,6 @@
 #include "OrgasmEngine.h"
 
+#include "Aid.h"
 #include "AnimSpeed.h"
 #include "Config.h"
 #include "Hud.h"
@@ -2866,31 +2867,49 @@ namespace OrgasmEngine
         return true;
     }
 
-    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method)
+    namespace
     {
-        Effects fx;
-        std::string line;
+        // Caller holds g_lock. The forcer's mini-game scene when the forcer is not a victim there.
+        const SceneState* ForcerScene(RE::Actor* forcer)
         {
-            std::lock_guard lock(g_lock);
-            const SceneState* sc = PlayerAggressorScene();
+            const auto* fst = Find(forcer);
+            if (!g_settings.miniGame || !fst || fst->role == Role::kVictim) {
+                return nullptr;
+            }
+            const auto it = g_scenes.find(fst->sid);
+            return it != g_scenes.end() ? &it->second : nullptr;
+        }
+
+        // Caller holds g_lock (sc from PlayerAggressorScene / ForcerScene). method: preset key, weak spell or text.
+        std::string ForceLocked(const SceneState* sc, RE::Actor* forcerActor, RE::FormID victim,
+            const std::string& strategyKey, const std::string& method, const Aid::WeakSpell* spell, Effects& fx)
+        {
             auto at = g_actors.find(victim);
-            if (!sc || at == g_actors.end() || !InScene(*sc, victim) || at->second.role != Role::kVictim) {
-                webui_log::warn("OrgasmEngine: PlayerForce refused for {:#x} (no aggressor scene / not a victim)", victim);
+            RE::Actor* victimActor = ActorFor(victim);
+            if (!sc || !forcerActor || at == g_actors.end() || !InScene(*sc, victim) ||
+                at->second.role != Role::kVictim || !victimActor || IsPlayer(victimActor)) {
+                webui_log::warn("OrgasmEngine: Force refused for {:#x} (no forcer scene / not a non-player victim)",
+                    victim);
                 return "";
             }
             ActorState& t = at->second;
             const Strategy s = ParseStrategy(strategyKey, Strategy::kCount);
             if (s == Strategy::kCount || !ForceableStrategy(*sc, t, s)) {
-                webui_log::warn("OrgasmEngine: PlayerForce {:#x} strategy '{}' not allowed", victim, strategyKey);
+                webui_log::warn("OrgasmEngine: Force {:#x} strategy '{}' not allowed", victim, strategyKey);
                 return "";
             }
-            auto* player = RE::PlayerCharacter::GetSingleton();
-            const std::string forcer = NameOf(player);
-            const std::string name = NameOf(ActorFor(victim));
+            const RE::FormID forcerId = forcerActor->GetFormID();
+            const std::string forcer = NameOf(forcerActor);
+            const std::string name = NameOf(victimActor);
 
-            // Preset: "<forcer> punches <victim> in the face and forces <victim> to ...". Free text: "... by <text>".
+            // Preset: "<forcer> punches <victim> in the face and forces <victim> to ...". Weak spell: "<forcer> hits
+            // <victim> with Sparks and forces ...". Free text: "... by <text>".
             std::string act;
             std::string noun = method;
+            if (spell) {
+                act = "hits {victim} with " + spell->name;
+                noun = "a jolt of " + spell->name;
+            }
             for (const auto& m : kForceMethods) {
                 if (method == m.key) {
                     act = m.act;
@@ -2901,12 +2920,12 @@ namespace OrgasmEngine
 
             // A forced victim drops what it was forcing; an NPC forcer lets go.
             ReleaseForced(*sc, t, fx);
-            if (t.forcedBy != 0 && t.forcedBy != player->GetFormID()) {
+            if (t.forcedBy != 0 && t.forcedBy != forcerId) {
                 if (auto old = g_actors.find(t.forcedBy); old != g_actors.end()) {
                     ReleaseForced(*sc, old->second, fx);
                 }
             }
-            t.forcedBy = player->GetFormID();
+            t.forcedBy = forcerId;
             t.forcedAction = ForcedAction::kPlayStrategy;
             t.forcedStrategy = s;
             t.forceMethod = noun;
@@ -2916,8 +2935,9 @@ namespace OrgasmEngine
             t.nextStepAt = Now();
 
             std::string what = ForcedPhrase(s);
-            ReplaceAll(what, "{forcer}", IsFemale(player) ? "her" : "him");
-            ReplaceAll(what, "{self}", Reflexive(ActorFor(victim)));
+            ReplaceAll(what, "{forcer}", IsFemale(forcerActor) ? "her" : "him");
+            ReplaceAll(what, "{self}", Reflexive(victimActor));
+            std::string line;
             if (!act.empty()) {
                 line = forcer + " " + act + " and forces " + name + " to " + what + ".";
             } else if (!method.empty()) {
@@ -2925,11 +2945,60 @@ namespace OrgasmEngine
             } else {
                 line = forcer + " forces " + name + " to " + what + ".";
             }
-            webui_log::info("OrgasmEngine: player forces {:#x} -> {} by '{}' (fear {:.0f}s)", victim, InfoOf(s).key,
-                method, g_settings.fearCooldown);
+            webui_log::info("OrgasmEngine: {:#x} forces {:#x} -> {} by '{}' (fear {:.0f}s)", forcerId, victim,
+                InfoOf(s).key, method, g_settings.fearCooldown);
+            return line;
         }
-        PostEffects(std::move(fx));
-        return line;
+
+        std::string ForceWith(RE::Actor* forcer, bool player, RE::FormID victim, const std::string& strategyKey,
+            const std::string& method)
+        {
+            // Weak attack spells read the forcer's spell lists outside the engine lock.
+            const auto spells = Aid::WeakAttackSpells(forcer);
+            const Aid::WeakSpell* spell = Aid::FindWeakSpell(spells, method);
+            Effects fx;
+            std::string line;
+            {
+                std::lock_guard lock(g_lock);
+                const SceneState* sc = player ? PlayerAggressorScene() : ForcerScene(forcer);
+                line = ForceLocked(sc, forcer, victim, strategyKey, method, spell, fx);
+            }
+            PostEffects(std::move(fx));
+            if (!line.empty() && spell) {
+                Aid::QueueWeakSpellHit(ActorFor(victim), spell->minDamage);
+            }
+            return line;
+        }
+    }
+
+    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method)
+    {
+        return ForceWith(RE::PlayerCharacter::GetSingleton(), true, victim, strategyKey, method);
+    }
+
+    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method)
+    {
+        if (!forcer || IsPlayer(forcer)) {
+            return forcer ? PlayerForce(victim, strategyKey, method) : "";
+        }
+        return ForceWith(forcer, false, victim, strategyKey, method);
+    }
+
+    bool CanForce(RE::Actor* actor)
+    {
+        std::lock_guard lock(g_lock);
+        const SceneState* sc = ForcerScene(actor);
+        if (!sc) {
+            return false;
+        }
+        for (const auto id : sc->actors) {
+            const auto at = g_actors.find(id);
+            RE::Actor* a = ActorFor(id);
+            if (at != g_actors.end() && at->second.role == Role::kVictim && a && a != actor && !IsPlayer(a)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void EndScene(std::int32_t sid)

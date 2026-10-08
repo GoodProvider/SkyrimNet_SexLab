@@ -72,6 +72,45 @@ float Function GetStaminaRegen(Actor akActor) global native
 ; How the forcer forced akActor ("a slap to the face"); narrated with give in / resist. "" clears.
 Function SetForceMethod(Actor akActor, String method) global native
 
+; ---- LLM actions SexLab_Aid / SexLab_Force (mirror the HUD Aid / Force keys) ----
+; caster heals or restores target with its best healing (kind "heal") or stamina ("stamina") spell (costs magicka)
+; or potion (consumed). Returns the narration line, "" when it has none / refused.
+String Function Aid(Actor caster, Actor target, String kind) global native
+; forcer (not a victim) forces victim (a non-player victim of its mini-game scene) into strategy (a strategy key)
+; by method (slap face / pinch nipple / cover mouth / punch / pull hair, a weak attack spell the forcer knows, or
+; free text). Returns the narration line, "" when refused.
+String Function Force(Actor forcer, Actor victim, String strategy, String method) global native
+; Any affordable healing / stamina spell or any such potion (skyrimnet_sexlab_can_aid).
+bool Function HasAidOptions(Actor akActor) global native
+; Not a victim in a mini-game scene that has a non-player victim (skyrimnet_sexlab_can_force).
+bool Function CanForce(Actor akActor) global native
+
+; Eligibility keys (StorageUtil ints) for the SexLab_Aid / SexLab_Force papyrus_util rules. Set per position at
+; scene begin, refreshed after an aid (potions run out), cleared at scene end.
+Function ActionKeys_Refresh(Actor akActor) global
+    if akActor == None
+        return
+    endif
+    if HasAidOptions(akActor)
+        StorageUtil.SetIntValue(akActor, "skyrimnet_sexlab_can_aid", 1)
+    else
+        StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_aid")
+    endif
+    if CanForce(akActor)
+        StorageUtil.SetIntValue(akActor, "skyrimnet_sexlab_can_force", 1)
+    else
+        StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_force")
+    endif
+EndFunction
+
+Function ActionKeys_Clear(Actor akActor) global
+    if akActor == None
+        return
+    endif
+    StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_aid")
+    StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_force")
+EndFunction
+
 ; Strategy action key (static action parameter) -> id; -1 when unknown.
 int Function StrategyId(String strategy_key) global
     String[] keys = new String[12]

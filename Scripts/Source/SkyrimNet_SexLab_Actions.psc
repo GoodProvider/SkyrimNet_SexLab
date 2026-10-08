@@ -522,12 +522,13 @@ Function TM_StagePrev(Actor speaker, Actor target)
         return
     endif
     sslThreadController th = sl.GetThread()
-    if th == None
+    if th == None || !StageKeyReady("TM_StagePrev", th)
         return
     endif
     int stage = th.stage
     if stage > 1
         th.GoToStage(stage - 1)
+        Trace("TM_StagePrev", "stage "+stage+" -> "+th.stage)
     endif
 EndFunction
 
@@ -538,14 +539,26 @@ Function TM_StageNext(Actor speaker, Actor target)
         return
     endif
     sslThreadController th = sl.GetThread()
-    if th == None || th.animation == None
+    if th == None || th.animation == None || !StageKeyReady("TM_StageNext", th)
         return
     endif
     int stage = th.stage
     int maxStage = th.animation.StageCount()
     if stage < maxStage
         th.GoToStage(stage + 1)
+        Trace("TM_StageNext", "stage "+stage+" -> "+th.stage+" of "+maxStage+" leadIn:"+th.LeadIn)
     endif
+EndFunction
+
+; SexLab 1.6x GoToStage only works in "Animating". A key press queued while the thread is still
+; Advancing (or Frozen / Refresh / Ending) would act on a stale stage: ignore it.
+bool Function StageKeyReady(String func, sslThreadController th)
+    String state_ = (th as sslThreadModel).GetState()
+    if state_ != "animating"
+        Trace(func, "ignored, thread state '"+state_+"' stage:"+th.stage)
+        return false
+    endif
+    return true
 EndFunction
 
 Function TM_GoToStage(Actor speaker, Actor target, String stageStr)
@@ -555,7 +568,7 @@ Function TM_GoToStage(Actor speaker, Actor target, String stageStr)
         return
     endif
     sslThreadController th = sl.GetThread()
-    if th == None || th.animation == None
+    if th == None || th.animation == None || !StageKeyReady("TM_GoToStage", th)
         return
     endif
     int stage = stageStr as int
@@ -564,7 +577,9 @@ Function TM_GoToStage(Actor speaker, Actor target, String stageStr)
         Trace("TM_GoToStage", "bad stage "+stageStr)
         return
     endif
+    int before = th.stage
     th.GoToStage(stage)
+    Trace("TM_GoToStage", "stage "+before+" -> "+th.stage)
     String scene_state_json = sl.BuildWebUISceneMenuState()
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
     SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
@@ -755,6 +770,64 @@ Function MiniGame_Act(Actor speaker, Actor target, bool arouse)
         ok = SkyrimNet_SexLab_OrgasmEngine.Calm(speaker, target, mult)
     endif
     Trace("MiniGame_Act", GetDisplayName(speaker)+" "+arouse+" "+GetDisplayName(target)+" mult:"+mult+" ok:"+ok)
+EndFunction
+
+;-------------------------------------------
+; Aid / Force (LLM actions): mirror the HUD Aid (Num 0) and Force (Num .) keys
+;-------------------------------------------
+
+; kind: "heal" or "stamina". The speaker's best spell (costs magicka) or potion (consumed) for it.
+Function LLM_Aid(Actor speaker, Actor target, String kind)
+    if target == None
+        target = speaker
+    endif
+    if speaker == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(speaker)
+    if sl == None || sl.GetThread() == None || sl.GetThread().Positions.Find(target) < 0
+        Trace("LLM_Aid", GetDisplayName(target)+" is not in "+GetDisplayName(speaker)+"'s scene")
+        return
+    endif
+    String line = SkyrimNet_SexLab_OrgasmEngine.Aid(speaker, target, kind)
+    Trace("LLM_Aid", GetDisplayName(speaker)+" "+kind+" "+GetDisplayName(target)+" line:"+line)
+    if line != ""
+        SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_aid", line, speaker, target, False)
+    endif
+    ; The potion leaves the inventory on the game thread.
+    Utility.Wait(0.5)
+    SkyrimNet_SexLab_OrgasmEngine.ActionKeys_Refresh(speaker)
+EndFunction
+
+; Same scene, speaker not a victim, target a non-player victim. strategy: a strategy key; method: preset, weak
+; attack spell the speaker knows, or free text.
+Function LLM_Force(Actor speaker, Actor target, String strategy, String method)
+    if speaker == None || target == None || speaker == target
+        Trace("LLM_Force", "needs a speaker and a different target")
+        return
+    endif
+    if target == Game.GetPlayer()
+        Trace("LLM_Force", GetDisplayName(speaker)+" cannot force the player")
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(speaker)
+    sslThreadController thread = None
+    if sl != None
+        thread = sl.GetThread()
+    endif
+    if thread == None || thread.Positions.Find(target) < 0
+        Trace("LLM_Force", GetDisplayName(target)+" is not in "+GetDisplayName(speaker)+"'s scene")
+        return
+    endif
+    if thread.IsVictim(speaker) || !thread.IsVictim(target)
+        Trace("LLM_Force", GetDisplayName(speaker)+" is not the aggressor of "+GetDisplayName(target))
+        return
+    endif
+    String line = SkyrimNet_SexLab_OrgasmEngine.Force(speaker, target, strategy, method)
+    Trace("LLM_Force", GetDisplayName(speaker)+" forces "+GetDisplayName(target)+" strategy:"+strategy+" method:"+method+" line:"+line)
+    if line != ""
+        SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_force", line, speaker, target, False)
+    endif
 EndFunction
 
 ;-------------------------------------------

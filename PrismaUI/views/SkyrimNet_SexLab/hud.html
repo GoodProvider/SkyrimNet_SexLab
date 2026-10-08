@@ -7,7 +7,7 @@
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
         C++ pushes hudUpdate({groups, focus, shiftTarget (row arouse / calm hit while Shift is held, -1 otherwise), actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
-        blocked, paused, freeCam, force {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
+        blocked, paused, freeCam, force {show, enabled}, aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
@@ -225,7 +225,7 @@
         // Every label each grid column can show; each cell carries them as invisible sizers so widths never change.
         const COLUMN_LABELS = [
             ['', 'PosUp', 'PosDn'],
-            ['', 'prev', 'deny', 'allow'],
+            ['', 'prev', 'deny', 'allow', 'aid'],
             ['calm', 'broken', 'pause', 'play', 'end'],
             ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM],
             SPEED_NAMES.concat([NO_STEP]),
@@ -309,7 +309,7 @@
             //   PosUp   (Num 7)  calm   arouse   <slower step>
             //   PosDn   prev     pause  next     <faster step>
             //           deny     end    free 📷
-            //                           force           (Num .; player aggressor + mini-game only)
+            //           aid             force           (Num 0: mini-game; Num .: player aggressor + mini-game)
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
@@ -331,13 +331,18 @@
             c += ctl(keys, 'end', 'end', 2, { off: cOff });
             c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 3, { off: cOff });
             c += ctl(keys, '', '', 4, { off: true });
-            // Force row: only while the player is an aggressor; greyed out without a non-player victim.
+            // Bottom row (mini-game): aid under deny, greyed out without a healing / stamina spell or potion;
+            // force only while the player is an aggressor, greyed out without a non-player victim.
             const force = state.force || {};
-            if (force.show && !mgcOff) {
+            const aid = state.aid || {};
+            const forceOn = !!force.show && !mgcOff;
+            const aidOn = !!aid.show && !mgcOff;
+            if (forceOn || aidOn) {
                 c += ctl(keys, '', '', 0, { off: true });
-                c += ctl(keys, '', '', 1, { off: true });
+                c += ctl(keys, 'aid', 'aid', 1, !aidOn ? { off: true } : aid.enabled ? {} :
+                    { dim: true, title: 'no healing or stamina spell or potion' });
                 c += ctl(keys, '', '', 2, { off: true });
-                c += ctl(keys, 'force', 'force', 3, force.enabled ? {} :
+                c += ctl(keys, 'force', 'force', 3, !forceOn ? { off: true } : force.enabled ? {} :
                     { dim: true, title: 'scene must have at least one non-player victim' });
                 c += ctl(keys, '', '', 4, { off: true });
             }

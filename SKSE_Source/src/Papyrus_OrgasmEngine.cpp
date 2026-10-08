@@ -1,5 +1,6 @@
 #include "Papyrus_OrgasmEngine.h"
 
+#include "Aid.h"
 #include "Config.h"
 #include "AnimSpeed.h"
 #include "OrgasmEngine.h"
@@ -145,6 +146,31 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetForceMethod(a, method.c_str() ? method.c_str() : "");
         }
+        // ---- LLM actions (SexLab_Aid / SexLab_Force): narration line, "" when refused ----
+        RE::BSFixedString AidAction(RE::StaticFunctionTag*, RE::Actor* caster, RE::Actor* target, RE::BSFixedString kind)
+        {
+            const RE::FormID option = Aid::PickBest(caster, Str(kind));
+            if (!option) {
+                webui_log::info("Papyrus Aid: {:#x} has no '{}' option", caster ? caster->GetFormID() : 0, Str(kind));
+                return "";
+            }
+            return RE::BSFixedString(Aid::Apply(caster, target, option).c_str());
+        }
+        RE::BSFixedString ForceAction(RE::StaticFunctionTag*, RE::Actor* forcer, RE::Actor* victim, RE::BSFixedString strategy,
+            RE::BSFixedString method)
+        {
+            if (!victim) {
+                return "";
+            }
+            // The LLM may echo the description ("selfless (please the speaker)"): the first word is the key.
+            std::string key = Str(strategy);
+            if (const auto cut = key.find_first_of(" (:,"); cut != std::string::npos) {
+                key.resize(cut);
+            }
+            return RE::BSFixedString(OrgasmEngine::Force(forcer, victim->GetFormID(), key, Str(method)).c_str());
+        }
+        bool HasAidOptions(RE::StaticFunctionTag*, RE::Actor* a) { return ::Aid::HasOptions(a); }
+        bool CanForce(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::CanForce(a); }
         void EndScene(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::EndScene(sid); }
         void ResetSpeedScale(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ResetSpeedScale(a); }
         std::int32_t GetSpeedLevel(RE::StaticFunctionTag*, RE::Actor* a)
@@ -208,6 +234,10 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GetStaminaRegen", s, GetStaminaRegen);
         a_vm->RegisterFunction("GetForcedBy", s, GetForcedBy);
         a_vm->RegisterFunction("SetForceMethod", s, SetForceMethod);
+        a_vm->RegisterFunction("Aid", s, AidAction);
+        a_vm->RegisterFunction("Force", s, ForceAction);
+        a_vm->RegisterFunction("HasAidOptions", s, HasAidOptions);
+        a_vm->RegisterFunction("CanForce", s, CanForce);
         a_vm->RegisterFunction("EndScene", s, EndScene);
         a_vm->RegisterFunction("ResetSpeedScale", s, ResetSpeedScale);
         a_vm->RegisterFunction("GetSpeedLevel", s, GetSpeedLevel);

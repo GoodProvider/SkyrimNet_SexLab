@@ -73,6 +73,32 @@
       "file": "outfit_undress.yaml"
     },
     {
+      "name": "SexLab_Aid",
+      "label": "Aid",
+      "customCategory": "",
+      "questEditorId": "SkyrimNet_SexLab",
+      "scriptName": "SkyrimNet_SexLab_Actions",
+      "executionFunctionName": "LLM_Aid",
+      "parameterMapping": [
+        {
+          "type": "speaker",
+          "name": "speaker",
+          "description": "Speaker Actor parameter (triggering entity), the one casting the spell or giving the potion"
+        },
+        {
+          "type": "dynamic",
+          "name": "target",
+          "description": "Actor being healed or restored (can be speaker)"
+        },
+        {
+          "type": "dynamic",
+          "name": "kind",
+          "description": "heal|stamina"
+        }
+      ],
+      "file": "SexLab_Aid.yaml"
+    },
+    {
       "name": "SexLab_AllowOrgasm",
       "label": "Allow Orgasm",
       "customCategory": "",
@@ -176,6 +202,37 @@
         }
       ],
       "file": "SexLab_DenyOrgasm.yaml"
+    },
+    {
+      "name": "SexLab_Force",
+      "label": "Force",
+      "customCategory": "",
+      "questEditorId": "SkyrimNet_SexLab",
+      "scriptName": "SkyrimNet_SexLab_Actions",
+      "executionFunctionName": "LLM_Force",
+      "parameterMapping": [
+        {
+          "type": "speaker",
+          "name": "speaker",
+          "description": "Speaker Actor parameter (triggering entity), the aggressor"
+        },
+        {
+          "type": "dynamic",
+          "name": "target",
+          "description": "The victim being forced"
+        },
+        {
+          "type": "dynamic",
+          "name": "strategy",
+          "description": "What the victim is forced to do: selfless (please the speaker)|passive (lie still and take it)|mutual (chase pleasure with the speaker)|together (finish together)|selfish (pleasure themselves)|cumquick (make the speaker cum quickly)|reject (hold back their orgasm). Give only the first word."
+        },
+        {
+          "type": "dynamic",
+          "name": "method",
+          "description": "How [speaker] forces them: slap face|pinch nipple|cover mouth|punch|pull hair|<the name of a weak attack spell [speaker] knows, e.g. Sparks>|<your own short phrase>"
+        }
+      ],
+      "file": "SexLab_Force.yaml"
     },
     {
       "name": "SexLab_Masturbation_Forced",

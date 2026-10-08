@@ -38,11 +38,11 @@ These keys work while you control a scene: you are in it, or you took control of
 | PgUp PosUp | 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
 | PgDn PosDn | 4 previous    | 5 pause | 6 next        | + faster |
 |            | 1 deny        | 2 end   | 3 free camera |          |
-|            |               |         | . force       |          |
+|            | 0 aid         |         | . force       |          |
 ---------------------------------------------------------------------
 ```
 
-Num 3 is SexLab's own **Toggle Free Camera** key, set in the SexLab MCM; this mod doesn't bind it, but the HUD shows it. Num 7 is left for SkyrimNet. Num 0 and Num Enter are free.
+Num 3 is SexLab's own **Toggle Free Camera** key, set in the SexLab MCM; this mod doesn't bind it, but the HUD shows it. Num 7 is left for SkyrimNet. Num Enter is free.
 
 If you saved keys in the dashboard before this layout, reset them there to get the new defaults.
 
@@ -62,8 +62,8 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
    PosDn    prev     pause    next     forceful
             Num 1    Num 2    Num 3
             deny     end      free 📷
-                              Num .
-                              force
+            Num 0             Num .
+            aid               force
   ```
 
   Num 7 is dimmed with no label (it belongs to SkyrimNet).
@@ -86,7 +86,9 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.
-  - **Num .** (*force*, shown only while you are an aggressor) opens the **Force** panel: "You force *victim* to *strategy* by *method*." Pick a victim, what they are forced to do (default: please you), and a method: slap face, pinch nipple, cover mouth, punch, pull hair, or **custom** (type your own). It is narrated ("Bob punches Nina in the face and forces Nina to please him."). For **Fear cooldown** seconds (Mini-game settings, default 30) the victim can only give in; after that the AI may let them resist. Without a non-player victim the cell is greyed out.
+  - **Num .** (*force*, shown only while you are an aggressor) opens the **Force** panel: "You force *victim* to *strategy* by *method*." Pick a victim, what they are forced to do (default: please you), and a method: slap face, pinch nipple, cover mouth, punch, pull hair, one of your **weak attack spells** (Novice or Apprentice spells that damage health, such as Flames or Sparks), or **custom** (type your own). A spell isn't really cast: the victim takes the spell's smallest damage, never enough to kill, and doesn't turn hostile. It is narrated ("Bob punches Nina in the face and forces Nina to please him."). For **Fear cooldown** seconds (Mini-game settings, default 30) the victim can only give in; after that the AI may let them resist. Without a non-player victim the cell is greyed out.
+  - **Num 0** (*aid*) opens the **Aid** panel: "*You* *spell or potion* on *actor*." Pick one of your healing or stamina spells or potions and who gets it (you or anyone in the scene). A spell costs its magicka (a spell you can't afford is greyed out); Healing and Healing Hands count as three seconds of casting. A potion is used up. It is narrated ("Bob casts Healing Hands on Nina." / "Bob gives Nina a Potion of Minor Stamina."). Without a spell or potion the cell is greyed out.
+  - NPCs can do the same: the AI may have an actor heal or restore someone in the scene (**SexLab_Aid**), or have an aggressor force a victim (**SexLab_Force**, never the player).
   - The optional **mental break** drains the magicka of whoever is being aroused; when it runs out they can't hold back.
 
 All HUD keys are rebindable in the dashboard. While the HUD is up they don't reach SexLab or the game, so a key you share with a SexLab key only does the HUD action.

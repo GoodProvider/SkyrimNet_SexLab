@@ -1,5 +1,19 @@
 # Knowledgebase
 
+## Aid spells and weak Force spells are applied, not cast (2026-10-07)
+
+- **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so the spell or potion's visual effects don't play.
+- **Weak Force spells:** a real hostile cast would start combat or add a bounty, and could kill. Force applies the smallest Damage Health magnitude as `DamageActorValue`, capped at health − 1 (`Aid::QueueWeakSpellHit`).
+- **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Num 0 use does not refresh it, because actions never run for the player.
+
+## Next stage falls back to stage 1 (2026-10-07, open)
+
+**Symptom (Revanx91, SexLab 1.6x):** Num6 or Space never gets past stage 1; fine without this mod. Log (`bug-logs/SkyrimNet_SexLab-doesn't-go-next-stage.log`): 9 `TM_StageNext`, only three `OrgasmEngine ... stage 2/5` lines and never 3/5. `OrgasmEngine::SetStage` only logs forward steps, so the thread went 1→2 three times and back to 1 silently. `Pause_Hold ... stage:1` 7 s after a 2/5. Several presses hit `GetThreadActive ... 'Advancing'`; StageStart came ~10 s after `GoToStage` (VM saturated: `GetThread actor:` several times a second, `BeginScene resumed` ~10×/min).
+
+**Known:** the `Advancing` state means 1.6x, not P+ (P+ has no `Advancing`; its `Stage` is `_StageHistory.Length` and `GoToStage(<=1)` is `ResetScene`). In 1.6x only these set `Stage = 1`: `GoToStage(<1)` (Advancing clamps), `AdvanceStage(backwards)` + AdjustStage held, `ChangeActors` (`sslThreadModel` sets `Stage = 1` before `SetAnimation`), `EndLeadIn`. We call `ChangeActors` only from `ApplyWebUICommit`; the overlay was closed. Unproven suspect: `ReloadAnimationDefaults` → `ApplyDressedToActor` → `Strip`/`UnStrip` mid-scene (one at 17:00:11, right after a stage-2 StageStart).
+
+**Done:** stage keys act only in `Animating` (`Actions.StageKeyReady`). Traces: `TraceStageState` ("stage went backwards"), stage before/after on our mutators, `ActorChangeEnd` / `LeadInEnd` hooks, SexLab build at `Scene_Manager.Setup`. **Next:** reporter's traced log + `Papyrus.0.log` to name the reset.
+
 ## Mini-game orgasms far too early (2026-10-06)
 
 **Symptom:** player + NPC, both normal role, NPC on Mutual. `SetStageTimers` gave targetSecs 88.1, but the NPC orgasmed 30 s in. Log: NPC steps of +5.8 to +10.4 every 2 s, and `SexLab added 10` (or 14) to both actors 2–3 s before every `SetStage`.
@@ -264,7 +278,8 @@ local built and consumed within one function call) holds from this JSON store mu
 with `SNSL_JValue.isExists(...)` immediately before every use, and recreated if dead — never gated
 behind a "we already have one of the right shape/size" shortcut, because "already have one" is exactly
 the case a stale post-load handle satisfies. Grep `dead handle` / `attaching a dead handle` in
-`SkyrimNet_SexLab.log` to confirm this class of bug; it only reproduces after a save load, not on a
+`SkyrimNet_SexLab.log` to confirm this class of bug (since 2026-10-07 `isExists` / `isMap` / `isArray` /
+`isFormMap` probe silently, so every logged `dead handle` is a real use); it only reproduces after a save load, not on a
 fresh game, so always test lock/persistence fixes against a loaded save.
 
 ## The .pex and the .dll deploy in opposite directions (2026-09-23)
@@ -1114,6 +1129,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Headers/ is git-ignored:** `Headers/SkyrimNet_SexLab_Actions.psc` / `_OrgasmEngine.psc` stubs were edited by hand for the removed and changed functions (same output as `python_scripts/headers_build.py`).
 - **Confirmed in game (Jev, 2026-10-07 log):** requests go out and answer in about 0.2–0.4 s. `answers.strategy.choice` and `.confidence` are present. `dialogue` events reach the speaker's request. Answers mostly confirm the current strategy (p 0.78–0.98).
 - **Confidence floor:** one answer changed Mutual → Selfless at p=0.44, so changes now need `sexlab.minigame.decision_min_confidence` (0.6). A "kept" answer is never floored.
+- **Second in-game run (Jev, 2026-10-07 20:46 log):** 21 requests, 21 answers in 0.2–0.42 s; 15 kept, 1 changed (p=0.86), 5 floored (p 0.46–0.51). After a player Force, once the fear window ends the request offers only AcceptForce / Selfish / Reject and Jev keeps AcceptForce (p=1.00). The floor also held back the model's reaction to narration: after "Nina is overwhelmed and can only seek their own pleasure." (deny orgasm), three answers leaned Selfish at about 0.5. If that should go through, lower `decision_min_confidence`.
 - **Not every strategy change is the model:** stage/scene setting changes call `ApplyStrategy` directly (e.g. to `nonsexual` and back). Only changes next to a `StrategyDecision: … (changed)` line came from the model.
 - Still untested in game: `BGSRelationship::GetRelationship` for leveled actors (template-base fallback).
 

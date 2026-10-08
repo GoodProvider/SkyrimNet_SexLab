@@ -117,6 +117,20 @@ Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_all
 
 **NPC strategies** are not actions. SkyrimNet's decision model picks them (`StrategyDecision.cpp`, template `prompts/decisions/sexlab/minigame_strategy.prompt`): every NPC at scene start, and the speaker after each line an NPC in the scene speaks. See [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions). The player's HUD Force key still sets a victim's forced state (strategy chosen by the player, `ForcedAction::kPlayStrategy`) and a fear cooldown (`sexlab.minigame.fear_cooldown`) during which only `acceptforce` is offered. `SexLab_Arouse` / `SexLab_Calm` are unregistered in Together mode.
 
+### Aid and Force (mirror the HUD Aid / Force keys)
+
+| Action | Papyrus | Parameters | Eligible when (StorageUtil int on the speaker) |
+|--------|---------|------------|------------------------------------------------|
+| `SexLab_Aid` | `Actions.LLM_Aid` | `speaker`, `target` (can be the speaker), `kind` (`heal` / `stamina`) | `skyrimnet_sexlab_can_aid`: an affordable healing / stamina spell or such a potion |
+| `SexLab_Force` | `Actions.LLM_Force` | `speaker`, `target` (victim), `strategy` (first word is the key), `method` | `skyrimnet_sexlab_can_force`: not a victim, in a mini-game scene with a non-player victim |
+
+- `OrgasmEngine.ActionKeys_Refresh` sets both keys per position from `Scene.Engine_BeginScene` (natives `HasAidOptions` / `CanForce`). `LLM_Aid` refreshes them after a use, because potions run out. `ActionKeys_Clear` runs at scene end.
+- **Aid:** native `OrgasmEngine.Aid` picks the speaker's strongest affordable spell for `kind`, otherwise its strongest potion (`Aid.cpp`). A spell costs its magicka; a potion is consumed.
+- **Force:** native `OrgasmEngine.Force`, the same engine path as the player's Force key. `method` is a preset, a Novice / Apprentice Damage Health spell the speaker knows (a non-lethal hit of the spell's smallest magnitude, no real cast), or free text.
+- Papyrus still checks that speaker and target share the scene. Force also checks that the speaker is not a victim and the target is a non-player victim.
+- Both narrate through `DirectNarration_Optional` (`sexlab_aid` / `sexlab_force` events when the cooldown blocks), so the NPC's own line is not doubled.
+- Both are in `MCM.MiniGameActionNames` (unregistered while the mini-game is off).
+
 ## Orgasm denial actions
 
 `SexLab_DenyOrgasm` and `SexLab_AllowOrgasm` take `speaker` + dynamic `target`, and are eligible while the speaker is in `SexLabAnimatingFaction`. They call `SkyrimNet_SexLab_Actions.LLM_DenyOrgasm` / `LLM_AllowOrgasm`, and from there `Scene.SetDenyOrgasm(target, deny, speaker, from_llm=true)`.

@@ -1,5 +1,6 @@
 #include "Hud.h"
 
+#include "Aid.h"
 #include "Config.h"
 #include "OrgasmEngine.h"
 #include "WebUI.h"
@@ -45,6 +46,7 @@ namespace Hud
             { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD9, true },
             { "deny", "sexlab.hud.key_deny", VK_NUMPAD1, false },
             { "force", "sexlab.minigame.key_force", VK_DECIMAL, true },
+            { "aid", "sexlab.minigame.key_aid", VK_NUMPAD0, true },
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
         constexpr std::uint32_t kSkyrimNetDx = 0x47;   // Num 7
@@ -69,6 +71,12 @@ namespace Hud
         RE::FormID g_focus = 0;
         std::vector<RE::FormID> g_sceneActors;
         std::string g_lastPush;
+
+        // Aid cell: whether the player has an affordable healing / stamina spell or a potion (inventory scan,
+        // refreshed at most every kAidCheckInterval seconds).
+        constexpr double kAidCheckInterval = 1.0;
+        bool g_aidEnabled = false;
+        double g_aidCheckedAt = -1.0;
 
         // Faster/slower narration debounce: net steps since the first press of the burst.
         int g_speedSteps = 0;
@@ -241,9 +249,53 @@ namespace Hud
                 list.push_back({ { "id", v.id }, { "name", v.name }, { "strategies", std::move(strategies) } });
             }
             cfg["victims"] = std::move(list);
+            // Weak attack spells the player knows: extra methods (a non-lethal hit).
+            nlohmann::json spells = nlohmann::json::array();
+            for (const auto& sp : Aid::WeakAttackSpells(RE::PlayerCharacter::GetSingleton())) {
+                spells.push_back(sp.name);
+            }
+            cfg["spells"] = std::move(spells);
             const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             SKSE::GetTaskInterface()->AddTask([payload]() {
                 WebUI_Invoke("openForcePanel(" + payload + ");");
+                WebUI_Visibility_Show(false);
+            });
+        }
+
+        // Aid key (mini-game): the Aid panel, solo in the WebUI. Options are the player's healing / stamina spells
+        // and potions, targets the scene's actors (player first); the panel replies through WebUI onAidResult.
+        void OnAid()
+        {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            std::vector<OrgasmEngine::ActorView> actors;
+            if (!player || !OrgasmEngine::GetPlayerScene(actors)) {
+                return;
+            }
+            const auto options = Aid::ListOptions(player);
+            if (options.empty()) {
+                webui_log::info("Hud: aid ignored (no healing / stamina spell or potion)");
+                return;
+            }
+            nlohmann::json cfg;
+            cfg["caster"] = { { "id", player->GetFormID() }, { "name", NameOf(player) } };
+            nlohmann::json list = nlohmann::json::array();
+            list.push_back({ { "id", player->GetFormID() }, { "name", NameOf(player) } });
+            for (const auto& a : actors) {
+                if (a.id != player->GetFormID()) {
+                    list.push_back({ { "id", a.id }, { "name", a.name } });
+                }
+            }
+            cfg["actors"] = std::move(list);
+            nlohmann::json opts = nlohmann::json::array();
+            for (const auto& o : options) {
+                opts.push_back({ { "id", o.form }, { "name", o.name }, { "potion", o.potion }, { "count", o.count },
+                    { "cost", static_cast<int>(o.cost + 0.5f) }, { "affordable", o.affordable },
+                    { "health", o.health > 0.0f }, { "stamina", o.stamina > 0.0f } });
+            }
+            cfg["options"] = std::move(opts);
+            const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            SKSE::GetTaskInterface()->AddTask([payload]() {
+                WebUI_Invoke("openAidPanel(" + payload + ");");
                 WebUI_Visibility_Show(false);
             });
         }
@@ -309,6 +361,8 @@ namespace Hud
                     cb = []() { OnSpeed(true); };
                 } else if (ctl == "force") {
                     cb = []() { OnForce(); };
+                } else if (ctl == "aid") {
+                    cb = []() { OnAid(); };
                 } else if (ctl == "deny") {
                     cb = []() {
                         RE::FormID focus = 0;
@@ -373,6 +427,8 @@ namespace Hud
             return "Pause";
         case 0x53:
             return "Num .";
+        case 0x52:
+            return "Num 0";
         default:
             break;
         }
@@ -487,6 +543,8 @@ namespace Hud
         g_speedSteps = 0;
         g_speedLevel = -1;
         g_speedLastPress = 0.0;
+        g_aidEnabled = false;
+        g_aidCheckedAt = -1.0;
     }
 
     void Tick()
@@ -586,6 +644,19 @@ namespace Hud
             std::vector<OrgasmEngine::ForceVictim> victims;
             const bool aggressor = OrgasmEngine::GetPlayerForceInfo(victims);
             j["force"] = { { "show", aggressor }, { "enabled", aggressor && !victims.empty() } };
+        }
+        // Aid cell (mini-game): greyed out without an affordable healing / stamina spell or a potion.
+        {
+            bool miniGame = false;
+            {
+                std::lock_guard lock(g_lock);
+                miniGame = g_miniGame;
+            }
+            if (miniGame && (g_aidCheckedAt < 0.0 || Now() - g_aidCheckedAt >= kAidCheckInterval)) {
+                g_aidEnabled = Aid::HasOptions(player);
+                g_aidCheckedAt = Now();
+            }
+            j["aid"] = { { "show", miniGame }, { "enabled", miniGame && g_aidEnabled } };
         }
         j["paused"] = OrgasmEngine::IsPlayerScenePaused();
         // SexLab's free camera on: Num 3 reads "lock" (a press returns to the normal camera).

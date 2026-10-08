@@ -798,7 +798,7 @@ Function ApplyDressedToActor(Actor akActor, Bool clothed)
     endif
     sslActorAlias slot = thread.ActorAlias(akActor)
     if slot
-        Trace("ApplyDressedToActor", akActor.GetDisplayName()+" clothed:"+clothed)
+        Trace("ApplyDressedToActor", akActor.GetDisplayName()+" clothed:"+clothed+" stage:"+thread.Stage)
         if clothed
             slot.UnStrip()
         else
@@ -1705,6 +1705,8 @@ Function Engine_BeginScene()
             bool blocked = obj > 0 && SNSL_JMap.getInt(obj, "deny_orgasm") == 1
             SkyrimNet_SexLab_OrgasmEngine.SetSceneBlocked(a, blocked)
             SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(a, main.handler_dom.IsDOMSlave(a))
+            ; SexLab_Aid / SexLab_Force eligibility (roles are known now).
+            SkyrimNet_SexLab_OrgasmEngine.ActionKeys_Refresh(a)
         endif
         i += 1
     endwhile
@@ -2074,6 +2076,7 @@ Function Ending_ToFinal()
     int count = thread.Animation.StageCount()
     if thread.Stage < count
         ending_hold_pending = true
+        Trace("Ending_ToFinal", "GoToStage "+thread.Stage+" -> "+count)
         thread.GoToStage(count)
     else
         Ending_Hold()
@@ -2408,7 +2411,28 @@ EndFunction
 ; --------------------------------------------
 ; Animation Event Handlers
 ; --------------------------------------------
+; Stage diagnostics: one line per stage / animation start, flagged when the stage went backwards
+; (a SexLab restart -- ChangeActors / EndLeadIn / GoToStage(1) -- that no one asked for).
+Function TraceStageState(String func)
+    if thread == None
+        return
+    endif
+    String reg = ""
+    int count = 0
+    if thread.animation
+        reg = thread.animation.Registry
+        count = thread.animation.StageCount()
+    endif
+    String msg = "stage:"+thread.Stage+"/"+count+" last:"+stage_last+" state:"+(thread as sslThreadModel).GetState() \
+        +" anim:"+reg+" leadIn:"+thread.LeadIn+" status:"+status
+    if stage_last > 0 && thread.Stage < stage_last && reg == seeded_registry
+        msg += " ** stage went backwards **"
+    endif
+    Trace(func, msg)
+EndFunction
+
 Function AnimationStart()
+    TraceStageState("AnimationStart")
     description_last = ""
     stage_last = 0
     pending_animation_change = false
@@ -2452,6 +2476,7 @@ EndFunction
 
 Function StageStart()
     DbgEnter("StageStart")
+    TraceStageState("StageStart")
     AlignActors()
     ; Catches animation changes not yet seen elsewhere; narrated below like a stage change.
     String from_desc = description_last
@@ -2680,6 +2705,11 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
             thread.SendThreadEvent("OrgasmEnd")
         endif
         scene_paused = false
+        int k = thread.positions.length - 1
+        while 0 <= k
+            SkyrimNet_SexLab_OrgasmEngine.ActionKeys_Clear(thread.positions[k])
+            k -= 1
+        endwhile
         SkyrimNet_SexLab_OrgasmEngine.EndScene(sid)
         if config.SeparateOrgasms || engine_managed
             int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
@@ -4160,8 +4190,11 @@ Function WebUI_OnMenuPrevNext(int direction)
     if thread == None || thread.animation == None
         return
     endif
+    String state_ = (thread as sslThreadModel).GetState()
     int stage = thread.stage
-    if direction < 0 && stage > 1
+    if state_ != "animating"
+        Trace("WebUI_OnMenuPrevNext", "ignored, thread state '"+state_+"' stage:"+stage)
+    elseif direction < 0 && stage > 1
         thread.GoToStage(stage - 1)
     elseif direction > 0 && stage < thread.animation.StageCount()
         thread.GoToStage(stage + 1)
@@ -4680,6 +4713,7 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
         anim_count = thread.Animations.length
     endif
     Trace("WebUI_SwitchToRegistry", "DEBUG after rebuild idx:"+idx+" "+DbgAnimList()) ; DEBUG-DELETE
+    Trace("WebUI_SwitchToRegistry", "SetAnimation idx:"+idx+" stage:"+thread.Stage)
     thread.SetAnimation(idx)
     Trace("WebUI_SwitchToRegistry", "DEBUG after SetAnimation active:"+thread.animation.Registry+" "+DbgAnimList()) ; DEBUG-DELETE
     NotePlayedRegistry(reg)
@@ -4829,6 +4863,7 @@ Function WebUI_RestoreCancelSnapshot()
             thread.SetAnimations(anims)
         endif
         if active_idx >= 0 && (thread.animation == None || thread.animation.Registry != snap_active_reg)
+            Trace("WebUI_RestoreCancelSnapshot", "SetAnimation idx:"+active_idx+" stage:"+thread.Stage)
             thread.SetAnimation(active_idx)
         endif
     endif
@@ -4878,6 +4913,7 @@ Function WebUI_RestoreCancelSnapshot()
     ApplySexLabVoices()
     PersistPositions()
     if snap_stage >= 1 && thread.animation && snap_stage != thread.stage && snap_stage <= thread.animation.StageCount()
+        Trace("WebUI_RestoreCancelSnapshot", "GoToStage "+thread.Stage+" -> "+snap_stage)
         thread.GoToStage(snap_stage)
     endif
     cancel_dirty = false
@@ -4972,6 +5008,7 @@ Function ApplyWebUICommit(int obj)
                 endwhile
             endif
             if !same
+                Trace("ApplyWebUICommit", "ChangeActors (SexLab restarts at stage 1) stage:"+thread.Stage)
                 thread.ChangeActors(next)
             endif
         endif
