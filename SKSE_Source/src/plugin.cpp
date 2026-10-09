@@ -20,6 +20,8 @@
 #include "OrgasmEngine.h"
 #include "Hud.h"
 #include "Papyrus_OrgasmEngine.h"
+#include "ActorLocker.h"
+#include "Papyrus_ActorLocker.h"
 #include "StrategyDecision.h"
 
 using namespace SKSE;
@@ -84,6 +86,7 @@ namespace {
             webui_log::error("co-save: failed to write JSON store session");
         }
         OrgasmEngine::Save(intfc);
+        ActorLocker::Save(intfc);
     }
 
     void CoSave_OnLoad(SKSE::SerializationInterface *intfc) {
@@ -96,6 +99,8 @@ namespace {
                 }
             } else if (type == OrgasmEngine::kRecord) {
                 OrgasmEngine::Load(intfc, version, length);
+            } else if (type == ActorLocker::kRecord) {
+                ActorLocker::Load(intfc, version, length);
             }
         }
     }
@@ -103,6 +108,7 @@ namespace {
     void CoSave_OnRevert(SKSE::SerializationInterface *) {
         SexLabNet::Json::SetLoadedSaveSession(0);
         OrgasmEngine::Revert();
+        ActorLocker::Revert();
     }
 }
 
@@ -178,6 +184,11 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             webui_log::error("Failed to register OrgasmEngine Papyrus functions");
         } else {
             webui_log::info("OrgasmEngine Papyrus functions registered");
+        }
+        if (!papyrus->Register(PapyrusBindings_ActorLocker::Register_ActorLocker_Functions)) {
+            webui_log::error("Failed to register ActorLocker Papyrus functions");
+        } else {
+            webui_log::info("ActorLocker Papyrus functions registered");
         }
     } else {
         webui_log::info("Failed to get Papyrus interface.");

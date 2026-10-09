@@ -1,7 +1,9 @@
 {
   "type": "papyrus",
-  "label": "sex",
+  "label": "sexual",
   "panel": "scene_start",
+  "creatorTags": "sexual",
+  "creatorSuppress": "",
   "plugin": "SkyrimNet_SexLab.esp",
   "questFormId": "0x800",
   "scriptName": "SkyrimNet_SexLab_Actions",
@@ -12,7 +14,7 @@
     "victim": "none",
     "intent": "sexual activities",
     "direction": "random",
-    "method": "pussy",
+    "method": "sexual",
     "style": "normally",
     "settingName": "consensual"
   },

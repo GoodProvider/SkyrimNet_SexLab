@@ -67,16 +67,25 @@ namespace OrgasmEngine
     /// Pause hotkey state: HUD label; the safety-net clock stops. Passive gain keeps running.
     void SetScenePaused(std::int32_t sid, bool paused);
     /// Gate pass narration was just sent: the next non-player speech start pushes the scene to its
-    /// final stage (Effect_AdvanceToFinal).
-    void GateNarrationSent(std::int32_t sid);
+    /// final stage (Effect_AdvanceToFinal). mark: SpeakerMark() taken just before the DN went out, so a
+    /// fast voice is not missed; < 0 takes it now.
+    void GateNarrationSent(std::int32_t sid, std::int64_t mark = -1);
+    /// The engine plays this scene's ending gate (mini-game, every non-DOM actor AI driven, timed, no
+    /// LeadIn): its last orgasm lands at the end of the second-to-last stage.
+    /// The scene's actors (empty when unknown).
+    std::vector<RE::FormID> SceneActors(std::int32_t sid);
+    bool IsGateScene(std::int32_t sid);
     /// Scene ending lead and orgasm target (0 = off). The lead reaching it in the second-to-last stage
     /// triggers the early final roll in the group join (the Scene jumps to the final stage).
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target);
     // Seconds left on the timed final stage (unpaused, animating); -1 when not in one.
     float FinalStageRemaining(std::int32_t sid);
     bool IsPlayerScenePaused();
+    /// Pause state of the anchor actor's scene (HUD: the player, or the NPC the player took control of).
+    bool IsScenePaused(RE::Actor* anchor);
     /// Player scene stage (1-based) and stage count; false (0/0) when not in a scene.
     bool GetPlayerSceneStage(int& stage, int& count);
+    bool GetSceneStage(RE::Actor* anchor, int& stage, int& count);
     void SetSceneBlocked(RE::Actor* actor, bool blocked);
     // Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
     void SetOrgasmExpected(RE::Actor* actor, bool expected);
@@ -141,7 +150,8 @@ namespace OrgasmEngine
         std::vector<DecisionOption> options;    // only what the engine allows now
         std::vector<std::pair<std::string, RE::FormID>> slots;  // "p<slot>" -> actor (target suffixes)
     };
-    /// False when the actor is unmanaged, the player, or not in mini-game mode.
+    /// False when the actor is unmanaged, not AI-driven (the player outside auto play, an NPC the player took
+    /// control of), or not in mini-game mode.
     bool GetStrategyDecisionInput(RE::Actor* actor, DecisionInput& out);
     enum class DecisionResult
     {
@@ -157,7 +167,10 @@ namespace OrgasmEngine
         double confidence);
     /// sexlab.minigame.decision_strategy and mini-game mode.
     bool IsStrategyDecisionEnabled();
-    /// Non-player actors of a managed scene, position order.
+    /// sexlab.minigame.decision_min_confidence.
+    double GetDecisionMinConfidence();
+    /// AI-driven actors of a managed scene (NPCs the player does not control, the player in auto play),
+    /// position order.
     std::vector<RE::FormID> SceneNpcs(std::int32_t sid);
     /// Third-person phrase for the current strategy ("focuses on self enjoyment"), "" when none / Together mode.
     std::string GetStrategyText(RE::Actor* actor);
@@ -177,6 +190,8 @@ namespace OrgasmEngine
     };
     /// False when the player is not an aggressor in a managed mini-game scene. victims: non-player victims.
     bool GetPlayerForceInfo(std::vector<ForceVictim>& victims);
+    /// GetPlayerForceInfo for any forcer (HUD: the NPC the player took control of).
+    bool GetForceInfo(RE::Actor* forcer, std::vector<ForceVictim>& victims);
     /// The player forces victim into strategyKey by method (preset key or free text). Starts the fear
     /// cooldown (only AcceptForce offered). location: body part named in the narration ("" / "body": none).
     /// Returns the narration line, "" when refused.
@@ -185,6 +200,10 @@ namespace OrgasmEngine
     /// Any non-victim forcer (SexLab_Force action): forces a non-player victim of its mini-game scene. method: a
     /// preset key, one of the forcer's weak attack spells (a non-lethal hit), or free text. "" when refused.
     std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method);
+    /// PlayerForce with forcer acting for the player (HUD Force panel / auto play): the player, or the NPC the
+    /// player took control of. Same aggressor rule and narration line as PlayerForce.
+    std::string HudForce(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey,
+        const std::string& method, const std::string& location);
     /// The actor is not a victim in a mini-game scene that has a non-player victim (SexLab_Force eligibility).
     bool CanForce(RE::Actor* actor);
     void EndScene(std::int32_t sid);
@@ -241,6 +260,8 @@ namespace OrgasmEngine
     };
     /// Actors of the scene the player is in, in SexLab position order. False when none.
     bool GetPlayerScene(std::vector<ActorView>& out);
+    /// Actors of the anchor actor's scene, in SexLab position order. False when none.
+    bool GetActorScene(RE::Actor* anchor, std::vector<ActorView>& out);
     /// Speed levels match the scene styles: gentle, normal, forceful.
     inline constexpr int kSpeedLevelCount = 3;
     inline constexpr float kSpeedLevels[kSpeedLevelCount] = { 0.75f, 1.0f, 1.25f };
@@ -250,8 +271,22 @@ namespace OrgasmEngine
     /// Moves the player's scene one speed level up (dir > 0) or down (dir < 0), clamped to the ends.
     /// Returns the new level, -1 when the player is in no managed scene.
     int StepPlayerSceneSpeed(int dir);
+    int StepSceneSpeed(RE::Actor* anchor, int dir);
     /// Current speed level of the player's scene, -1 when none.
     int GetPlayerSceneSpeedLevel();
+    int GetSceneSpeedLevel(RE::Actor* anchor);
+
+    // ---- HUD take-control key ----
+    /// Auto play: the engine plays the player's mini-game strategy like an NPC's (decisions included).
+    /// Sticky: stays on for the player's later scenes until turned off (saved). False when the player is in
+    /// no managed scene.
+    bool SetAutoPlay(bool on);
+    bool IsAutoPlay();
+    /// Take control of an NPC: its strategy stops and the player drives it with the HUD. Ends with the scene.
+    /// False when unmanaged or the player.
+    bool SetPlayerDriven(RE::Actor* actor, bool on);
+    /// The actor's managed scene id; false when none.
+    bool SceneIdOf(RE::Actor* actor, std::int32_t& sid);
 
     /// Shell narration with the mod's rule: DirectNarration when the player is source or target,
     /// else DirectNarration_Optional(event_type, ...) which falls back to RegisterEvent (never dropped).
@@ -267,8 +302,9 @@ namespace OrgasmEngine
     // 2: + per-actor dom flag. 3: + stage timers, pause, final clock; jitter, DOM step state.
     // 4: + gateDone/gateAwait per scene, rushing per actor (a mid-hold save no longer re-rolls the
     // gate on load). 5: + stage clock per scene; bonus, curve progress, strategy, target, forcer per actor.
-    // 6: + stamina regen per actor. 7: + mini-game rates per scene (CalibrateMiniGame). Older still load.
-    constexpr std::uint32_t kRecordVersion = 7;
+    // 6: + stamina regen per actor. 7: + mini-game rates per scene (CalibrateMiniGame). 8: + sticky auto play
+    // (after the scenes). Older still load.
+    constexpr std::uint32_t kRecordVersion = 8;
 
     /// The exported C++ interface (RequestOrgasmEngineAPI).
     SKYRIMNET_SEXLAB_API::IOrgasmEngineV2* GetInterface();

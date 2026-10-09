@@ -8,7 +8,9 @@
 #include <mutex>
 #include <numeric>
 #include <optional>
+#include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace NarrationTiming
@@ -40,6 +42,23 @@ namespace NarrationTiming
         int g_missed = 0;
         std::atomic<std::uint64_t> g_speechStarts{ 0 };
         std::atomic<std::uint64_t> g_completions{ 0 };
+        // The paired response now playing (its Completions() index, 0 = none) and its speaker; the last one
+        // whose SpeechComplete arrived (ResponseDoneSince).
+        std::uint64_t g_openResponse = 0;
+        RE::FormID g_openSpeaker = 0;
+        std::atomic<std::uint64_t> g_lastDoneResponse{ 0 };
+
+        // Per-speaker responses, so a scene waits only for its own actors' voices (two scenes narrating
+        // together paired the other scene's reply, 2026-10-08). g_seq bumps on every non-player
+        // SpeechStarted; a speaker's response opens at its first sentence and closes at its SpeechComplete.
+        struct Speaker
+        {
+            std::uint64_t openStart = 0;  // seq of the open response's first sentence (0 = none open)
+            std::uint64_t lastStart = 0;  // seq of the latest sentence
+            std::uint64_t lastDone = 0;   // first-sentence seq of the latest completed response
+        };
+        std::uint64_t g_seq = 0;
+        std::unordered_map<RE::FormID, Speaker> g_speakers;
 
         // Caller holds g_lock.
         void ExpireStale(Clock::time_point now)
@@ -80,6 +99,13 @@ namespace NarrationTiming
             if (sender && sender->GetFormID() == 0x14)
                 return;
             g_speechStarts.fetch_add(1);
+            if (sender) {
+                auto& sp = g_speakers[sender->GetFormID()];
+                ++g_seq;
+                if (sp.openStart == 0)
+                    sp.openStart = g_seq;
+                sp.lastStart = g_seq;
+            }
             if (!g_pending)
                 return;
 
@@ -98,7 +124,30 @@ namespace NarrationTiming
                 g_pending->extra_sends,
                 g_pending->preview, StatsLine());
             g_pending.reset();
-            g_completions.fetch_add(1);
+            g_openResponse = g_completions.fetch_add(1) + 1;
+            g_openSpeaker = sender ? sender->GetFormID() : 0;
+        }
+
+        // Caller holds g_lock. SpeechComplete: once per response. The player's own line (or another speaker's)
+        // does not end the paired response.
+        void OnSpeechComplete(RE::TESForm* sender)
+        {
+            g_speaking = false;
+            const RE::FormID id = sender ? sender->GetFormID() : 0;
+            if (const auto it = g_speakers.find(id); id != 0 && it != g_speakers.end()) {
+                it->second.lastDone = it->second.openStart ? it->second.openStart : it->second.lastStart;
+                it->second.openStart = 0;
+            }
+            if (g_openResponse == 0) {
+                return;
+            }
+            if (id != 0 && g_openSpeaker != 0 && id != g_openSpeaker) {
+                return;
+            }
+            g_lastDoneResponse.store(g_openResponse);
+            webui_log::info("NarrationTiming: response {} complete speaker={:08X}", g_openResponse, id);
+            g_openResponse = 0;
+            g_openSpeaker = 0;
         }
 
         class SpeechSink : public RE::BSTEventSink<SKSE::ModCallbackEvent>
@@ -122,7 +171,7 @@ namespace NarrationTiming
                     OnSpeechStarted(a_event->sender);
                 } else if (name == "SkyrimNet_SpeechComplete") {
                     std::lock_guard lock(g_lock);
-                    g_speaking = false;
+                    OnSpeechComplete(a_event->sender);
                 }
                 return RE::BSEventNotifyControl::kContinue;
             }
@@ -162,6 +211,9 @@ namespace NarrationTiming
         std::lock_guard lock(g_lock);
         g_pending.reset();
         g_speaking = false;
+        g_openResponse = 0;
+        g_openSpeaker = 0;
+        g_speakers.clear();
     }
 
     double EstimateSeconds(double fallback)
@@ -189,5 +241,38 @@ namespace NarrationTiming
     std::uint64_t Completions()
     {
         return g_completions.load();
+    }
+
+    bool ResponseDoneSince(std::uint64_t mark)
+    {
+        return g_lastDoneResponse.load() > mark;
+    }
+
+    std::uint64_t SpeakerMark()
+    {
+        std::lock_guard lock(g_lock);
+        return g_seq;
+    }
+
+    bool StartedSince(std::uint64_t mark, std::span<const RE::FormID> speakers)
+    {
+        std::lock_guard lock(g_lock);
+        for (const auto id : speakers) {
+            const auto it = g_speakers.find(id);
+            if (it != g_speakers.end() && it->second.lastStart > mark)
+                return true;
+        }
+        return false;
+    }
+
+    bool DoneSince(std::uint64_t mark, std::span<const RE::FormID> speakers)
+    {
+        std::lock_guard lock(g_lock);
+        for (const auto id : speakers) {
+            const auto it = g_speakers.find(id);
+            if (it != g_speakers.end() && it->second.lastDone > mark)
+                return true;
+        }
+        return false;
     }
 }

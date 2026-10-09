@@ -3,6 +3,7 @@
 #include "Aid.h"
 #include "Config.h"
 #include "AnimSpeed.h"
+#include "NarrationTiming.h"
 #include "OrgasmEngine.h"
 #include "WebUI_Log.h"
 
@@ -90,13 +91,30 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetScenePaused(sid, paused);
         }
-        void GateNarrationSent(RE::StaticFunctionTag*, std::int32_t sid)
+        void GateNarrationSent(RE::StaticFunctionTag*, std::int32_t sid, std::int32_t mark)
         {
-            OrgasmEngine::GateNarrationSent(sid);
+            OrgasmEngine::GateNarrationSent(sid, mark);
         }
         void SetEndingTarget(RE::StaticFunctionTag*, std::int32_t sid, RE::Actor* lead, std::int32_t target)
         {
             OrgasmEngine::SetEndingTarget(sid, lead, target);
+        }
+        bool IsGateScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsGateScene(sid); }
+        // Response tracking for the final-stage hold, scoped to the scene's actors: mark before sending a
+        // narration, then ResponseStartedSince (one of them is speaking) / ResponseDoneSince (that reply ended).
+        std::int32_t NarrationMark(RE::StaticFunctionTag*)
+        {
+            return static_cast<std::int32_t>(NarrationTiming::SpeakerMark());
+        }
+        bool ResponseStartedSince(RE::StaticFunctionTag*, std::int32_t sid, std::int32_t mark)
+        {
+            return mark >= 0 && NarrationTiming::StartedSince(static_cast<std::uint64_t>(mark),
+                                    OrgasmEngine::SceneActors(sid));
+        }
+        bool ResponseDoneSince(RE::StaticFunctionTag*, std::int32_t sid, std::int32_t mark)
+        {
+            return mark >= 0 && NarrationTiming::DoneSince(static_cast<std::uint64_t>(mark),
+                                    OrgasmEngine::SceneActors(sid));
         }
         float FinalStageRemaining(RE::StaticFunctionTag*, std::int32_t sid)
         {
@@ -221,6 +239,10 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetScenePaused", s, SetScenePaused);
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
         a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
+        a_vm->RegisterFunction("IsGateScene", s, IsGateScene);
+        a_vm->RegisterFunction("NarrationMark", s, NarrationMark);
+        a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince);
+        a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince);
         a_vm->RegisterFunction("FinalStageRemaining", s, FinalStageRemaining);
         a_vm->RegisterFunction("SetSceneBlocked", s, SetSceneBlocked);
         a_vm->RegisterFunction("SetOrgasmExpected", s, SetOrgasmExpected);

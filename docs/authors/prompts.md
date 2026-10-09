@@ -65,6 +65,10 @@ A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plu
 - One criterion per line; profiles and other multi-line decorators go in a `[ state ]` block.
 - The pushed context keys are bare lowercase (`focus_uuid`, `last_line_text`, `partners[].relationship`, …), per [../reference/json-keys.md](../reference/json-keys.md).
 
+## Player turn decision (`decisions/sexlab/minigame_player_turn`)
+
+Auto play (HUD take-control key in the player's own scene): one decision template for the player's turn, with the player as the focus. Questions: `strategy` (choice, when `has_strategy`), `speak` (noul, when `ask_speak`), `hotkey` (choice over `hotkeys[]`, `none` first), and the dialog answers `aid_option` / `aid_part` (when `aid_options[]` is not empty) and `force_option` / `force_method` / `force_part` (when `force_options[]` is not empty). Each question block sits in its own `{% if %}`. The DLL reads answers by these question ids and the pushed keys (`next`, `deny_p2`, `aid_3`, `force_1`, `spell_1`, `ass`, …), so keep both as given and edit the wording around them. Flow: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#take-control-and-auto-play).
+
 ## Orgasm gate (`0550`)
 
 See [../reference/orgasm-narration.md](../reference/orgasm-narration.md). Gate:
@@ -82,6 +86,7 @@ contains(_direct_narration, " is orgasming.")
 | DirectNarration + `" is orgasming."` | `0550_sexlab_narration.prompt` |
 | Scene `RenderSlPrompt` (`afterglow.prompt`, `cum.prompt`) | DirectNarration / RegisterEvent |
 | `StrategyDecision.cpp` context JSON + `options[].key` | `decisions/sexlab/minigame_strategy.prompt` |
+| `StrategyDecision.cpp` player turn JSON + question ids + option keys | `decisions/sexlab/minigame_player_turn.prompt` |
 
 ## Checklist
 

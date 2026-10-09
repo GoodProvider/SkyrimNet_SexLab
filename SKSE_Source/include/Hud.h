@@ -7,7 +7,8 @@
 #include <nlohmann/json.hpp>
 
 /// Scene HUD: a second PrismaUI view (PrismaUI/views/SkyrimNet_SexLab/hud.html) shown without Focus
-/// (no pause, no input capture) while the player is in a scene the OrgasmEngine manages.
+/// (no pause, no input capture) while the player is in a scene the OrgasmEngine manages, or drives an NPC of one
+/// (take-control key on a crosshair NPC).
 /// Groups (sexlab.hud.enjoyment / sexlab.hud.controls / sexlab.enjoyment.mode) toggle rows and keys.
 namespace Hud
 {
@@ -28,4 +29,11 @@ namespace Hud
 
     /// hotkey-map.json entries for the HUD keys (dashboard bindings + fixed focus 1-4), as last applied.
     nlohmann::json HotkeyMapJson();
+
+    /// The actor HUD keys act as: the NPC the player took control of (take-control key), else the player.
+    RE::Actor* ActingActor();
+
+    /// Game thread. Presses a HUD key as the acting actor (auto play): slower / faster, or a Papyrus
+    /// Menu.Hud_OnKey control (previous, next, pause, end, pos_up, pos_down, deny with focus, speak).
+    void PressKey(const std::string& control, RE::FormID focus = 0);
 }

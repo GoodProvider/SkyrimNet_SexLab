@@ -302,7 +302,7 @@ Bool Function ThreadHasCreatorLockedActor(sslThreadController thread)
     Actor[] actors = thread.Positions
     int i = 0
     while i < actors.length
-        if actors[i] && StorageUtil.HasIntValue(actors[i], main.storage_actor_lock_key)
+        if actors[i] && SkyrimNet_SexLab_Locker.IsLocked(actors[i])
             return True
         endif
         i += 1
@@ -436,7 +436,7 @@ SkyrimNet_SexLab_Scene Function GetSceneInactive(sslThreadController thread)
         if candidate != None
             ; Busy only if a live SexLab thread is attached — status alone is not enough
             ; when saves leave all slots ACTIVE with no animations running.
-            if candidate.GetThreadActive()
+            if candidate.GetThreadInScene()
                 i += 1
             else
                 if candidate.IsActive()
@@ -458,7 +458,7 @@ SkyrimNet_SexLab_Scene Function GetSceneInactive(sslThreadController thread)
         return None
     endif
     ; Single shared fallback: do not rebind while it already serves a live thread (no CK pool expand).
-    if sl_scene_generic.GetThreadActive()
+    if sl_scene_generic.GetThreadInScene()
         Trace("GetSceneInactive", "sl_scene_generic already active for another thread, refusing allocate")
         return None
     endif
@@ -937,7 +937,7 @@ String Function BuildSceneConnectionsJson()
     int i = 0
     while i < sl_scenes.length
         SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
-        if sl_scene != None && sl_scene.GetThreadActive()
+        if sl_scene != None && sl_scene.GetThreadInScene()
             int co = SNSL_JMap.object()
             SNSL_JMap.setStr(co, "_id", "scene:"+sl_scene.sid)
             SNSL_JMap.setInt(co, "_scene_sid", sl_scene.sid)
@@ -957,7 +957,7 @@ Function WebUI_TakeCancelSnapshots()
     int i = 0
     while i < sl_scenes.length
         SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
-        if sl_scene != None && sl_scene.GetThreadActive()
+        if sl_scene != None && sl_scene.GetThreadInScene()
             sl_scene.WebUI_TakeCancelSnapshot()
         endif
         i += 1
@@ -998,7 +998,7 @@ String Function BuildAllSceneInfosJson()
     i = 0
     while i < sl_scenes.length
         SkyrimNet_SexLab_Scene sl_scene = sl_scenes[i]
-        if sl_scene != None && sl_scene.GetThreadActive()
+        if sl_scene != None && sl_scene.GetThreadInScene()
             int st = sl_scene.BuildWebUISceneMenuObject()
             if st
                 SNSL_JArray.addObj(arr, st)
@@ -1092,7 +1092,7 @@ Function WebUI_OnSceneConnectionChange(String json)
         String sid_str = StringUtil.Substring(conn, 6)
         int scene_sid = sid_str as int
         SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
-        if sl_scene == None || !sl_scene.GetThreadActive()
+        if sl_scene == None || !sl_scene.GetThreadInScene()
             Trace("WebUI_OnSceneConnectionChange", "no active scene sid:"+scene_sid, true)
             JValue.release(obj)
             return

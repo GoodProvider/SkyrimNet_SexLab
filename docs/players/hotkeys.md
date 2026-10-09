@@ -31,10 +31,11 @@ While this overlay is open, other mods’ hotkeys (including SexLab stage/adjust
 
 ## Scene keys (numpad + PgUp / PgDn)
 
-These keys work while you control a scene: you are in it, or you took control of the crosshair scene with SexLab's `N`. They work with NumLock on or off.
+These keys work while you are in a scene, or while you control an NPC in another scene with **Num \*** (below). They work with NumLock on or off.
 
 ```
 ---------------------------------------------------------------------
+|            |               |         |               | * control|
 | PgUp PosUp | 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
 | PgDn PosDn | 4 previous    | 5 pause | 6 next        | + faster |
 |            | 1 deny        | 2 end   | 3 free camera |          |
@@ -56,6 +57,8 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
 - **Controls:** a fixed grid laid out like the numpad. Each label names what pressing its key will do.
 
   ```
+                                       Num *
+                                       auto
    PgUp     Num 7    Num 8    Num 9    Num -
    PosUp             calm     arouse   gentle
    PgDn     Num 4    Num 5    Num 6    Num +
@@ -68,6 +71,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
 
   Num 7 is dimmed with no label (it belongs to SkyrimNet).
 
+  - **Num \*** (*auto* / *control*) hands your scene to the AI or takes it back. See [Take control and auto play](#take-control-and-auto-play).
   - **Num 2** ends the scene.
   - **Num 5** pauses the current stage; the cell then reads *play*. Press again to resume with the rest of the stage's time.
   - **Num 4 / Num 6** go to the previous / next stage.
@@ -90,5 +94,12 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - **Num 0** (*aid*) opens the **Aid** panel: "*You* *spell or potion* on *actor*'s *body part*." Pick one of your healing or stamina spells or potions, who gets it (you or anyone in the scene), and where (body, pussy, ass, nipples or **custom**; it only changes the narration). A spell costs its magicka (a spell you can't afford is greyed out); Healing and Healing Hands count as three seconds of casting. A potion is used up. The spell's or potion's effects show on the target (and the spell's glow on your hands). It is narrated ("Bob casts Healing Hands on Nina." / "Bob gives Nina a Potion of Minor Stamina."; with a body part: "Bob casts Healing Hands on Nina's ass." / "Bob pours a Potion of Minor Stamina on Nina's nipples."). Without a spell or potion the cell is greyed out.
   - NPCs can do the same: the AI may have an actor heal or restore someone in the scene (**SexLab_Aid**), or have an aggressor force a victim (**SexLab_Force**, never the player).
   - The optional **mental break** drains the magicka of whoever is being aroused; when it runs out they can't hold back.
+
+## Take control and auto play
+
+**Num \*** (dashboard **Scene HUD** / **Take control key**) does one of two things:
+
+- **In your own scene: auto play.** Press it and the cell reads *control*: the AI now plays you like an NPC. Your HUD row shows the strategy it picked. After anyone in the scene speaks, it decides how you behave, whether you press a key (next or previous stage, swap roles, slower, faster, pause, deny or allow someone, end, aid, force), what you pick in the Aid or Force panel, and whether you answer (SkyrimNet writes and speaks your line). It rarely presses anything, at most one key and one line every 5 seconds, and ending the scene needs a confident answer. You can still press any key yourself. Press **Num \*** again (*auto*) to take back control. Auto play stays on for your later scenes (and across saves) until you press **Num \*** again, so a scene you leave alone ends the usual way: the last orgasm at the end of the second-to-last stage, then the final stage until the reply to it has played (30 s at most). It needs the Multi-Orgasm Mini-game with **Strategy decisions** on and a SkyrimNet decisions provider.
+- **Not in a scene: control an NPC.** Aim at someone in a scene and press it. The HUD appears for that scene and reads "as *name*". Every key now acts as that NPC: arouse and calm cost their stamina and magicka, the stage, speed, pause, swap, end and deny keys work on their scene, and Force forces as them ("Nina forces …"). Aid is hidden (it uses your own spells and potions). The NPC stops playing their own strategy, and the focus starts on someone else in the scene (1-4 to change it). Press **Num \*** again to let go; ending the scene, or starting one of your own, lets go too. SexLab's own thread control (`N`) is not used, so the scene keeps its normal stage timing.
 
 All HUD keys are rebindable in the dashboard. While the HUD is up they don't reach SexLab or the game, so a key you share with a SexLab key only does the HUD action.

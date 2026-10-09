@@ -16,6 +16,7 @@ Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (PrismaUI view path, ac
 | (shipped by SkyrimNet_Leashed) `SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/Actor/options/0700_leashed_panel.json` | Leash TargetMenu option (`panel: leash` + `panelScript`; omitted unless `SkyrimNet_Leashed.esp` is loaded) |
 | `SKSE/Plugins/SkyrimNet_SexLab/bondage/group-devices.json` | BondagePanel file-first catalog (live; API `GetDatabase` overlays when ready; same release split) |
 | `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest.yaml` | SkyrimNet plugin settings schema (control store) |
+| `Scripts/Source/SkyrimNet_SexLab_Locker.psc` / `SKSE_Source/src/ActorLocker.cpp` | Pre-start scene lock (co-save). Nearby status `locked`; Scene Creator lists `status:"ok"` only, Control Panel pulldown also lists `sexlab` / `locked` as `Name (SexLab)` / `Name (locked)` |
 | `Scripts/Source/SkyrimNet_SexLab_WebUI.psc` | Target/Sex/YesNo/SceneCreator/Animation natives + `SceneConnections_Show` + `SceneInfos_Seed` |
 
 ## Layout

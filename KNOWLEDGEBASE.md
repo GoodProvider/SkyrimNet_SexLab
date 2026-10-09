@@ -1,5 +1,29 @@
 # Knowledgebase
 
+## Gate voice / ending hold paired with another scene's reply (2026-10-08)
+
+**Symptom (`review-logs/2026-10-08_114804`):** two scenes ran at once. Scene C sent its gate DN at 11:36:06.77. Scene B sent its finish DN 0.1 s later. Nia's reply to B's finish (11:36:09.6) moved C to its final stage and then released C's ending hold "(response played)". Skadi's real reply to C came at 11:36:26, after the hold was already released.
+
+**Cause:** `NarrationTiming` paired the first non-player `SpeechStarted` after any `MarkSent`, whichever scene the speaker belonged to. `Completions()` and `ResponseDoneSince(mark)` were global counters.
+
+**Fix:** responses are now tracked per speaker (`SpeakerMark` / `StartedSince` / `DoneSince`). The gate check uses `StartedSince(gateSpeechMark, sc.actors)`, and Papyrus `ResponseStartedSince(sid, mark)` / `ResponseDoneSince(sid, mark)` only count the scene's own actors.
+
+## XAudio2_7 crash: headset removed, not the bridge (2026-10-08)
+
+**Symptom:** `EXCEPTION_ACCESS_VIOLATION` at `XAudio2_7.dll+0034C29` (`mov rax, [rcx]`, rcx = 0) on the audio thread (`BSAudioManagerThread`, `BSXAudio2GameSound` on the stack). No SkyrimNet, SexLab or PrismaUI frame. Seen 2026-09-25, 2026-10-04 00:51 and 2026-10-08 10:33; `+0043F09` on 2026-09-22 is likely the same.
+
+**Cause:** the audio output device (headset) was removed mid-game. Skyrim's XAudio2 2.7 does not recover from a lost device. The next new sound gets a null voice and crashes. On 10-08 that was a SexLab scene's voice/SFX starting while a SkyrimNet TTS clip played.
+
+**Action:** none in this repo. Don't blame recent commits for this signature. The workaround is to save and quit to the menu before unplugging or switching headsets.
+
+## AI-driven mini-game: no ending, response cut off (2026-10-08)
+
+**Symptom (player on auto play, 6 scenes; `review-logs/2026-10-08_102411`):** orgasms came anywhere (stage 1, 3, 4). Female leads (target 2) never reached their second orgasm, so `Ending_Check` never jumped and the final stage ran out with no hold. In one scene the lead orgasmed at 10:13:09.6, the same second as SexLab's final `StageEnd` (Papyrus), and `Ending_Hold` at 10:13:10.6 came after `AnimationEnding` had started: the scene ended 2.3 s later, before the response.
+
+**Cause:** mini-game mode turned off the gate and the safety net (`together = !miniGame`), so the ending depended on the lead happening to hit its rolled target in the last two stages. A hold applied once SexLab's last `StageEnd` has fired is too late: `UpdateTimer` cannot stop `AnimationEnding`.
+
+**Fix:** `SceneAiDriven` scenes (every non-DOM actor `AiDriven`) use the gate (`aiGate`). The lead always passes, and natural orgasms are held at 98 in the last two stages, so the gate's orgasm is the last one. Its existing pipeline (`Gate_Hold` → voice → `Ending_ToFinal` → `Ending_Hold`) holds the final stage from its start.
+
 ## Aid spells and weak Force spells are applied, not cast (2026-10-07)
 
 - **Visual cast:** the amounts below stay direct, but `Aid::PlaySpellVisuals` (main thread, after the restore or hit) plays each effect's `castingArt` on the caster (`ApplyArtObject`; spells only), `effectShader` and `hitEffectArt` on the target, and its `kRelease` (caster) / `kHit` (target) `effectSounds` via `BSAudioManager::GetSoundHandle`. They last 3 s for a concentration spell and 2 s otherwise. Nothing is engine-cast, so a self-delivery heal (Healing) visibly lands on another actor, and an attack spell starts no combat. Log line: `Aid: visuals '<spell>' ... art N shaders N sounds N`.
@@ -962,6 +986,14 @@ Scene-pick anim rows are stubs: `_in_thread_anims` (`Scene.psc`) carries only `_
 
 **Fix**: JS auto-unpauses for a step and re-pauses on the `_stage_started` push sent from `Scene.StageStart`; the `ApplyWebUICommit` push only moves the row.
 
+## Hotkey during stage change: no scene in overlay (2026-10-08)
+
+**Symptom**: the hotkey opens the overlay with no scene (`seed after bind pick=none inThread(0)=[]`) while a SexLab scene is running. Switching actors in the ControlMenu does not bring it back. `SkyrimNet_SexLab.log` has `GetThreadActive: thread is not animating or prepare 'Advancing'` right after `ProcessHotkey`.
+
+**Cause**: the same freeze as the 2026-09-20 entry above, hit on overlay open. The hotkey landed mid stage-change and the overlay pause froze the thread in `Advancing` until close. `BuildAllSceneInfosJson` / `WebUI_TakeCancelSnapshots` filtered on `GetThreadActive()` (`animating`/`prepare` only), so the scene was left out of the one-time seed. `GetSceneInactive` used the same check, so a slot whose thread was `Advancing` counted as free and could be reclaimed by a new scene.
+
+**Fix**: `Scene.GetThreadInScene()` also accepts `advancing`/`refresh`. Listing and occupancy checks use it: `GetSceneInactive`, `BuildSceneConnectionsJson`, `WebUI_TakeCancelSnapshots`, `BuildAllSceneInfosJson`, `WebUI_OnSceneConnectionChange`, and `Menu.WebUI_ConfigureFocusScene`. `GetThreadActive()` stays the commit gate. `Menu.ProcessHotkey` → `WaitForStageChange` waits up to about 3s, game still unpaused, for the target's thread to reach `animating` before it opens the overlay.
+
 ## WebUI click-lockout from timer-driven pause toggle (2026-09-22)
 
 **Symptom**: after a Description Editor autosave, the whole overlay stopped responding to clicks — cursor still moved, Escape still closed the overlay — but nothing was clickable. `SkyrimNet_SexLab.log` showed zero entries for the rest of that session: no click ever reached a native JS listener again.
@@ -1027,6 +1059,8 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **DOM always rolls once per scene:** DOM hooks `HookOrgasmStart_DOM<id>ORGASM`. If that never fires, `handleSexEndEvent` calls `handleSexOrgasm` at AnimationEnd (`had_handle_orgasm`). `SexLabOrgasmSeparate` only comes from SLSO.
 - **Timed enjoyment rate:** the engine's base rate is `100 / (stages 1..N-1 + 0.9 × final)` seconds from the thread's stage timers (`GetTimer` rule). It is a fixed rate, so pausing, repeating stages or speeding up add enjoyment. The role keys are multipliers now, under new names: `sexlab.enjoyment.passive_mult` / `aggressor_mult` / `victim_mult`. The old absolute `*_rate` values would have been misread as multipliers.
 - **sslThreadController `StageTimer` / `TimedStage` are private script variables** (not properties), so other scripts can't read or set them. For the pause hotkey, use the public `UpdateTimer(sec)` (sets `TimedStage = true`, `StageTimer += sec`) and `ResolveTimers()` (resets `TimedStage = Animation.HasTimer(Stage)`). `GoToStage` → `PlayStageAnimations` resets `StageTimer`, so a hold must be re-applied at StageStart.
+- **A released final stage can still never end** (2026-10-08, `review-logs/2026-10-08_114804`): the controller advances only on `(AutoAdvance || TimedStage) && StageTimer < now` in its own `OnUpdate`. After `Ending_Poll`'s release a player scene got no `StageEnd` at all, and the private timer state can't be read to say why. `Ending_Watch` ends the animation `FinalStageRemaining + 15 s` after the release. Its trace logs the readable inputs (`thread.AutoAdvance`, `HasTimer`, `IsInMenuMode`, state). Also, SexLab 1.66 `sslActorAlias` sets a player thread's `AutoAdvance = Config.AutoAdvance`; with that off, `ResolveTimers()` on an untimed stage leaves it waiting for the advance key.
+- **`thread.positions` in `AnimationEnd`:** SexLab resets the ending thread concurrently, so `thread.positions` can turn unreadable partway through the handler ("Cannot get the length of a non-array"). Read it once into a local at entry.
 - **Pause key DX:** `MapVirtualKey(VK_PAUSE)` returns no scancode. `HotkeyVkToDx` maps it to DIK_PAUSE 0xC5 explicitly.
 - **DOM compile headers:** `SkyrimNet_DOM/Headers_Source/DOM/` stubs (imported by `skyrimse.ppj`) only declare what we call. Add a member there (copied from `extern/Source_DOM`) before using it from Handler_DOM, or Pyro reports "not a property".
 - **Why thread-wide:** a per-actor `DisableOrgasm` would be re-enabled by the existing `DisableOrgasm(a, false)` call sites. Those now route through `Scene.SetOrgasmDisabled`, which also sets the engine block.
@@ -1074,6 +1108,13 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - Final-stage `StageStart` sent `continue activity` 56 ms before Bob fired. Fix: no continue DN in the final stage.
 - The two groups' `NarrateOrgasmStash` ran at the same time; `OrgasmMessagesToNarration` yields on JMap / native calls, so each consumed the other's slots (crossed recovering lines). Fix: `orgasm_narrating` guard → window.
 - The finish came 7.8 s after the orgasm. Fix: final-stage orgasms use the window, and `OrgasmWindow_HoldForFinish` keeps it for `AnimationEnd` when the stage ends inside the cap.
+
+## Scene endings: gate race, response hold, sticky auto play (2026-10-08)
+
+- Snapshot `review-logs/2026-10-08_112127`. The final-stage hold waited for SkyrimNet's whole speech queue: with two scenes talking it ran 7–45 s, and its release added the held time to the stage (59 s in one scene). **Rule:** hold until the orgasm DN's own paired response ends (`NarrationTiming::ResponseDoneSince`, the speaker's `SkyrimNet_SpeechComplete`), at most 30 s, and release without adding the held time.
+- Gate lead = the DN→speech median (1.6 s), but tick → `Gate_Hold` took 1.7 s, so SexLab turned the stage first. **Rule:** the gate fires `lead + 2 s` early. A hold applied as the stage turns is lost to SexLab's new stage timer: `Ending_StageStart` applies it again once per (animation, stage).
+- Auto play was per scene, and the player started as Passive (nothing allowed before auto play) with the prompt saying "keep the current approach": 18 of 18 player turns chose passive. Auto play is now sticky (co-save v8) and starts on the role default.
+- An aggressor's early orgasm ended gate scenes ("ending after dialogue") and then lost its hold. In gate scenes every aggressor expected to orgasm now passes the gate outright.
 
 ## PrismaUI modals: own full-screen layer, hide imperatively (2026-10-03)
 
@@ -1154,6 +1195,39 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Symptom:** in a 2-actor Scene Creator, clicking a third nearby actor (Nina) did nothing. After removing position 2 the click logged nothing at all. Log: `WebUI_OnResolveActorMeta` with no `HandleResolveDeviousTags`, then `HandleAnimDbQuery actor_count=2` about 190 ms later. The reply landed on `actorAnimMetaResult`'s generic branch, not the `'n'` branch that pushed the pending entry.
 - **Cause:** the add waited in `SC.pendingNearby` for a reply carrying its exact `'n<k>'` id. The id round-trips through a Papyrus `String` / BSFixedString, which is case-insensitive and pooled, so an exact echo is not guaranteed. The stale entry also failed the duplicate check (`pendingAdds.some(...)`), blocking that actor for the session. No Papyrus error is logged.
 - **Fix / rule:** push the position at once and enrich afterwards (`'m<k>'`), matching reply rows by form id, as `scEnsurePositionSeed` does. Do not make JS state depend on Papyrus echoing a string id verbatim. Untested in game: the exact form the id came back in.
+
+## DN bursts: one spoken reply; NPC-only orgasm DNs became events (2026-10-08)
+
+- **Symptom:** NPC-only scene (Nina victim + Nia The Nerd initiator, `no_orgasm`, 5 stages) had no orgasm or finish reaction. Nina orgasmed at stage 4/5; the orgasm, stage 4 change, arouse, stage 5 change, strategy line and finish all went out within ~16 s, all as events.
+- **Cause 1:** `DirectNarration_Optional` needs ≥ `sexlab.narration.cooldown` (20 s) since the last audio ended. Ongoing dialogue keeps that near 0 (87 ms at the orgasm, 7.8 s at the finish), so in NPC-only scenes the orgasm and finish were `RegisterEvent` (`Orgasm`, `End`) and 0550 never gated.
+- **Cause 2:** the ending lead was the initiator, who was not expected to orgasm, so the second-to-last-stage jump never fired and the stage-4 orgasm and stage-5 change were separate narrations.
+- **Rule:** SkyrimNet speaks one reply per burst of DirectNarrations; later DNs cancel or downgrade earlier ones. Merge related narrations into one DN and send the rest as events. Do not send optional DNs right after an orgasm DN (`Scene.OrgasmDNRecent`).
+- **Fix:** orgasm and orgasm/afterglow finish DNs in NPC-only scenes use `DirectNarration_Nearby` (distance only). The finish is always at least `RegisterEventForce("end")`. The lead must be expected to orgasm (`Ending_PickLead`). The jump's final `StageStart` sends the change and the orgasm as one DN (`stage_fold_pending`). Contract: [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md).
+- **Follow-up run (09:09):** Nia orgasmed 2 s before stage 4/5 ended: orgasm DN at 23.28, then stage 5's change as an event at 25.28. In the 08:04 run the orgasm landed during StageStart's yields and beat its change. Now both fold into the next StageStart's DN (`stage_fold_pending`), and the change keeps budget priority over the recovering / not-orgasming parts.
+- **Open:** the finish had no afterglow (no `afterglow` render). `AnimationEnd` now traces `afterglow positions:… engine_managed:…` to name the missing input. Untested in game.
+
+## Take-control key: auto play and driving an NPC (2026-10-08)
+
+- **What:** `sexlab.hud.key_take_control` (Num \*). In the player's scene it toggles auto play (`ActorState::autoPlay`); outside one it takes or releases control of the crosshair NPC (`playerDriven`, Hud `g_anchor`). `AiDriven(st)` replaced the engine's player checks. See [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#take-control-and-auto-play).
+- **Two bindings for one key:** HUD keys only fire while the HUD is up, and a crosshair NPC scene has no HUD until control is taken. The key is also a global `KeyHandler::Register` callback. `KeyHandler::ProcessEvent` skips `_callbacks` for a key the HUD consumed, so it never fires twice.
+- **Papyrus dispatch arity:** C++ always passes all three `Hud_OnKey(control, focus, anchor)` arguments (`None` actors when unused) rather than relying on Papyrus default parameters through `DispatchMethodCall`.
+- **No TransformNarration in SkyrimNet:** the player's auto-play line uses `SkyrimNetApi.TransformDialogue("<player> replies")`. Its docs say empty text fails, so don't send `" "`. `TriggerPlayerDialogue()` is the alternative if this reads badly.
+- **Decision keys must be safe ids:** spell names have spaces, so Force methods go out as `spell_<n>` and map back to the name. Aid / Force / deny options are `aid_<n>`, `force_<n>`, `deny_p<slot>`.
+- **Not saved:** both flags live in `ActorState` and are not in the co-save. A load or a new scene starts manual. `Hud::Reset` clears the anchor.
+- Untested in game: the whole feature, `GetKeyNameTextA` giving "Num *" for DX 0x37, whether conditional `[ question ]` blocks (`{% if %}`) render in the decision template, and how often Jev answers `speak` yes or presses a key.
+
+## Scene Creator listed actors already in a scene (2026-10-08)
+
+**Symptom:** Bob and Nia started a scene from Scene Creator; reopening Scene Creator listed both in the Actor table.
+**Cause:** the nearby scan marked SexLab-animating actors `status:"sexlab", selectable:true` (for the Control Panel pulldown) and `scActorSexLabEligible` accepted `ok || sexlab`. The creator lock was a StorageUtil key that C++ could not read, and the Papyrus filter `Menu.WebUI_PushAvailableNearby` is never called.
+**Fix:** lock moved to C++ `ActorLocker` (co-save `ALCK`, Papyrus surface `SkyrimNet_SexLab_Locker`). `ClassifyNearbyActor` reports `locked`; Scene Creator takes `status:"ok"` only; the pulldown keeps `sexlab` / `locked` selectable, labelled `(SexLab)` / `(locked)`.
+**Follow-up:** the player still appeared as a selected Position: `scNearbyPool()` (seed for `scEnsurePositionSeed`) added `playerActor` / `targetActor` unconditionally, and draft positions were never re-checked. Now the pool takes `status:"ok"` only (`scFormIdEligible`), and `scPruneIneligiblePositions()` drops ineligible creator positions on every seed pass (skipped until the first nearby scan).
+
+## Derived `sexual` tag (2026-10-08)
+
+- AnimDB adds `sexual` from `sex_tags.json` in `LoadSynonyms()`, which runs after `LoadAllRowsLocked` at open and after EndSync. That pass upserts the changed rows, so the DB stores the tag. The sync path applies it **before** the unchanged-row compare; otherwise every row would look changed.
+- The tag is only added. Removing a tag from `sex_tags.json` needs a forced AnimDB rebuild to drop `sexual`.
+- TargetMenu options with `creatorTags` / `creatorSuppress` only replace SC tags / suppress while Scene Creator is open. Options without those fields still re-seed the whole creator (`ssApplySceneStartDefaultsToCreator`).
 
 ## Username privacy (standing rule)
 

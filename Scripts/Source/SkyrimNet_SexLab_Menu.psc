@@ -107,36 +107,68 @@ Function ProcessHotkey(int key_code)
     Trace("ProcessHotkey","target: "+target_name+" preferExplicit:"+preferExplicit)
 
     if target != None
+        WaitForStageChange(target)
         animdb.PushSexLabCount() ; Settings shows db / SexLab counts even before SexLab is enabled
         Open_WebUI_Target(target)
         SkyrimNet_SexLab_WebUI.WebUI_AfterTargetOpen(target, preferExplicit)
     endif
 EndFunction
 
-; Scene HUD keys (C++ Hud): SexLab thread operations on the player's scene. calm / arouse / focus /
-; slower / faster never reach Papyrus (OrgasmEngine + AnimSpeed in C++).
-; focus: the HUD's focus actor (deny key); None for the other keys.
-Function Hud_OnKey(String control, Actor focus = None)
-    Actor player = Game.GetPlayer()
-    if !main.sexlab.IsActorActive(player)
+; SexLab Advancing / Refresh finish on game time; the overlay pauses the game and would freeze the
+; thread there (commits dropped until close). Let it reach Animating first, capped at ~3s.
+Function WaitForStageChange(Actor target)
+    SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(target)
+    if sl == None || sl.GetThread() == None
         return
     endif
-    Trace("Hud_OnKey", control)
+    sslThreadModel model = sl.GetThread() as sslThreadModel
+    String s = model.GetState()
+    if s != "advancing" && s != "refresh"
+        return
+    endif
+    int tries = 30
+    while tries > 0 && (s == "advancing" || s == "refresh")
+        Utility.Wait(0.1)
+        s = model.GetState()
+        tries -= 1
+    endwhile
+    Trace("WaitForStageChange", target.GetDisplayName()+" sid:"+sl.sid+" state:"+s+" waited:"+((30 - tries) * 0.1)+"s")
+EndFunction
+
+; Scene HUD keys (C++ Hud): SexLab thread operations on the HUD's scene. calm / arouse / focus /
+; slower / faster never reach Papyrus (OrgasmEngine + AnimSpeed in C++).
+; focus: the HUD's focus actor (deny key); None for the other keys.
+; anchor: the NPC the player took control of (take-control key); None: the player's own scene.
+; speak (auto play): SkyrimNet writes and speaks the player's next line.
+Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None)
+    Actor player = Game.GetPlayer()
+    if anchor == None
+        anchor = player
+    endif
+    if !main.sexlab.IsActorActive(anchor)
+        return
+    endif
+    Trace("Hud_OnKey", control+" as "+anchor.GetDisplayName())
     if control == "end"
-        actions.SceneStop_Target(player, player, "normally")
+        actions.SceneStop_Target(anchor, anchor, "normally")
     elseif control == "previous"
-        actions.TM_StagePrev(player, player)
+        actions.TM_StagePrev(anchor, anchor)
     elseif control == "next"
-        actions.TM_StageNext(player, player)
+        actions.TM_StageNext(anchor, anchor)
     elseif control == "pause"
-        SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(player)
+        SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(anchor)
         if sl_scene != None
             sl_scene.TogglePause()
         endif
     elseif control == "deny"
-        SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(player)
+        SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(anchor)
         if deny_scene != None && focus != None
-            deny_scene.ToggleDenyOrgasm(focus)
+            deny_scene.ToggleDenyOrgasm(focus, anchor)
+        endif
+    elseif control == "speak"
+        int failed = SkyrimNetApi.TransformDialogue(player.GetDisplayName()+" replies")
+        if failed != 0
+            Trace("Hud_OnKey", "speak: TransformDialogue failed ("+failed+")")
         endif
     elseif control == "camera_lock"
         ; SexLab's free camera just went off mid-scene: normal third-person camera, look/camera-switch enabled.
@@ -146,7 +178,7 @@ Function Hud_OnKey(String control, Actor focus = None)
         endif
         Game.EnablePlayerControls(false, false, true, true, false, false, false, false, 0)
     elseif control == "pos_up" || control == "pos_down"
-        SkyrimNet_SexLab_Scene pos_scene = manager.GetSceneByActor(player)
+        SkyrimNet_SexLab_Scene pos_scene = manager.GetSceneByActor(anchor)
         if pos_scene != None
             pos_scene.HotkeyChangePositions(control == "pos_down")
         endif
@@ -194,7 +226,7 @@ Function WebUI_ConfigureFocusScene()
         return
     endif
     SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(target)
-    if sl == None || !sl.GetThreadActive()
+    if sl == None || !sl.GetThreadInScene()
         return
     endif
     String scene_state_json = sl.BuildWebUISceneMenuState()
@@ -255,7 +287,7 @@ Function Target_Menu_Selection(Actor target, Actor player)
     buttons[masturbate] = "masturbate"
     buttons[punish] = "punish"
     buttons[affection] = "affection"
-    buttons[sex] = "sex"
+    buttons[sex] = "sexual"
     buttons[raped_by_player] = "player rapes"
     buttons[rapes_player] = "rapes player"
     if bondage != -1 
@@ -326,31 +358,16 @@ Function Target_Menu_Selection(Actor target, Actor player)
         endif 
     elseif button == affection
         if ostim_player == 0 || !main.ostimnet_found    
-            String[] bs = new String[6] 
-            bs[0] = "single hug"
-            bs[1] = "hugging"
-            bs[2] = "cuddle"
-            bs[3] = "spooning"
-            bs[4] = "kissing"
-            bs[5] = "headpat"
-            String method = SkyMessage.ShowArray("How would you like to show affection?", bs, getIndex = false) as string  
-            if method == ""
-                Trace("Target_Menu_Selection","cancelled affection method selection")
-                return
-            endif
-            string setting_name = "nonsexual_male_position_1"
-            if method == "kissing" 
-                setting_name = "nonsexual_kissing"
-            endif 
-            actions.StartScene_Consensual_Two("showing physical affection",player, target=target, style="gently", method=method,setting_name=setting_name)
+            ; No method tag: the nonsexual setting suppresses AnimDB's derived "sexual" tag.
+            actions.StartScene_Consensual_Two("showing physical affection",player, target=target, style="gently", setting_name="nonsexual")
         else
             Debug.Notification("Affection is not available while OStim is the active framework.")
         endif 
     elseif button == sex
         if debug_mode && main.handler_dom.IsDOMSlave(target) 
-            main.handler_dom.StartScene_Consensual_Two("sexual activities", target, player, player)
+            main.handler_dom.StartScene_Consensual_Two("sexual activities", target, player, player, method="sexual")
         else
-            actions.StartScene_Consensual_Two("sexual activities", player, target)
+            actions.StartScene_Consensual_Two("sexual activities", player, target, method="sexual")
         endif 
     elseif button == rapes_player
         if debug_mode && main.handler_dom.IsDOMSlave(target) 
@@ -635,8 +652,7 @@ Function MultiTarget_Menu_Selection(Actor player)
         setting_name = "nonsexual_male_position_1"
         method = "spooning"
     elseif intent == "showing physical affection" || intent == "showing affection"
-        method = "spooning"
-        setting_name = "nonsexual_male_position_1"
+        setting_name = "nonsexual"
     endif 
 
     if intent == "sexual assault"
@@ -687,7 +703,7 @@ bool Function IsAvailableActor(Actor akActor)
     if !SkyrimNet_SexLab_WebUI.IsAvailableActor(akActor)
         return false
     endif
-    if StorageUtil.HasIntValue(akActor, "skyrimnet_sexlab_scene_actor_lock")
+    if SkyrimNet_SexLab_Locker.IsLocked(akActor)
         return false
     endif
     if !akActor.Is3DLoaded()

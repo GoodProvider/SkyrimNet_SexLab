@@ -255,6 +255,17 @@ schema:
       defaultValue: true
       category: "Scene HUD"
 
+    - name: "Take control key"
+      path: "sexlab.hud.key_take_control"
+      type: "hotkey"
+      description: "In your own scene: switches auto play on or off (the AI plays you: strategy, keys and lines). Aimed at an NPC in another scene: you drive that NPC with the HUD keys; press again to let go. Default Num *."
+      min: 1
+      max: 255
+      required: false
+      defaultValue: 106
+      category: "Scene HUD"
+      supportsOverride: false
+
     - name: "Slower key"
       path: "sexlab.hud.key_slower"
       type: "hotkey"
@@ -479,7 +490,7 @@ schema:
     - name: "Orgasm check before the last stage"
       path: "sexlab.ending.gate"
       type: "bool"
-      description: "Shortly before the last stage (early by the measured time from narration to voice), each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. For those who pass, the orgasm narration is sent at once, their bars fill, and the last stage starts with the orgasm when the voice begins. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm."
+      description: "Shortly before the last stage (early by the measured time from narration to voice), each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. For those who pass, the orgasm narration is sent at once, their bars fill, and the last stage starts with the orgasm when the voice begins. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm. Mini-game: only when nobody is under the player's control (NPCs, player on auto play); then the scene lead always passes, earlier orgasms still count, and nobody else orgasms in the last two stages except at this check."
       defaultValue: true
       category: "Scene ending"
 
@@ -504,10 +515,10 @@ schema:
     - name: "Hold last stage for orgasm dialogue"
       path: "sexlab.ending.dialogue_hold_max"
       type: "float"
-      description: "After the orgasm that ends the scene, the last stage is held until the orgasm dialogue has played, for at most this many seconds. 0: no hold."
+      description: "After the orgasm that ends the scene, the last stage is held until the response to the orgasm has played, for at most this many seconds (30 at most). 0: no hold."
       min: 0
-      max: 120
-      defaultValue: 45
+      max: 30
+      defaultValue: 30
       category: "Scene ending"
 
     - name: "DOM arousal per scene"

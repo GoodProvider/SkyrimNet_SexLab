@@ -46,14 +46,14 @@ Allowing again tests the allowed actor with the normal orgasm rule and checks ev
 
 Use `punish_*` (not obsolete `punishing_*`).
 
-`nonsexual_male_position_0`–`2` (LLM cuddle / comfort / affection actions, MCM affection) filter like `nonsexual` (strict, affection `tags_any`, same suppress list plus `forplay,whip`) and add `male_position`. The cuddle actions pass a posture (`sitting` / `laying`) as the method tag, so without `tags_any` + `strict` the posture alone matched sex animations.
+`nonsexual_male_position_0`–`2` (LLM cuddle / comfort / affection actions, MCM affection) filter like `nonsexual` (strict, affection `tags_any`, suppress `sexual,spanking,aggressive,forplay,whip`) and add `male_position`. The cuddle actions pass a posture (`sitting` / `laying`) as the method tag, so without `tags_any` + `strict` the posture alone matched sex animations.
 
 TargetMenu scene-start options and their settings:
 
 | Option | Setting | Filter |
 |--------|---------|--------|
 | sex | `consensual` | any sex act; no `aggressive`; not an affection/platonic animation |
-| affection | `nonsexual` | strict; any of cuddling/hug/spooning/kissing/headpat/handholding/lappillow; no sex acts, spanking, aggressive |
+| affection | `nonsexual` | strict; any of cuddling/hug/spooning/kissing/headpat/handholding/lappillow; suppresses `sexual` (see [tag-synonyms](tag-synonyms.md)), spanking, aggressive |
 | platonic | `nonsexual_platonic` | strict; any of cuddling/hug/spooning/headpat/handholding; also no kissing or submission |
 | punish | `punish_spanking` | strict; `spanking` (broad: spank/punish/discipline); any gender. Option `methodSettings` sends **whip** to `punish_whipping_oral` (`assume_bound`, so whip always finds its DD animations) |
 | masturbation | `default` | DD-only animations only when bound |

@@ -2,6 +2,7 @@
 
 #include "PCH.h"
 
+#include <span>
 #include <string_view>
 
 /// Measures how long SkyrimNet takes from a DirectNarration being sent to the first speech it
@@ -33,4 +34,18 @@ namespace NarrationTiming
     /// sentences of an already-matched response do not bump this again, so "Completions() grew past
     /// the count taken right after a MarkSent()" means that specific narration's own response began.
     std::uint64_t Completions();
+
+    /// The response paired after `mark` (a Completions() value taken before the narration was sent) has
+    /// finished playing: its speaker's SkyrimNet_SpeechComplete arrived.
+    bool ResponseDoneSince(std::uint64_t mark);
+
+    /// Scene-scoped response tracking. SpeakerMark(): a counter bumped by every non-player
+    /// SkyrimNet_SpeechStarted; take it just before sending a narration.
+    std::uint64_t SpeakerMark();
+
+    /// One of `speakers` started speaking after `mark`.
+    bool StartedSince(std::uint64_t mark, std::span<const RE::FormID> speakers);
+
+    /// A response by one of `speakers` that started after `mark` has finished (its SpeechComplete).
+    bool DoneSince(std::uint64_t mark, std::span<const RE::FormID> speakers);
 }

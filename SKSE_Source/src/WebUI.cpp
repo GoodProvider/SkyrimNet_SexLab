@@ -7,6 +7,7 @@
 #include "ActionDispatch.h"
 #include "Config.h"
 #include "AnimationDB.h"
+#include "Hud.h"
 #include "OrgasmEngine.h"
 #include "RE/Skyrim.h"
 
@@ -786,10 +787,11 @@ void InitWebUI()
                     const std::string location = j.value("location", std::string{});
                     webui_log::info("onForceResult victim={:#x} strategy={} method='{}' location='{}'", victim, strategy,
                         method, location);
-                    const std::string line = OrgasmEngine::PlayerForce(victim, strategy, method, location);
+                    // The player, or the NPC the player took control of (HUD take-control key).
+                    RE::Actor* forcer = Hud::ActingActor();
+                    const std::string line = OrgasmEngine::HudForce(forcer, victim, strategy, method, location);
                     if (!line.empty())
-                        OrgasmEngine::NarrateDirect(line, RE::PlayerCharacter::GetSingleton(),
-                            RE::TESForm::LookupByID<RE::Actor>(victim));
+                        OrgasmEngine::NarrateDirect(line, forcer, RE::TESForm::LookupByID<RE::Actor>(victim));
                 } catch (...) {
                     webui_log::warn("onForceResult: bad JSON");
                 }

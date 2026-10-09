@@ -2271,7 +2271,7 @@
     <div id="force-panel" class="panel" style="display:none">
         <div class="target-row">Force</div>
         <div class="force-sentence">
-            You force <span id="force-victim"></span>
+            <span id="force-forcer">You force</span> <span id="force-victim"></span>
             to <span id="force-strategy"></span>
             by <span id="force-method"></span>
             on <span id="force-part"></span>.
@@ -2575,6 +2575,10 @@
             if (typeof ensureCreatorSceneInfo === 'function')
                 ensureCreatorSceneInfo();
             selectedSceneInfoKey = 'new';
+            // Fresh creator: start filtered to sexual animations.
+            const fresh = sceneInfoByKey.get('new');
+            if (fresh && !(fresh.tags || []).length && !(fresh.suppress || []).length)
+                fresh.tags = ['sexual'];
             showPanel('scene_creator_panel');
             if (typeof bindVisiblePanelsFromSceneInfo === 'function')
                 bindVisiblePanelsFromSceneInfo();
@@ -4514,8 +4518,40 @@
             return p === 'scene_start' || p === 'cuddle';
         }
 
+        // Option creatorTags / creatorSuppress (CSV): with Scene Creator open, the option only
+        // replaces the creator's tag + suppress chips (its own panel stays closed).
+        function ssCreatorField(opt, name) {
+            if (!opt) return undefined;
+            const v = opt[name];
+            return v !== undefined ? v : opt[name.toLowerCase()];
+        }
+
+        function ssHasCreatorTags(opt) {
+            return ssCreatorField(opt, 'creatorTags') !== undefined
+                || ssCreatorField(opt, 'creatorSuppress') !== undefined;
+        }
+
+        function ssSetCreatorTags(opt) {
+            SC.tags = ssSplitTags(ssCsv(ssCreatorField(opt, 'creatorTags')));
+            SC.suppress = ssSplitTags(ssCsv(ssCreatorField(opt, 'creatorSuppress')));
+            SC.ddAuto = SC.ddAuto.filter(t => SC.tags.includes(t));
+            const info = selectedSceneInfo();
+            if (info) {
+                info.tags = SC.tags.slice();
+                info.suppress = SC.suppress.slice();
+            }
+            scRenderTagChips();
+            scRefreshTags();
+            scRefreshAnims();
+            renderTargetMenu();
+        }
+
         function selectPapyrusOption(opt) {
             ssCascade = null;
+            if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen() && ssHasCreatorTags(opt)) {
+                ssSetCreatorTags(opt);
+                return;
+            }
             if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) {
                 leftSelectedOpt = opt;
                 papyrusSelectedOpt = null;
@@ -4584,21 +4620,9 @@
         // Each leaf: display key/label, the AnimDB tag it fires (wire), and which legacy
         // direction string ("giving family" vs "fucking family") reproduces today's SexLab
         // cast-position behavior for a "giving" vs "receiving" pick.
+        // One leaf: AnimDB derives "sexual" from sex_tags.json, so it is the only sex filter.
         const SS_SEX_LEAVES = [
-            { key: 'vaginal',      label: 'vaginal',      wire: 'vaginal',      giving: 'fucking', receiving: 'fucked in' },
-            { key: 'anal',         label: 'anal',         wire: 'anal',         giving: 'fucking', receiving: 'fucked in' },
-            { key: 'oral',         label: 'oral',         wire: 'oral',         giving: 'fucking', receiving: 'fucked in' },
-            { key: 'blowjob',      label: 'blowjob',      wire: 'blowjob',      giving: 'fucking', receiving: 'fucked in' },
-            { key: 'cunnilingus',  label: 'cunnilingus',  wire: 'cunnilingus',  giving: 'fucking', receiving: 'fucked in' },
-            { key: 'assjob',       label: 'assjob',       wire: 'assjob',       giving: 'giving',  receiving: 'getting' },
-            { key: 'boobjob',      label: 'boobjob',      wire: 'boobjob',      giving: 'giving',  receiving: 'getting' },
-            { key: 'thighjob',     label: 'thighjob',     wire: 'thighjob',     giving: 'giving',  receiving: 'getting' },
-            { key: 'fisting',      label: 'fisting',      wire: 'fisting',      giving: 'giving',  receiving: 'getting' },
-            { key: 'fingering',    label: 'fingering',    wire: 'fingering',    giving: 'giving',  receiving: 'getting' },
-            { key: 'dildo',        label: 'dildo',        wire: 'dildo',        giving: 'giving',  receiving: 'getting' },
-            { key: 'handjob',      label: 'handjob',      wire: 'handjob',      giving: 'giving',  receiving: 'getting' },
-            { key: 'footjob',      label: 'footjob',      wire: 'footjob',      giving: 'giving',  receiving: 'getting' },
-            { key: 'masturbation', label: 'masturbation', wire: 'masturbation', giving: 'giving',  receiving: 'getting' }
+            { key: 'sexual', label: 'sexual', wire: 'sexual', giving: 'fucking', receiving: 'fucked in' }
         ];
         const SS_AFFECTION_LEAVES = [
             { key: 'kissing',  label: 'kissing',  wire: 'kissing',  giving: 'giving', receiving: 'getting' },
@@ -4621,7 +4645,7 @@
             { key: 'milking', label: 'milking', wire: 'milking', giving: 'giving', receiving: 'getting' };
 
         const SS_CATEGORIES = [
-            { key: 'sex', label: 'sex', leaves: SS_SEX_LEAVES },
+            { key: 'sexual', label: 'sexual', leaves: SS_SEX_LEAVES },
             { key: 'affection', label: 'affection', leaves: SS_AFFECTION_LEAVES },
             { key: 'punish', label: 'punish', leaves: SS_PUNISH_LEAVES }
         ];
@@ -4744,7 +4768,10 @@
 
         // Legacy vocabulary that may still be seeded by panelDefaults/JS constants
         // (pussy/ass/mouth, getting/fucking/"fucked in") normalizes into the new tree.
-        const SS_LEGACY_METHOD_ALIAS = { pussy: 'vaginal', ass: 'anal', mouth: 'oral', cuddle: 'cuddling' };
+        const SS_LEGACY_METHOD_ALIAS = {
+            pussy: 'sexual', ass: 'sexual', mouth: 'sexual', vaginal: 'sexual', anal: 'sexual', oral: 'sexual',
+            sex: 'sexual', cuddle: 'cuddling'
+        };
         function ssNormalizeMethodKey(method) {
             const m = String(method || '').toLowerCase();
             return ssFindLeaf(m) ? m : (SS_LEGACY_METHOD_ALIAS[m] || m);
@@ -4842,14 +4869,14 @@
             ssUi.victimDefault = d.victim || (d.objectRelation === 'to victim' ? 'currentActor' : 'none');
             ssUi.victimFormId = ssFidBySource(pool, ssUi.victimDefault);
             ssUi.direction = ssNormalizeDirection(d.direction || 'random');
-            ssUi.method = ssNormalizeMethodKey(d.method) || 'vaginal';
+            ssUi.method = ssNormalizeMethodKey(d.method) || 'sexual';
             ssUi.intent = d.intent || 'sexual activities';
             ssUi.customIntent = '';
             ssUi.intentBeforeCustom = ssUi.intent === 'custom' ? 'sexual activities' : ssUi.intent;
             ssUi.style = d.style || 'normally';
             ssUi.settingName = d.settingName || d.setting_name || 'default';
             if (!ssFindLeaf(ssUi.method))
-                ssUi.method = 'vaginal';
+                ssUi.method = 'sexual';
             ssDeriveCast(pool);
             return true;
         }
@@ -4924,8 +4951,7 @@
             return 0;
         }
 
-        const NONSEXUAL_SUPPRESS_FALLBACK =
-            'oral,vaginal,anal,masturbation,handjob,boobjob,thighjob,fisting,dildo,fingering,footjob';
+        const NONSEXUAL_SUPPRESS_FALLBACK = 'sexual';
 
         function ssApplySceneCreator(state) {
             if (typeof closeTargetPulldowns === 'function')
@@ -7305,12 +7331,12 @@
             return (nearbyActors || []).filter(a => a && a.selectable && a.status === 'ok');
         }
 
-        /// ControlPanel-selectable nearby: status ok or already in SexLab. Ineligible
-        /// (child / cmbt / ostim / dead / load) stay off Scene Menu Positions.
+        /// Scene Creator eligibility: status ok only. In-scene (sexlab), creator-locked
+        /// (locked) and ineligible (child / cmbt / ostim / dead / load) stay off Positions;
+        /// the Control Panel pulldown still lists sexlab / locked as selectable.
         function scActorSexLabEligible(a) {
             if (!a || a.selectable === false) return false;
-            const st = String(a.status || 'ok');
-            return st === 'ok' || st === 'sexlab';
+            return String(a.status || 'ok') === 'ok';
         }
 
         function scEligibleNearbyActors() {
@@ -7341,6 +7367,12 @@
             return out;
         }
 
+        // Display text for nearby status (mirrors C++ NearbyReasonLabel).
+        const NEARBY_REASON_LABELS = {
+            sexlab: 'SexLab', ostim: 'Ostim', child: 'Child', dead: 'Dead',
+            cmbt: 'Combat', load: 'Unloaded', gone: 'Gone'
+        };
+
         function setNearbyActors(actors) {
             nearbyActors = (actors || []).map(a => {
                 const status = a.status != null ? String(a.status) : 'ok';
@@ -7352,7 +7384,7 @@
                     ? String(a.label)
                     : (status === 'ok'
                         ? name.slice(0, 10)
-                        : (name.slice(0, 10) + ' (' + status.slice(0, 5) + ')'));
+                        : (name.slice(0, 10) + ' (' + (NEARBY_REASON_LABELS[status] || status) + ')'));
                 return {
                     name,
                     label,
@@ -7854,6 +7886,9 @@
                 method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
             // Presets, then the player's weak attack spells (a non-lethal hit), then custom text.
             const methods = FORCE_PRESETS.concat((cfg && cfg.spells) || [], ['custom']);
+            // HUD take-control key: the NPC the player drives forces (cfg.forcer); else the player.
+            document.getElementById('force-forcer').textContent =
+                cfg && cfg.forcer && cfg.forcer.name ? cfg.forcer.name + ' forces' : 'You force';
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
@@ -8880,22 +8915,40 @@
                     gender: g != null ? g : (prev && scGenderKnown(prev.gender) ? prev.gender : null)
                 });
             };
-            if (playerActor) {
+            // Only Scene Creator-eligible actors (status ok): player / target in a SexLab
+            // scene or held by the ActorLocker are not seeded.
+            if (playerActor && scFormIdEligible(playerActor.formId)) {
                 addPool(playerActor.name || 'Player', playerActor.uuid, playerActor.formId,
                     undefined, playerActor.gender);
             }
-            if (targetActor) {
+            if (targetActor && scFormIdEligible(targetActor.formId)) {
                 // Target is the distance anchor when present → treat as nearest (0).
                 addPool(targetActor.name || 'Target', targetActor.uuid, targetActor.formId, 0,
                     scActorGender(targetActor));
             }
             (nearbyActors || []).forEach(a => {
-                if (!a) return;
-                const st = String(a.status || '');
-                if (st === 'child' || st === 'dead') return;
+                if (!scActorSexLabEligible(a)) return;
                 addPool(a.name, a.uuid, a.formId != null ? a.formId : 0, a.dist, a.gender);
             });
             return [...byUuid.values()];
+        }
+
+        /// Scene Creator eligibility by form id, from the nearby scan. Not listed → not eligible.
+        function scFormIdEligible(formId) {
+            return scActorSexLabEligible(controlActorByFormId(formId));
+        }
+
+        /// Creator draft: drop positions whose actor is no longer eligible (in a SexLab
+        /// scene, locked, dead...). Skipped until the first nearby scan arrives.
+        function scPruneIneligiblePositions() {
+            if (SC.mode === 'active' || !(nearbyActors || []).length) return false;
+            const before = (SC.positions || []).length;
+            if (!before) return false;
+            SC.positions = SC.positions.filter(p =>
+                scFormIdEligible(p._form_id != null ? p._form_id : p.formId));
+            if (SC.positions.length === before) return false;
+            scOnActorCountChanged();
+            return true;
         }
 
         function scPoolIsPlayer(a) {
@@ -8923,6 +8976,7 @@
         /// When Include is empty, seed from soft nearby: solo player @0; else nearest-to-target @0, player @1.
         function scEnsurePositionSeed() {
             if (SC.mode === 'active') return;
+            scPruneIneligiblePositions();
             if ((SC.positions || []).length) return;
             const pool = scNearbyPool();
             if (!pool.length) return;

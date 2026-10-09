@@ -1,0 +1,138 @@
+{# Decision template: the player's turn in a SexLab mini-game scene while the player is on auto play (HUD
+   take-control key). The AI plays the player like an NPC: how they behave (strategy), whether they say something
+   now, which HUD key they press (or none), and what they would pick in the Aid / Force dialog boxes.
+   Sent by SkyrimNet_SexLab.dll (StrategyDecision.cpp) through PublicSendCustomDecisionToLLM: when auto play turns
+   on, at scene start, and after each line anyone in the player's scene speaks. Rendered into a decisions request,
+   never into chat messages.
+
+   Context pushed by the game (C++ snapshot): everything minigame_strategy.prompt gets (the player is the focus),
+   plus last_speaker (who said last_line_text, "" = the player), has_strategy, ask_speak, hotkeys [key, text],
+   aid_options [key, text], force_options [key, text], force_methods [key, text], parts. Keys are read back by the
+   game: keep {{ o.key }} as given. A criterion is one line. #}
+{% set _focus = decnpc(focus_uuid) %}
+[ state focus ]
+{{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}, is the {{ role }} in this scene{% if not expects_orgasm %} (this act is not expected to bring {{ focus_name }} to orgasm){% endif %}.
+{{ focus_name }} is {{ arousal }}{% if orgasms > 0 %} and has climaxed {{ orgasms }} time{% if orgasms > 1 %}s{% endif %} so far{% endif %}.
+{% if approach != "" %}Current approach: {{ focus_name }} {{ approach }}.{% endif %}
+{% if forced_by != "" %}{{ focus_name }} is being forced by {{ forced_by }}{% if force_method != "" %} ({{ force_method }}){% endif %}.{% endif %}
+{% if broken %}{{ focus_name }} is mentally overwhelmed.{% endif %}
+{{ render_character_profile("short_inline", focus_uuid) }}
+[ end state ]
+
+[ state scene ]
+{% set _sexlab = sexlab_get_threads(focus_uuid) %}
+{% if existsIn(_sexlab, "threads") %}
+{% for thread in _sexlab.threads %}
+{% for actor_record in thread.actors %}
+{% if to_number(actor_record.uuid) == focus_uuid %}
+{% if existsIn(thread, "location") and thread.location != "" %}On {{ thread.location }}, {% endif %}{{ thread.description }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+The scene is at its {{ progress }}{% if progress != "final stage" and progress != "start" %} stage{% endif %}.
+[ end state ]
+
+[ state partners ]
+{% for p in partners %}
+{{ p.name }}: the {{ p.role }}, {{ p.arousal }}{% if p.orgasms > 0 %}, climaxed {{ p.orgasms }} time{% if p.orgasms > 1 %}s{% endif %}{% endif %}{% if p.approach != "" %}; {{ p.name }} {{ p.approach }}{% endif %}. {{ focus_name }} and {{ p.name }} are {{ p.relationship }}.
+- {{ render_character_profile("short_inline", p.uuid) }}
+{% endfor %}
+[ end state ]
+
+[ state recent_dialogue ]
+{% set _events = get_recent_events(15, focus_uuid) %}
+{% if length(_events) > 0 %}
+{% for event in _events %}
+{{ format_event(event, "compact") }}
+{% endfor %}
+{% else %}
+Nothing has been said recently.
+{% endif %}
+[ end state ]
+
+[ state last_line ]
+{% if trigger == "dialogue" and last_line_text != "" %}{% if last_speaker != "" %}{{ last_speaker }}{% else %}{{ focus_name }}{% endif %} just said: "{{ last_line_text }}"{% else %}Nothing has just been said; {{ focus_name }} is acting on their own.{% endif %}
+[ end state ]
+
+{% if has_strategy %}
+[ question strategy choice ]
+Decide how {{ focus_name }} is behaving in the act right now.
+Base it on who {{ focus_name }} is (`focus`), their role, their relationship with each partner (`partners`), and what is happening (`scene`).
+`last_line` weighs most: the behaviour must fit what was just said. Then `recent_dialogue`, oldest first, which shows how the scene came about and whether {{ focus_name }} wanted it.
+{% if trigger == "dialogue" %}Keep the current approach ({{ current_key }}) unless what was said or the situation clearly changes it.{% else %}{{ focus_name }} has not chosen an approach yet: pick the one that fits who they are and how the scene came about.{% endif %}
+A victim who is resisting does not cooperate. A lover or friend who is lagging behind may be helped. A rival or enemy is unlikely to be generous.
+Passive only fits someone reluctant, exhausted or uninterested; a willing participant takes an active part.
+[ criteria ]
+{% for o in options %}
+{{ o.key }}: {{ o.text }}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+{% endif %}
+
+{% if ask_speak %}
+[ question speak noul ]
+Does {{ focus_name }} want to say something right now, in reply to `last_line`?
+Yes when {{ focus_name }} was addressed, has a strong reaction, or would naturally answer. No when {{ focus_name }} just spoke, has nothing to add, or would stay silent (a gagged, overwhelmed or sullen character).
+[ end question ]
+{% endif %}
+
+[ question hotkey choice ]
+Which of these does {{ focus_name }} do right now, if any? Most of the time the answer is `none`: act only when `last_line`, the scene or {{ focus_name }}'s character clearly calls for it.
+Ending the scene is only for when {{ focus_name }} clearly wants it to stop or it has run its course.
+[ criteria ]
+{% for o in hotkeys %}
+{{ o.key }}: {{ o.text }}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+
+{% if length(aid_options) > 0 %}
+[ question aid_option choice ]
+If {{ focus_name }} chose `aid` (heal or restore someone), which spell or potion would they use, and on whom?
+[ criteria ]
+{% for o in aid_options %}
+{{ o.key }}: {{ o.text }}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+
+[ question aid_part choice ]
+If {{ focus_name }} chose `aid`, where on the body would they apply it?
+[ criteria ]
+{% for p in parts %}
+{{ p }}: {% if p == "body" %}nowhere in particular{% else %}the {{ p }}{% endif %}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+{% endif %}
+
+{% if length(force_options) > 0 %}
+[ question force_option choice ]
+If {{ focus_name }} chose `force`, whom would they force, and to do what?
+[ criteria ]
+{% for o in force_options %}
+{{ o.key }}: {{ o.text }}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+
+[ question force_method choice ]
+If {{ focus_name }} chose `force`, how would they compel the victim?
+[ criteria ]
+{% for o in force_methods %}
+{{ o.key }}: {{ o.text }}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+
+[ question force_part choice ]
+If {{ focus_name }} chose `force`, where on the victim's body would they strike?
+[ criteria ]
+{% for p in parts %}
+{{ p }}: {% if p == "body" %}nowhere in particular{% else %}the {{ p }}{% endif %}
+{% endfor %}
+[ end criteria ]
+[ end question ]
+{% endif %}

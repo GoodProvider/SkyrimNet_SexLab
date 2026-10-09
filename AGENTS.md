@@ -22,10 +22,13 @@ Repo root: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`.
 
 Documents is OneDrive-redirected — not `%USERPROFILE%\Documents\...`.
 
+**Default:** when asked to review logs, read the SKSE logs (`...\SKSE\SkyrimNet_SexLab.log`, `SkyrimNet.log`, newest `crash-*.log`) unless a different log is named. Procedure (snapshot to `review-logs/<timestamp>/` first; snapshot and third-party modes): [.claude/skills/review-logs/SKILL.md](.claude/skills/review-logs/SKILL.md).
+
 | Log | Path |
 |-----|------|
 | Crash Logger | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\crash-*.log` |
 | SkyrimNet_SexLab | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log` |
+| SkyrimNet | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet.log` |
 | Papyrus | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log` |
 | SkyrimNet conversation (dialogue history) | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\conversation_log.log` |
 | SkyrimNet LLM requests (full prompts sent) | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\openrouter_input.log` (rotated: `openrouter_input.<timestamp>.log`) |

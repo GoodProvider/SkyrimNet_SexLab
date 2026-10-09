@@ -30,6 +30,26 @@ namespace AnimationDB
         using SynonymMap = std::unordered_map<std::string, std::shared_ptr<const std::vector<std::string>>>;
         SynonymMap g_syn[2];
         std::unordered_map<std::string, SceneSettingFilter> g_scene_filters; // scenes/<name>.json as written; under g_mutex
+        /// sex_tags.json: any of these on a row derives the "sexual" tag. Guarded by g_mutex.
+        std::unordered_set<std::string> g_sex_tags;
+        constexpr const char* kSexualTag = "sexual";
+
+        /// Appends "sexual" when the row carries any sex_tags.json tag. Additive only.
+        bool ApplySexualTagLocked(AnimRow& row)
+        {
+            if (g_sex_tags.empty())
+                return false;
+            bool has_sex = false;
+            for (const auto& tag : row.tags) {
+                if (tag == kSexualTag)
+                    return false;
+                if (g_sex_tags.contains(tag))
+                    has_sex = true;
+            }
+            if (has_sex)
+                row.tags.emplace_back(kSexualTag);
+            return has_sex;
+        }
 
         const SynonymMap* SynonymMapFor(SynonymMode mode)
         {
@@ -1181,6 +1201,34 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             webui_log::info("AnimationDB: synonyms {} clusters={} tags={}", path.filename().string(), live, out.size());
             return out;
         }
+
+        /// Parses a flat ["tag", ...] array (lowercased + trimmed). Missing file → empty (no "sexual").
+        std::unordered_set<std::string> LoadSexTagsFile(const std::filesystem::path& path)
+        {
+            std::unordered_set<std::string> out;
+            std::error_code ec;
+            if (!std::filesystem::exists(path, ec)) {
+                webui_log::warn("AnimationDB: sex tags file missing {} (no sexual tag)", path.string());
+                return out;
+            }
+            try {
+                std::ifstream f(path);
+                const auto j = nlohmann::json::parse(f);
+                if (j.is_array()) {
+                    for (const auto& el : j) {
+                        if (!el.is_string())
+                            continue;
+                        std::string tag = TrimLower(el.get<std::string>());
+                        if (!tag.empty())
+                            out.insert(std::move(tag));
+                    }
+                }
+            } catch (const std::exception& e) {
+                webui_log::warn("AnimationDB: failed to parse {}: {}", path.string(), e.what());
+            }
+            webui_log::info("AnimationDB: sex_tags n={}", out.size());
+            return out;
+        }
     }
 
     SynonymMode ParseSynonymMode(const std::string& s)
@@ -1198,10 +1246,22 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         const auto dir = PluginDataDir();
         auto strict = LoadSynonymsFile(dir / "synonyms-strict.json");
         auto broad = LoadSynonymsFile(dir / "synonyms-broad.json");
+        auto sex_tags = LoadSexTagsFile(dir / "sex_tags.json");
         std::lock_guard lock(g_mutex);
         g_syn[0] = std::move(strict);
         g_syn[1] = std::move(broad);
         g_scene_filters.clear(); // scene settings reload at the same points as the synonym files
+        g_sex_tags = std::move(sex_tags);
+        int added = 0;
+        for (auto& [reg, row] : g_rows) {
+            if (ApplySexualTagLocked(row)) {
+                UpsertRowLocked(row);
+                ++added;
+            }
+        }
+        if (added)
+            RebuildTagIndexLocked();
+        webui_log::info("AnimationDB: sexual tag added to {} rows", added);
     }
 
     std::vector<std::string> SynonymsOf(const std::string& tag, SynonymMode mode)
@@ -1686,6 +1746,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             row.tags = JsonToVecStr(anim["tags"]);
         else if (anim.contains("_tags") && anim["_tags"].is_string())
             row.tags = SplitCsv(anim["_tags"].get<std::string>());
+        // Before the unchanged-row check: stored rows already carry the derived tag.
+        ApplySexualTagLocked(row);
 
         // Same registry already pushed this sync: later row overwrites the earlier one.
         {

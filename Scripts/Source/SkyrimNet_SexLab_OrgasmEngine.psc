@@ -38,11 +38,21 @@ Function SetStage(int sid, int stage, int stageCount) global native
 Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 ; Pause hotkey: HUD label, stops the final-stage safety-net clock (gain keeps running).
 Function SetScenePaused(int sid, bool paused) global native
-; Gate pass narration was just sent: the next voice pushes the scene to its final stage.
-Function GateNarrationSent(int sid) global native
+; Gate pass narration was just sent: the next voice after mark (NarrationMark() taken before the DN;
+; -1 = now) pushes the scene to its final stage.
+Function GateNarrationSent(int sid, int mark) global native
 ; Scene ending lead and orgasm target (0 = off): the lead reaching it in the second-to-last stage makes
 ; everyone else roll early for the final stage, into the same DN.
 Function SetEndingTarget(int sid, Actor lead, int target) global native
+; The engine plays this scene's ending gate (mini-game, everyone AI driven, timed): its last orgasm lands
+; at the end of the second-to-last stage.
+bool Function IsGateScene(int sid) global native
+; Final-stage hold: take a mark just before sending the orgasm narration. Only the scene's own actors count:
+; ResponseStartedSince(sid, mark) once one of them speaks, ResponseDoneSince(sid, mark) once that reply has
+; finished playing (SkyrimNet_SpeechComplete).
+int Function NarrationMark() global native
+bool Function ResponseStartedSince(int sid, int mark) global native
+bool Function ResponseDoneSince(int sid, int mark) global native
 ; Seconds left on the final stage's timer (unpaused, animating); -1 when not in a timed final stage.
 float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native

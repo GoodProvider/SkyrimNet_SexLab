@@ -4,6 +4,7 @@
 #include "WebUI_Log.h"
 #include "WebUI.h"
 #include "ActionCatalog.h"
+#include "ActorLocker.h"
 #include "AnimationDB.h"
 #include "BondageCatalog.h"
 #include "Config.h"
@@ -688,30 +689,6 @@ namespace PapyrusBindings_WebUI
 
         constexpr float kAllowedRadii[] = { 1600.f, 2400.f, 3200.f, 4000.f, 4800.f };
 
-        RE::TESFaction* ResolveSexLabAnimatingFaction()
-        {
-            static RE::TESFaction* cached = nullptr;
-            static bool resolved = false;
-            if (!resolved) {
-                resolved = true;
-                cached = RE::TESDataHandler::GetSingleton()->LookupForm<RE::TESFaction>(0xE50F, "SexLab.esm");
-            }
-            return cached;
-        }
-
-        RE::TESFaction* ResolveOstimActorCountFaction()
-        {
-            static RE::TESFaction* cached = nullptr;
-            static bool resolved = false;
-            if (!resolved) {
-                resolved = true;
-                auto* dh = RE::TESDataHandler::GetSingleton();
-                if (dh && dh->LookupModByName("Ostim.esp"))
-                    cached = dh->LookupForm<RE::TESFaction>(0xECA, "Ostim.esp");
-            }
-            return cached;
-        }
-
         /// 0 male, 1 female — SexLab human mapping. Papyrus GetGender overwrites (creatures 2/3).
         int ActorSex(RE::Actor* actor)
         {
@@ -765,19 +742,26 @@ namespace PapyrusBindings_WebUI
                 out.status = "cmbt";
                 return out;
             }
-            if (auto* ostim = ResolveOstimActorCountFaction()) {
+            if (auto* ostim = ActorLocker::OstimActorCountFaction()) {
                 if (actor->IsInFaction(ostim)) {
                     out.status = "ostim";
                     return out;
                 }
             }
-            if (auto* anim = ResolveSexLabAnimatingFaction()) {
+            if (auto* anim = ActorLocker::SexLabAnimatingFaction()) {
                 if (actor->IsInFaction(anim)) {
                     out.status = "sexlab";
                     out.selectable = true;
                     out.sortRank = 0;
                     return out;
                 }
+            }
+            // Held by a Scene_Creator but not yet animating. Control Panel may still target it.
+            if (ActorLocker::IsLocked(actor)) {
+                out.status = "locked";
+                out.selectable = true;
+                out.sortRank = 0;
+                return out;
             }
             if (!actor->Is3DLoaded()) {
                 out.status = "load";
@@ -796,22 +780,32 @@ namespace PapyrusBindings_WebUI
             return name.substr(0, maxLen);
         }
 
+        /// Display text for a nearby status; `status` itself stays lowercase for JS logic.
+        std::string NearbyReasonLabel(const std::string& status)
+        {
+            if (status == "sexlab") return "SexLab";
+            if (status == "ostim") return "Ostim";
+            if (status == "child") return "Child";
+            if (status == "dead") return "Dead";
+            if (status == "cmbt") return "Combat";
+            if (status == "load") return "Unloaded";
+            if (status == "gone") return "Gone";
+            return status;
+        }
+
         std::string MakeNearbyLabel(const std::string& name, const NearbyClassify& cls)
         {
             const std::string cropped = CropActorLabelName(name);
             if (cls.status == "ok")
                 return cropped;
-            std::string reason = cls.status;
-            if (reason.size() > 5)
-                reason = reason.substr(0, 5);
-            return cropped + " (" + reason + ")";
+            return cropped + " (" + NearbyReasonLabel(cls.status) + ")";
         }
 
         bool IsSexLabAnimatingActor(RE::Actor* actor)
         {
             if (!actor)
                 return false;
-            if (auto* anim = ResolveSexLabAnimatingFaction())
+            if (auto* anim = ActorLocker::SexLabAnimatingFaction())
                 return actor->IsInFaction(anim);
             return false;
         }
@@ -915,14 +909,16 @@ namespace PapyrusBindings_WebUI
             return false;
         if (actor->IsInCombat())
             return false;
-        if (auto* anim = ResolveSexLabAnimatingFaction()) {
+        if (auto* anim = ActorLocker::SexLabAnimatingFaction()) {
             if (actor->IsInFaction(anim))
                 return false;
         }
-        if (auto* ostim = ResolveOstimActorCountFaction()) {
+        if (auto* ostim = ActorLocker::OstimActorCountFaction()) {
             if (actor->IsInFaction(ostim))
                 return false;
         }
+        if (ActorLocker::IsLocked(actor))
+            return false;
         return true;
     }
 

@@ -440,30 +440,59 @@ Function ContinueActivity(Actor source=None, Actor target=None, bool optional_is
     DirectNarration_Optional("continue activity", msg, source, target, optional_is_dropped)
 EndFunction 
 
+; The player is within sexlab.narration.max_distance of source (no source: nearby).
+Bool Function NarrationNearby(Actor source) global
+    if source == None
+        return True
+    endif
+    Actor player = Game.GetPlayer()
+    if player == source
+        return True
+    endif
+    float unit_meter = 0.0142875
+    float max_distance = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.max_distance", 15.0)
+    return unit_meter*player.GetDistance(source) <= max_distance
+EndFunction
+
 Bool Function NarrationCoolOffAllows(Actor source, Actor target) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    if main == None 
-        return False 
-    endif 
-
-    float unit_meter = 0.0142875
-    float distance = 0
-    if source != None 
-        Actor player = Game.GetPlayer()
-        if player == source 
-            distance = 0 
-        else
-            distance = unit_meter*player.GetDistance(source) 
-        endif 
-    endif 
+    if main == None
+        return False
+    endif
 
     int queue_size = SkyrimNetAPI.GetSpeechQueueSize()
-    int last_audio = SkyrimNetAPI.GetTimeSinceLastAudioEnded()/1000 
-    float time_current = Utility.GetCurrentRealTime() 
-    float time_delta = time_current - main.direct_narration_last_time 
+    int last_audio = SkyrimNetAPI.GetTimeSinceLastAudioEnded()/1000
+    float time_current = Utility.GetCurrentRealTime()
+    float time_delta = time_current - main.direct_narration_last_time
     float cool_off = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.cooldown", 20.0)
-    float max_distance = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.max_distance", 15.0)
-    return time_delta > cool_off && queue_size == 0 && (last_audio >= cool_off && distance <= max_distance)
+    return time_delta > cool_off && queue_size == 0 && last_audio >= cool_off && NarrationNearby(source)
+EndFunction
+
+; Must-react narrations in NPC-only scenes (orgasm, finish with orgasm / afterglow): a DirectNarration
+; whenever the player is nearby, skipping the cooldown / audio checks; else an event.
+; Returns false only when CheckDuplicate blanked msg (nothing sent).
+bool Function DirectNarration_Nearby(String event_type, String msg, Actor source=None, Actor target=None) global
+    msg = CheckDuplicate("DirectNarration_Nearby", source, msg, False, target)
+    if msg == ""
+        return false
+    endif
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    String type = "event"
+    if main != None && NarrationNearby(source)
+        SendDirectNarration(msg, source, target)
+        main.direct_narration_last_time = Utility.GetCurrentRealTime()
+        type = "direct"
+    else
+        SkyrimNetApi.RegisterEvent(event_type, msg, source, target)
+    endif
+    if source != None
+        msg += " source:"+source.GetDisplayName()
+    endif
+    if target != None
+        msg += " target:"+target.GetDisplayName()
+    endif
+    Trace("DirectNarration_Nearby","type:"+type+" msg:"+msg)
+    return true
 EndFunction
 
 bool Function DirectNarration_Optional(String event_type, String msg, Actor source=None, Actor target=None, bool optional_is_dropped=False) global

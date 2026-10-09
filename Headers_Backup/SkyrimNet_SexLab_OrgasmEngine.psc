@@ -21,7 +21,7 @@ Function BeginScene(int sid, Actor[] actors, int[] roles, float[] seeds, bool ha
 Function SetStage(int sid, int stage, int stageCount) global native
 Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 Function SetScenePaused(int sid, bool paused) global native
-Function GateNarrationSent(int sid) global native
+Function GateNarrationSent(int sid, int mark) global native
 Function SetEndingTarget(int sid, Actor lead, int target) global native
 float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native

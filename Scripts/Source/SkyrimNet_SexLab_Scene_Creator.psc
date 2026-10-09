@@ -85,7 +85,6 @@ bool setting_has_filter = false
 ; -------------------------------------
 ; Actor Locks 
 ; -------------------------------------
-String storage_actor_lock_key = "skyrimnet_sexlab_scene_actor_lock"
 int actorLock = 0
 float actorLockTimeout = 0.00069444444 ;  1 day / (24 hours  * 60 minutes )  
 
@@ -1248,8 +1247,8 @@ EndFunction
 
 Bool Function IsActorLocked(Actor akActor) 
     DbgEnter("IsActorLocked", "akActor:"+GetDisplayName(akActor))
-    DbgReturn("IsActorLocked", "StorageUtil.HasIntValue(akActor, storage_actor_lock_key)")
-    return StorageUtil.HasIntValue(akActor, storage_actor_lock_key) 
+    DbgReturn("IsActorLocked", "SkyrimNet_SexLab_Locker.IsLocked(akActor)")
+    return SkyrimNet_SexLab_Locker.IsLocked(akActor)
 EndFunction 
 
 bool Function LockActorLock(Actor akActor) 
@@ -1259,25 +1258,15 @@ bool Function LockActorLock(Actor akActor)
         return false
     endif
 
-    if akActor.IsDead() || akActor.IsInCombat() 
-        Trace("LockActorLock", GetDisplayName(akActor)+" is dead or in combat")
-        return false 
-    endif 
-
-    if StorageUtil.HasIntValue(akActor, storage_actor_lock_key)
-        Trace("LockActorLock", GetDisplayName(akActor)+" is already locked")
+    ; C++ ActorLocker rejects dead/combat/already locked/SexLab faction/OStim.
+    if !SkyrimNet_SexLab_Locker.Lock(akActor)
+        Trace("LockActorLock", GetDisplayName(akActor)+" is not lockable")
         return false
     endif
-    StorageUtil.SetIntValue(akActor, storage_actor_lock_key, 1)
 
-    if sexlab.IsActorActive(akActor) 
+    ; SexLab's own authority (covers the window before AnimatingFaction is applied).
+    if sexlab.IsActorActive(akActor)
         Trace("LockActorLock", GetDisplayName(akActor)+" SexLab animation")
-        UnlockActorLock(akActor)
-        return false 
-    endif 
-
-    if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
-        Trace("LockActorLock", GetDisplayName(akActor)+" OStim animation")
         UnlockActorLock(akActor)
         return false 
     endif
@@ -1288,7 +1277,7 @@ EndFunction
 
 Function UnlockActorLock(Actor akActor) 
     DbgEnter("UnlockActorLock", "akActor:"+GetDisplayName(akActor))
-    StorageUtil.UnsetIntValue(akActor, storage_actor_lock_key) 
+    SkyrimNet_SexLab_Locker.Unlock(akActor)
     DbgEnd("UnlockActorLock")
 EndFunction
 

@@ -329,7 +329,7 @@ Bool Function ActorUnavailable(Actor a)
     if manager != None && manager.IsBusy(a)
         return True
     endif
-    return main != None && StorageUtil.HasIntValue(a, main.storage_actor_lock_key)
+    return SkyrimNet_SexLab_Locker.IsLocked(a)
 EndFunction
 
 ; Hug/cuddle/kiss giver @ SexLab pos1. Matches YAML long intents, SceneStartPanel short
@@ -454,7 +454,7 @@ bool Function BodyAnimation_IsEligible(Actor akActor, string contextJson, string
         return false 
     endif 
 
-    if StorageUtil.HasIntValue(akActor, "skyrimnet_sexlab_scene_actor_lock")
+    if SkyrimNet_SexLab_Locker.IsLocked(akActor)
         Trace("BodyAnimation_IsEligible", akActor.GetDisplayName()+" is locked")
         return false
     endif

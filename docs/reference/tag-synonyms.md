@@ -66,3 +66,10 @@ The **synonyms** pulldown in the Scene Creator and the Description Editor animat
 ## Animation selection
 
 All tag-based selection in `SkyrimNet_SexLab_Scene_Creator.psc` goes through `SelectAnimationsFromAnimDb`, which runs the full AnimDB query and then the peel steps. `SexLab.GetAnimationsByTags` is not called anywhere, because it matches tags literally and ignores synonyms.
+
+## Derived `sexual` tag (`sex_tags.json`)
+
+`SKSE/Plugins/SkyrimNet_SexLab/sex_tags.json` is a flat array of tags (`["oral","vaginal","anal",…]`). AnimDB adds the tag `sexual` to every animation whose tags include any of them. It is stored in the row's tags, so filters, tag chips and `ResolveTags` treat it like any other tag. Loaded with the synonym files (game load, AnimDB sync).
+
+- Use `sexual` to require any sex act and suppress `sexual` to exclude them. `kissing` is **not** a sex tag.
+- The tag is only ever added. If you remove a tag from the file, rows that already have `sexual` keep it until AnimDB is force-rebuilt.

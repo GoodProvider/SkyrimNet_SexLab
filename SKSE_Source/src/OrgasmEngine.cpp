@@ -44,6 +44,7 @@ namespace OrgasmEngine
         constexpr float kSafetyAt = 0.9f;           // safety net: this share of the final stage's timer
         constexpr float kSafetyMin = 90.0f;         // safety net: enjoyment needed to fire
         constexpr float kRushHover = 98.0f;         // gate pass: bar cap until the final stage starts
+        constexpr double kGateDispatchMargin = 2.0;  // gate fires this much earlier: tick -> Papyrus -> stage hold
         constexpr float kRushFireAt = 97.0f;        // gate pass: orgasm (ForceOrgasm) at this in the final stage
         constexpr double kRushFinish = 1.0;         // gate pass: seconds to finish the climb in the final stage
         constexpr float kDomStep = 10.0f;           // DOM slave: progress points per arousal push
@@ -160,6 +161,10 @@ namespace OrgasmEngine
             double nextStepAt = 0.0;
             bool brokenOverride = false;  // broken: strategy set aside, arousing self
             float regen = 100.0f;  // stamina regen, percent of the actor's default (staminaFatigue)
+            // HUD take-control key. autoPlay (player): the engine plays the player's strategy like an NPC's.
+            // playerDriven (NPC): the player drives this NPC with the HUD; its strategy stops. Not saved.
+            bool autoPlay = false;
+            bool playerDriven = false;
         };
 
         struct SceneState
@@ -187,14 +192,13 @@ namespace OrgasmEngine
             // it on every BeginScene.
             RE::FormID endingLead = 0;
             std::int32_t endingTarget = 0;
-            // Gate passed in the second-to-last stage (held by the Scene): the gate narration's own
-            // DN->speech pairing completing (Completions() > gateCompletionMark) pushes the scene to
-            // its final stage. Completions() only grows when a MarkSent narration gets its matching
-            // speech start, so unrelated sentences of other in-flight speech do not trip this early
-            // (SpeechStarts() would, since it counts every sentence of any speech).
+            // Gate passed in the second-to-last stage (held by the Scene): one of this scene's actors
+            // starting to speak after the gate narration (NarrationTiming::StartedSince(gateSpeechMark,
+            // actors)) pushes the scene to its final stage. Scoped to the scene's actors: another scene's
+            // reply must not advance this one (2026-10-08).
             bool gateAwait = false;
             bool gateMarked = false;  // GateNarrationSent seen
-            std::uint64_t gateCompletionMark = 0;
+            std::uint64_t gateSpeechMark = 0;
             // Together: animating, unpaused seconds in the current stage (progress clock).
             double stageElapsed = 0.0;
             bool exhaustedSent = false;  // a non-victim gave out (regen at kRegenFloor): scene end sent
@@ -317,6 +321,8 @@ namespace OrgasmEngine
         double g_lastTick = 0.0;
         std::mt19937 g_rng{ std::random_device{}() };
         RE::TESFaction* g_animatingFaction = nullptr;
+        // Auto play stays on for the player's later scenes until the take-control key turns it off (co-save v8).
+        bool g_autoPlaySticky = false;
 
         // Wall clock: only the source of Tick's delta.
         double GameNow()
@@ -400,6 +406,32 @@ namespace OrgasmEngine
         {
             const auto it = g_scenes.find(st.sid);
             return it != g_scenes.end() ? &it->second : nullptr;
+        }
+
+        // The engine plays this actor's mini-game strategy: NPCs unless the player took control of them, the
+        // player only in auto play.
+        bool AiDriven(const ActorState& st)
+        {
+            return IsPlayer(ActorFor(st.id)) ? st.autoPlay : !st.playerDriven;
+        }
+
+        // Caller holds g_lock. Mini-game scene the engine plays alone: every non-DOM actor is AiDriven (no
+        // one under the player's hand). Such a scene keeps the ending gate: its last orgasm lands at the end
+        // of the second-to-last stage.
+        bool SceneAiDriven(const SceneState& sc)
+        {
+            bool any = false;
+            for (const auto id : sc.actors) {
+                const auto at = g_actors.find(id);
+                if (at == g_actors.end() || at->second.dom) {
+                    continue;
+                }
+                if (!AiDriven(at->second)) {
+                    return false;
+                }
+                any = true;
+            }
+            return any;
         }
 
         // Target = stages 1..N-1 + kFinalShare x the final stage (LeadIn: all x kLeadInStretch);
@@ -888,10 +920,10 @@ namespace OrgasmEngine
             return false;
         }
 
-        // Caller holds g_lock. Mini-game mode, NPCs only. Forced: AcceptForce, or Selfish / Reject (RejectForce).
+        // Caller holds g_lock. Mini-game mode, AI-driven actors only. Forced: AcceptForce, or Selfish / Reject (RejectForce).
         bool StrategyAllowed(const SceneState& sc, const ActorState& st, Strategy s)
         {
-            if (!g_settings.miniGame || IsPlayer(ActorFor(st.id)) || s < Strategy::kPassive || s >= Strategy::kCount) {
+            if (!g_settings.miniGame || !AiDriven(st) || s < Strategy::kPassive || s >= Strategy::kCount) {
                 return false;
             }
             if (st.forcedBy != 0) {
@@ -1087,8 +1119,9 @@ namespace OrgasmEngine
             st.nextStepAt = Now();
             if (s == Strategy::kGreedy || s == Strategy::kForcedOrgasm) {
                 auto at = g_actors.find(target);
-                // The player plays their own mini-game: never forced.
-                if (at != g_actors.end() && at->second.sid == st.sid && !IsPlayer(ActorFor(target))) {
+                // The player plays their own mini-game (or an NPC they took control of): never forced.
+                if (at != g_actors.end() && at->second.sid == st.sid && !IsPlayer(ActorFor(target)) &&
+                    !at->second.playerDriven) {
                     ActorState& t = at->second;
                     if (t.forcedBy != 0 && t.forcedBy != st.id) {
                         if (auto old = g_actors.find(t.forcedBy); old != g_actors.end()) {
@@ -1238,7 +1271,7 @@ namespace OrgasmEngine
         {
             RE::Actor* self = ActorFor(st.id);
             const bool stepsReady = sc.ratesKnown || now - sc.beganAt >= kUntimedGrace;
-            if (!g_settings.miniGame || !stepsReady || !self || IsPlayer(self) || now < st.nextStepAt) {
+            if (!g_settings.miniGame || !stepsReady || !self || !AiDriven(st) || now < st.nextStepAt) {
                 return;
             }
             const float interval = std::max(0.25f, g_settings.npcInterval);
@@ -1707,6 +1740,13 @@ namespace OrgasmEngine
                     RE::Actor* first = sc.actors.empty() ? nullptr : ActorFor(sc.actors.front());
                     const float speed = first ? AnimSpeed::Get(first) : 1.0f;
                     const bool finalStage = sc.stageCount > 0 && sc.stage >= sc.stageCount;
+                    // Gate (4a): Together, or a mini-game scene the engine plays alone (aiGate), timed, no LeadIn.
+                    const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
+                    const bool together = !g_settings.miniGame;
+                    const bool aiGate = g_settings.miniGame && SceneAiDriven(sc);
+                    const bool useGate = (together || aiGate) && g_settings.gate && timedScene && !sc.leadIn;
+                    // aiGate, last two stages: no orgasm but the gate's (or a forced one), so the gate's is last.
+                    const bool gateHeld = aiGate && useGate && sc.stage >= sc.stageCount - 1;
                     if (finalStage && !sc.paused) {
                         sc.finalElapsed += dt;
                     }
@@ -1722,7 +1762,7 @@ namespace OrgasmEngine
                         sc.anyExpected = expected;
                         for (const auto id : sc.actors) {
                             auto at = g_actors.find(id);
-                            if (at == g_actors.end() || at->second.forcedBy != 0 || IsPlayer(ActorFor(id))) {
+                            if (at == g_actors.end() || at->second.forcedBy != 0 || !AiDriven(at->second)) {
                                 continue;
                             }
                             ActorState& st = at->second;
@@ -1816,6 +1856,10 @@ namespace OrgasmEngine
                             }
                             // Mini-game: NPCs play their strategy.
                             StrategyStep(sc, st, now, fx);
+                            // aiGate: held below the threshold until the gate rolls (it starts the rush).
+                            if (gateHeld && !st.dom) {
+                                st.enjoyment = std::min(st.enjoyment, kRushHover);
+                            }
 
                             // 2. Orgasm test.
                             if (st.pending && st.pendingForce) {
@@ -1868,6 +1912,9 @@ namespace OrgasmEngine
                                     st.domSyncNow = false;
                                     st.lastDomSyncAt = now;
                                 }
+                            } else if (gateHeld) {
+                                // aiGate: the gate (end of the second-to-last stage) is the scene's last orgasm;
+                                // a request waits for it (the gate passes a pending actor).
                             } else {
                                 const bool wants = WantsOrgasm(st, now, false);
                                 const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
@@ -1911,39 +1958,74 @@ namespace OrgasmEngine
                     // kRushHover by the expected voice) and the Scene narrates them at once and holds the
                     // stage; the voice starting pushes the final stage, where the rush fires the orgasm. All
                     // fail: SexLab advances as normal, no orgasm.
-                    const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
-                    // Mini-game: no gate and no safety net, so several orgasms or none are possible.
+                    // Mini-game under the player's hand: no gate and no safety net, so several orgasms or none.
                     // Together: everyone expected passes the gate (no roll) and finishes together.
-                    const bool together = !g_settings.miniGame;
-                    const bool useGate = together && g_settings.gate && timedScene && !sc.leadIn;
+                    // aiGate (mini-game, engine plays everyone): earlier orgasms count too; the ending lead
+                    // and every aggressor expected to orgasm pass outright (cooldown ignored), a pending
+                    // request passes, the rest roll. A victim follows its aggressor's strategy: Force orgasm
+                    // passes it, Tease keeps it out, anything else rolls.
+                    // The gate fires lead + kGateDispatchMargin before the stage timer ends, so the Scene's
+                    // hold (tick -> Papyrus -> UpdateTimer) lands before SexLab advances.
                     if (useGate && !sc.gateDone && sc.stage >= sc.stageCount - 1) {
                         const bool penultimate = sc.stage == sc.stageCount - 1;
                         const float gateSecs = sc.stageSecs[sc.stageSecs.size() - 2];
                         const double lead = NarrationTiming::EstimateSeconds(g_settings.gateLeadDefault);
-                        if (!penultimate || sc.penultElapsed >= std::max(0.0, gateSecs - lead)) {
+                        if (!penultimate || sc.penultElapsed >= std::max(0.0, gateSecs - lead - kGateDispatchMargin)) {
                             sc.gateDone = true;
                             GatePassFx pass{ {}, penultimate };
+                            // Victims an aggressor is set on forcing to orgasm, or teasing at the edge.
+                            std::vector<RE::FormID> forcedVictims;
+                            std::vector<RE::FormID> teasedVictims;
+                            if (aiGate) {
+                                for (const auto id : sc.actors) {
+                                    const auto at = g_actors.find(id);
+                                    if (at == g_actors.end() || at->second.role != Role::kAggressor ||
+                                        at->second.strategyTarget == 0) {
+                                        continue;
+                                    }
+                                    if (at->second.strategy == Strategy::kForcedOrgasm) {
+                                        forcedVictims.push_back(at->second.strategyTarget);
+                                    } else if (at->second.strategy == Strategy::kTease) {
+                                        teasedVictims.push_back(at->second.strategyTarget);
+                                    }
+                                }
+                            }
+                            const auto has = [](const std::vector<RE::FormID>& v, RE::FormID id) {
+                                return std::find(v.begin(), v.end(), id) != v.end();
+                            };
                             for (const auto id : sc.actors) {
                                 auto at = g_actors.find(id);
                                 if (at == g_actors.end()) {
                                     continue;
                                 }
                                 ActorState& st = at->second;
-                                if ((st.orgasmCount != 0 && !together) || !st.orgasmExpected || st.rushing ||
-                                    !CanOrgasmNow(st, now) ||
+                                const bool isLead = aiGate && id == sc.endingLead && sc.endingTarget > 0;
+                                const bool isAggressor = aiGate && st.role == Role::kAggressor;
+                                const bool victim = aiGate && st.role == Role::kVictim;
+                                const bool outright = (isLead && penultimate) || isAggressor;
+                                const bool canNow = outright ? !st.dom && !AnyBlock(st) && !st.finalRollFailed &&
+                                                                   now >= st.edgeUntil
+                                                             : CanOrgasmNow(st, now);
+                                if ((st.orgasmCount != 0 && !together && !aiGate) || !st.orgasmExpected ||
+                                    st.rushing || !canNow || (victim && has(teasedVictims, id)) ||
                                     std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
                                     std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
                                         rushGroup.actors.end()) {
                                     webui_log::info("OrgasmEngine: gate skips {:#x} enjoyment={:.1f} count={} "
-                                                    "expected={} dom={}",
-                                        id, st.enjoyment, st.orgasmCount, st.orgasmExpected, st.dom);
+                                                    "expected={} dom={} ai_gate={} teased={}",
+                                        id, st.enjoyment, st.orgasmCount, st.orgasmExpected, st.dom, aiGate,
+                                        victim && has(teasedVictims, id));
                                     continue;
                                 }
+                                const bool forcedVictim = victim && has(forcedVictims, id);
                                 float r = 0.0f;
-                                const bool passed = together || RollOrgasm(st, g_settings.stageSpike, r);
+                                const bool passed = together || isLead || isAggressor || forcedVictim ||
+                                                    (aiGate && st.pending) || RollOrgasm(st, g_settings.stageSpike, r);
                                 webui_log::info("OrgasmEngine: gate {:#x} enjoyment={:.1f} bonus={:.1f} roll=+{:.1f} "
-                                                "pass={} lead={:.2f}s penultimate={} together={}",
-                                    id, st.enjoyment, g_settings.stageSpike, r, passed, lead, penultimate, together);
+                                                "pass={} lead={:.2f}s penultimate={} together={} ai_gate={} ending_lead={} "
+                                                "aggressor={} forced_victim={}",
+                                    id, st.enjoyment, g_settings.stageSpike, r, passed, lead, penultimate, together,
+                                    aiGate, isLead, isAggressor, forcedVictim);
                                 if (passed) {
                                     st.rushing = true;
                                     st.rushRate = std::max(0.0f, kRushHover - st.enjoyment) / static_cast<float>(lead);
@@ -1964,6 +2046,7 @@ namespace OrgasmEngine
                                     ActorState& st = at->second;
                                     if (!st.orgasmExpected || st.rushing || !CanOrgasmNow(st, now) ||
                                         st.enjoyment < g_settings.groupJoinFinal ||
+                                        (st.role == Role::kVictim && has(teasedVictims, id)) ||
                                         std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
                                         std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
                                             rushGroup.actors.end()) {
@@ -1985,7 +2068,7 @@ namespace OrgasmEngine
                     }
                     // The voice for the gate narration started: final stage now (the rush fires there).
                     if (sc.gateAwait && sc.gateMarked && !sc.paused && !sc.actors.empty() &&
-                        NarrationTiming::Completions() > sc.gateCompletionMark) {
+                        NarrationTiming::StartedSince(sc.gateSpeechMark, sc.actors)) {
                         sc.gateAwait = false;
                         webui_log::info("OrgasmEngine: scene {} gate voice started, to the final stage", sid);
                         fx.advances.push_back(sc.actors.front());
@@ -2278,6 +2361,11 @@ namespace OrgasmEngine
         // Role defaults for new actors (after the roster, so Greedy-style checks see everyone). Not announced.
         for (const auto id : newcomers) {
             if (auto at = g_actors.find(id); at != g_actors.end()) {
+                // Sticky auto play: on before the default, so the player gets the role default, not Passive.
+                if (g_autoPlaySticky && IsPlayer(ActorFor(id))) {
+                    at->second.autoPlay = true;
+                    webui_log::info("OrgasmEngine: auto play on (scene {}, sticky)", sid);
+                }
                 at->second.strategy = DefaultStrategy(sc, at->second);
                 webui_log::info("OrgasmEngine: {:#x} default strategy {}", id, InfoOf(at->second.strategy).key);
             }
@@ -2391,17 +2479,38 @@ namespace OrgasmEngine
         }
     }
 
-    void GateNarrationSent(std::int32_t sid)
+    void GateNarrationSent(std::int32_t sid, std::int64_t mark)
     {
         std::lock_guard lock(g_lock);
         const auto it = g_scenes.find(sid);
         if (it == g_scenes.end() || !it->second.gateAwait) {
             return;
         }
-        it->second.gateCompletionMark = NarrationTiming::Completions();
+        it->second.gateSpeechMark =
+            mark >= 0 ? static_cast<std::uint64_t>(mark) : NarrationTiming::SpeakerMark();
         it->second.gateMarked = true;
         webui_log::info("OrgasmEngine: scene {} gate narration sent, waiting for speech (mark {})", sid,
-            it->second.gateCompletionMark);
+            it->second.gateSpeechMark);
+    }
+
+    std::vector<RE::FormID> SceneActors(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        return it == g_scenes.end() ? std::vector<RE::FormID>{} : it->second.actors;
+    }
+
+    bool IsGateScene(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it == g_scenes.end()) {
+            return false;
+        }
+        const SceneState& sc = it->second;
+        // Same test as Tick's aiGate && useGate.
+        const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
+        return g_settings.miniGame && g_settings.gate && SceneAiDriven(sc) && timedScene && !sc.leadIn;
     }
 
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target)
@@ -2438,16 +2547,26 @@ namespace OrgasmEngine
 
     bool IsPlayerScenePaused()
     {
+        return IsScenePaused(RE::PlayerCharacter::GetSingleton());
+    }
+
+    bool IsScenePaused(RE::Actor* anchor)
+    {
         std::lock_guard lock(g_lock);
-        const auto* st = Find(RE::PlayerCharacter::GetSingleton());
+        const auto* st = Find(anchor);
         const SceneState* sc = st ? SceneOf(*st) : nullptr;
         return sc && sc->paused;
     }
 
     bool GetPlayerSceneStage(int& stage, int& count)
     {
+        return GetSceneStage(RE::PlayerCharacter::GetSingleton(), stage, count);
+    }
+
+    bool GetSceneStage(RE::Actor* anchor, int& stage, int& count)
+    {
         std::lock_guard lock(g_lock);
-        const auto* st = Find(RE::PlayerCharacter::GetSingleton());
+        const auto* st = Find(anchor);
         const SceneState* sc = st ? SceneOf(*st) : nullptr;
         stage = sc ? sc->stage : 0;
         count = sc ? sc->stageCount : 0;
@@ -2590,7 +2709,7 @@ namespace OrgasmEngine
         // Caller holds g_lock. GetStrategyText's rule.
         std::string ApproachOf(const ActorState& st)
         {
-            if (!g_settings.miniGame || IsPlayer(ActorFor(st.id))) {
+            if (!g_settings.miniGame || !AiDriven(st)) {
                 return "";
             }
             return st.broken ? "is overwhelmed and can only seek their own pleasure" : StrategyPhrase(st);
@@ -2636,7 +2755,7 @@ namespace OrgasmEngine
         std::lock_guard lock(g_lock);
         const auto* st = Find(actor);
         const SceneState* sc = st ? SceneOf(*st) : nullptr;
-        if (!st || !sc || !g_settings.miniGame || IsPlayer(actor)) {
+        if (!st || !sc || !g_settings.miniGame || !AiDriven(*st)) {
             return false;
         }
         out = DecisionInput{};
@@ -2743,13 +2862,19 @@ namespace OrgasmEngine
         return g_settings.miniGame && g_settings.decisionStrategy;
     }
 
+    double GetDecisionMinConfidence()
+    {
+        std::lock_guard lock(g_lock);
+        return g_settings.decisionMinConfidence;
+    }
+
     std::vector<RE::FormID> SceneNpcs(std::int32_t sid)
     {
         std::vector<RE::FormID> out;
         std::lock_guard lock(g_lock);
         if (const auto it = g_scenes.find(sid); it != g_scenes.end()) {
             for (const auto id : it->second.actors) {
-                if (!IsPlayer(ActorFor(id))) {
+                if (const auto at = g_actors.find(id); at != g_actors.end() && AiDriven(at->second)) {
                     out.push_back(id);
                 }
             }
@@ -2768,7 +2893,7 @@ namespace OrgasmEngine
     {
         std::lock_guard lock(g_lock);
         const auto* st = Find(actor);
-        if (!st || !g_settings.miniGame || IsPlayer(actor)) {
+        if (!st || !g_settings.miniGame || !AiDriven(*st)) {
             return "";
         }
         return st->broken ? "is overwhelmed and can only seek their own pleasure" : StrategyPhrase(*st);
@@ -2820,11 +2945,11 @@ namespace OrgasmEngine
             { "pull", "pulls {target}", "a yank" },
         };
 
-        // Caller holds g_lock. The player's scene when the player is an aggressor in mini-game mode.
-        const SceneState* PlayerAggressorScene()
+        // Caller holds g_lock. The actor's scene when it is an aggressor in mini-game mode (player Force: the
+        // player, or the NPC the player took control of).
+        const SceneState* AggressorScene(RE::Actor* forcer)
         {
-            auto* player = RE::PlayerCharacter::GetSingleton();
-            const auto* pst = Find(player);
+            const auto* pst = Find(forcer);
             if (!g_settings.miniGame || !pst || pst->role != Role::kAggressor) {
                 return nullptr;
             }
@@ -2846,9 +2971,14 @@ namespace OrgasmEngine
 
     bool GetPlayerForceInfo(std::vector<ForceVictim>& victims)
     {
+        return GetForceInfo(RE::PlayerCharacter::GetSingleton(), victims);
+    }
+
+    bool GetForceInfo(RE::Actor* forcer, std::vector<ForceVictim>& victims)
+    {
         victims.clear();
         std::lock_guard lock(g_lock);
-        const SceneState* sc = PlayerAggressorScene();
+        const SceneState* sc = AggressorScene(forcer);
         if (!sc) {
             return false;
         }
@@ -2888,7 +3018,7 @@ namespace OrgasmEngine
             return it != g_scenes.end() ? &it->second : nullptr;
         }
 
-        // Caller holds g_lock (sc from PlayerAggressorScene / ForcerScene). method: preset key, weak spell or text.
+        // Caller holds g_lock (sc from AggressorScene / ForcerScene). method: preset key, weak spell or text.
         // location: "" (LLM action, old presets) or the HUD body part ("body": the victim, no part named).
         std::string ForceLocked(const SceneState* sc, RE::Actor* forcerActor, RE::FormID victim,
             const std::string& strategyKey, const std::string& method, const std::string& location,
@@ -2978,7 +3108,7 @@ namespace OrgasmEngine
             return line;
         }
 
-        std::string ForceWith(RE::Actor* forcer, bool player, RE::FormID victim, const std::string& strategyKey,
+        std::string ForceWith(RE::Actor* forcer, bool hud, RE::FormID victim, const std::string& strategyKey,
             const std::string& method, const std::string& location)
         {
             // Weak attack spells read the forcer's spell lists outside the engine lock.
@@ -2988,7 +3118,7 @@ namespace OrgasmEngine
             std::string line;
             {
                 std::lock_guard lock(g_lock);
-                const SceneState* sc = player ? PlayerAggressorScene() : ForcerScene(forcer);
+                const SceneState* sc = hud ? AggressorScene(forcer) : ForcerScene(forcer);
                 line = ForceLocked(sc, forcer, victim, strategyKey, method, location, spell, fx);
             }
             PostEffects(std::move(fx));
@@ -3011,6 +3141,12 @@ namespace OrgasmEngine
             return forcer ? PlayerForce(victim, strategyKey, method) : "";
         }
         return ForceWith(forcer, false, victim, strategyKey, method, "");
+    }
+
+    std::string HudForce(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey,
+        const std::string& method, const std::string& location)
+    {
+        return forcer ? ForceWith(forcer, true, victim, strategyKey, method, location) : "";
     }
 
     bool CanForce(RE::Actor* actor)
@@ -3358,10 +3494,14 @@ namespace OrgasmEngine
 
     bool GetPlayerScene(std::vector<ActorView>& out)
     {
+        return GetActorScene(RE::PlayerCharacter::GetSingleton(), out);
+    }
+
+    bool GetActorScene(RE::Actor* anchor, std::vector<ActorView>& out)
+    {
         out.clear();
-        auto* player = RE::PlayerCharacter::GetSingleton();
         std::lock_guard lock(g_lock);
-        const auto* pst = Find(player);
+        const auto* pst = Find(anchor);
         if (!pst) {
             return false;
         }
@@ -3388,7 +3528,7 @@ namespace OrgasmEngine
             v.broken = at->second.broken;
             v.dom = at->second.dom;
             v.denied = at->second.sceneBlocked;
-            if (g_settings.miniGame && !IsPlayer(actor)) {
+            if (g_settings.miniGame && AiDriven(at->second)) {
                 v.strategy = at->second.broken ? "broken" : HudLabel(at->second);
             }
             v.magicka = pct(RE::ActorValue::kMagicka);
@@ -3411,15 +3551,19 @@ namespace OrgasmEngine
 
     int StepPlayerSceneSpeed(int dir)
     {
-        auto* player = RE::PlayerCharacter::GetSingleton();
+        return StepSceneSpeed(RE::PlayerCharacter::GetSingleton(), dir);
+    }
+
+    int StepSceneSpeed(RE::Actor* anchor, int dir)
+    {
         std::lock_guard lock(g_lock);
-        auto* st = Find(player);
+        auto* st = Find(anchor);
         SceneState* sc = st ? SceneOf(*st) : nullptr;
         if (!sc) {
             return -1;
         }
         // Scale = level speed / style speed, so the effective speed lands exactly on the level.
-        const float current = AnimSpeed::Get(player);
+        const float current = AnimSpeed::Get(anchor);
         const float base = std::max(0.01f, current / std::max(0.01f, sc->speedScale));
         const int level = NearestSpeedLevel(current);
         const int next = std::clamp(level + (dir > 0 ? 1 : dir < 0 ? -1 : 0), 0, kSpeedLevelCount - 1);
@@ -3435,15 +3579,99 @@ namespace OrgasmEngine
 
     int GetPlayerSceneSpeedLevel()
     {
-        auto* player = RE::PlayerCharacter::GetSingleton();
+        return GetSceneSpeedLevel(RE::PlayerCharacter::GetSingleton());
+    }
+
+    int GetSceneSpeedLevel(RE::Actor* anchor)
+    {
         {
             std::lock_guard lock(g_lock);
-            auto* st = Find(player);
+            auto* st = Find(anchor);
             if (!st || !SceneOf(*st)) {
                 return -1;
             }
         }
-        return NearestSpeedLevel(AnimSpeed::Get(player));
+        return NearestSpeedLevel(AnimSpeed::Get(anchor));
+    }
+
+    bool SetAutoPlay(bool on)
+    {
+        Effects fx;
+        {
+            std::lock_guard lock(g_lock);
+            auto* st = Find(RE::PlayerCharacter::GetSingleton());
+            const SceneState* sc = st ? SceneOf(*st) : nullptr;
+            if (!st || !sc) {
+                return false;
+            }
+            g_autoPlaySticky = on;
+            if (st->autoPlay == on) {
+                return true;
+            }
+            if (!on) {
+                ReleaseForced(*sc, *st, fx, false);  // stops forcing a partner (Greedy / ForcedOrgasm)
+            }
+            st->autoPlay = on;
+            if (on) {
+                // The strategy BeginScene gave the player (Passive: none allowed then) is a placeholder: the
+                // role default until the decision model picks one. Forced: kept while still allowed.
+                if (st->forcedBy == 0 || !StrategyAllowed(*sc, *st, st->strategy)) {
+                    st->strategy = DefaultStrategy(*sc, *st);
+                    st->strategyTarget = 0;
+                }
+                st->nextStepAt = Now();
+            }
+            webui_log::info("OrgasmEngine: auto play {} (scene {}, strategy {})", on ? "on" : "off", sc->sid,
+                InfoOf(st->strategy).key);
+        }
+        PostEffects(std::move(fx));
+        return true;
+    }
+
+    bool IsAutoPlay()
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(RE::PlayerCharacter::GetSingleton());
+        return st && SceneOf(*st) && st->autoPlay;
+    }
+
+    bool SetPlayerDriven(RE::Actor* actor, bool on)
+    {
+        Effects fx;
+        {
+            std::lock_guard lock(g_lock);
+            auto* st = Find(actor);
+            const SceneState* sc = st ? SceneOf(*st) : nullptr;
+            if (!st || !sc || IsPlayer(actor)) {
+                return false;
+            }
+            if (st->playerDriven == on) {
+                return true;
+            }
+            if (on) {
+                ReleaseForced(*sc, *st, fx, false);  // the player plays it now
+            }
+            st->playerDriven = on;
+            if (!on && g_settings.miniGame && !StrategyAllowed(*sc, *st, st->strategy)) {
+                st->strategy = DefaultStrategy(*sc, *st);
+                st->strategyTarget = 0;
+            }
+            st->nextStepAt = Now();
+            webui_log::info("OrgasmEngine: {:#x} player-driven {} (scene {})", st->id, on, sc->sid);
+        }
+        PostEffects(std::move(fx));
+        return true;
+    }
+
+    bool SceneIdOf(RE::Actor* actor, std::int32_t& sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(actor);
+        if (!st || !SceneOf(*st)) {
+            return false;
+        }
+        sid = st->sid;
+        return true;
     }
 
     void Narrate(const std::string& eventType, const std::string& msg, RE::Actor* source, RE::Actor* target)
@@ -3545,6 +3773,8 @@ namespace OrgasmEngine
                 intfc->WriteRecordData(st.regen);
             }
         }
+        // v8: sticky auto play.
+        intfc->WriteRecordData(g_autoPlaySticky);
     }
 
     void Load(SKSE::SerializationInterface* intfc, std::uint32_t version, std::uint32_t)
@@ -3557,6 +3787,7 @@ namespace OrgasmEngine
         g_scenes.clear();
         g_actors.clear();
         g_narrateDue.clear();
+        g_autoPlaySticky = false;
         const double now = Now();
         std::uint32_t sceneCount = 0;
         if (!intfc->ReadRecordData(sceneCount)) {
@@ -3712,7 +3943,14 @@ namespace OrgasmEngine
                 g_scenes[sc.sid] = std::move(sc);
             }
         }
-        webui_log::info("OrgasmEngine: co-save loaded {} scene(s), {} actor(s)", g_scenes.size(), g_actors.size());
+        if (version >= 8 && intfc->ReadRecordData(g_autoPlaySticky) && g_autoPlaySticky) {
+            // A scene saved with the player in it resumes in auto play.
+            if (auto* st = Find(RE::PlayerCharacter::GetSingleton()); st && SceneOf(*st)) {
+                st->autoPlay = true;
+            }
+        }
+        webui_log::info("OrgasmEngine: co-save loaded {} scene(s), {} actor(s) auto_play={}", g_scenes.size(),
+            g_actors.size(), g_autoPlaySticky);
     }
 
     void Revert()
@@ -3721,6 +3959,7 @@ namespace OrgasmEngine
         g_scenes.clear();
         g_actors.clear();
         g_narrateDue.clear();
+        g_autoPlaySticky = false;
     }
 
     SKYRIMNET_SEXLAB_API::IOrgasmEngineV2* GetInterface()

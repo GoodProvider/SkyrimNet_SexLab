@@ -31,3 +31,6 @@ crash-*.log
 
 # Local secrets (username etc.)
 .secrets.md
+
+# Log review snapshots (.claude/skills/review-logs)
+review-logs/
