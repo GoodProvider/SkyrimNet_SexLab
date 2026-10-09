@@ -47,6 +47,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Narrate position changes**: new option (on by default) narrates the new stage description with the actors in their new roles.
 - **Description Editor**: **continue scene** now closes the WebUI after sending its narration.
 - **TargetMenu cleanup**: the Stop / Stage / Position / Animation entries are gone from the in-scene Scene menu; the Description Editor and the new position hotkeys cover them. If you install by hand (not a mod manager), delete the four old files `0100_stop`, `0200_stage`, `0300_position` and `0400_animation` from the TargetMenu Scene folder.
+- **TargetMenu no longer flickers**: a panel opened by hovering now stays open for a second while you move the mouse toward it. Hovering another entry in the same list still switches right away. Moving down a panel's fields no longer makes the panel itself blink.
 - **Deny / allow orgasm**: the Transform option is gone. Denying and allowing are plain events again: "Bob forbids Nina from orgasming without permission." / "Bob permits Nina to orgasm."
 - **Hug fix**: a single hug no longer leaves you unable to attack with your weapon (e.g. a whip) afterward. Both people now put their weapons away before hugging.
 - **Newer Skyrim support**: the SKSE plugin is rebuilt for Skyrim 1.7.x / 1.7.99 and works with SkyrimNet beta26 rc4.

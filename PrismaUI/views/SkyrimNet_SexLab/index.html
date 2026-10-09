@@ -4063,15 +4063,34 @@
         // Hover-intent drill for pulldown rows (DOMPrism columns style). One shared
         // timer so resting on a new row cancels the previous pending drill; the delay
         // lets the pointer sweep across panels without wiping an open params panel.
+        // A hover-opened panel is then held for TM_HOLD_MS: rows in other columns wait
+        // out the hold, while siblings in the opener's column switch at the normal delay.
+        // Clicks bypass the hold; closing the menu clears it.
         const TM_HOVER_DELAY_MS = 150;
+        const TM_HOLD_MS = 1000;
         let tmHoverTimer = null;
+        let tmHold = null; // { group, until }
+        // Column identity that survives re-renders: host + index of the row's panel.
+        function tmColumnKey(el) {
+            const panel = el.closest('.panel');
+            const host = panel && panel.parentElement;
+            if (!host) return '';
+            return (host.id || host.className) + ':' + Array.prototype.indexOf.call(host.children, panel);
+        }
         function tmBindHoverDrill(el, isOpen, drill) {
             el.addEventListener('mouseenter', () => {
                 clearTimeout(tmHoverTimer);
                 if (isOpen()) return;
+                const group = tmColumnKey(el);
+                let delay = TM_HOVER_DELAY_MS;
+                const now = Date.now();
+                if (tmHold && tmHold.group !== group && now < tmHold.until)
+                    delay = Math.max(delay, tmHold.until - now);
                 tmHoverTimer = setTimeout(() => {
-                    if (!isOpen()) drill();
-                }, TM_HOVER_DELAY_MS);
+                    if (isOpen()) return;
+                    tmHold = { group: group, until: Date.now() + TM_HOLD_MS };
+                    drill();
+                }, delay);
             });
             el.addEventListener('mouseleave', () => clearTimeout(tmHoverTimer));
         }
@@ -4308,6 +4327,7 @@
             bondageState = { groups: [] };
             ssUi.seededForLabel = '';
             ssCascade = null;
+            tmHold = null;
             ssCloseIntentPanel();
             const host = document.getElementById('target-cascade-host');
             if (host) host.innerHTML = '';
@@ -4321,6 +4341,7 @@
             selectedActionLabel = null;
             ssUi.seededForLabel = '';
             ssCascade = null;
+            tmHold = null;
             ssCloseIntentPanel();
             const host = document.getElementById('target-cascade-host');
             if (host) host.innerHTML = '';
@@ -5654,6 +5675,7 @@
             const isOpen = () => !!ssCascade && ssCascade.key === spec.key;
             const root = document.createElement('div');
             root.className = 'pulldown pulldown-cascade' + (isOpen() ? ' cascade-open' : '');
+            root.dataset.cascadeKey = spec.key;
             const valueEl = document.createElement('div');
             valueEl.className = 'pulldown-value';
             valueEl.textContent = spec.display || '—';
@@ -5661,14 +5683,14 @@
             if (disabled) return root;
             const open = () => {
                 ssCascade = { key: spec.key, path: [] };
-                renderPapyrusPanel();
+                ssRefreshFieldCascade();
             };
             valueEl.onclick = (e) => {
                 e.stopPropagation();
                 closeAllPulldowns();
                 if (isOpen()) {
                     ssCascade = null;
-                    renderPapyrusPanel();
+                    ssRefreshFieldCascade();
                 } else {
                     open();
                 }
@@ -5694,7 +5716,7 @@
                 const drill = () => {
                     if (!ssCascade) return;
                     ssCascade.path = ssCascade.path.slice(0, level).concat([idx]);
-                    renderPapyrusPanel();
+                    ssRefreshFieldCascade();
                 };
                 const row = document.createElement('div');
                 row.className = 'option-row' + (isOpen() ? ' selected' : '');
@@ -5731,9 +5753,20 @@
             tmBindHoverDrill(row, () => !deeperOpen(), () => {
                 if (!ssCascade) return;
                 ssCascade.path = ssCascade.path.slice(0, level);
-                renderPapyrusPanel();
+                ssRefreshFieldCascade();
             });
             return row;
+        }
+
+        // Cascade navigation only: swap the field columns and the open-field highlight,
+        // leaving the parameter panel itself in place so it doesn't flicker under the mouse.
+        function ssRefreshFieldCascade() {
+            const host = document.getElementById('target-cascade-host');
+            if (!host) return;
+            host.querySelectorAll('.pulldown-cascade[data-cascade-key]').forEach(el => {
+                el.classList.toggle('cascade-open', !!ssCascade && ssCascade.key === el.dataset.cascadeKey);
+            });
+            ssRenderFieldCascade(host);
         }
 
         function ssRenderFieldCascade(host) {
@@ -5758,7 +5791,7 @@
                     header.onclick = (e) => {
                         e.stopPropagation();
                         ssCascade.path = ssCascade.path.slice(0, level - 1);
-                        renderPapyrusPanel();
+                        ssRefreshFieldCascade();
                     };
                 } else {
                     header.textContent = spec.caption || spec.key;
