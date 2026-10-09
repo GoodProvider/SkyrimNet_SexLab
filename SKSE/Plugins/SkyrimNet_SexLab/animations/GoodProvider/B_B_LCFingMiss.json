@@ -1,18 +1,32 @@
 {
-  "version": "3.0",
-  "stage 1": {
-    "description": "is kneeling, while thrusting with fingers tips into the pussy of a hands tied behind back laying down with legs in the air"
-  },
-  "stage 2": {
-    "description": "licks the pussy of a legs in the air, hands bound behind back, flat on back "
-  },
-  "stage 3": {
-    "description": "slapping the pussy of a legs stretched to the sides, arms bound behind back, flat on back"
-  },
-  "stage 4": {
-    "description": "fingers thrusting into the pussy, legs back beside the head, arms tied behind back, on back"
-  },
-  "stage 5": {
-    "description": "fingering the pussy of arms tied behind back, back arched, ass off ground, with legs twitching in orgasm"
-  }
+    "clothed": [
+        0,
+        1
+    ],
+    "orgasm_expected": [
+        1,
+        0
+    ],
+    "speaking_modifiers": [
+        [
+            "_pleasure_"
+        ],
+        []
+    ],
+    "stage 1": {
+        "description": "is kneeling, while thrusting with fingers tips into the pussy of a hands tied behind back laying down with legs in the air"
+    },
+    "stage 2": {
+        "description": "licks the pussy of a legs in the air, hands bound behind back, flat on back "
+    },
+    "stage 3": {
+        "description": "slapping the pussy of a legs stretched to the sides, arms bound behind back, flat on back"
+    },
+    "stage 4": {
+        "description": "fingers thrusting into the pussy, legs back beside the head, arms tied behind back, on back"
+    },
+    "stage 5": {
+        "description": "fingering the pussy of arms tied behind back, back arched, ass off ground, with legs twitching in orgasm"
+    },
+    "version": "3.0"
 }

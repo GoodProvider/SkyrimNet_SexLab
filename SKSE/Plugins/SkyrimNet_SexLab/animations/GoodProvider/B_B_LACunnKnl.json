@@ -1,6 +1,6 @@
 {
     "clothed": [
-        0,
+        1,
         0
     ],
     "orgasm_expected": [
@@ -9,13 +9,13 @@
     ],
     "speaking_modifiers": [
         [
-            "_pain_",
-            "_pleasure_"
+            "_pain_"
         ],
         [
             "_pleasure_"
         ]
     ],
+    "version": "3.0",
     "stage 1": {
         "description": ""
     },
@@ -30,6 +30,5 @@
     },
     "stage 5": {
         "description": ""
-    },
-    "version": "3.0"
+    }
 }
