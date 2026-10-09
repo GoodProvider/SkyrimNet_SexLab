@@ -12,7 +12,7 @@
     <project>SkyrimNet_SexLab</project>
     <summary>Bridge mod between SkyrimNet (LLM) and SexLab Framework.</summary>
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
-    <updated>2026-10-05</updated>
+    <updated>2026-10-08</updated>
     <base_tag>0.35.1</base_tag>
     <next_version>0.35.2</next_version>
     <version_status>Makefile VERSION=0.35.2 (authoritative); plugin manifest.json 0.35.2; info.json, FOMOD info.xml / ModuleConfig.xml still 0.35.1 until make release; latest git tag 0.35.1 (1620fc2); 0.35.2 not tagged</version_status>
@@ -63,6 +63,7 @@
   </doc_files>
 
   <status>
+    <note>2026-10-08: 0.35.2 docs pass at HEAD cb06ecc (delta since 7c2f9ba: cdc55b2..47b3ec6 Force/Aid keys and actions, strategy decisions replacing SexLab_Strategy_* actions, mini-game calibration, arousal floor, Shift retarget, derived sexual tag, ActorLocker, take-control key / auto play / NPC control, AI-driven ending gate, TargetMenu hover hold, MIT CommonLibVR 4.39.5; cb06ecc AnimDb_SubstituteActors warnings). CHANGELOG.md 0.35.2 regrouped into the allowed themes; superseded Force presets / strategy-action bullets folded; CHANGELOG-user.md 0.35.2 regrouped to 14 bullets, TargetMenu flicker moved from 0.35.1. Docs already current. BLOCKER: manifest.yaml sexlab.minigame.fear_cooldown defaultValue 0 (and C++ fallback 0.0f) is a test value; docs say 15, revert before make release. Omit: %SystemDrive%/, bug-logs/, checkpoints/full/, extern/JContainers/, extern/OStimNet/, extern/vcpkg-ports/, guides/ostimnet-agent-calls.md, Headers_Backup/, z-*, reviews/.</note>
     <note>2026-10-05: 0.35.2 since tagged 0.35.1 (1620fc2), HEAD 7c2f9ba. Delta: af7b667 (lone hug narration always speaker hugs target; Leash panel type/body pulldowns) and 7c2f9ba (AnimDB count mismatch warning, Rebuild DB / Build DB ControlPanel button, first-hotkey mismatch dialog, explained-gap prompt, sync skip traces, bound tag cleanup, plain ControlPanel title). Bullets added to the 0.35.1 sections after tagging were moved to 0.35.2; the 0.35.1 sections now match the tag. Docs (webui.md, hotkeys.md) already current. DLL and pex rebuilt in 7c2f9ba (pex shrank after the ppj import switch to SexLabFrameworkAE). Omit: Headers_Backup/, headers_build.py, skyrimse.ppj, %SystemDrive%/, bug-logs/, checkpoints/full/, extern/JContainers/, z-*, reviews/.</note>
     <note>2026-10-04: 0.35.1 docs pass at HEAD f31f65b (adds camera restore after TFC / scene end and sexlab.minigame.mouse default on). CHANGELOG.md 0.35.1 regrouped into Actions / scenes (lone hug CalmForPairedIdle), Orgasm / narration (deny Transform removed), SKSE / WebUI. Camera documented in hotkeys.md, papyrus.md, webui.md. Pex and DLL rebuilt in f31f65b. Omit: %SystemDrive%/, checkpoints/full/, extern/JContainers/, z-*, reviews/. Next: make release, tag 0.35.1, GitHub Release.</note>
     <note>2026-10-04: 0.35.1 since tagged 0.35.0 (HEAD 4ebea86). Delta: SkyrimNet beta26 rc4 (API v12) alignment, CommonLibSSE-NG v11.0.0 (Skyrim 1.7.x), TargetMenu Scene stop/stage/position/animation removed, Description Editor continue closes WebUI, HUD PosUp/PosDn + pos_narration. Docs (hotkeys.md, webui.md) already current. Omit: z-*, reviews/, extern/JContainers, checkpoints/full, %SystemDrive%/. pyro then make release; 0.35.1 untagged.</note>
