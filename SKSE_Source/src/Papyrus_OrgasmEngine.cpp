@@ -6,6 +6,7 @@
 #include "NarrationTiming.h"
 #include "OrgasmEngine.h"
 #include "WebUI_Log.h"
+#include "Whipped.h"
 
 #include <string>
 #include <vector>
@@ -188,6 +189,7 @@ namespace PapyrusBindings_OrgasmEngine
             return RE::BSFixedString(OrgasmEngine::Force(forcer, victim->GetFormID(), key, Str(method)).c_str());
         }
         bool HasAidOptions(RE::StaticFunctionTag*, RE::Actor* a) { return ::Aid::HasOptions(a); }
+        bool WhippedInstalled(RE::StaticFunctionTag*) { return Whipped::Installed(); }
         bool CanForce(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::CanForce(a); }
         void EndScene(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::EndScene(sid); }
         void ResetSpeedScale(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ResetSpeedScale(a); }
@@ -259,6 +261,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("Aid", s, AidAction);
         a_vm->RegisterFunction("Force", s, ForceAction);
         a_vm->RegisterFunction("HasAidOptions", s, HasAidOptions);
+        a_vm->RegisterFunction("WhippedInstalled", s, WhippedInstalled);
         a_vm->RegisterFunction("CanForce", s, CanForce);
         a_vm->RegisterFunction("EndScene", s, EndScene);
         a_vm->RegisterFunction("ResetSpeedScale", s, ResetSpeedScale);

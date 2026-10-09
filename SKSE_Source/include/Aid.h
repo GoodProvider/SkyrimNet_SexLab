@@ -32,8 +32,11 @@ namespace Aid
     /// Best option for kind ("heal" / "stamina"): the strongest affordable spell, else the strongest potion. 0 when none.
     RE::FormID PickBest(RE::Actor* caster, std::string_view kind);
     /// Applies option form from caster to target (re-validated). Game state changes are queued on the main thread.
-    /// location: body part named in the narration only ("" / "body": none). Returns the narration line, "" when refused.
-    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location = "");
+    /// location: body part ("" / "body": none). Returns the narration line, "" when refused.
+    /// With SkyrimNet_Whipped installed a health option heals whip wounds on the part through Whipped, which also
+    /// narrates the line: *whipped is set true and the caller must not narrate it.
+    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location = "",
+        bool* whipped = nullptr);
 
     struct WeakSpell
     {
@@ -46,6 +49,6 @@ namespace Aid
     /// The weak spell named name (case-insensitive), nullptr when the actor has none by that name.
     const WeakSpell* FindWeakSpell(const std::vector<WeakSpell>& spells, std::string_view name);
     /// Queues a direct health hit of dmg on the victim, never below 1 health, and plays the spell's casting art on the
-    /// forcer and its shader / hit art / sounds on the victim (no cast: no combat, no bounty).
+    /// forcer and its shader / hit art / sounds on the victim (no cast: no combat, no bounty). dmg 0: visuals only.
     void QueueWeakSpellHit(RE::Actor* forcer, RE::Actor* victim, RE::FormID spell, float dmg);
 }

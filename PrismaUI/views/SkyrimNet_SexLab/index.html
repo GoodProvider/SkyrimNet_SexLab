@@ -974,6 +974,26 @@
             border-radius: var(--radius);
         }
 
+        .pulldown-option.part-dim,
+        .pulldown-value.part-dim {
+            opacity: 0.45;
+            color: var(--text-muted);
+        }
+
+        .whipped-confirm {
+            font-family: var(--font-ui);
+            color: var(--text-primary);
+            margin: 0 0 var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            background: var(--bg-input);
+        }
+
+        .whipped-confirm .btn-row {
+            margin-top: var(--space-sm);
+        }
+
         .aid-note {
             font-family: var(--font-ui);
             color: var(--text-secondary);
@@ -2278,6 +2298,7 @@
         </div>
         <textarea id="force-custom-text" style="display:none" placeholder="threatening them with a knife" oninput="forceUpdate()"></textarea>
         <textarea id="force-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="forceUpdate()"></textarea>
+        <div id="force-part-confirm" class="whipped-confirm" style="display:none"></div>
         <div class="btn-row">
             <div class="action-btn" id="force-accept" onmousedown="event.preventDefault()" onclick="forceAccept()">Force</div>
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="forceCancel()">Cancel</div>
@@ -2291,6 +2312,7 @@
             on <span id="aid-actor"></span>'s <span id="aid-part"></span>.
         </div>
         <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
+        <div id="aid-part-confirm" class="whipped-confirm" style="display:none"></div>
         <div id="aid-note" class="aid-note"></div>
         <div class="btn-row">
             <div class="action-btn" id="aid-accept" onmousedown="event.preventDefault()" onclick="aidAccept()">Use</div>
@@ -7865,19 +7887,85 @@
         // C++ Hud OnForce: {victims: [{id, name, strategies: [{key, label}]}]}. Reply: onForceResult.
         const FORCE_PRESETS = ['slap', 'pinch', 'punch', 'pull'];
         const FORCE_DEFAULT_STRATEGY = 'selfless';
-        // Force and Aid narrate where on the victim; 'body' keeps the unlocated wording.
-        const BODY_PARTS = ['body', 'pussy', 'ass', 'nipples', 'custom'];
+        // Force and Aid narrate where on the victim; 'body' keeps the unlocated wording. With SkyrimNet_Whipped
+        // installed the part is also where the whip damage / heal lands ('body' and custom text: a random part).
+        const BODY_PARTS = ['body', 'face', 'lips', 'nipples', 'back', 'left arm', 'right arm', 'left leg', 'right leg',
+            'pussy', 'cock', 'ass', 'custom'];
+        // Whipped's "include sexual body parts" setting: shown darker while off; picking one asks to turn it on.
+        const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'ass']);
+        // From the Hud payload (whipped, whippedSexual).
+        let WHIPPED = { installed: false, sexual: false };
         let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
 
-        // A body-part pulldown into hostId; custom shows textId. onPick(part) on change.
-        function renderPartPulldown(hostId, textId, onPick) {
+        // Parts for an actor ({female}): pussy only for women, cock only for men; unknown sex keeps both.
+        function bodyPartsFor(actor) {
+            const female = actor && typeof actor.female === 'boolean' ? actor.female : null;
+            return BODY_PARTS.filter(p => !(female === true && p === 'cock') && !(female === false && p === 'pussy'));
+        }
+
+        function partDimmed(part) {
+            return WHIPPED.installed && !WHIPPED.sexual && SEXUAL_PARTS.has(part);
+        }
+
+        // A body-part pulldown into hostId for actor; custom shows textId. onPick(part) on change.
+        // current: the part to show (undefined on open: 'body', custom text cleared; one the actor lacks: 'body').
+        function renderPartPulldown(hostId, textId, onPick, actor, current) {
             const host = document.getElementById(hostId);
+            const parts = bodyPartsFor(actor);
+            const shown = parts.includes(current) ? current : parts[0];
+            const confirmId = hostId + '-confirm';
             host.innerHTML = '';
-            host.appendChild(createPulldown(BODY_PARTS, BODY_PARTS[0], (v) => {
+            host.appendChild(createPulldown(parts, shown, (v) => {
+                if (partDimmed(v)) {
+                    whippedConfirm(confirmId, () => {
+                        onPick(v);
+                        renderPartPulldown(hostId, textId, onPick, actor, v);
+                    }, () => renderPartPulldown(hostId, textId, onPick, actor, shown));
+                    return;
+                }
                 onPick(v);
                 if (v === 'custom') document.getElementById(textId).focus();
+            }, null, (el, text) => {
+                el.textContent = text;
+                el.classList.toggle('part-dim', partDimmed(text));
             }));
-            document.getElementById(textId).value = '';
+            if (current === undefined) document.getElementById(textId).value = '';
+            if (shown !== current) onPick(shown);
+        }
+
+        // "Do you wish to enable WHIPPED sexual parts?" Yes: turns Whipped's setting on, then onYes. No: onNo.
+        function whippedConfirm(confirmId, onYes, onNo) {
+            const box = document.getElementById(confirmId);
+            box.innerHTML = '';
+            const q = document.createElement('div');
+            q.textContent = 'Do you wish to enable WHIPPED sexual parts?';
+            const row = document.createElement('div');
+            row.className = 'btn-row';
+            const yes = document.createElement('div');
+            yes.className = 'action-btn';
+            yes.textContent = 'Yes';
+            const no = document.createElement('div');
+            no.className = 'option-cancel';
+            no.textContent = 'No';
+            const close = () => { box.style.display = 'none'; box.innerHTML = ''; };
+            yes.onmousedown = no.onmousedown = (e) => e.preventDefault();
+            yes.onclick = (e) => {
+                e.stopPropagation();
+                close();
+                WHIPPED.sexual = true;
+                if (typeof window.onWhippedSexualParts === 'function') window.onWhippedSexualParts('{}');
+                onYes();
+            };
+            no.onclick = (e) => {
+                e.stopPropagation();
+                close();
+                onNo();
+            };
+            row.appendChild(yes);
+            row.appendChild(no);
+            box.appendChild(q);
+            box.appendChild(row);
+            box.style.display = 'block';
         }
 
         // Shows textId for a custom part; '' when custom is empty, else the location to send.
@@ -7905,6 +7993,13 @@
             }));
         }
 
+        function forceRenderPart(current) {
+            renderPartPulldown('force-part', 'force-part-text', (v) => {
+                FORCE.part = v;
+                forceUpdate();
+            }, forceVictim(), current);
+        }
+
         function forceUpdate() {
             const custom = FORCE.method === 'custom';
             const text = document.getElementById('force-custom-text');
@@ -7917,6 +8012,8 @@
         function openForcePanel(cfg) {
             FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY,
                 method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
+            WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
+            document.getElementById('force-part-confirm').style.display = 'none';
             // Presets, then the player's weak attack spells (a non-lethal hit), then custom text.
             const methods = FORCE_PRESETS.concat((cfg && cfg.spells) || [], ['custom']);
             // HUD take-control key: the NPC the player drives forces (cfg.forcer); else the player.
@@ -7930,6 +8027,7 @@
             victimHost.appendChild(createPulldown(FORCE.victims.map(v => v.name), (FORCE.victims[0] || {}).name || '', (_, i) => {
                 FORCE.victim = i;
                 forceRenderStrategy();
+                forceRenderPart(FORCE.part);
                 forceUpdate();
             }));
             forceRenderStrategy();
@@ -7941,10 +8039,7 @@
                 if (v === 'custom') document.getElementById('force-custom-text').focus();
             }));
             document.getElementById('force-custom-text').value = '';
-            renderPartPulldown('force-part', 'force-part-text', (v) => {
-                FORCE.part = v;
-                forceUpdate();
-            });
+            forceRenderPart();
             // Same solo layout as the gating dialogue: only this panel shows.
             document.body.classList.add('yesno-solo');
             hideControlPanel();
@@ -7994,6 +8089,13 @@
             return `${o.name} (${o.cost} magicka)`;
         }
 
+        function aidRenderPart(current) {
+            renderPartPulldown('aid-part', 'aid-part-text', (v) => {
+                AID.part = v;
+                aidUpdate();
+            }, AID.actors[AID.actor], current);
+        }
+
         function aidUpdate() {
             const o = AID.options[AID.option];
             const ok = !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
@@ -8007,6 +8109,8 @@
         function openAidPanel(cfg) {
             AID = { actors: (cfg && cfg.actors) || [], options: (cfg && cfg.options) || [], actor: 0, option: -1,
                 part: BODY_PARTS[0] };
+            WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
+            document.getElementById('aid-part-confirm').style.display = 'none';
             AID.option = AID.options.findIndex(o => o.affordable);
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
@@ -8024,12 +8128,10 @@
             actorHost.innerHTML = '';
             actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[0] || {}).name || '', (_, i) => {
                 AID.actor = i;
+                aidRenderPart(AID.part);
                 aidUpdate();
             }));
-            renderPartPulldown('aid-part', 'aid-part-text', (v) => {
-                AID.part = v;
-                aidUpdate();
-            });
+            aidRenderPart();
             document.body.classList.add('yesno-solo');
             hideControlPanel();
             hideTargetMenuRow();

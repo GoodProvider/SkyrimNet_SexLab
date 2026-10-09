@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## SkyrimNet_Whipped soft dependency (2026-10-09)
+
+- Detect with `TESDataHandler::LookupModByName("SkyrimNet_Whipped.esp")` plus a VM type check that `SkyrimNet_Whipped_Main` has the global `External_Strike` (`Whipped::Installed`, cached per session). An older Whipped without the API counts as not installed.
+- Call its Papyrus globals with `DispatchStaticCall`; never call its `Take*` / `Sync*` natives (they drain Whipped's own queues).
+- Read its settings from C++ with `SexLabNet::GetForeignConfigBool("SkyrimNet_Whipped", ...)` (C++ name without `Plugin_`). Write them only through Whipped (`External_SetSexualParts`, which runs `PatchConfig` on `Plugin_SkyrimNet_Whipped` and applies the value at once).
+
 ## Gate voice / ending hold paired with another scene's reply (2026-10-08)
 
 **Symptom (`review-logs/2026-10-08_114804`):** two scenes ran at once. Scene C sent its gate DN at 11:36:06.77. Scene B sent its finish DN 0.1 s later. Nia's reply to B's finish (11:36:09.6) moved C to its final stage and then released C's ending hold "(response played)". Skadi's real reply to C came at 11:36:26, after the hold was already released.

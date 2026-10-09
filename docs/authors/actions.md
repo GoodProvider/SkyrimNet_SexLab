@@ -129,6 +129,7 @@ Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_all
 - **Force:** native `OrgasmEngine.Force`, the same engine path as the player's Force key. `method` is a preset, a Novice / Apprentice Damage Health spell the speaker knows (a non-lethal hit of the spell's smallest magnitude, no real cast), or free text.
 - Papyrus still checks that speaker and target share the scene. Force also checks that the speaker is not a victim and the target is a non-player victim.
 - Both narrate through `DirectNarration_Optional` (`sexlab_aid` / `sexlab_force` events when the cooldown blocks), so the NPC's own line is not doubled.
+- **SkyrimNet_Whipped** (soft dependency, `Whipped.cpp`): when `Whipped::Installed()` (plugin loaded and `SkyrimNet_Whipped_Main.External_Strike` exists), Force calls `External_Strike(forcer, victim, line, 1, part)` and heal-type Aid calls `External_Heal(caster, target, line, health, part)`. Whipped applies the damage / heal and sends the DirectNarration, so SexLab does not narrate (HUD: the `whipped` out-param of `HudForce` / `Aid::Apply`; Papyrus: `OrgasmEngine.WhippedInstalled()`). A weak spell then does no health damage of its own, and the Aid health restore is left to Whipped. Pulldown terms map to Whipped parts in `Whipped::PartName` (cock -> penis, ass -> ass hole; body / custom -> random). NPC actions carry no part (random).
 - Both are in `MCM.MiniGameActionNames` (unregistered while the mini-game is off).
 
 ## Orgasm denial actions

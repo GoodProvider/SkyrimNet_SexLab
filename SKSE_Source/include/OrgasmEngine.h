@@ -195,15 +195,19 @@ namespace OrgasmEngine
     /// The player forces victim into strategyKey by method (preset key or free text). Starts the fear
     /// cooldown (only AcceptForce offered). location: body part named in the narration ("" / "body": none).
     /// Returns the narration line, "" when refused.
+    /// With SkyrimNet_Whipped installed the hit goes through Whipped (slap/pinch/punch/pull use their torture types;
+    /// cover mouth, free text, and weak spells use whipping; a weak spell does no health damage of its own), which also
+    /// narrates the line: *whipped is set true and the caller must not narrate it.
     std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method,
-        const std::string& location = "");
+        const std::string& location = "", bool* whipped = nullptr);
     /// Any non-victim forcer (SexLab_Force action): forces a non-player victim of its mini-game scene. method: a
     /// preset key, one of the forcer's weak attack spells (a non-lethal hit), or free text. "" when refused.
-    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method);
+    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method,
+        bool* whipped = nullptr);
     /// PlayerForce with forcer acting for the player (HUD Force panel / auto play): the player, or the NPC the
     /// player took control of. Same aggressor rule and narration line as PlayerForce.
     std::string HudForce(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey,
-        const std::string& method, const std::string& location);
+        const std::string& method, const std::string& location, bool* whipped = nullptr);
     /// The actor is not a victim in a mini-game scene that has a non-player victim (SexLab_Force eligibility).
     bool CanForce(RE::Actor* actor);
     void EndScene(std::int32_t sid);

@@ -8,6 +8,7 @@
 #include "NarrationTiming.h"
 #include "StrategyDecision.h"
 #include "WebUI_Log.h"
+#include "Whipped.h"
 
 #include <algorithm>
 #include <atomic>
@@ -3118,8 +3119,11 @@ namespace OrgasmEngine
         }
 
         std::string ForceWith(RE::Actor* forcer, bool hud, RE::FormID victim, const std::string& strategyKey,
-            const std::string& method, const std::string& location)
+            const std::string& method, const std::string& location, bool* whipped)
         {
+            if (whipped) {
+                *whipped = false;
+            }
             // Weak attack spells read the forcer's spell lists outside the engine lock.
             const auto spells = Aid::WeakAttackSpells(forcer);
             const Aid::WeakSpell* spell = Aid::FindWeakSpell(spells, method);
@@ -3131,31 +3135,40 @@ namespace OrgasmEngine
                 line = ForceLocked(sc, forcer, victim, strategyKey, method, location, spell, fx);
             }
             PostEffects(std::move(fx));
-            if (!line.empty() && spell) {
-                Aid::QueueWeakSpellHit(forcer, ActorFor(victim), spell->form, spell->minDamage);
+            if (line.empty()) {
+                return line;
+            }
+            // SkyrimNet_Whipped: slap/pinch/punch/pull use their torture types; the rest whip. Spell damage is dropped.
+            const bool toWhipped = Whipped::ForceHit(forcer, ActorFor(victim), line, method, location);
+            if (whipped) {
+                *whipped = toWhipped;
+            }
+            if (spell) {
+                Aid::QueueWeakSpellHit(forcer, ActorFor(victim), spell->form, toWhipped ? 0.0f : spell->minDamage);
             }
             return line;
         }
     }
 
     std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method,
-        const std::string& location)
+        const std::string& location, bool* whipped)
     {
-        return ForceWith(RE::PlayerCharacter::GetSingleton(), true, victim, strategyKey, method, location);
+        return ForceWith(RE::PlayerCharacter::GetSingleton(), true, victim, strategyKey, method, location, whipped);
     }
 
-    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method)
+    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method,
+        bool* whipped)
     {
         if (!forcer || IsPlayer(forcer)) {
-            return forcer ? PlayerForce(victim, strategyKey, method) : "";
+            return forcer ? PlayerForce(victim, strategyKey, method, "", whipped) : "";
         }
-        return ForceWith(forcer, false, victim, strategyKey, method, "");
+        return ForceWith(forcer, false, victim, strategyKey, method, "", whipped);
     }
 
     std::string HudForce(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey,
-        const std::string& method, const std::string& location)
+        const std::string& method, const std::string& location, bool* whipped)
     {
-        return forcer ? ForceWith(forcer, true, victim, strategyKey, method, location) : "";
+        return forcer ? ForceWith(forcer, true, victim, strategyKey, method, location, whipped) : "";
     }
 
     bool CanForce(RE::Actor* actor)

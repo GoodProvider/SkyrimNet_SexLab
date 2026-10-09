@@ -6,6 +6,7 @@
 #include "StrategyDecision.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
+#include "Whipped.h"
 
 #include <Windows.h>
 #include <algorithm>
@@ -259,6 +260,26 @@ namespace Hud
             }
         }
 
+        // Body-part pulldown: the actor's sex (pussy / cock), "" when unknown.
+        bool IsFemaleId(RE::FormID id)
+        {
+            const auto* a = RE::TESForm::LookupByID<RE::Actor>(id);
+            const auto* base = a ? a->GetActorBase() : nullptr;
+            return base && base->GetSex() == RE::SEX::kFemale;
+        }
+
+        // Opens a panel on the game thread with SkyrimNet_Whipped's state added (installed / sexual parts on).
+        void OpenPanel(const char* fn, nlohmann::json cfg)
+        {
+            SKSE::GetTaskInterface()->AddTask([fn, cfg = std::move(cfg)]() mutable {
+                cfg["whipped"] = Whipped::Installed();
+                cfg["whippedSexual"] = cfg["whipped"].get<bool>() && Whipped::SexualParts();
+                const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+                WebUI_Invoke(std::string(fn) + "(" + payload + ");");
+                WebUI_Visibility_Show(false);
+            });
+        }
+
         // Force key (the acting actor is an aggressor): the Force panel, solo in the WebUI. Victims and their
         // strategies come from the engine; the panel replies through WebUI onForceResult.
         void OnForce()
@@ -285,7 +306,8 @@ namespace Hud
                 for (const auto& [key, label] : v.strategies) {
                     strategies.push_back({ { "key", key }, { "label", label } });
                 }
-                list.push_back({ { "id", v.id }, { "name", v.name }, { "strategies", std::move(strategies) } });
+                list.push_back({ { "id", v.id }, { "name", v.name }, { "female", IsFemaleId(v.id) },
+                    { "strategies", std::move(strategies) } });
             }
             cfg["victims"] = std::move(list);
             // Weak attack spells the forcer knows: extra methods (a non-lethal hit).
@@ -294,11 +316,7 @@ namespace Hud
                 spells.push_back(sp.name);
             }
             cfg["spells"] = std::move(spells);
-            const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-            SKSE::GetTaskInterface()->AddTask([payload]() {
-                WebUI_Invoke("openForcePanel(" + payload + ");");
-                WebUI_Visibility_Show(false);
-            });
+            OpenPanel("openForcePanel", std::move(cfg));
         }
 
         // Aid key (mini-game): the Aid panel, solo in the WebUI. Options are the player's healing / stamina spells
@@ -325,10 +343,11 @@ namespace Hud
             nlohmann::json cfg;
             cfg["caster"] = { { "id", player->GetFormID() }, { "name", NameOf(player) } };
             nlohmann::json list = nlohmann::json::array();
-            list.push_back({ { "id", player->GetFormID() }, { "name", NameOf(player) } });
+            list.push_back({ { "id", player->GetFormID() }, { "name", NameOf(player) },
+                { "female", IsFemaleId(player->GetFormID()) } });
             for (const auto& a : actors) {
                 if (a.id != player->GetFormID()) {
-                    list.push_back({ { "id", a.id }, { "name", a.name } });
+                    list.push_back({ { "id", a.id }, { "name", a.name }, { "female", IsFemaleId(a.id) } });
                 }
             }
             cfg["actors"] = std::move(list);
@@ -339,11 +358,7 @@ namespace Hud
                     { "health", o.health > 0.0f }, { "stamina", o.stamina > 0.0f } });
             }
             cfg["options"] = std::move(opts);
-            const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-            SKSE::GetTaskInterface()->AddTask([payload]() {
-                WebUI_Invoke("openAidPanel(" + payload + ");");
-                WebUI_Visibility_Show(false);
-            });
+            OpenPanel("openAidPanel", std::move(cfg));
         }
 
         bool BlockingMenuOpen()

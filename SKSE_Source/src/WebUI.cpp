@@ -9,6 +9,7 @@
 #include "AnimationDB.h"
 #include "Hud.h"
 #include "OrgasmEngine.h"
+#include "Whipped.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -789,13 +790,21 @@ void InitWebUI()
                         method, location);
                     SKSE::GetTaskInterface()->AddTask([victim, strategy, method, location]() {
                         RE::Actor* forcer = Hud::ActingActor();
-                        const std::string line = OrgasmEngine::HudForce(forcer, victim, strategy, method, location);
-                        if (!line.empty())
+                        bool whipped = false;
+                        const std::string line = OrgasmEngine::HudForce(forcer, victim, strategy, method, location, &whipped);
+                        if (!line.empty() && !whipped)
                             OrgasmEngine::NarrateDirect(line, forcer, RE::TESForm::LookupByID<RE::Actor>(victim));
                     });
                 } catch (...) {
                     webui_log::warn("onForceResult: bad JSON");
                 }
+            });
+        });
+
+        // Force / Aid part pulldown: the player agreed to turn on SkyrimNet_Whipped's sexual body parts.
+        PrismaUI->RegisterJSListener(g_view, "onWhippedSexualParts", [](const char*) {
+            RunGuarded("onWhippedSexualParts", [&] {
+                SKSE::GetTaskInterface()->AddTask([]() { Whipped::EnableSexualParts(); });
             });
         });
 
@@ -817,8 +826,9 @@ void InitWebUI()
                     SKSE::GetTaskInterface()->AddTask([target, option, location]() {
                         auto* player = RE::PlayerCharacter::GetSingleton();
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
-                        const std::string line = Aid::Apply(player, actor, option, location);
-                        if (!line.empty())
+                        bool whipped = false;
+                        const std::string line = Aid::Apply(player, actor, option, location, &whipped);
+                        if (!line.empty() && !whipped)
                             OrgasmEngine::NarrateDirect(line, player, actor);
                     });
                 } catch (...) {

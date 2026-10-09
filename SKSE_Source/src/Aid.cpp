@@ -1,6 +1,7 @@
 #include "Aid.h"
 
 #include "WebUI_Log.h"
+#include "Whipped.h"
 
 #include <algorithm>
 #include <cctype>
@@ -246,8 +247,11 @@ namespace Aid
         return best ? best->form : 0;
     }
 
-    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location)
+    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location, bool* whipped)
     {
+        if (whipped) {
+            *whipped = false;
+        }
         if (!caster || !target || !form) {
             return "";
         }
@@ -260,7 +264,30 @@ namespace Aid
         const Option o = *it;
         const RE::FormID casterId = caster->GetFormID();
         const RE::FormID targetId = target->GetFormID();
-        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId]() {
+
+        const std::string who = ActorName(caster);
+        const std::string whom = ActorName(target);
+        const bool self = caster == target;
+        // HUD body part ("body" / "": none): "on Lydia's ass" / "on her own ass".
+        const std::string part = location == "body" ? "" : location;
+        std::string line;
+        if (!part.empty()) {
+            const auto* base = target->GetActorBase();
+            const std::string own = (base && base->GetSex() == RE::SEX::kFemale) ? "her own " : "his own ";
+            const std::string where = (self ? own : whom + "'s ") + part;
+            line = who + (o.potion ? " pours a " : " casts ") + o.name + " on " + where + ".";
+        } else if (o.potion) {
+            line = self ? who + " drinks a " + o.name + "." : who + " gives " + whom + " a " + o.name + ".";
+        } else {
+            line = self ? who + " casts " + o.name + "." : who + " casts " + o.name + " on " + whom + ".";
+        }
+
+        // SkyrimNet_Whipped heals the wounds on the part (and the health with them) and narrates the line.
+        const bool toWhipped = o.health > 0.0f && Whipped::Installed();
+        if (whipped) {
+            *whipped = toWhipped;
+        }
+        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toWhipped, line, part]() {
             auto* c = RE::TESForm::LookupByID<RE::Actor>(casterId);
             auto* t = RE::TESForm::LookupByID<RE::Actor>(targetId);
             if (!c || !t) {
@@ -275,28 +302,14 @@ namespace Aid
             } else if (auto* owner = c->AsActorValueOwner(); owner && o.cost > 0.0f) {
                 owner->DamageActorValue(RE::ActorValue::kMagicka, o.cost);
             }
-            Restore(t, o.health, o.stamina);
+            Restore(t, toWhipped ? 0.0f : o.health, o.stamina);
+            if (toWhipped) {
+                Whipped::Heal(c, t, line, o.health, part);
+            }
             PlaySpellVisuals(c, t, RE::TESForm::LookupByID<RE::MagicItem>(o.form), o.potion);
         });
-
-        const std::string who = ActorName(caster);
-        const std::string whom = ActorName(target);
-        const bool self = caster == target;
-        // HUD body part ("body" / "": none) is narration only: "on Lydia's ass" / "on her own ass".
-        const std::string part = location == "body" ? "" : location;
-        std::string line;
-        if (!part.empty()) {
-            const auto* base = target->GetActorBase();
-            const std::string own = (base && base->GetSex() == RE::SEX::kFemale) ? "her own " : "his own ";
-            const std::string where = (self ? own : whom + "'s ") + part;
-            line = who + (o.potion ? " pours a " : " casts ") + o.name + " on " + where + ".";
-        } else if (o.potion) {
-            line = self ? who + " drinks a " + o.name + "." : who + " gives " + whom + " a " + o.name + ".";
-        } else {
-            line = self ? who + " casts " + o.name + "." : who + " casts " + o.name + " on " + whom + ".";
-        }
-        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f}", casterId,
-            targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost);
+        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} whipped {}", casterId,
+            targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, toWhipped);
         return line;
     }
 
@@ -343,7 +356,7 @@ namespace Aid
 
     void QueueWeakSpellHit(RE::Actor* forcer, RE::Actor* victim, RE::FormID spell, float dmg)
     {
-        if (!victim || dmg <= 0.0f) {
+        if (!victim || dmg < 0.0f) {
             return;
         }
         const RE::FormID id = victim->GetFormID();

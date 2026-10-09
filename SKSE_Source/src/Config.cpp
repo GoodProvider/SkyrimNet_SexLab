@@ -113,6 +113,13 @@ bool GetConfigBool(const char* path, bool def)
     return GetBool(path, def);
 }
 
+bool GetForeignConfigBool(const char* plugin, const char* path, bool def)
+{
+    if (!CrossDllStdStringSafe() || !PublicGetPluginConfigValue)
+        return def;
+    return ParseBool(PublicGetPluginConfigValue(plugin, path, def ? "true" : "false"), def);
+}
+
 int GetConfigInt(const char* path, int def)
 {
     return GetInt(path, def);

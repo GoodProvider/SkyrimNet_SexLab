@@ -1,7 +1,5 @@
 https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
-Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
-
 ### 0.35.2
 
 - New Num * key: AI auto-plays you, or take control of an NPC's scene
@@ -14,6 +12,9 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - New Aid (Num 0) and Force (Num .) panels; NPCs can use them too
 - Aid and Force can target a body part; Force can use weak attack spells
 - Aid and Force spells now show their glow, effects and sounds
+- Body part list: face, lips, nipples, back, arms, legs, pussy, cock, ass
+- With SkyrimNet_Whipped: Force wounds the part, Aid heals it
+- Whipped sexual parts greyed until you agree to enable them
 - Arouse/Calm no longer makes anyone speak
 - Hold Shift to arouse/calm the other actor without changing focus
 - Arousal never falls below enjoyment during scenes (optional)

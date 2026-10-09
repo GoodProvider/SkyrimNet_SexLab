@@ -5,6 +5,10 @@
 #include "Hud.h"
 #include "OrgasmEngine.h"
 #include "WebUI_Log.h"
+#include "Whipped.h"
+
+#include <algorithm>
+#include <string_view>
 
 #include <nlohmann/json.hpp>
 
@@ -40,7 +44,23 @@ namespace StrategyDecision
         constexpr double kHotkeyInterval = 5.0;   // seconds between auto-play key presses
         constexpr double kEndConfidence = 0.8;    // ending the scene can't be undone
         constexpr std::size_t kMaxAidOptions = 20;
-        constexpr const char* kBodyParts[] = { "body", "pussy", "ass", "nipples" };
+        // Aid / Force part pulldown (index.html BODY_PARTS without "custom"); the sexual ones as SEXUAL_PARTS.
+        constexpr const char* kBodyParts[] = { "body", "face", "lips", "nipples", "back", "left arm", "right arm",
+            "left leg", "right leg", "pussy", "cock", "ass" };
+        constexpr std::string_view kSexualParts[] = { "lips", "nipples", "pussy", "cock", "ass" };
+
+        // With SkyrimNet_Whipped's sexual parts off there is no player to ask to turn them on: leave them out.
+        std::vector<std::string> OfferedParts()
+        {
+            const bool skipSexual = Whipped::Installed() && !Whipped::SexualParts();
+            std::vector<std::string> out;
+            for (const char* p : kBodyParts) {
+                if (!skipSexual || std::find(std::begin(kSexualParts), std::end(kSexualParts), p) == std::end(kSexualParts)) {
+                    out.emplace_back(p);
+                }
+            }
+            return out;
+        }
         constexpr int kMinApiVersion = 12;
         // SkyrimNet event types for a spoken NPC line (originator = speaker).
         constexpr const char* kDialogueEvents[] = { "dialogue", "dialogue_npc", "dialogue_background" };
@@ -469,8 +489,9 @@ namespace StrategyDecision
                     return "";
                 }
                 RE::Actor* target = RE::TESForm::LookupByID<RE::Actor>(a->second.target);
-                const std::string line = Aid::Apply(player, target, a->second.form, part("aid_part"));
-                if (!line.empty()) {
+                bool whipped = false;
+                const std::string line = Aid::Apply(player, target, a->second.form, part("aid_part"), &whipped);
+                if (!line.empty() && !whipped) {
                     OrgasmEngine::NarrateDirect(line, player, target);
                 }
             } else if (key == "force") {
@@ -481,9 +502,10 @@ namespace StrategyDecision
                 }
                 const auto m = t.methodOf.find(Choice(answers, "force_method").first);
                 const std::string method = m != t.methodOf.end() ? m->second : "slap";
-                const std::string line =
-                    OrgasmEngine::HudForce(player, f->second.victim, f->second.strategy, method, part("force_part"));
-                if (!line.empty()) {
+                bool whipped = false;
+                const std::string line = OrgasmEngine::HudForce(player, f->second.victim, f->second.strategy, method,
+                    part("force_part"), &whipped);
+                if (!line.empty() && !whipped) {
                     OrgasmEngine::NarrateDirect(line, player, RE::TESForm::LookupByID<RE::Actor>(f->second.victim));
                 }
             } else {
@@ -569,7 +591,7 @@ namespace StrategyDecision
             ctx["aid_options"] = OptionsJson(t->aidOptions);
             ctx["force_options"] = OptionsJson(t->forceOptions);
             ctx["force_methods"] = OptionsJson(t->forceMethods);
-            ctx["parts"] = std::vector<std::string>(std::begin(kBodyParts), std::end(kBodyParts));
+            ctx["parts"] = OfferedParts();
             const std::string body = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             g_turn.inFlight = true;
             const bool queued = PublicSendCustomDecisionToLLM(kPlayerTemplate, body.c_str(), kMaxProbabilities,

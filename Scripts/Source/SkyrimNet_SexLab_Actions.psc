@@ -809,7 +809,8 @@ Function LLM_Aid(Actor speaker, Actor target, String kind)
     endif
     String line = SkyrimNet_SexLab_OrgasmEngine.Aid(speaker, target, kind)
     Trace("LLM_Aid", GetDisplayName(speaker)+" "+kind+" "+GetDisplayName(target)+" line:"+line)
-    if line != ""
+    ; SkyrimNet_Whipped heals the wounds and narrates the line itself.
+    if line != "" && !(StringUtil.Find(kind, "stam") < 0 && SkyrimNet_SexLab_OrgasmEngine.WhippedInstalled())
         SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_aid", line, speaker, target, False)
     endif
     ; The potion leaves the inventory on the game thread.
@@ -843,7 +844,8 @@ Function LLM_Force(Actor speaker, Actor target, String strategy, String method)
     endif
     String line = SkyrimNet_SexLab_OrgasmEngine.Force(speaker, target, strategy, method)
     Trace("LLM_Force", GetDisplayName(speaker)+" forces "+GetDisplayName(target)+" strategy:"+strategy+" method:"+method+" line:"+line)
-    if line != ""
+    ; SkyrimNet_Whipped applies the hit and narrates the line itself.
+    if line != "" && !SkyrimNet_SexLab_OrgasmEngine.WhippedInstalled()
         SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_force", line, speaker, target, False)
     endif
 EndFunction
