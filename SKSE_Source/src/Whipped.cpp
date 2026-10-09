@@ -55,9 +55,9 @@ namespace Whipped
                 return false;
             }
             const bool plugin = dh->LookupModByName(kPlugin) != nullptr;
-            const bool api = plugin && HasGlobal(kScript, "External_Strike");
+            const bool api = plugin && HasGlobal(kScript, "External_Damage");
             if (plugin && !api) {
-                webui_log::warn("Whipped: {} is loaded but has no External_Strike (update SkyrimNet_Whipped)", kPlugin);
+                webui_log::warn("Whipped: {} is loaded but has no External_Damage (update SkyrimNet_Whipped)", kPlugin);
             }
             cached = api ? 1 : 0;
             webui_log::info("Whipped: installed={}", api);
@@ -115,6 +115,32 @@ namespace Whipped
             }
             return nullptr;
         }
+
+        // Whipped torture type for the spell's first fire / frost / shock effect (Whipped's Classifier mapping),
+        // nullptr for none.
+        const char* SpellTortureType(RE::FormID spell)
+        {
+            const auto* item = spell ? RE::TESForm::LookupByID<RE::MagicItem>(spell) : nullptr;
+            if (!item) {
+                return nullptr;
+            }
+            for (const auto* effect : item->effects) {
+                if (!effect || !effect->baseEffect) {
+                    continue;
+                }
+                switch (effect->baseEffect->data.resistVariable) {
+                case RE::ActorValue::kResistFire:
+                    return "fire";
+                case RE::ActorValue::kResistFrost:
+                    return "frost";
+                case RE::ActorValue::kResistShock:
+                    return "shock";
+                default:
+                    break;
+                }
+            }
+            return nullptr;
+        }
     }
 
     bool Strike(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& part)
@@ -123,8 +149,9 @@ namespace Whipped
             return false;
         }
         webui_log::info("Whipped: strike {:#x} part '{}' -> '{}'", victim->GetFormID(), part, PartName(part));
-        Call("External_Strike", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
-            static_cast<std::int32_t>(1), RE::BSFixedString(PartName(part).c_str()), true);
+        // External_Damage(attacker, victim, cause, body_part, damage_type, damage_amount, narrate)
+        Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
+            RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString("whipping"), static_cast<std::int32_t>(1), true);
         return true;
     }
 
@@ -135,18 +162,23 @@ namespace Whipped
             return false;
         }
         webui_log::info("Whipped: torture {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part, PartName(part));
-        Call("External_Torture", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
-            RE::BSFixedString(type), static_cast<std::int32_t>(1), RE::BSFixedString(PartName(part).c_str()), true);
+        Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
+            RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString(type), static_cast<std::int32_t>(1), true);
         return true;
     }
 
     bool ForceHit(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& method,
-        const std::string& location)
+        const std::string& location, RE::FormID spell)
     {
         if (!victim || !Installed()) {
             return false;
         }
         const std::string pulldown = location == "body" ? "" : location;
+        if (spell) {
+            // A spell burns, freezes or shocks; it never whips. No element: the spell's own damage stands.
+            const char* type = SpellTortureType(spell);
+            return type && Torture(attacker, victim, line, type, pulldown);
+        }
         if (const TortureRoute* route = TortureRouteFor(method)) {
             const std::string part = pulldown.empty() ? route->defaultPart : pulldown;
             return Torture(attacker, victim, line, route->type, part);

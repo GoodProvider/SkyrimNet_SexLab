@@ -90,7 +90,7 @@ String Function Aid(Actor caster, Actor target, String kind) global native
 ; by method (slap face / pinch nipple / cover mouth / punch / pull hair, a weak attack spell the forcer knows, or
 ; free text). Returns the narration line, "" when refused.
 String Function Force(Actor forcer, Actor victim, String strategy, String method) global native
-; SkyrimNet_Whipped (with External_Strike) is installed: Force hits and "heal" Aid go through it, and Whipped sends
+; SkyrimNet_Whipped (with External_Damage) is installed: Force hits and "heal" Aid go through it, and Whipped sends
 ; their narration line (the caller must not narrate it again).
 bool Function WhippedInstalled() global native
 ; Any affordable healing / stamina spell or any such potion (skyrimnet_sexlab_can_aid).
