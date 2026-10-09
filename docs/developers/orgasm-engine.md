@@ -132,7 +132,7 @@ For each managed scene:
    - **Early final roll:** in the second-to-last stage of a timed, non-LeadIn scene, when the Scene's ending lead (`SetEndingTarget`) is in the group and has reached the target (the Scene is about to jump), everyone still out rolls again with `enjoyment + random(0, random_bonus) + stage_spike ≥ 100`. A pass joins this group, so it goes into the same DN. A fail sets `finalRollFailed`: no more orgasms (no denied event either) until the scene steps back before the last two stages, except a forced request. Not saved. Log `final roll`.
    - The same `JoinGroup` runs for `NoteExternalOrgasm` and `AllowOrgasm`.
 
-   The group is sent as one `Effect_OrgasmGroup`, so it gets one narration. It is `individual` unless every trigger came from the safety net. Pending arouse/calm narrations about the group's actors are folded into it (`extras`).
+   The group is sent as one `Effect_OrgasmGroup`, so it gets one narration. It is `individual` unless every trigger came from the safety net. Pending arouse/calm narrations about the group's actors are flushed as short-lived events at the same time (`extras` stays empty).
    `FinalStageRemaining(sid)` (native) returns the final stage's timer minus its animating, unpaused seconds, or -1 outside a timed final stage. `Scene.OrgasmWindow_HoldForFinish` uses it.
 5. **Mirror:** at most once a second per actor, `Effect_Mirror` → `AdjustEnjoyment(ours − SexLab's)`, so SexLab voices and expressions follow our value.
 

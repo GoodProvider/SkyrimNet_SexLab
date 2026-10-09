@@ -228,7 +228,7 @@ namespace OrgasmEngine
             std::string source;
             RE::FormID allower = 0;  // AllowOrgasm: "<allower> allowed <allowed> to orgasm."
             RE::FormID allowed = 0;
-            std::string extras;  // pending arouse / calm narrations folded into the orgasm message
+            std::string extras;  // unused (arouse / calm now short-lived events); kept for the Papyrus signature
         };
         struct MirrorFx
         {
@@ -1471,8 +1471,8 @@ namespace OrgasmEngine
                               : a + " calms " + b + ", keeping them further from orgasm.";
         }
 
-        // Caller holds g_lock. Folds pending arouse / calm narrations about the group into it (no separate DN
-        // racing the orgasm DN) and queues the group's single Papyrus dispatch.
+        // Caller holds g_lock. Flushes pending arouse / calm narrations about the group as short-lived events
+        // (no longer folded into the orgasm DN; extras stays empty) and queues the group's single Papyrus dispatch.
         void EmitGroup(OrgasmGroupFx&& group, Effects& fx)
         {
             if (group.actors.empty()) {
@@ -1486,9 +1486,10 @@ namespace OrgasmEngine
                     ++it;
                     continue;
                 }
-                const std::string text = NarrationText(it->first);
-                if (!text.empty()) {
-                    group.extras += group.extras.empty() ? text : " " + text;
+                const auto [who, target, arouse] = it->first;
+                std::string msg = NarrationText(it->first);
+                if (!msg.empty()) {
+                    fx.narrations.push_back({ arouse ? "sexlab_arouse" : "sexlab_calm", std::move(msg), who, target });
                 }
                 it = g_narrateDue.erase(it);
             }

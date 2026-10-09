@@ -167,7 +167,7 @@ EndFunction
 
 ; Everyone who orgasmed together in one scene (natural, forced, safety net, allow, group join at 95).
 ; forced[i] 1: forced request. individual false: stash + window (safety net / joiners of an external orgasm).
-; allower: deny 1 -> 0 prefix. extras: pending arouse / calm narrations folded into the one message.
+; allower: deny 1 -> 0 prefix. extras: always "" (arouse / calm go out as short-lived events via Effect_Narrate).
 Function Effect_OrgasmGroup(Actor[] actors, int[] forced, bool individual, String source, Actor allower, Actor allowed, String extras) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()
     if manager == None || !actors || actors.length == 0 || actors[0] == None
@@ -263,11 +263,14 @@ Function Effect_NarrateDirect(String msg, Actor source, Actor target) global
     SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target)
 EndFunction
 
-; Speed / mini-game narrations are optional for everyone (player included): standard optional path,
-; DirectNarration when NarrationCoolOffAllows, else downgraded to RegisterEvent (never dropped).
+; Arouse / calm narrations: short-lived events only (no DN, no history). Stable eventId per
+; (type, source, target) so a repeat replaces the previous one instead of stacking.
 Function Effect_Narrate(String event_type, String msg, Actor source, Actor target) global
-    if msg == ""
+    if msg == "" || source == None || target == None
         return
     endif
-    SkyrimNet_SexLab_Utilities.DirectNarration_Optional(event_type, msg, source, target, False)
+    int ttlMs = 30000
+    String eventId = event_type + "_" + source.GetFormID() + "_" + target.GetFormID()
+    SkyrimNetApi.RegisterShortLivedEvent(eventId, event_type, msg, "", ttlMs, source, target)
+    SkyrimNet_SexLab_WebUI.TraceLog("SkyrimNet_SexLab_OrgasmEngine", "Effect_Narrate", "short-lived "+eventId+" msg:"+msg)
 EndFunction

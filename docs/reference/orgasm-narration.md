@@ -37,7 +37,7 @@ The LLM cannot answer an endless prompt, so every orgasm moment produces **one**
 
 **Order** (`Scene.OrgasmMessagesToNarration`):
 1. Always in the DN: allow prefix, then forced, DOM melt, orgasming and denied.
-2. While the budget allows, in this order: cum (`AddCum`), recovering / not orgasming / DOM `HandleOrgasmDenied`, then the folded arouse/calm lines.
+2. While the budget allows, in this order: cum (`AddCum`), recovering / not orgasming / DOM `HandleOrgasmDenied`.
 
 The tentacles line is added once.
 
@@ -46,7 +46,7 @@ The tentacles line is added once.
   - Otherwise the plain event `"<denier> permits <actor> to orgasm."` is sent (every source: HUD, Description Editor, LLM action).
   - Deny sends the event `"<denier> forbids <actor> from orgasming without permission."`
 - **Denier.** Stored as `deny_by` on the position obj and persisted beside `deny_orgasm`. It is the player (HUD, Description Editor, TargetMenu) or an aggressor NPC (LLM `SexLab_DenyOrgasm` / `SexLab_AllowOrgasm`; see [../authors/actions.md](../authors/actions.md)). An empty value falls back to the player's name.
-- **Folded mini-game lines.** Pending arouse/calm narrations about anyone in the group are taken out of the engine's narrate queue and appended (budget) instead of racing the orgasm DN as their own DN.
+- **Mini-game lines are not folded.** Pending arouse/calm narrations about anyone in the group are flushed from the engine's narrate queue as short-lived events (`RegisterShortLivedEvent`, 30 s TTL, never a DN), so they never race or pad the orgasm DN. `extras` is always empty.
 - **DOM melt grouping.** `Scene.MeltKey` drops the manager's `". <name> is orgasming."` clause and turns the slave's name into `{n}`. Slaves with the same key share one melt sentence.
 
 ## Who triggers orgasms
