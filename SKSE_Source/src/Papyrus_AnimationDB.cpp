@@ -248,10 +248,17 @@ namespace PapyrusBindings_AnimationDB
                         names.push_back(el.get<std::string>());
                 }
             }
-        } catch (...) {
+        } catch (const std::exception& e) {
+            webui_log::warn("AnimDb_SubstituteActors: actors_json parse failed: {} | json='{}'", e.what(),
+                actors_json.c_str() ? actors_json.c_str() : "(null)");
         }
-        return RE::BSFixedString(
-            AnimationDB::SubstituteActors(desc.c_str() ? desc.c_str() : "", names));
+        std::string result = AnimationDB::SubstituteActors(desc.c_str() ? desc.c_str() : "", names);
+        if (result.find("{{sl.actors.") != std::string::npos) {
+            webui_log::warn("AnimDb_SubstituteActors: tokens left after substitution | names={} json='{}' desc='{}'",
+                names.size(), actors_json.c_str() ? actors_json.c_str() : "(null)",
+                desc.c_str() ? desc.c_str() : "(null)");
+        }
+        return RE::BSFixedString(result);
     }
 
     RE::BSFixedString AnimDb_GetStagesJson(RE::StaticFunctionTag*, RE::BSFixedString registry,
