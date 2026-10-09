@@ -682,7 +682,7 @@ schema:
       description: "Seconds after you force a victim (Force hotkey) during which the victim can only give in, not resist."
       min: 0
       max: 600
-      defaultValue: 0
+      defaultValue: 2
       category: "Mini-game"
 
     - name: "NPC step minimum"
