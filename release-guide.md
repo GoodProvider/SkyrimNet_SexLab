@@ -11,7 +11,7 @@ Agents: use the project `release` skill (`.cursor/skills/release/SKILL.md`). Ses
 | Agent | Changelogs, freshness-matrix docs, Makefile `VERSION` if missing, checkpoint | `compile: pyro`, `make release`, git tag, GitHub Release, feature work |
 | Maintainer | Compile, package, tag, publish | Inventing changelog bullets the tree does not support |
 
-**Agent done-when:** `CHANGELOG.md` and `CHANGELOG-user.md` cover `next_version`; freshness-matrix files match the delta; checkpoint is current; hand-off lists leftover version mismatches. Packaging is not part of done.
+**Agent done-when:** `CHANGELOG.md`, `CHANGELOG-developer.md` and `CHANGELOG-player.md` cover `next_version`; freshness-matrix files match the delta; checkpoint is current; hand-off lists leftover version mismatches. Packaging is not part of done.
 
 ## Version sources
 
@@ -35,7 +35,7 @@ Update only the rows the delta touches. Contracts stay single-sourced under `doc
 
 | When the delta includes | Update |
 |-------------------------|--------|
-| Action YAML or scene JSON | `docs/authors/actions.md`; `docs/reference/scene-settings.md`; `CHANGELOG.md`; `CHANGELOG-user.md` if player-visible; `README.md` index only if a new top-level feature category appears; `docs/examples/` stub only if no short in-tree file exists |
+| Action YAML or scene JSON | `docs/authors/actions.md`; `docs/reference/scene-settings.md`; `CHANGELOG.md`; `CHANGELOG-developer.md`; `CHANGELOG-player.md` if player-visible; `README.md` index only if a new top-level feature category appears; `docs/examples/` stub only if no short in-tree file exists |
 | Prompts, speaking modifiers, or orgasm DirectNarration text | exactly one of `docs/reference/protocol-tokens.md`, `orgasm-narration.md`, or `json-keys.md`; `docs/authors/prompts.md`; changelogs |
 | Papyrus scene / manager / creator behavior | `docs/developers/papyrus.md`; changelogs; `docs/reference/*` only if a protocol contract changed |
 | WebUI / SKSE / PrismaUI | `docs/developers/webui.md`; `docs/players/hotkeys.md` if user-visible; changelogs |
@@ -51,7 +51,8 @@ Update only the rows the delta touches. Contracts stay single-sourced under `doc
 | Agent router | `llms.txt` |
 | Agent policy | `AGENTS.md` |
 | Changelog (technical) | `CHANGELOG.md` |
-| Changelog (player) | `CHANGELOG-user.md` |
+| Changelog (developer summary) | `CHANGELOG-developer.md` |
+| Changelog (player) | `CHANGELOG-player.md` |
 | Players | `docs/players/overview.md`, `hotkeys.md`, `requirements.md` |
 | Authors | `docs/authors/actions.md`, `prompts.md`, `animations.md` |
 | Developers | `docs/developers/papyrus.md`, `webui.md` |
@@ -85,9 +86,13 @@ Use only these H3 themes, and only when the group has content:
 
 Prefer concrete identifiers (YAML names, `setting_name`, StorageUtil keys, prompt files).
 
-### `CHANGELOG-user.md`
+### `CHANGELOG-developer.md`
 
 First line = GitHub releases URL for `next_version`. Then 5–12 plain-English bullets. No claims missing from `CHANGELOG.md`.
+
+### `CHANGELOG-player.md`
+
+Ships with the release. First line = GitHub releases URL for `next_version`, then the SkyrimNet requirement line, then one `### VERSION` section per release. Only player-facing bullets taken from `CHANGELOG.md` (no Papyrus / SKSE internals); each bullet is 100 characters or fewer. No claims missing from `CHANGELOG.md`.
 
 ### Writing bar
 

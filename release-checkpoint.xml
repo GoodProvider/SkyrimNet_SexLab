@@ -15,7 +15,7 @@
     <updated>2026-10-08</updated>
     <base_tag>0.35.1</base_tag>
     <next_version>0.35.2</next_version>
-    <version_status>Makefile VERSION=0.35.2 (authoritative); plugin manifest.json 0.35.2; info.json, FOMOD info.xml / ModuleConfig.xml still 0.35.1 until make release; latest git tag 0.35.1 (1620fc2); 0.35.2 not tagged</version_status>
+    <version_status>Makefile VERSION=0.35.2 (authoritative); plugin manifest.json, info.json, FOMOD info.xml all 0.35.2; ModuleConfig.xml refreshed by make release; latest git tag 0.35.1 (1620fc2); 0.35.2 not tagged</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -23,7 +23,8 @@
       <artifact role="agent policy">AGENTS.md</artifact>
       <artifact role="agent router">llms.txt</artifact>
       <artifact role="changelog since last tag">CHANGELOG.md</artifact>
-      <artifact role="player changelog summary">CHANGELOG-user.md</artifact>
+      <artifact role="developer changelog summary">CHANGELOG-developer.md</artifact>
+      <artifact role="player changelog (ships with release)">CHANGELOG-player.md</artifact>
       <artifact role="end-user front door">README.md</artifact>
       <artifact role="players">docs/players/overview.md</artifact>
       <artifact role="action authoring">docs/authors/actions.md</artifact>
@@ -40,7 +41,8 @@
     <file>AGENTS.md</file>
     <file>llms.txt</file>
     <file>CHANGELOG.md</file>
-    <file>CHANGELOG-user.md</file>
+    <file>CHANGELOG-developer.md</file>
+    <file>CHANGELOG-player.md</file>
     <file>docs/players/overview.md</file>
     <file>docs/players/hotkeys.md</file>
     <file>docs/players/requirements.md</file>

@@ -34,7 +34,7 @@
        agent-only policy — no duplicated contracts
     7. release-guide.xml — per-release freshness matrix + workflow
     8. release-checkpoint.xml — durable base_tag / next_version / doc inventory
-    9. CHANGELOG.md (+ CHANGELOG-user.md if the maintainer wants a plain summary)
+    9. CHANGELOG.md (+ CHANGELOG-developer.md if the maintainer wants a plain summary)
     10. .gitignore updates aligned with the llms.txt denylist
   </goal>
 
@@ -77,7 +77,7 @@ README.md
 llms.txt
 AGENTS.md
 CHANGELOG.md
-CHANGELOG-user.md            # if maintainer wants plain-language notes
+CHANGELOG-developer.md            # if maintainer wants plain-language notes
 release-guide.xml
 release-checkpoint.xml
 # documentation-guide.xml    # optional in target after copy
@@ -210,14 +210,14 @@ enabled: true
   </cold_start>
   <freshness_matrix>
     <!-- paste customized rows from documentation-guide freshness examples -->
-    <row when="public config / content files">docs/…; CHANGELOG.md; CHANGELOG-user.md if user-visible</row>
+    <row when="public config / content files">docs/…; CHANGELOG.md; CHANGELOG-developer.md if user-visible</row>
     <row when="protocol / schema / gate strings">exactly one docs/reference/…; how-to; changelogs</row>
     <row when="runtime code behavior">docs/<dev>/…; changelogs</row>
   </freshness_matrix>
   <workflow>
     <step id="1" name="establish_delta">Collect shipping delta since base_tag.</step>
     <step id="2" name="clarify_before_writing">Ask maintainer before drafting.</step>
-    <step id="3" name="rewrite_changelog">CHANGELOG.md then CHANGELOG-user.md if used.</step>
+    <step id="3" name="rewrite_changelog">CHANGELOG.md then CHANGELOG-developer.md if used.</step>
     <!-- continue: align_docs → version_prep → checkpoint → hand_off -->
   </workflow>
   <quality_bar>
@@ -272,7 +272,7 @@ enabled: true
       - Audience folder names (suggestions only — do not invent a required set)
       - Which existing files stay / move / delete
       - Version authority for release-guide
-      - Whether CHANGELOG-user.md is wanted
+      - Whether CHANGELOG-developer.md is wanted
       - Deliberate omissions (WIP, local-only)
       Do not draft bulk docs until answers avoid invention.
     </step>
@@ -366,7 +366,7 @@ enabled: true
     <artifact>README.md (short) and llms.txt</artifact>
     <artifact>Thinned AGENTS.md (+ CLAUDE/.cursorrules if used)</artifact>
     <artifact>release-guide.xml and release-checkpoint.xml</artifact>
-    <artifact>CHANGELOG.md / CHANGELOG-user.md if missing or structurally obsolete</artifact>
+    <artifact>CHANGELOG.md / CHANGELOG-developer.md if missing or structurally obsolete</artifact>
     <artifact>.gitignore updates + link sweep</artifact>
     <artifact>Hand-off: tree summary, open questions; next use release-guide.xml for releases</artifact>
   </output>

@@ -8,7 +8,7 @@ Adds SkyrimNet (LLM) support to SexLab Framework.
 - **Authors:** [actions](docs/authors/actions.md) · [prompts](docs/authors/prompts.md) · [animations](docs/authors/animations.md)
 - **Developers:** [papyrus](docs/developers/papyrus.md) · [webui](docs/developers/webui.md)
 - **Agents:** [AGENTS.md](AGENTS.md) · [llms.txt](llms.txt) · [release-guide.xml](release-guide.xml) · [documentation-guide.xml](documentation-guide.xml) (portable template for other repos)
-- **Changelog:** [CHANGELOG.md](CHANGELOG.md) · [CHANGELOG-user.md](CHANGELOG-user.md)
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md) · [CHANGELOG-player.md](CHANGELOG-player.md) · [CHANGELOG-developer.md](CHANGELOG-developer.md)
 
 ## Quick start
 

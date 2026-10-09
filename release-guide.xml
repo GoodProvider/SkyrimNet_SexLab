@@ -18,7 +18,8 @@
 
     Equal deliverables when the delta touches them:
     - CHANGELOG.md — authoritative technical changelog since base_tag
-    - CHANGELOG-user.md — plain-language public summary
+    - CHANGELOG-developer.md — plain-language public summary
+    - CHANGELOG-player.md — player-facing bullets from CHANGELOG.md, each 100 characters or fewer; ships with the release
     - README.md — short front door (links only; no long feature dump)
     - docs/** — audience docs must match shipped behavior
     - update SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/manifest's version to next_version
@@ -35,7 +36,7 @@
 
   <scope>
     <in_scope>
-      <item>CHANGELOG.md / CHANGELOG-user.md</item>
+      <item>CHANGELOG.md / CHANGELOG-developer.md / CHANGELOG-player.md</item>
       <item>README.md (keep short; deep content lives under docs/)</item>
       <item>docs/players/*, docs/authors/*, docs/developers/*, docs/reference/*, docs/examples/*</item>
       <item>llms.txt when doc map or denylist changes</item>
@@ -54,7 +55,8 @@
     <file role="end-user front door">README.md</file>
     <file role="agent router">llms.txt</file>
     <file role="changelog authoritative">CHANGELOG.md</file>
-    <file role="changelog player summary">CHANGELOG-user.md</file>
+    <file role="changelog developer summary">CHANGELOG-developer.md</file>
+    <file role="changelog player">CHANGELOG-player.md</file>
     <file role="players">docs/players/overview.md</file>
     <file role="players">docs/players/hotkeys.md</file>
     <file role="players">docs/players/requirements.md</file>
@@ -76,7 +78,7 @@
   <freshness_matrix note="Update only the rows the delta touches; always keep contracts single-sourced.">
     <row when="action YAML or scene JSON">
       docs/authors/actions.md; docs/reference/scene-settings.md;
-      CHANGELOG.md; CHANGELOG-user.md if player-visible;
+      CHANGELOG.md; CHANGELOG-developer.md; CHANGELOG-player.md if player-visible;
       README.md index only if a new top-level feature category appears;
       docs/examples/ stub only if no short in-tree file exists
     </row>
@@ -138,9 +140,13 @@
       - Group by theme only when the group has content (Actions / scenes, Orgasm / narration, …)
       - Prefer concrete identifiers (YAML names, setting_name, StorageUtil keys, prompt files)
     </step>
-    <step id="4" name="user_summary">
-      CHANGELOG-user.md: first line = GitHub releases URL for next_version; 5–12 plain English
+    <step id="4" name="developer_summary">
+      CHANGELOG-developer.md: first line = GitHub releases URL for next_version; 5–12 plain English
       bullets; no claims missing from CHANGELOG.md.
+    </step>
+    <step id="4b" name="player_changelog">
+      CHANGELOG-player.md (ships with the release): only player-facing bullets from CHANGELOG.md;
+      each bullet 100 characters or fewer; no claims missing from CHANGELOG.md.
     </step>
     <step id="5" name="align_docs">
       Apply freshness_matrix. Prefer pointers over duplication. Keep README short.
@@ -182,7 +188,7 @@
   </quality_bar>
 
   <output>
-    <artifact>Updated CHANGELOG.md and CHANGELOG-user.md for next_version</artifact>
+    <artifact>Updated CHANGELOG.md, CHANGELOG-developer.md and CHANGELOG-player.md for next_version</artifact>
     <artifact>Updated docs/** and short README.md as required by freshness_matrix</artifact>
     <artifact>Updated release-checkpoint.xml</artifact>
     <artifact>Short hand-off: version consistency + suggested ship steps</artifact>
