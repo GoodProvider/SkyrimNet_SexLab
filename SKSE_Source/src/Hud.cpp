@@ -667,6 +667,7 @@ namespace Hud
 
     void Reset()
     {
+        ReleaseControl();
         std::lock_guard lock(g_lock);
         g_focus = 0;
         g_sceneActors.clear();
@@ -676,7 +677,6 @@ namespace Hud
         g_speedLastPress = 0.0;
         g_aidEnabled = false;
         g_aidCheckedAt = -1.0;
-        g_anchor = 0;
     }
 
     RE::Actor* ActingActor()
@@ -826,8 +826,14 @@ namespace Hud
             }
             j["aid"] = { { "show", miniGame }, { "enabled", miniGame && g_aidEnabled } };
         }
-        // Take-control cell: "auto" while the player drives (own scene, or an NPC), "control" in auto play.
-        j["takeControl"] = controlling || !OrgasmEngine::IsAutoPlay();
+        // Take-control cell: auto = hand to AI (own scene, manual); control = take back (auto play); release = let go of NPC.
+        if (controlling) {
+            j["takeControlLabel"] = "release";
+        } else if (OrgasmEngine::IsAutoPlay()) {
+            j["takeControlLabel"] = "control";
+        } else {
+            j["takeControlLabel"] = "auto";
+        }
         j["acting"] = controlling ? NameOf(acting) : "";
         j["paused"] = OrgasmEngine::IsScenePaused(acting);
         // SexLab's free camera on: Num 3 reads "lock" (a press returns to the normal camera).

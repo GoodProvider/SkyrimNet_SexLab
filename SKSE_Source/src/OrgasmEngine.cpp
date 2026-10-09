@@ -361,6 +361,14 @@ namespace OrgasmEngine
             return actor && actor == RE::PlayerCharacter::GetSingleton();
         }
 
+        bool IsPlayerFormId(RE::FormID id)
+        {
+            if (id == 0x14)
+                return true;
+            const auto* player = RE::PlayerCharacter::GetSingleton();
+            return player && player->GetFormID() == id;
+        }
+
         bool IsFemale(RE::Actor* actor)
         {
             const auto* base = actor ? actor->GetActorBase() : nullptr;
@@ -412,7 +420,7 @@ namespace OrgasmEngine
         // player only in auto play.
         bool AiDriven(const ActorState& st)
         {
-            return IsPlayer(ActorFor(st.id)) ? st.autoPlay : !st.playerDriven;
+            return IsPlayerFormId(st.id) ? st.autoPlay : !st.playerDriven;
         }
 
         // Caller holds g_lock. Mini-game scene the engine plays alone: every non-DOM actor is AiDriven (no
@@ -2362,7 +2370,7 @@ namespace OrgasmEngine
         for (const auto id : newcomers) {
             if (auto at = g_actors.find(id); at != g_actors.end()) {
                 // Sticky auto play: on before the default, so the player gets the role default, not Passive.
-                if (g_autoPlaySticky && IsPlayer(ActorFor(id))) {
+                if (g_autoPlaySticky && IsPlayerFormId(id)) {
                     at->second.autoPlay = true;
                     webui_log::info("OrgasmEngine: auto play on (scene {}, sticky)", sid);
                 }

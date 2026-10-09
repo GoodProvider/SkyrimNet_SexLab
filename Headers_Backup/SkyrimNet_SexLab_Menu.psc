@@ -9,7 +9,7 @@ Function OpenSkyrimNetDashboard() Native
 Function Setup() Native
 Bool Function Setup_CheckLinks() Native
 Function ProcessHotkey(int key_code) Native
-Function Hud_OnKey(String control, Actor focus = None) Native
+Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None) Native
 Function Open_WebUI_Target(Actor target) Native
 Function WebUI_OnControlActorFocus(Actor target) Native
 Function WebUI_ConfigureFocusScene() Native

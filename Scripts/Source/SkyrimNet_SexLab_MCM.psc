@@ -338,6 +338,20 @@ String[] Function EnjoymentModeOptions()
     return options
 EndFunction
 
+Function ApplyEnjoymentMode(int index)
+    if index < 0 || index > 1
+        return
+    endif
+    String mode = EnjoymentModeOptions()[index]
+    bool ok = SkyrimNetApi.PatchConfig(PLUGIN_CONFIG, "{ \"sexlab\": { \"enjoyment\": { \"mode\": \"" + mode + "\" } } }")
+    Trace("EnjoymentMode", "mode:" + mode + " patched:" + ok)
+    ApplyPluginConfig()
+    SetMenuOptionValueST(EnjoymentModeLabel())
+    if index == 1 && minigame_actions_unregistered
+        ShowMessage("Mini-game LLM actions come back after a save and reload.", false)
+    endif
+EndFunction
+
 State EnjoymentMode
     Event OnMenuOpenST()
         SetMenuDialogOptions(EnjoymentModeOptions())
@@ -349,20 +363,10 @@ State EnjoymentMode
         SetMenuDialogDefaultIndex(0)
     EndEvent
     Event OnMenuAcceptST(int index)
-        if index < 0 || index > 1
-            return
-        endif
-        String mode = EnjoymentModeOptions()[index]
-        bool ok = SkyrimNetApi.PatchConfig(PLUGIN_CONFIG, "{ \"sexlab\": { \"enjoyment\": { \"mode\": \"" + mode + "\" } } }")
-        Trace("EnjoymentMode", "mode:" + mode + " patched:" + ok)
-        ApplyPluginConfig()
-        SetMenuOptionValueST(EnjoymentModeLabel())
-        if index == 1 && minigame_actions_unregistered
-            ShowMessage("Mini-game LLM actions come back after a save and reload.", false)
-        endif
+        ApplyEnjoymentMode(index)
     EndEvent
     Event OnDefaultST()
-        OnMenuAcceptST(0)
+        ApplyEnjoymentMode(0)
     EndEvent
     Event OnHighlightST()
         SetInfoText(             "Always Orgasm Together: SexLab skill, Lewd/Pure, victim/aggressor and relationship shape how fast enjoyment rises; everyone reaches 100 at the end and orgasms together."+newline           + "Multi-Orgasm Mini-game: the bonus is constant; several orgasms or none. NPCs pick strategies (LLM). Also in the SkyrimNet_SexLab settings.")

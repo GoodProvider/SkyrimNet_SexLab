@@ -48,4 +48,8 @@ namespace NarrationTiming
 
     /// A response by one of `speakers` that started after `mark` has finished (its SpeechComplete).
     bool DoneSince(std::uint64_t mark, std::span<const RE::FormID> speakers);
+
+    /// The latest response that started after `mark` among `speakers` has finished (avoids releasing on an
+    /// earlier partner line while the orgasm narration is still queued).
+    bool DoneSinceMostRecentStarted(std::uint64_t mark, std::span<const RE::FormID> speakers);
 }

@@ -11,6 +11,40 @@ namespace ActorLocker
     {
         std::mutex g_mutex;
         std::unordered_set<RE::FormID> g_locked;
+
+        // SkyrimNet action YAML and TargetMenu still gate on this StorageUtil key.
+        constexpr const char* kStorageLockKey = "skyrimnet_sexlab_scene_actor_lock";
+
+        void MirrorStorageUtilLock(RE::TESForm* form, bool locked)
+        {
+            if (!form)
+                return;
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm)
+                return;
+            RE::BSFixedString key(kStorageLockKey);
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
+            if (locked) {
+                auto* args =
+                    RE::MakeFunctionArguments(static_cast<RE::TESForm*>(form), std::move(key), static_cast<std::int32_t>(1));
+                vm->DispatchStaticCall(
+                    RE::BSFixedString("StorageUtil"), RE::BSFixedString("SetIntValue"), args, cb);
+            } else {
+                auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(form), std::move(key));
+                vm->DispatchStaticCall(
+                    RE::BSFixedString("StorageUtil"), RE::BSFixedString("UnsetIntValue"), args, cb);
+            }
+        }
+
+        void MirrorStorageUtilUnlock(RE::Actor* actor)
+        {
+            MirrorStorageUtilLock(actor, false);
+        }
+
+        void MirrorStorageUtilLock(RE::Actor* actor)
+        {
+            MirrorStorageUtilLock(static_cast<RE::TESForm*>(actor), true);
+        }
     }
 
     RE::TESFaction* SexLabAnimatingFaction()
@@ -48,8 +82,10 @@ namespace ActorLocker
             return false;
         std::lock_guard lock(g_mutex);
         const bool inserted = g_locked.insert(actor->GetFormID()).second;
-        if (inserted)
+        if (inserted) {
+            MirrorStorageUtilLock(actor);
             webui_log::info("ActorLocker: locked {:08X}", actor->GetFormID());
+        }
         return inserted;
     }
 
@@ -58,8 +94,10 @@ namespace ActorLocker
         if (!actor)
             return;
         std::lock_guard lock(g_mutex);
-        if (g_locked.erase(actor->GetFormID()))
+        if (g_locked.erase(actor->GetFormID())) {
+            MirrorStorageUtilUnlock(actor);
             webui_log::info("ActorLocker: unlocked {:08X}", actor->GetFormID());
+        }
     }
 
     bool IsLocked(RE::Actor* actor)
@@ -73,6 +111,10 @@ namespace ActorLocker
     void Clear()
     {
         std::lock_guard lock(g_mutex);
+        for (const auto id : g_locked) {
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(id))
+                MirrorStorageUtilUnlock(actor);
+        }
         g_locked.clear();
     }
 
@@ -91,6 +133,10 @@ namespace ActorLocker
     void Load(SKSE::SerializationInterface* intfc, std::uint32_t version, std::uint32_t)
     {
         std::lock_guard lock(g_mutex);
+        for (const auto id : g_locked) {
+            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(id))
+                MirrorStorageUtilUnlock(actor);
+        }
         g_locked.clear();
         if (version != kRecordVersion)
             return;
@@ -101,8 +147,11 @@ namespace ActorLocker
             RE::FormID oldId = 0, newId = 0;
             if (!intfc->ReadRecordData(oldId))
                 return;
-            if (intfc->ResolveFormID(oldId, newId))
+            if (intfc->ResolveFormID(oldId, newId)) {
                 g_locked.insert(newId);
+                if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(newId))
+                    MirrorStorageUtilLock(actor);
+            }
         }
         webui_log::info("ActorLocker: loaded {} lock(s)", g_locked.size());
     }

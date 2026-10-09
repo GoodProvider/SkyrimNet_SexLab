@@ -73,7 +73,7 @@ Passive only fits someone reluctant, exhausted or uninterested; a willing partic
 
 {% if ask_speak %}
 [ question speak noul ]
-Does {{ focus_name }} want to say something right now, in reply to `last_line`?
+Does {{ focus_name }} want to say something right now{% if trigger == "dialogue" and last_line_text != "" %}, in reply to `last_line`{% else %} in this moment{% endif %}?
 Yes when {{ focus_name }} was addressed, has a strong reaction, or would naturally answer. No when {{ focus_name }} just spoke, has nothing to add, or would stay silent (a gagged, overwhelmed or sullen character).
 [ end question ]
 {% endif %}

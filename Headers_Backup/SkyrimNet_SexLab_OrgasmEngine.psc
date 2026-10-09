@@ -23,6 +23,10 @@ Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 Function SetScenePaused(int sid, bool paused) global native
 Function GateNarrationSent(int sid, int mark) global native
 Function SetEndingTarget(int sid, Actor lead, int target) global native
+bool Function IsGateScene(int sid) global native
+int Function NarrationMark() global native
+bool Function ResponseStartedSince(int sid, int mark) global native
+bool Function ResponseDoneSince(int sid, int mark) global native
 float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native
 Function SetOrgasmExpected(Actor akActor, bool expected) global native

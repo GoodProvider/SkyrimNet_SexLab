@@ -126,13 +126,13 @@ Function WaitForStageChange(Actor target)
     if s != "advancing" && s != "refresh"
         return
     endif
-    int tries = 30
+    int tries = 15
     while tries > 0 && (s == "advancing" || s == "refresh")
-        Utility.Wait(0.1)
+        Utility.Wait(0.2)
         s = model.GetState()
         tries -= 1
     endwhile
-    Trace("WaitForStageChange", target.GetDisplayName()+" sid:"+sl.sid+" state:"+s+" waited:"+((30 - tries) * 0.1)+"s")
+    Trace("WaitForStageChange", target.GetDisplayName()+" sid:"+sl.sid+" state:"+s+" waited:"+((15 - tries) * 0.2)+"s")
 EndFunction
 
 ; Scene HUD keys (C++ Hud): SexLab thread operations on the HUD's scene. calm / arouse / focus /

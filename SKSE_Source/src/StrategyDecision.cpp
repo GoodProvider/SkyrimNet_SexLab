@@ -422,21 +422,22 @@ namespace StrategyDecision
         }
 
         // Game thread. Presses the chosen HUD key as the player; Aid / Force use the dialog answers.
-        void PressChosenKey(RE::Actor* player, const TurnInput& t, const nlohmann::json& answers)
+        // Returns the key pressed, or "" when none / skipped.
+        std::string PressChosenKey(RE::Actor* player, const TurnInput& t, const nlohmann::json& answers)
         {
             const auto [key, conf] = Choice(answers, "hotkey");
             if (key.empty() || key == "none") {
-                return;
+                return "";
             }
             const double floor = key == "end" ? kEndConfidence : OrgasmEngine::GetDecisionMinConfidence();
             if (conf >= 0.0 && conf < floor) {
                 webui_log::info("StrategyDecision: player key {} p={:.2f} under {:.2f}, not pressed", key, conf, floor);
-                return;
+                return "";
             }
             if (Seconds() - g_turn.lastHotkey < kHotkeyInterval) {
                 webui_log::info("StrategyDecision: player key {} skipped (pressed one {:.1f}s ago)", key,
                     Seconds() - g_turn.lastHotkey);
-                return;
+                return "";
             }
             const auto valid = [&](const std::string& k) {
                 for (const auto& o : t.hotkeys) {
@@ -448,7 +449,7 @@ namespace StrategyDecision
             };
             if (!valid(key)) {
                 webui_log::warn("StrategyDecision: player key '{}' not offered", key);
-                return;
+                return "";
             }
             const auto part = [&](const char* q) {
                 const std::string p = Choice(answers, q).first;
@@ -459,14 +460,13 @@ namespace StrategyDecision
                 }
                 return std::string("body");
             };
-            g_turn.lastHotkey = Seconds();
             if (const auto d = t.denyTargets.find(key); d != t.denyTargets.end()) {
                 Hud::PressKey("deny", d->second);
             } else if (key == "aid") {
                 const auto a = t.aid.find(Choice(answers, "aid_option").first);
                 if (a == t.aid.end()) {
                     webui_log::warn("StrategyDecision: player aid without a valid aid_option");
-                    return;
+                    return "";
                 }
                 RE::Actor* target = RE::TESForm::LookupByID<RE::Actor>(a->second.target);
                 const std::string line = Aid::Apply(player, target, a->second.form, part("aid_part"));
@@ -477,7 +477,7 @@ namespace StrategyDecision
                 const auto f = t.force.find(Choice(answers, "force_option").first);
                 if (f == t.force.end()) {
                     webui_log::warn("StrategyDecision: player force without a valid force_option");
-                    return;
+                    return "";
                 }
                 const auto m = t.methodOf.find(Choice(answers, "force_method").first);
                 const std::string method = m != t.methodOf.end() ? m->second : "slap";
@@ -489,7 +489,9 @@ namespace StrategyDecision
             } else {
                 Hud::PressKey(key);
             }
+            g_turn.lastHotkey = Seconds();
             webui_log::info("StrategyDecision: player pressed {} p={:.2f}", key, conf);
+            return key;
         }
 
         // Game thread. The player's turn arrived (or failed): strategy, then key, then the line.
@@ -501,7 +503,8 @@ namespace StrategyDecision
             const bool current = OrgasmEngine::IsAutoPlay() && OrgasmEngine::SceneIdOf(player, sid) &&
                                  sid == t->strategy.sid;
             if (!success) {
-                NoteFailure(player->GetFormID(), json);
+                if (player)
+                    NoteFailure(player->GetFormID(), json);
             } else if (!current) {
                 webui_log::info("StrategyDecision: player turn dropped (auto play off or scene changed)");
             } else {
@@ -515,8 +518,8 @@ namespace StrategyDecision
                     const char* outcome = ApplyStrategyAnswer(player->GetFormID(), t->strategy, key, conf);
                     webui_log::info("StrategyDecision: player strategy {} p={:.2f} ({})", key, conf, outcome);
                 }
-                PressChosenKey(player, *t, answers);
-                if (t->askSpeak) {
+                const std::string hotkey = PressChosenKey(player, *t, answers);
+                if (t->askSpeak && hotkey != "end") {
                     double yes = 0.0;
                     if (const auto it = answers.find("speak"); it != answers.end() && it->is_object()) {
                         yes = it->value("noul", 0.0);

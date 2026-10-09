@@ -275,4 +275,30 @@ namespace NarrationTiming
         }
         return false;
     }
+
+    bool DoneSinceMostRecentStarted(std::uint64_t mark, std::span<const RE::FormID> speakers)
+    {
+        std::lock_guard lock(g_lock);
+        std::uint64_t bestStart = 0;
+        RE::FormID bestId = 0;
+        for (const auto id : speakers) {
+            const auto it = g_speakers.find(id);
+            if (it == g_speakers.end())
+                continue;
+            const std::uint64_t start = it->second.lastStart;
+            if (start > mark && start >= bestStart) {
+                bestStart = start;
+                bestId = id;
+            }
+        }
+        if (bestStart == 0 || bestId == 0)
+            return false;
+        const auto it = g_speakers.find(bestId);
+        if (it == g_speakers.end())
+            return false;
+        const Speaker& sp = it->second;
+        if (sp.openStart != 0)
+            return false;
+        return sp.lastDone >= bestStart && sp.lastDone > mark;
+    }
 }

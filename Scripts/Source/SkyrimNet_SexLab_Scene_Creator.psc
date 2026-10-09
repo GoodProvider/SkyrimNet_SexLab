@@ -1270,6 +1270,12 @@ bool Function LockActorLock(Actor akActor)
         UnlockActorLock(akActor)
         return false 
     endif
+
+    if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
+        Trace("LockActorLock", GetDisplayName(akActor)+" OStim animation")
+        UnlockActorLock(akActor)
+        return false 
+    endif
     Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
     DbgReturn("LockActorLock", "True")
     return true 

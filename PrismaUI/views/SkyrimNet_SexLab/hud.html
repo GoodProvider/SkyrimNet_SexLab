@@ -238,7 +238,7 @@
             ['', 'prev', 'deny', 'allow', 'aid'],
             ['calm', 'broken', 'pause', 'play', 'end'],
             ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM],
-            SPEED_NAMES.concat([NO_STEP, 'auto', 'control']),
+            SPEED_NAMES.concat([NO_STEP, 'auto', 'control', 'release']),
         ];
 
         // Label text; a trailing camera emoji is drawn smaller.
@@ -327,14 +327,14 @@
             const fa = actors[state.focus];
             const slower = state.slower || '', faster = state.faster || '';
             let c = '';
-            // Top row: take control. "auto" while the player drives (own scene, or an NPC): a press hands it to
-            // the AI; "control" in auto play: a press takes it back.
+            // Top row: take control. auto = hand to AI; control = take back from auto play; release = stop driving an NPC.
             if (state.acting && !cOff) {
                 c += '<span class="acting">as ' + esc(state.acting) + '</span>';
             } else {
                 for (let i = 0; i < 4; i++) c += ctl(keys, '', '', i, { off: true });
             }
-            c += ctl(keys, 'take_control', state.takeControl === false ? 'control' : 'auto', 4, { off: cOff });
+            const tcLabel = state.takeControlLabel || 'auto';
+            c += ctl(keys, 'take_control', tcLabel, 4, { off: cOff });
             c += ctl(keys, 'pos_up', 'PosUp', 0, { off: cOff });
             c += ctl(keys, 'skyrimnet', '', 1, { dim: true, off: cOff });
             c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 2, { blocked: blocked.calm, off: mgcOff });

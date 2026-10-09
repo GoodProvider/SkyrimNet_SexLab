@@ -1918,8 +1918,13 @@ Function Ending_Reset()
     ending_hold_stage = 0
     ending_hold_anim = None
     ending_watching = false
+    ending_watch_deadline = 0.0
+    ending_watch_released = 0.0
+    ending_watch_stage = 0
     ending_watch_anim = None
     stage_fold_pending = false
+    stage_starting = false
+    orgasm_dn_at = 0.0
 EndFunction
 
 float Function Ending_HoldMax()

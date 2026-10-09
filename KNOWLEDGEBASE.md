@@ -893,7 +893,7 @@ The **Speaker is always the subject** of LLM-facing sentences. `speaker_position
 
 ## Actor lock key (2026-07-23)
 
-Creator locks with `skyrimnet_sexlab_scene_actor_lock`. Action YAML eligibility and `Main.storage_actor_lock_key` must use the same string (not `skyrimnet_sexlab_actor_lock`).
+Creator locks live in C++ `ActorLocker` (co-save `ALCK`); `TryLock` / `Unlock` mirror StorageUtil `skyrimnet_sexlab_scene_actor_lock` for SkyrimNet action YAML and TargetMenu eligibility (not `skyrimnet_sexlab_actor_lock`).
 
 ## Punish-rape setting_name must match scene file (2026-07-22)
 
@@ -1213,7 +1213,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Papyrus dispatch arity:** C++ always passes all three `Hud_OnKey(control, focus, anchor)` arguments (`None` actors when unused) rather than relying on Papyrus default parameters through `DispatchMethodCall`.
 - **No TransformNarration in SkyrimNet:** the player's auto-play line uses `SkyrimNetApi.TransformDialogue("<player> replies")`. Its docs say empty text fails, so don't send `" "`. `TriggerPlayerDialogue()` is the alternative if this reads badly.
 - **Decision keys must be safe ids:** spell names have spaces, so Force methods go out as `spell_<n>` and map back to the name. Aid / Force / deny options are `aid_<n>`, `force_<n>`, `deny_p<slot>`.
-- **Not saved:** both flags live in `ActorState` and are not in the co-save. A load or a new scene starts manual. `Hud::Reset` clears the anchor.
+- **Sticky auto play:** `g_autoPlaySticky` (co-save v8) re-enables the player's `autoPlay` in later scenes until Num * turns it off. Per-scene `autoPlay` / `playerDriven` are not saved; `playerDriven` ends with the scene. `Hud::Reset` clears the anchor.
 - Untested in game: the whole feature, `GetKeyNameTextA` giving "Num *" for DX 0x37, whether conditional `[ question ]` blocks (`{% if %}`) render in the decision template, and how often Jev answers `speak` yes or presses a key.
 
 ## Scene Creator listed actors already in a scene (2026-10-08)

@@ -113,7 +113,7 @@ namespace PapyrusBindings_OrgasmEngine
         }
         bool ResponseDoneSince(RE::StaticFunctionTag*, std::int32_t sid, std::int32_t mark)
         {
-            return mark >= 0 && NarrationTiming::DoneSince(static_cast<std::uint64_t>(mark),
+            return mark >= 0 && NarrationTiming::DoneSinceMostRecentStarted(static_cast<std::uint64_t>(mark),
                                     OrgasmEngine::SceneActors(sid));
         }
         float FinalStageRemaining(RE::StaticFunctionTag*, std::int32_t sid)
