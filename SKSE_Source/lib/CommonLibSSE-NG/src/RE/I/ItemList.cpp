@@ -1,0 +1,44 @@
+#include "RE/I/ItemList.h"
+
+#include "RE/P/PlayerCharacter.h"
+
+namespace RE
+{
+	ItemList::Item* ItemList::GetSelectedItem()
+	{
+		if (unk50) {
+			return nullptr;
+		}
+
+		GFxValue selectedIndex;
+		auto     success = root.GetMember("selectedIndex", &selectedIndex);
+		if (!success || !selectedIndex.IsNumber()) {
+			return nullptr;
+		}
+
+		auto idx = static_cast<std::int32_t>(selectedIndex.GetNumber());
+		if (idx < 0 || static_cast<std::size_t>(idx) >= items.size()) {
+			return nullptr;
+		}
+
+		return items[idx];
+	}
+
+	void ItemList::Update()
+	{
+		auto player = RE::PlayerCharacter::GetSingleton();
+		Update(player);
+	}
+
+	void ItemList::Update(TESObjectREFR* a_owner)
+	{
+		Update_Impl(a_owner);
+	}
+
+	void ItemList::Update_Impl(TESObjectREFR* a_owner)
+	{
+		using func_t = decltype(&ItemList::Update_Impl);
+		static REL::Relocation<func_t> func{ RELOCATION_ID(50099, 51031) };
+		return func(this, a_owner);
+	}
+}

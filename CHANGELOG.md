@@ -2,6 +2,9 @@
 
 ## [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2) — since [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1)
 
+### CommonLibSSE license
+- `SKSE_Source/lib/CommonLibSSE-NG` is now a vendored MIT copy of `MinLL/CommonLibVR` v4.39.5 (was the GPL-3.0 alandtse submodule v11.0.0). No plugin code changes.
+
 ### Derived `sexual` tag
 - **`sex_tags.json`** (new, `SKSE/Plugins/SkyrimNet_SexLab/`): AnimDB adds the `sexual` tag to every animation that has any of the listed tags (`LoadSexTagsFile` / `ApplySexualTagLocked`, loaded in `LoadSynonyms`; applied before the unchanged-row check during sync).
 - `nonsexual*` scene settings: `tags_suppress` now uses `sexual` instead of the long list of sex tags. `NONSEXUAL_SUPPRESS_FALLBACK` is `sexual`.

@@ -1,0 +1,16 @@
+# dot folders
+.idea/
+.vs*/
+.xmake/
+
+# folders
+/build*
+/out*
+/vs*
+
+# files
+*.cmake
+*.zip
+CMakeUserPresets.json
+CMakeFiles
+CMakeCache.txt

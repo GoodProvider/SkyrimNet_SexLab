@@ -37,6 +37,7 @@ set(CommonLibPath "lib/CommonLibSSE-NG")
 set(CommonLibName "CommonLibSSE")
 
 set(BUILD_TESTS       OFF CACHE BOOL "" FORCE)
+set(SKSE_SUPPORT_XBYAK OFF CACHE BOOL "" FORCE)
 
 # Force static linking for all vcpkg dependencies
 set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")

@@ -1141,7 +1141,18 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Cause:** `Orgasm_ApplyGroup` yields in its `ForceOrgasm` loop and arms the window only after the loop. A slow `StageStart` saw `orgasm_messages_set` with the window closed, and took Bob's slot before Nina's was stashed. The window then flushed Nina alone.
 - **Fix:** `orgasm_group_pending` is set over the stash loop until the window is armed or the DN is sent. `StageStart` holds the stash (`hold_stash`, read once) while it, `orgasm_window_open` or `orgasm_narrating` is set, and marks `orgasm_narrating` while it builds. See [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md).
 
-## CommonLibSSE-NG pin and Skyrim 1.7.x (2026-10-04)
+## CommonLibSSE moved to MIT MinLL/CommonLibVR (2026-10-08)
+
+- `SKSE_Source/lib/CommonLibSSE-NG` is now a **vendored copy** (no submodule, no `.gitmodules`) of `MinLL/CommonLibVR` v4.39.5 (`550cc4f`, MIT) plus OpenVR in `extern/openvr`; see `VENDORED.md` there. Same pin as `extern/vcpkg-ports/commonlibsse-ng-fork`. It replaces alandtse v11.0.0 (GPL-3.0, not compatible with the Skyrim EULA). SE/AE 1.7.99/1.7.104 supported. `SKSE_SUPPORT_XBYAK` is forced OFF in `SKSE_Source/CMakeLists.txt`. Plugin source needed no changes; Debug and Release build clean.
+- The "submodule" bump notes below are historical. To bump, re-extract the new MinLL archive over the folder and update `VENDORED.md` and the port's `portfile.cmake` together.
+
+## `{{sl.actors.N}}` reached SkyrimNet raw: non-pyro compiler kept `\"` literally (2026-10-08)
+
+- **Symptom:** narration read `Bob initiates: {{sl.actors.0}} ...`; SkyrimNet.log warned `variable 'sl.actors.0' not found` (Inja only reports it; substitution is ours). `AnimDb_SubstituteActors` logged `actors_json parse failed ... json='[\"Nina\",\"Bob\"]'`, names=0.
+- **Cause:** the 19:07 `Scripts/*.pex` (committed in 82bac2c) came from a different compiler (string table carries docstrings / `conditional` / `hidden`) that stores `"\""` as backslash+quote. Every Papyrus-built JSON (31 `\"` sites) broke. Not the CommonLib swap.
+- **Fix:** rebuild with `compile: pyro` (`--no-incremental-build` when pex is newer than source). Check: `grep -ac '\\"' Scripts/*.pex` must be 0. `AnimDb_SubstituteActors` now warns on parse failure and on tokens left after substitution.
+
+## CommonLibSSE-NG pin and Skyrim 1.7.x (2026-10-04, superseded)
 
 - `SKSE_Source/lib/CommonLibSSE-NG` is a submodule of `https://github.com/alandtse/CommonLibSSE-NG.git` (branch `ng`; the old `alandtse/CommonLibVR` URL redirects there). It's pinned to tag **v11.0.0** (`94faaed`), which supports 1.7.99 / Address Library format 5. It was on v4.10.0+1 (`293e038`) before.
 - **The plugin needs no runtime list.** `add_commonlibsse_plugin` emits `VersionIndependence::AddressLibrary` + `StructCompatibility::Independent`, so a CommonLib bump is all it takes to support a new runtime. Players still need the Address Library build for their runtime.
