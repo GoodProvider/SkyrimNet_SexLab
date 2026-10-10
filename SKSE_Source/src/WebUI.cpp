@@ -828,16 +828,19 @@ void InitWebUI()
                         return;
                     const auto target = j.value("target", static_cast<RE::FormID>(0));
                     const auto option = j.value("option", static_cast<RE::FormID>(0));
+                    const auto subject = j.value("subject", static_cast<RE::FormID>(0));
                     const std::string location = j.value("location", std::string{});
-                    webui_log::info("onAidResult target={:#x} option={:#x} location='{}'", target, option, location);
+                    webui_log::info("onAidResult subject={:#x} target={:#x} option={:#x} location='{}'", subject, target,
+                        option, location);
                     // Inventory and spell lists are read on the game thread.
-                    SKSE::GetTaskInterface()->AddTask([target, option, location]() {
-                        auto* player = RE::PlayerCharacter::GetSingleton();
+                    SKSE::GetTaskInterface()->AddTask([subject, target, option, location]() {
+                        auto* caster = subject ? RE::TESForm::LookupByID<RE::Actor>(subject)
+                                               : static_cast<RE::Actor*>(RE::PlayerCharacter::GetSingleton());
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
                         bool whipped = false;
-                        const std::string line = Aid::Apply(player, actor, option, location, &whipped);
+                        const std::string line = Aid::Apply(caster, actor, option, location, &whipped);
                         if (!line.empty() && !whipped)
-                            OrgasmEngine::NarrateDirect(line, player, actor);
+                            OrgasmEngine::NarrateDirect(line, caster, actor);
                     });
                 } catch (...) {
                     webui_log::warn("onAidResult: bad JSON");

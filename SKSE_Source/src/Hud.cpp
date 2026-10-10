@@ -319,8 +319,9 @@ namespace Hud
             OpenPanel("openPunishPanel", std::move(cfg));
         }
 
-        // Aid key (mini-game): the Aid panel, solo in the WebUI. Options are the player's healing / stamina spells
-        // and potions, targets the scene's actors (player first); the panel replies through WebUI onAidResult.
+        // Aid key (mini-game): the Aid panel, solo in the WebUI. Every scene actor (player first) can be the subject
+        // (default: the player) or the object; each brings its own healing / stamina spells and potions. The panel
+        // replies through WebUI onAidResult.
         // The player's own scene only (not while controlling an NPC).
         void OnAid()
         {
@@ -340,24 +341,28 @@ namespace Hud
                 webui_log::info("Hud: aid ignored (no healing / stamina spell or potion)");
                 return;
             }
+            const auto optionsJson = [](const std::vector<Aid::Option>& list) {
+                nlohmann::json opts = nlohmann::json::array();
+                for (const auto& o : list) {
+                    opts.push_back({ { "id", o.form }, { "name", o.name }, { "potion", o.potion }, { "count", o.count },
+                        { "cost", static_cast<int>(o.cost + 0.5f) }, { "affordable", o.affordable },
+                        { "health", o.health > 0.0f }, { "stamina", o.stamina > 0.0f } });
+                }
+                return opts;
+            };
             nlohmann::json cfg;
-            cfg["caster"] = { { "id", player->GetFormID() }, { "name", NameOf(player) } };
             nlohmann::json list = nlohmann::json::array();
             list.push_back({ { "id", player->GetFormID() }, { "name", NameOf(player) },
-                { "female", IsFemaleId(player->GetFormID()) } });
+                { "female", IsFemaleId(player->GetFormID()) }, { "isPlayer", true },
+                { "options", optionsJson(options) } });
             for (const auto& a : actors) {
                 if (a.id != player->GetFormID()) {
-                    list.push_back({ { "id", a.id }, { "name", a.name }, { "female", IsFemaleId(a.id) } });
+                    list.push_back({ { "id", a.id }, { "name", a.name }, { "female", IsFemaleId(a.id) },
+                        { "isPlayer", false }, { "options", optionsJson(Aid::ListOptions(ActorFor(a.id))) } });
                 }
             }
             cfg["actors"] = std::move(list);
-            nlohmann::json opts = nlohmann::json::array();
-            for (const auto& o : options) {
-                opts.push_back({ { "id", o.form }, { "name", o.name }, { "potion", o.potion }, { "count", o.count },
-                    { "cost", static_cast<int>(o.cost + 0.5f) }, { "affordable", o.affordable },
-                    { "health", o.health > 0.0f }, { "stamina", o.stamina > 0.0f } });
-            }
-            cfg["options"] = std::move(opts);
+            cfg["defaultSubject"] = player->GetFormID();
             OpenPanel("openAidPanel", std::move(cfg));
         }
 

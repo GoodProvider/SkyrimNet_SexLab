@@ -2357,7 +2357,7 @@
     <div id="aid-panel" class="panel" style="display:none">
         <div class="target-row">Aid</div>
         <div class="act-sentence">
-            <span id="aid-caster"></span> <span id="aid-option"></span>
+            <span id="aid-subject"></span> <span id="aid-option"></span>
             on <span id="aid-actor"></span>'s <span id="aid-part"></span>.
         </div>
         <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
@@ -8393,7 +8393,7 @@
         }
 
         // ── Aid panel (HUD aid key): the player's healing / stamina spells and potions on a scene actor ──
-        let AID = { actors: [], options: [], actor: 0, option: -1, part: BODY_PARTS[0] };
+        let AID = { actors: [], options: [], subject: 0, actor: 0, option: -1, part: BODY_PARTS[0] };
 
         function aidLabel(o) {
             if (o.potion) return o.count > 1 ? `${o.name} ×${o.count}` : o.name;
@@ -8407,6 +8407,31 @@
             }, AID.actors[AID.actor], current);
         }
 
+        // The subject's own spells / potions fill the option pulldown; the first affordable one is selected.
+        function aidRenderOptions() {
+            const s = AID.actors[AID.subject];
+            AID.options = (s && s.options) || [];
+            AID.option = AID.options.findIndex(o => o.affordable);
+            const labels = AID.options.map(aidLabel);
+            const disabled = AID.options.filter(o => !o.affordable).map(aidLabel);
+            const optionHost = document.getElementById('aid-option');
+            optionHost.innerHTML = '';
+            optionHost.appendChild(createPulldown(labels, labels[AID.option] || '', (_, i) => {
+                AID.option = i;
+                aidUpdate();
+            }, disabled));
+        }
+
+        function aidRenderActor() {
+            const actorHost = document.getElementById('aid-actor');
+            actorHost.innerHTML = '';
+            actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[AID.actor] || {}).name || '', (_, i) => {
+                AID.actor = i;
+                aidRenderPart(AID.part);
+                aidUpdate();
+            }));
+        }
+
         function aidUpdate() {
             const o = AID.options[AID.option];
             const ok = !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
@@ -8418,30 +8443,27 @@
         }
 
         function openAidPanel(cfg) {
-            AID = { actors: (cfg && cfg.actors) || [], options: (cfg && cfg.options) || [], actor: 0, option: -1,
+            AID = { actors: (cfg && cfg.actors) || [], options: [], subject: 0, actor: 0, option: -1,
                 part: BODY_PARTS[0] };
             WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
             document.getElementById('aid-part-confirm').style.display = 'none';
-            AID.option = AID.options.findIndex(o => o.affordable);
+            // Subject defaults to the player; the object to the first actor that is not the player (else the subject).
+            const defSubject = AID.actors.findIndex(a => a.id === (cfg && cfg.defaultSubject));
+            AID.subject = Math.max(0, defSubject);
+            const defObject = AID.actors.findIndex(a => !a.isPlayer);
+            AID.actor = defObject >= 0 ? defObject : AID.subject;
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
-            document.getElementById('aid-caster').textContent = (cfg && cfg.caster && cfg.caster.name) || 'You';
-            const labels = AID.options.map(aidLabel);
-            const disabled = AID.options.filter(o => !o.affordable).map(aidLabel);
-            const optionHost = document.getElementById('aid-option');
-            optionHost.innerHTML = '';
-            optionHost.appendChild(createPulldown(labels, labels[AID.option] || '', (_, i) => {
-                AID.option = i;
-                aidUpdate();
-            }, disabled));
-            const actorHost = document.getElementById('aid-actor');
-            actorHost.innerHTML = '';
-            actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[0] || {}).name || '', (_, i) => {
-                AID.actor = i;
-                aidRenderPart(AID.part);
+            const subjectHost = document.getElementById('aid-subject');
+            subjectHost.innerHTML = '';
+            subjectHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[AID.subject] || {}).name || 'You', (_, i) => {
+                AID.subject = i;
+                aidRenderOptions();
                 aidUpdate();
             }));
+            aidRenderOptions();
+            aidRenderActor();
             aidRenderPart();
             document.body.classList.add('yesno-solo');
             hideControlPanel();
@@ -8473,7 +8495,8 @@
             const o = AID.options[AID.option];
             const a = AID.actors[AID.actor];
             if (!o || !a || document.getElementById('aid-accept').classList.contains('de-disabled')) return;
-            aidSend({ target: a.id, option: o.id, location: partLocation(AID.part, 'aid-part-text') });
+            const s = AID.actors[AID.subject];
+            aidSend({ subject: s ? s.id : 0, target: a.id, option: o.id, location: partLocation(AID.part, 'aid-part-text') });
         }
 
         function aidCancel() {

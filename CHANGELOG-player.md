@@ -2,6 +2,7 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
 ### 0.35.2
 
+- Aid panel (Num 0): pick who uses the spell or potion (default you) and who it is used on (default someone else in the scene)
 - Bondage panel: Start now removes or changes devices that were not in the bundled list (for example some armbinders), and tells you when a device could not be changed
 - New Ask / Order / Punish panel (Num .): ask or order someone to change how they play; they answer "agrees to" or "refuses", and a refusal is something they can be punished for
 - Strategies renamed to match strategies.json: deny self, deny all, deny, tease, focused; Together, Greedy, Forced orgasm and Accept force are gone, and so is being forced
