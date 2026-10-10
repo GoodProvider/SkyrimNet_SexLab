@@ -118,6 +118,14 @@ Function RecordCum(Actor akActor, bool on_mouth, bool on_pussy, bool on_ass) glo
         StorageUtil.SetFloatValue(akActor, "skyrimnet_sexlab_cum_ass", now)
     endif
     StorageUtil.SetFloatValue(akActor, "skyrimnet_sexlab_cum_time", now)
+    ; Player-held list of everyone with cum: the sexlab_clean_cum YAML gate.
+    StorageUtil.FormListAdd(Game.GetPlayer(), "skyrimnet_sexlab_cum_actors", akActor, false)
+EndFunction
+
+; Drop the actor's gate keys once no place has cum left.
+Function CumUnsetGate(Actor akActor) global
+    StorageUtil.UnsetFloatValue(akActor, "skyrimnet_sexlab_cum_time")
+    StorageUtil.FormListRemove(Game.GetPlayer(), "skyrimnet_sexlab_cum_actors", akActor, true)
 EndFunction
 
 ; 0 = cleared/none, 1 = warm (< 1 game hour), 2 = drying (until duration)
@@ -172,7 +180,7 @@ String Function Cum(Actor akActor) global
     int pussy = CumAge(akActor, "skyrimnet_sexlab_cum_pussy", now, duration, wash)
     int ass = CumAge(akActor, "skyrimnet_sexlab_cum_ass", now, duration, wash)
     if mouth == 0 && pussy == 0 && ass == 0
-        StorageUtil.UnsetFloatValue(akActor, "skyrimnet_sexlab_cum_time")
+        CumUnsetGate(akActor)
     endif
 
     int obj = JMap.object()
@@ -184,6 +192,72 @@ String Function Cum(Actor akActor) global
     String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(obj)
     JValue.release(obj)
     return json
+EndFunction
+
+; Places that still have cum ("pussy,mouth,ass" order, comma separated; "" when none).
+;   TargetMenu clean_cum panel reads this via papyrusQuery.
+String Function CumParts(Actor akActor) global
+    if akActor == None
+        return ""
+    endif
+    float duration = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.cum.duration_hours", 4.0)
+    bool wash = duration <= 0.0 || akActor.IsSwimming()
+    float now = Utility.GetCurrentGameTime()
+    int mouth = CumAge(akActor, "skyrimnet_sexlab_cum_mouth", now, duration, wash)
+    int pussy = CumAge(akActor, "skyrimnet_sexlab_cum_pussy", now, duration, wash)
+    int ass = CumAge(akActor, "skyrimnet_sexlab_cum_ass", now, duration, wash)
+    String parts = ""
+    if pussy > 0
+        parts = "pussy"
+    endif
+    if mouth > 0
+        if parts != ""
+            parts += ","
+        endif
+        parts += "mouth"
+    endif
+    if ass > 0
+        if parts != ""
+            parts += ","
+        endif
+        parts += "ass"
+    endif
+    if parts == ""
+        CumUnsetGate(akActor)
+    endif
+    return parts
+EndFunction
+
+; Clean one place (mouth|pussy|ass) or "all". SexLab has no per-place overlay clear,
+; so ClearCum then re-apply the places still recorded.
+Function ClearCumPart(Actor akActor, String part) global
+    if akActor == None
+        return
+    endif
+    bool all = part == "all"
+    if all || part == "mouth"
+        StorageUtil.UnsetFloatValue(akActor, "skyrimnet_sexlab_cum_mouth")
+    endif
+    if all || part == "pussy"
+        StorageUtil.UnsetFloatValue(akActor, "skyrimnet_sexlab_cum_pussy")
+    endif
+    if all || part == "ass"
+        StorageUtil.UnsetFloatValue(akActor, "skyrimnet_sexlab_cum_ass")
+    endif
+    bool mouth = StorageUtil.GetFloatValue(akActor, "skyrimnet_sexlab_cum_mouth", 0.0) > 0.0
+    bool pussy = StorageUtil.GetFloatValue(akActor, "skyrimnet_sexlab_cum_pussy", 0.0) > 0.0
+    bool ass = StorageUtil.GetFloatValue(akActor, "skyrimnet_sexlab_cum_ass", 0.0) > 0.0
+    SexLabFramework sexlab = SexLabUtil.GetAPI()
+    if sexlab != None
+        sexlab.ClearCum(akActor)
+        if mouth || pussy || ass
+            sexlab.AddCum(akActor, pussy, mouth, ass)
+        endif
+    endif
+    if !(mouth || pussy || ass)
+        CumUnsetGate(akActor)
+    endif
+    Trace("ClearCumPart", akActor.GetDisplayName()+" part:"+part+" left mouth:"+mouth+" pussy:"+pussy+" ass:"+ass)
 EndFunction
 
 String Function Player_LOS_Distance(Actor akActor) global

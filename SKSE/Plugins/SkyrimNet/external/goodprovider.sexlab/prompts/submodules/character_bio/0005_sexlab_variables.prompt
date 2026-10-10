@@ -32,6 +32,6 @@
     {# Vibration capabilities and status #}
     {% set has_vibrators = (worn_has_keyword(actorUUID, "zad_DeviousPlugVaginal") or worn_has_keyword(actorUUID, "zad_DeviousPlugAnal") or worn_has_keyword(actorUUID, "zad_DeviousPiercingsNipple") or worn_has_keyword(actorUUID, "zad_DeviousPiercingsVaginal")) %}
     {% set vibrators_active = is_in_faction(actorUUID, "zadVibratorFaction") %}
-  {% endif %} 
+  {% endif %}
 {% endif %}
  

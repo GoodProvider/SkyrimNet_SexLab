@@ -65,7 +65,6 @@ namespace PapyrusBindings_OrgasmEngine
             return OrgasmEngine::GetSecondsSinceOrgasm(a);
         }
         bool IsManaged(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::IsManaged(a); }
-        bool IsMentallyBroken(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::IsMentallyBroken(a); }
         bool IsMiniGameEnabled(RE::StaticFunctionTag*) { return OrgasmEngine::IsMiniGameEnabled(); }
         void SetRates(RE::StaticFunctionTag*, float passive, float aggressor, float victim)
         {
@@ -160,12 +159,7 @@ namespace PapyrusBindings_OrgasmEngine
         {
             return RE::BSFixedString(OrgasmEngine::GetStrategyText(a).c_str());
         }
-        RE::Actor* GetForcedBy(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::GetForcedBy(a); }
-        void SetForceMethod(RE::StaticFunctionTag*, RE::Actor* a, RE::BSFixedString method)
-        {
-            OrgasmEngine::SetForceMethod(a, method.c_str() ? method.c_str() : "");
-        }
-        // ---- LLM actions (SexLab_Aid / SexLab_Force): narration line, "" when refused ----
+        // ---- LLM actions (SexLab_Aid / SexLab_Scene_Punish): narration line, "" when refused ----
         RE::BSFixedString AidAction(RE::StaticFunctionTag*, RE::Actor* caster, RE::Actor* target, RE::BSFixedString kind)
         {
             const RE::FormID option = Aid::PickBest(caster, Str(kind));
@@ -175,22 +169,31 @@ namespace PapyrusBindings_OrgasmEngine
             }
             return RE::BSFixedString(Aid::Apply(caster, target, option).c_str());
         }
-        RE::BSFixedString ForceAction(RE::StaticFunctionTag*, RE::Actor* forcer, RE::Actor* victim, RE::BSFixedString strategy,
-            RE::BSFixedString method)
+        // Always "": the engine narrates the punishment itself, after the target's strategy decision
+        // (OrgasmEngine::PunishNarrated). Kept as a String for scripts compiled against the old signature.
+        RE::BSFixedString PunishAction(RE::StaticFunctionTag*, RE::Actor* punisher, RE::Actor* target,
+            RE::BSFixedString method, RE::BSFixedString part, RE::BSFixedString reason)
         {
-            if (!victim) {
-                return "";
+            if (target) {
+                OrgasmEngine::PunishNarrated(punisher, target->GetFormID(), Str(method), Str(part), Str(reason));
             }
-            // The LLM may echo the description ("selfless (please the speaker)"): the first word is the key.
-            std::string key = Str(strategy);
-            if (const auto cut = key.find_first_of(" (:,"); cut != std::string::npos) {
-                key.resize(cut);
-            }
-            return RE::BSFixedString(OrgasmEngine::Force(forcer, victim->GetFormID(), key, Str(method)).c_str());
+            return "";
+        }
+        // by asks / orders target to take a strategy (key: a request key like "focused_p1", "" + text: free phrase).
+        // The engine narrates the request, the target's answer and any refusal itself.
+        bool AskOrder(RE::StaticFunctionTag*, RE::Actor* by, RE::Actor* target, bool order, RE::BSFixedString key,
+            RE::BSFixedString text)
+        {
+            return target && OrgasmEngine::AskOrderNarrated(by, target->GetFormID(), order, Str(key), Str(text));
+        }
+        // Another mod supplies a reason target can be punished for this scene (SkyrimNet_DOM).
+        void AddPunishReason(RE::StaticFunctionTag*, RE::Actor* by, RE::Actor* target, RE::BSFixedString reason)
+        {
+            OrgasmEngine::AddPunishReason(by, target, Str(reason));
         }
         bool HasAidOptions(RE::StaticFunctionTag*, RE::Actor* a) { return ::Aid::HasOptions(a); }
         bool WhippedInstalled(RE::StaticFunctionTag*) { return Whipped::Installed(); }
-        bool CanForce(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::CanForce(a); }
+        bool CanPunish(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::CanPunish(a); }
         void EndScene(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::EndScene(sid); }
         void ResetSpeedScale(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ResetSpeedScale(a); }
         std::int32_t GetSpeedLevel(RE::StaticFunctionTag*, RE::Actor* a)
@@ -230,7 +233,6 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GetOrgasmCount", s, GetOrgasmCount);
         a_vm->RegisterFunction("GetSecondsSinceOrgasm", s, GetSecondsSinceOrgasm);
         a_vm->RegisterFunction("IsManaged", s, IsManaged);
-        a_vm->RegisterFunction("IsMentallyBroken", s, IsMentallyBroken);
         a_vm->RegisterFunction("IsMiniGameEnabled", s, IsMiniGameEnabled);
         a_vm->RegisterFunction("SetRates", s, SetRates);
         a_vm->RegisterFunction("ReloadConfig", s, ReloadConfig);
@@ -256,13 +258,13 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GetStrategy", s, GetStrategy);
         a_vm->RegisterFunction("GetStrategyText", s, GetStrategyText);
         a_vm->RegisterFunction("GetStaminaRegen", s, GetStaminaRegen);
-        a_vm->RegisterFunction("GetForcedBy", s, GetForcedBy);
-        a_vm->RegisterFunction("SetForceMethod", s, SetForceMethod);
         a_vm->RegisterFunction("Aid", s, AidAction);
-        a_vm->RegisterFunction("Force", s, ForceAction);
+        a_vm->RegisterFunction("Punish", s, PunishAction);
+        a_vm->RegisterFunction("AskOrder", s, AskOrder);
+        a_vm->RegisterFunction("AddPunishReason", s, AddPunishReason);
         a_vm->RegisterFunction("HasAidOptions", s, HasAidOptions);
         a_vm->RegisterFunction("WhippedInstalled", s, WhippedInstalled);
-        a_vm->RegisterFunction("CanForce", s, CanForce);
+        a_vm->RegisterFunction("CanPunish", s, CanPunish);
         a_vm->RegisterFunction("EndScene", s, EndScene);
         a_vm->RegisterFunction("ResetSpeedScale", s, ResetSpeedScale);
         a_vm->RegisterFunction("GetSpeedLevel", s, GetSpeedLevel);

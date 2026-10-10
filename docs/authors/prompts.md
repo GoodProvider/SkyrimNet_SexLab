@@ -59,7 +59,7 @@ v0.31.5+ length rules in `0050_sexlab_activity.prompt` when `_pain_` / `_pleasur
 
 ## Strategy decision (`decisions/sexlab/minigame_strategy`)
 
-A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plus one `[ question strategy choice ]` with `[ criteria ]`. The DLL sends it through `PublicSendCustomDecisionToLLM` for one NPC at a time (scene start, and after that NPC speaks). Flow and context keys: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions).
+A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plus one `[ question strategy choice ]` with `[ criteria ]`. The DLL sends it through `PublicSendCustomDecisionToLLM` for one NPC at a time (scene start, after that NPC speaks, and right after it is asked, ordered or punished). The question asks which strategy the NPC decides to start using now; it ranks `last_line`, the NPC's own thoughts, and recent events over older ones. A `timeline` state block lists the NPC's recent speech, thoughts, narrations and events, one line each (narration inside speech on its own line). The current strategy and earlier punishments are never shown: asks, orders, refusals and punishments are events in the timeline. Flow and context keys: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions).
 
 - Keep `{{ o.key }}` exactly as given: the DLL maps the answer back by key (`passive`, `tease_p2`, …).
 - One criterion per line; profiles and other multi-line decorators go in a `[ state ]` block.
@@ -67,7 +67,7 @@ A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plu
 
 ## Player turn decision (`decisions/sexlab/minigame_player_turn`)
 
-Auto play (HUD take-control key in the player's own scene): one decision template for the player's turn, with the player as the focus. Questions: `strategy` (choice, when `has_strategy`), `speak` (noul, when `ask_speak`), `hotkey` (choice over `hotkeys[]`, `none` first), and the dialog answers `aid_option` / `aid_part` (when `aid_options[]` is not empty) and `force_option` / `force_method` / `force_part` (when `force_options[]` is not empty). Each question block sits in its own `{% if %}`. The DLL reads answers by these question ids and the pushed keys (`next`, `deny_p2`, `aid_3`, `force_1`, `spell_1`, `ass`, …), so keep both as given and edit the wording around them. Flow: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#take-control-and-auto-play).
+Auto play (HUD take-control key in the player's own scene): one decision template for the player's turn, with the player as the focus. Questions: `strategy` (choice, when `has_strategy`), `speak` (noul, when `ask_speak`), `hotkey` (choice over `hotkeys[]`, `none` first), and the dialog answers `aid_option` / `aid_part` (when `aid_options[]` is not empty) and `punish_option` / `punish_method` / `punish_part` (when `punish_options[]` is not empty). Each question block sits in its own `{% if %}`. The DLL reads answers by these question ids and the pushed keys (`next`, `deny_p2`, `aid_3`, `punish_1`, `spell_1`, `ass`, …), so keep both as given and edit the wording around them. Flow: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#take-control-and-auto-play).
 
 ## Orgasm gate (`0550`)
 

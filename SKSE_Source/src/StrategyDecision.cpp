@@ -17,7 +17,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -27,6 +26,7 @@ extern "C" {
 extern int (*PublicGetVersion)();
 extern uint64_t (*PublicFormIDToUUID)(uint32_t formId);
 extern uint64_t (*PublicRegisterEventCallback)(const char* eventType, std::function<void(const char*)> callback);
+extern std::string (*PublicGetRecentEvents)(uint32_t formId, int maxCount, const char* eventTypeFilter);
 extern bool (*PublicSendCustomDecisionToLLM)(const char* templateName, const char* contextJson, int maxProbabilities,
     std::function<void(const char* answer, const char* resultJson, int success)> callback);
 }
@@ -37,14 +37,14 @@ namespace StrategyDecision
     {
         constexpr const char* kTemplate = "sexlab/minigame_strategy";
         // Auto play: the player's turn (strategy, whether to speak, which HUD key to press and what to pick in
-        // the Aid / Force dialogs).
+        // the Aid / Punish dialogs).
         constexpr const char* kPlayerTemplate = "sexlab/minigame_player_turn";
         constexpr int kMaxProbabilities = 3;
         constexpr double kSpeakInterval = 5.0;    // seconds between auto-play player lines
         constexpr double kHotkeyInterval = 5.0;   // seconds between auto-play key presses
         constexpr double kEndConfidence = 0.8;    // ending the scene can't be undone
         constexpr std::size_t kMaxAidOptions = 20;
-        // Aid / Force part pulldown (index.html BODY_PARTS without "custom"); the sexual ones as SEXUAL_PARTS.
+        // Aid / Punish part pulldown (index.html BODY_PARTS without "custom"); the sexual ones as SEXUAL_PARTS.
         constexpr const char* kBodyParts[] = { "body", "face", "lips", "nipples", "back", "left arm", "right arm",
             "left leg", "right leg", "pussy", "cock", "ass" };
         constexpr std::string_view kSexualParts[] = { "lips", "nipples", "pussy", "cock", "ass" };
@@ -62,6 +62,8 @@ namespace StrategyDecision
             return out;
         }
         constexpr int kMinApiVersion = 12;
+        constexpr int kTimelineEvents = 30;  // events asked for; thoughts and speech are split into more lines
+        constexpr int kTimelineLines = 15;   // lines kept, newest
         // SkyrimNet event types for a spoken NPC line (originator = speaker).
         constexpr const char* kDialogueEvents[] = { "dialogue", "dialogue_npc", "dialogue_background" };
 
@@ -69,13 +71,19 @@ namespace StrategyDecision
         bool g_noRouteWarned = false;  // game thread
         bool g_noRoute = false;        // no decisions provider: stop asking until the next load
 
+        // Called once with the outcome of an asked / ordered / punished request (RequestAnswer).
+        using Done = std::function<void(OrgasmEngine::DecisionResult)>;
+
         // Game thread only. One request in flight per NPC; a line arriving meanwhile is kept for one follow-up.
+        // A punishment waiting for the follow-up (done set) keeps its trigger and line over later dialogue.
         struct Pending
         {
             bool inFlight = false;
             bool dirty = false;
             std::string trigger;
             std::string line;
+            Done active;  // the in-flight request's
+            Done done;    // the follow-up's
         };
         std::unordered_map<RE::FormID, Pending> g_pending;
 
@@ -117,6 +125,105 @@ namespace StrategyDecision
             return { kLabels[level], 4 - level };
         }
 
+        std::string Trim(const std::string& s)
+        {
+            const auto b = s.find_first_not_of(" \t\r\n");
+            if (b == std::string::npos) {
+                return "";
+            }
+            return s.substr(b, s.find_last_not_of(" \t\r\n") - b + 1);
+        }
+
+        // A narration line from a *...* span: first letter upper case, ends with a period.
+        std::string NarrationLine(std::string s)
+        {
+            s = Trim(s);
+            if (s.empty()) {
+                return s;
+            }
+            s[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
+            if (const char last = s.back(); last != '.' && last != '!' && last != '?') {
+                s.push_back('.');
+            }
+            return s;
+        }
+
+        // "kiss me *bob leans in*" by Bob -> "Bob said: kiss me", "Bob leans in." (order kept; a *...* span is
+        // narration, the rest is speech).
+        void SplitSpeech(const std::string& speaker, const std::string& text, std::vector<std::string>& out)
+        {
+            std::size_t pos = 0;
+            while (pos < text.size()) {
+                const auto open = text.find('*', pos);
+                const std::string spoken = Trim(text.substr(pos, open == std::string::npos ? open : open - pos));
+                if (!spoken.empty()) {
+                    out.push_back((speaker.empty() ? std::string("Someone") : speaker) + " said: " + spoken);
+                }
+                if (open == std::string::npos) {
+                    break;
+                }
+                const auto close = text.find('*', open + 1);
+                const std::string narrated =
+                    NarrationLine(text.substr(open + 1, close == std::string::npos ? close : close - open - 1));
+                if (!narrated.empty()) {
+                    out.push_back(narrated);
+                }
+                if (close == std::string::npos) {
+                    break;
+                }
+                pos = close + 1;
+            }
+        }
+
+        // The focus actor's recent events as one timeline, oldest first, one line each: speech ("Bob said: ..."),
+        // thoughts ("Nina thought: ..."), direct narrations and other events as their text. Narration inside
+        // speech is pulled out into its own line.
+        std::vector<std::string> BuildTimeline(const OrgasmEngine::DecisionInput& in)
+        {
+            std::vector<std::string> out;
+            if (!PublicGetRecentEvents) {
+                return out;
+            }
+            nlohmann::json events;
+            try {
+                events = nlohmann::json::parse(PublicGetRecentEvents(in.id, kTimelineEvents, ""), nullptr, false);
+            } catch (...) {
+                return out;
+            }
+            if (!events.is_array()) {
+                return out;
+            }
+            std::vector<nlohmann::json> list(events.begin(), events.end());
+            std::stable_sort(list.begin(), list.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
+                return a.value("gameTime", 0.0) < b.value("gameTime", 0.0);
+            });
+            for (const auto& e : list) {
+                if (!e.is_object()) {
+                    continue;
+                }
+                const std::string type = e.value("type", std::string{});
+                const std::string text = Trim(e.value("text", std::string{}));
+                const std::string who = e.value("originatingActorName", std::string{});
+                if (text.empty() || type == "spell" || type == "hit" || type == "combat" ||
+                    type == "gamemaster_dialogue") {
+                    continue;
+                }
+                if (type.rfind("dialogue", 0) == 0) {
+                    SplitSpeech(who, text, out);
+                } else if (type == "npc_thoughts") {
+                    if (who == in.name) {  // other actors' thoughts (telepathy) are not this actor's
+                        out.push_back(who + " thought: " + text);
+                    }
+                } else {
+                    out.push_back(text);
+                }
+            }
+            if (out.size() > static_cast<std::size_t>(kTimelineLines)) {
+                out.erase(out.begin(), out.end() - kTimelineLines);
+            }
+            return out;
+        }
+
         nlohmann::json BuildContext(const OrgasmEngine::DecisionInput& in, RE::Actor* focus, const std::string& trigger,
             const std::string& line)
         {
@@ -125,21 +232,16 @@ namespace StrategyDecision
             ctx["focus_uuid"] = UuidOf(in.id);
             ctx["focus_name"] = in.name;
             ctx["last_line_text"] = line;
-            ctx["progress"] = in.progress;
             ctx["role"] = in.role;
             ctx["arousal"] = in.arousal;
             ctx["orgasms"] = in.orgasms;
             ctx["expects_orgasm"] = in.expectsOrgasm;
-            ctx["broken"] = in.broken;
-            ctx["current_key"] = in.currentKey;
-            ctx["approach"] = in.approach;
-            ctx["forced_by"] = in.forcedBy;
-            ctx["force_method"] = in.forceMethod;
+            ctx["timeline"] = BuildTimeline(in);
             auto partners = nlohmann::json::array();
             for (const auto& p : in.partners) {
                 const auto [label, rank] = Relationship(focus, RE::TESForm::LookupByID<RE::Actor>(p.id));
                 partners.push_back({ { "uuid", UuidOf(p.id) }, { "name", p.name }, { "is_player", p.isPlayer },
-                    { "role", p.role }, { "arousal", p.arousal }, { "orgasms", p.orgasms }, { "approach", p.approach },
+                    { "role", p.role }, { "arousal", p.arousal }, { "orgasms", p.orgasms },
                     { "relationship", label }, { "relationship_rank", rank } });
             }
             ctx["partners"] = std::move(partners);
@@ -151,16 +253,22 @@ namespace StrategyDecision
             return ctx;
         }
 
-        void Request(RE::FormID id, const std::string& trigger, const std::string& line);
+        void Request(RE::FormID id, const std::string& trigger, const std::string& line, Done done = {});
 
-        // Game thread. Applies a strategy answer; returns the outcome for the log.
-        const char* ApplyStrategyAnswer(RE::FormID id, const OrgasmEngine::DecisionInput& in, const std::string& key,
-            double confidence)
+        // Game thread. Applies a strategy answer.
+        OrgasmEngine::DecisionResult ApplyStrategyAnswer(RE::FormID id, const OrgasmEngine::DecisionInput& in,
+            const std::string& key, double confidence)
         {
             using R = OrgasmEngine::DecisionResult;
             RE::Actor* actor = RE::TESForm::LookupByID<RE::Actor>(id);
-            const R result = actor && !key.empty() ? OrgasmEngine::ApplyStrategyDecision(actor, in, key, confidence)
-                                                   : R::kDropped;
+            return actor && !key.empty() ? OrgasmEngine::ApplyStrategyDecision(actor, in, key, confidence)
+                                         : R::kDropped;
+        }
+
+        // The outcome for the log.
+        const char* ResultText(OrgasmEngine::DecisionResult result)
+        {
+            using R = OrgasmEngine::DecisionResult;
             return result == R::kChanged       ? "changed"
                    : result == R::kKept          ? "kept"
                    : result == R::kLowConfidence ? "low confidence, kept current"
@@ -192,11 +300,20 @@ namespace StrategyDecision
         void OnAnswer(RE::FormID id, std::shared_ptr<OrgasmEngine::DecisionInput> in, int success,
             const std::string& answer, const std::string& json)
         {
+            using R = OrgasmEngine::DecisionResult;
             Pending& p = g_pending[id];
             p.inFlight = false;
+            Done done = std::exchange(p.active, nullptr);
             if (!success) {
                 NoteFailure(id, json);
+                Done queued = std::exchange(p.done, nullptr);
                 g_pending.erase(id);
+                if (done) {
+                    done(R::kDropped);
+                }
+                if (queued) {
+                    queued(R::kDropped);
+                }
                 return;
             }
             std::string key = answer;
@@ -208,31 +325,57 @@ namespace StrategyDecision
                 confidence = a.value("confidence", -1.0);
             } catch (...) {
             }
-            const char* outcome = ApplyStrategyAnswer(id, *in, key, confidence);
-            webui_log::info("StrategyDecision: {:#x} answer {} p={:.2f} ({})", id, key, confidence, outcome);
+            const R result = ApplyStrategyAnswer(id, *in, key, confidence);
+            webui_log::info("StrategyDecision: {:#x} answer {} p={:.2f} ({})", id, key, confidence, ResultText(result));
             if (p.dirty) {
                 p.dirty = false;
                 const std::string trigger = p.trigger;
                 const std::string next = p.line;
-                Request(id, trigger, next);
+                Done queued = std::exchange(p.done, nullptr);
+                if (done) {
+                    done(result);
+                }
+                Request(id, trigger, next, std::move(queued));
             } else {
                 g_pending.erase(id);
+                if (done) {
+                    done(result);
+                }
             }
         }
 
-        // Game thread.
-        void Request(RE::FormID id, const std::string& trigger, const std::string& line)
+        // Game thread. done (punished requests) is called exactly once: with the answer, or kDropped right away
+        // when no decision is sent.
+        void Request(RE::FormID id, const std::string& trigger, const std::string& line, Done done)
         {
+            using R = OrgasmEngine::DecisionResult;
+            const auto skip = [&done]() {
+                if (done) {
+                    done(R::kDropped);
+                }
+            };
             if (g_noRoute || !g_installed || !OrgasmEngine::IsStrategyDecisionEnabled()) {
+                skip();
                 return;
             }
             RE::Actor* actor = RE::TESForm::LookupByID<RE::Actor>(id);
             auto in = std::make_shared<OrgasmEngine::DecisionInput>();
             if (!actor || !OrgasmEngine::GetStrategyDecisionInput(actor, *in) || in->options.size() < 2) {
+                skip();
                 return;
             }
             Pending& p = g_pending[id];
             if (p.inFlight) {
+                if (done) {
+                    // Punishments waiting together get the same follow-up answer; the newest line asks.
+                    p.done = p.done ? Done([a = std::move(p.done), b = std::move(done)](R r) {
+                        a(r);
+                        b(r);
+                    })
+                                    : std::move(done);
+                } else if (p.done) {
+                    return;  // a punishment is waiting: its trigger and line ask the follow-up
+                }
                 p.dirty = true;
                 p.trigger = trigger;
                 p.line = line;
@@ -240,6 +383,7 @@ namespace StrategyDecision
             }
             const std::string ctx = BuildContext(*in, actor, trigger, line).dump();
             p.inFlight = true;
+            p.active = std::move(done);
             const bool queued = PublicSendCustomDecisionToLLM(kTemplate, ctx.c_str(), kMaxProbabilities,
                 [id, in](const char* answer, const char* resultJson, int success) {
                     // SkyrimNet ThreadPool: copy, then do the work on the game thread.
@@ -251,7 +395,11 @@ namespace StrategyDecision
                 });
             if (!queued) {
                 webui_log::warn("StrategyDecision: {:#x} request not queued", id);
+                Done d = std::exchange(g_pending[id].active, nullptr);
                 g_pending.erase(id);
+                if (d) {
+                    d(R::kDropped);
+                }
                 return;
             }
             webui_log::info("StrategyDecision: send {:#x} trigger={} current={} options={}", id, trigger,
@@ -267,31 +415,13 @@ namespace StrategyDecision
             return duration<double>(steady_clock::now() - start).count();
         }
 
-        // "please you" (Force panel label) -> "please Bob": the decision reads it in the third person.
-        std::string NameForYou(const std::string& label, const std::string& name)
-        {
-            std::istringstream words(label);
-            std::string out;
-            std::string w;
-            while (words >> w) {
-                out += (out.empty() ? "" : " ") + (w == "you" ? name : w);
-            }
-            return out;
-        }
-
         struct AidChoice
         {
             RE::FormID target = 0;
             RE::FormID form = 0;
         };
-        struct ForceChoice
-        {
-            RE::FormID victim = 0;
-            std::string strategy;
-        };
-
         // What the player's turn may pick, by option key. The decision's question ids: strategy, speak, hotkey,
-        // aid_option, aid_part, force_option, force_method, force_part.
+        // aid_option, aid_part, punish_option, punish_method, punish_part.
         struct TurnInput
         {
             OrgasmEngine::DecisionInput strategy;
@@ -300,10 +430,10 @@ namespace StrategyDecision
             std::map<std::string, RE::FormID> denyTargets;      // deny_p<slot> / allow_p<slot>
             std::vector<OrgasmEngine::DecisionOption> aidOptions;
             std::map<std::string, AidChoice> aid;
-            std::vector<OrgasmEngine::DecisionOption> forceOptions;
-            std::map<std::string, ForceChoice> force;
-            std::vector<OrgasmEngine::DecisionOption> forceMethods;
-            std::map<std::string, std::string> methodOf;  // force_methods key -> the method HudForce takes
+            std::vector<OrgasmEngine::DecisionOption> punishOptions;
+            std::map<std::string, RE::FormID> punish;  // punish_options key -> target
+            std::vector<OrgasmEngine::DecisionOption> punishMethods;
+            std::map<std::string, std::string> methodOf;  // punish_methods key -> the method Punish takes
         };
 
         // Game thread only. One player-turn request in flight; a line arriving meanwhile is kept for one follow-up.
@@ -320,7 +450,7 @@ namespace StrategyDecision
         };
         PlayerTurn g_turn;
 
-        // Game thread. The keys the player may press now, as the HUD shows them, and the Aid / Force dialog
+        // Game thread. The keys the player may press now, as the HUD shows them, and the Aid / Punish dialog
         // choices. False when the player is not in auto play in a mini-game scene.
         bool BuildTurn(RE::Actor* player, bool askSpeak, TurnInput& t)
         {
@@ -393,26 +523,24 @@ namespace StrategyDecision
                 keys.push_back({ "aid", "heal or restore someone with a spell or potion" });
             }
 
-            // Force: the player is an aggressor with a non-player victim.
-            std::vector<OrgasmEngine::ForceVictim> victims;
-            if (OrgasmEngine::GetForceInfo(player, victims)) {
-                for (const auto& v : victims) {
-                    for (const auto& [key, label] : v.strategies) {
-                        const std::string k = "force_" + std::to_string(t.forceOptions.size() + 1);
-                        t.forceOptions.push_back({ k, "force " + v.name + " to " + NameForYou(label, self) });
-                        t.force[k] = { v.id, key };
-                    }
+            // Punish: anyone else in the scene.
+            std::vector<OrgasmEngine::PunishTarget> targets;
+            if (OrgasmEngine::GetPunishInfo(player, targets)) {
+                for (const auto& v : targets) {
+                    const std::string k = "punish_" + std::to_string(t.punishOptions.size() + 1);
+                    t.punishOptions.push_back({ k, "punish " + v.name });
+                    t.punish[k] = v.id;
                 }
             }
-            if (!t.forceOptions.empty()) {
-                keys.push_back({ "force", "force a victim to do something by hurting or scaring them" });
+            if (!t.punishOptions.empty()) {
+                keys.push_back({ "punish", "hurt someone in the scene to punish them" });
                 for (const char* m : { "slap", "pinch", "punch", "pull" }) {
-                    t.forceMethods.push_back({ m, m });
+                    t.punishMethods.push_back({ m, m });
                     t.methodOf[m] = m;
                 }
                 for (const auto& sp : Aid::WeakAttackSpells(player)) {
                     const std::string k = "spell_" + std::to_string(t.methodOf.size() - 3);
-                    t.forceMethods.push_back({ k, "hit them with the " + sp.name + " spell" });
+                    t.punishMethods.push_back({ k, "hit them with the " + sp.name + " spell" });
                     t.methodOf[k] = sp.name;
                 }
             }
@@ -441,7 +569,7 @@ namespace StrategyDecision
             return { it->value("choice", std::string{}), it->value("confidence", -1.0) };
         }
 
-        // Game thread. Presses the chosen HUD key as the player; Aid / Force use the dialog answers.
+        // Game thread. Presses the chosen HUD key as the player; Aid / Punish use the dialog answers.
         // Returns the key pressed, or "" when none / skipped.
         std::string PressChosenKey(RE::Actor* player, const TurnInput& t, const nlohmann::json& answers)
         {
@@ -494,20 +622,16 @@ namespace StrategyDecision
                 if (!line.empty() && !whipped) {
                     OrgasmEngine::NarrateDirect(line, player, target);
                 }
-            } else if (key == "force") {
-                const auto f = t.force.find(Choice(answers, "force_option").first);
-                if (f == t.force.end()) {
-                    webui_log::warn("StrategyDecision: player force without a valid force_option");
+            } else if (key == "punish") {
+                const auto f = t.punish.find(Choice(answers, "punish_option").first);
+                if (f == t.punish.end()) {
+                    webui_log::warn("StrategyDecision: player punish without a valid punish_option");
                     return "";
                 }
-                const auto m = t.methodOf.find(Choice(answers, "force_method").first);
+                const auto m = t.methodOf.find(Choice(answers, "punish_method").first);
                 const std::string method = m != t.methodOf.end() ? m->second : "slap";
-                bool whipped = false;
-                const std::string line = OrgasmEngine::HudForce(player, f->second.victim, f->second.strategy, method,
-                    part("force_part"), &whipped);
-                if (!line.empty() && !whipped) {
-                    OrgasmEngine::NarrateDirect(line, player, RE::TESForm::LookupByID<RE::Actor>(f->second.victim));
-                }
+                // A decision can't write free text: no reason.
+                OrgasmEngine::PunishNarrated(player, f->second, method, part("punish_part"), "");
             } else {
                 Hud::PressKey(key);
             }
@@ -537,7 +661,7 @@ namespace StrategyDecision
                 }
                 if (t->strategy.options.size() >= 2) {
                     const auto [key, conf] = Choice(answers, "strategy");
-                    const char* outcome = ApplyStrategyAnswer(player->GetFormID(), t->strategy, key, conf);
+                    const char* outcome = ResultText(ApplyStrategyAnswer(player->GetFormID(), t->strategy, key, conf));
                     webui_log::info("StrategyDecision: player strategy {} p={:.2f} ({})", key, conf, outcome);
                 }
                 const std::string hotkey = PressChosenKey(player, *t, answers);
@@ -589,8 +713,8 @@ namespace StrategyDecision
             ctx["ask_speak"] = askSpeak;
             ctx["hotkeys"] = OptionsJson(t->hotkeys);
             ctx["aid_options"] = OptionsJson(t->aidOptions);
-            ctx["force_options"] = OptionsJson(t->forceOptions);
-            ctx["force_methods"] = OptionsJson(t->forceMethods);
+            ctx["punish_options"] = OptionsJson(t->punishOptions);
+            ctx["punish_methods"] = OptionsJson(t->punishMethods);
             ctx["parts"] = OfferedParts();
             const std::string body = ctx.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
             g_turn.inFlight = true;
@@ -606,8 +730,8 @@ namespace StrategyDecision
                 g_turn.inFlight = false;
                 return;
             }
-            webui_log::info("StrategyDecision: send player turn trigger={} speak={} keys={} aid={} force={}", trigger,
-                askSpeak, t->hotkeys.size(), t->aidOptions.size(), t->forceOptions.size());
+            webui_log::info("StrategyDecision: send player turn trigger={} speak={} keys={} aid={} punish={}", trigger,
+                askSpeak, t->hotkeys.size(), t->aidOptions.size(), t->punishOptions.size());
         }
 
         // SkyrimNet ThreadPool: a spoken line. Copy what we need, then hop to the game thread.
@@ -716,5 +840,11 @@ namespace StrategyDecision
     void OnAutoPlay()
     {
         RequestPlayerTurn("auto_play", "", "", true);
+    }
+
+    void RequestAnswer(RE::FormID target, const std::string& trigger, const std::string& line,
+        std::function<void(OrgasmEngine::DecisionResult)> done)
+    {
+        Request(target, trigger, line, std::move(done));
     }
 }

@@ -3,7 +3,6 @@
   {% if clothing_state == "minimal" or clothing_state == "nude" %}
     {% if show_internal %}
       {{ "### Physical Appearance" }}
-
     {% endif %} 
     {% if clothing_state == "minimal" %}
       {% if actor_gender == "male" %}

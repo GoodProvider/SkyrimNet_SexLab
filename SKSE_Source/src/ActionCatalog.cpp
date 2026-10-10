@@ -326,6 +326,43 @@ namespace ActionCatalog
             return cb->done && cb->value;
         }
 
+        class FloatResultCallback : public RE::BSScript::IStackCallbackFunctor
+        {
+        public:
+            void operator()(RE::BSScript::Variable a_result) override
+            {
+                if (a_result.IsFloat())
+                    value = a_result.GetFloat();
+                done = true;
+            }
+            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
+
+            float value = 0.0f;
+            bool done = false;
+        };
+
+        float StorageUtilGetFloatValue(RE::TESForm* form, const char* key, float def)
+        {
+            if (!form || !key || !key[0])
+                return def;
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm)
+                return def;
+
+            auto cbPtr = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>{ new FloatResultCallback() };
+            auto* cb = static_cast<FloatResultCallback*>(cbPtr.get());
+
+            RE::BSFixedString keyStr(key);
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(form), std::move(keyStr), std::move(def));
+            if (!vm->DispatchStaticCall(
+                    RE::BSFixedString("StorageUtil"), RE::BSFixedString("GetFloatValue"), args, cbPtr)) {
+                return def;
+            }
+            for (int i = 0; i < 64 && !cb->done; ++i)
+                vm->Update(0.0f);
+            return cb->done ? cb->value : def;
+        }
+
         RE::TESGlobal* ResolveGlobalByArg(std::string_view name)
         {
             if (name.empty())
@@ -445,6 +482,13 @@ namespace ActionCatalog
                     auto* actor = FocusActor();
                     const bool has = actor && StorageUtilHasIntValue(actor, key.c_str());
                     return CompareValues(has ? 1.0 : 0.0, op, expected);
+                }
+
+                if (EqualsIgnoreCase(fn, "GetFloatValue")) {
+                    const float def = args.size() > 3 ? static_cast<float>(AsNumber(args[3])) : 0.0f;
+                    auto* actor = FocusActor();
+                    const float v = actor ? StorageUtilGetFloatValue(actor, key.c_str(), def) : def;
+                    return CompareValues(static_cast<double>(v), op, expected);
                 }
                 return false;
             }

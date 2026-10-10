@@ -39,7 +39,7 @@ These keys work while you are in a scene, or while you control an NPC in another
 | PgUp PosUp | 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
 | PgDn PosDn | 4 previous    | 5 pause | 6 next        | + faster |
 |            | 1 deny        | 2 end   | 3 free camera |          |
-|            | 0 aid         |         | . force       |          |
+|            | 0 aid         |         | . punish      |          |
 ---------------------------------------------------------------------
 ```
 
@@ -66,13 +66,23 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
             Num 1    Num 2    Num 3
             deny     end      free 📷
             Num 0             Num .
-            aid               force
+            aid               punish
   ```
 
   Num 7 is dimmed with no label (it belongs to SkyrimNet).
 
   - **Num \*** (*auto* / *control*) hands your scene to the AI or takes it back. See [Take control and auto play](#take-control-and-auto-play).
   - **Num 2** ends the scene.
+  - **Num .** (*ask*) opens the **Ask / Order / Punish** panel. It works in every scene, whatever your role. The cell reads *ask*.
+    - **Ask / order:** "*subject* *asks* / *orders* *object* to *request*." The **request** lists what the object can be asked to do right now, in the words of the strategy ("be passive and let things happen", "focus on Bob's pleasure"), or **custom** (type your own words). It works in the mini-game, on NPCs the AI plays. It is narrated ("Bob orders Nina to be passive and let things happen."), the AI decides what Nina does, and she answers on her own line: "Nina agrees to Bob's request to …" or "Nina refuses Bob's request to …". A refusal is remembered as something she can be punished for.
+    - **Punish:** "*subject* *punishes* *object* by *method* *object*'s *body part*, because *reason*." The **punish** choice shows up only when the object can be punished for something: a request she refused, or a reason another mod gave. The **reason** lists those (or **custom**, which opens a box to type your own; Enter or OK punishes right away).
+    - **Subject:** anyone in the scene (default: you, or the NPC you control). **Object:** anyone else in the scene, you included.
+    - **Method** (punish): slap, pinch, punch, pull, one of the subject's **weak attack spells** (Novice or Apprentice spells that damage health, such as Flames or Sparks), or **custom** (type what it is, such as *biting*). **Body part:** body, face, nipples, ass and so on, or **custom**.
+
+    A punishment is narrated, for example "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to be passive." With *body* no part is named, and with no reason the "because …" is left off. With **SkyrimNet_Whipped** installed, the line is followed by how it feels to Nina ("Nina's nipples throb in tight, bruised points. …"). A spell reads "… by hitting Nina's ass with Sparks". The spell's effects show, but the target only takes its smallest damage, never enough to kill, and doesn't turn hostile.
+
+    The narration makes the target answer, and the AI decides from there how they behave: they might give in, resist or turn the tables. The cell is greyed out when nobody else is in the scene.
+  - NPCs can punish too (**SexLab_Scene_Punish**): anyone in the scene, the player included.
   - **Num 5** pauses the current stage; the cell then reads *play*. Press again to resume with the rest of the stage's time.
   - **Num 4 / Num 6** go to the previous / next stage.
   - **PgUp / PgDn** (*PosUp* / *PosDn*) swap the actors' roles forward / back (SexLab's swap positions; nothing happens in solo or creature scenes). With **Narrate position changes** on (default), the current stage description is narrated with the actors in their new roles.
@@ -90,16 +100,14 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.
-  - **Num .** (*force*, shown only while you are an aggressor) opens the **Force** panel: "You force *victim* to *strategy* by *method* on *body part*." Pick a victim, what they are forced to do (default: please you), a method: slap, pinch, punch, pull, one of your **weak attack spells** (Novice or Apprentice spells that damage health, such as Flames or Sparks), or **custom** (type your own), and where: body, pussy, ass, nipples or **custom** (type your own). The spell's effects show (your hands glow, the victim flashes with fire, frost or shock, and you hear the hit), but the victim only takes the spell's smallest damage, never enough to kill, and doesn't turn hostile. It is narrated ("Bob slaps Nina's ass and forces Nina to please him."; *body* names no part: "Bob slaps Nina and forces …"). For **Fear cooldown** seconds (Mini-game settings, default 15) the victim can only give in; after that the AI may let them resist. Without a non-player victim the cell is greyed out.
   - **Num 0** (*aid*) opens the **Aid** panel: "*You* *spell or potion* on *actor*'s *body part*." Pick one of your healing or stamina spells or potions, who gets it (you or anyone in the scene), and where (body, pussy, ass, nipples or **custom**; it only changes the narration). A spell costs its magicka (a spell you can't afford is greyed out); Healing and Healing Hands count as three seconds of casting. A potion is used up. The spell's or potion's effects show on the target (and the spell's glow on your hands). It is narrated ("Bob casts Healing Hands on Nina." / "Bob gives Nina a Potion of Minor Stamina."; with a body part: "Bob casts Healing Hands on Nina's ass." / "Bob pours a Potion of Minor Stamina on Nina's nipples."). Without a spell or potion the cell is greyed out.
-  - NPCs can do the same: the AI may have an actor heal or restore someone in the scene (**SexLab_Aid**), or have an aggressor force a victim (**SexLab_Force**, never the player).
-  - The optional **mental break** drains the magicka of whoever is being aroused; when it runs out they can't hold back.
+  - NPCs can do the same: the AI may have an actor heal or restore someone in the scene (**SexLab_Aid**).
 
 ## Take control and auto play
 
 **Num \*** (dashboard **Scene HUD** / **Take control key**) does one of two things:
 
-- **In your own scene: auto play.** Press it and the cell reads *control*: the AI now plays you like an NPC. Your HUD row shows the strategy it picked. After anyone in the scene speaks, it decides how you behave, whether you press a key (next or previous stage, swap roles, slower, faster, pause, deny or allow someone, end, aid, force), what you pick in the Aid or Force panel, and whether you answer (SkyrimNet writes and speaks your line). It rarely presses anything, at most one key and one line every 5 seconds, and ending the scene needs a confident answer. You can still press any key yourself. Press **Num \*** again (*auto*) to take back control. Auto play stays on for your later scenes (and across saves) until you press **Num \*** again, so a scene you leave alone ends the usual way: the last orgasm at the end of the second-to-last stage, then the final stage until the reply to it has played (30 s at most). It needs the Multi-Orgasm Mini-game with **Strategy decisions** on and a SkyrimNet decisions provider.
-- **Not in a scene: control an NPC.** Aim at someone in a scene and press it. The HUD appears for that scene and reads "as *name*". Every key now acts as that NPC: arouse and calm cost their stamina and magicka, the stage, speed, pause, swap, end and deny keys work on their scene, and Force forces as them ("Nina forces …"). Aid is hidden (it uses your own spells and potions). The NPC stops playing their own strategy, and the focus starts on someone else in the scene (1-4 to change it). Press **Num \*** again to let go; ending the scene, or starting one of your own, lets go too. SexLab's own thread control (`N`) is not used, so the scene keeps its normal stage timing.
+- **In your own scene: auto play.** Press it and the cell reads *control*: the AI now plays you like an NPC. Your HUD row shows the strategy it picked. After anyone in the scene speaks, it decides how you behave, whether you press a key (next or previous stage, swap roles, slower, faster, pause, deny or allow someone, end, aid, punish), what you pick in the Aid or Punish panel (auto play gives no reason), and whether you answer (SkyrimNet writes and speaks your line). It rarely presses anything, at most one key and one line every 5 seconds, and ending the scene needs a confident answer. You can still press any key yourself. Press **Num \*** again (*auto*) to take back control. Auto play stays on for your later scenes (and across saves) until you press **Num \*** again, so a scene you leave alone ends the usual way: the last orgasm at the end of the second-to-last stage, then the final stage until the reply to it has played (30 s at most). It needs the Multi-Orgasm Mini-game with **Strategy decisions** on and a SkyrimNet decisions provider.
+- **Not in a scene: control an NPC.** Aim at someone in a scene and press it. The HUD appears for that scene and reads "as *name*". Every key now acts as that NPC: arouse and calm cost their stamina and magicka, the stage, speed, pause, swap, end and deny keys work on their scene, and Punish defaults to them as the punisher ("Nina slaps …"). Aid is hidden (it uses your own spells and potions). The NPC stops playing their own strategy, and the focus starts on someone else in the scene (1-4 to change it). Press **Num \*** again to let go; ending the scene, or starting one of your own, lets go too. SexLab's own thread control (`N`) is not used, so the scene keeps its normal stage timing.
 
 All HUD keys are rebindable in the dashboard. While the HUD is up they don't reach SexLab or the game, so a key you share with a SexLab key only does the HUD action.

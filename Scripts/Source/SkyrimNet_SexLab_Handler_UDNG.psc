@@ -265,26 +265,6 @@ int Function BondageOriginalMap(int payload)
     return JMap.getObj(payload, "original")
 EndFunction
 
-String Function OriginalIdForGroup(int origMap, int session, int index, String gname)
-    if origMap != 0 && gname != ""
-        if JMap.hasKey(origMap, gname)
-            return JMap.getStr(origMap, gname)
-        endif
-        String[] keys = JMap.allKeysPArray(origMap)
-        if keys
-            int n = keys.Length
-            int i = 0
-            while i < n
-                if keys[i] == gname
-                    return JMap.getStr(origMap, keys[i])
-                endif
-                i += 1
-            endwhile
-        endif
-    endif
-    return OriginalIdAt(session, index)
-EndFunction
-
 Function PushBondageState(Actor target)
     if target == None
         return
@@ -310,80 +290,87 @@ Function TM_BondageRefresh(Actor target)
     EnsureSession(target)
 EndFunction
 
-String Function OriginalIdAt(int session, int index)
-    if session == 0
+int Function FileDeviceById(String deviceId)
+    if group_devices == 0 || deviceId == ""
+        return 0
+    endif
+    int n = JArray.count(group_devices)
+    int i = 0
+    while i < n
+        int group = JArray.getObj(group_devices, i)
+        int picked = FindDeviceById(JMap.getObj(group, "devices"), deviceId)
+        if picked > 0
+            return picked
+        endif
+        i += 1
+    endwhile
+    return 0
+EndFunction
+
+; Inventory armor for a catalog id: bundled file first, else straight from plugin:0xhex.
+Armor Function InventoryOfId(String deviceId)
+    Armor inv = None
+    int d = FileDeviceById(deviceId)
+    if d > 0
+        inv = JMap.getForm(d, "formInventory") as Armor
+    endif
+    if inv == None
+        inv = ArmorFromWantedId(deviceId)
+    endif
+    return inv
+EndFunction
+
+String Function DeviceLabel(String deviceId)
+    if deviceId == ""
         return ""
     endif
-    int orig = JMap.getObj(session, "original")
-    if orig == 0 || index < 0 || index >= JArray.count(orig)
-        return ""
+    Armor inv = InventoryOfId(deviceId)
+    if inv != None && inv.GetName() != ""
+        return inv.GetName()
     endif
-    return JArray.getStr(orig, index)
+    return deviceId
 EndFunction
 
-String Function CurrentIdForGroup(int wantedMap, String groupName, String fallback)
-    if wantedMap == 0 || groupName == ""
-        return fallback
-    endif
-    if JMap.hasKey(wantedMap, groupName)
-        return JMap.getStr(wantedMap, groupName)
-    endif
-    String[] keys = JMap.allKeysPArray(wantedMap)
-    if keys
-        int n = keys.Length
-        int i = 0
-        while i < n
-            if keys[i] == groupName
-                return JMap.getStr(wantedMap, keys[i])
-            endif
-            i += 1
-        endwhile
-    endif
-    return fallback
-EndFunction
-
-Bool Function UnlockWornInGroup(Actor target, int devices)
-    int worn = WornDeviceInGroup(target, devices)
-    if worn <= 0
-        return true
-    endif
-    Armor inventory = JMap.getForm(worn, "formInventory") as Armor
-    Armor rendered = JMap.getForm(worn, "formRendered") as Armor
-    return zlibs.UnLockDevice(target, inventory, rendered, destroyDevice = true)
-EndFunction
-
-Bool Function SetGroupToId(Actor target, int devices, String wantedId)
-    int worn = WornDeviceInGroup(target, devices)
-    String wornId = ""
-    if worn > 0
-        wornId = DeviceIdOf(worn)
-    endif
-    if wornId == wantedId
-        return true
-    endif
-    if wantedId == ""
-        return UnlockWornInGroup(target, devices)
-    endif
-    int picked = FindDeviceById(devices, wantedId)
-    Armor inventory = None
-    Keyword kword = None
-    if picked > 0
-        inventory = JMap.getForm(picked, "formInventory") as Armor
-        kword = DeviceKeywordOf(picked)
-    else
-        inventory = ArmorFromWantedId(wantedId)
-        if inventory == None
-            Trace("SetGroupToId", "--- device not in catalog: "+wantedId)
+; Unlock / lock / swap one slot by device id. Ids come from the live DD NG catalog, so
+; group-devices.json only supplies optional rendered/keyword hints (speed), never a limit.
+Bool Function ChangeDevice(Actor target, String origId, String wantedId)
+    Armor origInv = None
+    Armor origRendered = None
+    Keyword origKw = None
+    if origId != ""
+        origInv = InventoryOfId(origId)
+        int od = FileDeviceById(origId)
+        if od > 0
+            origRendered = JMap.getForm(od, "formRendered") as Armor
+            origKw = DeviceKeywordOf(od)
+        endif
+        if origInv == None
+            Trace("ChangeDevice", "--- cannot resolve current device "+origId)
             return false
         endif
+    endif
+
+    if wantedId == ""
+        return zlibs.UnLockDevice(target, origInv, origRendered, origKw, destroyDevice = true)
+    endif
+
+    Armor wantedInv = InventoryOfId(wantedId)
+    if wantedInv == None
+        Trace("ChangeDevice", "--- cannot resolve wanted device "+wantedId)
+        return false
+    endif
+    Keyword wantedKw = None
+    int wd = FileDeviceById(wantedId)
+    if wd > 0
+        wantedKw = DeviceKeywordOf(wd)
     endif
     AddKeys(target, zlibs.chastityKey, 1)
     AddKeys(target, zlibs.restraintsKey, 2)
     AddKeys(target, zlibs.piercingKey, 1)
-    if worn <= 0
-        return zlibs.LockDevice(target, inventory, force = true)
+    if origId == ""
+        return zlibs.LockDevice(target, wantedInv, force = true)
     endif
-    return zlibs.SwapDevices(target, inventory, kword, destroyDevice = true)
+    return zlibs.SwapDevices(target, wantedInv, wantedKw, destroyDevice = true)
 EndFunction
 
 Function TM_BondageApply(Actor target, String deviceId)
@@ -411,7 +398,15 @@ Function TM_BondageApply(Actor target, String deviceId)
         i += 1
     endwhile
     if picked <= 0
-        Trace("TM_BondageApply", "--- device not in catalog: "+deviceId)
+        ; Not in the bundled file: lock it straight from plugin:0xhex.
+        Armor direct = ArmorFromWantedId(deviceId)
+        if direct == None
+            Trace("TM_BondageApply", "--- device not in catalog: "+deviceId)
+            PushBondageState(target)
+            return
+        endif
+        Bool lockedOk = zlibs.LockDevice(target, direct, force = true)
+        Trace("TM_BondageApply", "--- lock (by id) "+deviceId+" ok="+lockedOk)
         PushBondageState(target)
         return
     endif
@@ -443,6 +438,7 @@ EndFunction
 
 Function TM_BondageFinish(Actor speaker, Actor target, String style, String currentJson)
     Trace("TM_BondageFinish", "--- "+GetDisplayNameSafe(speaker)+" -> "+GetDisplayNameSafe(target)+" style:"+style)
+    Trace("TM_BondageFinish", "--- payload "+StringUtil.Substring(currentJson, 0, 600))
     if target == None || !EnsureReady()
         ReleaseAll()
         SkyrimNet_SexLab_WebUI.WebUI_CloseOverlay()
@@ -459,40 +455,69 @@ Function TM_BondageFinish(Actor speaker, Actor target, String style, String curr
 
     String added = ""
     String removed = ""
-    int session = SessionOf(target)
-    int n = JArray.count(group_devices)
-    int i = 0
-    while i < n
-        int group = JArray.getObj(group_devices, i)
-        int devices = JMap.getObj(group, "devices")
-        String gname = JMap.getStr(group, "name")
-        if gname == ""
-            gname = JMap.getStr(group, "Name")
+    String failed = ""
+
+    ; Iterate the payload's groups (the live DD NG catalog the panel showed), not
+    ; group-devices.json: the bundled file lacks devices the panel can list and wear.
+    String[] origNames = JMap.allKeysPArray(origMap)
+    String[] wantedNames = JMap.allKeysPArray(wantedMap)
+    int pass = 0
+    while pass < 2
+        String[] names = origNames
+        if pass == 1
+            names = wantedNames
         endif
-        String origId = OriginalIdForGroup(origMap, session, i, gname)
-        String wantedId = CurrentIdForGroup(wantedMap, gname, origId)
-        if origId != wantedId
-            SetGroupToId(target, devices, wantedId)
-            if wantedId != ""
-                int picked = FindDeviceById(devices, wantedId)
-                if picked > 0
-                    if added != ""
-                        added = added + ", "
-                    endif
-                    added = added + DeviceNameOf(picked)
+        int n = 0
+        if names
+            n = names.Length
+        endif
+        int i = 0
+        while i < n
+            String gname = names[i]
+            i += 1
+            if pass == 0 || !JMap.hasKey(origMap, gname)
+                String origId = JMap.getStr(origMap, gname)
+                String wantedId = origId
+                if JMap.hasKey(wantedMap, gname)
+                    wantedId = JMap.getStr(wantedMap, gname)
                 endif
-            else
-                int orig = FindDeviceById(devices, origId)
-                if orig > 0
-                    if removed != ""
-                        removed = removed + ", "
+                if origId != wantedId
+                    Bool ok = ChangeDevice(target, origId, wantedId)
+                    Trace("TM_BondageFinish", "--- "+gname+" '"+origId+"' -> '"+wantedId+"' ok="+ok)
+                    String newLabel = DeviceLabel(wantedId)
+                    String oldLabel = DeviceLabel(origId)
+                    if !ok
+                        if failed != ""
+                            failed = failed + ", "
+                        endif
+                        if wantedId != ""
+                            failed = failed + newLabel
+                        else
+                            failed = failed + oldLabel
+                        endif
+                    else
+                        if origId != ""
+                            if removed != ""
+                                removed = removed + ", "
+                            endif
+                            removed = removed + oldLabel
+                        endif
+                        if wantedId != ""
+                            if added != ""
+                                added = added + ", "
+                            endif
+                            added = added + newLabel
+                        endif
                     endif
-                    removed = removed + DeviceNameOf(orig)
                 endif
             endif
-        endif
-        i += 1
+        endwhile
+        pass += 1
     endwhile
+
+    if failed != ""
+        Debug.Notification("Bondage: could not change "+failed)
+    endif
 
     if style != "silently" && style != "silent"
         String style_desc = ""

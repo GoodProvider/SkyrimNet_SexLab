@@ -4,6 +4,7 @@
 #include "WebUI_Log.h"
 
 #include <array>
+#include <functional>
 #include <string_view>
 #include <utility>
 
@@ -101,16 +102,16 @@ namespace Whipped
                 { "punching", "face" },
                 { "pulling", "face" },
             };
-            if (method == "slap" || method == "slap face") {
+            if (method == "slap") {
                 return &kRoutes[0];
             }
-            if (method == "pinch" || method == "pinch nipple") {
+            if (method == "pinch") {
                 return &kRoutes[1];
             }
             if (method == "punch") {
                 return &kRoutes[2];
             }
-            if (method == "pull" || method == "pull hair") {
+            if (method == "pull") {
                 return &kRoutes[3];
             }
             return nullptr;
@@ -167,7 +168,7 @@ namespace Whipped
         return true;
     }
 
-    bool ForceHit(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& method,
+    bool PunishHit(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& method,
         const std::string& location, RE::FormID spell)
     {
         if (!victim || !Installed()) {
@@ -184,6 +185,78 @@ namespace Whipped
             return Torture(attacker, victim, line, route->type, part);
         }
         return Strike(attacker, victim, line, pulldown);
+    }
+
+    namespace
+    {
+        // Receives External_TortureText's String on a Papyrus VM thread.
+        class TextCallback : public RE::BSScript::IStackCallbackFunctor
+        {
+        public:
+            explicit TextCallback(std::function<void(std::string)> done) : done_(std::move(done)) {}
+            void operator()(RE::BSScript::Variable a_result) override
+            {
+                std::string text;
+                if (a_result.IsString()) {
+                    text = std::string(a_result.GetString());
+                }
+                if (done_) {
+                    done_(std::move(text));
+                }
+            }
+            void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
+
+        private:
+            std::function<void(std::string)> done_;
+        };
+
+        bool TextApi()
+        {
+            static int cached = -1;
+            if (cached < 0) {
+                cached = Installed() && HasGlobal(kScript, "External_TortureText") ? 1 : 0;
+                if (!cached && Installed()) {
+                    webui_log::warn("Whipped: no External_TortureText (update SkyrimNet_Whipped); punish feeling text off");
+                }
+            }
+            return cached == 1;
+        }
+    }
+
+    bool PunishText(RE::Actor* attacker, RE::Actor* victim, const std::string& method, const std::string& location,
+        RE::FormID spell, std::function<void(std::string)> done)
+    {
+        if (!victim || !TextApi()) {
+            return false;
+        }
+        const std::string pulldown = location == "body" ? "" : location;
+        std::string type = "whipping";  // free text whips
+        std::string part = pulldown;
+        if (spell) {
+            const char* t = SpellTortureType(spell);
+            if (!t) {
+                return false;
+            }
+            type = t;
+        } else if (const TortureRoute* route = TortureRouteFor(method)) {
+            type = route->type;
+            part = pulldown.empty() ? route->defaultPart : pulldown;
+        }
+        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        if (!vm) {
+            return false;
+        }
+        webui_log::info("Whipped: torture text {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part,
+            PartName(part));
+        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{ new TextCallback(std::move(done)) };
+        // External_TortureText(attacker, victim, damage_type, body_part, damage_amount)
+        auto* args = RE::MakeFunctionArguments(std::move(attacker), std::move(victim),
+            RE::BSFixedString(type.c_str()), RE::BSFixedString(PartName(part).c_str()), static_cast<std::int32_t>(1));
+        if (!vm->DispatchStaticCall(kScript, "External_TortureText", args, callback)) {
+            webui_log::warn("Whipped: {}.External_TortureText dispatch failed", kScript);
+            return false;
+        }
+        return true;
     }
 
     bool Heal(RE::Actor* caster, RE::Actor* target, const std::string& line, float health, const std::string& part)

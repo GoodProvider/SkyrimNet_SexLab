@@ -7,7 +7,7 @@
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
         C++ pushes hudUpdate({groups, focus, shiftTarget (row arouse / calm hit while Shift is held, -1 otherwise), actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
-        blocked, paused, freeCam, force {show, enabled}, aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
+        blocked, paused, freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
@@ -81,7 +81,6 @@
         td.focus { width: 1.4em; text-align: center; color: var(--text-secondary); font-weight: 600; }
         td.focus.on { color: var(--accent); }
         td.name { white-space: nowrap; width: 12em; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
-        tr.broken td.name { color: var(--text-muted); font-style: italic; }
         td.name .dom { font-size: 0.7em; font-weight: 600; color: var(--accent); vertical-align: middle; }
         td.barcell { width: 180px; }
         td.rescell { width: 60px; }
@@ -236,8 +235,8 @@
         const COLUMN_LABELS = [
             ['', 'PosUp', 'PosDn'],
             ['', 'prev', 'deny', 'allow', 'aid'],
-            ['calm', 'broken', 'pause', 'play', 'end'],
-            ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM],
+            ['calm', 'pause', 'play', 'end'],
+            ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM, 'ask'],
             SPEED_NAMES.concat([NO_STEP, 'auto', 'control', 'release']),
         ];
 
@@ -285,7 +284,7 @@
                     const shifted = (i === state.shiftTarget && i !== state.focus);
                     const focus = shifted ? '⇧' : (i === state.focus) ? '▶' : (i < 4 ? String(i + 1) : '');
                     const cls = (a.flash ? ' flash' : '') + (!a.flash && a.near ? ' near' : '');
-                    html += '<tr class="' + (a.broken ? 'broken' : '') + '">' +
+                    html += '<tr>' +
                         '<td class="focus' + (i === state.focus || shifted ? ' on' : '') + mgOff + '">' + focus + '</td>' +
                         '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') +
                             (a.strategy ? ' <span class="dom" title="mini-game strategy">' + esc(a.strategy) + '</span>' : '') + '</td>' +
@@ -320,7 +319,7 @@
             //   PosUp   (Num 7)  calm   arouse   <slower step>
             //   PosDn   prev     pause  next     <faster step>
             //           deny     end    free 📷
-            //           aid             force           (Num 0: mini-game; Num .: player aggressor + mini-game)
+            //           aid             punish          (Num 0: mini-game; Num .: always)
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
@@ -337,7 +336,7 @@
             c += ctl(keys, 'take_control', tcLabel, 4, { off: cOff });
             c += ctl(keys, 'pos_up', 'PosUp', 0, { off: cOff });
             c += ctl(keys, 'skyrimnet', '', 1, { dim: true, off: cOff });
-            c += ctl(keys, 'calm', blocked.broken ? 'broken' : 'calm', 2, { blocked: blocked.calm, off: mgcOff });
+            c += ctl(keys, 'calm', 'calm', 2, { blocked: blocked.calm, off: mgcOff });
             c += ctl(keys, 'arouse', 'arouse', 3, { blocked: blocked.arouse, off: mgcOff });
             c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower, off: cOff });
             c += ctl(keys, 'pos_down', 'PosDn', 0, { off: cOff });
@@ -350,19 +349,19 @@
             c += ctl(keys, 'end', 'end', 2, { off: cOff });
             c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 3, { off: cOff });
             c += ctl(keys, '', '', 4, { off: true });
-            // Bottom row (mini-game): aid under deny, greyed out without a healing / stamina spell or potion;
-            // force only while the player is an aggressor, greyed out without a non-player victim.
-            const force = state.force || {};
+            // Bottom row: aid (mini-game) under deny, greyed out without a healing / stamina spell or potion;
+            // ask / order / punish always (shows ask), greyed out when nobody else is in the scene.
+            const punish = state.punish || {};
             const aid = state.aid || {};
-            const forceOn = !!force.show && !mgcOff;
+            const punishOn = !!punish.show && !cOff;
             const aidOn = !!aid.show && !mgcOff;
-            if (forceOn || aidOn) {
+            if (punishOn || aidOn) {
                 c += ctl(keys, '', '', 0, { off: true });
                 c += ctl(keys, 'aid', 'aid', 1, !aidOn ? { off: true } : aid.enabled ? {} :
                     { dim: true, title: 'no healing or stamina spell or potion' });
                 c += ctl(keys, '', '', 2, { off: true });
-                c += ctl(keys, 'force', 'force', 3, !forceOn ? { off: true } : force.enabled ? {} :
-                    { dim: true, title: 'scene must have at least one non-player victim' });
+                c += ctl(keys, 'punish', 'ask', 3, !punishOn ? { off: true } : punish.enabled ? {} :
+                    { dim: true, title: 'nobody else is in the scene' });
                 c += ctl(keys, '', '', 4, { off: true });
             }
             const controlsOn = !!g.controls;

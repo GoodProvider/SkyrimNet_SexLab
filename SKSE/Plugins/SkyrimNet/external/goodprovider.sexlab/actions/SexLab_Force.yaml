@@ -14,7 +14,7 @@ parameterMapping:
     description: The victim being forced
   - type: dynamic
     name: strategy
-    description: "What the victim is forced to do: selfless (please the speaker)|passive (lie still and take it)|mutual (chase pleasure with the speaker)|together (finish together)|selfish (pleasure themselves)|cumquick (make the speaker cum quickly)|reject (hold back their orgasm). Give only the first word."
+    description: "What the victim is forced to do: selfless (please the speaker)|passive (lie still and take it)|mutual (chase pleasure with the speaker)|together (finish together)|selfish (pleasure themselves). Give only the first word."
   - type: dynamic
     name: method
     description: "How [speaker] forces them: slap face|pinch nipple|cover mouth|punch|pull hair|<the name of a weak attack spell [speaker] knows, e.g. Sparks>|<your own short phrase>"

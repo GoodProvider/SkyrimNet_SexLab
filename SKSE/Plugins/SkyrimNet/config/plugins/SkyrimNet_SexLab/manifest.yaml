@@ -600,7 +600,7 @@ schema:
     - name: "Arouse amount"
       path: "sexlab.minigame.arouse_amount"
       type: "float"
-      description: "Enjoyment added per arouse (x (1 + 0.1 x skill)). Forced actors add half."
+      description: "Enjoyment added per arouse (x (1 + 0.1 x skill))."
       min: 0.5
       max: 20
       defaultValue: 2.4
@@ -609,7 +609,7 @@ schema:
     - name: "Calm amount"
       path: "sexlab.minigame.calm_amount"
       type: "float"
-      description: "Enjoyment removed per calm. Forced actors remove half."
+      description: "Enjoyment removed per calm."
       min: 0.5
       max: 20
       defaultValue: 3.2
@@ -640,22 +640,6 @@ schema:
       min: 0
       max: 30
       defaultValue: 4
-      category: "Mini-game"
-
-    - name: "Mental break"
-      path: "sexlab.minigame.mental_break"
-      type: "bool"
-      description: "Being aroused by a partner drains magicka. At 10% magicka or less the actor is broken and cannot calm or edge until above 25%."
-      defaultValue: false
-      category: "Mini-game"
-
-    - name: "Mental break drain"
-      path: "sexlab.minigame.break_drain"
-      type: "float"
-      description: "Magicka drained per arouse at 100% enjoyment (x partner skill, x orgasms)."
-      min: 0
-      max: 50
-      defaultValue: 6
       category: "Mini-game"
 
     - name: "Calm / arouse narration window (sec)"
@@ -727,7 +711,6 @@ schema:
         - "Mutual"
         - "Selfish"
         - "Selfless"
-        - "Together"
         - "Passive"
       defaultValue: "Mutual"
       category: "Mini-game"
@@ -740,7 +723,6 @@ schema:
         - "Selfish"
         - "Mutual"
         - "Selfless"
-        - "Together"
         - "Passive"
       defaultValue: "Selfish"
       category: "Mini-game"
@@ -751,12 +733,9 @@ schema:
       description: "Fallback strategy for victims: used until the decision model's first pick arrives, and always when no decisions provider is set up."
       options:
         - "Passive"
-        - "Reject"
-        - "Cum quick"
         - "Selfish"
         - "Mutual"
         - "Selfless"
-        - "Together"
       defaultValue: "Passive"
       category: "Mini-game"
 

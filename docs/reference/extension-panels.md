@@ -6,7 +6,7 @@ Another mod can add its own TargetMenu panel without changing `index.html`. It s
 
 | key | meaning |
 |-----|---------|
-| `panel` | Panel kind, such as `leash`. Must not be a built-in kind (`scene_start`, `cuddle`, `outfit`, `bondage`, `fields`) |
+| `panel` | Panel kind, such as `leash`. Must not be a built-in kind (`scene_start`, `cuddle`, `outfit`, `bondage`, `fields`, `clean_cum`) |
 | `panelScript` | Script path relative to `PrismaUI/views/SkyrimNet_SexLab/`, shipped as an MO2 overlay into that folder |
 
 Other keys (`label`, `requiresPlugin`, `parameterMapping`, …) work the same as for any `papyrus` option. See [docs/developers/webui.md](../developers/webui.md).

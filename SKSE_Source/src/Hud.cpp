@@ -30,6 +30,7 @@ namespace Hud
             const char* path;
             int defaultVk;
             bool miniGame;  // false = controls group
+            const char* legacyPath = nullptr;  // older dashboard path, used while path still holds the default
         };
 
         // Dashboard hotkeys (VK), defaults on the numpad laid out like the HUD grid, plus PgUp / PgDn
@@ -49,7 +50,7 @@ namespace Hud
             { "calm", "sexlab.minigame.key_calm", VK_NUMPAD8, true },
             { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD9, true },
             { "deny", "sexlab.hud.key_deny", VK_NUMPAD1, false },
-            { "force", "sexlab.minigame.key_force", VK_DECIMAL, true },
+            { "punish", "sexlab.hud.key_punish", VK_DECIMAL, false, "sexlab.minigame.key_force" },
             { "aid", "sexlab.minigame.key_aid", VK_NUMPAD0, true },
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
@@ -218,7 +219,7 @@ namespace Hud
             const bool ok = arouse ? OrgasmEngine::Arouse(source, target, 1.0f)
                                    : OrgasmEngine::Calm(source, target, 1.0f);
             if (!ok) {
-                webui_log::info("Hud: {} refused (cost / broken)", arouse ? "arouse" : "calm");
+                webui_log::info("Hud: {} refused (cost)", arouse ? "arouse" : "calm");
             }
             std::lock_guard lock(g_lock);
             g_lastPush.clear();
@@ -280,43 +281,42 @@ namespace Hud
             });
         }
 
-        // Force key (the acting actor is an aggressor): the Force panel, solo in the WebUI. Victims and their
-        // strategies come from the engine; the panel replies through WebUI onForceResult.
-        void OnForce()
+        // Ask / Order / Punish key (anyone in a managed scene): the panel, solo in the WebUI. Every actor of the
+        // acting actor's scene can be the subject (default: the acting actor) or the object; each brings its weak
+        // attack spells (extra punish methods, a non-lethal hit) and, as an object, the requests it could be asked
+        // for (strategy order phrases) and its punishment reasons (the punish verb needs one).
+        // The panel replies through WebUI onPunishResult.
+        void OnPunish()
         {
-            RE::Actor* forcer = nullptr;
-            bool controlling = false;
-            {
-                std::lock_guard lock(g_lock);
-                forcer = ActingLocked();
-                controlling = g_anchor != 0;
-            }
-            std::vector<OrgasmEngine::ForceVictim> victims;
-            if (!OrgasmEngine::GetForceInfo(forcer, victims) || victims.empty()) {
-                webui_log::info("Hud: force ignored (not aggressor / no victim)");
+            RE::Actor* acting = Acting();
+            std::vector<OrgasmEngine::PunishTarget> others;
+            if (!acting || !OrgasmEngine::GetPunishInfo(acting, others) || others.empty()) {
+                webui_log::info("Hud: punish ignored (not in a managed scene / alone)");
                 return;
             }
-            nlohmann::json cfg;
-            if (controlling) {
-                cfg["forcer"] = { { "id", forcer->GetFormID() }, { "name", NameOf(forcer) } };
+            std::vector<std::pair<RE::FormID, std::string>> everyone{ { acting->GetFormID(), NameOf(acting) } };
+            for (const auto& o : others) {
+                everyone.emplace_back(o.id, o.name);
             }
             nlohmann::json list = nlohmann::json::array();
-            for (const auto& v : victims) {
-                nlohmann::json strategies = nlohmann::json::array();
-                for (const auto& [key, label] : v.strategies) {
-                    strategies.push_back({ { "key", key }, { "label", label } });
+            for (const auto& [id, name] : everyone) {
+                nlohmann::json spells = nlohmann::json::array();
+                for (const auto& sp : Aid::WeakAttackSpells(ActorFor(id))) {
+                    spells.push_back(sp.name);
                 }
-                list.push_back({ { "id", v.id }, { "name", v.name }, { "female", IsFemaleId(v.id) },
-                    { "strategies", std::move(strategies) } });
+                nlohmann::json requests = nlohmann::json::array();
+                for (const auto& r : OrgasmEngine::GetRequestOptions(id)) {
+                    requests.push_back({ { "key", r.key }, { "text", r.text } });
+                }
+                auto* player = RE::PlayerCharacter::GetSingleton();
+                list.push_back({ { "id", id }, { "name", name }, { "female", IsFemaleId(id) },
+                    { "isPlayer", player && id == player->GetFormID() }, { "spells", std::move(spells) },
+                    { "requests", std::move(requests) }, { "reasons", OrgasmEngine::GetPunishReasons(id) } });
             }
-            cfg["victims"] = std::move(list);
-            // Weak attack spells the forcer knows: extra methods (a non-lethal hit).
-            nlohmann::json spells = nlohmann::json::array();
-            for (const auto& sp : Aid::WeakAttackSpells(forcer)) {
-                spells.push_back(sp.name);
-            }
-            cfg["spells"] = std::move(spells);
-            OpenPanel("openForcePanel", std::move(cfg));
+            nlohmann::json cfg;
+            cfg["actors"] = std::move(list);
+            cfg["defaultPunisher"] = acting->GetFormID();
+            OpenPanel("openPunishPanel", std::move(cfg));
         }
 
         // Aid key (mini-game): the Aid panel, solo in the WebUI. Options are the player's healing / stamina spells
@@ -488,8 +488,8 @@ namespace Hud
                     cb = []() { OnSpeed(false); };
                 } else if (ctl == "faster") {
                     cb = []() { OnSpeed(true); };
-                } else if (ctl == "force") {
-                    cb = []() { OnForce(); };
+                } else if (ctl == "punish") {
+                    cb = []() { OnPunish(); };
                 } else if (ctl == "aid") {
                     cb = []() { OnAid(); };
                 } else if (ctl == "deny") {
@@ -625,7 +625,10 @@ namespace Hud
             g_keyDx.clear();
             g_keyLabel.clear();
             for (const auto& b : kBindings) {
-                const int vk = SexLabNet::GetConfigInt(b.path, b.defaultVk);
+                int vk = SexLabNet::GetConfigInt(b.path, b.defaultVk);
+                if (vk == b.defaultVk && b.legacyPath) {
+                    vk = SexLabNet::GetConfigInt(b.legacyPath, b.defaultVk);
+                }
                 const auto dx = SexLabNet::HotkeyVkToDx(vk);
                 g_keyVk[b.control] = vk;
                 g_keyDx[b.control] = dx;
@@ -796,7 +799,7 @@ namespace Hud
                 }
                 rows.push_back({ { "pos", i }, { "name", a.name },
                     { "enjoyment", static_cast<int>(a.enjoyment + 0.5f) }, { "flash", a.flashing },
-                    { "near", a.enjoyment >= 90.0f }, { "broken", a.broken }, { "dom", a.dom }, { "denied", a.denied }, { "strategy", a.strategy },
+                    { "near", a.enjoyment >= 90.0f }, { "dom", a.dom }, { "denied", a.denied }, { "strategy", a.strategy },
                     { "magicka", static_cast<int>(a.magicka + 0.5f) },
                     { "stamina", static_cast<int>(a.stamina + 0.5f) } });
             }
@@ -821,11 +824,11 @@ namespace Hud
             keys["skyrimnet"] = DxLabel(kSkyrimNetDx);
             j["keys"] = std::move(keys);
         }
-        // Force cell: shown while the acting actor is an aggressor, greyed out without a non-player victim.
+        // Punish cell: always shown, greyed out when nobody else is in the scene.
         {
-            std::vector<OrgasmEngine::ForceVictim> victims;
-            const bool aggressor = OrgasmEngine::GetForceInfo(acting, victims);
-            j["force"] = { { "show", aggressor }, { "enabled", aggressor && !victims.empty() } };
+            std::vector<OrgasmEngine::PunishTarget> targets;
+            const bool punishScene = OrgasmEngine::GetPunishInfo(acting, targets);
+            j["punish"] = { { "show", true }, { "enabled", punishScene && !targets.empty() } };
         }
         // Aid cell (mini-game, the player's own scene): greyed out without an affordable healing / stamina spell or
         // a potion.
@@ -864,8 +867,7 @@ namespace Hud
         j["faster"] = speedLevel >= 0 && speedLevel + 1 < OrgasmEngine::kSpeedLevelCount
                           ? OrgasmEngine::kSpeedLevelNames[speedLevel + 1]
                           : "";
-        j["blocked"] = { { "arouse", !OrgasmEngine::CanArouse(acting) }, { "calm", !OrgasmEngine::CanCalm(acting) },
-            { "broken", OrgasmEngine::IsMentallyBroken(acting) } };
+        j["blocked"] = { { "arouse", !OrgasmEngine::CanArouse(acting) }, { "calm", !OrgasmEngine::CanCalm(acting) } };
 
         const std::string payload = j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         {

@@ -7,7 +7,7 @@ Scriptname SkyrimNet_SexLab_OrgasmEngine
 ; source = free-form owner id ("dom", "dd_vibrator", ...). Blocks and rate modifiers are keyed by it.
 ; ModEvents sent by the engine (sender = affected actor, strArg = "<source>|<acting actor FormID>"):
 ;   SkyrimNet_SexLab_Orgasm (numArg orgasm count), SkyrimNet_SexLab_OrgasmDenied,
-;   SkyrimNet_SexLab_Edge (numArg seconds), SkyrimNet_SexLab_MentalBreak (numArg 1 broken / 0 recovered)
+;   SkyrimNet_SexLab_Edge (numArg seconds)
 
 ; ---- Public API ----
 float Function GetEnjoyment(Actor akActor) global native
@@ -24,7 +24,6 @@ Function RequestOrgasm(Actor akActor, bool force, String source) global native
 int Function GetOrgasmCount(Actor akActor) global native
 float Function GetSecondsSinceOrgasm(Actor akActor) global native
 bool Function IsManaged(Actor akActor) global native
-bool Function IsMentallyBroken(Actor akActor) global native
 bool Function IsMiniGameEnabled() global native
 Function SetRates(float passive, float aggressor, float victim) global native
 ; Re-reads sexlab.enjoyment.* / sexlab.minigame.* / sexlab.hud.* (MCM on SkyrimNet_OnPluginConfigSaved).
@@ -69,36 +68,43 @@ Function SetActorSkills(Actor akActor, int skill, int lewd) global native
 Function SetBonusInputs(Actor akActor, float[] ownSkills, float[] partnerSkills, int lowestRank, int highestRank, int actSkill) global native
 
 ; ---- Mini-game NPC strategies (Multi-Orgasm Mini-game mode) ----
-; ids: 0 passive 1 mutual 2 selfish 3 selfless 4 together 5 tease 6 reject 7 cumquick 8 greedy
-;      9 forcedorgasm 10 acceptforce 11 nonsexual. target: Tease / Greedy (a victim) / ForcedOrgasm; None picks one.
-; False when not allowed for the actor (mode, role, forced state). Narrated; shown on the HUD.
+; ids (strategies.json order): 0 passive 1 mutual 2 selfish 3 selfless 4 deny_self 5 deny_all 6 deny
+;      7 tease 8 focused 9 nonsexual. target: deny / tease / focused; None picks one.
+; False when not allowed for the actor (mode, scene). Narrated; shown on the HUD.
 bool Function SetStrategy(Actor akActor, int strategy, Actor target) global native
 int Function GetStrategy(Actor akActor) global native
 ; Third-person phrase ("focuses on self enjoyment"); "" when none, Together mode or the player.
 String Function GetStrategyText(Actor akActor) global native
-Actor Function GetForcedBy(Actor akActor) global native
 ; Sex is hard work: stamina regen, percent of the actor's default (100 when unmanaged or the setting is off).
 float Function GetStaminaRegen(Actor akActor) global native
-; How the forcer forced akActor ("a slap to the face"); narrated with give in / resist. "" clears.
-Function SetForceMethod(Actor akActor, String method) global native
 
-; ---- LLM actions SexLab_Aid / SexLab_Force (mirror the HUD Aid / Force keys) ----
+; ---- LLM actions SexLab_Aid / SexLab_Scene_Punish (mirror the HUD Aid / Punish keys) ----
 ; caster heals or restores target with its best healing (kind "heal") or stamina ("stamina") spell (costs magicka)
 ; or potion (consumed). Returns the narration line, "" when it has none / refused.
 String Function Aid(Actor caster, Actor target, String kind) global native
-; forcer (not a victim) forces victim (a non-player victim of its mini-game scene) into strategy (a strategy key)
-; by method (slap face / pinch nipple / cover mouth / punch / pull hair, a weak attack spell the forcer knows, or
-; free text). Returns the narration line, "" when refused.
-String Function Force(Actor forcer, Actor victim, String strategy, String method) global native
-; SkyrimNet_Whipped (with External_Damage) is installed: Force hits and "heal" Aid go through it, and Whipped sends
-; their narration line (the caller must not narrate it again).
+; by asks (order false) or orders (true) target to take a strategy: key a request key ("passive", "focused_p1": the
+; strategy plus "_p<position>" of the actor it is about; see the Ask / Order panel), or "" with text (a free phrase
+; after "to"). The engine narrates "Bob orders Nina to ...", runs Nina's strategy decision, then narrates "Nina agrees
+; to|refuses Bob's request to ..." itself; a refusal becomes a punishment reason. False when refused.
+bool Function AskOrder(Actor by, Actor target, bool order, String key, String text) global native
+; Another mod (SkyrimNet_DOM) supplies a reason target can be punished for in its scene ("Nina spoke without
+; permission"); it appears in the Punish panel's reason pulldown.
+Function AddPunishReason(Actor by, Actor target, String reason) global native
+; punisher hurts target (anyone else in its scene, the player included) by method (slap / pinch / punch / pull, a
+; weak attack spell the punisher knows, or a free phrase like "biting") on part (body, face, nipples, ...) because
+; reason ("" for none): "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to ...". With
+; SkyrimNet_Whipped the hit's feeling text follows the line. The engine narrates it, then runs Nina's strategy decision.
+; Always returns "" (kept as a String for old callers); the caller narrates nothing.
+String Function Punish(Actor punisher, Actor target, String method, String part, String reason) global native
+; SkyrimNet_Whipped (with External_Damage) is installed: Punish hits and "heal" Aid go through it, and Whipped sends
+; their narration line (the caller must not narrate it again; Punish never needs it).
 bool Function WhippedInstalled() global native
 ; Any affordable healing / stamina spell or any such potion (skyrimnet_sexlab_can_aid).
 bool Function HasAidOptions(Actor akActor) global native
-; Not a victim in a mini-game scene that has a non-player victim (skyrimnet_sexlab_can_force).
-bool Function CanForce(Actor akActor) global native
+; In a managed scene with someone else in it (skyrimnet_sexlab_can_punish).
+bool Function CanPunish(Actor akActor) global native
 
-; Eligibility keys (StorageUtil ints) for the SexLab_Aid / SexLab_Force papyrus_util rules. Set per position at
+; Eligibility keys (StorageUtil ints) for the SexLab_Aid / SexLab_Scene_Punish papyrus_util rules. Set per position at
 ; scene begin, refreshed after an aid (potions run out), cleared at scene end.
 Function ActionKeys_Refresh(Actor akActor) global
     if akActor == None
@@ -109,11 +115,12 @@ Function ActionKeys_Refresh(Actor akActor) global
     else
         StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_aid")
     endif
-    if CanForce(akActor)
-        StorageUtil.SetIntValue(akActor, "skyrimnet_sexlab_can_force", 1)
+    if CanPunish(akActor)
+        StorageUtil.SetIntValue(akActor, "skyrimnet_sexlab_can_punish", 1)
     else
-        StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_force")
+        StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_punish")
     endif
+    StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_force") ; removed Force action
 EndFunction
 
 Function ActionKeys_Clear(Actor akActor) global
@@ -121,24 +128,23 @@ Function ActionKeys_Clear(Actor akActor) global
         return
     endif
     StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_aid")
-    StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_force")
+    StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_punish")
+    StorageUtil.UnsetIntValue(akActor, "skyrimnet_sexlab_can_force") ; removed Force action
 EndFunction
 
 ; Strategy action key (static action parameter) -> id; -1 when unknown.
 int Function StrategyId(String strategy_key) global
-    String[] keys = new String[12]
+    String[] keys = new String[10]
     keys[0] = "passive"
     keys[1] = "mutual"
     keys[2] = "selfish"
     keys[3] = "selfless"
-    keys[4] = "together"
-    keys[5] = "tease"
-    keys[6] = "reject"
-    keys[7] = "cumquick"
-    keys[8] = "greedy"
-    keys[9] = "forcedorgasm"
-    keys[10] = "acceptforce"
-    keys[11] = "nonsexual"
+    keys[4] = "deny_self"
+    keys[5] = "deny_all"
+    keys[6] = "deny"
+    keys[7] = "tease"
+    keys[8] = "focused"
+    keys[9] = "nonsexual"
     return keys.Find(strategy_key)
 EndFunction
 Function EndScene(int sid) global native
@@ -264,6 +270,15 @@ Function Effect_NarrateDirect(String msg, Actor source, Actor target) global
         return
     endif
     SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target)
+EndFunction
+
+; Ask / order / agree / refuse narration in a scene without the player: dropped-never (falls back to an event when the
+; speech queue is busy), like a strategy change.
+Function Effect_NarrateOptional(String msg, Actor source, Actor target) global
+    if msg == ""
+        return
+    endif
+    SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_request", msg, source, target, False)
 EndFunction
 
 ; Arouse / calm narrations: short-lived events only (no DN, no history). Stable eventId per

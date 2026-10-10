@@ -46,7 +46,7 @@ namespace SKYRIMNET_SEXLAB_API
         kOrgasm = 0,       // target orgasmed; count = its orgasm total this scene
         kOrgasmDenied = 1, // target reached the orgasm test but a block stopped it
         kEdge = 2,         // source calmed target at >= 90 enjoyment; value = edge seconds
-        kMentalBreak = 3,  // target's mental break changed; count = 1 broken, 0 recovered
+        // 3 was kMentalBreak (removed)
     };
 
     struct EngineEvent
@@ -72,8 +72,8 @@ namespace SKYRIMNET_SEXLAB_API
         virtual void SetEnjoyment(RE::Actor* a_actor, float a_value, const char* a_source) noexcept = 0;
         virtual void AddEnjoyment(RE::Actor* a_actor, float a_delta, const char* a_source) noexcept = 0;
 
-        /// Mini-game actions (skill, cost, edge, mental break and narration included).
-        /// False when `who` cannot pay the cost, is mentally broken (calm), or target is not managed.
+        /// Mini-game actions (skill, cost, edge and narration included).
+        /// False when `who` cannot pay the cost, or target is not managed.
         virtual bool Arouse(RE::Actor* a_who, RE::Actor* a_target, float a_mult) noexcept = 0;
         virtual bool Calm(RE::Actor* a_who, RE::Actor* a_target, float a_mult) noexcept = 0;
 
@@ -95,7 +95,6 @@ namespace SKYRIMNET_SEXLAB_API
         /// Seconds since the last orgasm; -1 when none this scene.
         virtual float GetSecondsSinceOrgasm(RE::Actor* a_actor) noexcept = 0;
         virtual bool IsManaged(RE::Actor* a_actor) noexcept = 0;
-        virtual bool IsMentallyBroken(RE::Actor* a_actor) noexcept = 0;
 
         /// Runtime override of the role multipliers (normal / aggressor / victim) on the scene's
         /// stage-timer base rate (1.0 reaches 100 near the end of a normal scene).
@@ -114,14 +113,12 @@ namespace SKYRIMNET_SEXLAB_API
         kMutual = 1,
         kSelfish = 2,
         kSelfless = 3,
-        kTogether = 4,
-        kTease = 5,
-        kReject = 6,
-        kCumQuick = 7,
-        kGreedy = 8,
-        kForcedOrgasm = 9,
-        kAcceptForce = 10,
-        kNonSexual = 11,
+        kDenySelf = 4,
+        kDenyAll = 5,
+        kDeny = 6,
+        kTease = 7,
+        kFocused = 8,
+        kNonSexual = 9,
     };
 
     class IOrgasmEngineV2 : public IOrgasmEngineV1
@@ -131,7 +128,7 @@ namespace SKYRIMNET_SEXLAB_API
 
     public:
         /// Multi-Orgasm Mini-game mode only: the engine plays the mini-game for the NPC with this strategy.
-        /// a_target: Tease / Greedy (a victim) / ForcedOrgasm; nullptr picks one. False when not allowed.
+        /// a_target: Deny / Tease / Focused; nullptr picks one. False when not allowed.
         virtual bool SetStrategy(RE::Actor* a_actor, Strategy a_strategy, RE::Actor* a_target) noexcept = 0;
         virtual Strategy GetStrategy(RE::Actor* a_actor) noexcept = 0;
     };

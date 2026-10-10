@@ -1,0 +1,30 @@
+{
+  "type": "papyrus",
+  "label": "Clean Cum",
+  "panel": "clean_cum",
+  "plugin": "SkyrimNet_SexLab.esp",
+  "questFormId": "0x800",
+  "scriptName": "SkyrimNet_SexLab_Actions",
+  "executionFunctionName": "TM_CleanCum",
+  "closeWebUI": true,
+  "parameterMapping": [
+    { "type": "speaker", "name": "speaker" },
+    { "type": "target", "name": "target" },
+    { "type": "dynamic", "name": "part" },
+    { "type": "dynamic", "name": "style" }
+  ],
+  "eligibilityRules": [
+    {
+      "conditions": [
+        {
+          "decoratorName": "papyrus_util",
+          "arguments": ["GetFloatValue", "currentActor", "skyrimnet_sexlab_cum_time", 0],
+          "comparisonOperator": ">",
+          "expectedValue": 0
+        }
+      ],
+      "logicalOperator": "AND",
+      "required": true
+    }
+  ]
+}

@@ -922,12 +922,12 @@
             border-radius: var(--radius);
         }
 
-        #force-panel {
+        #punish-panel {
             pointer-events: auto;
             min-width: 420px;
         }
 
-        .force-sentence {
+        .act-sentence {
             font-family: var(--font-ui);
             font-size: var(--text-lg);
             color: var(--text-primary);
@@ -935,13 +935,14 @@
             line-height: 2.2;
         }
 
-        .force-sentence .pulldown {
+        .act-sentence .pulldown {
             display: inline-block;
             min-width: 140px;
             vertical-align: middle;
         }
 
-        #force-custom-text,
+        #punish-custom-text,
+        #punish-request-text,
         .part-custom-text {
             width: 100%;
             min-height: 60px;
@@ -955,7 +956,42 @@
             font-family: var(--font-ui);
         }
 
-        #force-accept.de-disabled,
+        #punish-request .pulldown,
+        #punish-reason .pulldown {
+            min-width: 200px;
+            max-width: 100%;
+        }
+
+        /* Punish reason "custom": over the Punish panel. */
+        #punish-reason-dialog {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+        }
+
+        #punish-reason-dialog.open {
+            display: flex;
+        }
+
+        #punish-reason-text {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            padding: var(--space-xs) var(--space-sm);
+            font-family: var(--font-ui);
+            font-size: inherit;
+        }
+
+        #punish-accept.de-disabled,
+        #punish-reason-ok.de-disabled,
         #aid-accept.de-disabled {
             opacity: 0.4;
             pointer-events: none;
@@ -1000,7 +1036,7 @@
             margin: 0 0 var(--space-md);
         }
 
-        #force-panel .option-cancel {
+        #punish-panel .option-cancel {
             margin-top: 0;
             border-top: none;
             padding: var(--space-xs) var(--space-md);
@@ -2287,27 +2323,40 @@
             </div>
         </div>
     </div>
-    <!-- Force (HUD force key, player aggressor): "You force <victim> to <strategy> by <method> on <part>." -->
-    <div id="force-panel" class="panel" style="display:none">
-        <div class="target-row">Force</div>
-        <div class="force-sentence">
-            <span id="force-forcer">You force</span> <span id="force-victim"></span>
-            to <span id="force-strategy"></span>
-            by <span id="force-method"></span>
-            on <span id="force-part"></span>.
+    <!-- Ask / Order / Punish (HUD punish key, anyone in the scene):
+         "<subject> asks|orders <object> to <request>." / "<subject> punishes <object> by <method> <object>'s <part>, because <reason>." -->
+    <div id="punish-panel" class="panel" style="display:none">
+        <div class="target-row" id="punish-title">Ask</div>
+        <div class="act-sentence">
+            <span id="punish-punisher"></span> <span id="punish-verb"></span>
+            <span id="punish-target"></span><span id="punish-ask-part"> to <span id="punish-request"></span></span><span id="punish-pun-part"> by <span id="punish-method"></span>
+            <span id="punish-target-name"></span>'s <span id="punish-part"></span>, because <span id="punish-reason"></span></span>.
         </div>
-        <textarea id="force-custom-text" style="display:none" placeholder="threatening them with a knife" oninput="forceUpdate()"></textarea>
-        <textarea id="force-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="forceUpdate()"></textarea>
-        <div id="force-part-confirm" class="whipped-confirm" style="display:none"></div>
+        <textarea id="punish-request-text" style="display:none" placeholder="stop resisting" oninput="punishUpdate()"></textarea>
+        <textarea id="punish-custom-text" style="display:none" placeholder="biting" oninput="punishUpdate()"></textarea>
+        <textarea id="punish-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="punishUpdate()"></textarea>
+        <div id="punish-part-confirm" class="whipped-confirm" style="display:none"></div>
         <div class="btn-row">
-            <div class="action-btn" id="force-accept" onmousedown="event.preventDefault()" onclick="forceAccept()">Force</div>
-            <div class="option-cancel" onmousedown="event.preventDefault()" onclick="forceCancel()">Cancel</div>
+            <div class="action-btn" id="punish-accept" onmousedown="event.preventDefault()" onclick="punishAccept()">Ask</div>
+            <div class="option-cancel" onmousedown="event.preventDefault()" onclick="punishCancel()">Cancel</div>
+        </div>
+    </div>
+    <!-- Punish reason "custom": OK / Enter closes this and the Punish panel and punishes. -->
+    <div id="punish-reason-dialog">
+        <div class="stop-dialog">
+            <div class="target-row">Custom reason</div>
+            <input id="punish-reason-text" type="text" placeholder="resisting her orgasm" oninput="punishReasonDialogUpdate()"
+                onkeydown="if (event.key === 'Enter') { event.preventDefault(); punishReasonDialogOk(); }">
+            <div class="btn-row">
+                <div class="action-btn de-disabled" id="punish-reason-ok" onmousedown="event.preventDefault()" onclick="punishReasonDialogOk()">OK</div>
+                <div class="option-cancel" onmousedown="event.preventDefault()" onclick="punishReasonDialogClose()">Cancel</div>
+            </div>
         </div>
     </div>
     <!-- Aid (HUD aid key, mini-game): "<player> <spell / potion> on <actor>'s <part>." -->
     <div id="aid-panel" class="panel" style="display:none">
         <div class="target-row">Aid</div>
-        <div class="force-sentence">
+        <div class="act-sentence">
             <span id="aid-caster"></span> <span id="aid-option"></span>
             on <span id="aid-actor"></span>'s <span id="aid-part"></span>.
         </div>
@@ -3267,8 +3316,12 @@
                     ssCloseIntentPanel();
                 return;
             }
-            if (forceIsOpen()) {
-                forceCancel();
+            if (punishReasonDialogIsOpen()) {
+                punishReasonDialogClose();
+                return;
+            }
+            if (punishIsOpen()) {
+                punishCancel();
                 return;
             }
             if (aidIsOpen()) {
@@ -3358,6 +3411,9 @@
         let papyrusSelectedOpt = null;
         let outfitUi = { pos0: 0, pos1: 0, style: 'normally' };
         const OUTFIT_STYLES = ['forcefully', 'normally', 'gently', 'silently'];
+        // Clean Cum panel: parts[formId] = live places from Decorators.CumParts (undefined = loading).
+        let cleanCumUi = { subject: 0, target: 0, part: '', style: 'gently', parts: {} };
+        const CLEAN_CUM_STYLES = ['roughly', 'normally', 'gently', 'silently'];
         let bondageUi = { speaker: 0, target: 0, style: 'normally' };
         // Extension panels: another mod ships the renderer as PrismaUI/views/SkyrimNet_SexLab/<panelScript>
         // (MO2 overlay; option JSON "panelScript"). The script calls
@@ -4345,6 +4401,7 @@
             selectedActionLabel = null;
             outfitUi.pos0 = 0;
             outfitUi.pos1 = 0;
+            cleanCumUi = { subject: 0, target: 0, part: '', style: 'gently', parts: {} };
             bondageUi = { speaker: 0, target: 0, style: 'normally' };
             bondageState = { groups: [] };
             ssUi.seededForLabel = '';
@@ -6112,6 +6169,104 @@
             body.appendChild(objRow);
         }
 
+        function cleanCumLoadParts(fid) {
+            if (!fid || cleanCumUi.parts[fid] !== undefined) return;
+            cleanCumUi.parts[fid] = null;
+            papyrusQuery('SkyrimNet_SexLab_Decorators', 'CumParts', fid).then((v) => {
+                cleanCumUi.parts[fid] = (v || '').split(',').map(x => x.trim()).filter(Boolean);
+                if (papyrusSelectedOpt && papyrusSelectedOpt.panel === 'clean_cum')
+                    renderPapyrusPanel();
+            });
+        }
+
+        // Sentence: [subject] / cleans cum from [target]'s [body part]
+        function renderCleanCumPanelBody(body, opt) {
+            const pool = eligibleParamActors();
+            const target = outfitFindActor(pool, cleanCumUi.target)
+                || outfitFindActor(pool, targetActor && targetActor.formId)
+                || pool[0]
+                || null;
+            const subject = outfitFindActor(pool, cleanCumUi.subject)
+                || outfitFindActor(pool, playerActor && playerActor.formId)
+                || pool[0]
+                || null;
+            if (target) cleanCumUi.target = formIdU32(target.formId);
+            if (subject) cleanCumUi.subject = formIdU32(subject.formId);
+            if (!CLEAN_CUM_STYLES.includes(cleanCumUi.style))
+                cleanCumUi.style = 'gently';
+
+            cleanCumLoadParts(cleanCumUi.target);
+            const live = cleanCumUi.parts[cleanCumUi.target];
+            const choices = Array.isArray(live) ? live.slice() : [];
+            if (choices.length > 1) choices.push('all');
+            if (!choices.includes(cleanCumUi.part))
+                cleanCumUi.part = choices[0] || '';
+
+            const bar = document.createElement('div');
+            bar.className = 'bottom-bar top-bar';
+            const startBtn = document.createElement('div');
+            startBtn.className = 'action-btn';
+            startBtn.textContent = 'Start';
+            const ready = cleanCumUi.subject && cleanCumUi.target && cleanCumUi.part;
+            if (!ready) startBtn.classList.add('disabled');
+            startBtn.onclick = () => {
+                if (startBtn.classList.contains('disabled')) return;
+                firePapyrusOption(opt, {
+                    speaker: tmActorParam(cleanCumUi.subject),
+                    target: tmActorParam(cleanCumUi.target),
+                    part: cleanCumUi.part,
+                    style: cleanCumUi.style
+                });
+                delete cleanCumUi.parts[cleanCumUi.target];
+                if (typeof hidePanel === 'function') {
+                    hidePanel('target_menu_panel');
+                    hidePanel('control_panel');
+                }
+            };
+            bar.appendChild(startBtn);
+            bar.appendChild(ssListCascade('clean_cum_style', 'style', CLEAN_CUM_STYLES, cleanCumUi.style, (v) => {
+                cleanCumUi.style = v;
+                renderPapyrusPanel();
+            }));
+            body.appendChild(bar);
+
+            const row = document.createElement('div');
+            row.className = 'compact-row';
+            row.appendChild(outfitActorPulldown(pool, subject, (entry) => {
+                cleanCumUi.subject = formIdU32(entry.formId);
+            }));
+            body.appendChild(row);
+
+            const objRow = document.createElement('div');
+            objRow.className = 'compact-row';
+            const verbEl = document.createElement('span');
+            verbEl.textContent = 'cleans cum from';
+            objRow.appendChild(verbEl);
+            objRow.appendChild(outfitActorPulldown(pool, target, (entry) => {
+                cleanCumUi.target = formIdU32(entry.formId);
+                cleanCumUi.part = '';
+                renderPapyrusPanel();
+            }));
+            const possEl = document.createElement('span');
+            possEl.textContent = "'s";
+            objRow.appendChild(possEl);
+            if (live === null || live === undefined) {
+                const wait = document.createElement('span');
+                wait.textContent = '…';
+                objRow.appendChild(wait);
+            } else if (!choices.length) {
+                const none = document.createElement('span');
+                none.textContent = '(no cum)';
+                objRow.appendChild(none);
+            } else {
+                objRow.appendChild(createPulldown(choices, cleanCumUi.part, (picked) => {
+                    cleanCumUi.part = picked;
+                    renderPapyrusPanel();
+                }));
+            }
+            body.appendChild(objRow);
+        }
+
         function bondageParseArg(arg) {
             if (typeof arg === 'string') {
                 try {
@@ -7000,7 +7155,7 @@
             applySourceTint(panel, navEffectiveSource(opt));
             const kind = opt.panel;
             const skipHeader = kind === 'scene_start' || kind === 'cuddle'
-                || kind === 'outfit' || kind === 'bondage' || kind === 'fields'
+                || kind === 'outfit' || kind === 'bondage' || kind === 'fields' || kind === 'clean_cum'
                 || !!(extPanels[kind] && extPanels[kind].skipHeader);
             if (!skipHeader) {
                 const header = document.createElement('div');
@@ -7023,6 +7178,8 @@
                 renderFieldsPanelBody(body, opt);
             } else if (kind === 'outfit') {
                 renderOutfitPanelBody(body, opt);
+            } else if (kind === 'clean_cum') {
+                renderCleanCumPanelBody(body, opt);
             } else if (kind === 'bondage') {
                 panel.classList.add('target-bondage-panel');
                 renderBondagePanelBody(body, opt);
@@ -7883,11 +8040,19 @@
             }));
         }
 
-        // ── Force (HUD force key) ────────────────────────────────
-        // C++ Hud OnForce: {victims: [{id, name, strategies: [{key, label}]}]}. Reply: onForceResult.
-        const FORCE_PRESETS = ['slap', 'pinch', 'punch', 'pull'];
-        const FORCE_DEFAULT_STRATEGY = 'selfless';
-        // Force and Aid narrate where on the victim; 'body' keeps the unlocated wording. With SkyrimNet_Whipped
+        // ── Ask / Order / Punish (HUD punish key) ───────────────────
+        // C++ Hud OnPunish: {actors: [{id, name, female, isPlayer, spells, requests: [{key, text}], reasons: [string]}],
+        // defaultPunisher, whipped, whippedSexual}. Reply onPunishResult:
+        //   ask / order: {verb, subject, object, request (a request key) | text (free phrase after "to")}
+        //   punish:      {verb, subject, object, method, location, reason}
+        // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
+        // be punished for (refused requests, reasons other mods supply); the punish verb needs at least one.
+        // Presets: [key sent, label]. Then the subject's weak attack spells, then custom (a phrase like "biting").
+        const PUNISH_PRESETS = [['slap', 'slapping'], ['pinch', 'pinching'], ['punch', 'punching'], ['pull', 'pulling']];
+        // verb key sent -> [label in the sentence, accept button / title text]
+        const PUNISH_VERBS = { ask: ['asks', 'Ask'], order: ['orders', 'Order'], punish: ['punishes', 'Punish'] };
+        const PUNISH_CUSTOM = 'custom';
+        // Punish and Aid narrate where on the target; 'body' keeps the unlocated wording. With SkyrimNet_Whipped
         // installed the part is also where the whip damage / heal lands ('body' and custom text: a random part).
         const BODY_PARTS = ['body', 'face', 'lips', 'nipples', 'back', 'left arm', 'right arm', 'left leg', 'right leg',
             'pussy', 'cock', 'ass', 'custom'];
@@ -7895,7 +8060,8 @@
         const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'ass']);
         // From the Hud payload (whipped, whippedSexual).
         let WHIPPED = { installed: false, sexual: false };
-        let FORCE = { victims: [], victim: 0, strategy: '', method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
+        let PUNISH = { actors: [], subject: 0, object: 0, verb: 'ask', request: '', method: PUNISH_PRESETS[0][0],
+            part: BODY_PARTS[0], reason: '' };
 
         // Parts for an actor ({female}): pussy only for women, cock only for men; unknown sex keeps both.
         function bodyPartsFor(actor) {
@@ -7975,110 +8141,255 @@
             return part === 'custom' ? text.value.trim() : part;
         }
 
-        function forceVictim() {
-            return FORCE.victims[FORCE.victim] || null;
+        function punishSubject() {
+            return PUNISH.actors.find(a => a.id === PUNISH.subject) || null;
         }
 
-        function forceRenderStrategy() {
-            const host = document.getElementById('force-strategy');
+        function punishObjects() {
+            return PUNISH.actors.filter(a => a.id !== PUNISH.subject);
+        }
+
+        function punishObject() {
+            return punishObjects().find(a => a.id === PUNISH.object) || null;
+        }
+
+        function punishIsAsk() {
+            return PUNISH.verb !== 'punish';
+        }
+
+        // Verb pulldown: ask, order, and punish once the object holds a reason it can be punished for. Keeps the verb
+        // when still offered (else back to ask).
+        function punishRenderVerb() {
+            const o = punishObject();
+            const verbs = o && o.reasons && o.reasons.length ? ['ask', 'order', 'punish'] : ['ask', 'order'];
+            if (!verbs.includes(PUNISH.verb)) PUNISH.verb = 'ask';
+            const host = document.getElementById('punish-verb');
             host.innerHTML = '';
-            const v = forceVictim();
-            const list = v ? (v.strategies || []) : [];
-            const pick = list.find(s => s.key === FORCE.strategy)
-                || list.find(s => s.key === FORCE_DEFAULT_STRATEGY) || list[0];
-            FORCE.strategy = pick ? pick.key : '';
-            host.appendChild(createPulldown(list.map(s => s.label), pick ? pick.label : '', (_, i) => {
-                FORCE.strategy = list[i].key;
-                forceUpdate();
+            host.appendChild(createPulldown(verbs.map(v => PUNISH_VERBS[v][0]), PUNISH_VERBS[PUNISH.verb][0], (_, i) => {
+                PUNISH.verb = verbs[i];
+                punishUpdate();
             }));
         }
 
-        function forceRenderPart(current) {
-            renderPartPulldown('force-part', 'force-part-text', (v) => {
-                FORCE.part = v;
-                forceUpdate();
-            }, forceVictim(), current);
+        // Request pulldown (ask / order): what the object could be asked to do, then custom (free phrase).
+        function punishRenderRequest() {
+            const o = punishObject();
+            const reqs = (o && o.requests) || [];
+            if (PUNISH.request !== PUNISH_CUSTOM && !reqs.some(r => r.key === PUNISH.request))
+                PUNISH.request = reqs.length ? reqs[0].key : PUNISH_CUSTOM;
+            const labels = reqs.map(r => r.text).concat([PUNISH_CUSTOM]);
+            const cur = PUNISH.request === PUNISH_CUSTOM ? PUNISH_CUSTOM : reqs.find(r => r.key === PUNISH.request).text;
+            const host = document.getElementById('punish-request');
+            host.innerHTML = '';
+            host.appendChild(createPulldown(labels, cur, (_, i) => {
+                PUNISH.request = i < reqs.length ? reqs[i].key : PUNISH_CUSTOM;
+                punishUpdate();
+                if (PUNISH.request === PUNISH_CUSTOM) document.getElementById('punish-request-text').focus();
+            }));
         }
 
-        function forceUpdate() {
-            const custom = FORCE.method === 'custom';
-            const text = document.getElementById('force-custom-text');
-            text.style.display = custom ? '' : 'none';
-            const ok = !!forceVictim() && !!FORCE.strategy && (!custom || text.value.trim() !== '') &&
-                partLocation(FORCE.part, 'force-part-text') !== '';
-            document.getElementById('force-accept').classList.toggle('de-disabled', !ok);
+        // Method pulldown for the current subject: presets, its weak attack spells (a non-lethal hit), custom.
+        function punishRenderMethod() {
+            const p = punishSubject();
+            const methods = PUNISH_PRESETS.concat(((p && p.spells) || []).map(s => [s, s]), [['custom', 'custom']]);
+            if (!methods.some(m => m[0] === PUNISH.method)) PUNISH.method = methods[0][0];
+            const host = document.getElementById('punish-method');
+            host.innerHTML = '';
+            const shown = methods.find(m => m[0] === PUNISH.method);
+            host.appendChild(createPulldown(methods.map(m => m[1]), shown[1], (_, i) => {
+                PUNISH.method = methods[i][0];
+                punishUpdate();
+                if (PUNISH.method === 'custom') document.getElementById('punish-custom-text').focus();
+            }));
         }
 
-        function openForcePanel(cfg) {
-            FORCE = { victims: (cfg && cfg.victims) || [], victim: 0, strategy: FORCE_DEFAULT_STRATEGY,
-                method: FORCE_PRESETS[0], part: BODY_PARTS[0] };
+        // Object pulldown: everyone but the subject; the current object stays when still allowed.
+        function punishRenderObject() {
+            const list = punishObjects();
+            if (!list.some(a => a.id === PUNISH.object)) PUNISH.object = list.length ? list[0].id : 0;
+            const host = document.getElementById('punish-target');
+            host.innerHTML = '';
+            const t = punishObject();
+            host.appendChild(createPulldown(list.map(a => a.name), t ? t.name : '', (_, i) => {
+                PUNISH.object = list[i].id;
+                punishRenderVerb();
+                punishRenderRequest();
+                punishRenderPart(PUNISH.part);
+                punishRenderReason();
+                punishUpdate();
+            }));
+        }
+
+        // Reason pulldown (punish): what the object can be punished for, then custom (the custom dialog). A custom
+        // reason kept after a blocked OK shows as its own entry. The reason stays when still listed.
+        function punishRenderReason() {
+            const t = punishObject();
+            const reasons = ((t && t.reasons) || []).slice();
+            if (PUNISH.reason && !reasons.includes(PUNISH.reason)) {
+                if (PUNISH.reasonCustom) reasons.push(PUNISH.reason);
+                else PUNISH.reason = '';
+            }
+            if (!PUNISH.reason && reasons.length) PUNISH.reason = reasons[0];
+            const host = document.getElementById('punish-reason');
+            host.innerHTML = '';
+            host.appendChild(createPulldown(reasons.concat(['custom']), PUNISH.reason || 'custom', (v) => {
+                if (v === 'custom') {
+                    punishRenderReason();
+                    punishReasonDialogOpen();
+                    return;
+                }
+                PUNISH.reason = v;
+                PUNISH.reasonCustom = false;
+            }));
+        }
+
+        function punishReasonDialogOpen() {
+            const text = document.getElementById('punish-reason-text');
+            text.value = '';
+            punishReasonDialogUpdate();
+            document.getElementById('punish-reason-dialog').classList.add('open');
+            text.focus();
+        }
+
+        function punishReasonDialogIsOpen() {
+            return document.getElementById('punish-reason-dialog').classList.contains('open');
+        }
+
+        function punishReasonDialogClose() {
+            document.getElementById('punish-reason-dialog').classList.remove('open');
+        }
+
+        function punishReasonDialogUpdate() {
+            document.getElementById('punish-reason-ok').classList.toggle('de-disabled',
+                document.getElementById('punish-reason-text').value.trim() === '');
+        }
+
+        // OK / Enter: the custom reason, then punish (closes the panel). Blocked (custom method / part empty): the
+        // panel stays open with the custom reason picked.
+        function punishReasonDialogOk() {
+            const reason = document.getElementById('punish-reason-text').value.trim();
+            if (!reason) return;
+            PUNISH.reason = reason;
+            PUNISH.reasonCustom = true;
+            punishReasonDialogClose();
+            punishRenderReason();
+            punishAccept();
+        }
+
+        function punishRenderPart(current) {
+            renderPartPulldown('punish-part', 'punish-part-text', (v) => {
+                PUNISH.part = v;
+                punishUpdate();
+            }, punishObject(), current);
+        }
+
+        // Shows the ask / order or the punish half of the sentence and enables the accept button.
+        function punishUpdate() {
+            const ask = punishIsAsk();
+            const o = punishObject();
+            document.getElementById('punish-ask-part').style.display = ask ? '' : 'none';
+            document.getElementById('punish-pun-part').style.display = ask ? 'none' : '';
+            document.getElementById('punish-target-name').textContent = o ? o.name : '';
+            document.getElementById('punish-title').textContent = PUNISH_VERBS[PUNISH.verb][1];
+            document.getElementById('punish-accept').textContent = PUNISH_VERBS[PUNISH.verb][1];
+            const reqText = document.getElementById('punish-request-text');
+            const reqCustom = ask && PUNISH.request === PUNISH_CUSTOM;
+            reqText.style.display = reqCustom ? '' : 'none';
+            const methodText = document.getElementById('punish-custom-text');
+            const methodCustom = !ask && PUNISH.method === 'custom';
+            methodText.style.display = methodCustom ? '' : 'none';
+            let ok = !!punishSubject() && !!o;
+            if (ask) {
+                document.getElementById('punish-part-text').style.display = 'none';
+                ok = ok && (!reqCustom || reqText.value.trim() !== '');
+            } else {
+                ok = ok && (!methodCustom || methodText.value.trim() !== '') &&
+                    partLocation(PUNISH.part, 'punish-part-text') !== '';
+            }
+            document.getElementById('punish-accept').classList.toggle('de-disabled', !ok);
+        }
+
+        function openPunishPanel(cfg) {
+            const actors = (cfg && cfg.actors) || [];
+            const first = actors[0] || {};
+            PUNISH = { actors, subject: (cfg && cfg.defaultPunisher) || first.id || 0, object: 0, verb: 'ask',
+                request: '', method: PUNISH_PRESETS[0][0], part: BODY_PARTS[0], reason: '', reasonCustom: false };
             WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
-            document.getElementById('force-part-confirm').style.display = 'none';
-            // Presets, then the player's weak attack spells (a non-lethal hit), then custom text.
-            const methods = FORCE_PRESETS.concat((cfg && cfg.spells) || [], ['custom']);
-            // HUD take-control key: the NPC the player drives forces (cfg.forcer); else the player.
-            document.getElementById('force-forcer').textContent =
-                cfg && cfg.forcer && cfg.forcer.name ? cfg.forcer.name + ' forces' : 'You force';
+            document.getElementById('punish-part-confirm').style.display = 'none';
+            punishReasonDialogClose();
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
-            const victimHost = document.getElementById('force-victim');
-            victimHost.innerHTML = '';
-            victimHost.appendChild(createPulldown(FORCE.victims.map(v => v.name), (FORCE.victims[0] || {}).name || '', (_, i) => {
-                FORCE.victim = i;
-                forceRenderStrategy();
-                forceRenderPart(FORCE.part);
-                forceUpdate();
+            const subjectHost = document.getElementById('punish-punisher');
+            subjectHost.innerHTML = '';
+            const p = punishSubject();
+            subjectHost.appendChild(createPulldown(actors.map(a => a.name), p ? p.name : '', (_, i) => {
+                PUNISH.subject = actors[i].id;
+                punishRenderMethod();
+                punishRenderObject();
+                punishRenderVerb();
+                punishRenderRequest();
+                punishRenderPart(PUNISH.part);
+                punishRenderReason();
+                punishUpdate();
             }));
-            forceRenderStrategy();
-            const methodHost = document.getElementById('force-method');
-            methodHost.innerHTML = '';
-            methodHost.appendChild(createPulldown(methods, FORCE.method, (v) => {
-                FORCE.method = v;
-                forceUpdate();
-                if (v === 'custom') document.getElementById('force-custom-text').focus();
-            }));
-            document.getElementById('force-custom-text').value = '';
-            forceRenderPart();
+            punishRenderMethod();
+            punishRenderObject();
+            punishRenderVerb();
+            punishRenderRequest();
+            document.getElementById('punish-custom-text').value = '';
+            document.getElementById('punish-request-text').value = '';
+            punishRenderPart();
+            punishRenderReason();
             // Same solo layout as the gating dialogue: only this panel shows.
             document.body.classList.add('yesno-solo');
             hideControlPanel();
             hideTargetMenuRow();
             const host = document.getElementById('main-panel-host');
             if (host) host.style.display = 'none';
-            document.getElementById('force-panel').style.display = 'block';
-            forceUpdate();
+            document.getElementById('punish-panel').style.display = 'block';
+            punishUpdate();
         }
 
-        function hideForcePanel() {
-            document.getElementById('force-panel').style.display = 'none';
+        function hidePunishPanel() {
+            document.getElementById('punish-panel').style.display = 'none';
+            punishReasonDialogClose();
             closeAllPulldowns();
             clearYesNoSolo();
         }
 
-        function forceIsOpen() {
-            return document.getElementById('force-panel').style.display === 'block';
+        function punishIsOpen() {
+            return document.getElementById('punish-panel').style.display === 'block';
         }
 
-        function forceSend(payload) {
-            if (typeof window.onForceResult === 'function')
-                window.onForceResult(JSON.stringify(payload));
+        function punishSend(payload) {
+            if (typeof window.onPunishResult === 'function')
+                window.onPunishResult(JSON.stringify(payload));
             else
-                hideForcePanel();
+                hidePunishPanel();
         }
 
-        function forceAccept() {
-            const v = forceVictim();
-            if (!v || document.getElementById('force-accept').classList.contains('de-disabled')) return;
-            const method = FORCE.method === 'custom'
-                ? document.getElementById('force-custom-text').value.trim()
-                : FORCE.method;
-            forceSend({ victim: v.id, strategy: FORCE.strategy, method,
-                location: partLocation(FORCE.part, 'force-part-text') });
+        function punishAccept() {
+            const p = punishSubject();
+            const t = punishObject();
+            if (!p || !t || document.getElementById('punish-accept').classList.contains('de-disabled')) return;
+            if (punishIsAsk()) {
+                const custom = PUNISH.request === PUNISH_CUSTOM;
+                punishSend({ verb: PUNISH.verb, subject: p.id, object: t.id,
+                    request: custom ? '' : PUNISH.request,
+                    text: custom ? document.getElementById('punish-request-text').value.trim() : '' });
+                return;
+            }
+            const method = PUNISH.method === 'custom'
+                ? document.getElementById('punish-custom-text').value.trim()
+                : PUNISH.method;
+            punishSend({ verb: 'punish', subject: p.id, object: t.id, method,
+                location: partLocation(PUNISH.part, 'punish-part-text'),
+                reason: PUNISH.reason });
         }
 
-        function forceCancel() {
-            forceSend({ cancel: true });
+        function punishCancel() {
+            punishSend({ cancel: true });
         }
 
         // ── Aid panel (HUD aid key): the player's healing / stamina spells and potions on a scene actor ──

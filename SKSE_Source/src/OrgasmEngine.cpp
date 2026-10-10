@@ -11,12 +11,15 @@
 #include "Whipped.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <map>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <thread>
 #include <unordered_map>
@@ -34,8 +37,6 @@ namespace OrgasmEngine
         constexpr double kMirrorRefresh = 3.0;
         constexpr double kRollInterval = 1.0;
         constexpr double kStaleSceneSeconds = 10.0;
-        constexpr float kBreakAt = 0.10f;
-        constexpr float kRecoverAt = 0.25f;
         constexpr double kDomSyncInterval = 1.0;
         constexpr double kDomRefresh = 2.0;
         constexpr float kDomMeterPossible = 50.0f;  // DOM meter >= this: DOM's values could produce an orgasm
@@ -69,8 +70,6 @@ namespace OrgasmEngine
             float staminaCost = 8.0f;
             float magickaCost = 8.0f;
             float edgeSeconds = 4.0f;
-            bool mentalBreak = false;
-            float breakDrain = 6.0f;
             float randomBonus = 10.0f;
             float narrateWindow = 3.0f;
             float groupJoin = 85.0f;       // someone orgasmed: others at this enjoyment or more join outright
@@ -93,7 +92,6 @@ namespace OrgasmEngine
             Strategy defaultVictim = Strategy::kPassive;
             bool decisionStrategy = true;  // the decision model picks NPC strategies (StrategyDecision)
             float decisionMinConfidence = 0.6f;  // a strategy change needs at least this answer confidence
-            float fearCooldown = 0.0f;   // player Force: seconds the victim can only give in
             // Sex is hard work: stamina regen (share of the actor's default) decays while animating.
             // Disabled for now: the sexlab.stamina.* settings were removed (0.35.2); code kept for later.
             bool staminaFatigue = false;
@@ -101,6 +99,19 @@ namespace OrgasmEngine
             float regenDecay = 40.0f;       // untimed scenes: regen points lost per minute of animation
             float regenOrgasmCost = 10.0f;  // regen points lost per orgasm
         };
+
+        // A reason the actor can be punished for this scene: a request it refused (type "refused_strategy"), or one
+        // another mod supplied (type "external", e.g. SkyrimNet_DOM). Not saved.
+        struct PunishRecord
+        {
+            RE::FormID by = 0;        // order_actor: who asked / ordered
+            RE::FormID target = 0;    // target_actor: who refused (the list's owner)
+            std::string reason;       // reason_narration: after "because" ("Nina refused Bob's order to ...")
+            std::string strategyKey;  // the refused request's key ("focused_p1"); "" for a custom / external reason
+            std::string request;      // the request's order text ("be passive and let things happen")
+            std::string type = "refused_strategy";
+        };
+        constexpr std::size_t kPunishKept = 8;
 
         struct ActorState
         {
@@ -113,7 +124,6 @@ namespace OrgasmEngine
             Role role = Role::kNormal;
             std::int32_t skill = 0;
             std::int32_t lewd = 0;
-            bool broken = false;
             bool sceneBlocked = false;
             bool orgasmExpected = true;  // position's orgasm_expected; false: no passive gain
             std::map<std::string, bool> blocks;
@@ -151,21 +161,16 @@ namespace OrgasmEngine
             float bonus = 0.0f;
             // Together: scene progress (0..1) already credited by the curve.
             float curveP = 0.0f;
-            // Mini-game NPC strategy. forcedBy: Greedy / ForcedOrgasm forcer; forcedAction what AcceptForce plays.
+            // Mini-game NPC strategy.
             Strategy strategy = Strategy::kPassive;
             RE::FormID strategyTarget = 0;
-            RE::FormID forcedBy = 0;
-            ForcedAction forcedAction = ForcedAction::kNone;
-            Strategy forcedStrategy = Strategy::kPassive;  // kPlayStrategy: what AcceptForce plays
-            std::string forceMethod;  // "a slap to the face"; narrated with AcceptForce / RejectForce
-            double fearUntil = 0.0;   // player Force: only AcceptForce offered until then
             double nextStepAt = 0.0;
-            bool brokenOverride = false;  // broken: strategy set aside, arousing self
             float regen = 100.0f;  // stamina regen, percent of the actor's default (staminaFatigue)
             // HUD take-control key. autoPlay (player): the engine plays the player's strategy like an NPC's.
             // playerDriven (NPC): the player drives this NPC with the HUD; its strategy stops. Not saved.
             bool autoPlay = false;
             bool playerDriven = false;
+            std::vector<PunishRecord> reasons;  // punishment reasons held (last kPunishKept), oldest first
         };
 
         struct SceneState
@@ -611,30 +616,6 @@ namespace OrgasmEngine
             return std::max(0.5f, g_settings.magickaCost * (1.0f + 0.05f * lewd));
         }
 
-        // Caller holds g_lock. Magicka thresholds with hysteresis.
-        void UpdateBroken(ActorState& st, RE::Actor* actor, RE::FormID sourceId, const std::string& source,
-            Effects& fx)
-        {
-            bool broken = st.broken;
-            if (!g_settings.mentalBreak || !actor) {
-                broken = false;
-            } else {
-                const float max = MaxAv(actor, RE::ActorValue::kMagicka);
-                const float pct = max > 0.0f ? CurrentAv(actor, RE::ActorValue::kMagicka) / max : 1.0f;
-                if (!st.broken && pct <= kBreakAt) {
-                    broken = true;
-                } else if (st.broken && pct > kRecoverAt) {
-                    broken = false;
-                }
-            }
-            if (broken != st.broken) {
-                st.broken = broken;
-                fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kMentalBreak, st.id, sourceId, source,
-                    0.0f, broken ? 1 : 0 });
-                webui_log::info("OrgasmEngine: {:#x} mental break {}", st.id, broken ? "on" : "off");
-            }
-        }
-
         // Caller holds g_lock. Counts the orgasm and adds the actor to group (the caller emits the group).
         void Fire(ActorState& st, OrgasmGroupFx& group, bool individual, const std::string& source, double now,
             Effects& fx)
@@ -830,57 +811,100 @@ namespace OrgasmEngine
         }
 
         // ---- Mini-game NPC strategies ----
+        // The wording lives in Data/SKSE/Plugins/SkyrimNet_SexLab/strategies.json (LoadStrategies, matched by
+        // key); the keys stay here, in Strategy enum order.
+        constexpr const char* kStrategyKeys[] = {
+            "passive", "mutual", "selfish", "selfless", "deny_self", "deny_all", "deny", "tease", "focused",
+            "nonsexual",
+        };
+        constexpr std::size_t kStrategyCount = std::size(kStrategyKeys);
+        static_assert(kStrategyCount == static_cast<std::size_t>(Strategy::kCount));
+
         struct StrategyInfo
         {
-            const char* key;       // decision option / dashboard key
-            const char* label;     // HUD tag: short name
-            const char* text;      // third person, after the name; {target} / {forcer} / {name} filled in
-            const char* option;    // decision option text (criteria line); also {self} / {his}
-            const char* observed;  // how a decision-made change looks to others, after the name
+            std::string key;       // decision option / dashboard key
+            std::string label;     // HUD tag: short name
+            std::string text;      // third person, after the name; {target} / {name} filled in
+            std::string option;    // decision option text (criteria line); also {self} / {his}
+            std::string observed;  // how a decision-made change looks to others, after the name
+            std::string order;     // infinitive phrase after "to": "Bob orders Nina to <order>."
         };
-        constexpr StrategyInfo kStrategies[] = {
-            { "passive", "passive", "lets things happen", "Passive: {name} stops trying and lets things happen",
-                "appears to be just letting things happen" },
-            { "mutual", "arouse all", "focuses efforts on mutual enjoyment",
-                "Mutual: {name} works on mutual enjoyment, always helping whoever is least aroused, {self} included",
-                "appears to be making sure everyone enjoys it" },
-            { "selfish", "arouse self", "focuses on self enjoyment", "Selfish: {name} chases {his} own pleasure",
-                "appears to be focused on {his} own enjoyment" },
-            { "selfless", "arouse others", "focuses on the enjoyment of others",
-                "Selfless: {name} focuses on pleasing the others, always helping the least aroused partner",
-                "appears to be focused on pleasing the others" },
-            { "together", "finish together", "paces themselves to finish together",
-                "Together: {name} paces {self} to finish together, holding back when ahead and catching up when behind",
-                "appears to be pacing {self} to finish together" },
-            { "tease", "tease", "teases {target}, holding them at the edge",
-                "Tease {target}: {name} arouses {target}, then holds them at the edge of orgasm",
-                "appears to be teasing {target}, keeping them at the edge" },
-            { "reject", "hold back", "focuses effort on not orgasming",
-                "Hold back: {name} fights {his} own arousal and puts all effort into not orgasming",
-                "appears to be fighting not to climax" },
-            { "cumquick", "cum quick", "is focused on making them cum so it ends",
-                "Cum quick: {name} works to make the aggressor cum so it ends",
-                "appears to be trying to make it end quickly" },
-            { "greedy", "greedy", "focuses on their own pleasure and forces {target} to focus on {name}'s pleasure",
-                "Greedy with {target}: {name} takes {his} own pleasure and forces {target} to serve it",
-                "appears to be using {target} for {his} own pleasure" },
-            { "forcedorgasm", "force orgasm", "focuses on forcing {target} to orgasm",
-                "Force {target} to orgasm: {name} drives {target} to orgasm and makes them arouse themselves too",
-                "appears to be set on forcing {target} to orgasm" },
-            { "acceptforce", "give in", "gives in to {forcer}",
-                "Give in: {name} gives in to {forcer} and does what {forcer} forces",
-                "appears to have given in to {forcer}" },
-            { "nonsexual", "non-sexual", "keeps things non-sexual",
-                "Non-sexual: {name} keeps things affectionate and non-sexual",
-                "appears to be keeping things non-sexual" },
-        };
-        static_assert(std::size(kStrategies) == static_cast<std::size_t>(Strategy::kCount));
+        using StrategyTable = std::array<StrategyInfo, kStrategyCount>;
+
+        // Every text is its key until strategies.json provides it.
+        StrategyTable FallbackStrategies()
+        {
+            StrategyTable t;
+            for (std::size_t i = 0; i < kStrategyCount; ++i) {
+                t[i].key = t[i].label = t[i].text = t[i].option = t[i].observed = t[i].order = kStrategyKeys[i];
+            }
+            return t;
+        }
+        StrategyTable g_strategies = FallbackStrategies();  // g_lock
+
+        // Reads strategies.json (an array of objects, one per key). Unreadable / invalid: keeps the table in use.
+        void LoadStrategies()
+        {
+            constexpr const char* kPath = "Data/SKSE/Plugins/SkyrimNet_SexLab/strategies.json";
+            std::ifstream in(kPath);
+            if (!in) {
+                webui_log::warn("OrgasmEngine: {} missing; strategy texts stay as they were", kPath);
+                return;
+            }
+            StrategyTable next = FallbackStrategies();
+            std::array<bool, kStrategyCount> seen{};
+            try {
+                const auto j = nlohmann::json::parse(in);
+                if (!j.is_array()) {
+                    webui_log::warn("OrgasmEngine: {} is not an array; strategy texts stay as they were", kPath);
+                    return;
+                }
+                const auto str = [](const nlohmann::json& o, const char* name) {
+                    const auto it = o.find(name);
+                    return it != o.end() && it->is_string() ? it->get<std::string>() : std::string();
+                };
+                for (const auto& item : j) {
+                    const std::string key = item.is_object() ? str(item, "key") : "";
+                    std::size_t i = 0;
+                    while (i < kStrategyCount && key != kStrategyKeys[i]) {
+                        ++i;
+                    }
+                    if (i == kStrategyCount) {
+                        webui_log::warn("OrgasmEngine: strategies.json: unknown key '{}' ignored", key);
+                        continue;
+                    }
+                    seen[i] = true;
+                    StrategyInfo& t = next[i];
+                    const std::pair<const char*, std::string*> required[] = {
+                        { "label", &t.label }, { "text", &t.text }, { "option", &t.option },
+                        { "observed", &t.observed }, { "order", &t.order },
+                    };
+                    for (const auto& [name, field] : required) {
+                        if (const std::string v = str(item, name); !v.empty()) {
+                            *field = v;
+                        } else {
+                            webui_log::warn("OrgasmEngine: strategies.json: '{}' has no {}", key, name);
+                        }
+                    }
+                }
+            } catch (const std::exception& e) {
+                webui_log::warn("OrgasmEngine: {} unreadable ({}); strategy texts stay as they were", kPath, e.what());
+                return;
+            }
+            for (std::size_t i = 0; i < kStrategyCount; ++i) {
+                if (!seen[i]) {
+                    webui_log::warn("OrgasmEngine: strategies.json: no entry for '{}'", kStrategyKeys[i]);
+                }
+            }
+            std::lock_guard lock(g_lock);
+            g_strategies = std::move(next);
+        }
 
         const StrategyInfo& InfoOf(Strategy s)
         {
             const auto i = static_cast<std::size_t>(std::clamp(static_cast<std::int32_t>(s), 0,
                 static_cast<std::int32_t>(Strategy::kCount) - 1));
-            return kStrategies[i];
+            return g_strategies[i];
         }
 
         // Dashboard pulldown value ("Mutual", "Cum quick", ...) -> strategy; def when unknown.
@@ -893,7 +917,9 @@ namespace OrgasmEngine
                 }
             }
             for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
-                if (v == kStrategies[i].key) {
+                std::string k = kStrategyKeys[i];  // "deny_self" matches the stripped "denyself"
+                k.erase(std::remove(k.begin(), k.end(), '_'), k.end());
+                if (v == k) {
                     return static_cast<Strategy>(i);
                 }
             }
@@ -902,7 +928,7 @@ namespace OrgasmEngine
 
         bool NeedsTarget(Strategy s)
         {
-            return s == Strategy::kTease || s == Strategy::kGreedy || s == Strategy::kForcedOrgasm;
+            return s == Strategy::kDeny || s == Strategy::kTease || s == Strategy::kFocused;
         }
 
         // Caller holds g_lock. Some actor of the scene expects orgasm (position's orgasm_expected).
@@ -916,49 +942,22 @@ namespace OrgasmEngine
             return false;
         }
 
-        bool AnyOtherVictim(const SceneState& sc, RE::FormID self)
-        {
-            for (const auto id : sc.actors) {
-                if (id == self) {
-                    continue;
-                }
-                if (const auto at = g_actors.find(id); at != g_actors.end() && at->second.role == Role::kVictim) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Caller holds g_lock. Mini-game mode, AI-driven actors only. Forced: AcceptForce, or Selfish / Reject (RejectForce).
+        // Caller holds g_lock. Mini-game mode, AI-driven actors only; no role gating.
         bool StrategyAllowed(const SceneState& sc, const ActorState& st, Strategy s)
         {
             if (!g_settings.miniGame || !AiDriven(st) || s < Strategy::kPassive || s >= Strategy::kCount) {
                 return false;
             }
-            if (st.forcedBy != 0) {
-                if (Now() < st.fearUntil) {
-                    return s == Strategy::kAcceptForce;
-                }
-                return s == Strategy::kAcceptForce || s == Strategy::kSelfish || s == Strategy::kReject;
-            }
-            const bool victim = st.role == Role::kVictim;
             const bool others = sc.actors.size() > 1;
             switch (s) {
-            case Strategy::kAcceptForce:
-                return false;
             case Strategy::kNonSexual:
                 return !AnyExpected(sc);
-            case Strategy::kReject:
-            case Strategy::kCumQuick:
-                return victim;
-            case Strategy::kTease:
-            case Strategy::kForcedOrgasm:
-                return !victim && others;
-            case Strategy::kGreedy:
-                return !victim && AnyOtherVictim(sc, st.id);
             case Strategy::kMutual:
             case Strategy::kSelfless:
-            case Strategy::kTogether:
+            case Strategy::kDenyAll:
+            case Strategy::kDeny:
+            case Strategy::kTease:
+            case Strategy::kFocused:
                 return others;
             default:
                 return true;
@@ -994,75 +993,29 @@ namespace OrgasmEngine
             }
         }
 
-        // Fills {target} / {forcer} / {name} / {self} / {his} in a strategy text for the actor `self`.
-        void FillStrategyText(std::string& text, RE::FormID self, RE::FormID target, RE::FormID forcer)
+        // Fills {target} / {name} / {self} / {his} in a strategy text for the actor `self`.
+        void FillStrategyText(std::string& text, RE::FormID self, RE::FormID target)
         {
             RE::Actor* actor = ActorFor(self);
             ReplaceAll(text, "{target}", NameOf(ActorFor(target)));
-            ReplaceAll(text, "{forcer}", NameOf(ActorFor(forcer)));
             ReplaceAll(text, "{name}", NameOf(actor));
             ReplaceAll(text, "{self}", Reflexive(actor));
             ReplaceAll(text, "{his}", Possessive(actor));
         }
 
-        // Player Force: what the victim is forced to do, after "forces <victim> to" / "gives in to <forcer> and".
-        // {forcer} is the player ("you" on the panel); {self} the victim's reflexive pronoun.
-        const char* ForcedPhrase(Strategy s)
-        {
-            switch (s) {
-            case Strategy::kPassive:
-                return "lie still and take it";
-            case Strategy::kMutual:
-                return "chase pleasure with {forcer}";
-            case Strategy::kSelfish:
-                return "pleasure {self}";
-            case Strategy::kSelfless:
-                return "please {forcer}";
-            case Strategy::kTogether:
-                return "finish together with {forcer}";
-            case Strategy::kReject:
-                return "hold back their orgasm";
-            case Strategy::kCumQuick:
-                return "make {forcer} cum quickly";
-            default:
-                return InfoOf(s).text;
-            }
-        }
-
-        // Caller holds g_lock. HUD tag: short name; forced actors get "⛓️" + what they actually do.
+        // Caller holds g_lock. HUD tag: short name.
         std::string HudLabel(const ActorState& st)
         {
-            if (st.forcedBy == 0) {
-                return InfoOf(st.strategy).label;
-            }
-            const char* what = InfoOf(st.strategy).label;
-            if (st.strategy == Strategy::kAcceptForce) {
-                if (st.forcedAction == ForcedAction::kPlayStrategy) {
-                    what = InfoOf(st.forcedStrategy).label;
-                } else if (st.forcedAction == ForcedAction::kArouseForcer) {
-                    what = InfoOf(Strategy::kSelfless).label;
-                } else if (st.forcedAction == ForcedAction::kArouseSelf) {
-                    what = InfoOf(Strategy::kSelfish).label;
-                }
-            }
-            return std::string("\xE2\x9B\x93\xEF\xB8\x8F ") + what;
+            std::string label = InfoOf(st.strategy).label;
+            FillStrategyText(label, st.id, st.strategyTarget);
+            return label;
         }
 
         // Caller holds g_lock. Third-person phrase for the actor's strategy (no leading name).
         std::string StrategyPhrase(const ActorState& st)
         {
-            const StrategyInfo& info = InfoOf(st.strategy);
-            std::string text = info.text;
-            const std::string by = st.forceMethod.empty() ? "" : " despite " + st.forceMethod;
-            if (st.forcedBy != 0 && (st.strategy == Strategy::kSelfish || st.strategy == Strategy::kReject)) {
-                text = "resists {forcer}" + by + " and " + text;
-            } else if (st.strategy == Strategy::kAcceptForce && !st.forceMethod.empty()) {
-                text += ", cowed by " + st.forceMethod;
-            }
-            if (st.strategy == Strategy::kAcceptForce && st.forcedAction == ForcedAction::kPlayStrategy) {
-                text += " and " + std::string(ForcedPhrase(st.forcedStrategy));
-            }
-            FillStrategyText(text, st.id, st.strategyTarget, st.forcedBy);
+            std::string text = InfoOf(st.strategy).text;
+            FillStrategyText(text, st.id, st.strategyTarget);
             return text;
         }
 
@@ -1071,10 +1024,7 @@ namespace OrgasmEngine
         std::string ObservedPhrase(const ActorState& st)
         {
             std::string text = InfoOf(st.strategy).observed;
-            if (st.forcedBy != 0 && (st.strategy == Strategy::kSelfish || st.strategy == Strategy::kReject)) {
-                text = "appears to be resisting {forcer} and " + text.substr(std::string("appears to be ").size());
-            }
-            FillStrategyText(text, st.id, st.strategyTarget, st.forcedBy);
+            FillStrategyText(text, st.id, st.strategyTarget);
             return text;
         }
 
@@ -1092,71 +1042,23 @@ namespace OrgasmEngine
                 name + " " + (observed.empty() ? phrase : observed) + ".", narrate });
         }
 
-        // Caller holds g_lock. Ends the forced state this actor put on its target (Greedy / ForcedOrgasm).
-        void ReleaseForced(const SceneState& sc, ActorState& forcer, Effects& fx, bool narrate = true)
-        {
-            if (forcer.strategy != Strategy::kGreedy && forcer.strategy != Strategy::kForcedOrgasm) {
-                return;
-            }
-            const auto at = g_actors.find(forcer.strategyTarget);
-            if (at == g_actors.end() || at->second.forcedBy != forcer.id) {
-                return;
-            }
-            ActorState& t = at->second;
-            const std::string forcerName = NameOf(ActorFor(forcer.id));
-            t.forcedBy = 0;
-            t.forcedAction = ForcedAction::kNone;
-            t.forceMethod.clear();
-            t.fearUntil = 0.0;
-            t.strategy = DefaultStrategy(sc, t);
-            t.strategyTarget = 0;
-            Announce(sc, t, "is no longer forced by " + forcerName, fx, narrate);
-            webui_log::info("OrgasmEngine: {:#x} released from forced by {:#x} -> {}", t.id, forcer.id,
-                InfoOf(t.strategy).key);
-        }
-
-        // Caller holds g_lock. Sets the strategy (already allowed), forcing the target for Greedy / ForcedOrgasm.
+        // Caller holds g_lock. Sets the strategy (already allowed).
         // narrate false: a decision-made change (short-term event instead of narration).
         void ApplyStrategy(const SceneState& sc, ActorState& st, Strategy s, RE::FormID target, bool announce,
             Effects& fx, bool narrate = true)
         {
-            if (st.strategy != s || st.strategyTarget != target) {
-                ReleaseForced(sc, st, fx, narrate);
-            }
             st.strategy = s;
             st.strategyTarget = NeedsTarget(s) ? target : 0;
             st.nextStepAt = Now();
-            if (s == Strategy::kGreedy || s == Strategy::kForcedOrgasm) {
-                auto at = g_actors.find(target);
-                // The player plays their own mini-game (or an NPC they took control of): never forced.
-                if (at != g_actors.end() && at->second.sid == st.sid && !IsPlayer(ActorFor(target)) &&
-                    !at->second.playerDriven) {
-                    ActorState& t = at->second;
-                    if (t.forcedBy != 0 && t.forcedBy != st.id) {
-                        if (auto old = g_actors.find(t.forcedBy); old != g_actors.end()) {
-                            ReleaseForced(sc, old->second, fx, narrate);
-                        }
-                    }
-                    ReleaseForced(sc, t, fx, narrate);  // a forced actor drops what it was forcing
-                    t.forcedBy = st.id;
-                    t.forceMethod.clear();
-                    t.fearUntil = 0.0;
-                    t.forcedAction = s == Strategy::kGreedy ? ForcedAction::kArouseForcer : ForcedAction::kArouseSelf;
-                    t.strategy = Strategy::kAcceptForce;
-                    t.strategyTarget = 0;
-                    t.nextStepAt = Now();
-                }
-            }
-            webui_log::info("OrgasmEngine: {:#x} strategy {} target {:#x} forcedBy {:#x}", st.id, InfoOf(s).key,
-                st.strategyTarget, st.forcedBy);
+            webui_log::info("OrgasmEngine: {:#x} strategy {} target {:#x}", st.id, InfoOf(s).key, st.strategyTarget);
             if (announce) {
                 Announce(sc, st, StrategyPhrase(st), fx, narrate, ObservedPhrase(st));
             }
         }
 
-        // Caller holds g_lock. Mini-game press with an explicit base amount (skill factor, cost, mental-break
-        // drain applied). narrate: queue the coalesced "<A> arouses <B>" line (player keys / LLM / API).
-        bool ArouseLocked(RE::Actor* who, RE::Actor* target, ActorState& tst, float base, bool narrate, Effects& fx)
+        // Caller holds g_lock. Mini-game press with an explicit base amount (skill factor, cost applied). narrate:
+        // queue the coalesced "<A> arouses <B>" line (player keys / LLM / API).
+        bool ArouseLocked(RE::Actor* who, RE::Actor* target, ActorState& tst, float base, bool narrate, Effects&)
         {
             const auto* wst = Find(who);
             const float skill = wst ? static_cast<float>(wst->skill) : 0.0f;
@@ -1166,21 +1068,13 @@ namespace OrgasmEngine
             }
             DamageAv(who, RE::ActorValue::kStamina, cost);
             const float before = tst.enjoyment;
-            // Forced actors are half as effective.
-            const float forcedMult = wst && wst->forcedBy != 0 ? 0.5f : 1.0f;
-            const float amount = std::max(0.0f, base) * (1.0f + 0.1f * skill) * forcedMult;
+            const float amount = std::max(0.0f, base) * (1.0f + 0.1f * skill);
             if (tst.dom) {
                 tst.domDelta += amount;
                 tst.domShare += amount / kMaxEnjoyment;
                 tst.domSyncNow = true;
             } else {
                 tst.enjoyment = std::clamp(before + amount, 0.0f, kMaxEnjoyment);
-            }
-            if (g_settings.mentalBreak && who != target) {
-                const float drain = g_settings.breakDrain * (before / kMaxEnjoyment) * (1.0f + 0.1f * skill) *
-                                    (1.0f + static_cast<float>(tst.orgasmCount));
-                DamageAv(target, RE::ActorValue::kMagicka, drain);
-                UpdateBroken(tst, target, who->GetFormID(), "minigame", fx);
             }
             if (narrate) {
                 NoteNarration(who->GetFormID(), target->GetFormID(), true, Now());
@@ -1193,9 +1087,6 @@ namespace OrgasmEngine
         bool CalmLocked(RE::Actor* who, RE::Actor* target, ActorState& tst, float base, bool narrate, Effects& fx)
         {
             const auto* wst = Find(who);
-            if (wst && wst->broken) {
-                return false;
-            }
             const float cost = CalmCost(wst);
             if (CurrentAv(who, RE::ActorValue::kMagicka) < cost) {
                 return false;
@@ -1204,7 +1095,7 @@ namespace OrgasmEngine
             const double now = Now();
             tst.lastCalmAt = now;
             const float before = tst.enjoyment;
-            const float amount = std::max(0.0f, base) * (wst && wst->forcedBy != 0 ? 0.5f : 1.0f);
+            const float amount = std::max(0.0f, base);
             if (tst.dom) {
                 tst.domDelta -= amount;
                 tst.domSyncNow = true;
@@ -1273,7 +1164,7 @@ namespace OrgasmEngine
         // Timed scenes: the step is the scene's calibrated step rate x the interval, spread by
         // random(npc_step_min, npc_step_max) / their mean, over the scene's mean NPC skill factor (arouse
         // re-applies the actor's own), so every NPC on Mutual lands on mutualTarget. Untimed: random(min,
-        // max) as is. Costs, mental break and edging as for a player press. Not narrated (the strategy
+        // max) as is. Costs and edging as for a player press. Not narrated (the strategy
         // choice is). No step until the scene's timers arrived (SexLab's are empty at first), or kUntimedGrace
         // after BeginScene for a scene that never sends any.
         void StrategyStep(const SceneState& sc, ActorState& st, double now, Effects& fx)
@@ -1286,13 +1177,6 @@ namespace OrgasmEngine
             const float interval = std::max(0.25f, g_settings.npcInterval);
             st.nextStepAt = now + interval;
 
-            if (st.broken != st.brokenOverride) {
-                st.brokenOverride = st.broken;
-                Announce(sc, st,
-                    st.broken ? "is overwhelmed and can only seek their own pleasure"
-                              : "recovers and " + StrategyPhrase(st),
-                    fx);
-            }
             const float lo = std::max(0.0f, std::min(g_settings.npcStepMin, g_settings.npcStepMax));
             const float hi = std::max(lo, g_settings.npcStepMax);
             std::uniform_real_distribution<float> roll(lo, hi);
@@ -1318,52 +1202,36 @@ namespace OrgasmEngine
                 }
             };
 
-            // Broken: tries to arouse self, whatever the strategy.
-            if (st.broken) {
-                arouse(st.id);
-                return;
-            }
-            Strategy play = st.strategy;
-            if (play == Strategy::kAcceptForce && st.forcedAction == ForcedAction::kPlayStrategy) {
-                play = st.forcedStrategy;
-                // Forced to please the player: the player, not the lowest other.
-                if (play == Strategy::kSelfless && InScene(sc, st.forcedBy)) {
-                    arouse(st.forcedBy);
-                    return;
-                }
-            }
-            switch (play) {
-            case Strategy::kAcceptForce:
-                if (st.forcedAction == ForcedAction::kArouseForcer) {
-                    arouse(st.forcedBy);
-                } else if (st.forcedAction == ForcedAction::kArouseSelf) {
-                    arouse(st.id);
-                }
-                break;
+            // The strategy's target, or another actor of the scene when it left.
+            const auto targetOf = [&]() {
+                return InScene(sc, st.strategyTarget) ? st.strategyTarget : PickOther(sc, st.id, true, false);
+            };
+            switch (st.strategy) {
             case Strategy::kMutual:
                 arouse(PickOther(sc, st.id, true, true));
                 break;
             case Strategy::kSelfish:
-            case Strategy::kGreedy:
                 arouse(st.id);
                 break;
             case Strategy::kSelfless:
                 arouse(PickOther(sc, st.id, true, false));
                 break;
-            case Strategy::kTogether: {
-                const RE::FormID partner = PickOther(sc, st.id, true, false);
-                const auto pt = g_actors.find(partner);
-                const float diff = pt != g_actors.end() ? st.enjoyment - pt->second.enjoyment : 0.0f;
-                if (diff > 5.0f) {
-                    calm(st.id);
-                } else if (diff < -5.0f) {
-                    arouse(st.id);
+            case Strategy::kDenySelf:
+                calm(st.id);
+                break;
+            case Strategy::kDenyAll:
+                for (const auto id : sc.actors) {
+                    calm(id);
                 }
                 break;
-            }
+            case Strategy::kDeny:
+                calm(targetOf());
+                break;
+            case Strategy::kFocused:
+                arouse(targetOf());
+                break;
             case Strategy::kTease: {
-                const RE::FormID target =
-                    InScene(sc, st.strategyTarget) ? st.strategyTarget : PickOther(sc, st.id, true, false);
+                const RE::FormID target = targetOf();
                 const auto tt = g_actors.find(target);
                 if (tt != g_actors.end()) {
                     if (tt->second.enjoyment < kEdgeThreshold) {
@@ -1374,20 +1242,6 @@ namespace OrgasmEngine
                 }
                 break;
             }
-            case Strategy::kReject:
-                calm(st.id);
-                break;
-            case Strategy::kCumQuick: {
-                RE::FormID target = PickOther(sc, st.id, false, false, Role::kAggressor);
-                if (!target) {
-                    target = PickOther(sc, st.id, false, false);
-                }
-                arouse(target);
-                break;
-            }
-            case Strategy::kForcedOrgasm:
-                arouse(InScene(sc, st.strategyTarget) ? st.strategyTarget : PickOther(sc, st.id, true, false));
-                break;
             default:
                 break;
             }
@@ -1547,9 +1401,6 @@ namespace OrgasmEngine
                 break;
             case SKYRIMNET_SEXLAB_API::EngineEventType::kEdge:
                 name = "SkyrimNet_SexLab_Edge";
-                break;
-            case SKYRIMNET_SEXLAB_API::EngineEventType::kMentalBreak:
-                name = "SkyrimNet_SexLab_MentalBreak";
                 break;
             default:
                 break;
@@ -1772,7 +1623,7 @@ namespace OrgasmEngine
                         sc.anyExpected = expected;
                         for (const auto id : sc.actors) {
                             auto at = g_actors.find(id);
-                            if (at == g_actors.end() || at->second.forcedBy != 0 || !AiDriven(at->second)) {
+                            if (at == g_actors.end() || !AiDriven(at->second)) {
                                 continue;
                             }
                             ActorState& st = at->second;
@@ -1817,8 +1668,6 @@ namespace OrgasmEngine
                             continue;
                         }
                         ActorState& st = at->second;
-                        RE::Actor* actor = ActorFor(id);
-
                         if (st.rushing && AnyBlock(st)) {
                             st.rushing = false;
                             webui_log::info("OrgasmEngine: gate rush {:#x} cancelled (blocked) enjoyment={:.1f}", id,
@@ -1860,10 +1709,6 @@ namespace OrgasmEngine
                                 }
                             }
 
-                            // Mental break recovers as magicka regenerates.
-                            if (st.broken || g_settings.mentalBreak) {
-                                UpdateBroken(st, actor, 0, "minigame", fx);
-                            }
                             // Mini-game: NPCs play their strategy.
                             StrategyStep(sc, st, now, fx);
                             // aiGate: held below the threshold until the gate rolls (it starts the rush).
@@ -1993,9 +1838,10 @@ namespace OrgasmEngine
                                         at->second.strategyTarget == 0) {
                                         continue;
                                     }
-                                    if (at->second.strategy == Strategy::kForcedOrgasm) {
+                                    if (at->second.strategy == Strategy::kFocused) {
                                         forcedVictims.push_back(at->second.strategyTarget);
-                                    } else if (at->second.strategy == Strategy::kTease) {
+                                    } else if (at->second.strategy == Strategy::kTease ||
+                                               at->second.strategy == Strategy::kDeny) {
                                         teasedVictims.push_back(at->second.strategyTarget);
                                     }
                                 }
@@ -2171,7 +2017,6 @@ namespace OrgasmEngine
                 return OrgasmEngine::GetSecondsSinceOrgasm(a);
             }
             bool IsManaged(RE::Actor* a) noexcept override { return OrgasmEngine::IsManaged(a); }
-            bool IsMentallyBroken(RE::Actor* a) noexcept override { return OrgasmEngine::IsMentallyBroken(a); }
             void SetRates(float p, float ag, float v) noexcept override { OrgasmEngine::SetRates(p, ag, v); }
             std::uint32_t RegisterEventCallback(SKYRIMNET_SEXLAB_API::EngineEventCallback cb) noexcept override
             {
@@ -2227,6 +2072,7 @@ namespace OrgasmEngine
 
     void ReloadConfig()
     {
+        LoadStrategies();
         using SexLabNet::GetConfigBool;
         using SexLabNet::GetConfigFloat;
         Settings s;
@@ -2243,8 +2089,6 @@ namespace OrgasmEngine
         s.staminaCost = GetConfigFloat("sexlab.minigame.stamina_cost", 8.0f);
         s.magickaCost = GetConfigFloat("sexlab.minigame.magicka_cost", 8.0f);
         s.edgeSeconds = GetConfigFloat("sexlab.minigame.edge_seconds", 4.0f);
-        s.mentalBreak = GetConfigBool("sexlab.minigame.mental_break", false);
-        s.breakDrain = GetConfigFloat("sexlab.minigame.break_drain", 6.0f);
         s.randomBonus = GetConfigFloat("sexlab.minigame.random_bonus", 10.0f);
         s.narrateWindow = GetConfigFloat("sexlab.minigame.narrate_window", 3.0f);
         s.groupJoin = std::clamp(GetConfigFloat("sexlab.enjoyment.group_join", 85.0f), 0.0f, kMaxEnjoyment);
@@ -2266,7 +2110,6 @@ namespace OrgasmEngine
             Strategy::kMutual);
         s.defaultAggressor = ParseStrategy(
             SexLabNet::GetConfigString("sexlab.minigame.default_strategy_aggressor", "Selfish"), Strategy::kSelfish);
-        s.fearCooldown = std::clamp(GetConfigFloat("sexlab.minigame.fear_cooldown", 0.0f), 0.0f, 600.0f);
         s.defaultVictim = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_victim", "Passive"),
             Strategy::kPassive);
         s.decisionStrategy = GetConfigBool("sexlab.minigame.decision_strategy", true);
@@ -2279,10 +2122,10 @@ namespace OrgasmEngine
         }
         webui_log::info(
             "OrgasmEngine: config minigame={} role mults={}/{}/{} jitter={}-{} dom scale={}/{} arouse={} calm={} "
-            "cost={}/{} edge={}s break={} drain={} random={} window={}s group_join={} group_join_final={} stage_spike={} gate={} gate_lead={}",
+            "cost={}/{} edge={}s random={} window={}s group_join={} group_join_final={} stage_spike={} gate={} gate_lead={}",
             s.miniGame, s.passiveRate, s.aggressorRate, s.victimRate, s.jitterMin, s.jitterMax, s.domArousalScale,
             s.domArousalScalePlayer, s.arouseAmount, s.calmAmount, s.staminaCost, s.magickaCost, s.edgeSeconds,
-            s.mentalBreak, s.breakDrain, s.randomBonus, s.narrateWindow, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
+            s.randomBonus, s.narrateWindow, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
         webui_log::info("OrgasmEngine: config mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
                         "interval={}s step={}-{} mutual_target={} passive_share={} defaults={}/{}/{}",
             s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
@@ -2347,7 +2190,6 @@ namespace OrgasmEngine
                 const auto at = g_actors.find(old);
                 if (at != g_actors.end() && at->second.sid == sid) {
                     AnimSpeed::SetScale(ActorFor(old), 1.0f);
-                    ReleaseForced(sc, at->second, fx);
                     g_actors.erase(at);
                 }
             }
@@ -2357,18 +2199,7 @@ namespace OrgasmEngine
             sc.generation = ++s_generation;
         }
         sc.actors = std::move(ids);
-        // Forced by someone who left: free again.
-        for (const auto id : sc.actors) {
-            auto at = g_actors.find(id);
-            if (at != g_actors.end() && at->second.forcedBy != 0 && !InScene(sc, at->second.forcedBy)) {
-                at->second.forcedBy = 0;
-                at->second.forcedAction = ForcedAction::kNone;
-                at->second.forceMethod.clear();
-                at->second.fearUntil = 0.0;
-                at->second.strategy = Strategy::kPassive;
-            }
-        }
-        // Role defaults for new actors (after the roster, so Greedy-style checks see everyone). Not announced.
+        // Role defaults for new actors (after the roster, so scene-size checks see everyone). Not announced.
         for (const auto id : newcomers) {
             if (auto at = g_actors.find(id); at != g_actors.end()) {
                 // Sticky auto play: on before the default, so the player gets the role default, not Passive.
@@ -2652,20 +2483,17 @@ namespace OrgasmEngine
             bool narrate, Effects& fx)
         {
             if (!StrategyAllowed(sc, st, strategy)) {
-                webui_log::info("OrgasmEngine: {:#x} strategy {} not allowed (role {} forcedBy {:#x} minigame {})",
-                    st.id, InfoOf(strategy).key, static_cast<std::int32_t>(st.role), st.forcedBy,
-                    g_settings.miniGame);
+                webui_log::info("OrgasmEngine: {:#x} strategy {} not allowed (role {} minigame {})", st.id,
+                    InfoOf(strategy).key, static_cast<std::int32_t>(st.role), g_settings.miniGame);
                 return false;
             }
             if (NeedsTarget(strategy)) {
                 const auto valid = [&](RE::FormID id) {
                     const auto at = g_actors.find(id);
-                    return id != st.id && InScene(sc, id) && at != g_actors.end() &&
-                           (strategy != Strategy::kGreedy || at->second.role == Role::kVictim);
+                    return id != st.id && InScene(sc, id) && at != g_actors.end();
                 };
                 if (!valid(targetId)) {
-                    targetId = strategy == Strategy::kGreedy ? PickOther(sc, st.id, true, false, Role::kVictim)
-                                                             : PickOther(sc, st.id, true, false);
+                    targetId = PickOther(sc, st.id, true, false);
                 }
                 if (!valid(targetId)) {
                     return false;
@@ -2705,38 +2533,11 @@ namespace OrgasmEngine
             return "barely aroused";
         }
 
-        const char* ProgressName(const SceneState& sc)
-        {
-            if (sc.stageCount <= 1 || sc.stage <= 1) {
-                return "start";
-            }
-            if (sc.stage >= sc.stageCount) {
-                return "final stage";
-            }
-            return sc.stage == sc.stageCount - 1 ? "near the end" : "middle";
-        }
-
-        // Caller holds g_lock. GetStrategyText's rule.
-        std::string ApproachOf(const ActorState& st)
-        {
-            if (!g_settings.miniGame || !AiDriven(st)) {
-                return "";
-            }
-            return st.broken ? "is overwhelmed and can only seek their own pleasure" : StrategyPhrase(st);
-        }
-
-        // Decision option text for strategy s (target: Tease / Greedy / ForcedOrgasm).
+        // Decision option text for strategy s (target: Deny / Tease / Focused).
         std::string OptionText(const ActorState& st, Strategy s, RE::FormID target)
         {
             std::string text = InfoOf(s).option;
-            if (st.forcedBy != 0 && s == Strategy::kSelfish) {
-                text = "Resist {forcer}: {name} refuses and chases {his} own pleasure instead";
-            } else if (st.forcedBy != 0 && s == Strategy::kReject) {
-                text = "Resist {forcer}: {name} refuses and fights {his} own arousal, trying not to orgasm";
-            } else if (s == Strategy::kAcceptForce && st.forcedAction == ForcedAction::kPlayStrategy) {
-                text += " and " + std::string(ForcedPhrase(st.forcedStrategy));
-            }
-            FillStrategyText(text, st.id, target, st.forcedBy);
+            FillStrategyText(text, st.id, target);
             return text;
         }
     }
@@ -2777,12 +2578,7 @@ namespace OrgasmEngine
         out.arousal = ArousalBand(st->enjoyment);
         out.orgasms = st->orgasmCount;
         out.expectsOrgasm = st->orgasmExpected;
-        out.broken = st->broken;
         out.currentKey = InfoOf(st->strategy).key;
-        out.approach = ApproachOf(*st);
-        out.forcedBy = st->forcedBy ? NameOf(ActorFor(st->forcedBy)) : "";
-        out.forceMethod = st->forcedBy ? st->forceMethod : "";
-        out.progress = ProgressName(*sc);
         for (std::size_t i = 0; i < sc->actors.size(); ++i) {
             const RE::FormID id = sc->actors[i];
             out.slots.emplace_back("p" + std::to_string(i + 1), id);
@@ -2798,7 +2594,6 @@ namespace OrgasmEngine
             p.role = RoleName(at->second.role);
             p.arousal = ArousalBand(at->second.enjoyment);
             p.orgasms = at->second.orgasmCount;
-            p.approach = ApproachOf(at->second);
             out.partners.push_back(std::move(p));
         }
         for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
@@ -2807,19 +2602,18 @@ namespace OrgasmEngine
                 continue;
             }
             if (!NeedsTarget(s)) {
-                out.options.push_back({ kStrategies[i].key, OptionText(*st, s, 0) });
+                out.options.push_back({ kStrategyKeys[i], OptionText(*st, s, 0) });
                 continue;
             }
             // One option per valid target (SetStrategyLocked's rule).
             for (std::size_t j = 0; j < sc->actors.size(); ++j) {
                 const RE::FormID id = sc->actors[j];
                 const auto at = g_actors.find(id);
-                if (id == st->id || at == g_actors.end() ||
-                    (s == Strategy::kGreedy && at->second.role != Role::kVictim)) {
+                if (id == st->id || at == g_actors.end()) {
                     continue;
                 }
                 out.options.push_back(
-                    { std::string(kStrategies[i].key) + "_p" + std::to_string(j + 1), OptionText(*st, s, id) });
+                    { std::string(kStrategyKeys[i]) + "_p" + std::to_string(j + 1), OptionText(*st, s, id) });
             }
         }
         return true;
@@ -2906,7 +2700,7 @@ namespace OrgasmEngine
         if (!st || !g_settings.miniGame || !AiDriven(*st)) {
             return "";
         }
-        return st->broken ? "is overwhelmed and can only seek their own pleasure" : StrategyPhrase(*st);
+        return StrategyPhrase(*st);
     }
 
     float GetStaminaRegen(RE::Actor* actor)
@@ -2916,272 +2710,476 @@ namespace OrgasmEngine
         return st && g_settings.staminaFatigue ? st->regen : 100.0f;
     }
 
-    RE::Actor* GetForcedBy(RE::Actor* actor)
-    {
-        std::lock_guard lock(g_lock);
-        const auto* st = Find(actor);
-        return st ? ActorFor(st->forcedBy) : nullptr;
-    }
-
-    void SetForceMethod(RE::Actor* actor, const std::string& method)
-    {
-        std::lock_guard lock(g_lock);
-        if (auto* st = Find(actor); st && st->forcedBy != 0) {
-            st->forceMethod = method;
-        }
-    }
-
     namespace
     {
-        struct ForceMethod
+        struct PunishMethod
         {
             const char* key;
-            const char* act;   // "<forcer> <act>" with {victim}
-            const char* noun;  // "cowed by <noun>"
+            const char* act;  // "<punisher> punishes <target> by <act>"; {target}: "<target>" or "<target>'s <part>"
         };
-        constexpr ForceMethod kForceMethods[] = {
-            { "slap face", "slaps {victim} across the face", "a slap to the face" },
-            { "pinch nipple", "pinches {victim}'s nipple", "a pinched nipple" },
-            { "cover mouth", "clamps a hand over {victim}'s mouth", "a hand over the mouth" },
-            { "punch", "punches {victim} in the face", "a punch to the face" },
-            { "pull hair", "pulls {victim}'s hair", "a yank of the hair" },
-        };
-        // HUD Force panel: the body part comes from its own pulldown. {target}: "<victim>" or "<victim>'s <part>";
-        // the noun gains " to the <part>".
-        constexpr ForceMethod kLocatedForceMethods[] = {
-            { "slap", "slaps {target}", "a slap" },
-            { "pinch", "pinches {target}", "a pinch" },
-            { "punch", "punches {target}", "a punch" },
-            { "pull", "pulls {target}", "a yank" },
+        constexpr PunishMethod kPunishMethods[] = {
+            { "slap", "slapping {target}" },
+            { "pinch", "pinching {target}" },
+            { "punch", "punching {target}" },
+            { "pull", "pulling {target}" },
         };
 
-        // Caller holds g_lock. The actor's scene when it is an aggressor in mini-game mode (player Force: the
-        // player, or the NPC the player took control of).
-        const SceneState* AggressorScene(RE::Actor* forcer)
+        // Caller holds g_lock. The actor's managed scene (any role, any orgasm mode).
+        const SceneState* PunisherScene(RE::Actor* punisher)
         {
-            const auto* pst = Find(forcer);
-            if (!g_settings.miniGame || !pst || pst->role != Role::kAggressor) {
+            const auto* pst = Find(punisher);
+            if (!pst) {
                 return nullptr;
             }
             const auto it = g_scenes.find(pst->sid);
             return it != g_scenes.end() ? &it->second : nullptr;
         }
 
-        // Caller holds g_lock. What a victim may be forced into: its own victim choices, no target needed.
-        bool ForceableStrategy(const SceneState& sc, const ActorState& victim, Strategy s)
+        std::string Trimmed(const std::string& s)
         {
-            if (NeedsTarget(s) || s == Strategy::kAcceptForce) {
+            const auto b = s.find_first_not_of(" \t\r\n");
+            if (b == std::string::npos) {
+                return "";
+            }
+            const auto e = s.find_last_not_of(" \t\r\n.");
+            return e == std::string::npos || e < b ? "" : s.substr(b, e - b + 1);
+        }
+
+        // Caller holds g_lock. The scene has the player, or the player drives one of its actors: its narrations are
+        // DirectNarrations; any other scene's are DirectNarration_Optional.
+        bool PlayerScene(const SceneState& sc)
+        {
+            if (sc.hasPlayer) {
+                return true;
+            }
+            for (const auto id : sc.actors) {
+                if (const auto at = g_actors.find(id); at != g_actors.end() && at->second.playerDriven) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Ask / order / answer / punishment narration with the mod's scene rule (see PlayerScene).
+        void NarrateRequest(const std::string& msg, RE::Actor* source, RE::Actor* target, bool direct)
+        {
+            if (msg.empty()) {
+                return;
+            }
+            if (direct) {
+                NarrateDirect(msg, source, target);
+                return;
+            }
+            DispatchShell("Effect_NarrateOptional",
+                RE::MakeFunctionArguments(RE::BSFixedString(msg.c_str()), std::move(source), std::move(target)));
+        }
+
+        // Caller holds g_lock. "<key>" or "<key>_p<slot>" of the actor's current strategy (a request's key).
+        std::string CurrentRequestKey(const SceneState& sc, const ActorState& st)
+        {
+            std::string key = kStrategyKeys[static_cast<std::size_t>(st.strategy)];
+            if (NeedsTarget(st.strategy)) {
+                for (std::size_t i = 0; i < sc.actors.size(); ++i) {
+                    if (sc.actors[i] == st.strategyTarget) {
+                        return key + "_p" + std::to_string(i + 1);
+                    }
+                }
+            }
+            return key;
+        }
+
+        // Caller holds g_lock. A request key -> strategy and target; false when unknown, not allowed for the
+        // actor or the target is not another actor of the scene.
+        bool ParseRequest(const SceneState& sc, const ActorState& st, const std::string& key, Strategy& s,
+            RE::FormID& target)
+        {
+            std::string base = key;
+            target = 0;
+            if (const auto pos = key.rfind("_p"); pos != std::string::npos) {
+                const std::string digits = key.substr(pos + 2);
+                if (!digits.empty() && std::all_of(digits.begin(), digits.end(), [](unsigned char c) {
+                        return std::isdigit(c) != 0;
+                    })) {
+                    const auto slot = static_cast<std::size_t>(std::stoul(digits));
+                    if (slot >= 1 && slot <= sc.actors.size()) {
+                        target = sc.actors[slot - 1];
+                        base = key.substr(0, pos);
+                    }
+                }
+            }
+            s = ParseStrategy(base, Strategy::kCount);
+            if (s == Strategy::kCount || !StrategyAllowed(sc, st, s)) {
                 return false;
             }
-            ActorState free = victim;
-            free.forcedBy = 0;
-            return StrategyAllowed(sc, free, s);
+            if (!NeedsTarget(s)) {
+                target = 0;
+                return true;
+            }
+            return target != 0 && target != st.id && InScene(sc, target) && g_actors.count(target) != 0;
+        }
+
+        // Caller holds g_lock. The strategy's order phrase ("focus on Bob's pleasure"), {target} filled.
+        std::string RequestText(const ActorState& st, Strategy s, RE::FormID target)
+        {
+            std::string text = InfoOf(s).order;
+            FillStrategyText(text, st.id, target);
+            return text;
+        }
+
+        // Caller holds g_lock. Keeps one reason per (by, strategyKey) for a keyed request; the last kPunishKept.
+        void AddReasonLocked(ActorState& st, PunishRecord rec)
+        {
+            auto& list = st.reasons;
+            if (!rec.strategyKey.empty() &&
+                std::any_of(list.begin(), list.end(), [&](const PunishRecord& r) {
+                    return r.by == rec.by && r.strategyKey == rec.strategyKey;
+                })) {
+                return;
+            }
+            list.push_back(std::move(rec));
+            if (list.size() > kPunishKept) {
+                list.erase(list.begin());
+            }
+        }
+
+        // Game thread. The target's answer to a request arrived: "<target> agrees to|refuses <by>'s request to
+        // <text>." as its own narration; a refusal is kept as a punishment reason, an agreement clears it. key "":
+        // a custom request (agreed when the decision changed the strategy). Nothing when no decision was made.
+        void FinishRequest(RE::FormID byId, RE::FormID targetId, bool order, const std::string& key,
+            const std::string& text, bool direct, DecisionResult result)
+        {
+            if (result != DecisionResult::kChanged && result != DecisionResult::kKept &&
+                result != DecisionResult::kLowConfidence) {
+                return;
+            }
+            RE::Actor* by = ActorFor(byId);
+            RE::Actor* target = ActorFor(targetId);
+            if (!by || !target) {
+                return;
+            }
+            bool agrees = false;
+            {
+                std::lock_guard lock(g_lock);
+                const auto at = g_actors.find(targetId);
+                const SceneState* sc = at != g_actors.end() ? SceneOf(at->second) : nullptr;
+                if (!sc) {
+                    return;
+                }
+                ActorState& st = at->second;
+                agrees = key.empty() ? result == DecisionResult::kChanged : CurrentRequestKey(*sc, st) == key;
+                if (agrees) {
+                    auto& list = st.reasons;
+                    list.erase(std::remove_if(list.begin(), list.end(),
+                                   [&](const PunishRecord& r) {
+                                       return r.by == byId && (key.empty() ? r.request == text : r.strategyKey == key);
+                                   }),
+                        list.end());
+                } else {
+                    PunishRecord rec;
+                    rec.by = byId;
+                    rec.target = targetId;
+                    rec.reason = NameOf(target) + " refused " + NameOf(by) + "'s " + (order ? "order" : "request") +
+                                 " to " + text;
+                    rec.strategyKey = key;
+                    rec.request = text;
+                    AddReasonLocked(st, std::move(rec));
+                }
+            }
+            const std::string line =
+                NameOf(target) + (agrees ? " agrees to " : " refuses ") + NameOf(by) + "'s request to " + text + ".";
+            webui_log::info("OrgasmEngine: request answer: {}", line);
+            NarrateRequest(line, target, by, direct);
+        }
+
+        struct PunishPlan
+        {
+            std::string line;         // "Bob punishes Nina by pinching Nina's nipples, because ..."
+            bool direct = false;      // PlayerScene
+            // The refused request the reason came from (empty key: none).
+            RE::FormID requestBy = 0;
+            bool requestOrder = false;
+            std::string requestKey;
+            std::string requestText;
+        };
+
+        // Caller holds g_lock. "<punisher> punishes <target> by pinching <target>'s nipples, because <reason>."
+        // Weak spell: "... by hitting <target>'s ass with Sparks". Free text is the method as typed
+        // ("biting <target>'s lips"). location "body" / "" names no part. Empty line when refused.
+        PunishPlan PunishLocked(RE::Actor* punisherActor, RE::FormID target, const std::string& method,
+            const std::string& location, const std::string& reason, const Aid::WeakSpell* spell)
+        {
+            PunishPlan plan;
+            const SceneState* sc = PunisherScene(punisherActor);
+            RE::Actor* targetActor = ActorFor(target);
+            if (!sc || !targetActor || targetActor == punisherActor || !InScene(*sc, target)) {
+                webui_log::warn("OrgasmEngine: Punish refused for {:#x} (no punisher scene / not in it)", target);
+                return plan;
+            }
+            const std::string part = location == "body" ? "" : location;
+            const std::string name = NameOf(targetActor);
+            const std::string on = part.empty() ? name : name + "'s " + part;
+            const std::string how = Trimmed(method);
+            std::string act;
+            if (spell) {
+                act = "hitting " + on + " with " + spell->name;
+            } else {
+                for (const auto& m : kPunishMethods) {
+                    if (how == m.key) {
+                        act = m.act;
+                    }
+                }
+                if (act.empty()) {
+                    act = how.empty() ? kPunishMethods[0].act : how + " {target}";
+                }
+                ReplaceAll(act, "{target}", on);
+            }
+            std::string why = Trimmed(reason);
+            // The line adds "because": "because Nina refused ..." would read "because because Nina refused ...".
+            if (why.size() > 8 && _strnicmp(why.c_str(), "because ", 8) == 0) {
+                why = Trimmed(why.substr(8));
+            }
+            plan.line = NameOf(punisherActor) + " punishes " + name + " by " + act +
+                        (why.empty() ? "" : ", because " + why) + ".";
+            plan.direct = PlayerScene(*sc);
+            if (const auto at = g_actors.find(target); at != g_actors.end() && !why.empty()) {
+                for (const auto& r : at->second.reasons) {
+                    if (r.reason == why && !r.strategyKey.empty()) {
+                        plan.requestBy = r.by;
+                        plan.requestOrder = r.reason.find(" order to ") != std::string::npos;
+                        plan.requestKey = r.strategyKey;
+                        plan.requestText = r.request;
+                    }
+                }
+            }
+            webui_log::info("OrgasmEngine: {:#x} punishes {:#x} by '{}' on '{}' because '{}'",
+                punisherActor->GetFormID(), target, method, location, why);
+            return plan;
+        }
+
+        // Game thread. The hit has landed (feeling: Whipped's text, "" when none): narrate the punishment, then
+        // ask the target's strategy decision with that narration as last_line; a punishment for a refused request
+        // gets the agree / refuse answer.
+        void ContinuePunish(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan,
+            const std::string& method, const std::string& location, RE::FormID spell, float spellDamage,
+            const std::string& feeling, bool feelingFromWhipped)
+        {
+            RE::Actor* punisher = ActorFor(punisherId);
+            RE::Actor* target = ActorFor(targetId);
+            if (!punisher || !target) {
+                return;
+            }
+            const std::string text = feeling.empty() ? plan.line : plan.line + " " + feeling;
+            webui_log::info("OrgasmEngine: punishment of {:#x} narrated: {}", targetId, text);
+            bool whippedNarrates = false;
+            if (!feelingFromWhipped) {
+                // Older Whipped (no External_TortureText): the hit goes through External_Damage, which narrates.
+                whippedNarrates = Whipped::PunishHit(punisher, target, text, method, location, spell);
+            }
+            if (!whippedNarrates) {
+                NarrateRequest(text, punisher, target, plan.direct);
+            }
+            if (spell) {
+                Aid::QueueWeakSpellHit(punisher, target, spell,
+                    feelingFromWhipped || whippedNarrates ? 0.0f : spellDamage);
+            }
+            StrategyDecision::RequestAnswer(targetId, "punished", text,
+                [plan, targetId](DecisionResult result) {
+                    if (!plan.requestKey.empty()) {
+                        FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
+                            plan.direct, result);
+                    }
+                });
         }
     }
 
-    bool GetPlayerForceInfo(std::vector<ForceVictim>& victims)
+    bool GetPunishInfo(RE::Actor* punisher, std::vector<PunishTarget>& targets)
     {
-        return GetForceInfo(RE::PlayerCharacter::GetSingleton(), victims);
-    }
-
-    bool GetForceInfo(RE::Actor* forcer, std::vector<ForceVictim>& victims)
-    {
-        victims.clear();
+        targets.clear();
         std::lock_guard lock(g_lock);
-        const SceneState* sc = AggressorScene(forcer);
+        const SceneState* sc = punisher ? PunisherScene(punisher) : nullptr;
         if (!sc) {
             return false;
         }
         for (const auto id : sc->actors) {
-            const auto at = g_actors.find(id);
             RE::Actor* actor = ActorFor(id);
-            if (at == g_actors.end() || at->second.role != Role::kVictim || !actor || IsPlayer(actor)) {
-                continue;
+            if (actor && actor != punisher) {
+                targets.push_back({ id, NameOf(actor) });
             }
-            ForceVictim v;
-            v.id = id;
-            v.name = NameOf(actor);
-            for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
-                const auto s = static_cast<Strategy>(i);
-                if (ForceableStrategy(*sc, at->second, s)) {
-                    std::string label = ForcedPhrase(s);
-                    ReplaceAll(label, "{forcer}", "you");
-                    ReplaceAll(label, "{self}", IsFemale(actor) ? "herself" : "himself");
-                    v.strategies.emplace_back(kStrategies[i].key, std::move(label));
-                }
-            }
-            victims.push_back(std::move(v));
         }
         return true;
     }
 
-    namespace
+    std::vector<RequestOption> GetRequestOptions(RE::FormID target)
     {
-        // Caller holds g_lock. The forcer's mini-game scene when the forcer is not a victim there.
-        const SceneState* ForcerScene(RE::Actor* forcer)
-        {
-            const auto* fst = Find(forcer);
-            if (!g_settings.miniGame || !fst || fst->role == Role::kVictim) {
-                return nullptr;
-            }
-            const auto it = g_scenes.find(fst->sid);
-            return it != g_scenes.end() ? &it->second : nullptr;
+        std::vector<RequestOption> out;
+        std::lock_guard lock(g_lock);
+        const auto it = g_actors.find(target);
+        const SceneState* sc = it != g_actors.end() ? SceneOf(it->second) : nullptr;
+        if (!sc) {
+            return out;
         }
-
-        // Caller holds g_lock (sc from AggressorScene / ForcerScene). method: preset key, weak spell or text.
-        // location: "" (LLM action, old presets) or the HUD body part ("body": the victim, no part named).
-        std::string ForceLocked(const SceneState* sc, RE::Actor* forcerActor, RE::FormID victim,
-            const std::string& strategyKey, const std::string& method, const std::string& location,
-            const Aid::WeakSpell* spell, Effects& fx)
-        {
-            auto at = g_actors.find(victim);
-            RE::Actor* victimActor = ActorFor(victim);
-            if (!sc || !forcerActor || at == g_actors.end() || !InScene(*sc, victim) ||
-                at->second.role != Role::kVictim || !victimActor || IsPlayer(victimActor)) {
-                webui_log::warn("OrgasmEngine: Force refused for {:#x} (no forcer scene / not a non-player victim)",
-                    victim);
-                return "";
+        const ActorState& st = it->second;
+        for (std::int32_t i = 0; i < static_cast<std::int32_t>(Strategy::kCount); ++i) {
+            const auto s = static_cast<Strategy>(i);
+            if (!StrategyAllowed(*sc, st, s)) {
+                continue;
             }
-            ActorState& t = at->second;
-            const Strategy s = ParseStrategy(strategyKey, Strategy::kCount);
-            if (s == Strategy::kCount || !ForceableStrategy(*sc, t, s)) {
-                webui_log::warn("OrgasmEngine: Force {:#x} strategy '{}' not allowed", victim, strategyKey);
-                return "";
-            }
-            const RE::FormID forcerId = forcerActor->GetFormID();
-            const std::string forcer = NameOf(forcerActor);
-            const std::string name = NameOf(victimActor);
-
-            // Preset: "<forcer> punches <victim> in the face and forces <victim> to ...". Weak spell: "<forcer> hits
-            // <victim> with Sparks; the pain, and the fear of another, force <victim> to ..." (the pain and fear
-            // compel, not the spell). Free text: "... by <text>".
-            // HUD body part: "Lydia's ass" as the target, " to the ass" on the noun. "body" names no part.
-            const std::string part = location == "body" ? "" : location;
-            const std::string target = part.empty() ? name : name + "'s " + part;
-            const std::string toPart = part.empty() ? "" : " to the " + part;
-            std::string act;
-            std::string noun = method;
-            if (spell) {
-                noun = "the pain of " + spell->name + toPart + " and the fear of another";
-            }
-            if (location.empty()) {
-                for (const auto& m : kForceMethods) {
-                    if (method == m.key) {
-                        act = m.act;
-                        noun = m.noun;
-                    }
+            if (!NeedsTarget(s)) {
+                if (s != st.strategy) {
+                    out.push_back({ kStrategyKeys[i], RequestText(st, s, 0) });
                 }
+                continue;
+            }
+            // One per other actor (GetStrategyDecisionInput's rule).
+            for (std::size_t j = 0; j < sc->actors.size(); ++j) {
+                const RE::FormID id = sc->actors[j];
+                if (id == st.id || g_actors.find(id) == g_actors.end() || (s == st.strategy && id == st.strategyTarget)) {
+                    continue;
+                }
+                out.push_back({ std::string(kStrategyKeys[i]) + "_p" + std::to_string(j + 1), RequestText(st, s, id) });
+            }
+        }
+        return out;
+    }
+
+    std::vector<std::string> GetPunishReasons(RE::FormID target)
+    {
+        std::vector<std::string> out;
+        std::lock_guard lock(g_lock);
+        if (const auto it = g_actors.find(target); it != g_actors.end() && SceneOf(it->second)) {
+            for (const auto& r : it->second.reasons) {
+                if (std::find(out.begin(), out.end(), r.reason) == out.end()) {
+                    out.push_back(r.reason);
+                }
+            }
+        }
+        return out;
+    }
+
+    void AddPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason)
+    {
+        const std::string why = Trimmed(reason);
+        if (why.empty()) {
+            return;
+        }
+        std::lock_guard lock(g_lock);
+        if (auto* st = Find(target); st && SceneOf(*st)) {
+            PunishRecord rec;
+            rec.by = by ? by->GetFormID() : 0;
+            rec.target = st->id;
+            rec.reason = why;
+            rec.type = "external";
+            auto& list = st->reasons;
+            if (std::none_of(list.begin(), list.end(), [&](const PunishRecord& r) { return r.reason == why; })) {
+                AddReasonLocked(*st, std::move(rec));
+            }
+        }
+    }
+
+    bool AskOrderNarrated(RE::Actor* by, RE::FormID target, bool order, const std::string& requestKey,
+        const std::string& customText)
+    {
+        if (!by) {
+            return false;
+        }
+        std::string text;
+        bool direct = false;
+        {
+            std::lock_guard lock(g_lock);
+            const SceneState* sc = PunisherScene(by);
+            const auto at = g_actors.find(target);
+            if (!sc || at == g_actors.end() || target == by->GetFormID() || !InScene(*sc, target)) {
+                webui_log::warn("OrgasmEngine: ask / order refused for {:#x} (no scene / not in it)", target);
+                return false;
+            }
+            if (!requestKey.empty()) {
+                Strategy s = Strategy::kCount;
+                RE::FormID t = 0;
+                if (!ParseRequest(*sc, at->second, requestKey, s, t)) {
+                    webui_log::warn("OrgasmEngine: ask / order refused: '{}' not allowed for {:#x}", requestKey, target);
+                    return false;
+                }
+                text = RequestText(at->second, s, t);
             } else {
-                for (const auto& m : kLocatedForceMethods) {
-                    if (method == m.key) {
-                        act = m.act;
-                        noun = std::string(m.noun) + toPart;
-                    }
-                }
+                text = Trimmed(customText);
             }
-            ReplaceAll(act, "{victim}", name);
-            ReplaceAll(act, "{target}", target);
-
-            // A forced victim drops what it was forcing; an NPC forcer lets go.
-            ReleaseForced(*sc, t, fx);
-            if (t.forcedBy != 0 && t.forcedBy != forcerId) {
-                if (auto old = g_actors.find(t.forcedBy); old != g_actors.end()) {
-                    ReleaseForced(*sc, old->second, fx);
-                }
-            }
-            t.forcedBy = forcerId;
-            t.forcedAction = ForcedAction::kPlayStrategy;
-            t.forcedStrategy = s;
-            t.forceMethod = noun;
-            t.strategy = Strategy::kAcceptForce;
-            t.strategyTarget = 0;
-            t.fearUntil = Now() + g_settings.fearCooldown;
-            t.nextStepAt = Now();
-
-            std::string what = ForcedPhrase(s);
-            ReplaceAll(what, "{forcer}", IsFemale(forcerActor) ? "her" : "him");
-            ReplaceAll(what, "{self}", Reflexive(victimActor));
-            std::string line;
-            if (spell) {
-                line = forcer + " hits " + target + " with " + spell->name + "; the pain, and the fear of another, force " +
-                    name + " to " + what + ".";
-            } else if (!act.empty()) {
-                line = forcer + " " + act + " and forces " + name + " to " + what + ".";
-            } else if (!method.empty()) {
-                line = forcer + " forces " + name + " to " + what + " by " + method +
-                    (part.empty() ? "" : " on " + target) + ".";
-            } else {
-                line = forcer + " forces " + name + " to " + what + ".";
-            }
-            webui_log::info("OrgasmEngine: {:#x} forces {:#x} -> {} by '{}' on '{}' (fear {:.0f}s)", forcerId, victim,
-                InfoOf(s).key, method, location, g_settings.fearCooldown);
-            return line;
+            direct = PlayerScene(*sc);
         }
+        RE::Actor* targetActor = ActorFor(target);
+        if (text.empty() || !targetActor) {
+            return false;
+        }
+        const std::string line = NameOf(by) + (order ? " orders " : " asks ") + NameOf(targetActor) + " to " + text + ".";
+        const RE::FormID byId = by->GetFormID();
+        // The decision and the narrations run on the game thread (Papyrus calls this from a VM thread).
+        SKSE::GetTaskInterface()->AddTask([byId, target, order, requestKey, text, line, direct]() {
+            RE::Actor* asker = ActorFor(byId);
+            RE::Actor* asked = ActorFor(target);
+            if (!asker || !asked) {
+                return;
+            }
+            NarrateRequest(line, asker, asked, direct);
+            StrategyDecision::RequestAnswer(target, order ? "ordered" : "asked", line,
+                [byId, target, order, requestKey, text, direct](DecisionResult result) {
+                    FinishRequest(byId, target, order, requestKey, text, direct, result);
+                });
+        });
+        return true;
+    }
 
-        std::string ForceWith(RE::Actor* forcer, bool hud, RE::FormID victim, const std::string& strategyKey,
-            const std::string& method, const std::string& location, bool* whipped)
+    bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
+        const std::string& reason)
+    {
+        if (!punisher) {
+            return false;
+        }
+        // Weak attack spells read the punisher's spell lists outside the engine lock.
+        const auto spells = Aid::WeakAttackSpells(punisher);
+        const Aid::WeakSpell* spell = Aid::FindWeakSpell(spells, method);
+        PunishPlan plan;
         {
-            if (whipped) {
-                *whipped = false;
-            }
-            // Weak attack spells read the forcer's spell lists outside the engine lock.
-            const auto spells = Aid::WeakAttackSpells(forcer);
-            const Aid::WeakSpell* spell = Aid::FindWeakSpell(spells, method);
-            Effects fx;
-            std::string line;
-            {
-                std::lock_guard lock(g_lock);
-                const SceneState* sc = hud ? AggressorScene(forcer) : ForcerScene(forcer);
-                line = ForceLocked(sc, forcer, victim, strategyKey, method, location, spell, fx);
-            }
-            PostEffects(std::move(fx));
-            if (line.empty()) {
-                return line;
-            }
-            // SkyrimNet_Whipped: slap/pinch/punch/pull use their torture types; the rest whip. Spell damage is dropped.
-            const bool toWhipped = Whipped::ForceHit(forcer, ActorFor(victim), line, method, location);
-            if (whipped) {
-                *whipped = toWhipped;
-            }
-            if (spell) {
-                Aid::QueueWeakSpellHit(forcer, ActorFor(victim), spell->form, toWhipped ? 0.0f : spell->minDamage);
-            }
-            return line;
+            std::lock_guard lock(g_lock);
+            plan = PunishLocked(punisher, target, method, location, reason, spell);
         }
-    }
-
-    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method,
-        const std::string& location, bool* whipped)
-    {
-        return ForceWith(RE::PlayerCharacter::GetSingleton(), true, victim, strategyKey, method, location, whipped);
-    }
-
-    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method,
-        bool* whipped)
-    {
-        if (!forcer || IsPlayer(forcer)) {
-            return forcer ? PlayerForce(victim, strategyKey, method, "", whipped) : "";
+        if (plan.line.empty()) {
+            return false;
         }
-        return ForceWith(forcer, false, victim, strategyKey, method, "", whipped);
+        const RE::FormID punisherId = punisher->GetFormID();
+        const RE::FormID spellForm = spell ? spell->form : 0;
+        const float spellDamage = spell ? spell->minDamage : 0.0f;
+        // The hit, the narrations and the decision run on the game thread.
+        SKSE::GetTaskInterface()->AddTask([punisherId, target, plan, method, location, spellForm, spellDamage]() {
+            RE::Actor* p = ActorFor(punisherId);
+            RE::Actor* t = ActorFor(target);
+            if (!p || !t) {
+                return;
+            }
+            // Whipped lands the hit silently and returns the feeling text; narrate it with the line.
+            const bool asked = Whipped::PunishText(p, t, method, location, spellForm,
+                [punisherId, target, plan, method, location, spellForm, spellDamage](std::string feeling) {
+                    SKSE::GetTaskInterface()->AddTask(
+                        [punisherId, target, plan, method, location, spellForm, spellDamage, feeling]() {
+                            ContinuePunish(punisherId, target, plan, method, location, spellForm, spellDamage, feeling,
+                                true);
+                        });
+                });
+            if (!asked) {
+                ContinuePunish(punisherId, target, plan, method, location, spellForm, spellDamage, "", false);
+            }
+        });
+        return true;
     }
 
-    std::string HudForce(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey,
-        const std::string& method, const std::string& location, bool* whipped)
-    {
-        return forcer ? ForceWith(forcer, true, victim, strategyKey, method, location, whipped) : "";
-    }
-
-    bool CanForce(RE::Actor* actor)
+    bool CanPunish(RE::Actor* actor)
     {
         std::lock_guard lock(g_lock);
-        const SceneState* sc = ForcerScene(actor);
+        const SceneState* sc = actor ? PunisherScene(actor) : nullptr;
         if (!sc) {
             return false;
         }
         for (const auto id : sc->actors) {
-            const auto at = g_actors.find(id);
             RE::Actor* a = ActorFor(id);
-            if (at != g_actors.end() && at->second.role == Role::kVictim && a && a != actor && !IsPlayer(a)) {
+            if (a && a != actor) {
                 return true;
             }
         }
@@ -3462,13 +3460,6 @@ namespace OrgasmEngine
         return Find(actor) != nullptr;
     }
 
-    bool IsMentallyBroken(RE::Actor* actor)
-    {
-        std::lock_guard lock(g_lock);
-        const auto* st = Find(actor);
-        return st && st->broken;
-    }
-
     void SetRates(float passive, float aggressor, float victim)
     {
         std::lock_guard lock(g_lock);
@@ -3507,11 +3498,7 @@ namespace OrgasmEngine
         if (!who) {
             return false;
         }
-        const auto* st = Find(who);
-        if (st && st->broken) {
-            return false;
-        }
-        return CurrentAv(who, RE::ActorValue::kMagicka) >= CalmCost(st);
+        return CurrentAv(who, RE::ActorValue::kMagicka) >= CalmCost(Find(who));
     }
 
     bool GetPlayerScene(std::vector<ActorView>& out)
@@ -3547,11 +3534,10 @@ namespace OrgasmEngine
             v.name = NameOf(actor);
             v.enjoyment = at->second.enjoyment;
             v.flashing = now < at->second.flashUntil;
-            v.broken = at->second.broken;
             v.dom = at->second.dom;
             v.denied = at->second.sceneBlocked;
             if (g_settings.miniGame && AiDriven(at->second)) {
-                v.strategy = at->second.broken ? "broken" : HudLabel(at->second);
+                v.strategy = HudLabel(at->second);
             }
             v.magicka = pct(RE::ActorValue::kMagicka);
             v.stamina = pct(RE::ActorValue::kStamina);
@@ -3630,17 +3616,12 @@ namespace OrgasmEngine
             if (st->autoPlay == on) {
                 return true;
             }
-            if (!on) {
-                ReleaseForced(*sc, *st, fx, false);  // stops forcing a partner (Greedy / ForcedOrgasm)
-            }
             st->autoPlay = on;
             if (on) {
                 // The strategy BeginScene gave the player (Passive: none allowed then) is a placeholder: the
-                // role default until the decision model picks one. Forced: kept while still allowed.
-                if (st->forcedBy == 0 || !StrategyAllowed(*sc, *st, st->strategy)) {
-                    st->strategy = DefaultStrategy(*sc, *st);
-                    st->strategyTarget = 0;
-                }
+                // role default until the decision model picks one.
+                st->strategy = DefaultStrategy(*sc, *st);
+                st->strategyTarget = 0;
                 st->nextStepAt = Now();
             }
             webui_log::info("OrgasmEngine: auto play {} (scene {}, strategy {})", on ? "on" : "off", sc->sid,
@@ -3669,9 +3650,6 @@ namespace OrgasmEngine
             }
             if (st->playerDriven == on) {
                 return true;
-            }
-            if (on) {
-                ReleaseForced(*sc, *st, fx, false);  // the player plays it now
             }
             st->playerDriven = on;
             if (!on && g_settings.miniGame && !StrategyAllowed(*sc, *st, st->strategy)) {
@@ -3759,7 +3737,7 @@ namespace OrgasmEngine
                 intfc->WriteRecordData(static_cast<std::int32_t>(st.role));
                 intfc->WriteRecordData(st.skill);
                 intfc->WriteRecordData(st.lewd);
-                intfc->WriteRecordData(st.broken);
+                intfc->WriteRecordData(false);  // was mental break; kept so the record layout is unchanged
                 intfc->WriteRecordData(st.sceneBlocked);
                 intfc->WriteRecordData(st.dom);
                 intfc->WriteRecordData(st.jitter);
@@ -3784,13 +3762,8 @@ namespace OrgasmEngine
                 intfc->WriteRecordData(st.curveP);
                 intfc->WriteRecordData(static_cast<std::int32_t>(st.strategy));
                 intfc->WriteRecordData(st.strategyTarget);
-                intfc->WriteRecordData(st.forcedBy);
-                // kPlayStrategy saves as kPlayStrategy + forced strategy (no record version bump).
-                std::int32_t forced = static_cast<std::int32_t>(st.forcedAction);
-                if (st.forcedAction == ForcedAction::kPlayStrategy) {
-                    forced += static_cast<std::int32_t>(st.forcedStrategy);
-                }
-                intfc->WriteRecordData(forced);
+                intfc->WriteRecordData(static_cast<RE::FormID>(0));   // was forcedBy (removed)
+                intfc->WriteRecordData(static_cast<std::int32_t>(0));  // was forcedAction (removed)
                 // v6: stamina regen.
                 intfc->WriteRecordData(st.regen);
             }
@@ -3877,10 +3850,11 @@ namespace OrgasmEngine
                 std::int32_t role = 0;
                 float since = -1.0f;
                 std::uint32_t n = 0;
+                bool legacyBroken = false;  // mental break was removed; the saved flag is read and dropped
                 if (!intfc->ReadRecordData(oldId) || !intfc->ReadRecordData(st.enjoyment) ||
                     !intfc->ReadRecordData(st.orgasmCount) || !intfc->ReadRecordData(role) ||
                     !intfc->ReadRecordData(st.skill) || !intfc->ReadRecordData(st.lewd) ||
-                    !intfc->ReadRecordData(st.broken) || !intfc->ReadRecordData(st.sceneBlocked) ||
+                    !intfc->ReadRecordData(legacyBroken) || !intfc->ReadRecordData(st.sceneBlocked) ||
                     (version >= 2 && !intfc->ReadRecordData(st.dom)) ||
                     (version >= 3 &&
                         (!intfc->ReadRecordData(st.jitter) || !intfc->ReadRecordData(st.domProgress) ||
@@ -3920,23 +3894,12 @@ namespace OrgasmEngine
                         webui_log::error("OrgasmEngine: co-save truncated");
                         return;
                     }
-                    st.strategy = static_cast<Strategy>(
-                        std::clamp(strategy, 0, static_cast<std::int32_t>(Strategy::kCount) - 1));
-                    constexpr auto kPlay = static_cast<std::int32_t>(ForcedAction::kPlayStrategy);
-                    if (forcedAction >= kPlay) {
-                        st.forcedAction = ForcedAction::kPlayStrategy;
-                        st.forcedStrategy = static_cast<Strategy>(std::clamp(forcedAction - kPlay, 0,
-                            static_cast<std::int32_t>(Strategy::kCount) - 1));
-                    } else {
-                        st.forcedAction = static_cast<ForcedAction>(std::clamp(forcedAction, 0, kPlay - 1));
-                    }
-                    if (!target || !intfc->ResolveFormID(target, st.strategyTarget)) {
-                        st.strategyTarget = 0;
-                    }
-                    if (!forcer || !intfc->ResolveFormID(forcer, st.forcedBy)) {
-                        st.forcedBy = 0;
-                        st.forcedAction = ForcedAction::kNone;
-                    }
+                    // SexLab stops every scene on load, so no saved strategy is used: the fields are read to keep
+                    // the record layout and dropped (a scene that starts later gets its own defaults).
+                    (void)strategy;
+                    (void)target;
+                    (void)forcer;
+                    (void)forcedAction;
                 }
                 if (version >= 6 && !intfc->ReadRecordData(st.regen)) {
                     webui_log::error("OrgasmEngine: co-save truncated");

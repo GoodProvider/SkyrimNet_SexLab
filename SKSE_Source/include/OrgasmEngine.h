@@ -22,30 +22,20 @@ namespace OrgasmEngine
     };
 
     /// Mini-game NPC strategy (Papyrus SetStrategy id). The engine plays the mini-game for the NPC.
+    /// Order matches strategies.json (the source of truth for keys and wording).
     enum class Strategy : std::int32_t
     {
-        kPassive = 0,       // no presses
-        kMutual = 1,        // arouse the lowest-enjoyment actor (self included)
-        kSelfish = 2,       // arouse self
-        kSelfless = 3,      // arouse the lowest-enjoyment other actor
-        kTogether = 4,      // calm self when ahead, arouse self when behind
-        kTease = 5,         // arouse the target below 90, calm (edge) them at 90+
-        kReject = 6,        // calm self (victims; or forced via RejectForce)
-        kCumQuick = 7,      // arouse the aggressor (victims)
-        kGreedy = 8,        // arouse self; the target is forced to arouse the speaker
-        kForcedOrgasm = 9,  // arouse the target; the target is forced to arouse self
-        kAcceptForce = 10,  // forced: play the forced action
-        kNonSexual = 11,    // no presses; the default when no actor expects orgasm
-        kCount = 12,
-    };
-
-    /// What a forced actor's AcceptForce plays.
-    enum class ForcedAction : std::int32_t
-    {
-        kNone = 0,
-        kArouseForcer = 1,  // Greedy
-        kArouseSelf = 2,    // ForcedOrgasm
-        kPlayStrategy = 3,  // player Force (HUD): play the strategy the player chose
+        kPassive = 0,    // no presses
+        kMutual = 1,     // arouse the lowest-enjoyment actor (self included)
+        kSelfish = 2,    // arouse self
+        kSelfless = 3,   // arouse the lowest-enjoyment other actor
+        kDenySelf = 4,   // calm self
+        kDenyAll = 5,    // calm every actor in the scene, self included
+        kDeny = 6,       // calm the target
+        kTease = 7,      // arouse the target below 90, calm (edge) them at 90+
+        kFocused = 8,    // arouse the target
+        kNonSexual = 9,  // no presses; the default when no actor expects orgasm
+        kCount = 10,
     };
 
     /// Starts the tick thread. Call once at kDataLoaded.
@@ -108,8 +98,8 @@ namespace OrgasmEngine
         kDecision = 1,
     };
 
-    /// Mini-game: the NPC's strategy (and its target for Tease / Greedy / ForcedOrgasm). Announced (see
-    /// StrategySource). False when not allowed for the actor (mode, role, forced state).
+    /// Mini-game: the NPC's strategy (and its target for Deny / Tease / Focused). Announced (see
+    /// StrategySource). False when not allowed for the actor (mode, scene).
     bool SetStrategy(RE::Actor* actor, Strategy strategy, RE::Actor* target,
         StrategySource source = StrategySource::kAction);
     Strategy GetStrategy(RE::Actor* actor);
@@ -123,7 +113,6 @@ namespace OrgasmEngine
         std::string role;     // partner | aggressor | victim
         std::string arousal;  // 0050 bands: barely aroused ... on the verge of orgasm
         std::int32_t orgasms = 0;
-        std::string approach;  // GetStrategyText, "" for the player
     };
     struct DecisionOption
     {
@@ -140,12 +129,7 @@ namespace OrgasmEngine
         std::string arousal;
         std::int32_t orgasms = 0;
         bool expectsOrgasm = true;
-        bool broken = false;
-        std::string currentKey;
-        std::string approach;
-        std::string forcedBy;
-        std::string forceMethod;
-        std::string progress;  // start | middle | near the end | final stage
+        std::string currentKey;  // C++ only (kept / changed); never sent to the prompt
         std::vector<DecisionPartner> partners;  // everyone else, SexLab position order
         std::vector<DecisionOption> options;    // only what the engine allows now
         std::vector<std::pair<std::string, RE::FormID>> slots;  // "p<slot>" -> actor (target suffixes)
@@ -176,40 +160,49 @@ namespace OrgasmEngine
     std::string GetStrategyText(RE::Actor* actor);
     // Stamina regen, percent of the actor's default (100 when unmanaged or fatigue is off).
     float GetStaminaRegen(RE::Actor* actor);
-    RE::Actor* GetForcedBy(RE::Actor* actor);
-    /// How the forcer forced the actor ("a slap to the face"), shown in AcceptForce / RejectForce narration.
-    /// Kept until the forced state ends. "" clears.
-    void SetForceMethod(RE::Actor* actor, const std::string& method);
 
-    /// Player Force (HUD key): a victim the player can force and the strategies it can be forced into.
-    struct ForceVictim
+    /// Punish (HUD key, SexLab_Scene_Punish action, auto play): someone in the scene the punisher can punish.
+    struct PunishTarget
     {
         RE::FormID id = 0;
         std::string name;
-        std::vector<std::pair<std::string, std::string>> strategies;  // key, panel label ("please you")
     };
-    /// False when the player is not an aggressor in a managed mini-game scene. victims: non-player victims.
-    bool GetPlayerForceInfo(std::vector<ForceVictim>& victims);
-    /// GetPlayerForceInfo for any forcer (HUD: the NPC the player took control of).
-    bool GetForceInfo(RE::Actor* forcer, std::vector<ForceVictim>& victims);
-    /// The player forces victim into strategyKey by method (preset key or free text). Starts the fear
-    /// cooldown (only AcceptForce offered). location: body part named in the narration ("" / "body": none).
-    /// Returns the narration line, "" when refused.
-    /// With SkyrimNet_Whipped installed the hit goes through Whipped (slap/pinch/punch/pull use their torture types;
-    /// cover mouth, free text, and weak spells use whipping; a weak spell does no health damage of its own), which also
-    /// narrates the line: *whipped is set true and the caller must not narrate it.
-    std::string PlayerForce(RE::FormID victim, const std::string& strategyKey, const std::string& method,
-        const std::string& location = "", bool* whipped = nullptr);
-    /// Any non-victim forcer (SexLab_Force action): forces a non-player victim of its mini-game scene. method: a
-    /// preset key, one of the forcer's weak attack spells (a non-lethal hit), or free text. "" when refused.
-    std::string Force(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey, const std::string& method,
-        bool* whipped = nullptr);
-    /// PlayerForce with forcer acting for the player (HUD Force panel / auto play): the player, or the NPC the
-    /// player took control of. Same aggressor rule and narration line as PlayerForce.
-    std::string HudForce(RE::Actor* forcer, RE::FormID victim, const std::string& strategyKey,
-        const std::string& method, const std::string& location, bool* whipped = nullptr);
-    /// The actor is not a victim in a mini-game scene that has a non-player victim (SexLab_Force eligibility).
-    bool CanForce(RE::Actor* actor);
+    /// False when the punisher is not in a managed scene. targets: everyone else in it, the player included.
+    bool GetPunishInfo(RE::Actor* punisher, std::vector<PunishTarget>& targets);
+    /// Ask / Order panel request: a strategy the target could be asked to take.
+    struct RequestOption
+    {
+        std::string key;   // "<key>" or "<key>_p<slot>" (deny / tease / focused: the actor the request is about)
+        std::string text;  // strategies.json "order" phrase after "to", {target} filled: "be passive and let things happen"
+    };
+    /// The strategies `target` may take now (decision rule; one per other actor for deny / tease / focused), its
+    /// current one left out. Empty when unmanaged, not AI-driven (the player outside auto play, an NPC the player
+    /// controls) or not in mini-game mode.
+    std::vector<RequestOption> GetRequestOptions(RE::FormID target);
+    /// What `target` can be punished for this scene, newest last: "Nina refused Bob's order to be passive" (a
+    /// refused ask / order) or a reason a mod supplied (AddPunishReason). The punish verb is offered only when
+    /// this is not empty.
+    std::vector<std::string> GetPunishReasons(RE::FormID target);
+    /// Another mod (SkyrimNet_DOM) supplies a reason `target` can be punished for ("Nina spoke without permission").
+    void AddPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason);
+    /// by asks or orders target to take a strategy: requestKey one of GetRequestOptions(target) keys, or "" with
+    /// customText (a free phrase after "to"). Narrates "Bob orders Nina to <text>." (DirectNarration when the scene
+    /// has the player or the player controls an actor of it, else DirectNarration_Optional), runs the target's
+    /// strategy decision with that line as last_line, then narrates the answer on its own: "Nina agrees to|refuses
+    /// Bob's request to <text>." A refusal is kept as a punishment reason. Any thread. False when refused.
+    bool AskOrderNarrated(RE::Actor* by, RE::FormID target, bool order, const std::string& requestKey,
+        const std::string& customText);
+    /// The punisher hurts target: "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to
+    /// be passive." With SkyrimNet_Whipped (External_TortureText) the hit lands silently and its feeling text is
+    /// appended to the narration; the narration is then sent and is last_line of the target's strategy decision
+    /// (trigger "punished"); a punishment for a refused request gets the agree / refuse answer as its own narration.
+    /// method: slap / pinch / punch / pull, one of the punisher's weak attack spells (a non-lethal hit) or a free
+    /// phrase ("biting"). location: body part ("" / "body": none named). reason: "" drops the "because ..." clause.
+    /// Any thread. False when refused.
+    bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
+        const std::string& reason);
+    /// The actor is in a managed scene with someone else in it (SexLab_Scene_Punish eligibility).
+    bool CanPunish(RE::Actor* actor);
     void EndScene(std::int32_t sid);
     /// SexLabOrgasm arrived: true (and consumed) when the engine fired it itself.
     bool ConsumeOwnOrgasm(RE::Actor* actor);
@@ -239,7 +232,6 @@ namespace OrgasmEngine
     std::int32_t GetOrgasmCount(RE::Actor* actor);
     float GetSecondsSinceOrgasm(RE::Actor* actor);
     bool IsManaged(RE::Actor* actor);
-    bool IsMentallyBroken(RE::Actor* actor);
     void SetRates(float passive, float aggressor, float victim);
     std::uint32_t RegisterEventCallback(SKYRIMNET_SEXLAB_API::EngineEventCallback callback);
     void UnregisterEventCallback(std::uint32_t handle);
@@ -255,11 +247,10 @@ namespace OrgasmEngine
         std::string name;
         float enjoyment = 0.0f;
         bool flashing = false;
-        bool broken = false;
         bool dom = false;  // DOM slave: bar is DOM's orgasm meter, DOM decides
         bool denied = false;  // player's deny_orgasm (SetSceneBlocked)
         std::string strategy;  // mini-game NPC strategy label ("selfish", "forced"), "" when none
-        float magicka = 0.0f;  // 0..100 % of max (calm cost, mental break)
+        float magicka = 0.0f;  // 0..100 % of max (calm cost)
         float stamina = 0.0f;  // 0..100 % of max (arouse cost)
     };
     /// Actors of the scene the player is in, in SexLab position order. False when none.
@@ -308,7 +299,7 @@ namespace OrgasmEngine
     // gate on load). 5: + stage clock per scene; bonus, curve progress, strategy, target, forcer per actor.
     // 6: + stamina regen per actor. 7: + mini-game rates per scene (CalibrateMiniGame). 8: + sticky auto play
     // (after the scenes). Older still load.
-    constexpr std::uint32_t kRecordVersion = 8;
+    constexpr std::uint32_t kRecordVersion = 9;  // 9: strategy ids renumbered (reject / cumquick removed)
 
     /// The exported C++ interface (RequestOrgasmEngineAPI).
     SKYRIMNET_SEXLAB_API::IOrgasmEngineV2* GetInterface();

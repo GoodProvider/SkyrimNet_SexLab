@@ -771,10 +771,12 @@ void InitWebUI()
             });
         });
 
-        // Force panel (HUD force key): {cancel} or {victim, strategy, method, location}. Narrated directly.
-        PrismaUI->RegisterJSListener(g_view, "onForceResult", [](const char* value) {
-            RunGuarded("onForceResult", [&] {
-                WebUI_Invoke("hideForcePanel();");
+        // Ask / Order / Punish panel (HUD punish key): {cancel} or {verb, subject, object, ...}. verb "ask" | "order":
+        // request (a request key) or text (free phrase). verb "punish": method, location, reason. The engine narrates
+        // (source the subject, target the object; SkyrimNet picks who answers).
+        PrismaUI->RegisterJSListener(g_view, "onPunishResult", [](const char* value) {
+            RunGuarded("onPunishResult", [&] {
+                WebUI_Invoke("hidePunishPanel();");
                 WebUI_Visibility_HideWithoutCommit();
                 if (!value)
                     return;
@@ -782,26 +784,32 @@ void InitWebUI()
                     auto j = nlohmann::json::parse(value);
                     if (j.value("cancel", false))
                         return;
-                    const auto victim = j.value("victim", static_cast<RE::FormID>(0));
-                    const std::string strategy = j.value("strategy", std::string{});
+                    const std::string verb = j.value("verb", std::string("punish"));
+                    const auto subject = j.value("subject", static_cast<RE::FormID>(0));
+                    const auto object = j.value("object", static_cast<RE::FormID>(0));
+                    const std::string request = j.value("request", std::string{});
+                    const std::string text = j.value("text", std::string{});
                     const std::string method = j.value("method", std::string{});
                     const std::string location = j.value("location", std::string{});
-                    webui_log::info("onForceResult victim={:#x} strategy={} method='{}' location='{}'", victim, strategy,
-                        method, location);
-                    SKSE::GetTaskInterface()->AddTask([victim, strategy, method, location]() {
-                        RE::Actor* forcer = Hud::ActingActor();
-                        bool whipped = false;
-                        const std::string line = OrgasmEngine::HudForce(forcer, victim, strategy, method, location, &whipped);
-                        if (!line.empty() && !whipped)
-                            OrgasmEngine::NarrateDirect(line, forcer, RE::TESForm::LookupByID<RE::Actor>(victim));
-                    });
+                    const std::string reason = j.value("reason", std::string{});
+                    webui_log::info("onPunishResult verb={} subject={:#x} object={:#x} request='{}' text='{}' "
+                                    "method='{}' location='{}' reason='{}'",
+                        verb, subject, object, request, text, method, location, reason);
+                    SKSE::GetTaskInterface()->AddTask(
+                        [verb, subject, object, request, text, method, location, reason]() {
+                            RE::Actor* by = RE::TESForm::LookupByID<RE::Actor>(subject);
+                            if (verb == "punish")
+                                OrgasmEngine::PunishNarrated(by, object, method, location, reason);
+                            else
+                                OrgasmEngine::AskOrderNarrated(by, object, verb == "order", request, text);
+                        });
                 } catch (...) {
-                    webui_log::warn("onForceResult: bad JSON");
+                    webui_log::warn("onPunishResult: bad JSON");
                 }
             });
         });
 
-        // Force / Aid part pulldown: the player agreed to turn on SkyrimNet_Whipped's sexual body parts.
+        // Punish / Aid part pulldown: the player agreed to turn on SkyrimNet_Whipped's sexual body parts.
         PrismaUI->RegisterJSListener(g_view, "onWhippedSexualParts", [](const char*) {
             RunGuarded("onWhippedSexualParts", [&] {
                 SKSE::GetTaskInterface()->AddTask([]() { Whipped::EnableSexualParts(); });

@@ -1,0 +1,82 @@
+[
+  {
+    "key": "passive",
+    "label": "passive",
+    "text": "lets things happen",
+    "option": "passive: {name} stops trying and lets things happen",
+    "order": "be passive, stop trying and let things happen",
+    "observed": "appears to be just letting things happen"
+  },
+  {
+    "key": "mutual",
+    "label": "arouse all",
+    "text": "focuses on mutual enjoyment",
+    "option": "mutual: {name} focuses on mutual enjoyment, always helping whoever is least aroused, {self} included",
+    "order": "be mutual, focus on mutual enjoyment and help whoever is least aroused",
+    "observed": "appears to be making sure everyone enjoys it"
+  },
+  {
+    "key": "selfish",
+    "label": "arouse self",
+    "text": "focuses on self enjoyment",
+    "option": "selfish: {name} chases {his} own pleasure",
+    "order": "be selfish, focus on your own pleasure",
+    "observed": "appears to be focused on {his} own enjoyment"
+  },
+  {
+    "key": "selfless",
+    "label": "arouse others",
+    "text": "focuses on the enjoyment of others",
+    "option": "selfless: {name} focuses on pleasing others, without regard for personal pleasure",
+    "order": "be selfless, focus on pleasing others",
+    "observed": "appears to be focused on pleasing the others"
+  },
+  {
+    "key": "resist",
+    "label": "deny self",
+    "text": "resists pleasure and cumming",
+    "option": "resist: {name} resists the pleasure and refuses to cum",
+    "order": "resist your own pleasure, don't cum",
+    "observed": "appears to be resisting pleasure and fighting not to cum"
+  },
+  {
+    "key": "forbid",
+    "label": "deny all",
+    "text": "fights anyone experiencing pleasure or cumming",
+    "option": "forbid: {name} fights anyone experiencing pleasure or cumming, {self} included",
+    "order": "forbid anyone pleasure or cumming",
+    "observed": "appears to be fighting anyone experiencing pleasure or cumming"
+  },
+  {
+    "key": "deny",
+    "label": "deny {target}",
+    "text": "resists giving pleasure to {target} or letting {target} cum",
+    "option": "deny {target}: {name} resists giving {target} pleasure or letting {target} cum",
+    "order": "deny {target} pleasure, don't let {target} cum",
+    "observed": "appears to be resisting giving {target} pleasure or letting {target} cum"
+  },
+  {
+    "key": "tease",
+    "label": "tease {target}",
+    "text": "teases {target}, holding them at the edge",
+    "option": "tease {target}: {name} arouses {target}, then holds them at the edge of orgasm",
+    "order": "tease {target} and hold them at the edge",
+    "observed": "appears to be teasing {target}, keeping them at the edge"
+  },
+  {
+    "key": "focus",
+    "label": "focus {target}",
+    "text": "focuses on {target}'s pleasure",
+    "option": "focus {target}: {name} focuses on {target}'s pleasure, doing whatever it takes to make them cum",
+    "order": "focus on {target}'s pleasure",
+    "observed": "appears to be focusing on {target}'s pleasure"
+  },
+  {
+    "key": "nonsexual",
+    "label": "non-sexual",
+    "text": "keeps things non-sexual",
+    "option": "nonsexual: {name} keeps things affectionate and nonsexual",
+    "order": "keep things affectionate and nonsexual",
+    "observed": "appears to be keeping things non-sexual"
+  }
+]

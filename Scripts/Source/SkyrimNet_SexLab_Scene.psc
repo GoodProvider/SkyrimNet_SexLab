@@ -1751,7 +1751,7 @@ Function Engine_BeginScene()
             bool blocked = obj > 0 && SNSL_JMap.getInt(obj, "deny_orgasm") == 1
             SkyrimNet_SexLab_OrgasmEngine.SetSceneBlocked(a, blocked)
             SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(a, main.handler_dom.IsDOMSlave(a))
-            ; SexLab_Aid / SexLab_Force eligibility (roles are known now).
+            ; SexLab_Aid / SexLab_Scene_Punish eligibility (roles are known now).
             SkyrimNet_SexLab_OrgasmEngine.ActionKeys_Refresh(a)
         endif
         i += 1

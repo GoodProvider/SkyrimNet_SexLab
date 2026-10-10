@@ -185,11 +185,11 @@ bool minigame_actions_unregistered = False
 
 String[] Function MiniGameActionNames()
     ; NPC strategies come from the decision model (StrategyDecision), not LLM actions.
-    String[] names = new String[4]
+    ; SexLab_Scene_Punish is not here: it needs no mini-game and works in any managed scene.
+    String[] names = new String[3]
     names[0] = "SexLab_Arouse"
     names[1] = "SexLab_Calm"
     names[2] = "SexLab_Aid"
-    names[3] = "SexLab_Force"
     return names
 EndFunction
 

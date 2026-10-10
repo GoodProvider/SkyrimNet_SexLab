@@ -439,6 +439,66 @@ Function Outfit_Undress(Actor Speaker, Actor Target, String style, String narrat
 EndFunction
 
 ; -------------------------------------------------
+; Clean cum
+; -------------------------------------------------
+
+; part: mouth|pussy|ass|all; anything else falls back to the first place with cum.
+; narration: silent → RegisterEvent, none → no narration.
+Function CleanCum_Apply(Actor speaker, Actor target, String part, String style, String narration)
+    Trace("CleanCum_Apply", GetDisplayName(speaker)+" -> "+GetDisplayName(target)+" part:"+part+" style:"+style)
+    if speaker == None || target == None
+        return
+    endif
+    String parts = SkyrimNet_SexLab_Decorators.CumParts(target)
+    if parts == ""
+        Trace("CleanCum_Apply", GetDisplayName(target)+" has no cum")
+        return
+    endif
+    if part != "all" && StringUtil.Find(parts, part) < 0
+        int comma = StringUtil.Find(parts, ",")
+        if comma < 0
+            part = parts
+        else
+            part = StringUtil.Substring(parts, 0, comma)
+        endif
+    endif
+    SkyrimNet_SexLab_Decorators.ClearCumPart(target, part)
+
+    if narration != "none" && style != "silently" && style != "silent"
+        String where = part
+        if part == "all"
+            where = "body"
+        endif
+        String msg = speaker.GetDisplayName()+" "+style+" cleans the cum from "
+        if speaker == target
+            msg += "their own "+where+"."
+        else
+            msg += target.GetDisplayName()+"'s "+where+"."
+        endif
+        Actor listener = target
+        if listener == speaker
+            listener = None
+        endif
+        RegisterEvent("clean_cum", msg, speaker, listener)
+    endif
+    Outfit_RefreshWebUI(target)
+EndFunction
+
+; LLM action sexlab_clean_cum.
+Function CleanCum(Actor speaker, Actor target, String part, String style)
+    CleanCum_Apply(speaker, target, part, style, "silent")
+EndFunction
+
+; TargetMenu panel clean_cum (style silently skips narration).
+Function TM_CleanCum(Actor speaker, Actor target, String part, String style)
+    String narration = "silent"
+    if style == "silently" || style == "silent"
+        narration = "none"
+    endif
+    CleanCum_Apply(speaker, target, part, style, narration)
+EndFunction
+
+; -------------------------------------------------
 ; IsEligible
 ; -------------------------------------------------
 
@@ -791,7 +851,7 @@ Function MiniGame_Act(Actor speaker, Actor target, bool arouse)
 EndFunction
 
 ;-------------------------------------------
-; Aid / Force (LLM actions): mirror the HUD Aid (Num 0) and Force (Num .) keys
+; Aid / Punish (LLM actions): mirror the HUD Aid (Num 0) and Punish (Num .) keys
 ;-------------------------------------------
 
 ; kind: "heal" or "stamina". The speaker's best spell (costs magicka) or potion (consumed) for it.
@@ -818,15 +878,12 @@ Function LLM_Aid(Actor speaker, Actor target, String kind)
     SkyrimNet_SexLab_OrgasmEngine.ActionKeys_Refresh(speaker)
 EndFunction
 
-; Same scene, speaker not a victim, target a non-player victim. strategy: a strategy key; method: preset, weak
-; attack spell the speaker knows, or free text.
-Function LLM_Force(Actor speaker, Actor target, String strategy, String method)
+; Anyone in the speaker's scene but the speaker (the player included). method: preset, weak attack spell the
+; speaker knows, or a verb phrase; part: body part; reason: why ("" for none). Sets no strategy: the narration
+; (source speaker, target the punished) makes the target answer, and the strategy decision follows.
+Function LLM_Punish(Actor speaker, Actor target, String method, String part, String reason)
     if speaker == None || target == None || speaker == target
-        Trace("LLM_Force", "needs a speaker and a different target")
-        return
-    endif
-    if target == Game.GetPlayer()
-        Trace("LLM_Force", GetDisplayName(speaker)+" cannot force the player")
+        Trace("LLM_Punish", "needs a speaker and a different target")
         return
     endif
     SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(speaker)
@@ -835,19 +892,12 @@ Function LLM_Force(Actor speaker, Actor target, String strategy, String method)
         thread = sl.GetThread()
     endif
     if thread == None || thread.Positions.Find(target) < 0
-        Trace("LLM_Force", GetDisplayName(target)+" is not in "+GetDisplayName(speaker)+"'s scene")
+        Trace("LLM_Punish", GetDisplayName(target)+" is not in "+GetDisplayName(speaker)+"'s scene")
         return
     endif
-    if thread.IsVictim(speaker) || !thread.IsVictim(target)
-        Trace("LLM_Force", GetDisplayName(speaker)+" is not the aggressor of "+GetDisplayName(target))
-        return
-    endif
-    String line = SkyrimNet_SexLab_OrgasmEngine.Force(speaker, target, strategy, method)
-    Trace("LLM_Force", GetDisplayName(speaker)+" forces "+GetDisplayName(target)+" strategy:"+strategy+" method:"+method+" line:"+line)
-    ; SkyrimNet_Whipped applies the hit and narrates the line itself.
-    if line != "" && !SkyrimNet_SexLab_OrgasmEngine.WhippedInstalled()
-        SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_force", line, speaker, target, False)
-    endif
+    ; The engine narrates the punishment itself, after the target's strategy decision (the answer is in the line).
+    SkyrimNet_SexLab_OrgasmEngine.Punish(speaker, target, method, part, reason)
+    Trace("LLM_Punish", GetDisplayName(speaker)+" punishes "+GetDisplayName(target)+" method:"+method+" part:"+part+" reason:"+reason)
 EndFunction
 
 ;-------------------------------------------
