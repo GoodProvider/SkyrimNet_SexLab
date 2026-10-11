@@ -273,6 +273,8 @@ namespace PapyrusBindings_WebUI
                 const auto e = s.find_last_not_of(" \t");
                 spec.name_contains = (b == std::string::npos) ? std::string() : s.substr(b, e - b + 1);
             }
+            if (j.contains("_favorites_only") && j["_favorites_only"].is_boolean())
+                spec.favorites_only = j["_favorites_only"].get<bool>();
             if (j.contains("_synonyms") && j["_synonyms"].is_string())
                 spec.synonyms = AnimationDB::ParseSynonymMode(j["_synonyms"].get<std::string>());
             if (j.contains("_shuffle"))
@@ -292,6 +294,7 @@ namespace PapyrusBindings_WebUI
         j["_registry"] = row.registry;
         j["_name"] = row.name;
         j["_enabled"] = row.enabled;
+        j["_favorite"] = AnimationDB::IsFavorite(row.registry);
         j["_position_count"] = row.position_count;
         j["_stage_count"] = row.stage_count;
         j["_tags"] = row.tags;

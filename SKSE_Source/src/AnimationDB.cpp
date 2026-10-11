@@ -25,6 +25,8 @@ namespace AnimationDB
         int g_sync_upsert_failures = 0;
         std::unordered_map<std::string, AnimRow> g_rows;
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
+        /// Favorited registries (lowercase). Own table so animation resyncs never wipe it. Guarded by g_mutex.
+        std::unordered_set<std::string> g_favorites;
 
         /// tag → its cluster's members (incl. itself). [0] = strict, [1] = broad. Guarded by g_mutex.
         using SynonymMap = std::unordered_map<std::string, std::shared_ptr<const std::vector<std::string>>>;
@@ -219,6 +221,9 @@ CREATE TABLE IF NOT EXISTS animation_tags (
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT
+);
+CREATE TABLE IF NOT EXISTS favorites (
+  registry TEXT PRIMARY KEY
 );
 CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 )SQL";
@@ -481,6 +486,17 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
             sqlite3_finalize(stmt);
             RebuildTagIndexLocked();
+
+            g_favorites.clear();
+            sqlite3_stmt* fstmt = nullptr;
+            if (sqlite3_prepare_v2(g_db, "SELECT registry FROM favorites", -1, &fstmt, nullptr) == SQLITE_OK) {
+                while (sqlite3_step(fstmt) == SQLITE_ROW) {
+                    const unsigned char* t = sqlite3_column_text(fstmt, 0);
+                    if (t)
+                        g_favorites.insert(reinterpret_cast<const char*>(t));
+                }
+                sqlite3_finalize(fstmt);
+            }
         }
 
         void UpsertRowLocked(const AnimRow& row)
@@ -1008,6 +1024,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                     return false;
             }
             if (!spec.name_contains.empty() && ToLower(row.name).find(spec.name_contains) == std::string::npos)
+                return false;
+            if (spec.favorites_only && !g_favorites.count(row.registry))
                 return false;
             return true;
         }
@@ -1933,6 +1951,37 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     {
         std::lock_guard lock(g_mutex);
         return static_cast<int>(g_rows.size());
+    }
+
+    bool IsFavorite(const std::string& registry)
+    {
+        std::lock_guard lock(g_mutex);
+        return g_favorites.count(ToLower(registry)) > 0;
+    }
+
+    bool SetFavorite(const std::string& registry, bool favorite)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return false;
+        const std::string reg = ToLower(registry);
+        if (reg.empty())
+            return false;
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = favorite ? "INSERT OR IGNORE INTO favorites(registry) VALUES(?)"
+                                   : "DELETE FROM favorites WHERE registry=?";
+        if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+            return false;
+        sqlite3_bind_text(stmt, 1, reg.c_str(), -1, SQLITE_TRANSIENT);
+        const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+        sqlite3_finalize(stmt);
+        if (ok) {
+            if (favorite)
+                g_favorites.insert(reg);
+            else
+                g_favorites.erase(reg);
+        }
+        return ok;
     }
 
     std::optional<AnimRow> GetByRegistry(const std::string& registry)

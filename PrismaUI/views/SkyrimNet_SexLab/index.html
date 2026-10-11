@@ -1138,6 +1138,13 @@
             font-weight: 600;
         }
 
+        #sc-anims-list .col-fav {
+            width: 1.5em;
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
         .sc-col-positions > .section-header,
         .sc-col-tags > .section-header {
             flex-shrink: 0;
@@ -2092,6 +2099,8 @@
                         <div id="sc-filter-has-description"></div>
                         <span>synonyms:</span>
                         <div id="sc-filter-synonyms"></div>
+                        <span>favorites:</span>
+                        <div id="sc-favorites-toggle"></div>
                     </div>
                 </div>
             </div>
@@ -2186,6 +2195,8 @@
                         <div id="de-filter-has-description"></div>
                         <span>synonyms:</span>
                         <div id="de-filter-synonyms"></div>
+                        <span>favorites:</span>
+                        <div id="de-favorites-toggle"></div>
                     </div>
                     <div class="compact-row">
                         <span>name:</span>
@@ -8757,6 +8768,7 @@
             SC.filterAuto = true;
             SC.filterByOnce = '';
             SC.hasDescription = 'any';
+            SC.favoritesOnly = false;
             SC.synonyms = SC_SYNONYM_DEFAULT;
             SC.sceneSetting = '';
             SC.ddAuto = [];
@@ -9089,6 +9101,7 @@
             filterAuto: true,
             filterByOnce: '',
             hasDescription: 'any',
+            favoritesOnly: false,
             synonyms: SC_SYNONYM_DEFAULT,
             // Devious Devices tags (sexlab.tags.filter_by_devious_devices): ddAuto = tags auto-added from worn
             // devices, ddProbe = still dropping them when nothing matches, ddDismissed = removed by the player.
@@ -9151,6 +9164,40 @@
                 if (!host) continue;
                 host.innerHTML = '';
                 host.appendChild(createPulldown(SC_HAS_DESCRIPTION_OPTIONS, SC.hasDescription, onPick));
+            }
+        }
+
+        function scRenderFavoritesToggle() {
+            const cur = SC.favoritesOnly ? 'on' : 'off';
+            const onPick = v => {
+                const on = v === 'on';
+                if (on === !!SC.favoritesOnly) return;
+                SC.favoritesOnly = on;
+                scRenderFavoritesToggle(); // keep the SC and DE copies in sync
+                scRefreshAnims();
+                scRefreshTags();
+            };
+            for (const hostId of ['sc-favorites-toggle', 'de-favorites-toggle']) {
+                const host = document.getElementById(hostId);
+                if (!host) continue;
+                host.innerHTML = '';
+                host.appendChild(createPulldown(['off', 'on'], cur, onPick));
+            }
+        }
+
+        // Star click: persist to AnimDB; when the favorites filter is on, re-query so an unstarred row drops out.
+        function scToggleFavorite(idx, ev) {
+            if (ev) ev.stopPropagation();
+            const a = (SC.lastAnims || [])[idx];
+            if (!a || !a._registry) return;
+            a._favorite = !a._favorite;
+            if (typeof window.onAnimFavoriteSet === 'function')
+                window.onAnimFavoriteSet(JSON.stringify({ _registry: a._registry, _favorite: !!a._favorite }));
+            if (SC.favoritesOnly) {
+                scRefreshAnims();
+                scRefreshTags();
+            } else {
+                scRenderAnimList();
             }
         }
 
@@ -9247,6 +9294,7 @@
             scArmFilterDowngrade(forcedFilterBy);
             scRenderHasDescriptionPulldown();
             scRenderSynonymsPulldown();
+            scRenderFavoritesToggle();
             scRenderAnimShowPulldown();
             scApplyModeChrome();
             scEnsurePositionSeed();
@@ -10063,6 +10111,7 @@
             // Description Editor animation filter tab: case-insensitive substring of the animation name.
             if (typeof deFilterTabActive === 'function' && deFilterTabActive() && DE.animNameFilter)
                 filter._name_contains = DE.animNameFilter;
+            if (SC.favoritesOnly) filter._favorites_only = true;
             filter._synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
             // Scene start draft: the TargetMenu scene setting's tags_any / tags_prefer / exclude_settings
             // (C++ reads them by name). Bound = the cast wears DD (auto DD tags, kept or dismissed).
@@ -10320,6 +10369,7 @@
                 const stages = (a._stage_count != null) ? a._stage_count : '';
                 const desc = previewDescription(a);
                 return `<tr class="${sel ? 'selected' : ''}" onclick="scClickAnim(${i}, event)">` +
+                    `<td class="col-fav" onclick="scToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
                     `<td class="col-an">${escapeHtml(an)}</td>` +
                     `<td class="col-genders">${escapeHtml(genders)}</td>` +
                     `<td class="col-mods">${escapeHtml(mods)}</td>` +
@@ -10330,6 +10380,7 @@
             }).join('');
             document.getElementById('sc-anims-list').innerHTML =
                 `<table class="data-table anim-table"><thead><tr>` +
+                `<th class="col-fav"></th>` +
                 `<th class="col-an"></th>` +
                 `<th class="col-genders">genders</th>` +
                 `<th class="col-mods">modifiers</th>` +
@@ -10384,7 +10435,7 @@
                     scRefreshAnims();
                     return;
                 }
-                if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any') {
+                if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any' && !SC.favoritesOnly) {
                     SC.filterBy = SC.filterChain.shift();
                     scRenderFilterByPulldown();
                     scRefreshTags();
@@ -11556,6 +11607,7 @@
             scRenderFilterByPulldown();
             scRenderHasDescriptionPulldown();
             scRenderSynonymsPulldown();
+            scRenderFavoritesToggle();
             const nameEl = document.getElementById('de-anim-name-filter');
             if (nameEl && nameEl.value !== DE.animNameFilter) nameEl.value = DE.animNameFilter;
             deRenderLoadedList();
@@ -11593,7 +11645,7 @@
                 deRefreshFilterAnims();
                 return;
             }
-            if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any') {
+            if (!anims.length && SC.filterChain.length && (SC.hasDescription || 'any') === 'any' && !SC.favoritesOnly) {
                 SC.filterBy = SC.filterChain.shift();
                 scRenderFilterByPulldown();
                 scRefreshTags();

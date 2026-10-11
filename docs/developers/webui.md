@@ -273,3 +273,7 @@ Hard dependency ([Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/148
 **Display scale:** Overlay matches SkyrimNet’s system — px design tokens (~15px base), `body.style.zoom` × Dashboard `ui_scale` × up-only 1080p baseline, scrollable left-column / panel shells. See [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 
 After changing action `label`s: regenerate `actions_index.json` with `tools/generate_actions_index.py`.
+
+## Animation favorites
+
+AnimDB keeps a `favorites` table (registry, lowercase), separate from `animations` so resync/rebuild never clears it. The Scene Creator animation list (`#sc-anims-list`) has a header-less first column (`.col-fav`): ☆ not favorite, ★ favorite; clicking it calls `scToggleFavorite` → JS listener `onAnimFavoriteSet` `{_registry, _favorite}` (`AnimationDB::SetFavorite`). Anim rows from `onAnimDbQuery` carry `_favorite`. The **favorites** off/on filter (`SC.favoritesOnly`, hosts `sc-favorites-toggle` / `de-favorites-toggle`) sends `_filter._favorites_only: true`; it also stops the empty-result `filterChain` widening.

@@ -1059,6 +1059,21 @@ void InitWebUI()
             });
         });
 
+        PrismaUI->RegisterJSListener(g_view, "onAnimFavoriteSet", [](const char* value) {
+            RunGuarded("onAnimFavoriteSet", [&] {
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const std::string reg = j.value("_registry", "");
+                    if (!AnimationDB::SetFavorite(reg, j.value("_favorite", false)))
+                        webui_log::warn("onAnimFavoriteSet: failed for '{}'", reg);
+                } catch (...) {
+                    webui_log::warn("onAnimFavoriteSet: bad JSON");
+                }
+            });
+        });
+
         PrismaUI->RegisterJSListener(g_view, "onAnimDbResolveTags", [](const char* value) {
             RunGuarded("onAnimDbResolveTags", [&] {
                 PapyrusBindings_WebUI::HandleAnimDbResolveTags(value);

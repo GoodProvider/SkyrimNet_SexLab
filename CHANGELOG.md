@@ -3,6 +3,8 @@
 ## [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2) — since [0.35.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.1)
 
 ### Actions / scenes
+- **Animation favorites**: new `favorites` table in AnimDB (survives resync). Scene Creator animation list has a header-less first column (☆ / ★, click toggles via `onAnimFavoriteSet`) and a **favorites** off/on filter (`_favorites_only`); rows carry `_favorite`.
+- Auto play: removed the `TransformDialogue` call (the `speak` HUD key no longer makes SkyrimNet write a player line).
 - **`sex_tags.json`** (new, `SKSE/Plugins/SkyrimNet_SexLab/`): AnimDB adds the `sexual` tag to every animation that has any of the listed tags (`LoadSexTagsFile` / `ApplySexualTagLocked`, loaded in `LoadSynonyms`; applied before the unchanged-row check during sync).
 - `nonsexual*` scene settings: `tags_suppress` now uses `sexual` instead of the long list of sex tags. `NONSEXUAL_SUPPRESS_FALLBACK` is `sexual`.
 - WebUI TargetMenu: the **sex** option and category are now **sexual**, with a single leaf `sexual` (legacy `pussy`/`vaginal`/… map to it). New option fields `creatorTags` / `creatorSuppress`: while Scene Creator is open, picking such an option only sets the creator's tag and suppress chips (sexual: `sexual` / -, affection: - / `sexual`, platonic: - / `kissing,sexual`). **Custom** opens a fresh creator with the `sexual` chip.

@@ -68,6 +68,7 @@ namespace AnimationDB
         int male_creatures = -1;
         int female_creatures = -1;
         std::string name_contains; // lowercase; case-insensitive substring of AnimRow::name
+        bool favorites_only = false; // only registries in the favorites table
         SynonymMode synonyms = SynonymMode::Broad;
         bool shuffle = false; // QueryTopNAnims: random order before truncating to n
         /// Scene-setting `tags_any`: row must match ≥1 (each widened to its cluster).
@@ -114,6 +115,9 @@ namespace AnimationDB
     int TotalCount();
 
     std::optional<AnimRow> GetByRegistry(const std::string& registry);
+    bool IsFavorite(const std::string& registry);
+    /// Persists to the favorites table (survives animation resync/rebuild).
+    bool SetFavorite(const std::string& registry, bool favorite);
     std::string GetStageDescription(const std::string& registry, int stage);
     /// Raw templates for stages 1..stage_count in one lock/lookup (empty string where a stage has none).
     std::vector<std::string> GetAllStageDescriptions(const std::string& registry, int stage_count);
