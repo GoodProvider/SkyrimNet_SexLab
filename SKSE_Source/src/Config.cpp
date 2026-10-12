@@ -198,6 +198,24 @@ void InitSkyrimNetAPI()
     webui_log::info("SkyrimNet PublicAPI loaded (version={})", ver);
 }
 
+void RegisterDecorators()
+{
+    if (!PublicRegisterDecorator) {
+        webui_log::warn("RegisterDecorators: PublicRegisterDecorator is null (SkyrimNet API v5+ required)");
+        return;
+    }
+    // SEXLAB_STOP eligibility: "1" when NPCs may stop a scene (sexlab.actions.npc_stop_allowed).
+    const bool ok = PublicRegisterDecorator("sexlab_npc_stop_allowed",
+        "1 when NPCs may use the Stop action to end a SexLab scene, else 0",
+        [](RE::Actor*) -> std::string {
+            return GetBool("sexlab.actions.npc_stop_allowed", true) ? "1" : "0";
+        });
+    if (ok)
+        webui_log::info("RegisterDecorators: registered sexlab_npc_stop_allowed");
+    else
+        webui_log::error("RegisterDecorators: failed to register sexlab_npc_stop_allowed");
+}
+
 Config& Config::GetSingleton()
 {
     static Config instance;

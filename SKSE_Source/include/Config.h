@@ -17,6 +17,8 @@ inline bool CrossDllStdStringSafe()
 
 /// Resolve SkyrimNet PublicAPI pointers. Include PublicAPI.h from Config.cpp only.
 void InitSkyrimNetAPI();
+/// Register C++ decorators for action eligibility (call at kDataLoaded).
+void RegisterDecorators();
 
 void SetLastRebuildTimestamp(std::string ts);
 std::string GetLastRebuildTimestamp();

@@ -26,5 +26,10 @@ eligibilityRules:
           - SkyrimNet_SexLab_Faction_Victim
         comparisonOperator: "<"
         expectedValue: 0
+      - decoratorName: sexlab_npc_stop_allowed
+        arguments:
+          - currentActor
+        comparisonOperator: "=="
+        expectedValue: 1
     logicalOperator: AND
     required: true

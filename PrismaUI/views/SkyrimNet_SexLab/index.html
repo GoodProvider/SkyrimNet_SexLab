@@ -1145,6 +1145,13 @@
             user-select: none;
         }
 
+        .fav-filter-label {
+            color: var(--accent);
+            font-size: 1.15em;
+            line-height: 1;
+            user-select: none;
+        }
+
         .sc-col-positions > .section-header,
         .sc-col-tags > .section-header {
             flex-shrink: 0;
@@ -2093,14 +2100,12 @@
                         <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />                    </div>
                     <div id="sc-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
-                        <span>filter by gender:</span>
+                        <span>filter by:</span>
                         <div id="sc-filter-by-pulldown"></div>
                         <span>description:</span>
                         <div id="sc-filter-has-description"></div>
                         <span>synonyms:</span>
                         <div id="sc-filter-synonyms"></div>
-                        <span>favorites:</span>
-                        <div id="sc-favorites-toggle"></div>
                     </div>
                 </div>
             </div>
@@ -2108,6 +2113,8 @@
         <div class="sc-anims-section">
             <div class="section-header">Animations</div>
             <div class="compact-row">
+                <span class="fav-filter-label" title="favorites">&#9733;</span>
+                <div id="sc-favorites-toggle"></div>
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
                 <div id="sc-initiator-pulldown"></div>
@@ -2189,14 +2196,12 @@
                     </div>
                     <div id="de-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
-                        <span>filter by gender:</span>
+                        <span>filter by:</span>
                         <div id="de-filter-by-pulldown"></div>
                         <span>description:</span>
                         <div id="de-filter-has-description"></div>
                         <span>synonyms:</span>
                         <div id="de-filter-synonyms"></div>
-                        <span>favorites:</span>
-                        <div id="de-favorites-toggle"></div>
                     </div>
                     <div class="compact-row">
                         <span>name:</span>
@@ -2211,7 +2216,11 @@
                 </div>
             </div>
             </div>
-            <div class="compact-row"><span id="de-anim-count"></span></div>
+            <div class="compact-row">
+                <span class="fav-filter-label" title="favorites">&#9733;</span>
+                <div id="de-favorites-toggle"></div>
+                <span id="de-anim-count"></span>
+            </div>
             <div id="de-anims-list" class="scroll-list"></div>
         </div>
         <div id="de-lock-overlay"><div class="de-lock-text">loading...</div></div>
@@ -9060,6 +9069,7 @@
         const SC_FILTER_ORDER = ['positions', 'gender', 'none'];
         const SC_FILTER_DEFAULT = 'gender';
         const SC_FILTER_OPTIONS = ['gender', 'none', 'positions'];
+        const SC_FILTER_LABELS = { none: 'any' };
         const SC_HAS_DESCRIPTION_OPTIONS = ['any', 'described', 'undescribed'];
         // AnimDB tag synonym clusters (synonyms-broad.json / synonyms-strict.json); none = literal tags.
         const SC_SYNONYM_DEFAULT = 'broad';
@@ -9147,7 +9157,8 @@
                 const host = document.getElementById(hostId);
                 if (!host) continue;
                 host.innerHTML = '';
-                host.appendChild(createPulldown(SC_FILTER_OPTIONS, SC.filterBy, onPick));
+                host.appendChild(createPulldown(SC_FILTER_OPTIONS, SC.filterBy, onPick, null,
+                    (el, v) => { el.textContent = SC_FILTER_LABELS[v] || v; }));
             }
         }
 

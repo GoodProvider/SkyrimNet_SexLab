@@ -27,6 +27,13 @@ schema:
       defaultValue: true
       category: "Actions"
 
+    - name: "Allow NPCs to stop a scene"
+      path: "sexlab.actions.npc_stop_allowed"
+      type: "bool"
+      description: "When off, NPCs cannot use the Stop action to end a scene. The player's end-scene key and menus still work."
+      defaultValue: true
+      category: "Actions"
+
     - name: "Tag dialogs for player actions"
       path: "sexlab.tags.player"
       type: "bool"

@@ -132,6 +132,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             InitWebUI();
             Hud::Init();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
+            SexLabNet::RegisterDecorators();
             OrgasmEngine::Install();
             StrategyDecision::Install();
             NarrationTiming::Install();

@@ -139,7 +139,6 @@ EndFunction
 ; slower / faster never reach Papyrus (OrgasmEngine + AnimSpeed in C++).
 ; focus: the HUD's focus actor (deny key); None for the other keys.
 ; anchor: the NPC the player took control of (take-control key); None: the player's own scene.
-; speak (auto play): SkyrimNet writes and speaks the player's next line.
 Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None)
     Actor player = Game.GetPlayer()
     if anchor == None
@@ -164,11 +163,6 @@ Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None)
         SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(anchor)
         if deny_scene != None && focus != None
             deny_scene.ToggleDenyOrgasm(focus, anchor)
-        endif
-    elseif control == "speak"
-        int failed = SkyrimNetApi.TransformDialogue(player.GetDisplayName()+" replies")
-        if failed != 0
-            Trace("Hud_OnKey", "speak: TransformDialogue failed ("+failed+")")
         endif
     elseif control == "camera_lock"
         ; SexLab's free camera just went off mid-scene: normal third-person camera, look/camera-switch enabled.

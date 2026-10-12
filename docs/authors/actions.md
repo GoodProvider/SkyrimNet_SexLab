@@ -96,6 +96,8 @@ Groups need `logicalOperator` (`AND`/`OR`) and `required: true`. Actor lock key:
 
 Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_allowed`). Off unregisters LLM actions immediately; on needs save and reload, then Game Data Explorer Refresh.
 
+NPC Stop: **Allow NPCs to stop a scene** (`sexlab.actions.npc_stop_allowed`, default on). `SEXLAB_STOP` eligibility uses the C++ decorator `sexlab_npc_stop_allowed` (`"1"`/`"0"`, read live from config, registered at kDataLoaded via `PublicRegisterDecorator`). Off = Stop never eligible; no reload needed.
+
 ## After changes
 
 1. `SkyrimNet_SexLab.esp` last in load order.

@@ -453,6 +453,11 @@ namespace ActionCatalog
                 return CompareValues(inCombat ? 1.0 : 0.0, op, expected);
             }
 
+            if (EqualsIgnoreCase(decorator, "sexlab_npc_stop_allowed")) {
+                const bool allowed = SexLabNet::GetConfigBool("sexlab.actions.npc_stop_allowed", true);
+                return CompareValues(allowed ? 1.0 : 0.0, op, expected);
+            }
+
             if (EqualsIgnoreCase(decorator, "webui_focus_kind")) {
                 std::string actual = PapyrusBindings_WebUI::FocusKind;
                 std::string exp;
