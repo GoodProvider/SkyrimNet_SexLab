@@ -29,8 +29,9 @@ namespace Whipped
     /// fire / frost / shock effect: the caller narrates without feeling text.
     bool PunishText(RE::Actor* attacker, RE::Actor* victim, const std::string& method, const std::string& location,
         RE::FormID spell, std::function<void(std::string)> done);
-    /// Heals health worth of whip wounds on part; Whipped narrates line. False when not installed.
-    bool Heal(RE::Actor* caster, RE::Actor* target, const std::string& line, float health, const std::string& part);
+    /// Heals health worth of whip wounds on part; Whipped narrates line when narrate. False when not installed.
+    bool Heal(RE::Actor* caster, RE::Actor* target, const std::string& line, float health, const std::string& part,
+        bool narrate = true);
     /// Turns whip.body.include_sexual_parts on in Whipped.
     void EnableSexualParts();
 }

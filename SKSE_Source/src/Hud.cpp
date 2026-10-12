@@ -346,19 +346,30 @@ namespace Hud
                 for (const auto& o : list) {
                     opts.push_back({ { "id", o.form }, { "name", o.name }, { "potion", o.potion }, { "count", o.count },
                         { "cost", static_cast<int>(o.cost + 0.5f) }, { "affordable", o.affordable },
-                        { "health", o.health > 0.0f }, { "stamina", o.stamina > 0.0f } });
+                        { "health", o.health > 0.0f }, { "stamina", o.stamina > 0.0f },
+                        { "perCast", static_cast<int>((o.health > 0.0f ? o.health : o.stamina) + 0.5f) } });
                 }
                 return opts;
+            };
+            // Health the actor is missing: the panel's default points to heal.
+            const auto missingHealth = [](RE::Actor* actor) {
+                auto* av = actor ? actor->AsActorValueOwner() : nullptr;
+                return av ? static_cast<int>(std::max(0.0f, av->GetPermanentActorValue(RE::ActorValue::kHealth) -
+                                                                av->GetActorValue(RE::ActorValue::kHealth)) +
+                                             0.5f)
+                          : 0;
             };
             nlohmann::json cfg;
             nlohmann::json list = nlohmann::json::array();
             list.push_back({ { "id", player->GetFormID() }, { "name", NameOf(player) },
                 { "female", IsFemaleId(player->GetFormID()) }, { "isPlayer", true },
-                { "options", optionsJson(options) } });
+                { "missingHealth", missingHealth(player) }, { "options", optionsJson(options) } });
             for (const auto& a : actors) {
                 if (a.id != player->GetFormID()) {
+                    auto* actor = ActorFor(a.id);
                     list.push_back({ { "id", a.id }, { "name", a.name }, { "female", IsFemaleId(a.id) },
-                        { "isPlayer", false }, { "options", optionsJson(Aid::ListOptions(ActorFor(a.id))) } });
+                        { "isPlayer", false }, { "missingHealth", missingHealth(actor) },
+                        { "options", optionsJson(Aid::ListOptions(actor)) } });
                 }
             }
             cfg["actors"] = std::move(list);

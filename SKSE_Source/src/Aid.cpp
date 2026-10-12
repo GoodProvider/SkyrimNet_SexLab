@@ -5,6 +5,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace Aid
@@ -136,12 +140,14 @@ namespace Aid
         // Visual cast (main thread): the item's casting art on the caster's hands (spells), its effect shader and hit
         // art on the target, and its release / hit sounds. Amounts are applied separately; nothing is cast, so no
         // combat, no bounty, and a self-delivery spell (Healing) still shows on another actor.
-        void PlaySpellVisuals(RE::Actor* caster, RE::Actor* target, const RE::MagicItem* item, bool potion)
+        // seconds < 0: the item's default (kConcentrationSeconds / kVisualSeconds).
+        void PlaySpellVisuals(RE::Actor* caster, RE::Actor* target, const RE::MagicItem* item, bool potion,
+            float seconds = -1.0f)
         {
             if (!target || !item) {
                 return;
             }
-            const float dur = IsConcentration(item) ? kConcentrationSeconds : kVisualSeconds;
+            const float dur = seconds >= 0.0f ? seconds : IsConcentration(item) ? kConcentrationSeconds : kVisualSeconds;
             std::unordered_set<const RE::EffectSetting*> seen;
             std::int32_t art = 0;
             std::int32_t shaders = 0;
@@ -172,6 +178,189 @@ namespace Aid
             }
             webui_log::info("Aid: visuals '{}' {:#x} -> {:#x} art {} shaders {} sounds {} ({:.1f}s)", NameOf(item),
                 caster ? caster->GetFormID() : 0, target->GetFormID(), art, shaders, sounds, dur);
+        }
+
+        // Narration line; part "" means no body part.
+        std::string AidLine(RE::Actor* caster, RE::Actor* target, const Option& o, const std::string& part)
+        {
+            const std::string who = ActorName(caster);
+            const std::string whom = ActorName(target);
+            const bool self = caster == target;
+            if (!part.empty()) {
+                const auto* base = target->GetActorBase();
+                const std::string own = (base && base->GetSex() == RE::SEX::kFemale) ? "her own " : "his own ";
+                const std::string where = (self ? own : whom + "'s ") + part;
+                return who + (o.potion ? " pours a " : " casts ") + o.name + " on " + where + ".";
+            }
+            if (o.potion) {
+                return self ? who + " drinks a " + o.name + "." : who + " gives " + whom + " a " + o.name + ".";
+            }
+            return self ? who + " casts " + o.name + "." : who + " casts " + o.name + " on " + whom + ".";
+        }
+
+        // ── Channels (Aid panel points): a spell kept up until a number of points is restored ──
+
+        constexpr auto kChannelPoll = std::chrono::milliseconds(250);
+        constexpr float kChannelPollSeconds = 0.25f;
+
+        struct Channel
+        {
+            RE::FormID target = 0;
+            RE::FormID spell = 0;
+            std::string line;
+            std::string part;
+            bool toWhipped = false;
+            bool stamina = false;     // counts stamina (a stamina-only spell), else health
+            float points = 0.0f;      // to restore
+            float done = 0.0f;        // restored so far
+            float interval = 1.0f;    // seconds between ticks (casts)
+            float health = 0.0f;      // per tick
+            float staminaAmt = 0.0f;  // per tick
+            float wait = 0.0f;        // seconds until the next tick
+            bool first = true;
+            std::uint64_t gen = 0;    // tells a channel from the one that replaced it
+        };
+
+        std::mutex g_channelLock;
+        std::unordered_map<RE::FormID, Channel> g_channels;  // by caster
+        bool g_channelThread = false;                       // under g_channelLock
+        std::uint64_t g_channelGen = 0;                     // under g_channelLock
+
+        // Health / stamina restored per tick (a concentration spell's magnitude per second over interval seconds, a
+        // fire-and-forget spell's full cast) and the magicka a tick costs.
+        void TickAmounts(RE::SpellItem* spell, RE::Actor* caster, float interval, float& health, float& stamina,
+            float& cost)
+        {
+            if (!IsConcentration(spell)) {
+                RestoresOf(spell, health, stamina);
+                cost = spell->CalculateMagickaCost(caster);
+                return;
+            }
+            health = 0.0f;
+            stamina = 0.0f;
+            for (const auto* e : spell->effects) {
+                const auto* mgef = e ? e->baseEffect : nullptr;
+                if (!mgef || mgef->IsDetrimental() || mgef->IsHostile() ||
+                    mgef->GetArchetype() != RE::EffectArchetypes::ArchetypeID::kValueModifier) {
+                    continue;
+                }
+                if (mgef->data.primaryAV == RE::ActorValue::kHealth) {
+                    health += e->effectItem.magnitude * interval;
+                } else if (mgef->data.primaryAV == RE::ActorValue::kStamina) {
+                    stamina += e->effectItem.magnitude * interval;
+                }
+            }
+            cost = spell->CalculateMagickaCost(caster) * interval;
+        }
+
+        // Game thread. One tick of the channel; false when it is over (reason logged).
+        bool AdvanceChannel(RE::FormID casterId, Channel& ch)
+        {
+            const auto stop = [&](const char* why) {
+                webui_log::info("Aid: channel {:#x} -> {:#x} stopped ({}) restored {:.0f}/{:.0f}", casterId, ch.target,
+                    why, ch.done, ch.points);
+                return false;
+            };
+            auto* c = RE::TESForm::LookupByID<RE::Actor>(casterId);
+            auto* t = RE::TESForm::LookupByID<RE::Actor>(ch.target);
+            auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(ch.spell);
+            if (!c || !t || !spell || c->IsDead() || t->IsDead() || !c->Is3DLoaded() || !t->Is3DLoaded()) {
+                return stop("actor gone");
+            }
+            auto* casterAv = c->AsActorValueOwner();
+            auto* targetAv = t->AsActorValueOwner();
+            if (!casterAv || !targetAv) {
+                return stop("actor gone");
+            }
+            const auto av = ch.stamina ? RE::ActorValue::kStamina : RE::ActorValue::kHealth;
+            const float missing = targetAv->GetPermanentActorValue(av) - targetAv->GetActorValue(av);
+            const float owed = ch.points - ch.done;
+            if (owed < 0.5f) {
+                return stop("target reached");
+            }
+            if (missing < 0.5f) {
+                return stop("full");
+            }
+            float health = 0.0f;
+            float stamina = 0.0f;
+            float cost = 0.0f;
+            TickAmounts(spell, c, ch.interval, health, stamina, cost);
+            if (cost > 0.0f && casterAv->GetActorValue(RE::ActorValue::kMagicka) < cost) {
+                return stop("out of magicka");
+            }
+            // Last tick: only what is still owed (the other value scaled with it).
+            const float counted = ch.stamina ? stamina : health;
+            const float scale = counted > owed ? owed / counted : 1.0f;
+            health *= scale;
+            stamina *= scale;
+            if (cost > 0.0f) {
+                casterAv->DamageActorValue(RE::ActorValue::kMagicka, cost * scale);
+            }
+            Restore(t, ch.toWhipped ? 0.0f : health, stamina);
+            if (ch.toWhipped) {
+                Whipped::Heal(c, t, ch.line, health, ch.part, ch.first);
+            }
+            ch.first = false;
+            ch.done += std::min(counted * scale, missing);
+            PlaySpellVisuals(c, t, spell, false, ch.interval + kChannelPollSeconds);
+            return ch.done < ch.points - 0.5f || stop("target reached");
+        }
+
+        // Game thread, every kChannelPoll.
+        void ChannelTick()
+        {
+            auto* ui = RE::UI::GetSingleton();
+            if (ui && ui->GameIsPaused()) {
+                return;
+            }
+            std::vector<std::pair<RE::FormID, Channel>> due;
+            {
+                std::lock_guard lock(g_channelLock);
+                for (auto& [caster, ch] : g_channels) {
+                    ch.wait -= kChannelPollSeconds;
+                    if (ch.wait <= 0.0f) {
+                        due.emplace_back(caster, ch);
+                    }
+                }
+            }
+            for (auto& [caster, ch] : due) {
+                const bool keep = AdvanceChannel(caster, ch);
+                std::lock_guard lock(g_channelLock);
+                const auto it = g_channels.find(caster);
+                // A newer Aid from this caster replaced it meanwhile: leave the new one alone.
+                if (it == g_channels.end() || it->second.gen != ch.gen) {
+                    continue;
+                }
+                if (!keep) {
+                    g_channels.erase(it);
+                    continue;
+                }
+                ch.wait = ch.interval;
+                it->second = std::move(ch);
+            }
+        }
+
+        void EnsureChannelThread()
+        {
+            if (g_channelThread) {
+                return;
+            }
+            g_channelThread = true;
+            std::thread([]() {
+                while (true) {
+                    std::this_thread::sleep_for(kChannelPoll);
+                    {
+                        std::lock_guard lock(g_channelLock);
+                        if (g_channels.empty()) {
+                            g_channelThread = false;
+                            return;
+                        }
+                    }
+                    if (auto* tasks = SKSE::GetTaskInterface()) {
+                        tasks->AddTask([]() { ChannelTick(); });
+                    }
+                }
+            }).detach();
         }
     }
 
@@ -265,22 +454,9 @@ namespace Aid
         const RE::FormID casterId = caster->GetFormID();
         const RE::FormID targetId = target->GetFormID();
 
-        const std::string who = ActorName(caster);
-        const std::string whom = ActorName(target);
-        const bool self = caster == target;
         // HUD body part ("body" / "": none): "on Lydia's ass" / "on her own ass".
         const std::string part = location == "body" ? "" : location;
-        std::string line;
-        if (!part.empty()) {
-            const auto* base = target->GetActorBase();
-            const std::string own = (base && base->GetSex() == RE::SEX::kFemale) ? "her own " : "his own ";
-            const std::string where = (self ? own : whom + "'s ") + part;
-            line = who + (o.potion ? " pours a " : " casts ") + o.name + " on " + where + ".";
-        } else if (o.potion) {
-            line = self ? who + " drinks a " + o.name + "." : who + " gives " + whom + " a " + o.name + ".";
-        } else {
-            line = self ? who + " casts " + o.name + "." : who + " casts " + o.name + " on " + whom + ".";
-        }
+        const std::string line = AidLine(caster, target, o, part);
 
         // SkyrimNet_Whipped heals the wounds on the part (and the health with them) and narrates the line.
         const bool toWhipped = o.health > 0.0f && Whipped::Installed();
@@ -311,6 +487,53 @@ namespace Aid
         webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} whipped {}", casterId,
             targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, toWhipped);
         return line;
+    }
+
+    std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,
+        float points, bool* whipped)
+    {
+        if (whipped) {
+            *whipped = false;
+        }
+        if (!caster || !target || !form) {
+            return "";
+        }
+        auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(form);
+        if (points <= 0.0f || !spell) {
+            return Apply(caster, target, form, location, whipped);
+        }
+        const auto options = ListOptions(caster);
+        const auto it = std::find_if(options.begin(), options.end(), [form](const Option& o) { return o.form == form; });
+        if (it == options.end() || it->potion) {
+            webui_log::warn("Aid: {:#x} cannot channel {:#x} (not known)", caster->GetFormID(), form);
+            return "";
+        }
+        const Option& o = *it;
+        Channel ch;
+        ch.target = target->GetFormID();
+        ch.spell = form;
+        ch.part = location == "body" ? "" : location;
+        ch.line = AidLine(caster, target, o, ch.part);
+        ch.stamina = o.health <= 0.0f;
+        ch.toWhipped = !ch.stamina && Whipped::Installed();
+        ch.points = points;
+        ch.interval = IsConcentration(spell) ? 1.0f : std::max(1.0f, spell->GetChargeTime() + 0.5f);
+        if (whipped) {
+            *whipped = ch.toWhipped;
+        }
+        const RE::FormID casterId = caster->GetFormID();
+        {
+            std::lock_guard lock(g_channelLock);
+            ch.gen = ++g_channelGen;
+            if (g_channels.contains(casterId)) {
+                webui_log::info("Aid: channel {:#x} replaced", casterId);
+            }
+            g_channels[casterId] = ch;
+            EnsureChannelThread();
+        }
+        webui_log::info("Aid: channel {:#x} -> {:#x} '{}' on '{}' {:.0f} {} every {:.2f}s whipped {}", casterId,
+            ch.target, o.name, location, points, ch.stamina ? "stamina" : "health", ch.interval, ch.toWhipped);
+        return ch.line;
     }
 
     std::vector<WeakSpell> WeakAttackSpells(RE::Actor* actor)

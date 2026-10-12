@@ -259,14 +259,15 @@ namespace Whipped
         return true;
     }
 
-    bool Heal(RE::Actor* caster, RE::Actor* target, const std::string& line, float health, const std::string& part)
+    bool Heal(RE::Actor* caster, RE::Actor* target, const std::string& line, float health, const std::string& part,
+        bool narrate)
     {
         if (!target || health <= 0.0f || !Installed()) {
             return false;
         }
         webui_log::info("Whipped: heal {:#x} {:.0f} part '{}' -> '{}'", target->GetFormID(), health, part, PartName(part));
         Call("External_Heal", std::move(caster), std::move(target), RE::BSFixedString(line.c_str()), health,
-            RE::BSFixedString(PartName(part).c_str()), true);
+            RE::BSFixedString(PartName(part).c_str()), narrate);
         return true;
     }
 

@@ -830,15 +830,16 @@ void InitWebUI()
                     const auto option = j.value("option", static_cast<RE::FormID>(0));
                     const auto subject = j.value("subject", static_cast<RE::FormID>(0));
                     const std::string location = j.value("location", std::string{});
-                    webui_log::info("onAidResult subject={:#x} target={:#x} option={:#x} location='{}'", subject, target,
-                        option, location);
+                    const float points = j.value("points", 0.0f);
+                    webui_log::info("onAidResult subject={:#x} target={:#x} option={:#x} location='{}' points={:.0f}",
+                        subject, target, option, location, points);
                     // Inventory and spell lists are read on the game thread.
-                    SKSE::GetTaskInterface()->AddTask([subject, target, option, location]() {
+                    SKSE::GetTaskInterface()->AddTask([subject, target, option, location, points]() {
                         auto* caster = subject ? RE::TESForm::LookupByID<RE::Actor>(subject)
                                                : static_cast<RE::Actor*>(RE::PlayerCharacter::GetSingleton());
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
                         bool whipped = false;
-                        const std::string line = Aid::Apply(caster, actor, option, location, &whipped);
+                        const std::string line = Aid::StartChannel(caster, actor, option, location, points, &whipped);
                         if (!line.empty() && !whipped)
                             OrgasmEngine::NarrateDirect(line, caster, actor);
                     });

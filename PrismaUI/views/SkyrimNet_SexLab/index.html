@@ -1030,6 +1030,16 @@
             margin-top: var(--space-sm);
         }
 
+        .aid-points {
+            width: 80px;
+            font-family: var(--font-ui);
+            color: var(--text-primary);
+            background: var(--bg-input);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            padding: 2px var(--space-sm);
+        }
+
         .aid-note {
             font-family: var(--font-ui);
             color: var(--text-secondary);
@@ -2382,6 +2392,9 @@
         </div>
         <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
         <div id="aid-part-confirm" class="whipped-confirm" style="display:none"></div>
+        <div id="aid-points-row" class="aid-note" style="display:none">
+            Heal up to <input type="number" id="aid-points" class="aid-points" min="1" step="1" oninput="aidPointsTyped()"> points
+        </div>
         <div id="aid-note" class="aid-note"></div>
         <div class="btn-row">
             <div class="action-btn" id="aid-accept" onmousedown="event.preventDefault()" onclick="aidAccept()">Use</div>
@@ -8435,15 +8448,20 @@
         function aidRenderOptions() {
             const s = AID.actors[AID.subject];
             AID.options = (s && s.options) || [];
-            AID.option = AID.options.findIndex(o => o.affordable);
+            // Healing Hands (Skyrim.esm 0x0004D3F2) when known and affordable, else the first affordable option.
+            const HEALING_HANDS = 0x0004D3F2;
+            AID.option = AID.options.findIndex(o => o.id === HEALING_HANDS && o.affordable);
+            if (AID.option < 0) AID.option = AID.options.findIndex(o => o.affordable);
             const labels = AID.options.map(aidLabel);
             const disabled = AID.options.filter(o => !o.affordable).map(aidLabel);
             const optionHost = document.getElementById('aid-option');
             optionHost.innerHTML = '';
             optionHost.appendChild(createPulldown(labels, labels[AID.option] || '', (_, i) => {
                 AID.option = i;
+                aidDefaultPoints();
                 aidUpdate();
             }, disabled));
+            aidDefaultPoints();
         }
 
         function aidRenderActor() {
@@ -8452,23 +8470,45 @@
             actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[AID.actor] || {}).name || '', (_, i) => {
                 AID.actor = i;
                 aidRenderPart(AID.part);
+                aidDefaultPoints();
                 aidUpdate();
             }));
         }
 
+        // Points to heal: the target's missing health (a stamina-only spell: one cast), unless the player typed one.
+        function aidDefaultPoints() {
+            const o = AID.options[AID.option];
+            const row = document.getElementById('aid-points-row');
+            row.style.display = o && !o.potion ? 'block' : 'none';
+            if (!o || o.potion || AID.pointsTyped) return;
+            const a = AID.actors[AID.actor];
+            const v = o.health ? Math.max(1, (a && a.missingHealth) || 0) : Math.max(1, o.perCast || 1);
+            document.getElementById('aid-points').value = v;
+        }
+
+        function aidPointsTyped() {
+            AID.pointsTyped = true;
+            aidUpdate();
+        }
+
+        function aidPoints() {
+            return Math.floor(parseFloat(document.getElementById('aid-points').value) || 0);
+        }
+
         function aidUpdate() {
             const o = AID.options[AID.option];
-            const ok = !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
+            const pointsOk = !o || o.potion || aidPoints() > 0;
+            const ok = pointsOk && !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
             document.getElementById('aid-accept').classList.toggle('de-disabled', !ok);
             const what = o ? [o.health ? 'health' : '', o.stamina ? 'stamina' : ''].filter(Boolean).join(' and ') : '';
             document.getElementById('aid-note').textContent = !o
                 ? (AID.options.length ? 'Not enough magicka for any of your spells.' : 'No healing or stamina spell or potion.')
-                : (o.potion ? 'Potion' : 'Spell') + ', restores ' + what + '.';
+                : (o.potion ? 'Potion' : 'Spell') + ', restores ' + what + (o.potion ? '.' : ' at its normal rate until the points are healed or magicka runs out.');
         }
 
         function openAidPanel(cfg) {
             AID = { actors: (cfg && cfg.actors) || [], options: [], subject: 0, actor: 0, option: -1,
-                part: BODY_PARTS[0] };
+                part: BODY_PARTS[0], pointsTyped: false };
             WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
             document.getElementById('aid-part-confirm').style.display = 'none';
             // Subject defaults to the player; the object to the first actor that is not the player (else the subject).
@@ -8520,7 +8560,8 @@
             const a = AID.actors[AID.actor];
             if (!o || !a || document.getElementById('aid-accept').classList.contains('de-disabled')) return;
             const s = AID.actors[AID.subject];
-            aidSend({ subject: s ? s.id : 0, target: a.id, option: o.id, location: partLocation(AID.part, 'aid-part-text') });
+            aidSend({ subject: s ? s.id : 0, target: a.id, option: o.id, location: partLocation(AID.part, 'aid-part-text'),
+                points: o.potion ? 0 : aidPoints() });
         }
 
         function aidCancel() {
