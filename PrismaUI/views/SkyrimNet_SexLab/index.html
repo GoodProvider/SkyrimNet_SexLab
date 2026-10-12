@@ -7563,12 +7563,16 @@
             return (nearbyActors || []).filter(a => a && a.selectable && a.status === 'ok');
         }
 
-        /// Scene Creator eligibility: status ok only. In-scene (sexlab), creator-locked
-        /// (locked) and ineligible (child / cmbt / ostim / dead / load) stay off Positions;
+        /// Scene Creator eligibility: status ok, or locked by this creator (its own _positions,
+        /// SC.ownedFormIds; ActorLocker has no owner). In-scene (sexlab), locked by another
+        /// creator and ineligible (child / cmbt / ostim / dead / load) stay off Positions;
         /// the Control Panel pulldown still lists sexlab / locked as selectable.
         function scActorSexLabEligible(a) {
             if (!a || a.selectable === false) return false;
-            return String(a.status || 'ok') === 'ok';
+            const status = String(a.status || 'ok');
+            if (status === 'ok') return true;
+            if (status !== 'locked' || SC.mode !== 'creator' || !SC.ownedFormIds) return false;
+            return SC.ownedFormIds.has(formIdU32(a.formId != null ? a.formId : a._form_id));
         }
 
         function scEligibleNearbyActors() {
@@ -8548,6 +8552,9 @@
                 this.initiatorFormId = 0;
                 this.method = '';
                 this.positions = [];
+                // Form ids Papyrus sent in this creator's _positions: the creator holds their
+                // ActorLocker locks, so status "locked" does not make them ineligible here.
+                this.ownedFormIds = [];
                 this.positionOverride = false;
                 this.tags = [];
                 this.suppress = [];
@@ -8603,6 +8610,11 @@
                 if (state._initiator_form_id != null) this.initiatorFormId = formIdU32(state._initiator_form_id) || 0;
                 if (state._method != null) this.method = state._method || '';
                 if (state._positions) this.positions = sceneInfoClone(state._positions);
+                if (this.mode === 'creator' && Array.isArray(state._positions) && state._positions.length) {
+                    this.ownedFormIds = state._positions
+                        .map(p => formIdU32(p && (p._form_id != null ? p._form_id : p.formId)))
+                        .filter(id => id);
+                }
                 if (state._position_override != null) this.positionOverride = !!Number(state._position_override);
                 // An active push's _tags are the playing animation's tags (the scene push handler puts them on
                 // its lastAnims row), not the include-tag filter; taking them here limits the filter to that one.
@@ -8930,6 +8942,7 @@
             SC.initiatorFormId = info.initiatorFormId || 0;
             SC.method = info.method;
             SC.positions = sceneInfoClone(info.positions || []);
+            SC.ownedFormIds = new Set(info.ownedFormIds || []);
             SC.positionOverride = info.positionOverride === true;
             SC.tags = (info.tags || []).slice();
             SC.suppress = (info.suppress || []).slice();

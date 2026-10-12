@@ -1,5 +1,10 @@
 # Knowledgebase
 
+## Scene Creator dropped its own locked actors (2026-10-11)
+
+- **Symptom:** an NPC action (e.g. sexual assault) → Yes on the gate → Scene Creator opened with an empty Positions table. `Scene_Creator.LockActorLock` had locked both actors before `SceneCreator_Open`. The nearby scan reports them as `status:"locked"`, and `scPruneIneligiblePositions` removed them.
+- **Fix:** `ActorLocker` records no owner. The WebUI keeps the form ids from the creator's own `_positions` push (`SceneInfo.ownedFormIds` → `SC.ownedFormIds`), and `scActorSexLabEligible` accepts `locked` only for those actors. An actor locked by a different creator still stays off Positions.
+
 ## Force replaced by Punish; action name collision (2026-10-09)
 
 - **Punish sets no engine state.** The HUD key, auto play and the LLM action only build the line (`OrgasmEngine::Punish`) and narrate it with the punisher as source and the punished actor as target. SkyrimNet then picks the target to answer, and that line runs the normal `minigame_strategy` decision (`StrategyDecision::OnDialogueEvent`). Don't re-add a strategy push here; the user wants the LLM to decide the reaction.
