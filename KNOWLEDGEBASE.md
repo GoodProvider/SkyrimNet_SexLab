@@ -1172,6 +1172,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Symptom:** narration read `Bob initiates: {{sl.actors.0}} ...`; SkyrimNet.log warned `variable 'sl.actors.0' not found` (Inja only reports it; substitution is ours). `AnimDb_SubstituteActors` logged `actors_json parse failed ... json='[\"Nina\",\"Bob\"]'`, names=0.
 - **Cause:** the 19:07 `Scripts/*.pex` (committed in 82bac2c) came from a different compiler (string table carries docstrings / `conditional` / `hidden`) that stores `"\""` as backslash+quote. Every Papyrus-built JSON (31 `\"` sites) broke. Not the CommonLib swap.
 - **Fix:** rebuild with `compile: pyro` (`--no-incremental-build` when pex is newer than source). Check: `grep -ac '\\"' Scripts/*.pex` must be 0. `AnimDb_SubstituteActors` now warns on parse failure and on tokens left after substitution.
+- **Recurred 2026-10-10** (pex in `19b3bbd` / `062b432`: AnimDb, MCM, Menu, Scene, Utilities). `compile: papyrus` (`c:/Skyrim/tools/papyrus-compiler/papyrus.exe`) and `compile: skyrim` were both `isDefault` build tasks, so Ctrl+Shift+B could pick the wrong compiler. **`compile: pyro` is now the only default build task.** `ParseActorNames` (Papyrus_AnimationDB.cpp) retries `actors_json` with `\"` unescaped and warns `pex not built with pyro`. Stage descriptions survive a bad build; other Papyrus JSON does not, so still rebuild with pyro.
 
 ## CommonLibSSE-NG pin and Skyrim 1.7.x (2026-10-04, superseded)
 

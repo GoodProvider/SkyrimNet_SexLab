@@ -149,6 +149,37 @@ namespace PapyrusBindings_AnimationDB
                 j["_creator"] = row.creator;
             return j;
         }
+
+        // Papyrus-built ["name",...]. A non-pyro compiler stores "\"" as backslash+quote
+        // (KNOWLEDGEBASE "{{sl.actors.N}} reached SkyrimNet raw"), so retry once unescaped.
+        std::vector<std::string> ParseActorNames(const char* actors_json, const char* caller)
+        {
+            std::vector<std::string> names;
+            std::string text = actors_json ? actors_json : "[]";
+            nlohmann::json j;
+            try {
+                j = nlohmann::json::parse(text);
+            } catch (const std::exception& e) {
+                std::string fixed = text;
+                for (size_t pos = 0; (pos = fixed.find("\\\"", pos)) != std::string::npos; ++pos)
+                    fixed.erase(pos, 1);
+                try {
+                    j = nlohmann::json::parse(fixed);
+                    webui_log::warn("{}: actors_json had literal \\\" (pex not built with pyro); unescaped | json='{}'",
+                        caller, text);
+                } catch (...) {
+                    webui_log::warn("{}: actors_json parse failed: {} | json='{}'", caller, e.what(), text);
+                    return names;
+                }
+            }
+            if (j.is_array()) {
+                for (const auto& el : j) {
+                    if (el.is_string())
+                        names.push_back(el.get<std::string>());
+                }
+            }
+            return names;
+        }
     }
 
     void AnimDb_Open(RE::StaticFunctionTag*)
@@ -239,19 +270,7 @@ namespace PapyrusBindings_AnimationDB
     RE::BSFixedString AnimDb_SubstituteActors(RE::StaticFunctionTag*, RE::BSFixedString desc,
         RE::BSFixedString actors_json)
     {
-        std::vector<std::string> names;
-        try {
-            auto j = nlohmann::json::parse(actors_json.c_str() ? actors_json.c_str() : "[]");
-            if (j.is_array()) {
-                for (const auto& el : j) {
-                    if (el.is_string())
-                        names.push_back(el.get<std::string>());
-                }
-            }
-        } catch (const std::exception& e) {
-            webui_log::warn("AnimDb_SubstituteActors: actors_json parse failed: {} | json='{}'", e.what(),
-                actors_json.c_str() ? actors_json.c_str() : "(null)");
-        }
+        const auto names = ParseActorNames(actors_json.c_str(), "AnimDb_SubstituteActors");
         std::string result = AnimationDB::SubstituteActors(desc.c_str() ? desc.c_str() : "", names);
         if (result.find("{{sl.actors.") != std::string::npos) {
             webui_log::warn("AnimDb_SubstituteActors: tokens left after substitution | names={} json='{}' desc='{}'",
@@ -264,17 +283,7 @@ namespace PapyrusBindings_AnimationDB
     RE::BSFixedString AnimDb_GetStagesJson(RE::StaticFunctionTag*, RE::BSFixedString registry,
         std::int32_t stage_count, RE::BSFixedString actors_json, std::int32_t current_stage)
     {
-        std::vector<std::string> names;
-        try {
-            auto j = nlohmann::json::parse(actors_json.c_str() ? actors_json.c_str() : "[]");
-            if (j.is_array()) {
-                for (const auto& el : j) {
-                    if (el.is_string())
-                        names.push_back(el.get<std::string>());
-                }
-            }
-        } catch (...) {
-        }
+        const auto names = ParseActorNames(actors_json.c_str(), "AnimDb_GetStagesJson");
         const auto templates = AnimationDB::GetAllStageDescriptions(
             registry.c_str() ? registry.c_str() : "", stage_count);
         nlohmann::json arr = nlohmann::json::array();

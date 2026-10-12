@@ -43,8 +43,7 @@
                 "C:/Skyrim/dev/mods/SKSE64/Scripts/Source"
             ],
             "group": {
-                "kind": "build",
-                "isDefault": true
+                "kind": "build"
             },
             "presentation": {
                 "reveal": "always",
@@ -65,7 +64,8 @@
                 "cwd": "${workspaceFolder}"
             },
             "group": {
-                "kind": "build"
+                "kind": "build",
+                "isDefault": true
             },
             "presentation": {
                 "reveal": "always",
@@ -84,8 +84,7 @@
                 "-import='${workspaceFolder}/Headers;${workspaceFolder}/Scripts/Source'"
             ],
             "group": {
-                "kind": "build",
-                "isDefault": true
+                "kind": "build"
             },
             "presentation": {
                 "echo": true,
