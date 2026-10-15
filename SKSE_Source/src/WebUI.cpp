@@ -9,7 +9,7 @@
 #include "AnimationDB.h"
 #include "Hud.h"
 #include "OrgasmEngine.h"
-#include "Whipped.h"
+#include "InjuryEngine.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -809,10 +809,10 @@ void InitWebUI()
             });
         });
 
-        // Punish / Aid part pulldown: the player agreed to turn on SkyrimNet_Whipped's sexual body parts.
-        PrismaUI->RegisterJSListener(g_view, "onWhippedSexualParts", [](const char*) {
-            RunGuarded("onWhippedSexualParts", [&] {
-                SKSE::GetTaskInterface()->AddTask([]() { Whipped::EnableSexualParts(); });
+        // Punish / Aid part pulldown: the player agreed to turn on Injury Engine's sexual body parts.
+        PrismaUI->RegisterJSListener(g_view, "onInjuryEngineSexualParts", [](const char*) {
+            RunGuarded("onInjuryEngineSexualParts", [&] {
+                SKSE::GetTaskInterface()->AddTask([]() { InjuryEngine::EnableSexualParts(); });
             });
         });
 
@@ -838,9 +838,9 @@ void InitWebUI()
                         auto* caster = subject ? RE::TESForm::LookupByID<RE::Actor>(subject)
                                                : static_cast<RE::Actor*>(RE::PlayerCharacter::GetSingleton());
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
-                        bool whipped = false;
-                        const std::string line = Aid::StartChannel(caster, actor, option, location, points, &whipped);
-                        if (!line.empty() && !whipped)
+                        bool injuryEngine = false;
+                        const std::string line = Aid::StartChannel(caster, actor, option, location, points, &injuryEngine);
+                        if (!line.empty() && !injuryEngine)
                             OrgasmEngine::NarrateDirect(line, caster, actor);
                     });
                 } catch (...) {

@@ -195,7 +195,7 @@ namespace OrgasmEngine
     bool AskOrderNarrated(RE::Actor* by, RE::FormID target, bool order, const std::string& requestKey,
         const std::string& customText);
     /// The punisher hurts target: "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to
-    /// be passive." With SkyrimNet_Whipped (External_TortureText) the hit lands silently and its feeling text is
+    /// be passive." With Injury Engine (External_TortureText) the hit lands silently and its feeling text is
     /// appended to the narration; the narration is then sent and is last_line of the target's strategy decision
     /// (trigger "punished"); a punishment for a refused request gets the agree / refuse answer as its own narration.
     /// method: slap / pinch / punch / pull, one of the punisher's weak attack spells (a non-lethal hit) or a free

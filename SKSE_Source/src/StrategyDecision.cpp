@@ -5,7 +5,7 @@
 #include "Hud.h"
 #include "OrgasmEngine.h"
 #include "WebUI_Log.h"
-#include "Whipped.h"
+#include "InjuryEngine.h"
 
 #include <algorithm>
 #include <string_view>
@@ -49,10 +49,10 @@ namespace StrategyDecision
             "left leg", "right leg", "pussy", "cock", "ass" };
         constexpr std::string_view kSexualParts[] = { "lips", "nipples", "pussy", "cock", "ass" };
 
-        // With SkyrimNet_Whipped's sexual parts off there is no player to ask to turn them on: leave them out.
+        // With Injury Engine's sexual parts off there is no player to ask to turn them on: leave them out.
         std::vector<std::string> OfferedParts()
         {
-            const bool skipSexual = Whipped::Installed() && !Whipped::SexualParts();
+            const bool skipSexual = InjuryEngine::Installed() && !InjuryEngine::SexualParts();
             std::vector<std::string> out;
             for (const char* p : kBodyParts) {
                 if (!skipSexual || std::find(std::begin(kSexualParts), std::end(kSexualParts), p) == std::end(kSexualParts)) {
@@ -617,9 +617,9 @@ namespace StrategyDecision
                     return "";
                 }
                 RE::Actor* target = RE::TESForm::LookupByID<RE::Actor>(a->second.target);
-                bool whipped = false;
-                const std::string line = Aid::Apply(player, target, a->second.form, part("aid_part"), &whipped);
-                if (!line.empty() && !whipped) {
+                bool injuryEngine = false;
+                const std::string line = Aid::Apply(player, target, a->second.form, part("aid_part"), &injuryEngine);
+                if (!line.empty() && !injuryEngine) {
                     OrgasmEngine::NarrateDirect(line, player, target);
                 }
             } else if (key == "punish") {

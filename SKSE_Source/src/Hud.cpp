@@ -6,7 +6,7 @@
 #include "StrategyDecision.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
-#include "Whipped.h"
+#include "InjuryEngine.h"
 
 #include <Windows.h>
 #include <algorithm>
@@ -269,12 +269,12 @@ namespace Hud
             return base && base->GetSex() == RE::SEX::kFemale;
         }
 
-        // Opens a panel on the game thread with SkyrimNet_Whipped's state added (installed / sexual parts on).
+        // Opens a panel on the game thread with Injury Engine's state added (installed / sexual parts on).
         void OpenPanel(const char* fn, nlohmann::json cfg)
         {
             SKSE::GetTaskInterface()->AddTask([fn, cfg = std::move(cfg)]() mutable {
-                cfg["whipped"] = Whipped::Installed();
-                cfg["whippedSexual"] = cfg["whipped"].get<bool>() && Whipped::SexualParts();
+                cfg["injuryengine"] = InjuryEngine::Installed();
+                cfg["injuryengineSexual"] = cfg["injuryengine"].get<bool>() && InjuryEngine::SexualParts();
                 const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
                 WebUI_Invoke(std::string(fn) + "(" + payload + ");");
                 WebUI_Visibility_Show(false);

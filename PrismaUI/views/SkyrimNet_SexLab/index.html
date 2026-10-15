@@ -1016,7 +1016,7 @@
             color: var(--text-muted);
         }
 
-        .whipped-confirm {
+        .injuryengine-confirm {
             font-family: var(--font-ui);
             color: var(--text-primary);
             margin: 0 0 var(--space-md);
@@ -1026,7 +1026,7 @@
             background: var(--bg-input);
         }
 
-        .whipped-confirm .btn-row {
+        .injuryengine-confirm .btn-row {
             margin-top: var(--space-sm);
         }
 
@@ -2365,7 +2365,7 @@
         <textarea id="punish-request-text" style="display:none" placeholder="stop resisting" oninput="punishUpdate()"></textarea>
         <textarea id="punish-custom-text" style="display:none" placeholder="biting" oninput="punishUpdate()"></textarea>
         <textarea id="punish-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="punishUpdate()"></textarea>
-        <div id="punish-part-confirm" class="whipped-confirm" style="display:none"></div>
+        <div id="punish-part-confirm" class="injuryengine-confirm" style="display:none"></div>
         <div class="btn-row">
             <div class="action-btn" id="punish-accept" onmousedown="event.preventDefault()" onclick="punishAccept()">Ask</div>
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="punishCancel()">Cancel</div>
@@ -2391,7 +2391,7 @@
             on <span id="aid-actor"></span>'s <span id="aid-part"></span>.
         </div>
         <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
-        <div id="aid-part-confirm" class="whipped-confirm" style="display:none"></div>
+        <div id="aid-part-confirm" class="injuryengine-confirm" style="display:none"></div>
         <div id="aid-points-row" class="aid-note" style="display:none">
             Heal up to <input type="number" id="aid-points" class="aid-points" min="1" step="1" oninput="aidPointsTyped()"> points
         </div>
@@ -8079,7 +8079,7 @@
 
         // ── Ask / Order / Punish (HUD punish key) ───────────────────
         // C++ Hud OnPunish: {actors: [{id, name, female, isPlayer, spells, requests: [{key, text}], reasons: [string]}],
-        // defaultPunisher, whipped, whippedSexual}. Reply onPunishResult:
+        // defaultPunisher, injuryengine, injuryengineSexual}. Reply onPunishResult:
         //   ask / order: {verb, subject, object, request (a request key) | text (free phrase after "to")}
         //   punish:      {verb, subject, object, method, location, reason}
         // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
@@ -8089,14 +8089,14 @@
         // verb key sent -> [label in the sentence, accept button / title text]
         const PUNISH_VERBS = { ask: ['asks', 'Ask'], order: ['orders', 'Order'], punish: ['punishes', 'Punish'] };
         const PUNISH_CUSTOM = 'custom';
-        // Punish and Aid narrate where on the target; 'body' keeps the unlocated wording. With SkyrimNet_Whipped
+        // Punish and Aid narrate where on the target; 'body' keeps the unlocated wording. With Injury Engine
         // installed the part is also where the whip damage / heal lands ('body' and custom text: a random part).
         const BODY_PARTS = ['body', 'face', 'lips', 'nipples', 'back', 'left arm', 'right arm', 'left leg', 'right leg',
             'pussy', 'cock', 'ass', 'custom'];
-        // Whipped's "include sexual body parts" setting: shown darker while off; picking one asks to turn it on.
+        // Injury Engine's "include sexual body parts" setting: shown darker while off; picking one asks to turn it on.
         const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'ass']);
-        // From the Hud payload (whipped, whippedSexual).
-        let WHIPPED = { installed: false, sexual: false };
+        // From the Hud payload (injuryengine, injuryengineSexual).
+        let INJURYENGINE = { installed: false, sexual: false };
         let PUNISH = { actors: [], subject: 0, object: 0, verb: 'ask', request: '', method: PUNISH_PRESETS[0][0],
             part: BODY_PARTS[0], reason: '' };
 
@@ -8107,7 +8107,7 @@
         }
 
         function partDimmed(part) {
-            return WHIPPED.installed && !WHIPPED.sexual && SEXUAL_PARTS.has(part);
+            return INJURYENGINE.installed && !INJURYENGINE.sexual && SEXUAL_PARTS.has(part);
         }
 
         // A body-part pulldown into hostId for actor; custom shows textId. onPick(part) on change.
@@ -8120,7 +8120,7 @@
             host.innerHTML = '';
             host.appendChild(createPulldown(parts, shown, (v) => {
                 if (partDimmed(v)) {
-                    whippedConfirm(confirmId, () => {
+                    injuryEngineConfirm(confirmId, () => {
                         onPick(v);
                         renderPartPulldown(hostId, textId, onPick, actor, v);
                     }, () => renderPartPulldown(hostId, textId, onPick, actor, shown));
@@ -8136,12 +8136,12 @@
             if (shown !== current) onPick(shown);
         }
 
-        // "Do you wish to enable WHIPPED sexual parts?" Yes: turns Whipped's setting on, then onYes. No: onNo.
-        function whippedConfirm(confirmId, onYes, onNo) {
+        // "Do you wish to enable torture sexual parts?" Yes: turns Injury Engine's setting on, then onYes. No: onNo.
+        function injuryEngineConfirm(confirmId, onYes, onNo) {
             const box = document.getElementById(confirmId);
             box.innerHTML = '';
             const q = document.createElement('div');
-            q.textContent = 'Do you wish to enable WHIPPED sexual parts?';
+            q.textContent = 'Do you wish to enable torture sexual parts?';
             const row = document.createElement('div');
             row.className = 'btn-row';
             const yes = document.createElement('div');
@@ -8155,8 +8155,8 @@
             yes.onclick = (e) => {
                 e.stopPropagation();
                 close();
-                WHIPPED.sexual = true;
-                if (typeof window.onWhippedSexualParts === 'function') window.onWhippedSexualParts('{}');
+                INJURYENGINE.sexual = true;
+                if (typeof window.onInjuryEngineSexualParts === 'function') window.onInjuryEngineSexualParts('{}');
                 onYes();
             };
             no.onclick = (e) => {
@@ -8351,7 +8351,7 @@
             const first = actors[0] || {};
             PUNISH = { actors, subject: (cfg && cfg.defaultPunisher) || first.id || 0, object: 0, verb: 'ask',
                 request: '', method: PUNISH_PRESETS[0][0], part: BODY_PARTS[0], reason: '', reasonCustom: false };
-            WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
+            INJURYENGINE = { installed: !!(cfg && cfg.injuryengine), sexual: !!(cfg && cfg.injuryengineSexual) };
             document.getElementById('punish-part-confirm').style.display = 'none';
             punishReasonDialogClose();
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
@@ -8509,7 +8509,7 @@
         function openAidPanel(cfg) {
             AID = { actors: (cfg && cfg.actors) || [], options: [], subject: 0, actor: 0, option: -1,
                 part: BODY_PARTS[0], pointsTyped: false };
-            WHIPPED = { installed: !!(cfg && cfg.whipped), sexual: !!(cfg && cfg.whippedSexual) };
+            INJURYENGINE = { installed: !!(cfg && cfg.injuryengine), sexual: !!(cfg && cfg.injuryengineSexual) };
             document.getElementById('aid-part-confirm').style.display = 'none';
             // Subject defaults to the player; the object to the first actor that is not the player (else the subject).
             const defSubject = AID.actors.findIndex(a => a.id === (cfg && cfg.defaultSubject));

@@ -95,12 +95,12 @@ Function AddPunishReason(Actor by, Actor target, String reason) global native
 ; punisher hurts target (anyone else in its scene, the player included) by method (slap / pinch / punch / pull, a
 ; weak attack spell the punisher knows, or a free phrase like "biting") on part (body, face, nipples, ...) because
 ; reason ("" for none): "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to ...". With
-; SkyrimNet_Whipped the hit's feeling text follows the line. The engine narrates it, then runs Nina's strategy decision.
+; Injury Engine the hit's feeling text follows the line. The engine narrates it, then runs Nina's strategy decision.
 ; Always returns "" (kept as a String for old callers); the caller narrates nothing.
 String Function Punish(Actor punisher, Actor target, String method, String part, String reason) global native
-; SkyrimNet_Whipped (with External_Damage) is installed: Punish hits and "heal" Aid go through it, and Whipped sends
+; Injury Engine (with External_Damage) is installed: Punish hits and "heal" Aid go through it, and Injury Engine sends
 ; their narration line (the caller must not narrate it again; Punish never needs it).
-bool Function WhippedInstalled() global native
+bool Function InjuryEngineInstalled() global native
 ; Any affordable healing / stamina spell or any such potion (skyrimnet_sexlab_can_aid).
 bool Function HasAidOptions(Actor akActor) global native
 ; In a managed scene with someone else in it (skyrimnet_sexlab_can_punish).

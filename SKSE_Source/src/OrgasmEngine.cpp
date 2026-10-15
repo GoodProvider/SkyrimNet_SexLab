@@ -8,7 +8,7 @@
 #include "NarrationTiming.h"
 #include "StrategyDecision.h"
 #include "WebUI_Log.h"
-#include "Whipped.h"
+#include "InjuryEngine.h"
 
 #include <algorithm>
 #include <array>
@@ -2980,12 +2980,12 @@ namespace OrgasmEngine
             return plan;
         }
 
-        // Game thread. The hit has landed (feeling: Whipped's text, "" when none): narrate the punishment, then
+        // Game thread. The hit has landed (feeling: Injury Engine's text, "" when none): narrate the punishment, then
         // ask the target's strategy decision with that narration as last_line; a punishment for a refused request
         // gets the agree / refuse answer.
         void ContinuePunish(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan,
             const std::string& method, const std::string& location, RE::FormID spell, float spellDamage,
-            const std::string& feeling, bool feelingFromWhipped)
+            const std::string& feeling, bool feelingFromInjuryEngine)
         {
             RE::Actor* punisher = ActorFor(punisherId);
             RE::Actor* target = ActorFor(targetId);
@@ -2994,17 +2994,17 @@ namespace OrgasmEngine
             }
             const std::string text = feeling.empty() ? plan.line : plan.line + " " + feeling;
             webui_log::info("OrgasmEngine: punishment of {:#x} narrated: {}", targetId, text);
-            bool whippedNarrates = false;
-            if (!feelingFromWhipped) {
-                // Older Whipped (no External_TortureText): the hit goes through External_Damage, which narrates.
-                whippedNarrates = Whipped::PunishHit(punisher, target, text, method, location, spell);
+            bool injuryEngineNarrates = false;
+            if (!feelingFromInjuryEngine) {
+                // Older Injury Engine (no External_TortureText): the hit goes through External_Damage, which narrates.
+                injuryEngineNarrates = InjuryEngine::PunishHit(punisher, target, text, method, location, spell);
             }
-            if (!whippedNarrates) {
+            if (!injuryEngineNarrates) {
                 NarrateRequest(text, punisher, target, plan.direct);
             }
             if (spell) {
                 Aid::QueueWeakSpellHit(punisher, target, spell,
-                    feelingFromWhipped || whippedNarrates ? 0.0f : spellDamage);
+                    feelingFromInjuryEngine || injuryEngineNarrates ? 0.0f : spellDamage);
             }
             StrategyDecision::RequestAnswer(targetId, "punished", text,
                 [plan, targetId](DecisionResult result) {
@@ -3178,8 +3178,8 @@ namespace OrgasmEngine
             if (!p || !t) {
                 return;
             }
-            // Whipped lands the hit silently and returns the feeling text; narrate it with the line.
-            const bool asked = Whipped::PunishText(p, t, method, location, spellForm,
+            // Injury Engine lands the hit silently and returns the feeling text; narrate it with the line.
+            const bool asked = InjuryEngine::PunishText(p, t, method, location, spellForm,
                 [punisherId, target, plan, method, location, spellForm, spellDamage](std::string feeling) {
                     SKSE::GetTaskInterface()->AddTask(
                         [punisherId, target, plan, method, location, spellForm, spellDamage, feeling]() {

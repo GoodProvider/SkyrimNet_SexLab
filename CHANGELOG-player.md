@@ -14,7 +14,7 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 - Strategies renamed to match strategies.json: deny self, deny all, deny, tease, focused; Together, Greedy, Forced orgasm and Accept force are gone, and so is being forced
 - Mental break is gone, and so is its dashboard setting
 - NPCs now choose their strategy from their own thoughts, what was said and what just happened, not from their current strategy
-- Punish: with SkyrimNet_Whipped, the line is followed by how the hit feels
+- Punish: with Injury Engine, the line is followed by how the hit feels
 - Mini-game strategies are the same for everyone: Hold back and Cum quick are gone, and victims can now tease, force or be greedy too
 - New Num * key: AI auto-plays you, or take control of an NPC's scene
 - Auto play stays on across scenes and saves until you press Num * again
@@ -31,9 +31,9 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 - Aid and Punish can target a body part; Punish can use weak attack spells
 - Aid and Punish spells now show their glow, effects and sounds
 - Body part list: face, lips, nipples, back, arms, legs, pussy, cock, ass
-- With SkyrimNet_Whipped: Punish wounds the part, Aid heals it
-- Whipped: Flames, Frostbite and Sparks leave burns, frostbite, shocks
-- Whipped sexual parts greyed until you agree to enable them
+- With Injury Engine: Punish wounds the part, Aid heals it
+- Injury Engine: Flames, Frostbite and Sparks leave burns, frostbite, shocks
+- Injury Engine sexual parts greyed until you agree to enable them
 - New Clean Cum: TargetMenu option and NPC action, pick who cleans which body part
 - Arouse/Calm no longer makes anyone speak
 - NPCs now sense enjoyment as closeness to orgasm, not as arousal

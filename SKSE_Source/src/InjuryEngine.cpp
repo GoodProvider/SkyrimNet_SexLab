@@ -1,4 +1,4 @@
-#include "Whipped.h"
+#include "InjuryEngine.h"
 
 #include "Config.h"
 #include "WebUI_Log.h"
@@ -8,12 +8,12 @@
 #include <string_view>
 #include <utility>
 
-namespace Whipped
+namespace InjuryEngine
 {
     namespace
     {
-        constexpr const char* kPlugin = "SkyrimNet_Whipped.esp";
-        constexpr const char* kScript = "SkyrimNet_Whipped_Main";
+        constexpr const char* kPlugin = "Injury_Engine.esp";
+        constexpr const char* kScript = "Injury_Engine_Main";
 
         bool HasGlobal(const char* script, std::string_view fn)
         {
@@ -41,7 +41,7 @@ namespace Whipped
             auto* fargs = RE::MakeFunctionArguments(std::move(args)...);
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             if (!vm->DispatchStaticCall(kScript, fn, fargs, callback)) {
-                webui_log::warn("Whipped: {}.{} dispatch failed", kScript, fn);
+                webui_log::warn("InjuryEngine: {}.{} dispatch failed", kScript, fn);
             }
         }
     }
@@ -58,17 +58,17 @@ namespace Whipped
             const bool plugin = dh->LookupModByName(kPlugin) != nullptr;
             const bool api = plugin && HasGlobal(kScript, "External_Damage");
             if (plugin && !api) {
-                webui_log::warn("Whipped: {} is loaded but has no External_Damage (update SkyrimNet_Whipped)", kPlugin);
+                webui_log::warn("InjuryEngine: {} is loaded but has no External_Damage (update Injury Engine)", kPlugin);
             }
             cached = api ? 1 : 0;
-            webui_log::info("Whipped: installed={}", api);
+            webui_log::info("InjuryEngine: installed={}", api);
         }
         return cached == 1;
     }
 
     bool SexualParts()
     {
-        return SexLabNet::GetForeignConfigBool("SkyrimNet_Whipped", "whip.body.include_sexual_parts", false);
+        return SexLabNet::GetForeignConfigBool("Injury_Engine", "injury_engine.body.include_sexual_parts", false);
     }
 
     std::string PartName(const std::string& part)
@@ -117,7 +117,7 @@ namespace Whipped
             return nullptr;
         }
 
-        // Whipped torture type for the spell's first fire / frost / shock effect (Whipped's Classifier mapping),
+        // Injury Engine torture type for the spell's first fire / frost / shock effect (Injury Engine's Classifier mapping),
         // nullptr for none.
         const char* SpellTortureType(RE::FormID spell)
         {
@@ -149,7 +149,7 @@ namespace Whipped
         if (!victim || !Installed()) {
             return false;
         }
-        webui_log::info("Whipped: strike {:#x} part '{}' -> '{}'", victim->GetFormID(), part, PartName(part));
+        webui_log::info("InjuryEngine: strike {:#x} part '{}' -> '{}'", victim->GetFormID(), part, PartName(part));
         // External_Damage(attacker, victim, cause, body_part, damage_type, damage_amount, narrate)
         Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
             RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString("whipping"), static_cast<std::int32_t>(1), true);
@@ -162,7 +162,7 @@ namespace Whipped
         if (!victim || !Installed() || !type || !type[0]) {
             return false;
         }
-        webui_log::info("Whipped: torture {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part, PartName(part));
+        webui_log::info("InjuryEngine: torture {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part, PartName(part));
         Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
             RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString(type), static_cast<std::int32_t>(1), true);
         return true;
@@ -216,7 +216,7 @@ namespace Whipped
             if (cached < 0) {
                 cached = Installed() && HasGlobal(kScript, "External_TortureText") ? 1 : 0;
                 if (!cached && Installed()) {
-                    webui_log::warn("Whipped: no External_TortureText (update SkyrimNet_Whipped); punish feeling text off");
+                    webui_log::warn("InjuryEngine: no External_TortureText (update Injury Engine); punish feeling text off");
                 }
             }
             return cached == 1;
@@ -246,14 +246,14 @@ namespace Whipped
         if (!vm) {
             return false;
         }
-        webui_log::info("Whipped: torture text {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part,
+        webui_log::info("InjuryEngine: torture text {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part,
             PartName(part));
         RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{ new TextCallback(std::move(done)) };
         // External_TortureText(attacker, victim, damage_type, body_part, damage_amount)
         auto* args = RE::MakeFunctionArguments(std::move(attacker), std::move(victim),
             RE::BSFixedString(type.c_str()), RE::BSFixedString(PartName(part).c_str()), static_cast<std::int32_t>(1));
         if (!vm->DispatchStaticCall(kScript, "External_TortureText", args, callback)) {
-            webui_log::warn("Whipped: {}.External_TortureText dispatch failed", kScript);
+            webui_log::warn("InjuryEngine: {}.External_TortureText dispatch failed", kScript);
             return false;
         }
         return true;
@@ -265,7 +265,7 @@ namespace Whipped
         if (!target || health <= 0.0f || !Installed()) {
             return false;
         }
-        webui_log::info("Whipped: heal {:#x} {:.0f} part '{}' -> '{}'", target->GetFormID(), health, part, PartName(part));
+        webui_log::info("InjuryEngine: heal {:#x} {:.0f} part '{}' -> '{}'", target->GetFormID(), health, part, PartName(part));
         Call("External_Heal", std::move(caster), std::move(target), RE::BSFixedString(line.c_str()), health,
             RE::BSFixedString(PartName(part).c_str()), narrate);
         return true;
@@ -276,7 +276,7 @@ namespace Whipped
         if (!Installed()) {
             return;
         }
-        webui_log::info("Whipped: enabling sexual parts");
+        webui_log::info("InjuryEngine: enabling sexual parts");
         Call("External_SetSexualParts", true);
     }
 }

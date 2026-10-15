@@ -1,7 +1,7 @@
 #include "Aid.h"
 
 #include "WebUI_Log.h"
-#include "Whipped.h"
+#include "InjuryEngine.h"
 
 #include <algorithm>
 #include <cctype>
@@ -209,7 +209,7 @@ namespace Aid
             RE::FormID spell = 0;
             std::string line;
             std::string part;
-            bool toWhipped = false;
+            bool toInjuryEngine = false;
             bool stamina = false;     // counts stamina (a stamina-only spell), else health
             float points = 0.0f;      // to restore
             float done = 0.0f;        // restored so far
@@ -296,9 +296,9 @@ namespace Aid
             if (cost > 0.0f) {
                 casterAv->DamageActorValue(RE::ActorValue::kMagicka, cost * scale);
             }
-            Restore(t, ch.toWhipped ? 0.0f : health, stamina);
-            if (ch.toWhipped) {
-                Whipped::Heal(c, t, ch.line, health, ch.part, ch.first);
+            Restore(t, ch.toInjuryEngine ? 0.0f : health, stamina);
+            if (ch.toInjuryEngine) {
+                InjuryEngine::Heal(c, t, ch.line, health, ch.part, ch.first);
             }
             ch.first = false;
             ch.done += std::min(counted * scale, missing);
@@ -436,10 +436,10 @@ namespace Aid
         return best ? best->form : 0;
     }
 
-    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location, bool* whipped)
+    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location, bool* injuryEngine)
     {
-        if (whipped) {
-            *whipped = false;
+        if (injuryEngine) {
+            *injuryEngine = false;
         }
         if (!caster || !target || !form) {
             return "";
@@ -458,12 +458,12 @@ namespace Aid
         const std::string part = location == "body" ? "" : location;
         const std::string line = AidLine(caster, target, o, part);
 
-        // SkyrimNet_Whipped heals the wounds on the part (and the health with them) and narrates the line.
-        const bool toWhipped = o.health > 0.0f && Whipped::Installed();
-        if (whipped) {
-            *whipped = toWhipped;
+        // Injury Engine heals the wounds on the part (and the health with them) and narrates the line.
+        const bool toInjuryEngine = o.health > 0.0f && InjuryEngine::Installed();
+        if (injuryEngine) {
+            *injuryEngine = toInjuryEngine;
         }
-        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toWhipped, line, part]() {
+        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toInjuryEngine, line, part]() {
             auto* c = RE::TESForm::LookupByID<RE::Actor>(casterId);
             auto* t = RE::TESForm::LookupByID<RE::Actor>(targetId);
             if (!c || !t) {
@@ -478,29 +478,29 @@ namespace Aid
             } else if (auto* owner = c->AsActorValueOwner(); owner && o.cost > 0.0f) {
                 owner->DamageActorValue(RE::ActorValue::kMagicka, o.cost);
             }
-            Restore(t, toWhipped ? 0.0f : o.health, o.stamina);
-            if (toWhipped) {
-                Whipped::Heal(c, t, line, o.health, part);
+            Restore(t, toInjuryEngine ? 0.0f : o.health, o.stamina);
+            if (toInjuryEngine) {
+                InjuryEngine::Heal(c, t, line, o.health, part);
             }
             PlaySpellVisuals(c, t, RE::TESForm::LookupByID<RE::MagicItem>(o.form), o.potion);
         });
-        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} whipped {}", casterId,
-            targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, toWhipped);
+        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} injuryEngine {}", casterId,
+            targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, toInjuryEngine);
         return line;
     }
 
     std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,
-        float points, bool* whipped)
+        float points, bool* injuryEngine)
     {
-        if (whipped) {
-            *whipped = false;
+        if (injuryEngine) {
+            *injuryEngine = false;
         }
         if (!caster || !target || !form) {
             return "";
         }
         auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(form);
         if (points <= 0.0f || !spell) {
-            return Apply(caster, target, form, location, whipped);
+            return Apply(caster, target, form, location, injuryEngine);
         }
         const auto options = ListOptions(caster);
         const auto it = std::find_if(options.begin(), options.end(), [form](const Option& o) { return o.form == form; });
@@ -515,11 +515,11 @@ namespace Aid
         ch.part = location == "body" ? "" : location;
         ch.line = AidLine(caster, target, o, ch.part);
         ch.stamina = o.health <= 0.0f;
-        ch.toWhipped = !ch.stamina && Whipped::Installed();
+        ch.toInjuryEngine = !ch.stamina && InjuryEngine::Installed();
         ch.points = points;
         ch.interval = IsConcentration(spell) ? 1.0f : std::max(1.0f, spell->GetChargeTime() + 0.5f);
-        if (whipped) {
-            *whipped = ch.toWhipped;
+        if (injuryEngine) {
+            *injuryEngine = ch.toInjuryEngine;
         }
         const RE::FormID casterId = caster->GetFormID();
         {
@@ -531,8 +531,8 @@ namespace Aid
             g_channels[casterId] = ch;
             EnsureChannelThread();
         }
-        webui_log::info("Aid: channel {:#x} -> {:#x} '{}' on '{}' {:.0f} {} every {:.2f}s whipped {}", casterId,
-            ch.target, o.name, location, points, ch.stamina ? "stamina" : "health", ch.interval, ch.toWhipped);
+        webui_log::info("Aid: channel {:#x} -> {:#x} '{}' on '{}' {:.0f} {} every {:.2f}s injuryEngine {}", casterId,
+            ch.target, o.name, location, points, ch.stamina ? "stamina" : "health", ch.interval, ch.toInjuryEngine);
         return ch.line;
     }
 

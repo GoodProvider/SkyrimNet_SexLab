@@ -6,7 +6,7 @@
 #include "NarrationTiming.h"
 #include "OrgasmEngine.h"
 #include "WebUI_Log.h"
-#include "Whipped.h"
+#include "InjuryEngine.h"
 
 #include <string>
 #include <vector>
@@ -193,7 +193,7 @@ namespace PapyrusBindings_OrgasmEngine
             OrgasmEngine::AddPunishReason(by, target, Str(reason));
         }
         bool HasAidOptions(RE::StaticFunctionTag*, RE::Actor* a) { return ::Aid::HasOptions(a); }
-        bool WhippedInstalled(RE::StaticFunctionTag*) { return Whipped::Installed(); }
+        bool InjuryEngineInstalled(RE::StaticFunctionTag*) { return InjuryEngine::Installed(); }
         bool CanPunish(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::CanPunish(a); }
         void EndScene(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::EndScene(sid); }
         void ResetSpeedScale(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ResetSpeedScale(a); }
@@ -290,7 +290,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("AskOrder", s, AskOrder);
         a_vm->RegisterFunction("AddPunishReason", s, AddPunishReason);
         a_vm->RegisterFunction("HasAidOptions", s, HasAidOptions);
-        a_vm->RegisterFunction("WhippedInstalled", s, WhippedInstalled);
+        a_vm->RegisterFunction("InjuryEngineInstalled", s, InjuryEngineInstalled);
         a_vm->RegisterFunction("CanPunish", s, CanPunish);
         a_vm->RegisterFunction("EndScene", s, EndScene);
         a_vm->RegisterFunction("ResetSpeedScale", s, ResetSpeedScale);

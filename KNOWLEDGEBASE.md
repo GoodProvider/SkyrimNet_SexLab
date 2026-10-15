@@ -12,12 +12,12 @@
 - **Old co-saves:** `ForcedAction::kPlayStrategy` (removed player Force) is kept only so `Load` can turn it into an unforced actor playing the saved strategy.
 - **Hotkey path:** `sexlab.hud.key_punish` (Scene HUD, controls group, so it works without the mini-game). While it still holds its default, `Hud.cpp` reads the old `sexlab.minigame.key_force` (`KeyBinding::legacyPath`).
 
-## SkyrimNet_Whipped soft dependency (2026-10-09)
+## Injury Engine soft dependency (2026-10-09)
 
-- Detect with `TESDataHandler::LookupModByName("SkyrimNet_Whipped.esp")` plus a VM type check that `SkyrimNet_Whipped_Main` has the global `External_Damage` (`Whipped::Installed`, cached per session). An older Whipped without the API counts as not installed.
-- `External_TortureText` (silent hit, returns the feeling text as a String; `Whipped::PunishText`) is optional: without it Punish falls back to `External_Damage`, which narrates. Its Papyrus String result reaches C++ through an `IStackCallbackFunctor` on a VM thread, so hop to the game thread (`AddTask`) before using it.
-- Call its Papyrus globals with `DispatchStaticCall`; never call its `Take*` / `Sync*` natives (they drain Whipped's own queues).
-- Read its settings from C++ with `SexLabNet::GetForeignConfigBool("SkyrimNet_Whipped", ...)` (C++ name without `Plugin_`). Write them only through Whipped (`External_SetSexualParts`, which runs `PatchConfig` on `Plugin_SkyrimNet_Whipped` and applies the value at once).
+- Detect with `TESDataHandler::LookupModByName("Injury_Engine.esp")` plus a VM type check that `Injury_Engine_Main` has the global `External_Damage` (`InjuryEngine::Installed`, cached per session). An older Injury Engine without the API counts as not installed.
+- `External_TortureText` (silent hit, returns the feeling text as a String; `InjuryEngine::PunishText`) is optional: without it Punish falls back to `External_Damage`, which narrates. Its Papyrus String result reaches C++ through an `IStackCallbackFunctor` on a VM thread, so hop to the game thread (`AddTask`) before using it.
+- Call its Papyrus globals with `DispatchStaticCall`; never call its `Take*` / `Sync*` natives (they drain Injury Engine's own queues).
+- Read its settings from C++ with `SexLabNet::GetForeignConfigBool("Injury_Engine", ...)` (C++ name without `Plugin_`). Write them only through Injury Engine (`External_SetSexualParts`, which runs `PatchConfig` on `Plugin_Injury_Engine` and applies the value at once).
 
 ## Gate voice / ending hold paired with another scene's reply (2026-10-08)
 

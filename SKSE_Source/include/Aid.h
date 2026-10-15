@@ -33,17 +33,17 @@ namespace Aid
     RE::FormID PickBest(RE::Actor* caster, std::string_view kind);
     /// Applies option form from caster to target (re-validated). Game state changes are queued on the main thread.
     /// location: body part ("" / "body": none). Returns the narration line, "" when refused.
-    /// With SkyrimNet_Whipped installed a health option heals whip wounds on the part through Whipped, which also
-    /// narrates the line: *whipped is set true and the caller must not narrate it.
+    /// With Injury Engine installed a health option heals whip wounds on the part through Injury Engine, which also
+    /// narrates the line: *injuryEngine is set true and the caller must not narrate it.
     std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location = "",
-        bool* whipped = nullptr);
+        bool* injuryEngine = nullptr);
     /// Aid panel: keeps spell form going from caster to target at its normal rate (a concentration spell every second,
     /// a fire-and-forget spell recast every max(1, charge + 0.5) s) until points are restored (health; stamina for a
     /// stamina-only spell), the caster lacks the magicka for the next tick, the target is full, an actor is gone, or
     /// a newer channel from the caster replaces it. A potion or points <= 0 is a one-shot Apply. Returns the line for
-    /// the caller to narrate once ("" when refused); *whipped as for Apply (Whipped narrates on the first tick).
+    /// the caller to narrate once ("" when refused); *injuryEngine as for Apply (Injury Engine narrates on the first tick).
     std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,
-        float points, bool* whipped = nullptr);
+        float points, bool* injuryEngine = nullptr);
 
     struct WeakSpell
     {
