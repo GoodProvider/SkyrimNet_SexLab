@@ -25,6 +25,8 @@ int Function GetOrgasmCount(Actor akActor) global native
 float Function GetSecondsSinceOrgasm(Actor akActor) global native
 bool Function IsManaged(Actor akActor) global native
 bool Function IsMiniGameEnabled() global native
+; sexlab.enjoyment.engine_disabled: SexLab owns enjoyment and decides orgasms; the engine records them.
+bool Function IsEngineDisabled() global native
 Function SetRates(float passive, float aggressor, float victim) global native
 ; Re-reads sexlab.enjoyment.* / sexlab.minigame.* / sexlab.hud.* (MCM on SkyrimNet_OnPluginConfigSaved).
 Function ReloadConfig() global native
@@ -154,6 +156,8 @@ int Function GetSpeedLevel(Actor akActor) global native
 ; SexLabOrgasm bookkeeping (Scene_Manager.OrgasmIndividual): our own vs another plugin's ForceOrgasm.
 bool Function ConsumeOwnOrgasm(Actor akActor) global native
 int Function NoteExternalOrgasm(Actor akActor, String source) global native
+; SLSO only: queues akAlias.Orgasm(-2) (resets SLSO's 5 s guard, then DoOrgasm(true)). False: not dispatched.
+bool Function SLSOForceOrgasm(ReferenceAlias akAlias) global native
 ; deny_orgasm 1 -> 0: unblock and, in one step, fire everyone in the scene at 100 (+ group join at 95).
 ; True: Effect_OrgasmGroup narrates with "<allower> allowed <akActor> to orgasm. "; false: caller narrates.
 bool Function AllowOrgasm(Actor akActor, Actor allower) global native
@@ -249,11 +253,21 @@ Function Effect_StrategyChanged(Actor akActor, Actor target, String msg, String 
     if msg == ""
         return
     endif
+    int level = MiniGameNarrationLevel()
     if narrate
-        SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_strategy", msg, akActor, target, False)
+        if level >= 3
+            SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_strategy", msg, akActor, target, False)
+        else
+            SkyrimNet_SexLab_Utilities.NarrateBelowDirect(level, "sexlab_strategy", msg, akActor, target, True)
+        endif
     elseif observed != ""
-        SkyrimNetApi.RegisterEvent("sexlab_strategy", observed, akActor, target)
+        SkyrimNet_SexLab_Utilities.NarrateBelowDirect(level, "sexlab_strategy", observed, akActor, target, True)
     endif
+EndFunction
+
+; sexlab.narration.minigame_level: cap for strategy / request / Force / Aid narrations (3 Direct .. 0 Silent).
+int Function MiniGameNarrationLevel() global
+    return SkyrimNet_SexLab_Utilities.NarrationLevel("sexlab.narration.minigame_level")
 EndFunction
 
 ; Sex is hard work: these non-victims are at 0 stamina regen and 0 stamina; the scene ends.
@@ -269,7 +283,12 @@ Function Effect_NarrateDirect(String msg, Actor source, Actor target) global
     if msg == ""
         return
     endif
-    SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target)
+    int level = MiniGameNarrationLevel()
+    if level >= 3
+        SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target)
+    else
+        SkyrimNet_SexLab_Utilities.NarrateBelowDirect(level, "sexlab_request", msg, source, target)
+    endif
 EndFunction
 
 ; Ask / order / agree / refuse narration in a scene without the player: dropped-never (falls back to an event when the
@@ -278,7 +297,12 @@ Function Effect_NarrateOptional(String msg, Actor source, Actor target) global
     if msg == ""
         return
     endif
-    SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_request", msg, source, target, False)
+    int level = MiniGameNarrationLevel()
+    if level >= 3
+        SkyrimNet_SexLab_Utilities.DirectNarration_Optional("sexlab_request", msg, source, target, False)
+    else
+        SkyrimNet_SexLab_Utilities.NarrateBelowDirect(level, "sexlab_request", msg, source, target)
+    endif
 EndFunction
 
 ; Arouse / calm narrations: short-lived events only (no DN, no history). Stable eventId per

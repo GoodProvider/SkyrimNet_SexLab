@@ -11,7 +11,8 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 | `Scripts/Source/` | Papyrus source |
 | `Scripts/` | Compiled `.pex` |
 | `Headers/` | Import headers |
-| `skyrimse.ppj` | Pyro project |
+| `skyrimse.ppj` | Pyro project (main, SexLab 1.6x headers) |
+| `skyrimse-pplus.ppj`, `Scripts/Source_PPlus/` | Pyro project for the SexLab P+ bridge `SkyrimNet_SexLab_PPlus` ([sexlab-pplus.md](sexlab-pplus.md)) |
 | `Spriggit/` | ESP ↔ JSON |
 | `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Canonical action YAML + prompts (`manifest.json`; no settings schema). Pre-0.25 copies: `config/actions/`, `prompts/` |
 | `SKSE/Plugins/SkyrimNet/config/plugins/SkyrimNet_SexLab/` | Settings schema (`Plugin_SkyrimNet_SexLab`, `sexlab.*`) |
@@ -20,7 +21,7 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 
 ## Compile
 
-VS Code / Cursor task **`compile: pyro`** (`.vscode/tasks.json`). Do not invent Caprica / `papyrus.exe` one-offs unless asked.
+VS Code / Cursor task **`compile: pyro`** (`.vscode/tasks.json`): runs `skyrimse.ppj`, then `skyrimse-pplus.ppj` (the P+ bridge, compiled against `..\SexLab Framework PPLUS\Source\Scripts`). Do not invent Caprica / `papyrus.exe` one-offs unless asked.
 
 SKSE: [webui.md](webui.md).
 

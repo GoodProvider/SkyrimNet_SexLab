@@ -37,6 +37,8 @@ std::string GetConfigString(const char* path, const char* def);
 /// Enjoyment mode: sexlab.enjoyment.mode ("Always Orgasm Together at the end" / "Multi-Orgasm Mini-game");
 /// unset falls back to the older sexlab.minigame.enabled bool (default true). True = Multi-Orgasm Mini-game.
 bool IsMiniGameMode();
+/// sexlab.enjoyment.engine_disabled: SexLab owns enjoyment and orgasms; the OrgasmEngine only records them.
+bool IsOrgasmEngineDisabled();
 /// VK (dashboard type:hotkey) -> DX scancode. Mouse VKs map to SKSE's 256+ codes
 /// (VK_LBUTTON 256, VK_RBUTTON 257, VK_MBUTTON 258). 0 when unmapped.
 std::uint32_t HotkeyVkToDx(int vk);

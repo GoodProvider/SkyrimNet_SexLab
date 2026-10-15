@@ -41,6 +41,11 @@ int walk_slots_creature = 0
 int walk_slots_total = 0
 float progress_last_time = 0.0
 
+; SexLab P+: scene ids of the source being walked (SkyrimNet_SexLab_PPlus.AllSceneIds, no proxy alias cap);
+; pplus_ids_source = which walk_source they belong to (-1 none).
+String[] pplus_ids
+int pplus_ids_source = -1
+
 ; Load-time alignment prompt (does not auto-rebuild)
 Bool align_check_pending = False
 int align_mbox_id = 0
@@ -85,7 +90,11 @@ EndFunction
 int Function RefreshSlotCounts()
     walk_slots_human = 0
     walk_slots_creature = 0
-    if sexlab
+    if sexlab && SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        ; P+ slots are a proxy array (empty until SyncBackEnd, capped by the quest's aliases): count the registry.
+        walk_slots_human = SkyrimNet_SexLab_PPlus.AllSceneIds(0).length
+        walk_slots_creature = SkyrimNet_SexLab_PPlus.AllSceneIds(1).length
+    elseif sexlab
         if sexlab.AnimSlots
             walk_slots_human = sexlab.AnimSlots.Slotted
         endif
@@ -231,6 +240,7 @@ Function BeginWalk()
     walk_skip_unreg = 0
     walk_skip_empty = 0
     walk_skip_logged = 0
+    pplus_ids_source = -1
     progress_last_time = Utility.GetCurrentRealTime()
     AnimDb_BeginSync(walk_force)
     Trace("BeginWalk", "SkyrimNet SexLab loading", True)
@@ -273,6 +283,10 @@ Event OnUpdate()
         return
     endif
     if sync_phase != 2
+        return
+    endif
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        WalkPPlusBatch()
         return
     endif
     sslAnimationSlots slots = None
@@ -343,6 +357,147 @@ Event OnUpdate()
         RegisterForSingleUpdate(0.01)
     endif
 EndEvent
+
+; P+ walk: one batch of registry scene ids for walk_source (0 humans, 1 creatures).
+Function WalkPPlusBatch()
+    if pplus_ids_source != walk_source
+        pplus_ids = SkyrimNet_SexLab_PPlus.AllSceneIds(walk_source)
+        pplus_ids_source = walk_source
+        Trace("WalkPPlusBatch", "P+ source="+walk_source+" scenes="+pplus_ids.length)
+    endif
+    int total = pplus_ids.length
+    int batch_count = 0
+    String json = "["
+    Bool first = True
+    while walk_index < total && batch_count < BATCH_SIZE
+        String id = pplus_ids[walk_index]
+        walk_index += 1
+        String piece = ""
+        if id != ""
+            piece = BuildAnimJson_PPlus(id, walk_source)
+        endif
+        if piece != ""
+            if !first
+                json += ","
+            endif
+            json += piece
+            first = False
+            batch_count += 1
+            walk_total += 1
+        else
+            walk_skip_empty += 1
+        endif
+    endwhile
+    json += "]"
+    if batch_count > 0
+        AnimDb_PushAnimBatch(json)
+    endif
+    float now = Utility.GetCurrentRealTime()
+    if now - progress_last_time >= 5.0
+        progress_last_time = now
+        int done = walk_index
+        if walk_source == 1
+            done += walk_slots_human
+        endif
+        int pct = 0
+        if walk_slots_total > 0
+            pct = done * 100 / walk_slots_total
+        endif
+        if pct > 99
+            pct = 99
+        endif
+        Trace("OnUpdate", "SkyrimNet_SexLab is "+pct+"% finished", True)
+    endif
+    if walk_index >= total
+        FinishSourceOrDone()
+    else
+        RegisterForSingleUpdate(0.01)
+    endif
+EndFunction
+
+; P+ row from SexlabRegistry (the proxy's Name / Enabled / tags stay empty). Same keys as BuildAnimJson;
+; "_case":1 keeps the NanoID's case as the AnimDB key (NanoIDs are case-sensitive).
+String Function BuildAnimJson_PPlus(String id, int source)
+    String name = SkyrimNet_SexLab_PPlus.SceneName(id)
+    int enabled = 0
+    if SkyrimNet_SexLab_PPlus.SceneEnabled(id)
+        enabled = 1
+    endif
+    int pos_count = SkyrimNet_SexLab_PPlus.ActorCount(id)
+    int stage_count = SkyrimNet_SexLab_PPlus.NumStages(id)
+    int[] genders = SkyrimNet_SexLab_PPlus.PositionGenders(id)
+    String[] race_keys = SkyrimNet_SexLab_PPlus.PositionRaceKeys(id)
+    int males = 0
+    int females = 0
+    int male_creatures = 0
+    int female_creatures = 0
+    String race_type = ""
+    String pos_genders = "["
+    String pos_race = "["
+    int i = 0
+    while i < pos_count
+        if i > 0
+            pos_genders += ","
+            pos_race += ","
+        endif
+        int g = 0
+        if i < genders.length
+            g = genders[i]
+        endif
+        if g == 1
+            females += 1
+        elseif g == 2
+            male_creatures += 1
+        elseif g == 3
+            female_creatures += 1
+        else
+            males += 1
+        endif
+        pos_genders += g
+        String rk = ""
+        if i < race_keys.length && race_keys[i]
+            rk = race_keys[i]
+        endif
+        if race_type == "" && rk != ""
+            race_type = rk
+        endif
+        pos_race += "\""+EscapeJson(rk)+"\""
+        i += 1
+    endwhile
+    pos_genders += "]"
+    pos_race += "]"
+    int has_creature = 0
+    if male_creatures + female_creatures > 0
+        has_creature = 1
+    endif
+    String[] tags = SkyrimNet_SexLab_PPlus.SceneTags(id)
+    String tags_json = "["
+    i = 0
+    while i < tags.length
+        if i > 0
+            tags_json += ","
+        endif
+        tags_json += "\""+EscapeJson(tags[i])+"\""
+        i += 1
+    endwhile
+    tags_json += "]"
+    return "{\"_registry\":\""+EscapeJson(id)+"\""\
+        +",\"_case\":1"\
+        +",\"_name\":\""+EscapeJson(name)+"\""\
+        +",\"_enabled\":"+enabled\
+        +",\"_source\":"+source\
+        +",\"_position_count\":"+pos_count\
+        +",\"_stage_count\":"+stage_count\
+        +",\"_males\":"+males\
+        +",\"_females\":"+females\
+        +",\"_male_creatures\":"+male_creatures\
+        +",\"_female_creatures\":"+female_creatures\
+        +",\"_has_creature\":"+has_creature\
+        +",\"_race_type\":\""+EscapeJson(race_type)+"\""\
+        +",\"_pos_genders\":"+pos_genders\
+        +",\"_pos_race_keys\":"+pos_race\
+        +",\"_tags\":"+tags_json+"}"
+EndFunction
 
 Function LogWalkSkip(String reason, sslBaseAnimation anim)
     if walk_skip_logged >= 10
@@ -551,15 +706,60 @@ int walk_skip_unreg = 0
 int walk_skip_empty = 0
 int walk_skip_logged = 0
 
+; ---- Thread stage / animation identity (SexLab 1.6x or P+) ----
+; AnimDB key of the thread's animation: Animation.Registry, or on P+ the active scene's id (a ResetScene may not
+; have refreshed thread.Animation yet).
+String Function ThreadAnimKey(sslThreadController thread) global
+    if !thread
+        return ""
+    endif
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        String scene_id = SkyrimNet_SexLab_PPlus.ActiveScene(thread as Quest)
+        if scene_id != ""
+            return scene_id
+        endif
+    endif
+    if !thread.animation
+        return ""
+    endif
+    return thread.animation.Registry
+EndFunction
+
+; Stage number for narration, AnimDB ("stage N"), stage keys and the editor: thread.Stage on 1.6x; on P+ the
+; active stage's position in the scene's stage list (P+ GetLegacyStageNum; thread.Stage is history length there).
+int Function ThreadStageNum(sslThreadController thread) global
+    if !thread
+        return 0
+    endif
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        return SkyrimNet_SexLab_PPlus.LegacyStage(thread as Quest)
+    endif
+    return thread.Stage
+EndFunction
+
+; Stage count in ThreadStageNum's numbering.
+int Function ThreadStageCount(sslThreadController thread) global
+    if !thread
+        return 0
+    endif
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        return SkyrimNet_SexLab_PPlus.LegacyStageCount(thread as Quest)
+    endif
+    if !thread.animation
+        return 0
+    endif
+    return thread.animation.StageCount()
+EndFunction
+
 String Function GetThreadStageDescription(sslThreadController thread, int stage_override = -1)
     if !thread || !thread.animation
         return ""
     endif
     int stage = stage_override
     if stage < 1
-        stage = thread.stage
+        stage = ThreadStageNum(thread)
     endif
-    String reg = thread.animation.Registry
+    String reg = ThreadAnimKey(thread)
     String desc = AnimDb_GetStageDescription(reg, stage)
     if desc == "" && stage > 1
         ; fall back to earlier stages like old editor
@@ -603,14 +803,14 @@ String Function GetThreadStagesJson(sslThreadController thread, int stage_count)
         i += 1
     endwhile
     actors_json += "]"
-    return AnimDb_GetStagesJson(thread.animation.Registry, stage_count, actors_json, thread.stage)
+    return AnimDb_GetStagesJson(ThreadAnimKey(thread), stage_count, actors_json, ThreadStageNum(thread))
 EndFunction
 
 String Function GetThreadTransition(sslThreadController thread, int from_stage, int to_stage)
     if !thread || !thread.animation || from_stage < 1 || to_stage < 1
         return ""
     endif
-    String reg = thread.animation.Registry
+    String reg = ThreadAnimKey(thread)
     String text = AnimDb_GetTransition(reg, from_stage, to_stage)
     if text == ""
         return ""
@@ -639,7 +839,7 @@ int[] Function GetOrgasmExpected(sslThreadController thread)
     if !thread || !thread.animation || n < 1
         return out
     endif
-    String row = AnimDb_GetByRegistry(thread.animation.Registry)
+    String row = AnimDb_GetByRegistry(ThreadAnimKey(thread))
     if row == ""
         return out
     endif
@@ -695,7 +895,7 @@ String[] Function GetSpeakingModifiers(sslThreadController thread)
     if !thread || !thread.animation
         return out
     endif
-    String row = AnimDb_GetByRegistry(thread.animation.Registry)
+    String row = AnimDb_GetByRegistry(ThreadAnimKey(thread))
     if row == ""
         return out
     endif
@@ -706,7 +906,7 @@ String[] Function GetSpeakingModifiers(sslThreadController thread)
     int speak_arr = 0
     int stage_map = JMap.getObj(obj, "_stage_speaking")
     if stage_map != 0
-        int stage = thread.stage
+        int stage = ThreadStageNum(thread)
         if stage < 1
             stage = 1
         endif
@@ -743,7 +943,7 @@ int[] Function GetClothed(sslThreadController thread)
     if !thread || !thread.animation
         return out
     endif
-    String row = AnimDb_GetByRegistry(thread.animation.Registry)
+    String row = AnimDb_GetByRegistry(ThreadAnimKey(thread))
     if row == ""
         return out
     endif
@@ -776,7 +976,7 @@ bool[] Function GetHasDescriptionOrgasmExpected(sslThreadController thread)
     if !thread || !thread.animation
         return out
     endif
-    String row = AnimDb_GetByRegistry(thread.animation.Registry)
+    String row = AnimDb_GetByRegistry(ThreadAnimKey(thread))
     if row == ""
         return out
     endif
@@ -785,7 +985,7 @@ bool[] Function GetHasDescriptionOrgasmExpected(sslThreadController thread)
         return out
     endif
     int has_arr = JMap.getObj(obj, "_stage_has_description")
-    int stage = thread.stage
+    int stage = ThreadStageNum(thread)
     bool has_desc = false
     if has_arr != 0 && stage >= 1 && stage <= JArray.count(has_arr)
         has_desc = JArray.getInt(has_arr, stage - 1) == 1

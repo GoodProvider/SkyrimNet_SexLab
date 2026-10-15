@@ -6,6 +6,90 @@ plugin:
 
 schema:
   fields:
+    - name: "Start narration"
+      path: "sexlab.narration.start_level"
+      type: "select"
+      description: "Loudest way the scene start is sent. Lower settings downgrade it (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); it is never upgraded."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
+    - name: "Stage change narration"
+      path: "sexlab.narration.stage_level"
+      type: "select"
+      description: "Loudest way a stage change (\"Scene changes to ...\") is sent. Lower settings downgrade it (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); it is never upgraded."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
+    - name: "Orgasm narration"
+      path: "sexlab.narration.orgasm_level"
+      type: "select"
+      description: "Loudest way an orgasm is sent. Lower settings downgrade it (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); it is never upgraded. Below Direct there is no voice to wait for: the orgasm check and the last stage are not held for it."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
+    - name: "End narration"
+      path: "sexlab.narration.end_level"
+      type: "select"
+      description: "Loudest way the scene end (and a stop) is sent. Lower settings downgrade it (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); it is never upgraded."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
+    - name: "Position change narration"
+      path: "sexlab.narration.position_level"
+      type: "select"
+      description: "Loudest way a PosUp / PosDn role swap (\"The scene changes to ...\") is sent. Lower settings downgrade it (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); it is never upgraded."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
+    - name: "Style change narration"
+      path: "sexlab.narration.style_level"
+      type: "select"
+      description: "Loudest way a style change (\"X changes from 'gently' to 'forcefully'\") is sent. Lower settings downgrade it (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); it is never upgraded."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
+    - name: "Strategy / request narration"
+      path: "sexlab.narration.minigame_level"
+      type: "select"
+      description: "Loudest way mini-game strategy changes, asks / orders / answers, Force and Aid are sent. Lower settings downgrade them (Event: remembered event, ShortEvent: event that fades after 30 s, Silent: not sent); they are never upgraded. Arouse / calm are always short events."
+      options:
+        - "Direct"
+        - "Event"
+        - "ShortEvent"
+        - "Silent"
+      defaultValue: "Direct"
+      category: "Narration"
+
     - name: "Hide hermaphrodites from prompt"
       path: "sexlab.prompt.hide_hermaphrodites"
       type: "bool"
@@ -255,13 +339,6 @@ schema:
       category: "Scene HUD"
       supportsOverride: false
 
-    - name: "Narrate position changes"
-      path: "sexlab.hud.pos_narration"
-      type: "bool"
-      description: "After PosUp / PosDn, narrate \"The scene changes to ...\" with the current stage description and the actors in their new roles."
-      defaultValue: true
-      category: "Scene HUD"
-
     - name: "Take control key"
       path: "sexlab.hud.key_take_control"
       type: "hotkey"
@@ -305,6 +382,13 @@ schema:
       defaultValue: 97
       category: "Scene HUD"
       supportsOverride: false
+
+    - name: "Disable OrgasmEngine, switch back to SexLab"
+      path: "sexlab.enjoyment.engine_disabled"
+      type: "bool"
+      description: "SexLab (or SLSO) owns enjoyment and decides orgasms again; this mod only narrates them. Turns off the Orgasm mode, mini-game, NPC strategies, orgasm gate and safety net. The WebUI orgasm button still works. Applies from the next scene."
+      defaultValue: false
+      category: "Enjoyment"
 
     - name: "Orgasm mode"
       path: "sexlab.enjoyment.mode"

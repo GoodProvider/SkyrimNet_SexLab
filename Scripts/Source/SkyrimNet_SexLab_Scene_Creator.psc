@@ -427,10 +427,14 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     while i < num_victims && !failed
         DbgMsg("StartScene", "model.SetVictim "+victims[i].GetDisplayName())
         model.SetVictim(victims[i])
-        i += 1 
-    endwhile 
+        i += 1
+    endwhile
+    ; P+: IsAggressive is the "Aggressive" context, which SetVictim does not add.
+    if !failed && num_victims > 0 && IsSexLabPPlus()
+        SkyrimNet_SexLab_PPlus.SetConsent(model as Quest, false)
+    endif
 
-    if failed 
+    if failed
         ; Unlock SexLab Making slot claimed by NewThread (not Creator.Release).
         model.Initialize()
         Release() 
@@ -449,7 +453,7 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
 
     if num_actors == 1
         DbgMsg("StartScene", "sexlab.GetGender "+actors[0].GetDisplayName())
-        int gender = sexlab.GetGender(actors[0])
+        int gender = SexLabGender(sexlab, actors[0])
         DbgMsg("StartScene", "sexlab.GetGender returned "+gender)
         bool has_penis = (gender != 1 && gender != 3)
         if has_penis 
@@ -969,10 +973,10 @@ Function LoadSetting(String setting_name)
                 other = 1 
             endif 
             DbgMsg("LoadSetting", "sexlab.GetGender position "+actors[position].GetDisplayName())
-            int gender = sexlab.GetGender(actors[position])
+            int gender = SexLabGender(sexlab, actors[position])
             bool position_male = gender == 0 || gender == 2 
             DbgMsg("LoadSetting", "sexlab.GetGender other "+actors[other].GetDisplayName())
-            gender = sexlab.GetGender(actors[other])
+            gender = SexLabGender(sexlab, actors[other])
             bool other_male = gender == 0 || gender == 2 
             ; position is not a male
             if !position_male && other_male
@@ -1440,7 +1444,7 @@ int Function BuildWebUIObject()
         JMap.setInt(po, "_no_orgasm", no_orgasm_mask[i])
         JMap.setInt(po, "_victim", victim_mask[i])
         JMap.setStr(po, "_speaking", speaking_modifiers[i])
-        JMap.setInt(po, "_gender", sexlab.GetGender(actors[i]))
+        JMap.setInt(po, "_gender", SexLabGender(sexlab, actors[i]))
         JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, actors[i]))
         JArray.addObj(pos_arr, po)
         i += 1

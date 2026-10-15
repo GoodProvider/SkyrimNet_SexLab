@@ -2123,10 +2123,10 @@
         <div class="sc-anims-section">
             <div class="section-header">Animations</div>
             <div class="compact-row">
-                <span class="fav-filter-label" title="favorites">&#9733;</span>
-                <div id="sc-favorites-toggle"></div>
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
+                <span class="fav-filter-label" title="favorites">&#9733;</span>
+                <div id="sc-favorites-toggle"></div>
                 <div id="sc-initiator-pulldown"></div>
                 <span id="sc-initiates-label">initiates</span>
                 <div id="sc-style-pulldown"></div>
@@ -10410,6 +10410,8 @@
                 : scSelectedRegistries().length;
             document.getElementById('sc-selected-count').textContent =
                 SC.mode === 'active' ? `in-thread ${selectedCount}` : `selected ${selectedCount}`;
+            document.getElementById('sc-btn-start').classList.toggle('disabled',
+                SC.mode !== 'active' && selectedCount === 0);
             const inThread = new Set(SC.inThreadRegistries || []);
             let indices = sortAnimListRows(anims, {
                 active: SC.mode === 'active',
@@ -10676,6 +10678,7 @@
         }
 
         function scStart() {
+            if (document.getElementById('sc-btn-start').classList.contains('disabled')) return;
             applySceneMenuDraftToSceneInfo({ pendingCreate: true, mode: 'creator' });
             if (typeof hidePanel === 'function') {
                 hidePanel('scene_creator_panel');

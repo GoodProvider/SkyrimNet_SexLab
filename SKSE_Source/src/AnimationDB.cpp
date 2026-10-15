@@ -1025,7 +1025,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
             if (!spec.name_contains.empty() && ToLower(row.name).find(spec.name_contains) == std::string::npos)
                 return false;
-            if (spec.favorites_only && !g_favorites.count(row.registry))
+            if (spec.favorites_only && !g_favorites.count(ToLower(row.registry)))
                 return false;
             return true;
         }
@@ -1729,6 +1729,11 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             row.registry = get_str("registry");
         if (row.registry.empty())
             return false;
+        // SexLab P+ rows ("_case":1): the registry is a case-sensitive scene id (NanoID). Keep its case as the key
+        // and as the value handed back to Papyrus (GetAnimationByRegistry, SexlabRegistry). 1.6x registrars stay
+        // lowercased, as before.
+        if (get_int("_case") == 1 && anim.contains("_registry") && anim["_registry"].is_string())
+            row.registry = anim["_registry"].get<std::string>();
         // Human-facing name keeps SexLab casing (UI + animations/(name).json)
         if (anim.contains("_name") && anim["_name"].is_string())
             row.name = anim["_name"].get<std::string>();
@@ -1953,6 +1958,15 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         return static_cast<int>(g_rows.size());
     }
 
+    // Caller holds g_mutex. Exact key first (SexLab P+ ids keep their case), then the lowercased 1.6x key.
+    static std::unordered_map<std::string, AnimRow>::iterator FindRowLocked(const std::string& registry)
+    {
+        auto it = g_rows.find(registry);
+        if (it != g_rows.end())
+            return it;
+        return g_rows.find(ToLower(registry));
+    }
+
     bool IsFavorite(const std::string& registry)
     {
         std::lock_guard lock(g_mutex);
@@ -1987,7 +2001,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     std::optional<AnimRow> GetByRegistry(const std::string& registry)
     {
         std::lock_guard lock(g_mutex);
-        auto it = g_rows.find(ToLower(registry));
+        auto it = FindRowLocked(registry);
         if (it == g_rows.end())
             return std::nullopt;
         return it->second;
@@ -1997,7 +2011,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     {
         // Look up under the lock without copying the whole AnimRow (4 maps + 6 vectors).
         std::lock_guard lock(g_mutex);
-        auto row = g_rows.find(ToLower(registry));
+        auto row = FindRowLocked(registry);
         if (row == g_rows.end())
             return {};
         auto it = row->second.stage_descriptions.find(stage);
@@ -2013,7 +2027,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             return out;
         out.resize(static_cast<size_t>(stage_count));
         std::lock_guard lock(g_mutex);
-        auto row = g_rows.find(ToLower(registry));
+        auto row = FindRowLocked(registry);
         if (row == g_rows.end())
             return out;
         const auto& sd = row->second.stage_descriptions;
@@ -2029,7 +2043,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     std::string GetTransition(const std::string& registry, int from_stage, int to_stage)
     {
         std::lock_guard lock(g_mutex);
-        auto row = g_rows.find(ToLower(registry));
+        auto row = FindRowLocked(registry);
         if (row == g_rows.end() || !row->second.transitions.is_object())
             return {};
         const std::string key = std::to_string(from_stage) + "-" + std::to_string(to_stage);
@@ -2058,8 +2072,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         std::lock_guard lock(g_mutex);
         if (!g_db)
             return false;
-        const std::string reg_key = ToLower(registry);
-        auto it = g_rows.find(reg_key);
+        auto it = FindRowLocked(registry);
         if (it == g_rows.end())
             return false;
 

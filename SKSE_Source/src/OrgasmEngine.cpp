@@ -57,6 +57,9 @@ namespace OrgasmEngine
         struct Settings
         {
             bool miniGame = false;
+            // sexlab.enjoyment.engine_disabled: SexLab owns enjoyment and orgasms; the engine reads SexLab's
+            // value (Effect_Mirror pull), records SexLab's orgasms and fires only forced requests.
+            bool engineOff = false;
             // Role multipliers on the scene's timed base rate.
             float passiveRate = 0.4f;
             float aggressorRate = 0.45f;
@@ -1603,7 +1606,8 @@ namespace OrgasmEngine
                     const bool finalStage = sc.stageCount > 0 && sc.stage >= sc.stageCount;
                     // Gate (4a): Together, or a mini-game scene the engine plays alone (aiGate), timed, no LeadIn.
                     const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
-                    const bool together = !g_settings.miniGame;
+                    const bool engineOff = g_settings.engineOff;
+                    const bool together = !g_settings.miniGame && !engineOff;
                     const bool aiGate = g_settings.miniGame && SceneAiDriven(sc);
                     const bool useGate = (together || aiGate) && g_settings.gate && timedScene && !sc.leadIn;
                     // aiGate, last two stages: no orgasm but the gate's (or a forced one), so the gate's is last.
@@ -1676,7 +1680,16 @@ namespace OrgasmEngine
                         // Gate pass: the narration is already out. Climb to kRushHover by the expected voice
                         // start, then finish within kRushFinish in the final stage and fire there (no second
                         // DN). No passive gain or other test meanwhile; a forced request still wins.
-                        if (st.rushing && !(st.pending && st.pendingForce)) {
+                        if (engineOff) {
+                            // SexLab owns enjoyment and decides orgasms: no gain, strategy steps or orgasm
+                            // test. Only a forced request (WebUI button) fires.
+                            st.rushing = false;
+                            if (st.pending && st.pendingForce) {
+                                Fire(st, group, true, st.pendingSource, now, fx);
+                            } else {
+                                st.pending = false;
+                            }
+                        } else if (st.rushing && !(st.pending && st.pendingForce)) {
                             if (finalStage) {
                                 // Kept in rushRate so the finish is linear (max keeps the first tick's rate).
                                 st.rushRate = std::max(st.rushRate,
@@ -1797,10 +1810,11 @@ namespace OrgasmEngine
                             }
                         }
 
-                        // 3. Mirror into SexLab.
+                        // 3. Mirror into SexLab. Engine off: every kMirrorInterval, so Mirror_Apply pulls
+                        // SexLab's value back into the engine instead.
                         const auto rounded = static_cast<std::int32_t>(std::lround(st.enjoyment));
                         if (now - st.lastMirrorAt >= kMirrorInterval &&
-                            (rounded != st.lastMirrored || now - st.lastMirrorAt >= kMirrorRefresh)) {
+                            (engineOff || rounded != st.lastMirrored || now - st.lastMirrorAt >= kMirrorRefresh)) {
                             st.lastMirrored = rounded;
                             st.lastMirrorAt = now;
                             fx.mirrors.push_back({ id, rounded });
@@ -1961,7 +1975,9 @@ namespace OrgasmEngine
 
                     // 5. Group: anyone orgasmed -> everyone else rolls (JoinGroup), one dispatch.
                     if (!group.actors.empty()) {
-                        JoinGroup(sc, group, now, fx);
+                        if (!engineOff) {
+                            JoinGroup(sc, group, now, fx);
+                        }
                         EmitGroup(std::move(group), fx);
                     }
                     // Gate rush: narrated at the pass; ForceOrgasm only (Orgasm_ApplyGroup source "gate").
@@ -2076,7 +2092,9 @@ namespace OrgasmEngine
         using SexLabNet::GetConfigBool;
         using SexLabNet::GetConfigFloat;
         Settings s;
-        s.miniGame = SexLabNet::IsMiniGameMode();
+        s.engineOff = SexLabNet::IsOrgasmEngineDisabled();
+        // Engine off: no mode at all, so every mini-game guard (strategies, decisions, gate) is off too.
+        s.miniGame = !s.engineOff && SexLabNet::IsMiniGameMode();
         s.passiveRate = GetConfigFloat("sexlab.enjoyment.passive_mult", 0.4f);
         s.aggressorRate = GetConfigFloat("sexlab.enjoyment.aggressor_mult", 0.45f);
         s.victimRate = GetConfigFloat("sexlab.enjoyment.victim_mult", 0.3f);
@@ -2126,9 +2144,9 @@ namespace OrgasmEngine
             s.miniGame, s.passiveRate, s.aggressorRate, s.victimRate, s.jitterMin, s.jitterMax, s.domArousalScale,
             s.domArousalScalePlayer, s.arouseAmount, s.calmAmount, s.staminaCost, s.magickaCost, s.edgeSeconds,
             s.randomBonus, s.narrateWindow, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
-        webui_log::info("OrgasmEngine: config mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
+        webui_log::info("OrgasmEngine: config engine_off={} mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
                         "interval={}s step={}-{} mutual_target={} passive_share={} defaults={}/{}/{}",
-            s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
+            s.engineOff, s.engineOff ? "sexlab" : s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
             s.npcInterval, s.npcStepMin, s.npcStepMax, s.mutualTarget, s.passiveShare, InfoOf(s.defaultNormal).key,
             InfoOf(s.defaultAggressor).key, InfoOf(s.defaultVictim).key);
     }
@@ -2137,6 +2155,12 @@ namespace OrgasmEngine
     {
         std::lock_guard lock(g_lock);
         return g_settings.miniGame;
+    }
+
+    bool IsEngineDisabled()
+    {
+        std::lock_guard lock(g_lock);
+        return g_settings.engineOff;
     }
 
     void BeginScene(std::int32_t sid, const std::vector<RE::Actor*>& actors, const std::vector<std::int32_t>& roles,
@@ -3234,8 +3258,10 @@ namespace OrgasmEngine
             fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kOrgasm, st->id, 0, source, 0.0f, count });
             webui_log::info("OrgasmEngine: external orgasm {:#x} source={} count={}", st->id, source, count);
             // Every orgasm checks all actors. The caller narrates this actor; the joiners go to the scene's
-            // stash + window (individual=false), so both land in one DirectNarration.
-            if (const SceneState* sc = SceneOf(*st)) {
+            // stash + window (individual=false), so both land in one DirectNarration. Engine off: SexLab
+            // sends each actor's own orgasm, so no join.
+            const SceneState* sc = g_settings.engineOff ? nullptr : SceneOf(*st);
+            if (sc) {
                 OrgasmGroupFx group;
                 group.actors.push_back(st->id);  // marks the trigger as already in the group
                 group.forced.push_back(0);
@@ -3264,7 +3290,8 @@ namespace OrgasmEngine
             // Unblock and check in one lock, so the tick cannot fire first without the allow prefix.
             st->sceneBlocked = false;
             const SceneState* sc = SceneOf(*st);
-            if (!sc) {
+            // Engine off: unblock only; SexLab decides the orgasm and the caller narrates the allow.
+            if (!sc || g_settings.engineOff) {
                 return false;
             }
             const double now = Now();
@@ -3320,8 +3347,12 @@ namespace OrgasmEngine
     {
         std::lock_guard lock(g_lock);
         if (auto* st = Find(actor)) {
-            st->enjoyment = std::clamp(value, 0.0f, kMaxEnjoyment);
-            webui_log::info("OrgasmEngine: {} set {:#x} enjoyment {}", source, st->id, st->enjoyment);
+            const float next = std::clamp(value, 0.0f, kMaxEnjoyment);
+            // Logged on change only: with the engine off, Mirror_Apply pulls SexLab's value every second.
+            if (next != st->enjoyment) {
+                st->enjoyment = next;
+                webui_log::info("OrgasmEngine: {} set {:#x} enjoyment {}", source, st->id, st->enjoyment);
+            }
         }
     }
 
@@ -3344,7 +3375,7 @@ namespace OrgasmEngine
         {
             std::lock_guard lock(g_lock);
             auto* tst = Find(target);
-            if (!tst) {
+            if (!tst || g_settings.engineOff) {
                 return false;
             }
             ok = ArouseLocked(who, target, *tst, g_settings.arouseAmount * std::max(0.0f, mult), true, fx);
@@ -3363,7 +3394,7 @@ namespace OrgasmEngine
         {
             std::lock_guard lock(g_lock);
             auto* tst = Find(target);
-            if (!tst) {
+            if (!tst || g_settings.engineOff) {
                 return false;
             }
             ok = CalmLocked(who, target, *tst, g_settings.calmAmount * std::max(0.0f, mult), true, fx);

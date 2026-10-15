@@ -147,6 +147,11 @@ bool IsMiniGameMode()
     return GetBool("sexlab.minigame.enabled", true);
 }
 
+bool IsOrgasmEngineDisabled()
+{
+    return GetBool("sexlab.enjoyment.engine_disabled", false);
+}
+
 std::uint32_t HotkeyVkToDx(int vk)
 {
     switch (vk) {

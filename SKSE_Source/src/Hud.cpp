@@ -635,7 +635,7 @@ namespace Hud
             std::lock_guard lock(g_lock);
             g_showEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.enjoyment", true);
             g_showControls = SexLabNet::GetConfigBool("sexlab.hud.controls", true);
-            g_miniGame = SexLabNet::IsMiniGameMode();
+            g_miniGame = SexLabNet::IsMiniGameMode() && !SexLabNet::IsOrgasmEngineDisabled();
             g_miniGameMouse = SexLabNet::GetConfigBool("sexlab.minigame.mouse", true);
             g_keyVk.clear();
             g_keyDx.clear();

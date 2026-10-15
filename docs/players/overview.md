@@ -72,7 +72,7 @@ Configure in SkyrimNet under plugin **SkyrimNet_SexLab** (`goodprovider.sexlab`)
 - Tag Edit dialogs; Start Sex / Edit Stage hotkey (default backslash `\`)
 - Devious devices are added to tags (`sexlab.tags.filter_by_devious_devices`, default on): when actors wear DD heavy bondage, every TargetMenu scene start (method, random, Custom, DOM punish) adds `armbinder`, `yoke`, `cuffs` or `bound`, and the Scene Creator / Description Editor animation filter starts with them. A tag with no matching animation is dropped; in the Scene Creator / Description Editor you can remove any of them
 - Direct Narration: cooldown, max distance
-- Scene HUD, enjoyment rates, orgasm mini-game: see [hotkeys.md](hotkeys.md#scene-hud-player-scenes). Orgasms are decided by the mod's OrgasmEngine (SexLab's own trigger is off)
+- Scene HUD, enjoyment rates, orgasm mini-game: see [hotkeys.md](hotkeys.md#scene-hud-player-scenes). Orgasms are decided by the mod's OrgasmEngine (SexLab's own trigger is off). To let SexLab / SLSO decide again, turn on **Disable OrgasmEngine, switch back to SexLab** (Enjoyment settings); the mod then only narrates SexLab's orgasms
 - OstimNet: sex framework 0 SexLab / 1 Ostim (`sexlab.ostim.player`)
 - Leash (`SkyrimNet_Leashed.esp`): SkyMessage / Target Menu opens the Leashed panel
 

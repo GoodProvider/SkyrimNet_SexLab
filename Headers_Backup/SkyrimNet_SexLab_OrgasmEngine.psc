@@ -15,6 +15,7 @@ float Function GetSecondsSinceOrgasm(Actor akActor) global native
 bool Function IsManaged(Actor akActor) global native
 bool Function IsMentallyBroken(Actor akActor) global native
 bool Function IsMiniGameEnabled() global native
+bool Function IsEngineDisabled() global native
 Function SetRates(float passive, float aggressor, float victim) global native
 Function ReloadConfig() global native
 Function BeginScene(int sid, Actor[] actors, int[] roles, float[] seeds, bool hasPlayer) global native
@@ -39,6 +40,7 @@ int Function GetSpeedLevel(Actor akActor) global native
 bool Function ConsumeOwnOrgasm(Actor akActor) global native
 int Function NoteExternalOrgasm(Actor akActor, String source) global native
 bool Function AllowOrgasm(Actor akActor, Actor allower) global native
+bool Function SLSOForceOrgasm(ReferenceAlias akAlias) global native
 SkyrimNet_SexLab_Scene_Manager Function GetManager() global Native
 Function Effect_Orgasm(Actor akActor, bool individual, String source) global Native
 Function Effect_OrgasmGroup(Actor[] actors, int[] forced, bool individual, String source, Actor allower, Actor allowed, String extras) global Native

@@ -1212,7 +1212,7 @@ Function WebUI_OnResolveActorMeta(String json)
         if ak
             int gender = 0
             if sexlab
-                gender = sexlab.GetGender(ak)
+                gender = SexLabGender(sexlab, ak)
             endif
             SNSL_JMap.setInt(po, "_gender", gender)
             SNSL_JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, ak))
@@ -1454,6 +1454,9 @@ Function RegisterEventsSexlab()
     ; Diagnostics only: SexLab 1.6x ChangeActors / EndLeadIn restart the thread at stage 1.
     UnRegisterForModEvent("HookActorChangeEnd")
     RegisterForModEvent("HookActorChangeEnd", "TraceActorChangeEnd")
+    ; SexLab P+ ChangeActors (ours or another mod's) ends and restarts the thread: keep the scene across it.
+    UnRegisterForModEvent("HookActorChangeStart")
+    RegisterForModEvent("HookActorChangeStart", "ActorChangeStart")
     UnRegisterForModEvent("HookLeadInEnd")
     RegisterForModEvent("HookLeadInEnd", "TraceLeadInEnd")
 
@@ -1578,6 +1581,16 @@ Event AnimationChange(int ThreadID, bool HasPlayer)
     sl_scene.CheckAnimationChange()
 EndEvent
 
+Event ActorChangeStart(int ThreadID, bool HasPlayer)
+    if !IsSexLabPPlus()
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneByThreadId(ThreadID, any_state=True, create_if_missing=False)
+    if sl_scene != None
+        sl_scene.PPlus_BeginActorChange(from_hook=true)
+    endif
+EndEvent
+
 Event TraceActorChangeEnd(int ThreadID, bool HasPlayer)
     TraceThreadStage("ActorChangeEnd", ThreadID)
 EndEvent
@@ -1636,7 +1649,12 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
         else 
             main.active_sex = false
         endif
-        sl_scene.AnimationEnd()
+        if sl_scene.ActorChange_KeepScene()
+            ; SexLab P+ ChangeActors: the same thread starts again right after this end.
+            Trace("AnimationEnd", "P+ ChangeActors restart, keeping scene for ThreadID "+ThreadID)
+        else
+            sl_scene.AnimationEnd()
+        endif
     endif
     if HasPlayer && sexlab != None && !sexlab.IsActorActive(Game.GetPlayer())
         RestoreCameraAfterScene()
@@ -1709,7 +1727,8 @@ Event OrgasmIndividual(Form akForm, int full_enjoyment, int num_orgasms)
 
     ; OrgasmEngine scenes: SexLab's own trigger is off, so this is either our ForceOrgasm (already
     ; narrated in Scene.Orgasm_ApplyGroup) or another plugin calling SexLab's orgasm directly. Record the
-    ; latter in the engine (reset, count, cooldown, HUD flash, events) and narrate it once.
+    ; latter in the engine (reset, count, cooldown, HUD flash, events) and narrate it once. With
+    ; sexlab.enjoyment.engine_disabled SexLab's trigger is on, and its orgasms take this same path.
     if SkyrimNet_SexLab_OrgasmEngine.IsManaged(akActor)
         if SkyrimNet_SexLab_OrgasmEngine.ConsumeOwnOrgasm(akActor)
             return

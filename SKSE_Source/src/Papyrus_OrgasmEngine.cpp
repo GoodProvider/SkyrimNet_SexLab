@@ -66,6 +66,7 @@ namespace PapyrusBindings_OrgasmEngine
         }
         bool IsManaged(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::IsManaged(a); }
         bool IsMiniGameEnabled(RE::StaticFunctionTag*) { return OrgasmEngine::IsMiniGameEnabled(); }
+        bool IsEngineDisabled(RE::StaticFunctionTag*) { return OrgasmEngine::IsEngineDisabled(); }
         void SetRates(RE::StaticFunctionTag*, float passive, float aggressor, float victim)
         {
             OrgasmEngine::SetRates(passive, aggressor, victim);
@@ -209,6 +210,31 @@ namespace PapyrusBindings_OrgasmEngine
         {
             return OrgasmEngine::AllowOrgasm(a, allower);
         }
+
+        // SLSO's sslActorAlias.Orgasm(-2): resets its 5 s "excessive" guard (moved by SLSO edging's HoldOut),
+        // then DoOrgasm(true). Our compile headers are vanilla SexLab, so Papyrus can't call it directly.
+        bool SLSOForceOrgasm(RE::StaticFunctionTag*, RE::BGSRefAlias* alias)
+        {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm || !alias) {
+                return false;
+            }
+            auto handle = vm->GetObjectHandlePolicy()->GetHandleForObject(RE::BGSRefAlias::VMTYPEID, alias);
+            RE::BSTSmartPointer<RE::BSScript::Object> scriptObject;
+            vm->FindBoundObject(handle, "sslActorAlias", scriptObject);
+            if (!scriptObject) {
+                webui_log::warn("SLSOForceOrgasm: sslActorAlias not bound");
+                return false;
+            }
+            auto* args = RE::MakeFunctionArguments(-2.0f);
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+            if (!vm->DispatchMethodCall(scriptObject, RE::BSFixedString("Orgasm"), args, callback)) {
+                webui_log::warn("SLSOForceOrgasm: dispatch of sslActorAlias.Orgasm failed");
+                return false;
+            }
+            webui_log::info("SLSOForceOrgasm: dispatched sslActorAlias.Orgasm(-2)");
+            return true;
+        }
     }
 
     bool Register_OrgasmEngine_Functions(RE::BSScript::IVirtualMachine* a_vm)
@@ -234,6 +260,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GetSecondsSinceOrgasm", s, GetSecondsSinceOrgasm);
         a_vm->RegisterFunction("IsManaged", s, IsManaged);
         a_vm->RegisterFunction("IsMiniGameEnabled", s, IsMiniGameEnabled);
+        a_vm->RegisterFunction("IsEngineDisabled", s, IsEngineDisabled);
         a_vm->RegisterFunction("SetRates", s, SetRates);
         a_vm->RegisterFunction("ReloadConfig", s, ReloadConfig);
 
@@ -271,6 +298,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("ConsumeOwnOrgasm", s, ConsumeOwnOrgasm);
         a_vm->RegisterFunction("NoteExternalOrgasm", s, NoteExternalOrgasm);
         a_vm->RegisterFunction("AllowOrgasm", s, AllowOrgasm);
+        a_vm->RegisterFunction("SLSOForceOrgasm", s, SLSOForceOrgasm);
 
         webui_log::info("Successfully registered Papyrus functions for {}", s);
         return true;

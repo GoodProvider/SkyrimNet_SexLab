@@ -44,6 +44,8 @@ namespace OrgasmEngine
     /// Re-reads the sexlab.enjoyment.* / sexlab.minigame.* dashboard values.
     void ReloadConfig();
     bool IsMiniGameEnabled();
+    /// sexlab.enjoyment.engine_disabled: SexLab owns enjoyment and orgasms (thread.DisableAllOrgasms off).
+    bool IsEngineDisabled();
 
     // ---- Shell (our Scene script) ----
     void BeginScene(std::int32_t sid, const std::vector<RE::Actor*>& actors, const std::vector<std::int32_t>& roles,

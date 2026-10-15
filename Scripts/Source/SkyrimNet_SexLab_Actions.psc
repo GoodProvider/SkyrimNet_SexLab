@@ -604,8 +604,7 @@ Function TM_StagePrev(Actor speaker, Actor target)
         return
     endif
     int stage = th.stage
-    if stage > 1
-        th.GoToStage(stage - 1)
+    if sl.StageStep(-1)
         Trace("TM_StagePrev", "stage "+stage+" -> "+th.stage)
     endif
 EndFunction
@@ -621,10 +620,8 @@ Function TM_StageNext(Actor speaker, Actor target)
         return
     endif
     int stage = th.stage
-    int maxStage = th.animation.StageCount()
-    if stage < maxStage
-        th.GoToStage(stage + 1)
-        Trace("TM_StageNext", "stage "+stage+" -> "+th.stage+" of "+maxStage+" leadIn:"+th.LeadIn)
+    if sl.StageStep(1)
+        Trace("TM_StageNext", "stage "+stage+" -> "+th.stage+" leadIn:"+th.LeadIn)
     endif
 EndFunction
 
@@ -650,14 +647,14 @@ Function TM_GoToStage(Actor speaker, Actor target, String stageStr)
         return
     endif
     int stage = stageStr as int
-    int maxStage = th.animation.StageCount()
+    int maxStage = SkyrimNet_SexLab_AnimDb.ThreadStageCount(th)
     if stage < 1 || stage > maxStage
         Trace("TM_GoToStage", "bad stage "+stageStr)
         return
     endif
-    int before = th.stage
-    th.GoToStage(stage)
-    Trace("TM_GoToStage", "stage "+before+" -> "+th.stage)
+    int before = SkyrimNet_SexLab_AnimDb.ThreadStageNum(th)
+    sl.StageGoTo(stage)
+    Trace("TM_GoToStage", "stage "+before+" -> "+SkyrimNet_SexLab_AnimDb.ThreadStageNum(th))
     String scene_state_json = sl.BuildWebUISceneMenuState()
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
     SkyrimNet_SexLab_WebUI.Animation_Menu_Configure(scene_state_json)
@@ -728,6 +725,8 @@ Function TM_ChangeActors(Actor speaker, Actor target, String formIdsCsv)
         endwhile
         next = trimmed
     endif
+    ; P+: keep the SkyrimNet scene across the thread's end + restart.
+    sl.PPlus_BeginActorChange()
     th.ChangeActors(next)
     String scene_state_json = sl.BuildWebUISceneMenuState()
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
@@ -750,7 +749,12 @@ Function TM_SetAnimationIndex(Actor speaker, Actor target, String indexStr)
         Trace("TM_SetAnimationIndex", "bad index")
         return
     endif
-    th.SetAnimation(idx)
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        ; P+ SetAnimation is a ResetScene; mark it so the scene's restart check expects the lower stage.
+        sl.PPlus_SwitchScene(anims[idx].Registry)
+    else
+        th.SetAnimation(idx)
+    endif
     sl.CheckAnimationChange()
     String scene_state_json = sl.BuildWebUISceneMenuState()
     SkyrimNet_SexLab_WebUI.SceneCreator_Configure(scene_state_json)
@@ -813,7 +817,7 @@ Function TM_ForceOrgasm(Actor speaker, Actor target, String formIdStr)
         SkyrimNet_SexLab_OrgasmEngine.RequestOrgasm(a, true, "webui")
         return
     endif
-    th.ForceOrgasm(a)
+    sl.SexLabForceOrgasm(a)
 EndFunction
 
 ;-------------------------------------------

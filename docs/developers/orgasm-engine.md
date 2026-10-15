@@ -1,6 +1,17 @@
 # OrgasmEngine
 
-The C++ OrgasmEngine owns enjoyment and orgasms for **every** SexLab scene, including NPC-only scenes. SexLab's own trigger is switched off (`thread.DisableAllOrgasms(true)`), and SLSO is not used.
+The C++ OrgasmEngine owns enjoyment and orgasms for **every** SexLab scene, including NPC-only scenes. SexLab's own trigger is switched off (`thread.DisableAllOrgasms(true)`), and SLSO is not used. Unless the engine is disabled: see [Engine disabled](#engine-disabled).
+
+## Engine disabled
+
+`sexlab.enjoyment.engine_disabled` (manifest "Disable OrgasmEngine, switch back to SexLab", default off) hands enjoyment and orgasms back to SexLab (or SLSO). The engine still tracks the scene (HUD, counts, narration), but it no longer decides anything.
+
+- **Config:** `SexLabNet::IsOrgasmEngineDisabled` → `Settings::engineOff`. `ReloadConfig` also forces `miniGame` false, so strategies, NPC steps, decisions, Ask / Order, `IsGateScene` and the MCM Arouse / Calm actions are off through their existing guards. Log `config engine_off=true mode=sexlab`. Papyrus `IsEngineDisabled()`.
+- **Scene:** `Engine_BeginScene` calls `thread.DisableAllOrgasms(false)`, so SexLab's trigger runs (vanilla: at the final stage; SLSO: at its 100). `Engine_SetStage` sends no `OrgasmStart` / `OrgasmEnd` because SexLab sends its own (same branch as P+). The flag is read at scene start, so a mid-scene toggle applies from the next scene.
+- **Tick:** no rush, passive gain, Together curve, DOM progress, strategy step or orgasm test; the gate and safety net are off (`together`, `useGate` false). Only a forced request (`RequestOrgasm(…, true, …)`, the WebUI button) fires, alone (no `JoinGroup`).
+- **Enjoyment:** `Effect_Mirror` goes out every `kMirrorInterval` (1 s) and becomes a pull: `Scene.Mirror_Apply` reads SexLab's `GetEnjoyment` and calls `SetEnjoyment(actor, v, "sexlab")` (logged on change only), so the HUD bars show SexLab's value. Nothing is written into SexLab.
+- **Orgasms:** SexLab's `SexLabOrgasm` reaches `Scene_Manager.OrgasmIndividual` → `NoteExternalOrgasm(actor, "sexlab")` (count, cooldown, HUD flash, event; no group join) → `Scene.OrgasmIndividual(…, from_engine=true)`, narrated once.
+- **Off as well:** `Arouse` / `Calm` return false; `AllowOrgasm` only clears the block (returns false, the caller narrates); the HUD hides the mini-game keys and Aid (`g_miniGame` false). Deny still works: `SetOrgasmDisabled` keeps SexLab's per-actor `DisableOrgasm` in step.
 
 ## Who does what
 
@@ -49,7 +60,7 @@ SkyrimNet's decision model (e.g. Jev) picks a strategy per NPC; see [Strategy de
 - **Punish** (`OrgasmEngine::PunishNarrated(punisher, target, method, location, reason)`): the HUD key, auto play's `punish` key and the `SexLab_Scene_Punish` action (`CanPunish`) share one path. Anyone in a managed scene (any role, mini-game not required) can punish anyone else in it, the player included (`GetPunishInfo`). The HUD panel offers the verb only when `GetPunishReasons(target)` is not empty. The line: "<punisher> punishes <target> by <slapping / pinching / punching / pulling> <target>['s <part>], because <reason>." (`kPunishMethods`); a free phrase is the method as typed ("biting"); a method naming one of the punisher's Novice / Apprentice Damage Health spells (`Aid::WeakAttackSpells`) reads "by hitting <target>'s <part> with <spell>" and queues a health hit of the spell's smallest magnitude, never below 1 health (`Aid::QueueWeakSpellHit`; no cast, so no combat or bounty), then plays the spell's visuals (`PlaySpellVisuals`). "body" names no part; a reason that already starts with "because " loses it. **Hit, narrate, decide:** with SkyrimNet_Whipped's `External_TortureText` (`Whipped::PunishText`) the hit lands silently and its feeling text comes back as a String ("Nina's nipples throb in tight, bruised points. …"); the line plus that text is narrated (`ContinuePunish`, same DirectNarration rule as Ask / Order) and is the `last_line_text` of the target's decision (trigger `punished`). A punishment for a reason that is a refused request then gets the answer line, "Nina agrees to|refuses Bob's request to <order>." Without `External_TortureText` (older Whipped) the hit goes through `External_Damage` with the line and Whipped narrates it; without Whipped the line is narrated alone. Callers narrate nothing; the Papyrus `Punish` always returns "".
 - **Aid** (`Aid.cpp`, HUD Aid key and `SexLab_Aid`): healing / stamina spells (beneficial Value Modifier effects on Health / Stamina; base list plus `addedSpells`) and such potions. The restore is applied directly as magnitude × duration (a concentration spell as 3 s of casting) and the spell's magicka cost is spent; a potion is removed from the caster. Then `PlaySpellVisuals` plays each effect's casting art on the caster (spells), effect shader and hit art on the target, and release / hit sounds (3 s for concentration, else 2 s); nothing is engine-cast. The HUD greys the cell out via `Aid::HasOptions`, checked at most once a second.
 - **Defaults** at `BeginScene` by role: `sexlab.minigame.default_strategy_normal` / `_aggressor` / `_victim` (Mutual / Selfish / Passive). Not announced. They are the fallback until the scene-start decision lands, and always without a decisions provider.
-- **Announce** (every change): `Effect_StrategyChanged(actor, target, msg, observed, narrate)` shows no notification. `narrate` (API / Papyrus `SetStrategy`, NonSexual switches): `DirectNarration_Optional("sexlab_strategy", msg, …)`. Decision-made changes (`StrategySource::kDecision`): no narration, `SkyrimNetApi.RegisterEvent("sexlab_strategy", observed, …)`, a short-term event with how it looks to others ("Lydia appears to be focused on her own enjoyment.", `observed` in `strategies.json`).
+- **Announce** (every change): `Effect_StrategyChanged(actor, target, msg, observed, narrate)` shows no notification. `narrate` (API / Papyrus `SetStrategy`, NonSexual switches): `DirectNarration_Optional("sexlab_strategy", msg, …)`. Decision-made changes (`StrategySource::kDecision`): no narration, `SkyrimNetApi.RegisterEvent("sexlab_strategy", observed, …)`, a short-term event with how it looks to others ("Lydia appears to be focused on her own enjoyment.", `observed` in `strategies.json`). Both, and `Effect_NarrateDirect` / `Effect_NarrateOptional` (requests, Force, Aid), are capped by `sexlab.narration.minigame_level` (see [orgasm-narration.md](../reference/orgasm-narration.md)).
 - **Prompt / HUD**: `Scene` writes `GetStrategyText` to the position obj `strategy` (0050 prompt: "<name> focuses on …"; the speaker's own line ends "Speak and act in line with that approach."); the HUD shows the label as a tag.
 - `MCM.ApplyMiniGameActions` unregisters Arouse / Calm in Together mode (switching back needs save + reload). There are no strategy actions.
 
@@ -139,7 +150,7 @@ For each managed scene:
 
 **Firing an orgasm:**
 - The engine sets `enjoyment = 0` and counts the orgasm for each group member, then dispatches `Effect_OrgasmGroup(actors, forced, individual, source, allower, allowed, extras)` → `Scene.Orgasm_ApplyGroup`. `forced[i]` is 1 for a WebUI forced request. `Effect_Orgasm` remains as a one-actor wrapper.
-- `Orgasm_ApplyGroup` calls `thread.ForceOrgasm` (SexLab's cum, sound and `SexLabOrgasm`) for each actor, then narrates once, following [../reference/orgasm-narration.md](../reference/orgasm-narration.md).
+- `Orgasm_ApplyGroup` calls `SexLabForceOrgasm` (SexLab's cum, sound and `SexLabOrgasm`; with SLSO, `sslActorAlias.Orgasm(-2)` through native `SLSOForceOrgasm` so SLSO's 5 s guard can't drop it, else `thread.ForceOrgasm`) for each actor, then narrates once, following [../reference/orgasm-narration.md](../reference/orgasm-narration.md).
 - **Allow:** `AllowOrgasm(actor, allower)` (deny 1 → 0) does the following under one lock, so the tick can't fire first without the prefix:
   - clears the scene block,
   - fires every actor in the scene who can orgasm and is at 100,
@@ -176,6 +187,7 @@ For each managed scene:
   - **Resume:** `thread.UpdateTimer(held − 100000)` puts back the remaining time, then `thread.ResolveTimers()` restores `TimedStage = Animation.HasTimer(Stage)`.
 - `StageStart` re-applies the hold while paused, because `GoToStage` resets the timer. It is applied once per (animation, stage). Manual previous/next still work.
 - `SetScenePaused` tells the engine. That drives the HUD's "Paused" tag and its **pause**/**resume** label, stops the safety-net clock. It does not affect passive gain, which continues as normal.
+- **SexLab P+:** `UpdateTimer` sets `_ForceAdvance` there, so pause, resume and every other hold go through `PauseTimer` (`Scene.Timer_SyncHold`, re-asserted each StageStart and 1 s poll). See [sexlab-pplus.md](sexlab-pplus.md).
 
 ## Mini-game
 
@@ -319,6 +331,17 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
   - **Response:** every orgasm DN (`NarrateOrgasmStash`, the `StageStart` fold) first takes `ending_response_mark = OrgasmEngine.NarrationMark()` (`NarrationTiming::SpeakerMark()`). `NarrationTiming` tracks each non-player speaker's response (first `SpeechStarted` to its `SkyrimNet_SpeechComplete`). `ResponseStartedSince(sid, mark)` / `ResponseDoneSince(sid, mark)` only count the scene's own actors (`OrgasmEngine::SceneActors`), so two scenes narrating together don't release each other's holds (2026-10-08).
   - **Release** (`Ending_Poll`, shares `OnUpdate` with the orgasm window, 1 s; held ≥ 2 s, window closed): `ResponseDoneSince(mark)` (log `(response played)`). While one of the scene's actors is speaking after the mark, wait. With no paired response yet (the DN went out as an event, TTS off): `GetSpeechQueueSize() == 0` and audio ended at least 1 s after the first poll, min 3 s (`(speech queue empty)`). Always at `dialogue_hold_max` (30 s, capped at `ENDING_HOLD_CAP` 30; 0 = no hold; `(max)`).
   - Release takes the hold back off (`UpdateTimer(-PAUSE_HOLD_SECONDS)`) without adding the held time: the final stage ends at the later of its own timer and the response. While the pause key holds the stage the timer is left to the pause.
+
+## SexLab P+
+
+The engine itself is unchanged; the Scene shell feeds it a linear view of P+'s scene graph ([sexlab-pplus.md](sexlab-pplus.md)):
+
+- **Stage / count / seconds:** `Engine_StageCount` is the projected path (played history + longest path from the active stage to a sink); `thread.Stage` (history length) is the index, so the gate stage is the node before a sink and the final stage is the sink. `Engine_StageSeconds` uses P+'s per-node rule (`GetFixedLength`, climax stage = last timer, else the config timers). A branch changes the path; `SetStageTimers` then restarts the Together curve from current enjoyment.
+- **Holds:** pause, gate and ending holds are one `PauseTimer` (`Timer_SyncHold`), never `UpdateTimer`.
+- **Jump to final:** `Ending_ToFinal` calls `SkipToSink` (the path's sink) instead of `GoToStage(count)`, which is one edge on P+.
+- **Finish:** after the dialogue hold the final stage stays paused and `Ending_Watch` calls `EndAnimation()` at the stage's remaining time, so P+'s enjoyment-wait (`ThreadWaitsForOrgasm` → restart) never runs. `Scene.PPlus_StageStart` ends a thread P+ restarted from an expired sink anyway, and `DURATION_CAP_SECONDS` counts from the first sink.
+- **Hooks:** no synthesized `OrgasmStart` / `OrgasmEnd`; P+ sends its own at climax stages.
+- **Skills:** act tags come from the registry (`Scene.AnimHasTag`), not the empty proxy.
 
 ## Sex is hard work (stamina regen)
 

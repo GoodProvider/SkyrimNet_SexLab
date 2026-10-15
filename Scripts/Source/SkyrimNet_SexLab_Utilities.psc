@@ -34,12 +34,32 @@ String Function GetDisplayName(Actor akActor) global
     return akActor.GetDisplayName()
 EndFunction 
 
+; SexLab 1.6x GetGender coding: 0 male, 1 female, 2 male creature, 3 female creature. P+ GetGender returns 2 for a
+; futa too; its real sex comes from SexlabRegistry.GetSex (bridge LegacyGender maps futa -> 0, creatures -> 2 / 3).
+int Function SexLabGender(SexLabFramework sexlab, Actor akActor) global
+    if akActor == None
+        return 0
+    endif
+    if IsSexLabPPlus()
+        return SkyrimNet_SexLab_PPlus.LegacyGender(akActor)
+    endif
+    if sexlab == None
+        return 0
+    endif
+    return sexlab.GetGender(akActor)
+EndFunction
+
+; P+ futa (SexlabRegistry.GetSex 2): has a penis and keeps its base sex's body. Always false on 1.6x.
+bool Function IsFuta(Actor akActor) global
+    return akActor != None && IsSexLabPPlus() && SkyrimNet_SexLab_PPlus.IsFuta(akActor)
+EndFunction
+
 ; SexLab owns creature vs non-creature. Race key only for SexLab creature genders (2/3).
 String Function GetRaceKeyForActor(SexLabFramework sexlab, Actor akActor) global
     if akActor == None || sexlab == None
         return ""
     endif
-    int gender = sexlab.GetGender(akActor)
+    int gender = SexLabGender(sexlab, akActor)
     if gender < 2
         return ""
     endif
@@ -423,8 +443,52 @@ String Function JoinJArrayStrToJson(int array) global
 EndFunction 
 
 ; ------------------------------------------------------------
-; Narration Wrappers 
+; Narration Wrappers
 ; ------------------------------------------------------------
+
+; Narration level settings (sexlab.narration.*_level): the loudest way that narration may go out.
+; 3 Direct, 2 Event, 1 ShortEvent, 0 Silent. A cap: callers keep their own (lower) route at 3.
+int Function NarrationLevel(String path) global
+    String v = SkyrimNetApi.GetConfigString("Plugin_SkyrimNet_SexLab", path, "Direct")
+    if v == "Silent"
+        return 0
+    elseif v == "ShortEvent"
+        return 1
+    elseif v == "Event"
+        return 2
+    endif
+    return 3
+EndFunction
+
+; Below-Direct send for a level setting: 2+ an event (force: no CheckDuplicate, like
+; RegisterEventForce), 1 a 30 s short-lived event (stable id per type / source / target, so a
+; repeat replaces it), 0 nothing. Returns true when something was sent.
+bool Function NarrateBelowDirect(int level, String event_type, String msg, Actor source=None, Actor target=None, bool force=False) global
+    if msg == "" || level <= 0
+        if msg != ""
+            Trace("NarrateBelowDirect", "silent type:"+event_type+" msg:"+msg)
+        endif
+        return false
+    endif
+    if level >= 2
+        if force
+            RegisterEventForce(event_type, msg, source, target)
+        else
+            RegisterEvent(event_type, msg, source, target)
+        endif
+        return true
+    endif
+    String eventId = event_type
+    if source != None
+        eventId += "_" + source.GetFormID()
+    endif
+    if target != None
+        eventId += "_" + target.GetFormID()
+    endif
+    SkyrimNetApi.RegisterShortLivedEvent(eventId, event_type, msg, "", 30000, source, target)
+    Trace("NarrateBelowDirect", "short-lived "+eventId+" msg:"+msg)
+    return true
+EndFunction
 
 Function ContinueActivity(Actor source=None, Actor target=None, bool optional_is_dropped=False) global 
     String msg = ""

@@ -15,6 +15,7 @@
 | Develop Papyrus / ESP | docs/developers/papyrus.md, docs/reference/papyrus-rules.md |
 | Develop WebUI / SKSE | docs/developers/webui.md (ControlPanel modes, target sentinels, foreign `data_table` / `actor_detail` hosts), docs/reference/extension-panels.md |
 | Orgasm / enjoyment / mini-game / Scene HUD / plugin API | docs/developers/orgasm-engine.md |
+| SexLab P+ (bridge script, stage numbering, holds, AnimDB keys) | docs/developers/sexlab-pplus.md |
 | Agent policy | AGENTS.md (safety, confidence, commits) |
 | Quirks | KNOWLEDGEBASE.md |
 | Portable doc-system template (copy to other repos) | documentation-guide.xml |
