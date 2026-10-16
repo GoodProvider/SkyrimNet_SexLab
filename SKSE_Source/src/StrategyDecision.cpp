@@ -540,7 +540,8 @@ namespace StrategyDecision
                 }
                 for (const auto& sp : Aid::PunishSpells(player)) {
                     const std::string k = "spell_" + std::to_string(t.methodOf.size() - 3);
-                    t.punishMethods.push_back({ k, "hit them with the " + sp.name + " spell" });
+                    const std::string shown = Aid::PunishSpellDisplayName(sp.name);
+                    t.punishMethods.push_back({ k, "hit them with the " + shown + " spell" });
                     t.methodOf[k] = sp.name;
                 }
             }

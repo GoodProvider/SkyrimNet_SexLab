@@ -14,7 +14,7 @@ Bridge mod between SkyrimNet (LLM) and SexLab Framework.
 | `Scripts/` | Compiled `.pex` |
 | `Headers/` | Papyrus headers |
 | `skyrimse.ppj` | Pyro project |
-| `skyrimse-pplus.ppj` | Pyro project for the SexLab P+ bridge (`Scripts/Source_PPlus/`); `compile: pyro` runs both |
+| `skyrimse-pplus.ppj` | Pyro project for the SexLab P+ bridge (`Scripts/Source_PPlus/`); built by `compile: pyro (P+ bridge)` |
 | `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` | Beta 25 LLM plugin (actions + prompts + settings schema) |
 
 Repo root: `c:\Skyrim\dev\mods\SkyrimNet_SexLab`.
@@ -74,7 +74,7 @@ Papyrus (general code): %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special
 
 ## Compile
 
-- Papyrus: VS Code/Cursor task **`compile: pyro`** only (unless maintainer asks otherwise).
+- Papyrus: VS Code/Cursor task **`compile: papyrus`** only (unless maintainer asks otherwise). P+ bridge: `compile: pyro (P+ bridge)`.
 - SKSE / WebUI: [docs/developers/webui.md](docs/developers/webui.md).
 
 Tools under `tools/`: Pyro, Champollion, XEditLib, Spriggit.

@@ -86,7 +86,7 @@ Hypothesis that motivated the patch: SE uses 4-byte masks; old code used `ntrack
 
 ## Build
 
-Release: `cmake --build --preset build-release` from `SKSE_Source`, copy DLL → `SKSE/Plugins/`. HKX fill is compile-gated (`SKYRIMNET_ANIDESCRIBER_HKX=0`). Debug: `cmake --build --preset build-debug`. Papyrus: `compile: pyro` if AnimDb natives changed.
+Release: `cmake --build --preset build-release` from `SKSE_Source`, copy DLL → `SKSE/Plugins/`. HKX fill is compile-gated (`SKYRIMNET_ANIDESCRIBER_HKX=0`). Debug: `cmake --build --preset build-debug`. Papyrus: `compile: papyrus` if AnimDb natives changed.
 
 ## References
 

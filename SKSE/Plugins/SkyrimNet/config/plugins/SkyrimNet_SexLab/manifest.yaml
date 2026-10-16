@@ -637,6 +637,13 @@ schema:
       defaultValue: true
       category: "Enjoyment"
 
+    - name: "Arousal relief on engine orgasms"
+      path: "sexlab.arousal.engine_orgasm_relief"
+      type: "bool"
+      description: "With SLO Aroused NG and SexLab's combined orgasms (no SLSO), each orgasm the orgasm engine causes gives SLO's orgasm relief once. SLO's own end-of-scene check still covers the actors it picks."
+      defaultValue: true
+      category: "Enjoyment"
+
     - name: "Calm key"
       path: "sexlab.minigame.key_calm"
       type: "hotkey"

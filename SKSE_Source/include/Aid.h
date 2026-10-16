@@ -61,6 +61,8 @@ namespace Aid
     std::vector<WeakSpell> PunishSpells(RE::Actor* punisher);
     /// The weak spell named name (case-insensitive), nullptr when the actor has none by that name.
     const WeakSpell* FindWeakSpell(const std::vector<WeakSpell>& spells, std::string_view name);
+    /// Spell name for narration / decisions (strips Injury Engine's " (torture)" suffix, case-insensitive).
+    std::string PunishSpellDisplayName(std::string_view spellName);
     /// Queues a direct health hit of dmg on the victim, never below 1 health, and plays the spell's casting art on the
     /// forcer and its shader / hit art / sounds on the victim (no cast: no combat, no bounty). dmg 0: visuals only.
     void QueueWeakSpellHit(RE::Actor* forcer, RE::Actor* victim, RE::FormID spell, float dmg);

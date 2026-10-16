@@ -174,7 +174,7 @@
       Spriggit/; stages core + handlers; packs versions/SkyrimNet_SexLab ${VERSION}.7z.
     </effects>
     <prereqs>
-      Compiled Scripts/*.pex current (compile: pyro); SKSE DLL if WebUI ships;
+      Compiled Scripts/*.pex current (compile: papyrus); SKSE DLL if WebUI ships;
       Spriggit/ JSON is ESP source of truth; animations merged if required.
     </prereqs>
   </packaging_reference>

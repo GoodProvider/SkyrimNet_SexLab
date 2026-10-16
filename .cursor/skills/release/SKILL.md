@@ -128,7 +128,7 @@ Report:
 - files touched
 - version mismatches left
 - preflight notes
-- suggested maintainer ship steps: commit → `compile: pyro` if needed → `make release` → git tag → GitHub Release
+- suggested maintainer ship steps: commit → `compile: papyrus` if needed → `make release` → git tag → GitHub Release
 
 ## Done-when
 

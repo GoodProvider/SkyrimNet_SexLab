@@ -38,4 +38,4 @@ Do not duplicate contract text here — edit the canonical `docs/reference/` fil
 
 ## Compile / commits / safety / confidence
 
-Same as [AGENTS.md](AGENTS.md): `compile: pyro`; commit summary in first 72 chars; Nexus + KNOWLEDGEBASE standing rules; safety hooks; confidence ≥ 90% before game/script/ESP edits; SE ≠ VR.
+Same as [AGENTS.md](AGENTS.md): `compile: papyrus`; commit summary in first 72 chars; Nexus + KNOWLEDGEBASE standing rules; safety hooks; confidence ≥ 90% before game/script/ESP edits; SE ≠ VR.

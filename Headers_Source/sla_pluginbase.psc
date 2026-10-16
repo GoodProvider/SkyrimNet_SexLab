@@ -1,0 +1,1 @@
+scriptname sla_PluginBase extends Quest

@@ -2946,13 +2946,7 @@ namespace OrgasmEngine
             const std::string how = Trimmed(method);
             std::string act;
             if (spell) {
-                // "Sparks (torture)" (Injury Engine) reads as "Sparks" in the line.
-                std::string spellName = spell->name;
-                constexpr std::string_view kTorture = " (torture)";
-                if (spellName.size() > kTorture.size() && spellName.ends_with(kTorture)) {
-                    spellName.resize(spellName.size() - kTorture.size());
-                }
-                act = "hitting " + on + " with " + spellName;
+                act = "hitting " + on + " with " + Aid::PunishSpellDisplayName(spell->name);
             } else {
                 for (const auto& m : kPunishMethods) {
                     if (how == m.key) {

@@ -37,13 +37,13 @@
                 "-i", "${workspaceFolder}/Scripts/Source",
                 "-o", "${workspaceFolder}/Scripts",
                 "-h", "${workspaceFolder}/Headers",
-                "-h",
-                "${workspaceFolder}/Headers",
+                "-h", "${workspaceFolder}/Headers_Source",
                 "-h",
                 "C:/Skyrim/dev/mods/SKSE64/Scripts/Source"
             ],
             "group": {
-                "kind": "build"
+                "kind": "build",
+                "isDefault": true
             },
             "presentation": {
                 "reveal": "always",
@@ -59,8 +59,7 @@
                 "compile: pyro (P+ bridge)"
             ],
             "group": {
-                "kind": "build",
-                "isDefault": true
+                "kind": "build"
             },
             "problemMatcher": []
         },

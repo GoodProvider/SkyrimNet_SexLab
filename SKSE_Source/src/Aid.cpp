@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -604,6 +605,19 @@ namespace Aid
             }
         }
         return nullptr;
+    }
+
+    std::string PunishSpellDisplayName(std::string_view spellName)
+    {
+        std::string out(spellName);
+        constexpr std::string_view kTorture = " (torture)";
+        if (out.size() > kTorture.size()) {
+            const std::string tail = out.substr(out.size() - kTorture.size());
+            if (_stricmp(tail.c_str(), kTorture.data()) == 0) {
+                out.resize(out.size() - kTorture.size());
+            }
+        }
+        return out;
     }
 
     void QueueWeakSpellHit(RE::Actor* forcer, RE::Actor* victim, RE::FormID spell, float dmg)

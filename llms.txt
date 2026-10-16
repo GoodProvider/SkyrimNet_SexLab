@@ -40,5 +40,5 @@
 
 ## Compile reminders
 
-- Papyrus: Cursor task `compile: pyro` only
+- Papyrus: Cursor task `compile: papyrus` only
 - SKSE: CMake tasks under SKSE_Source (see docs/developers/webui.md)

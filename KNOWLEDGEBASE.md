@@ -85,6 +85,14 @@
 - SLO Aroused NG arousal is a sum of effects; `SetActorExposure` changes only the legacy exposure part. `Arousal_Floor` (Scene.psc, called from `Mirror_Apply`) adds `enjoyment - GetActorArousal` to exposure when enjoyment is higher. Exposure then decays per SLA settings; SLA's own post-orgasm drop is untouched.
 - Framework looked up once per scene (`sla_checked`, reset in `Engine_BeginScene`) via `SexLabAroused.esm` 0x4290F; OSL Aroused's compat esm uses the same form.
 
+## SLO Aroused NG ignores SexLabOrgasm in Combined mode (2026-10-16)
+
+- `sla_SexlabPlugin.OnSexLabOrgasm` returns unless SexLab `SeparateOrgasms` is on or SLSO is installed. In Combined mode SLO only acts on `HookOrgasmEnd` (ours: `Engine_SetStage` leaving the final stage, or `AnimationEnd`): `FindActorWillOrgasm` (tags, gender, DD chastity) picks who gets `sla_DefaultPlugin.OnOrgasm(actor, timeFactor × 20)`. Engine orgasms that pick misses got no relief.
+- Fix (`Scene.SLA_EngineOrgasm`, from `Orgasm_ApplyGroup`): each engine orgasm SLO's pick won't cover gets `OnOrgasm(actor, SexLab enjoyment before ForceOrgasm)` once. Final stage: decided at once with SLO's own `FindActorWillOrgasm`. Earlier stages: pending, decided just before we send `OrgasmEnd` (`SLA_FlushPending(true)`), or at `AnimationEnd` when no hook opened (`SLA_FlushPending(false)`, all relieved).
+- Plugin quests fetched by form, not through `slaMainScr` (the ppj resolves `slamainscr` from DD's old SLA source): `sla_defaultplugin` 0x096196, `sla_sexlabplugin` 0x099060 in `SexLabAroused.esm`. Headers in `Headers_Source/sla_*.psc` (`Headers/` is not imported and is gitignored).
+- Off for OSL Aroused (`OSLAroused.esp`), SLSO, SeparateOrgasms, P+, engine disabled, or `sexlab.arousal.engine_orgasm_relief` false.
+- Not fixed: SLO's pick can still relieve an actor the engine denied. `HookOrgasmEnd` can't be withheld (DOM and others use it).
+
 ## Close partner missed the group orgasm (2026-10-06)
 
 **Symptom:** Skadi orgasmed; Bob, at 88.7, was narrated "Although close, Bob is not orgasming right now" and then orgasmed alone 4.8 s later. Log: `group roll 0x14 enjoyment=88.7 roll=+1.4 pass=false`.
@@ -1179,6 +1187,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Cause:** the 19:07 `Scripts/*.pex` (committed in 82bac2c) came from a different compiler (string table carries docstrings / `conditional` / `hidden`) that stores `"\""` as backslash+quote. Every Papyrus-built JSON (31 `\"` sites) broke. Not the CommonLib swap.
 - **Fix:** rebuild with `compile: pyro` (`--no-incremental-build` when pex is newer than source). Check: `grep -ac '\\"' Scripts/*.pex` must be 0. `AnimDb_SubstituteActors` now warns on parse failure and on tokens left after substitution.
 - **Recurred 2026-10-10** (pex in `19b3bbd` / `062b432`: AnimDb, MCM, Menu, Scene, Utilities). `compile: papyrus` (`c:/Skyrim/tools/papyrus-compiler/papyrus.exe`) and `compile: skyrim` were both `isDefault` build tasks, so Ctrl+Shift+B could pick the wrong compiler. **`compile: pyro` is now the only default build task.** `ParseActorNames` (Papyrus_AnimationDB.cpp) retries `actors_json` with `\"` unescaped and warns `pex not built with pyro`. Stage descriptions survive a bad build; other Papyrus JSON does not, so still rebuild with pyro.
+- **Superseded 2026-10-16:** `compile: papyrus` (now with `Headers_Source` on the header path) was tested and works. It is the standard Papyrus task and the only default build task. The P+ bridge still builds with `compile: pyro (P+ bridge)`. After compiling, `grep -ac '\\"' Scripts/*.pex` should still be 0 for every file; if not, the escape bug is back. **Open:** the 2026-10-16 09:38 papyrus.exe build still fails this check (AnimDb 2, MCM 1, Menu 2, Scene 1, Utilities 2; e.g. Scene's `,\"_stage_started\":1}`).
 
 ## CommonLibSSE-NG pin and Skyrim 1.7.x (2026-10-04, superseded)
 

@@ -21,7 +21,7 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 
 ## Compile
 
-VS Code / Cursor task **`compile: pyro`** (`.vscode/tasks.json`): runs `skyrimse.ppj`, then `skyrimse-pplus.ppj` (the P+ bridge, compiled against `..\SexLab Framework PPLUS\Source\Scripts`). Do not invent Caprica / `papyrus.exe` one-offs unless asked.
+VS Code / Cursor task **`compile: papyrus`** (`.vscode/tasks.json`, default build task): `c:/Skyrim/tools/papyrus-compiler/papyrus.exe compile -nocache` over `Scripts/Source` into `Scripts/`, headers `Headers`, `Headers_Source`, SKSE64 source. The P+ bridge (`skyrimse-pplus.ppj`, compiled against `..\SexLab Framework PPLUS\Source\Scripts`) still builds with **`compile: pyro (P+ bridge)`**. Do not invent other one-off compile commands unless asked.
 
 SKSE: [webui.md](webui.md).
 
@@ -66,7 +66,7 @@ Scene_Creator (pooled) ──StartScene──► Scene_Manager.CreateSceneByCrea
 | `review-execution-plan.xml` | Current fix pass |
 | `reviews/*.review.md` | Per-pass notes |
 
-Resume: guide + checkpoint → plan High→Medium→Low (1-based lines, include comments) → apply → `compile: pyro` → write review → update checkpoint.
+Resume: guide + checkpoint → plan High→Medium→Low (1-based lines, include comments) → apply → `compile: papyrus` → write review → update checkpoint.
 
 ## ESP / Spriggit
 

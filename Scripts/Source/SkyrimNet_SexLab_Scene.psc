@@ -405,6 +405,9 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     seeded_registry = ""
     pending_animation_change = false
     animation_change_from = ""
+    pending_stage_restart = false
+    ; Once per scene, not per stage: relief pending from earlier stages waits for OrgasmEnd / AnimationEnd.
+    SLA_ReliefBegin()
     if !position_override
         ; No Scene Creator values: the first SyncAnimationDefaults (AnimationStart's
         ; GetThreadObj, or StageStart) seeds the starting animation's defaults. Not here: the
@@ -569,6 +572,8 @@ Function Release()
     seed_first_animation = false
     pending_animation_change = false
     animation_change_from = ""
+    pending_stage_restart = false
+    SLA_ReliefBegin()
     orgasm_window_open = false
     orgasm_hook_open = false
     scene_paused = false
@@ -747,6 +752,8 @@ bool seed_first_animation = false
 ; sends optional DirectNarration "Scene changes to '<new stage description>'".
 bool pending_animation_change = false
 String animation_change_from = ""
+; 1.6x animation switch while SexLab is Advancing (SetAnimation clamped the stage): restart at the next StageStart.
+bool pending_stage_restart = false
 
 ; Call from anywhere that may observe a changed thread.animation outside StageStart (poll, hooks,
 ; menus). Reloads the new animation's defaults now, and queues StageStart through a mod event
@@ -755,12 +762,7 @@ String animation_change_from = ""
 Function CheckAnimationChange()
     String from_desc = description_last
     if SyncAnimationDefaults()
-        if RestartStageOnAnimationChange()
-            ; The stage-1 StageStart that GoToStage brings narrates the change; queuing one now would
-            ; narrate the old stage number first.
-            pending_animation_change = true
-            animation_change_from = from_desc
-        else
+        if !ApplyRestartStageOnAnimationChange(from_desc)
             QueueAnimationChangeStage(from_desc)
         endif
         Engine_SetSkills()
@@ -769,18 +771,22 @@ Function CheckAnimationChange()
 EndFunction
 
 ; SexLab 1.6x SetAnimation keeps the current stage; a new animation starts at stage 1. P+ switches go
-; through ResetScene, which already starts at the root. True when GoToStage(1) was issued.
-bool Function RestartStageOnAnimationChange()
-    if IsSexLabPPlus() || thread == None || ending_done
+; through ResetScene, which already starts at the root. True when GoToStage(1) was issued or deferred.
+bool Function ApplyRestartStageOnAnimationChange(String from_desc)
+    if IsSexLabPPlus() || thread == None || ending_done || thread.Stage <= 1
         return false
     endif
-    if thread.Stage <= 1 || (thread as sslThreadModel).GetState() != "animating"
-        return false
+    pending_animation_change = true
+    animation_change_from = from_desc
+    if (thread as sslThreadModel).GetState() == "animating"
+        Trace("RestartStageOnAnimationChange", "animation change: stage "+thread.Stage+" -> 1")
+        ; Not a "stage went backwards" in TraceStageState, and no stage-pair transition lookup.
+        stage_last = 0
+        thread.GoToStage(1)
+        return true
     endif
-    Trace("RestartStageOnAnimationChange", "animation change: stage "+thread.Stage+" -> 1")
-    ; Not a "stage went backwards" in TraceStageState, and no stage-pair transition lookup.
-    stage_last = 0
-    thread.GoToStage(1)
+    Trace("RestartStageOnAnimationChange", "defer stage "+thread.Stage+" -> 1 state:"+(thread as sslThreadModel).GetState())
+    pending_stage_restart = true
     return true
 EndFunction
 
@@ -907,7 +913,9 @@ Function NoteSeededRegistry(String reg)
     bool changed = seeded_registry != "" && reg != seeded_registry
     seeded_registry = reg
     if changed
-        QueueAnimationChangeStage(description_last)
+        if !ApplyRestartStageOnAnimationChange(description_last)
+            QueueAnimationChangeStage(description_last)
+        endif
     endif
 EndFunction
 
@@ -1905,6 +1913,7 @@ Function Engine_SetStage()
     elseif !final_stage && orgasm_hook_open
         orgasm_hook_open = false
         Trace("Engine_SetStage", "OrgasmEnd hook stage:"+thread.Stage+"/"+count)
+        SLA_FlushPending(true)
         thread.SendThreadEvent("OrgasmEnd")
     endif
     SkyrimNet_SexLab_OrgasmEngine.SetStage(sid, thread.Stage, count)
@@ -2628,8 +2637,20 @@ Function Orgasm_ApplyGroup(Actor[] actors, int[] forced, bool individual, String
         if slot >= 0
             ; SexLab's trigger stays disabled (DisableAllOrgasms); we run SexLab's orgasm ourselves. The
             ; thread hooks OrgasmStart / OrgasmEnd follow SexLab's stage timing (Engine_SetStage).
+            ; Enjoyment before SexLab's orgasm resets it (SLO relief size).
+            bool sla_relief_on = SLA_ReliefActive()
+            int sla_enjoyment = 100
+            if sla_relief_on
+                sslActorAlias actorAlias = thread.ActorAlias(a)
+                if actorAlias != None
+                    sla_enjoyment = actorAlias.GetEnjoyment()
+                endif
+            endif
             SexLabForceOrgasm(a)
             Mirror_Rebaseline(a)
+            if sla_relief_on
+                SLA_EngineOrgasm(a, sla_enjoyment)
+            endif
             ; Gate rush: stashed and narrated at the pass (Engine_GatePassed).
             if source != "gate"
                 int kind = ORGASM_KIND_ORGASM
@@ -2909,6 +2930,99 @@ Function Arousal_Floor(Actor akActor, int enjoyment)
     endif
 EndFunction
 
+; ---- SLO Aroused NG (optional): orgasm relief for engine orgasms in Combined mode ----
+; SLO acts on SexLabOrgasm only with SeparateOrgasms or SLSO. Otherwise it waits for HookOrgasmEnd
+; (ours, Engine_SetStage / AnimationEnd) and relieves whoever its FindActorWillOrgasm picks. Engine
+; orgasms that pick misses get sla_DefaultPlugin.OnOrgasm here, so each gets relief exactly once.
+; Engine orgasms stay pending (one per actor) until the OrgasmEnd hook, or AnimationEnd without it.
+sla_DefaultPlugin sla_relief = None
+sla_SexlabPlugin sla_relief_sexlab = None
+bool sla_relief_checked = false
+Actor[] sla_relief_pending
+int[] sla_relief_enjoyment
+
+Function SLA_ReliefBegin()
+    sla_relief_checked = false
+    sla_relief = None
+    sla_relief_sexlab = None
+    sla_relief_pending = PapyrusUtil.ActorArray(0)
+    sla_relief_enjoyment = PapyrusUtil.IntArray(0)
+EndFunction
+
+bool Function SLA_ReliefActive()
+    if !sla_relief_checked
+        sla_relief_checked = true
+        ; OSL Aroused's compat SexLabAroused.esm has no SLO plugin quests.
+        if Game.GetModByName("SexLabAroused.esm") != 255 && Game.GetModByName("OSLAroused.esp") == 255 \
+                && Game.GetModByName("SLSO.esp") == 255 && !((SexLab as Quest) as sslSystemConfig).SeparateOrgasms && !IsSexLabPPlus() \
+                && !SkyrimNet_SexLab_OrgasmEngine.IsEngineDisabled() \
+                && SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.arousal.engine_orgasm_relief", true)
+            sla_relief = Game.GetFormFromFile(0x096196, "SexLabAroused.esm") as sla_DefaultPlugin
+            sla_relief_sexlab = Game.GetFormFromFile(0x099060, "SexLabAroused.esm") as sla_SexlabPlugin
+        endif
+        Trace("SLA_Relief", "active:"+(sla_relief != None)+" sexlab_plugin:"+(sla_relief_sexlab != None))
+    endif
+    return sla_relief != None
+EndFunction
+
+; SLO's own OrgasmEnd pick for a, on the current animation.
+bool Function SLA_WillCover(Actor a)
+    if sla_relief_sexlab == None || thread == None || thread.Animation == None
+        return false
+    endif
+    Actor[] positions = thread.Positions
+    int i = positions.Find(a)
+    if i < 0
+        return false
+    endif
+    bool[] picks = sla_relief_sexlab.FindActorWillOrgasm(thread, thread.Animation, positions)
+    return i < picks.length && picks[i]
+EndFunction
+
+Function SLA_Relieve(Actor a, int enjoyment)
+    Trace("SLA_Relief", GetDisplayName(a)+" OnOrgasm enjoyment:"+enjoyment)
+    sla_relief.OnOrgasm(a, enjoyment as float)
+EndFunction
+
+; Orgasm_ApplyGroup: one engine orgasm (enjoyment read before SexLab's reset).
+Function SLA_EngineOrgasm(Actor a, int enjoyment)
+    if a == None || !SLA_ReliefActive()
+        return
+    endif
+    ; Hook open or not, decided once at the flush, against the animation SLO picks on.
+    if !sla_relief_pending
+        sla_relief_pending = PapyrusUtil.ActorArray(0)
+        sla_relief_enjoyment = PapyrusUtil.IntArray(0)
+    endif
+    int i = sla_relief_pending.Find(a)
+    if i < 0
+        sla_relief_pending = PapyrusUtil.PushActor(sla_relief_pending, a)
+        sla_relief_enjoyment = PapyrusUtil.PushInt(sla_relief_enjoyment, enjoyment)
+    elseif enjoyment > sla_relief_enjoyment[i]
+        sla_relief_enjoyment[i] = enjoyment
+    endif
+    Trace("SLA_Relief", GetDisplayName(a)+" pending (stage "+thread.Stage+")")
+EndFunction
+
+; hook_closing: called just before we send OrgasmEnd (SLO picks then); false: no hook will follow.
+Function SLA_FlushPending(bool hook_closing)
+    if !sla_relief_pending || sla_relief == None
+        return
+    endif
+    int i = 0
+    while i < sla_relief_pending.length
+        Actor a = sla_relief_pending[i]
+        if hook_closing && SLA_WillCover(a)
+            Trace("SLA_Relief", GetDisplayName(a)+" SLO covers at OrgasmEnd")
+        elseif a != None
+            SLA_Relieve(a, sla_relief_enjoyment[i])
+        endif
+        i += 1
+    endwhile
+    sla_relief_pending = PapyrusUtil.ActorArray(0)
+    sla_relief_enjoyment = PapyrusUtil.IntArray(0)
+EndFunction
+
 ; --------------------------------------------
 ; Animation Event Handlers
 ; --------------------------------------------
@@ -3027,6 +3141,7 @@ Function AnimationStart()
     stage_last = 0
     pending_animation_change = false
     animation_change_from = ""
+    pending_stage_restart = false
     ; Re-entrant mid-scene AnimationStart must not force STATUS_SETUP (would re-run
     ; first-start/initiator path) or clear orgasm_messages_set while leaving non-empty
     ; slots (flush skips; Combined will not refill). Only reset orgasm stash on first start.
@@ -3110,18 +3225,30 @@ Function StageStart()
     stage_starting = true
     stage_started_at = Utility.GetCurrentRealTime()
     AlignActors()
+    if pending_stage_restart
+        pending_stage_restart = false
+        if thread != None && thread.Stage > 1 && !IsSexLabPPlus() && !ending_done
+            Trace("RestartStageOnAnimationChange", "deferred: stage "+thread.Stage+" -> 1")
+            stage_last = 0
+            thread.GoToStage(1)
+            stage_starting = false
+            DbgReturn("StageStart", "deferred restart at stage 1")
+            return
+        endif
+    endif
     ; Catches animation changes not yet seen elsewhere; narrated below like a stage change.
     String from_desc = description_last
     if SyncAnimationDefaults()
-        pending_animation_change = true
-        animation_change_from = from_desc
         Engine_SetSkills()
-        if RestartStageOnAnimationChange()
+        if ApplyRestartStageOnAnimationChange(from_desc) && !pending_stage_restart
             ; The stage-1 StageStart that follows narrates the change and runs the rest.
             stage_starting = false
             DbgReturn("StageStart", "restart at stage 1")
             return
         endif
+        ; Deferred restart (not animating yet): run this stage now; the next StageStart restarts.
+        pending_animation_change = true
+        animation_change_from = from_desc
     endif
     ; Also covers actors joining / leaving (ChangeActors restarts at a stage).
     Engine_BeginScene()
@@ -3393,7 +3520,10 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         exhausted_actors = PapyrusUtil.ActorArray(0)
         if orgasm_hook_open
             orgasm_hook_open = false
+            SLA_FlushPending(true)
             thread.SendThreadEvent("OrgasmEnd")
+        else
+            SLA_FlushPending(false)
         endif
         scene_paused = false
         int k = ended_actors.length - 1
@@ -5648,14 +5778,42 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
     endif
     Trace("WebUI_SwitchToRegistry", "DEBUG after rebuild idx:"+idx+" "+DbgAnimList()) ; DEBUG-DELETE
     Trace("WebUI_SwitchToRegistry", "SetAnimation idx:"+idx+" stage:"+thread.Stage)
+    ; Restart before SetAnimation (1.6x SetAnimation would clamp the stage). The stage-1 StageStart that
+    ; GoToStage brings narrates the change, so nothing below may queue a second one.
+    String from_desc = description_last
+    bool restarted = false
+    if !IsSexLabPPlus() && !ending_done && thread.Stage > 1 && (thread as sslThreadModel).GetState() == "animating"
+        Trace("RestartStageOnAnimationChange", "WebUI switch: stage "+thread.Stage+" -> 1")
+        stage_last = 0
+        thread.GoToStage(1)
+        restarted = true
+    endif
     thread.SetAnimation(idx)
     Trace("WebUI_SwitchToRegistry", "DEBUG after SetAnimation active:"+thread.animation.Registry+" "+DbgAnimList()) ; DEBUG-DELETE
     NotePlayedRegistry(reg)
     cancel_dirty = true
-    if reseed
-        CheckAnimationChange()
+    if !restarted
+        if reseed
+            CheckAnimationChange()
+        else
+            NoteSeededRegistry(reg)
+        endif
     else
-        NoteSeededRegistry(reg)
+        bool changed = false
+        if reseed
+            changed = SyncAnimationDefaults()
+            if changed
+                Engine_SetSkills()
+                Engine_SetStage()
+            endif
+        else
+            changed = seeded_registry != "" && reg != seeded_registry
+            seeded_registry = reg
+        endif
+        if changed
+            pending_animation_change = true
+            animation_change_from = from_desc
+        endif
     endif
     Trace("WebUI_SwitchToRegistry", reg+" idx:"+idx+" anims:"+anim_count+" reseed:"+reseed)
     WebUI_ConfigureIfOverlayVisible()
@@ -5810,6 +5968,7 @@ Function WebUI_RestoreCancelSnapshot()
     ; Record without reseeding or narrating: the values below are the ones to keep.
     seeded_registry = snap_seeded
     pending_animation_change = false
+    pending_stage_restart = false
     if snap_style != "" && snap_style != style
         SetStyle(snap_style)
     endif

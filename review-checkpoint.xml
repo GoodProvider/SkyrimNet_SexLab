@@ -28,8 +28,8 @@
       <artifact role="per-pass changelog">reviews/*.review.md</artifact>
     </related_artifacts>
     <compile>
-      Use the VS Code / Cursor task "compile: pyro" (pyro against skyrimse.ppj, game path
-      C:\Skyrim\dev\skyrim). Do not invent alternate one-off compile commands.
+      Use the VS Code / Cursor task "compile: papyrus" (papyrus.exe over Scripts/Source, headers
+      Headers, Headers_Source, SKSE64 source). P+ bridge: "compile: pyro (P+ bridge)". Do not invent alternate one-off compile commands.
     </compile>
     <dependencies>
       SexLabFramework, JContainers, StorageUtil, SKSE, SkyrimNet API, PO3_SKSEFunctions,
@@ -47,7 +47,7 @@
   </architecture>
 
   <constraints note="Hard rules from review-guide.xml/facts. Do NOT re-report these as findings.">
-    <do_not_report>Compile errors — all Scripts/Source compiles via pyro.</do_not_report>
+    <do_not_report>Compile errors — all Scripts/Source compiles via compile: papyrus.</do_not_report>
     <do_not_report>Case mismatches — Papyrus is case-insensitive.</do_not_report>
     <do_not_report>GetFormFromFile / CK property wiring — intentional in global functions.</do_not_report>
     <do_not_report>PagedActors and related calls.</do_not_report>
@@ -173,7 +173,7 @@
   <how_to_resume>
     <step>Read review-guide.xml (persona, output rules, do-not-report facts) and this checkpoint.</step>
     <step>For a new review pass: regenerate review-execution-plan.xml with findings ordered High-&gt;Medium-&gt;Low, each with problem, suggested fix, filename, and 1-based line number (include commented lines).</step>
-    <step>Apply fixes, compile via the "compile: pyro" task, write reviews/&lt;YYYY-MM-DD-NN&gt;.review.md, then add a &lt;pass&gt; entry here and update &lt;updated&gt; and &lt;current_status&gt;.</step>
+    <step>Apply fixes, compile via the "compile: papyrus" task, write reviews/&lt;YYYY-MM-DD-NN&gt;.review.md, then add a &lt;pass&gt; entry here and update &lt;updated&gt; and &lt;current_status&gt;.</step>
     <step>Respect &lt;constraints&gt; and &lt;locked_decisions&gt;; do not re-report items listed there.</step>
   </how_to_resume>
 </checkpoint>

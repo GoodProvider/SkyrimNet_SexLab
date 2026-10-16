@@ -21,7 +21,7 @@
 
 - [SkyrimNet_DOM](https://github.com/GoodProvider) — `SkyrimNet_DOM.esp`; Domination slave orgasm / hotkey routing
 - [SkyrimNet_Arousal](https://github.com/GoodProvider/SkyrimNet_Arousal)
-- [SLO Aroused NG](https://www.loverslab.com/files/file/25318-sexlab-aroused-ng/) — arousal is raised to match enjoyment during scenes (`sexlab.arousal.floor_enjoyment`)
+- [SLO Aroused NG](https://www.loverslab.com/files/file/25318-sexlab-aroused-ng/) — arousal is raised to match enjoyment during scenes (`sexlab.arousal.floor_enjoyment`), and each orgasm gives SLO's orgasm relief once, even with combined orgasms (`sexlab.arousal.engine_orgasm_relief`)
 - [OSL Aroused](https://www.nexusmods.com/skyrimspecialedition/mods/65454)
 - [OstimNet](https://github.com/tetherball88/OStimNet) — SkyrimNet dashboard **Sex framework** (`sexlab.ostim.player`) picks SexLab vs OStim for LLM starts
 - `SkyrimNet_Leashed.esp` — SkyMessage / PrismaUI Target Menu **leash** opens that mod’s panel
