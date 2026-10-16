@@ -198,7 +198,8 @@ namespace OrgasmEngine
     /// be passive." With Injury Engine (External_TortureText) the hit lands silently and its feeling text is
     /// appended to the narration; the narration is then sent and is last_line of the target's strategy decision
     /// (trigger "punished"); a punishment for a refused request gets the agree / refuse answer as its own narration.
-    /// method: slap / pinch / punch / pull, one of the punisher's weak attack spells (a non-lethal hit) or a free
+    /// method: slap / pinch / punch / pull, one of Aid::PunishSpells (weak attack spells, a non-lethal hit; with Injury
+    /// Engine, its torture spells) or a free
     /// phrase ("biting"). location: body part ("" / "body": none named). reason: "" drops the "because ..." clause.
     /// amount: hits (Injury Engine damage_amount, clamped to 1..its max_strikes); above 1 the line says "N times".
     /// Any thread. False when refused.

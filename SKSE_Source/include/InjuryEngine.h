@@ -16,6 +16,9 @@ namespace InjuryEngine
     bool SexualParts();
     /// Injury Engine setting injury_engine.action.max_strikes (1..20, default 10): the Punish panel's amount limit.
     int MaxStrikes();
+    /// Injury Engine setting injury_engine.action.require_whip (default true). Off: NPCs may torture without gear,
+    /// so NPC punishers get the torture spells.
+    bool RequireWhip();
     /// Pulldown term -> Injury Engine part name: cock -> penis, ass -> ass hole; body / custom text / "" -> "" (random).
     std::string PartName(const std::string& part);
     /// count whip hits on part; Injury Engine narrates line plus the injury. False when not installed.

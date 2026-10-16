@@ -58,7 +58,7 @@
 
 **Known:** the `Advancing` state means 1.6x, not P+ (P+ has no `Advancing`; its `Stage` is `_StageHistory.Length` and `GoToStage(<=1)` is `ResetScene`). In 1.6x only these set `Stage = 1`: `GoToStage(<1)` (Advancing clamps), `AdvanceStage(backwards)` + AdjustStage held, `ChangeActors` (`sslThreadModel` sets `Stage = 1` before `SetAnimation`), `EndLeadIn`. We call `ChangeActors` only from `ApplyWebUICommit`; the overlay was closed. Unproven suspect: `ReloadAnimationDefaults` → `ApplyDressedToActor` → `Strip`/`UnStrip` mid-scene (one at 17:00:11, right after a stage-2 StageStart).
 
-**Done:** stage keys act only in `Animating` (`Actions.StageKeyReady`). Traces: `TraceStageState` ("stage went backwards"), stage before/after on our mutators, `ActorChangeEnd` / `LeadInEnd` hooks, SexLab build at `Scene_Manager.Setup`. **Next:** reporter's traced log + `Papyrus.0.log` to name the reset.
+**Done:** stage keys act only in `Animating` (`Actions.StageKeyReady`). Traces: `TraceStageState` ("stage went backwards"), stage before/after on our mutators, `ActorChangeEnd` / `LeadInEnd` hooks, SexLab build at `Scene_Manager.Setup`. **Next:** reporter's traced log + `Papyrus.0.log` to name the reset. Since 2026-10-15 an animation change deliberately `GoToStage(1)`s on 1.6x (`Scene.RestartStageOnAnimationChange`, traced); only an untraced drop to stage 1 is this bug.
 
 ## Mini-game orgasms far too early (2026-10-06)
 

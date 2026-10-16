@@ -566,6 +566,35 @@ namespace Aid
         return out;
     }
 
+    std::vector<WeakSpell> TortureSpells(RE::Actor* knower)
+    {
+        std::vector<WeakSpell> out;
+        auto* dh = RE::TESDataHandler::GetSingleton();
+        if (!dh) {
+            return out;
+        }
+        // SPEL Injury_Engine_FlamesTorture / FrostbiteTorture / SparksTorture.
+        for (const RE::FormID local : { 0x816u, 0x817u, 0x818u }) {
+            auto* s = dh->LookupForm<RE::SpellItem>(local, "Injury_Engine.esp");
+            if (s && (!knower || knower->HasSpell(s))) {
+                out.push_back({ s->GetFormID(), NameOf(s), 0.0f });
+            }
+        }
+        std::sort(out.begin(), out.end(), [](const WeakSpell& a, const WeakSpell& b) { return a.name < b.name; });
+        return out;
+    }
+
+    std::vector<WeakSpell> PunishSpells(RE::Actor* punisher)
+    {
+        if (InjuryEngine::Installed()) {
+            if (punisher && punisher->IsPlayerRef()) {
+                return TortureSpells(punisher);
+            }
+            return InjuryEngine::RequireWhip() ? std::vector<WeakSpell>{} : TortureSpells(nullptr);
+        }
+        return WeakAttackSpells(punisher);
+    }
+
     const WeakSpell* FindWeakSpell(const std::vector<WeakSpell>& spells, std::string_view name)
     {
         const std::string key = Lower(name);

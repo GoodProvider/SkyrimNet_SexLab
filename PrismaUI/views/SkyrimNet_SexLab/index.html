@@ -8126,7 +8126,8 @@
         // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
         // be punished for (refused requests, reasons other mods supply); "no reason" and custom are always offered.
         // The panel reopens on the last values (accepted or cancelled) that are still offered.
-        // Presets: [key sent, label]. Then the subject's weak attack spells, then custom (a phrase like "biting").
+        // Presets: [key sent, label]. Then the subject's weak attack spells (with Injury Engine: its torture spells, see
+        // Aid::PunishSpells), then custom (a phrase like "biting").
         const PUNISH_PRESETS = [['slap', 'slapping'], ['pinch', 'pinching'], ['punch', 'punching'], ['pull', 'pulling']];
         // verb key sent -> [label in the sentence, accept button / title text]
         const PUNISH_VERBS = { ask: ['asks', 'Ask'], order: ['orders', 'Order'], punish: ['punishes', 'Punish'] };
@@ -8291,7 +8292,7 @@
             }));
         }
 
-        // Method pulldown for the current subject: presets, its weak attack spells (a non-lethal hit), custom.
+        // Method pulldown for the current subject: presets, its payload spells (weak attack / Injury Engine torture), custom.
         function punishRenderMethod() {
             const p = punishSubject();
             const methods = PUNISH_PRESETS.concat(((p && p.spells) || []).map(s => [s, s]), [['custom', 'custom']]);

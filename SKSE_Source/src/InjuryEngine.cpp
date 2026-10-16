@@ -77,6 +77,11 @@ namespace InjuryEngine
         return std::clamp(SexLabNet::GetForeignConfigInt("Injury_Engine", "injury_engine.action.max_strikes", 10), 1, 20);
     }
 
+    bool RequireWhip()
+    {
+        return SexLabNet::GetForeignConfigBool("Injury_Engine", "injury_engine.action.require_whip", true);
+    }
+
     std::string PartName(const std::string& part)
     {
         static constexpr std::array<std::pair<std::string_view, std::string_view>, 11> kParts{ {

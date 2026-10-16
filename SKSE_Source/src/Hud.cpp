@@ -349,8 +349,8 @@ namespace Hud
         }
 
         // Ask / Order / Punish key (anyone in a managed scene): the panel, solo in the WebUI. Every actor of the
-        // acting actor's scene can be the subject (default: the acting actor) or the object; each brings its weak
-        // attack spells (extra punish methods, a non-lethal hit) and, as an object, the requests it could be asked
+        // acting actor's scene can be the subject (default: the acting actor) or the object; each brings its punish
+        // spells (Aid::PunishSpells: weak attack or Injury Engine torture) and, as an object, the requests it could be asked
         // for (strategy order phrases) and its punishment reasons (the punish verb needs one).
         // The panel replies through WebUI onPunishResult.
         void OnPunish()
@@ -368,7 +368,7 @@ namespace Hud
             nlohmann::json list = nlohmann::json::array();
             for (const auto& [id, name] : everyone) {
                 nlohmann::json spells = nlohmann::json::array();
-                for (const auto& sp : Aid::WeakAttackSpells(ActorFor(id))) {
+                for (const auto& sp : Aid::PunishSpells(ActorFor(id))) {
                     spells.push_back(sp.name);
                 }
                 nlohmann::json requests = nlohmann::json::array();

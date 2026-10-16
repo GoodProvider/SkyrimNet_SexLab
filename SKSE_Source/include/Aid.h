@@ -53,6 +53,12 @@ namespace Aid
     };
     /// Novice / Apprentice spells with a hostile Damage Health effect, by name.
     std::vector<WeakSpell> WeakAttackSpells(RE::Actor* actor);
+    /// Injury Engine's Flames / Frostbite / Sparks (torture) that knower knows (nullptr: all three), by name
+    /// (minDamage 0: Injury Engine takes the damage).
+    std::vector<WeakSpell> TortureSpells(RE::Actor* knower);
+    /// Punish spell methods. With Injury Engine installed: the player gets the torture spells it knows; an NPC gets all
+    /// three when Injury Engine's require_whip is off, else none. Without Injury Engine: the weak attack spells.
+    std::vector<WeakSpell> PunishSpells(RE::Actor* punisher);
     /// The weak spell named name (case-insensitive), nullptr when the actor has none by that name.
     const WeakSpell* FindWeakSpell(const std::vector<WeakSpell>& spells, std::string_view name);
     /// Queues a direct health hit of dmg on the victim, never below 1 health, and plays the spell's casting art on the

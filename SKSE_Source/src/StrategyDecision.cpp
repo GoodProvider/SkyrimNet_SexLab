@@ -538,7 +538,7 @@ namespace StrategyDecision
                     t.punishMethods.push_back({ m, m });
                     t.methodOf[m] = m;
                 }
-                for (const auto& sp : Aid::WeakAttackSpells(player)) {
+                for (const auto& sp : Aid::PunishSpells(player)) {
                     const std::string k = "spell_" + std::to_string(t.methodOf.size() - 3);
                     t.punishMethods.push_back({ k, "hit them with the " + sp.name + " spell" });
                     t.methodOf[k] = sp.name;

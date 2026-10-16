@@ -2,6 +2,8 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
 ### 0.35.2
 
+- Punish with Injury Engine: the spell methods are now Flames, Frostbite and Sparks (torture) instead of weak attack spells. You get the ones you know (Injury Engine's "Add gear to player" teaches them); NPCs get all three only when Injury Engine's "NPC must already carry a whip" is off
+- Changing animation mid-scene (hotkey, Scene Menu, Description Editor, SL Tools) now starts the new animation at stage 1 instead of the stage you were on (SexLab P+ already did)
 - Aid and Punish panels with Injury Engine: a bar shows how badly the chosen body part is hurt, followed by its torture points (**body** shows the whole body). The Aid panel now starts on the most hurt body part; healing it doesn't need still goes to other hurt parts (needs the updated Injury Engine)
 - Ask / Order / Punish panel: reopens with what you picked last time (when it still fits the scene); a reason that is gone is swapped for another one at random
 - Punish: **no reason** and **custom** are always offered, so you can punish anyone in the scene

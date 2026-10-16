@@ -2946,7 +2946,13 @@ namespace OrgasmEngine
             const std::string how = Trimmed(method);
             std::string act;
             if (spell) {
-                act = "hitting " + on + " with " + spell->name;
+                // "Sparks (torture)" (Injury Engine) reads as "Sparks" in the line.
+                std::string spellName = spell->name;
+                constexpr std::string_view kTorture = " (torture)";
+                if (spellName.size() > kTorture.size() && spellName.ends_with(kTorture)) {
+                    spellName.resize(spellName.size() - kTorture.size());
+                }
+                act = "hitting " + on + " with " + spellName;
             } else {
                 for (const auto& m : kPunishMethods) {
                     if (how == m.key) {
@@ -3162,8 +3168,8 @@ namespace OrgasmEngine
             return false;
         }
         amount = InjuryEngine::Installed() ? std::clamp(amount, 1, InjuryEngine::MaxStrikes()) : 1;
-        // Weak attack spells read the punisher's spell lists outside the engine lock.
-        const auto spells = Aid::WeakAttackSpells(punisher);
+        // Punish spells (weak attack / Injury Engine torture) read spell lists outside the engine lock.
+        const auto spells = Aid::PunishSpells(punisher);
         const Aid::WeakSpell* spell = Aid::FindWeakSpell(spells, method);
         PunishPlan plan;
         {

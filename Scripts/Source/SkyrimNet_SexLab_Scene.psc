@@ -755,10 +755,33 @@ String animation_change_from = ""
 Function CheckAnimationChange()
     String from_desc = description_last
     if SyncAnimationDefaults()
-        QueueAnimationChangeStage(from_desc)
+        if RestartStageOnAnimationChange()
+            ; The stage-1 StageStart that GoToStage brings narrates the change; queuing one now would
+            ; narrate the old stage number first.
+            pending_animation_change = true
+            animation_change_from = from_desc
+        else
+            QueueAnimationChangeStage(from_desc)
+        endif
         Engine_SetSkills()
         Engine_SetStage()
     endif
+EndFunction
+
+; SexLab 1.6x SetAnimation keeps the current stage; a new animation starts at stage 1. P+ switches go
+; through ResetScene, which already starts at the root. True when GoToStage(1) was issued.
+bool Function RestartStageOnAnimationChange()
+    if IsSexLabPPlus() || thread == None || ending_done
+        return false
+    endif
+    if thread.Stage <= 1 || (thread as sslThreadModel).GetState() != "animating"
+        return false
+    endif
+    Trace("RestartStageOnAnimationChange", "animation change: stage "+thread.Stage+" -> 1")
+    ; Not a "stage went backwards" in TraceStageState, and no stage-pair transition lookup.
+    stage_last = 0
+    thread.GoToStage(1)
+    return true
 EndFunction
 
 ; Called every few seconds by Scene_Manager's poll (OnUpdate). SexLab's SetAnimation sends no
@@ -3093,6 +3116,12 @@ Function StageStart()
         pending_animation_change = true
         animation_change_from = from_desc
         Engine_SetSkills()
+        if RestartStageOnAnimationChange()
+            ; The stage-1 StageStart that follows narrates the change and runs the rest.
+            stage_starting = false
+            DbgReturn("StageStart", "restart at stage 1")
+            return
+        endif
     endif
     ; Also covers actors joining / leaving (ChangeActors restarts at a stage).
     Engine_BeginScene()
