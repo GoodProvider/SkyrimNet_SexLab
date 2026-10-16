@@ -662,22 +662,22 @@ schema:
     - name: "Ask / order / punish hotkey"
       path: "sexlab.minigame.key_force"
       type: "hotkey"
-      description: "Opens the Ask / Order / Punish panel: ask or order someone in the scene to change how they play, or punish them by a method (slap, punch, a weak attack spell you know, ...). Works in every scene. Greyed out on the HUD when nobody else is in the scene. Default Num /"
+      description: "Opens the Ask / Order / Punish panel: ask or order someone in the scene to change how they play, or punish them by a method (slap, punch, a weak attack spell you know, ...). Works in every scene. Greyed out on the HUD when nobody else is in the scene. Default Num ."
       min: 1
       max: 255
       required: false
-      defaultValue: 111
+      defaultValue: 110
       category: "Mini-game"
       supportsOverride: false
 
     - name: "Aid hotkey"
       path: "sexlab.minigame.key_aid"
       type: "hotkey"
-      description: "Opens the Aid panel: cast one of your healing or stamina spells (costs magicka) or use a healing or stamina potion on an actor in the scene. Greyed out on the HUD when you have none. Default Num = (most PC keyboards have no Num = key; set another key here)"
+      description: "Opens the Aid panel: cast one of your healing or stamina spells (costs magicka) or use a healing or stamina potion on an actor in the scene. Greyed out on the HUD when you have none. Default Num Enter (Enter here always means Num Enter)"
       min: 1
       max: 255
       required: false
-      defaultValue: 146
+      defaultValue: 13
       category: "Mini-game"
       supportsOverride: false
 

@@ -17,7 +17,7 @@
 - Detect with `TESDataHandler::LookupModByName("Injury_Engine.esp")` plus a VM type check that `Injury_Engine_Main` has the global `External_Damage` (`InjuryEngine::Installed`, cached per session). An older Injury Engine without the API counts as not installed.
 - `External_TortureText` (silent hit, returns the feeling text as a String; `InjuryEngine::PunishText`) is optional: without it Punish falls back to `External_Damage`, which narrates. Its Papyrus String result reaches C++ through an `IStackCallbackFunctor` on a VM thread, so hop to the game thread (`AddTask`) before using it.
 - Call its Papyrus globals with `DispatchStaticCall`; never call its `Take*` / `Sync*` natives (they drain Injury Engine's own queues).
-- Read its settings from C++ with `SexLabNet::GetForeignConfigBool("Injury_Engine", ...)` (C++ name without `Plugin_`). Write them only through Injury Engine (`External_SetSexualParts`, which runs `PatchConfig` on `Plugin_Injury_Engine` and applies the value at once).
+- Read its settings from C++ with `SexLabNet::GetForeignConfigBool("Injury_Engine", ...)` (C++ name without `Plugin_`). Write them only through Injury Engine (`External_SetSexualParts`, which runs `PatchConfig` on `Plugin_Injury_Engine` and applies the value at once). Until 2026-10-15 that patch still wrote the pre-rename `whip.body.include_sexual_parts`, so the Yes held only until the next config load; the patch JSON must follow the `injury_engine.` key rename.
 
 ## Gate voice / ending hold paired with another scene's reply (2026-10-08)
 
@@ -49,7 +49,7 @@
 
 - **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so no engine cast plays (see Visual cast).
 - **Weak Force spells:** a real hostile cast would start combat or add a bounty, and could kill. Force applies the smallest Damage Health magnitude as `DamageActorValue`, capped at health − 1 (`Aid::QueueWeakSpellHit`).
-- **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Aid key (Num =) use does not refresh it, because actions never run for the player.
+- **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Aid key (Num Enter) use does not refresh it, because actions never run for the player.
 
 ## Next stage falls back to stage 1 (2026-10-07, open)
 
@@ -1087,6 +1087,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **A released final stage can still never end** (2026-10-08, `review-logs/2026-10-08_114804`): the controller advances only on `(AutoAdvance || TimedStage) && StageTimer < now` in its own `OnUpdate`. After `Ending_Poll`'s release a player scene got no `StageEnd` at all, and the private timer state can't be read to say why. `Ending_Watch` ends the animation `FinalStageRemaining + 15 s` after the release. Its trace logs the readable inputs (`thread.AutoAdvance`, `HasTimer`, `IsInMenuMode`, state). Also, SexLab 1.66 `sslActorAlias` sets a player thread's `AutoAdvance = Config.AutoAdvance`; with that off, `ResolveTimers()` on an untimed stage leaves it waiting for the advance key.
 - **`thread.positions` in `AnimationEnd`:** SexLab resets the ending thread concurrently, so `thread.positions` can turn unreadable partway through the handler ("Cannot get the length of a non-array"). Read it once into a local at entry.
 - **Pause key DX:** `MapVirtualKey(VK_PAUSE)` returns no scancode. `HotkeyVkToDx` maps it to DIK_PAUSE 0xC5 explicitly.
+- **Num Enter DX:** Num Enter and main Enter are both `VK_RETURN`, so the dashboard can't tell them apart. `HotkeyVkToDx` puts `VK_RETURN` in the extended list (0x80 | 0x1C = 0x9C, DIK_NUMPADENTER): Enter always binds Num Enter, and main Enter can't be bound. Aid defaults to it.
 - **DOM compile headers:** `SkyrimNet_DOM/Headers_Source/DOM/` stubs (imported by `skyrimse.ppj`) only declare what we call. Add a member there (copied from `extern/Source_DOM`) before using it from Handler_DOM, or Pyro reports "not a property".
 - **Why thread-wide:** a per-actor `DisableOrgasm` would be re-enabled by the existing `DisableOrgasm(a, false)` call sites. Those now route through `Scene.SetOrgasmDisabled`, which also sets the engine block.
 - **Enjoyment trap:** SexLab's `CalcReaction` uses the **absolute** enjoyment, so a large negative `BaseEnjoyment` reads as strong. The engine's mirror (`AdjustEnjoyment(ours − GetEnjoyment())`) never targets below 0.

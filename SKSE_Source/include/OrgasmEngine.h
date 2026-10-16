@@ -200,9 +200,10 @@ namespace OrgasmEngine
     /// (trigger "punished"); a punishment for a refused request gets the agree / refuse answer as its own narration.
     /// method: slap / pinch / punch / pull, one of the punisher's weak attack spells (a non-lethal hit) or a free
     /// phrase ("biting"). location: body part ("" / "body": none named). reason: "" drops the "because ..." clause.
+    /// amount: hits (Injury Engine damage_amount, clamped to 1..its max_strikes); above 1 the line says "N times".
     /// Any thread. False when refused.
     bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
-        const std::string& reason);
+        const std::string& reason, std::int32_t amount = 1);
     /// The actor is in a managed scene with someone else in it (SexLab_Scene_Punish eligibility).
     bool CanPunish(RE::Actor* actor);
     void EndScene(std::int32_t sid);

@@ -2354,7 +2354,8 @@
         </div>
     </div>
     <!-- Ask / Order / Punish (HUD punish key, anyone in the scene):
-         "<subject> asks|orders <object> to <request>." / "<subject> punishes <object> by <method> <object>'s <part>, because <reason>." -->
+         "<subject> asks|orders <object> to <request>." / "<subject> punishes <object> by <method> <object>'s <part>, because <reason>."
+         Punish with Injury Engine also takes a hit count (1 to its max strikes). -->
     <div id="punish-panel" class="panel" style="display:none">
         <div class="target-row" id="punish-title">Ask</div>
         <div class="act-sentence">
@@ -2365,6 +2366,10 @@
         <textarea id="punish-request-text" style="display:none" placeholder="stop resisting" oninput="punishUpdate()"></textarea>
         <textarea id="punish-custom-text" style="display:none" placeholder="biting" oninput="punishUpdate()"></textarea>
         <textarea id="punish-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="punishUpdate()"></textarea>
+        <div id="punish-amount-row" class="aid-note" style="display:none">
+            Hits <input type="number" id="punish-amount" class="aid-points" min="1" step="1" oninput="punishUpdate()">
+            <span id="punish-amount-range"></span>
+        </div>
         <div id="punish-part-confirm" class="injuryengine-confirm" style="display:none"></div>
         <div class="btn-row">
             <div class="action-btn" id="punish-accept" onmousedown="event.preventDefault()" onclick="punishAccept()">Ask</div>
@@ -8079,26 +8084,30 @@
 
         // ── Ask / Order / Punish (HUD punish key) ───────────────────
         // C++ Hud OnPunish: {actors: [{id, name, female, isPlayer, spells, requests: [{key, text}], reasons: [string]}],
-        // defaultPunisher, injuryengine, injuryengineSexual}. Reply onPunishResult:
+        // defaultPunisher, injuryengine, injuryengineSexual, injuryengineMaxStrikes}. Reply onPunishResult:
         //   ask / order: {verb, subject, object, request (a request key) | text (free phrase after "to")}
-        //   punish:      {verb, subject, object, method, location, reason}
+        //   punish:      {verb, subject, object, method, location, reason ("" for no reason), amount (hits)}
         // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
-        // be punished for (refused requests, reasons other mods supply); the punish verb needs at least one.
+        // be punished for (refused requests, reasons other mods supply); "no reason" and custom are always offered.
+        // The panel reopens on the last values (accepted or cancelled) that are still offered.
         // Presets: [key sent, label]. Then the subject's weak attack spells, then custom (a phrase like "biting").
         const PUNISH_PRESETS = [['slap', 'slapping'], ['pinch', 'pinching'], ['punch', 'punching'], ['pull', 'pulling']];
         // verb key sent -> [label in the sentence, accept button / title text]
         const PUNISH_VERBS = { ask: ['asks', 'Ask'], order: ['orders', 'Order'], punish: ['punishes', 'Punish'] };
         const PUNISH_CUSTOM = 'custom';
+        const PUNISH_NO_REASON = 'no reason';
         // Punish and Aid narrate where on the target; 'body' keeps the unlocated wording. With Injury Engine
         // installed the part is also where the whip damage / heal lands ('body' and custom text: a random part).
         const BODY_PARTS = ['body', 'face', 'lips', 'nipples', 'back', 'left arm', 'right arm', 'left leg', 'right leg',
             'pussy', 'cock', 'ass', 'custom'];
         // Injury Engine's "include sexual body parts" setting: shown darker while off; picking one asks to turn it on.
         const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'ass']);
-        // From the Hud payload (injuryengine, injuryengineSexual).
-        let INJURYENGINE = { installed: false, sexual: false };
+        // From the Hud payload (injuryengine, injuryengineSexual, injuryengineMaxStrikes).
+        let INJURYENGINE = { installed: false, sexual: false, maxStrikes: 1 };
         let PUNISH = { actors: [], subject: 0, object: 0, verb: 'ask', request: '', method: PUNISH_PRESETS[0][0],
             part: BODY_PARTS[0], reason: '' };
+        // The values the panel last closed with (punishRemember); null until the first close this session.
+        let PUNISH_LAST = null;
 
         // Parts for an actor ({female}): pussy only for women, cock only for men; unknown sex keeps both.
         function bodyPartsFor(actor) {
@@ -8194,11 +8203,9 @@
             return PUNISH.verb !== 'punish';
         }
 
-        // Verb pulldown: ask, order, and punish once the object holds a reason it can be punished for. Keeps the verb
-        // when still offered (else back to ask).
+        // Verb pulldown: ask, order, punish (always offered: "no reason" is a reason). Keeps the verb.
         function punishRenderVerb() {
-            const o = punishObject();
-            const verbs = o && o.reasons && o.reasons.length ? ['ask', 'order', 'punish'] : ['ask', 'order'];
+            const verbs = ['ask', 'order', 'punish'];
             if (!verbs.includes(PUNISH.verb)) PUNISH.verb = 'ask';
             const host = document.getElementById('punish-verb');
             host.innerHTML = '';
@@ -8257,26 +8264,30 @@
             }));
         }
 
-        // Reason pulldown (punish): what the object can be punished for, then custom (the custom dialog). A custom
-        // reason kept after a blocked OK shows as its own entry. The reason stays when still listed.
+        // Reason pulldown (punish): what the object can be punished for, then "no reason" (sent as "") and custom (the
+        // custom dialog). A custom reason (typed this time or remembered) shows as its own entry. The reason stays when
+        // still listed; one that is gone (another object, or no longer held) is replaced by a random listed one, else
+        // "no reason". Nothing picked yet: the first listed one.
         function punishRenderReason() {
             const t = punishObject();
-            const reasons = ((t && t.reasons) || []).slice();
-            if (PUNISH.reason && !reasons.includes(PUNISH.reason)) {
+            const held = ((t && t.reasons) || []).slice();
+            const reasons = held.slice();
+            if (PUNISH.reason && PUNISH.reason !== PUNISH_NO_REASON && !held.includes(PUNISH.reason)) {
                 if (PUNISH.reasonCustom) reasons.push(PUNISH.reason);
-                else PUNISH.reason = '';
+                else PUNISH.reason = held.length ? held[Math.floor(Math.random() * held.length)] : PUNISH_NO_REASON;
             }
-            if (!PUNISH.reason && reasons.length) PUNISH.reason = reasons[0];
+            if (!PUNISH.reason) PUNISH.reason = held.length ? held[0] : PUNISH_NO_REASON;
+            const labels = reasons.concat([PUNISH_NO_REASON, PUNISH_CUSTOM]);
             const host = document.getElementById('punish-reason');
             host.innerHTML = '';
-            host.appendChild(createPulldown(reasons.concat(['custom']), PUNISH.reason || 'custom', (v) => {
-                if (v === 'custom') {
+            host.appendChild(createPulldown(labels, PUNISH.reason, (_, i) => {
+                if (i === labels.length - 1) {
                     punishRenderReason();
                     punishReasonDialogOpen();
                     return;
                 }
-                PUNISH.reason = v;
-                PUNISH.reasonCustom = false;
+                PUNISH.reason = i < reasons.length ? reasons[i] : PUNISH_NO_REASON;
+                PUNISH.reasonCustom = i >= held.length && i < reasons.length;
             }));
         }
 
@@ -8335,23 +8346,54 @@
             const methodText = document.getElementById('punish-custom-text');
             const methodCustom = !ask && PUNISH.method === 'custom';
             methodText.style.display = methodCustom ? '' : 'none';
+            const amountShown = punishAmountShown();
+            document.getElementById('punish-amount-row').style.display = amountShown ? '' : 'none';
             let ok = !!punishSubject() && !!o;
             if (ask) {
                 document.getElementById('punish-part-text').style.display = 'none';
                 ok = ok && (!reqCustom || reqText.value.trim() !== '');
             } else {
                 ok = ok && (!methodCustom || methodText.value.trim() !== '') &&
-                    partLocation(PUNISH.part, 'punish-part-text') !== '';
+                    partLocation(PUNISH.part, 'punish-part-text') !== '' && (!amountShown || punishAmount() > 0);
             }
             document.getElementById('punish-accept').classList.toggle('de-disabled', !ok);
         }
 
+        // Hit count: punish with Injury Engine only (without it the hit is narration, one hit).
+        function punishAmountShown() {
+            return !punishIsAsk() && INJURYENGINE.installed;
+        }
+
+        // The typed hit count, 0 when not a whole number from 1 to Injury Engine's max strikes.
+        function punishAmount() {
+            const v = Number(document.getElementById('punish-amount').value);
+            return Number.isInteger(v) && v >= 1 && v <= INJURYENGINE.maxStrikes ? v : 0;
+        }
+
+        // Keeps the panel's values for the next open (the text fields too; an invalid hit count keeps the last one).
+        function punishRemember() {
+            PUNISH_LAST = { subject: PUNISH.subject, object: PUNISH.object, verb: PUNISH.verb, request: PUNISH.request,
+                method: PUNISH.method, part: PUNISH.part, reason: PUNISH.reason, reasonCustom: !!PUNISH.reasonCustom,
+                amount: punishAmount() || (PUNISH_LAST && PUNISH_LAST.amount) || 1,
+                requestText: document.getElementById('punish-request-text').value,
+                methodText: document.getElementById('punish-custom-text').value,
+                partText: document.getElementById('punish-part-text').value };
+        }
+
+        // Opens on the last values where still offered: each punishRender* keeps a value only while it is listed.
         function openPunishPanel(cfg) {
             const actors = (cfg && cfg.actors) || [];
             const first = actors[0] || {};
-            PUNISH = { actors, subject: (cfg && cfg.defaultPunisher) || first.id || 0, object: 0, verb: 'ask',
-                request: '', method: PUNISH_PRESETS[0][0], part: BODY_PARTS[0], reason: '', reasonCustom: false };
-            INJURYENGINE = { installed: !!(cfg && cfg.injuryengine), sexual: !!(cfg && cfg.injuryengineSexual) };
+            INJURYENGINE = { installed: !!(cfg && cfg.injuryengine), sexual: !!(cfg && cfg.injuryengineSexual),
+                maxStrikes: Math.max(1, (cfg && cfg.injuryengineMaxStrikes) || 1) };
+            const last = PUNISH_LAST || {};
+            const subject = actors.some(a => a.id === last.subject) ? last.subject
+                : (cfg && cfg.defaultPunisher) || first.id || 0;
+            // A sexual part remembered from before Injury Engine's setting was turned off: back to body.
+            const part = last.part && !partDimmed(last.part) ? last.part : BODY_PARTS[0];
+            PUNISH = { actors, subject, object: last.object || 0, verb: last.verb || 'ask', request: last.request || '',
+                method: last.method || PUNISH_PRESETS[0][0], part, reason: last.reason || '',
+                reasonCustom: !!last.reasonCustom };
             document.getElementById('punish-part-confirm').style.display = 'none';
             punishReasonDialogClose();
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
@@ -8374,9 +8416,13 @@
             punishRenderObject();
             punishRenderVerb();
             punishRenderRequest();
-            document.getElementById('punish-custom-text').value = '';
-            document.getElementById('punish-request-text').value = '';
-            punishRenderPart();
+            document.getElementById('punish-custom-text').value = last.methodText || '';
+            document.getElementById('punish-request-text').value = last.requestText || '';
+            document.getElementById('punish-part-text').value = last.partText || '';
+            document.getElementById('punish-amount').max = INJURYENGINE.maxStrikes;
+            document.getElementById('punish-amount').value = Math.min(last.amount || 1, INJURYENGINE.maxStrikes);
+            document.getElementById('punish-amount-range').textContent = `(1 to ${INJURYENGINE.maxStrikes})`;
+            punishRenderPart(PUNISH.part);
             punishRenderReason();
             // Same solo layout as the gating dialogue: only this panel shows.
             document.body.classList.add('yesno-solo');
@@ -8400,6 +8446,7 @@
         }
 
         function punishSend(payload) {
+            punishRemember();
             if (typeof window.onPunishResult === 'function')
                 window.onPunishResult(JSON.stringify(payload));
             else
@@ -8422,7 +8469,8 @@
                 : PUNISH.method;
             punishSend({ verb: 'punish', subject: p.id, object: t.id, method,
                 location: partLocation(PUNISH.part, 'punish-part-text'),
-                reason: PUNISH.reason });
+                reason: PUNISH.reason === PUNISH_NO_REASON ? '' : PUNISH.reason,
+                amount: punishAmountShown() ? punishAmount() : 1 });
         }
 
         function punishCancel() {

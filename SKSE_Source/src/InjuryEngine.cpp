@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "WebUI_Log.h"
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <string_view>
@@ -69,6 +70,11 @@ namespace InjuryEngine
     bool SexualParts()
     {
         return SexLabNet::GetForeignConfigBool("Injury_Engine", "injury_engine.body.include_sexual_parts", false);
+    }
+
+    int MaxStrikes()
+    {
+        return std::clamp(SexLabNet::GetForeignConfigInt("Injury_Engine", "injury_engine.action.max_strikes", 10), 1, 20);
     }
 
     std::string PartName(const std::string& part)
@@ -144,32 +150,37 @@ namespace InjuryEngine
         }
     }
 
-    bool Strike(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& part)
+    bool Strike(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& part,
+        std::int32_t count)
     {
         if (!victim || !Installed()) {
             return false;
         }
-        webui_log::info("InjuryEngine: strike {:#x} part '{}' -> '{}'", victim->GetFormID(), part, PartName(part));
+        webui_log::info("InjuryEngine: strike {:#x} x{} part '{}' -> '{}'", victim->GetFormID(), count, part,
+            PartName(part));
         // External_Damage(attacker, victim, cause, body_part, damage_type, damage_amount, narrate)
         Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
-            RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString("whipping"), static_cast<std::int32_t>(1), true);
+            RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString("whipping"),
+            static_cast<std::int32_t>(std::max(count, 1)), true);
         return true;
     }
 
     bool Torture(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const char* type,
-        const std::string& part)
+        const std::string& part, std::int32_t count = 1)
     {
         if (!victim || !Installed() || !type || !type[0]) {
             return false;
         }
-        webui_log::info("InjuryEngine: torture {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part, PartName(part));
+        webui_log::info("InjuryEngine: torture {} {:#x} x{} part '{}' -> '{}'", type, victim->GetFormID(), count, part,
+            PartName(part));
         Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
-            RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString(type), static_cast<std::int32_t>(1), true);
+            RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString(type),
+            static_cast<std::int32_t>(std::max(count, 1)), true);
         return true;
     }
 
     bool PunishHit(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& method,
-        const std::string& location, RE::FormID spell)
+        const std::string& location, RE::FormID spell, std::int32_t count)
     {
         if (!victim || !Installed()) {
             return false;
@@ -178,13 +189,13 @@ namespace InjuryEngine
         if (spell) {
             // A spell burns, freezes or shocks; it never whips. No element: the spell's own damage stands.
             const char* type = SpellTortureType(spell);
-            return type && Torture(attacker, victim, line, type, pulldown);
+            return type && Torture(attacker, victim, line, type, pulldown, count);
         }
         if (const TortureRoute* route = TortureRouteFor(method)) {
             const std::string part = pulldown.empty() ? route->defaultPart : pulldown;
-            return Torture(attacker, victim, line, route->type, part);
+            return Torture(attacker, victim, line, route->type, part, count);
         }
-        return Strike(attacker, victim, line, pulldown);
+        return Strike(attacker, victim, line, pulldown, count);
     }
 
     namespace
@@ -224,7 +235,7 @@ namespace InjuryEngine
     }
 
     bool PunishText(RE::Actor* attacker, RE::Actor* victim, const std::string& method, const std::string& location,
-        RE::FormID spell, std::function<void(std::string)> done)
+        RE::FormID spell, std::function<void(std::string)> done, std::int32_t count)
     {
         if (!victim || !TextApi()) {
             return false;
@@ -246,12 +257,13 @@ namespace InjuryEngine
         if (!vm) {
             return false;
         }
-        webui_log::info("InjuryEngine: torture text {} {:#x} part '{}' -> '{}'", type, victim->GetFormID(), part,
-            PartName(part));
+        webui_log::info("InjuryEngine: torture text {} {:#x} x{} part '{}' -> '{}'", type, victim->GetFormID(), count,
+            part, PartName(part));
         RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{ new TextCallback(std::move(done)) };
         // External_TortureText(attacker, victim, damage_type, body_part, damage_amount)
         auto* args = RE::MakeFunctionArguments(std::move(attacker), std::move(victim),
-            RE::BSFixedString(type.c_str()), RE::BSFixedString(PartName(part).c_str()), static_cast<std::int32_t>(1));
+            RE::BSFixedString(type.c_str()), RE::BSFixedString(PartName(part).c_str()),
+            static_cast<std::int32_t>(std::max(count, 1)));
         if (!vm->DispatchStaticCall(kScript, "External_TortureText", args, callback)) {
             webui_log::warn("InjuryEngine: {}.External_TortureText dispatch failed", kScript);
             return false;

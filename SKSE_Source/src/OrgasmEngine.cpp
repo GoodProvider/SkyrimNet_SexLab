@@ -2927,10 +2927,11 @@ namespace OrgasmEngine
         };
 
         // Caller holds g_lock. "<punisher> punishes <target> by pinching <target>'s nipples, because <reason>."
+        // amount > 1 adds " <amount> times" after the act.
         // Weak spell: "... by hitting <target>'s ass with Sparks". Free text is the method as typed
         // ("biting <target>'s lips"). location "body" / "" names no part. Empty line when refused.
         PunishPlan PunishLocked(RE::Actor* punisherActor, RE::FormID target, const std::string& method,
-            const std::string& location, const std::string& reason, const Aid::WeakSpell* spell)
+            const std::string& location, const std::string& reason, const Aid::WeakSpell* spell, std::int32_t amount)
         {
             PunishPlan plan;
             const SceneState* sc = PunisherScene(punisherActor);
@@ -2956,6 +2957,9 @@ namespace OrgasmEngine
                     act = how.empty() ? kPunishMethods[0].act : how + " {target}";
                 }
                 ReplaceAll(act, "{target}", on);
+            }
+            if (amount > 1) {
+                act += " " + std::to_string(amount) + " times";
             }
             std::string why = Trimmed(reason);
             // The line adds "because": "because Nina refused ..." would read "because because Nina refused ...".
@@ -2985,7 +2989,7 @@ namespace OrgasmEngine
         // gets the agree / refuse answer.
         void ContinuePunish(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan,
             const std::string& method, const std::string& location, RE::FormID spell, float spellDamage,
-            const std::string& feeling, bool feelingFromInjuryEngine)
+            const std::string& feeling, bool feelingFromInjuryEngine, std::int32_t amount)
         {
             RE::Actor* punisher = ActorFor(punisherId);
             RE::Actor* target = ActorFor(targetId);
@@ -2997,7 +3001,7 @@ namespace OrgasmEngine
             bool injuryEngineNarrates = false;
             if (!feelingFromInjuryEngine) {
                 // Older Injury Engine (no External_TortureText): the hit goes through External_Damage, which narrates.
-                injuryEngineNarrates = InjuryEngine::PunishHit(punisher, target, text, method, location, spell);
+                injuryEngineNarrates = InjuryEngine::PunishHit(punisher, target, text, method, location, spell, amount);
             }
             if (!injuryEngineNarrates) {
                 NarrateRequest(text, punisher, target, plan.direct);
@@ -3152,18 +3156,19 @@ namespace OrgasmEngine
     }
 
     bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
-        const std::string& reason)
+        const std::string& reason, std::int32_t amount)
     {
         if (!punisher) {
             return false;
         }
+        amount = InjuryEngine::Installed() ? std::clamp(amount, 1, InjuryEngine::MaxStrikes()) : 1;
         // Weak attack spells read the punisher's spell lists outside the engine lock.
         const auto spells = Aid::WeakAttackSpells(punisher);
         const Aid::WeakSpell* spell = Aid::FindWeakSpell(spells, method);
         PunishPlan plan;
         {
             std::lock_guard lock(g_lock);
-            plan = PunishLocked(punisher, target, method, location, reason, spell);
+            plan = PunishLocked(punisher, target, method, location, reason, spell, amount);
         }
         if (plan.line.empty()) {
             return false;
@@ -3172,7 +3177,7 @@ namespace OrgasmEngine
         const RE::FormID spellForm = spell ? spell->form : 0;
         const float spellDamage = spell ? spell->minDamage : 0.0f;
         // The hit, the narrations and the decision run on the game thread.
-        SKSE::GetTaskInterface()->AddTask([punisherId, target, plan, method, location, spellForm, spellDamage]() {
+        SKSE::GetTaskInterface()->AddTask([punisherId, target, plan, method, location, spellForm, spellDamage, amount]() {
             RE::Actor* p = ActorFor(punisherId);
             RE::Actor* t = ActorFor(target);
             if (!p || !t) {
@@ -3180,15 +3185,16 @@ namespace OrgasmEngine
             }
             // Injury Engine lands the hit silently and returns the feeling text; narrate it with the line.
             const bool asked = InjuryEngine::PunishText(p, t, method, location, spellForm,
-                [punisherId, target, plan, method, location, spellForm, spellDamage](std::string feeling) {
+                [punisherId, target, plan, method, location, spellForm, spellDamage, amount](std::string feeling) {
                     SKSE::GetTaskInterface()->AddTask(
-                        [punisherId, target, plan, method, location, spellForm, spellDamage, feeling]() {
+                        [punisherId, target, plan, method, location, spellForm, spellDamage, amount, feeling]() {
                             ContinuePunish(punisherId, target, plan, method, location, spellForm, spellDamage, feeling,
-                                true);
+                                true, amount);
                         });
-                });
+                },
+                amount);
             if (!asked) {
-                ContinuePunish(punisherId, target, plan, method, location, spellForm, spellDamage, "", false);
+                ContinuePunish(punisherId, target, plan, method, location, spellForm, spellDamage, "", false, amount);
             }
         });
         return true;

@@ -31,6 +31,7 @@ void PushLogPanelPoll();
 bool GetConfigBool(const char* path, bool def);
 /// Another plugin's dashboard value (plugin = config name without "Plugin_", e.g. "Injury_Engine").
 bool GetForeignConfigBool(const char* plugin, const char* path, bool def);
+int GetForeignConfigInt(const char* plugin, const char* path, int def);
 int GetConfigInt(const char* path, int def);
 float GetConfigFloat(const char* path, float def);
 std::string GetConfigString(const char* path, const char* def);

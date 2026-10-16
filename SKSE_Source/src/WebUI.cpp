@@ -792,14 +792,15 @@ void InitWebUI()
                     const std::string method = j.value("method", std::string{});
                     const std::string location = j.value("location", std::string{});
                     const std::string reason = j.value("reason", std::string{});
+                    const std::int32_t amount = j.value("amount", 1);
                     webui_log::info("onPunishResult verb={} subject={:#x} object={:#x} request='{}' text='{}' "
-                                    "method='{}' location='{}' reason='{}'",
-                        verb, subject, object, request, text, method, location, reason);
+                                    "method='{}' location='{}' reason='{}' amount={}",
+                        verb, subject, object, request, text, method, location, reason, amount);
                     SKSE::GetTaskInterface()->AddTask(
-                        [verb, subject, object, request, text, method, location, reason]() {
+                        [verb, subject, object, request, text, method, location, reason, amount]() {
                             RE::Actor* by = RE::TESForm::LookupByID<RE::Actor>(subject);
                             if (verb == "punish")
-                                OrgasmEngine::PunishNarrated(by, object, method, location, reason);
+                                OrgasmEngine::PunishNarrated(by, object, method, location, reason, amount);
                             else
                                 OrgasmEngine::AskOrderNarrated(by, object, verb == "order", request, text);
                         });

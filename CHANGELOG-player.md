@@ -2,13 +2,17 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
 ### 0.35.2
 
-- Scene HUD: Aid moved from Num 0 to **Num =** and Ask / Order / Punish from Num . to **Num /**; both now sit in the top row above calm and arouse. Most PC keyboards have no Num = key: set the Aid hotkey in the dashboard (Mini-game). Keys you saved in the dashboard before keep working until you reset them
+- Ask / Order / Punish panel: reopens with what you picked last time (when it still fits the scene); a reason that is gone is swapped for another one at random
+- Punish: **no reason** and **custom** are always offered, so you can punish anyone in the scene
+- Punish with Injury Engine: new **Hits** box (1 up to Injury Engine's "Maximum lashes per action") lands that many hits; the line says "… 3 times"
+- Fixed: answering Yes to "enable torture sexual parts?" only lasted until the next load (needs the updated Injury Engine)
+- Scene HUD: Ask / Order / Punish stays on **Num .**, now drawn under Num 3, and Aid moves from Num 0 to **Num Enter**, to its right. Keys you saved in the dashboard before keep working until you reset them
 - New Narration settings at the top of the dashboard: Start, Stage change, Orgasm, End, Position change, Style change and Strategy / request narration. Each can be turned down to Event, ShortEvent (fades after 30 s) or Silent; Direct (default) keeps today's behaviour. With Orgasm below Direct the scene no longer waits for the orgasm voice. **Narrate position changes** is replaced by Position change narration
 - New setting **Disable OrgasmEngine, switch back to SexLab** (Enjoyment): SexLab or SLSO decides enjoyment and orgasms again and the mod just narrates them. The mini-game, NPC strategies and the orgasm check before the last stage are off while it is on; the WebUI orgasm button still works. Applies from the next scene
 - SexLab P+ supported: the animation database fills from P+, scenes end after the orgasms instead of looping, pause and stage keys work, and animation / actor changes keep the scene going
 - Fixed with SLSO: orgasms sometimes did not count for other mods (Radiant Prostitution clients paid as if they never came) because SLSO's edging swallowed them
 - Scene Creator: Start is greyed out until at least one animation is selected
-- Aid panel (Num 0): healing spells now have a "Heal up to _ points" field and keep healing at their normal rate until that many points are healed or you run out of magicka; Healing Hands is picked by default
+- Aid panel (Num Enter): healing spells now have a "Heal up to _ points" field and keep healing at their normal rate until that many points are healed or you run out of magicka; Healing Hands is picked by default
 - Aid panel (Num 0): pick who uses the spell or potion (default you) and who it is used on (default someone else in the scene)
 - Bondage panel: Start now removes or changes devices that were not in the bundled list (for example some armbinders), and tells you when a device could not be changed
 - New Ask / Order / Punish panel (Num .): ask or order someone to change how they play; they answer "agrees to" or "refuses", and a refusal is something they can be punished for

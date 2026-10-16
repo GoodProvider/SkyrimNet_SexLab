@@ -120,6 +120,15 @@ bool GetForeignConfigBool(const char* plugin, const char* path, bool def)
     return ParseBool(PublicGetPluginConfigValue(plugin, path, def ? "true" : "false"), def);
 }
 
+int GetForeignConfigInt(const char* plugin, const char* path, int def)
+{
+    if (!CrossDllStdStringSafe() || !PublicGetPluginConfigValue)
+        return def;
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%d", def);
+    return ParseInt(PublicGetPluginConfigValue(plugin, path, buf), def);
+}
+
 int GetConfigInt(const char* path, int def)
 {
     return GetInt(path, def);
@@ -187,6 +196,7 @@ std::uint32_t HotkeyVkToDx(int vk)
     case VK_INSERT:
     case VK_DELETE:
     case VK_DIVIDE:
+    case VK_RETURN:  // read as Num Enter (0x9C); main Enter shares the VK
     case VK_RCONTROL:
     case VK_RMENU:
         return 0x80 | sc;
