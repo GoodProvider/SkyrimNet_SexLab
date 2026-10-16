@@ -50,8 +50,8 @@ namespace Hud
             { "calm", "sexlab.minigame.key_calm", VK_NUMPAD8, true },
             { "arouse", "sexlab.minigame.key_arouse", VK_NUMPAD9, true },
             { "deny", "sexlab.hud.key_deny", VK_NUMPAD1, false },
-            { "punish", "sexlab.hud.key_punish", VK_DECIMAL, false, "sexlab.minigame.key_force" },
-            { "aid", "sexlab.minigame.key_aid", VK_NUMPAD0, true },
+            { "punish", "sexlab.hud.key_punish", VK_DIVIDE, false, "sexlab.minigame.key_force" },
+            { "aid", "sexlab.minigame.key_aid", VK_OEM_NEC_EQUAL, true },  // Num =
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
         constexpr std::uint32_t kSkyrimNetDx = 0x47;   // Num 7
@@ -591,6 +591,10 @@ namespace Hud
             return "Num .";
         case 0x52:
             return "Num 0";
+        case 0xB5:
+            return "Num /";
+        case 0x8D:
+            return "Num =";
         default:
             break;
         }

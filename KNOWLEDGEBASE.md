@@ -49,7 +49,7 @@
 
 - **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so no engine cast plays (see Visual cast).
 - **Weak Force spells:** a real hostile cast would start combat or add a bounty, and could kill. Force applies the smallest Damage Health magnitude as `DamageActorValue`, capped at health − 1 (`Aid::QueueWeakSpellHit`).
-- **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Num 0 use does not refresh it, because actions never run for the player.
+- **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Aid key (Num =) use does not refresh it, because actions never run for the player.
 
 ## Next stage falls back to stage 1 (2026-10-07, open)
 

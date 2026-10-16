@@ -9,7 +9,7 @@
         C++ pushes hudUpdate({groups, focus, shiftTarget (row arouse / calm hit while Shift is held, -1 otherwise), actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
         blocked, paused, freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
-        Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys.
+        Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys; aid (Num =) and ask (Num /) sit above calm / arouse.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -115,7 +115,7 @@
             100% { background-color: #ff4fa3; }
         }
 
-        /* Controls: 4 x 3 grid laid out like the numpad (7 8 9 - / 4 5 6 + / 1 2 3); each cell is one box, key over label.
+        /* Controls: 5 x 4 grid laid out like the numpad (= / * / 7 8 9 - / 4 5 6 + / 1 2 3); each cell is one box, key over label.
            Equal 1fr columns in a max-content grid: every box is as wide as the widest cell. */
         #controls {
             display: grid;
@@ -151,9 +151,9 @@
         .ctl.blocked, .ctl.dim { opacity: 0.4; }
         td.lock { width: 1.2em; text-align: center; }
         .ctl.blocked .label .text { text-decoration: line-through; }
-        /* Take control of an NPC: "as <name>" across the four left columns of the top row. */
+        /* Take control of an NPC: "as <name>" across the two left columns of the top row. */
         .acting {
-            grid-column: 1 / span 4;
+            grid-column: 1 / span 2;
             justify-self: end;
             align-self: center;
             color: var(--accent);
@@ -234,8 +234,8 @@
         // Every label each grid column can show; each cell carries them as invisible sizers so widths never change.
         const COLUMN_LABELS = [
             ['', 'PosUp', 'PosDn'],
-            ['', 'prev', 'deny', 'allow', 'aid'],
-            ['calm', 'pause', 'play', 'end'],
+            ['', 'prev', 'deny', 'allow'],
+            ['aid', 'calm', 'pause', 'play', 'end'],
             ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM, 'ask'],
             SPEED_NAMES.concat([NO_STEP, 'auto', 'control', 'release']),
         ];
@@ -315,23 +315,32 @@
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
             // Controls part, PgUp/PgDn column + numpad grid. Each label names what a press does.
-            //                                    auto|control   (Num *: take control; "as <npc>" while driving an NPC)
+            //   <as npc>         aid    ask      auto|control   (Num =: aid, mini-game; Num /: ask, always; Num *: take control)
             //   PosUp   (Num 7)  calm   arouse   <slower step>
             //   PosDn   prev     pause  next     <faster step>
             //           deny     end    free 📷
-            //           aid             punish          (Num 0: mini-game; Num .: always)
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
             const fa = actors[state.focus];
             const slower = state.slower || '', faster = state.faster || '';
             let c = '';
-            // Top row: take control. auto = hand to AI; control = take back from auto play; release = stop driving an NPC.
+            // Top row: "as <npc>" while driving an NPC; aid (mini-game) over calm, greyed out without a healing / stamina
+            // spell or potion; ask / order / punish over arouse (always shows ask), greyed out when nobody else is in the scene;
+            // take control. auto = hand to AI; control = take back from auto play; release = stop driving an NPC.
             if (state.acting && !cOff) {
                 c += '<span class="acting">as ' + esc(state.acting) + '</span>';
             } else {
-                for (let i = 0; i < 4; i++) c += ctl(keys, '', '', i, { off: true });
+                for (let i = 0; i < 2; i++) c += ctl(keys, '', '', i, { off: true });
             }
+            const punish = state.punish || {};
+            const aid = state.aid || {};
+            const punishOn = !!punish.show && !cOff;
+            const aidOn = !!aid.show && !mgcOff;
+            c += ctl(keys, 'aid', 'aid', 2, !aidOn ? { off: true } : aid.enabled ? {} :
+                { dim: true, title: 'no healing or stamina spell or potion' });
+            c += ctl(keys, 'punish', 'ask', 3, !punishOn ? { off: true } : punish.enabled ? {} :
+                { dim: true, title: 'nobody else is in the scene' });
             const tcLabel = state.takeControlLabel || 'auto';
             c += ctl(keys, 'take_control', tcLabel, 4, { off: cOff });
             c += ctl(keys, 'pos_up', 'PosUp', 0, { off: cOff });
@@ -349,21 +358,6 @@
             c += ctl(keys, 'end', 'end', 2, { off: cOff });
             c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 3, { off: cOff });
             c += ctl(keys, '', '', 4, { off: true });
-            // Bottom row: aid (mini-game) under deny, greyed out without a healing / stamina spell or potion;
-            // ask / order / punish always (shows ask), greyed out when nobody else is in the scene.
-            const punish = state.punish || {};
-            const aid = state.aid || {};
-            const punishOn = !!punish.show && !cOff;
-            const aidOn = !!aid.show && !mgcOff;
-            if (punishOn || aidOn) {
-                c += ctl(keys, '', '', 0, { off: true });
-                c += ctl(keys, 'aid', 'aid', 1, !aidOn ? { off: true } : aid.enabled ? {} :
-                    { dim: true, title: 'no healing or stamina spell or potion' });
-                c += ctl(keys, '', '', 2, { off: true });
-                c += ctl(keys, 'punish', 'ask', 3, !punishOn ? { off: true } : punish.enabled ? {} :
-                    { dim: true, title: 'nobody else is in the scene' });
-                c += ctl(keys, '', '', 4, { off: true });
-            }
             const controlsOn = !!g.controls;
             const controls = document.getElementById('controls');
             controls.innerHTML = c;

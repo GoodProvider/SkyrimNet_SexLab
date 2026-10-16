@@ -2,6 +2,7 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
 ### 0.35.2
 
+- Scene HUD: Aid moved from Num 0 to **Num =** and Ask / Order / Punish from Num . to **Num /**; both now sit in the top row above calm and arouse. Most PC keyboards have no Num = key: set the Aid hotkey in the dashboard (Mini-game). Keys you saved in the dashboard before keep working until you reset them
 - New Narration settings at the top of the dashboard: Start, Stage change, Orgasm, End, Position change, Style change and Strategy / request narration. Each can be turned down to Event, ShortEvent (fades after 30 s) or Silent; Direct (default) keeps today's behaviour. With Orgasm below Direct the scene no longer waits for the orgasm voice. **Narrate position changes** is replaced by Position change narration
 - New setting **Disable OrgasmEngine, switch back to SexLab** (Enjoyment): SexLab or SLSO decides enjoyment and orgasms again and the mod just narrates them. The mini-game, NPC strategies and the orgasm check before the last stage are off while it is on; the WebUI orgasm button still works. Applies from the next scene
 - SexLab P+ supported: the animation database fills from P+, scenes end after the orgasms instead of looping, pause and stage keys work, and animation / actor changes keep the scene going

@@ -163,6 +163,8 @@ std::uint32_t HotkeyVkToDx(int vk)
         return 258;
     case VK_PAUSE:
         return 0xC5;  // DIK_PAUSE; MapVirtualKey has no scancode for it
+    case VK_OEM_NEC_EQUAL:
+        return 0x8D;  // DIK_NUMPADEQUALS (Num =); MapVirtualKey has no scancode for it
     default:
         break;
     }

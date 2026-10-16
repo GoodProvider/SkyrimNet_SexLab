@@ -35,15 +35,16 @@ These keys work while you are in a scene, or while you control an NPC in another
 
 ```
 ---------------------------------------------------------------------
-|            |               |         |               | * control|
+|            |               | = aid   | / punish      | * control|
 | PgUp PosUp | 7 (SkyrimNet) | 8 calm  | 9 arouse      | - slower |
 | PgDn PosDn | 4 previous    | 5 pause | 6 next        | + faster |
 |            | 1 deny        | 2 end   | 3 free camera |          |
-|            | 0 aid         |         | . punish      |          |
 ---------------------------------------------------------------------
 ```
 
-Num 3 is SexLab's own **Toggle Free Camera** key, set in the SexLab MCM; this mod doesn't bind it, but the HUD shows it. Num 7 is left for SkyrimNet. Num Enter is free.
+Num 3 is SexLab's own **Toggle Free Camera** key, set in the SexLab MCM; this mod doesn't bind it, but the HUD shows it. Num 7 is left for SkyrimNet. Num 0, Num . and Num Enter are free.
+
+Most PC keyboards have no **Num =** key. If yours doesn't, set another key for **Aid** in the dashboard (**Mini-game** / **Aid hotkey**), for example Num 0.
 
 If you saved keys in the dashboard before this layout, reset them there to get the new defaults.
 
@@ -57,23 +58,21 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
 - **Controls:** a fixed grid laid out like the numpad. Each label names what pressing its key will do.
 
   ```
-                                       Num *
-                                       auto
+                     Num =    Num /    Num *
+                     aid      ask      auto
    PgUp     Num 7    Num 8    Num 9    Num -
    PosUp             calm     arouse   gentle
    PgDn     Num 4    Num 5    Num 6    Num +
    PosDn    prev     pause    next     forceful
             Num 1    Num 2    Num 3
             deny     end      free 📷
-            Num 0             Num .
-            aid               punish
   ```
 
   Num 7 is dimmed with no label (it belongs to SkyrimNet).
 
   - **Num \*** (*auto* / *control*) hands your scene to the AI or takes it back. See [Take control and auto play](#take-control-and-auto-play).
   - **Num 2** ends the scene.
-  - **Num .** (*ask*) opens the **Ask / Order / Punish** panel. It works in every scene, whatever your role. The cell reads *ask*.
+  - **Num /** (*ask*) opens the **Ask / Order / Punish** panel. It works in every scene, whatever your role. The cell reads *ask*.
     - **Ask / order:** "*subject* *asks* / *orders* *object* to *request*." The **request** lists what the object can be asked to do right now, in the words of the strategy ("be passive and let things happen", "focus on Bob's pleasure"), or **custom** (type your own words). It works in the mini-game, on NPCs the AI plays. It is narrated ("Bob orders Nina to be passive and let things happen."), the AI decides what Nina does, and she answers on her own line: "Nina agrees to Bob's request to …" or "Nina refuses Bob's request to …". A refusal is remembered as something she can be punished for.
     - **Punish:** "*subject* *punishes* *object* by *method* *object*'s *body part*, because *reason*." The **punish** choice shows up only when the object can be punished for something: a request she refused, or a reason another mod gave. The **reason** lists those (or **custom**, which opens a box to type your own; Enter or OK punishes right away).
     - **Subject:** anyone in the scene (default: you, or the NPC you control). **Object:** anyone else in the scene, you included.
@@ -100,7 +99,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
   - Acting on another actor is narrated.
   - Near the top, an orgasm can land anywhere from 90%.
   - Near the end of the final stage, anyone at 90% or more who hasn't finished still orgasms, unless you calmed them during that stage.
-  - **Num 0** (*aid*) opens the **Aid** panel: "*You* *spell or potion* on *actor*'s *body part*." Pick one of your healing or stamina spells or potions, who gets it (you or anyone in the scene), and where (body, pussy, ass, nipples or **custom**; it only changes the narration). A spell costs its magicka (a spell you can't afford is greyed out); Healing Hands is picked first when you know it. A spell has a **Heal up to _ points** field (default: the target's missing health): the spell keeps running at its normal rate (a concentration spell every second, other spells recast) until that many points are healed, you run out of magicka, or the target is full; a new Aid replaces it. A potion is used up. The spell's or potion's effects show on the target (and the spell's glow on your hands). It is narrated ("Bob casts Healing Hands on Nina." / "Bob gives Nina a Potion of Minor Stamina."; with a body part: "Bob casts Healing Hands on Nina's ass." / "Bob pours a Potion of Minor Stamina on Nina's nipples."). Without a spell or potion the cell is greyed out.
+  - **Num =** (*aid*) opens the **Aid** panel: "*You* *spell or potion* on *actor*'s *body part*." Pick one of your healing or stamina spells or potions, who gets it (you or anyone in the scene), and where (body, pussy, ass, nipples or **custom**; it only changes the narration). A spell costs its magicka (a spell you can't afford is greyed out); Healing Hands is picked first when you know it. A spell has a **Heal up to _ points** field (default: the target's missing health): the spell keeps running at its normal rate (a concentration spell every second, other spells recast) until that many points are healed, you run out of magicka, or the target is full; a new Aid replaces it. A potion is used up. The spell's or potion's effects show on the target (and the spell's glow on your hands). It is narrated ("Bob casts Healing Hands on Nina." / "Bob gives Nina a Potion of Minor Stamina."; with a body part: "Bob casts Healing Hands on Nina's ass." / "Bob pours a Potion of Minor Stamina on Nina's nipples."). Without a spell or potion the cell is greyed out.
   - NPCs can do the same: the AI may have an actor heal or restore someone in the scene (**SexLab_Aid**).
 
 ## Take control and auto play
