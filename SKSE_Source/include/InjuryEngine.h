@@ -35,6 +35,12 @@ namespace InjuryEngine
     /// Heals health worth of whip wounds on part; Injury Engine narrates line when narrate. False when not installed.
     bool Heal(RE::Actor* caster, RE::Actor* target, const std::string& line, float health, const std::string& part,
         bool narrate = true);
+    /// Injury Engine part name -> pulldown term: penis -> cock, ass hole -> ass; others unchanged.
+    std::string PartTerm(const std::string& name);
+    /// Torture points per part of target through External_PartPoints: done gets Injury Engine's JSON
+    /// ({"total","max","parts":[{"name","points","max"}]}, "" when not ready) on a Papyrus VM thread.
+    /// False (done never called) when not installed, Injury Engine has no External_PartPoints, or the dispatch fails.
+    bool PartPoints(RE::Actor* target, std::function<void(std::string)> done);
     /// Turns injury_engine.body.include_sexual_parts on in Injury Engine.
     void EnableSexualParts();
 }

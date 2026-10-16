@@ -16,6 +16,7 @@
 
 - Detect with `TESDataHandler::LookupModByName("Injury_Engine.esp")` plus a VM type check that `Injury_Engine_Main` has the global `External_Damage` (`InjuryEngine::Installed`, cached per session). An older Injury Engine without the API counts as not installed.
 - `External_TortureText` (silent hit, returns the feeling text as a String; `InjuryEngine::PunishText`) is optional: without it Punish falls back to `External_Damage`, which narrates. Its Papyrus String result reaches C++ through an `IStackCallbackFunctor` on a VM thread, so hop to the game thread (`AddTask`) before using it.
+- Torture points per part come from `External_PartPoints` (async, answered on a VM thread). `OpenPanel` waits for every actor's answer before opening Aid / Punish, so a panel opens a frame or two after the key; an Injury Engine without the global opens the panel at once with no bar.
 - Call its Papyrus globals with `DispatchStaticCall`; never call its `Take*` / `Sync*` natives (they drain Injury Engine's own queues).
 - Read its settings from C++ with `SexLabNet::GetForeignConfigBool("Injury_Engine", ...)` (C++ name without `Plugin_`). Write them only through Injury Engine (`External_SetSexualParts`, which runs `PatchConfig` on `Plugin_Injury_Engine` and applies the value at once). Until 2026-10-15 that patch still wrote the pre-rename `whip.body.include_sexual_parts`, so the Yes held only until the next config load; the patch JSON must follow the `injury_engine.` key rename.
 

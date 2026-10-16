@@ -2,6 +2,7 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 
 ### 0.35.2
 
+- Aid and Punish panels with Injury Engine: a bar shows how badly the chosen body part is hurt, followed by its torture points (**body** shows the whole body). The Aid panel now starts on the most hurt body part; healing it doesn't need still goes to other hurt parts (needs the updated Injury Engine)
 - Ask / Order / Punish panel: reopens with what you picked last time (when it still fits the scene); a reason that is gone is swapped for another one at random
 - Punish: **no reason** and **custom** are always offered, so you can punish anyone in the scene
 - Punish with Injury Engine: new **Hits** box (1 up to Injury Engine's "Maximum lashes per action") lands that many hits; the line says "… 3 times"

@@ -283,6 +283,39 @@ namespace InjuryEngine
         return true;
     }
 
+    std::string PartTerm(const std::string& name)
+    {
+        if (name == "penis") {
+            return "cock";
+        }
+        if (name == "ass hole") {
+            return "ass";
+        }
+        return name;
+    }
+
+    bool PartPoints(RE::Actor* target, std::function<void(std::string)> done)
+    {
+        static int cached = -1;
+        if (cached < 0) {
+            cached = Installed() && HasGlobal(kScript, "External_PartPoints") ? 1 : 0;
+            if (!cached && Installed()) {
+                webui_log::warn("InjuryEngine: no External_PartPoints (update Injury Engine); Aid / Punish torture bar off");
+            }
+        }
+        auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+        if (!target || cached != 1 || !vm) {
+            return false;
+        }
+        RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback{ new TextCallback(std::move(done)) };
+        auto* args = RE::MakeFunctionArguments(std::move(target));
+        if (!vm->DispatchStaticCall(kScript, "External_PartPoints", args, callback)) {
+            webui_log::warn("InjuryEngine: {}.External_PartPoints dispatch failed", kScript);
+            return false;
+        }
+        return true;
+    }
+
     void EnableSexualParts()
     {
         if (!Installed()) {

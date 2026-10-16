@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -269,16 +270,81 @@ namespace Hud
             return base && base->GetSex() == RE::SEX::kFemale;
         }
 
-        // Opens a panel on the game thread with Injury Engine's state added (installed / sexual parts on / max strikes).
+        void ShowPanel(const char* fn, const nlohmann::json& cfg)
+        {
+            const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            WebUI_Invoke(std::string(fn) + "(" + payload + ");");
+            WebUI_Visibility_Show(false);
+        }
+
+        // Injury Engine's External_PartPoints JSON -> the panel's actor "injury": {total, max, parts: {<term>: {points, max}}}.
+        // null when empty or unreadable.
+        nlohmann::json InjuryOf(const std::string& text)
+        {
+            const auto j = nlohmann::json::parse(text, nullptr, false);
+            if (j.is_discarded() || !j.is_object() || !j.contains("parts")) {
+                return nullptr;
+            }
+            nlohmann::json parts = nlohmann::json::object();
+            for (const auto& p : j["parts"]) {
+                parts[InjuryEngine::PartTerm(p.value("name", ""))] = { { "points", p.value("points", 0) },
+                    { "max", p.value("max", 0) } };
+            }
+            return { { "total", j.value("total", 0) }, { "max", j.value("max", 0) }, { "parts", std::move(parts) } };
+        }
+
+        // Opens a panel on the game thread with Injury Engine's state added (installed / sexual parts on / max strikes)
+        // and, when Injury Engine has External_PartPoints, each actor's torture points per part ("injury"): the panel
+        // opens once every actor's points are in (or straight away when none could be asked for).
         void OpenPanel(const char* fn, nlohmann::json cfg)
         {
             SKSE::GetTaskInterface()->AddTask([fn, cfg = std::move(cfg)]() mutable {
                 cfg["injuryengine"] = InjuryEngine::Installed();
                 cfg["injuryengineSexual"] = cfg["injuryengine"].get<bool>() && InjuryEngine::SexualParts();
                 cfg["injuryengineMaxStrikes"] = cfg["injuryengine"].get<bool>() ? InjuryEngine::MaxStrikes() : 1;
-                const std::string payload = cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-                WebUI_Invoke(std::string(fn) + "(" + payload + ");");
-                WebUI_Visibility_Show(false);
+                struct Pending
+                {
+                    std::mutex lock;
+                    nlohmann::json cfg;
+                    std::size_t left = 0;
+                };
+                auto pending = std::make_shared<Pending>();
+                pending->cfg = std::move(cfg);
+                const auto ids = [&]() {
+                    std::vector<RE::FormID> out;
+                    for (const auto& a : pending->cfg["actors"]) {
+                        out.push_back(a.value("id", RE::FormID{ 0 }));
+                    }
+                    return out;
+                }();
+                pending->left = ids.size();
+                std::size_t asked = 0;
+                if (pending->cfg["injuryengine"].get<bool>()) {
+                    for (std::size_t i = 0; i < ids.size(); ++i) {
+                        const bool ok = InjuryEngine::PartPoints(ActorFor(ids[i]), [pending, fn, i](std::string text) {
+                            auto injury = InjuryOf(text);
+                            std::lock_guard lock(pending->lock);
+                            if (!injury.is_null()) {
+                                pending->cfg["actors"][i]["injury"] = std::move(injury);
+                            }
+                            if (--pending->left == 0) {
+                                SKSE::GetTaskInterface()->AddTask([pending, fn]() { ShowPanel(fn, pending->cfg); });
+                            }
+                        });
+                        if (!ok) {
+                            break;
+                        }
+                        ++asked;
+                    }
+                }
+                // The actors not asked for count as answered; when that settles the last one, open here (otherwise
+                // the last callback opens it).
+                const std::size_t skipped = ids.size() - asked;
+                std::lock_guard lock(pending->lock);
+                pending->left -= skipped;
+                if (pending->left == 0 && (skipped > 0 || ids.empty())) {
+                    ShowPanel(fn, pending->cfg);
+                }
             });
         }
 

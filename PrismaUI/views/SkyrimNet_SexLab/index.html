@@ -1046,6 +1046,39 @@
             margin: 0 0 var(--space-md);
         }
 
+        /* Injury Engine torture on the picked part: bar (percent of the part's max), then the points. */
+        .torture-meter {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-left: var(--space-sm);
+            vertical-align: middle;
+        }
+
+        .torture-track {
+            position: relative;
+            width: 120px;
+            height: 8px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .torture-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 0;
+            background: #c0392b;
+        }
+
+        .torture-points {
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
         #punish-panel .option-cancel {
             margin-top: 0;
             border-top: none;
@@ -2369,6 +2402,7 @@
         <div id="punish-amount-row" class="aid-note" style="display:none">
             Hits <input type="number" id="punish-amount" class="aid-points" min="1" step="1" oninput="punishUpdate()">
             <span id="punish-amount-range"></span>
+            <span class="torture-meter" id="punish-torture" style="display:none"><span class="torture-track"><span class="torture-fill"></span></span><span class="torture-points"></span></span>
         </div>
         <div id="punish-part-confirm" class="injuryengine-confirm" style="display:none"></div>
         <div class="btn-row">
@@ -2398,7 +2432,8 @@
         <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
         <div id="aid-part-confirm" class="injuryengine-confirm" style="display:none"></div>
         <div id="aid-points-row" class="aid-note" style="display:none">
-            Heal up to <input type="number" id="aid-points" class="aid-points" min="1" step="1" oninput="aidPointsTyped()"> points
+            <span id="aid-points-input">Heal up to <input type="number" id="aid-points" class="aid-points" min="1" step="1" oninput="aidPointsTyped()"> points</span>
+            <span class="torture-meter" id="aid-torture" style="display:none"><span class="torture-track"><span class="torture-fill"></span></span><span class="torture-points"></span></span>
         </div>
         <div id="aid-note" class="aid-note"></div>
         <div class="btn-row">
@@ -8084,7 +8119,8 @@
 
         // ── Ask / Order / Punish (HUD punish key) ───────────────────
         // C++ Hud OnPunish: {actors: [{id, name, female, isPlayer, spells, requests: [{key, text}], reasons: [string]}],
-        // defaultPunisher, injuryengine, injuryengineSexual, injuryengineMaxStrikes}. Reply onPunishResult:
+        // defaultPunisher, injuryengine, injuryengineSexual, injuryengineMaxStrikes}. Each actor (Punish and Aid) may also
+        // carry injury: {total, max, parts: {<pulldown term>: {points, max}}} (Injury Engine torture points). Reply onPunishResult:
         //   ask / order: {verb, subject, object, request (a request key) | text (free phrase after "to")}
         //   punish:      {verb, subject, object, method, location, reason ("" for no reason), amount (hits)}
         // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
@@ -8185,6 +8221,29 @@
             const text = document.getElementById(textId);
             text.style.display = part === 'custom' ? '' : 'none';
             return part === 'custom' ? text.value.trim() : part;
+        }
+
+        // Torture points {points, max} of actor's part from the Hud payload's actor.injury (Injury Engine); body and
+        // custom text: the whole body (Injury Engine spreads those over random parts). null without Injury Engine data.
+        function injuryFor(actor, part) {
+            const inj = actor && actor.injury;
+            if (!inj) return null;
+            const p = inj.parts && inj.parts[part];
+            if (p) return { points: p.points || 0, max: p.max || 0 };
+            if (part === 'body' || part === 'custom') return { points: inj.total || 0, max: inj.max || 0 };
+            return null;
+        }
+
+        // The torture bar (percent of the part's max) and points after it; hidden without data.
+        function renderTortureMeter(id, actor, part) {
+            const meter = document.getElementById(id);
+            const inj = injuryFor(actor, part);
+            meter.style.display = inj ? '' : 'none';
+            if (!inj) return;
+            const pct = inj.max > 0 ? Math.min(100, Math.round(inj.points / inj.max * 100)) : 0;
+            meter.querySelector('.torture-fill').style.width = pct + '%';
+            meter.querySelector('.torture-points').textContent = `${inj.points} pts`;
+            meter.title = `${pct}% torture`;
         }
 
         function punishSubject() {
@@ -8357,6 +8416,7 @@
                     partLocation(PUNISH.part, 'punish-part-text') !== '' && (!amountShown || punishAmount() > 0);
             }
             document.getElementById('punish-accept').classList.toggle('de-disabled', !ok);
+            renderTortureMeter('punish-torture', o, PUNISH.part);
         }
 
         // Hit count: punish with Injury Engine only (without it the hit is narration, one hit).
@@ -8485,6 +8545,22 @@
             return `${o.name} (${o.cost} magicka)`;
         }
 
+        // The actor's part with the most torture points (Injury Engine), first listed on a tie; sexual parts while
+        // Injury Engine has them off are skipped. 'body' when nothing is damaged or there is no data.
+        function aidMostDamagedPart(actor) {
+            let best = 'body';
+            let bestPoints = 0;
+            for (const p of bodyPartsFor(actor)) {
+                if (p === 'body' || p === 'custom' || partDimmed(p)) continue;
+                const inj = injuryFor(actor, p);
+                if (inj && inj.points > bestPoints) {
+                    best = p;
+                    bestPoints = inj.points;
+                }
+            }
+            return best;
+        }
+
         function aidRenderPart(current) {
             renderPartPulldown('aid-part', 'aid-part-text', (v) => {
                 AID.part = v;
@@ -8517,20 +8593,22 @@
             actorHost.innerHTML = '';
             actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[AID.actor] || {}).name || '', (_, i) => {
                 AID.actor = i;
-                aidRenderPart(AID.part);
+                aidRenderPart(aidMostDamagedPart(AID.actors[i]));
                 aidDefaultPoints();
                 aidUpdate();
             }));
         }
 
         // Points to heal: the target's missing health (a stamina-only spell: one cast), unless the player typed one.
+        // The row also holds the torture bar: shown for a potion too (input hidden) when Injury Engine sent points.
         function aidDefaultPoints() {
             const o = AID.options[AID.option];
-            const row = document.getElementById('aid-points-row');
-            row.style.display = o && !o.potion ? 'block' : 'none';
-            if (!o || o.potion || AID.pointsTyped) return;
+            const spell = !!o && !o.potion;
             const a = AID.actors[AID.actor];
-            const v = o.health ? Math.max(1, (a && a.missingHealth) || 0) : Math.max(1, o.perCast || 1);
+            document.getElementById('aid-points-row').style.display = spell || (a && a.injury) ? 'block' : 'none';
+            document.getElementById('aid-points-input').style.display = spell ? '' : 'none';
+            if (!o || o.potion || AID.pointsTyped) return;
+            const v =o.health ? Math.max(1, (a && a.missingHealth) || 0) : Math.max(1, o.perCast || 1);
             document.getElementById('aid-points').value = v;
         }
 
@@ -8548,6 +8626,7 @@
             const pointsOk = !o || o.potion || aidPoints() > 0;
             const ok = pointsOk && !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
             document.getElementById('aid-accept').classList.toggle('de-disabled', !ok);
+            renderTortureMeter('aid-torture', AID.actors[AID.actor], AID.part);
             const what = o ? [o.health ? 'health' : '', o.stamina ? 'stamina' : ''].filter(Boolean).join(' and ') : '';
             document.getElementById('aid-note').textContent = !o
                 ? (AID.options.length ? 'Not enough magicka for any of your spells.' : 'No healing or stamina spell or potion.')
@@ -8559,6 +8638,7 @@
                 part: BODY_PARTS[0], pointsTyped: false };
             INJURYENGINE = { installed: !!(cfg && cfg.injuryengine), sexual: !!(cfg && cfg.injuryengineSexual) };
             document.getElementById('aid-part-confirm').style.display = 'none';
+            document.getElementById('aid-part-text').value = '';
             // Subject defaults to the player; the object to the first actor that is not the player (else the subject).
             const defSubject = AID.actors.findIndex(a => a.id === (cfg && cfg.defaultSubject));
             AID.subject = Math.max(0, defSubject);
@@ -8576,7 +8656,7 @@
             }));
             aidRenderOptions();
             aidRenderActor();
-            aidRenderPart();
+            aidRenderPart(aidMostDamagedPart(AID.actors[AID.actor]));
             document.body.classList.add('yesno-solo');
             hideControlPanel();
             hideTargetMenuRow();
