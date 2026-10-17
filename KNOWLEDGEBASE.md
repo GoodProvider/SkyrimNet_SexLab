@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## Necro / corpse scenes end right after they start on SexLab 1.6x (2026-10-17)
+
+- **Symptom:** a FunnyBizness necro animation with a corpse starts, then ends within seconds. The log shows `StageStart stage:1/N state:Animating` and then `AnimationStart stage:N/N state:Ending` with none of our `EndAnimation` traces. `sslThreadController.EndAnimation` sets `Stage = StageCount` before `Ending`, so "stage N/N, Ending" right after the start means SexLab ended the thread.
+- **Cause:** SexLab 1.6x / SLSO `sslActorAlias` OnUpdate (Prepare and Animating) calls `Thread.EndAnimation(true)` for `!Is3DLoaded() || IsDisabled() || (IsDead() && Health < 1)`. `ValidateActor` rejects the same corpse with -13. P+ tracks dead actors itself (`_livestatus`) and is not affected.
+- **Fix:** `Utilities.CorpseHealth_Floor` raises a dead actor to Health 2 before `AddActor` and at each `StageStart`. `CorpseHealth_Restore` puts the saved value back at `Scene.AnimationEnd` or when the start fails. The actor stays dead.
+
 ## Actor locks restored from the save (2026-10-16)
 
 - **Symptom:** after loading a save made while a scene was being set up, the actors stayed "Name (locked)" and actions / TargetMenu refused them. `ActorLocker::Load` restored the co-saved locks (and re-set the StorageUtil mirror), but SexLab cancels every scene on load, so nothing would ever unlock them.
@@ -1196,6 +1202,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Fix:** rebuild with `compile: pyro` (`--no-incremental-build` when pex is newer than source). Check: `grep -ac '\\"' Scripts/*.pex` must be 0. `AnimDb_SubstituteActors` now warns on parse failure and on tokens left after substitution.
 - **Recurred 2026-10-10** (pex in `19b3bbd` / `062b432`: AnimDb, MCM, Menu, Scene, Utilities). `compile: papyrus` (`c:/Skyrim/tools/papyrus-compiler/papyrus.exe`) and `compile: skyrim` were both `isDefault` build tasks, so Ctrl+Shift+B could pick the wrong compiler. **`compile: pyro` is now the only default build task.** `ParseActorNames` (Papyrus_AnimationDB.cpp) retries `actors_json` with `\"` unescaped and warns `pex not built with pyro`. Stage descriptions survive a bad build; other Papyrus JSON does not, so still rebuild with pyro.
 - **Superseded 2026-10-16:** `compile: papyrus` (now with `Headers_Source` on the header path) was tested and works. It is the standard Papyrus task and the only default build task. The P+ bridge still builds with `compile: pyro (P+ bridge)`. After compiling, `grep -ac '\\"' Scripts/*.pex` should still be 0 for every file; if not, the escape bug is back. **Open:** the 2026-10-16 09:38 papyrus.exe build still fails this check (AnimDb 2, MCM 1, Menu 2, Scene 1, Utilities 2; e.g. Scene's `,\"_stage_started\":1}`).
+- **Reverted 2026-10-17 (AnimDB empty on 0.36.0):** the papyrus.exe pex shipped in 0.36.0. Every `AnimDb_PushAnimBatch` logged `parse failed`, `EndSync rows=0`, and the walk still said "ready" (user logs on SexLab P+ 2.18.1; 1.6x is equally affected). **`compile: pyro` is the default build task again**, at `C:/Skyrim/tools/Pyro/pyro.exe`; the joelday extension (2026.x) no longer bundles pyro, and the old task path was dead. **`make check-pex`** (`python_scripts/check_pex_escapes.py`) gates `make release`. `AnimDb_PushAnimBatch` retries a failed batch once with `\"` unescaped and logs where the parse broke. Investigation: `checkpoints/pplus_animdb/checkpoint_v01.md`.
 
 ## CommonLibSSE-NG pin and Skyrim 1.7.x (2026-10-04, superseded)
 

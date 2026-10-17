@@ -10,6 +10,7 @@ Function AnimDb_Open() global native
 int Function AnimDb_BeginSync(Bool force_rebuild) global native
 int Function AnimDb_PushAnimBatch(String json) global native
 Bool Function AnimDb_EndSync() global native
+int Function AnimDb_LastSyncFailures() global native ; DEBUG-DELETE(pplus-animdb)
 String Function AnimDb_QueryTopNAnims(String filter_json, int n) global native
 String Function AnimDb_QueryTopNTags(String filter_json, int n) global native
 int Function AnimDb_TotalEnabled() global native
@@ -240,6 +241,12 @@ Function BeginWalk()
     walk_skip_unreg = 0
     walk_skip_empty = 0
     walk_skip_logged = 0
+    ; DEBUG-DELETE(pplus-animdb)
+    walk_batches = 0
+    walk_batches_rejected = 0
+    walk_rows_accepted = 0
+    walk_skip_empty_id = 0
+    ; DEBUG-DELETE(pplus-animdb) end
     pplus_ids_source = -1
     progress_last_time = Utility.GetCurrentRealTime()
     AnimDb_BeginSync(walk_force)
@@ -331,7 +338,7 @@ Event OnUpdate()
     json += "]"
 
     if batch_count > 0
-        AnimDb_PushAnimBatch(json)
+        NoteBatchResult(AnimDb_PushAnimBatch(json), batch_count, json) ; DEBUG-DELETE(pplus-animdb) (was a bare AnimDb_PushAnimBatch(json))
     endif
 
     float now = Utility.GetCurrentRealTime()
@@ -364,6 +371,12 @@ Function WalkPPlusBatch()
         pplus_ids = SkyrimNet_SexLab_PPlus.AllSceneIds(walk_source)
         pplus_ids_source = walk_source
         Trace("WalkPPlusBatch", "P+ source="+walk_source+" scenes="+pplus_ids.length)
+        ; DEBUG-DELETE(pplus-animdb): registry count vs RefreshSlotCounts, and the first scene as P+ reports it.
+        Trace("WalkPPlusBatch", "DEBUG P+ source="+walk_source+" ids="+pplus_ids.length+" slots_human="+walk_slots_human+" slots_creature="+walk_slots_creature+" slots_total="+walk_slots_total)
+        if pplus_ids.length > 0
+            Trace("WalkPPlusBatch", "DEBUG first scene "+SkyrimNet_SexLab_PPlus.SceneDebug(pplus_ids[0]))
+        endif
+        ; DEBUG-DELETE(pplus-animdb) end
     endif
     int total = pplus_ids.length
     int batch_count = 0
@@ -386,11 +399,20 @@ Function WalkPPlusBatch()
             walk_total += 1
         else
             walk_skip_empty += 1
+            ; DEBUG-DELETE(pplus-animdb)
+            if id == ""
+                walk_skip_empty_id += 1
+            endif
+            if walk_skip_logged < 10
+                walk_skip_logged += 1
+                Trace("WalkPPlusBatch", "DEBUG skipped source="+walk_source+" index="+(walk_index - 1)+" id='"+id+"'")
+            endif
+            ; DEBUG-DELETE(pplus-animdb) end
         endif
     endwhile
     json += "]"
     if batch_count > 0
-        AnimDb_PushAnimBatch(json)
+        NoteBatchResult(AnimDb_PushAnimBatch(json), batch_count, json) ; DEBUG-DELETE(pplus-animdb) (was a bare AnimDb_PushAnimBatch(json))
     endif
     float now = Utility.GetCurrentRealTime()
     if now - progress_last_time >= 5.0
@@ -499,6 +521,23 @@ String Function BuildAnimJson_PPlus(String id, int source)
         +",\"_tags\":"+tags_json+"}"
 EndFunction
 
+; DEBUG-DELETE(pplus-animdb): per-batch result of AnimDb_PushAnimBatch; traces the first batch's JSON head so a user log shows what
+; the pex actually built (a literal \" there means the pex was not built with pyro).
+Function NoteBatchResult(int accepted, int batch_count, String json)
+    walk_batches += 1
+    walk_rows_accepted += accepted
+    if walk_batches == 1
+        Trace("NoteBatchResult", "DEBUG first batch accepted="+accepted+"/"+batch_count+" json="+StringUtil.Substring(json, 0, 300))
+    endif
+    if accepted < batch_count
+        walk_batches_rejected += 1
+        if walk_batches_rejected <= 3
+            Trace("NoteBatchResult", "DEBUG batch "+walk_batches+" source="+walk_source+" accepted="+accepted+"/"+batch_count)
+        endif
+    endif
+EndFunction
+; DEBUG-DELETE(pplus-animdb) end
+
 Function LogWalkSkip(String reason, sslBaseAnimation anim)
     if walk_skip_logged >= 10
         return
@@ -520,9 +559,15 @@ Function FinishSourceOrDone()
     int db_count = AnimDb_TotalCount()
     last_sync_slots_total = walk_slots_total
     last_sync_db_count = db_count
-    Trace("FinishSourceOrDone", "total_pushed="+walk_total+" slots="+walk_slots_total+" db_rows="+db_count+" skip_null="+walk_skip_null+" skip_unregistered="+walk_skip_unreg+" skip_empty_registry="+walk_skip_empty+" duplicates="+(walk_total - db_count))
-    Trace("FinishSourceOrDone", "total_pushed="+walk_total)
-    Trace("FinishSourceOrDone", "SkyrimNet_SexLab is ready", True)
+    Trace("FinishSourceOrDone", "total_pushed="+walk_total+" slots="+walk_slots_total+" db_rows="+db_count+" skip_null="+walk_skip_null+" skip_unregistered="+walk_skip_unreg+" skip_empty_registry="+walk_skip_empty+" not_stored="+(walk_total - db_count))
+    ; DEBUG-DELETE(pplus-animdb)
+    Trace("FinishSourceOrDone", "DEBUG batches="+walk_batches+" rejected_batches="+walk_batches_rejected+" accepted="+walk_rows_accepted+" skip_empty_id="+walk_skip_empty_id+" native_failures="+AnimDb_LastSyncFailures())
+    ; DEBUG-DELETE(pplus-animdb) end
+    if db_count == 0 && walk_total > 0
+        Trace("FinishSourceOrDone", "AnimDB build failed: 0 of "+walk_total+" animations stored, see SkyrimNet_SexLab.log", True)
+    else
+        Trace("FinishSourceOrDone", "SkyrimNet_SexLab is ready", True)
+    endif
     IsAligned() ; push fresh counts to the Settings panel
     if walk_force
         last_rebuild_timestamp = "game day " + Utility.GetCurrentGameTime()
@@ -705,6 +750,12 @@ int walk_skip_null = 0
 int walk_skip_unreg = 0
 int walk_skip_empty = 0
 int walk_skip_logged = 0
+; DEBUG-DELETE(pplus-animdb)
+int walk_batches = 0
+int walk_batches_rejected = 0
+int walk_rows_accepted = 0
+int walk_skip_empty_id = 0
+; DEBUG-DELETE(pplus-animdb) end
 
 ; ---- Thread stage / animation identity (SexLab 1.6x or P+) ----
 ; AnimDB key of the thread's animation: Animation.Registry, or on P+ the active scene's id (a ResetScene may not

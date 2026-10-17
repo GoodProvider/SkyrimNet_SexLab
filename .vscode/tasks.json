@@ -42,8 +42,7 @@
                 "C:/Skyrim/dev/mods/SKSE64/Scripts/Source"
             ],
             "group": {
-                "kind": "build",
-                "isDefault": true
+                "kind": "build"
             },
             "presentation": {
                 "reveal": "always",
@@ -59,14 +58,15 @@
                 "compile: pyro (P+ bridge)"
             ],
             "group": {
-                "kind": "build"
+                "kind": "build",
+                "isDefault": true
             },
             "problemMatcher": []
         },
         {
             "label": "compile: pyro (main)",
             "type": "shell",
-            "command": "${env:USERPROFILE}/.vscode/extensions/joelday.papyrus-lang-vscode-2024.578.1412/pyro/pyro.exe",
+            "command": "C:/Skyrim/tools/Pyro/pyro.exe",
             "args": [
                 "${workspaceFolder}/skyrimse.ppj",
                 "--game-path",
@@ -84,7 +84,7 @@
         {
             "label": "compile: pyro (P+ bridge)",
             "type": "shell",
-            "command": "${env:USERPROFILE}/.vscode/extensions/joelday.papyrus-lang-vscode-2024.578.1412/pyro/pyro.exe",
+            "command": "C:/Skyrim/tools/Pyro/pyro.exe",
             "args": [
                 "${workspaceFolder}/skyrimse-pplus.ppj",
                 "--game-path",

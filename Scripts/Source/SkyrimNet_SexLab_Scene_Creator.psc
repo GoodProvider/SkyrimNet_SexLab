@@ -399,15 +399,26 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     ; -----------------------------------------
     ; Add Actors and Victims 
     ; -----------------------------------------
-    int i = 0 
-    bool failed = False 
-    while i < num_actors && !failed 
+    NecroDbgSnapshot("StartScene", actors, "before corpse floor") ; NECRO-DBG
+    int i = 0
+    while i < num_actors
+        CorpseHealth_Floor(actors[i])
+        i += 1
+    endwhile
+    NecroDbgSnapshot("StartScene", actors, "after corpse floor") ; NECRO-DBG
+
+    i = 0
+    bool failed = False
+    while i < num_actors && !failed
         DbgMsg("StartScene", "model.AddActor "+actors[i].GetDisplayName())
-        if model.AddActor(actors[i]) < 0 
+        if model.AddActor(actors[i]) < 0
             int code = sexlab.ValidateActor(actors[i])
             Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName()+" ValidateActor:"+code)
-            failed = True 
-        else 
+            failed = True
+        else
+            if NecroDbg() ; NECRO-DBG
+                Trace("StartScene", "[NECRO-DBG] AddActor ok: "+actors[i].GetDisplayName()) ; NECRO-DBG
+            endif ; NECRO-DBG
             ; Override off: the animation's defaults are applied once SexLab picks it (Scene.Setup).
             if no_orgasm_mask[i] == 1 && position_override
                 Trace("StartScene","no orgasm for "+actors[i].GetDisplayname())
@@ -435,6 +446,7 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     endif
 
     if failed
+        RestoreCorpseHealth()
         ; Unlock SexLab Making slot claimed by NewThread (not Creator.Release).
         model.Initialize()
         Release() 
@@ -486,6 +498,7 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     DbgMsg("StartScene", "model.StartThread() returned thread="+thread)
     if thread == None 
         Trace("StartScene","StartThread returned None, releasing sl_scene.sid")
+        RestoreCorpseHealth()
         model.Initialize()
         Release() 
         DbgReturn("StartScene", "None")
@@ -496,6 +509,7 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     if sl_scene == None
         Trace("StartScene","CreateSceneByCreator returned None, ending orphan thread")
         thread.EndAnimation(true)
+        RestoreCorpseHealth()
         Release()
         DbgReturn("StartScene", "None")
         return None
@@ -524,6 +538,15 @@ Function ApplyMajorityClothed(sslThreadModel model, sslBaseAnimation[] animation
         if majority[i] == 1
             model.SetNoStripping(actors[i])
         endif
+        i += 1
+    endwhile
+EndFunction
+
+; The scene never started: undo CorpseHealth_Floor.
+Function RestoreCorpseHealth()
+    int i = 0
+    while i < num_actors
+        CorpseHealth_Restore(actors[i])
         i += 1
     endwhile
 EndFunction

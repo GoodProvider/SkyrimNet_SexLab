@@ -1464,6 +1464,10 @@ Function RegisterEventsSexlab()
     RegisterForModEvent("HookActorChangeStart", "ActorChangeStart")
     UnRegisterForModEvent("HookLeadInEnd")
     RegisterForModEvent("HookLeadInEnd", "TraceLeadInEnd")
+    UnRegisterForModEvent("HookAnimationEnding") ; NECRO-DBG
+    if NecroDbg() ; NECRO-DBG
+        RegisterForModEvent("HookAnimationEnding", "NecroDbg_AnimationEnding") ; NECRO-DBG
+    endif ; NECRO-DBG
 
     UnRegisterForModEvent("HookOrgasmStart")
     UnRegisterForModEvent("SexLabOrgasm")
@@ -1603,6 +1607,24 @@ EndEvent
 Event TraceLeadInEnd(int ThreadID, bool HasPlayer)
     TraceThreadStage("LeadInEnd", ThreadID)
 EndEvent
+
+; NECRO-DBG begin: SexLab entered Ending (EndAnimation set Stage = StageCount). Right after sslActorAlias's
+; dead / Health < 1 / 3D / disabled check, so the snapshot shows which one ended the thread.
+Event NecroDbg_AnimationEnding(int ThreadID, bool HasPlayer)
+    if sexlab == None
+        return
+    endif
+    sslThreadController thread = SexLab.GetController(ThreadID)
+    if thread == None
+        return
+    endif
+    String reg = ""
+    if thread.Animation
+        reg = thread.Animation.Registry
+    endif
+    NecroDbgSnapshot("AnimationEnding", thread.Positions, "tid:"+ThreadID+" stage:"+thread.Stage+" state:"+(thread as sslThreadModel).GetState()+" auto:"+thread.AutoAdvance+" anim:"+reg)
+EndEvent
+; NECRO-DBG end
 
 Function TraceThreadStage(String func, int ThreadID)
     if sexlab == None

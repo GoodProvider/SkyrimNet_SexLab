@@ -2,6 +2,15 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+### 0.36.1
+
+- **AnimDB empty on 0.36.0 (SexLab P+ and 1.6x)**: the 0.36.0 `Scripts/*.pex` were built with `compile: papyrus` (papyrus.exe), which stores the Papyrus literal `"\""` as backslash+quote. Every JSON string built in Papyrus broke, including every `AnimDb_PushAnimBatch` batch, so `EndSync` kept 0 rows. The pex files are rebuilt with pyro, and **`compile: pyro` is the default build task again**. It now uses `C:/Skyrim/tools/Pyro/pyro.exe`; the VS Code extension no longer ships pyro.
+- **`make check-pex`** (`python_scripts/check_pex_escapes.py`) fails on any pex with a literal `\"`. `make release` runs it first.
+- **`AnimDb_PushAnimBatch`** now logs the parse error, byte offset and nearby text. On a parse failure it retries once with `\"` unescaped, so a bad build still fills the DB. `EndSync` errors when every batch failed to parse.
+- `FinishSourceOrDone` notifies "AnimDB build failed" when 0 rows are stored, and its misleading `duplicates=` is renamed `not_stored=`.
+- **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. Temporary instrumentation is tagged **`NECRO-DBG`**; see `checkpoints/necro-animations/checkpoint-v01.md`.
+- Temporary P+ / AnimDB instrumentation is tagged **`DEBUG-DELETE(pplus-animdb)`**: per-sync batch/row counters, `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, first-batch JSON trace, and skipped-id traces. See `checkpoints/pplus_animdb/checkpoint_v01.md`.
+
 ### 0.36.0
 
 - **SexLab P+ support**: the animation database fills from P+, scenes end after the orgasms instead of looping, pause and stage keys work, and animation / actor changes keep the scene going. See docs/developers/sexlab-pplus.md.
@@ -16,9 +25,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Arousal and orgasm fixes**: SLO Aroused NG now gets relief for every engine orgasm in Combined mode; SLSO edging no longer swallows our orgasms.
 - **Scenes**: an animation change on SexLab 1.6x restarts at stage 1; animation favorites; Description Editor Start button; Clean Cum option and `sexlab_clean_cum` action; Bondage panel Start handles devices outside `group-devices.json`.
 - **Locks cleared on load**: SexLab cancels every scene when a save loads, so actor locks and half-started Scene Creator sessions from the save are released instead of restored.
-- **Inja `
-`**: text sent to SkyrimNet's `ParseString` now goes through `Utilities.ParseInja`, which calls the new native `InjaPrepare` to turn a literal backslash+`n` (how `compile: papyrus` stores `"
-"`) into a real line break. Do not call `SkyrimNetApi.ParseString` directly.
+- **Inja line breaks**: text sent to SkyrimNet's `ParseString` now goes through `Utilities.ParseInja`, which calls the new native `InjaPrepare` to turn a literal backslash+`n` (how `compile: papyrus` stores a Papyrus newline escape) into a real line break. Do not call `SkyrimNetApi.ParseString` directly.
 - **Install**: the legacy pre-Beta-25 `config/actions` and `prompts` copies are removed; everything ships in `external/goodprovider.sexlab/`.
 
 ### 0.35.2

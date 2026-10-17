@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.36.1 (unreleased)
+
+### Animation database
+- **AnimDB fix**: on 0.36.0 every `AnimDb_PushAnimBatch` logged `parse failed` and the DB stayed at 0 rows on both SexLab P+ and 1.6x. Cause: `Scripts/*.pex` built with `compile: papyrus` (papyrus.exe) keep `"\""` as backslash+quote. Five scripts were affected: AnimDb, MCM, Menu, Scene and Utilities. All pex files are rebuilt with pyro. `compile: pyro` is the default task again, now at `C:/Skyrim/tools/Pyro/pyro.exe`.
+- New `make check-pex` (`python_scripts/check_pex_escapes.py`), a dependency of `make release`.
+- `AnimDb_PushAnimBatch`: logs the parse error with byte and nearby text, retries once with `\"` unescaped, and `EndSync` logs an error when every batch failed. `FinishSourceOrDone` notifies when 0 rows are stored and logs `not_stored=` (was `duplicates=`).
+- Temporary instrumentation is tagged `DEBUG-DELETE(pplus-animdb)` (Papyrus_AnimationDB.cpp, AnimationDB.cpp/.h, AnimDb.psc, PPlus.psc and the header stubs): batch/row counters on a second `EndSync` line, native `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, `AllSceneIds` count traces, the first batch's JSON head, and skipped-id traces.
+
+### Scenes
+- **Necro / corpse scenes ended right after starting (SexLab 1.6x)**: `sslActorAlias` OnUpdate calls `EndAnimation(true)` for an actor that `IsDead() && Health < 1`. New `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (StorageUtil float `skyrimnet_sexlab_corpse_health`) raise a corpse to Health 2 before `AddActor` (and again at each `StageStart`) and restore it in `Scene.AnimationEnd` or when the start fails. No-op on P+. Temporary instrumentation is tagged `NECRO-DBG` (`Utilities.NecroDbg` / `NecroDbgSnapshot`, a `HookAnimationEnding` handler in Scene_Manager, snapshots in Scene_Creator.StartScene, Scene.StageStart / AnimationStart / AnimationEnd / SetPosition). See `checkpoints/necro-animations/checkpoint-v01.md`.
+
 ## [0.36.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0) — since [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2)
 
 ### Actions / scenes
@@ -36,6 +47,7 @@
 - **Aid channel**: `Aid::StartChannel` keeps a healing spell going at its normal rate until the requested points are restored, the caster is out of magicka or the target is full; Aid panel adds "Heal up to _ points" (default Healing Hands) and caster / target pickers
 - **HUD keys**: Ask / Order / Punish on **Num .** (VK 110, `sexlab.minigame.key_force`, dashboard "Ask / order / punish hotkey"; `Hud.cpp` path `sexlab.hud.key_punish` falls back to it), drawn in a new bottom row under Num 3; **Aid** moves from Num 0 to **Num Enter** (VK 13; `HotkeyVkToDx` treats `VK_RETURN` as extended, DX 0x9C). Top row keeps only Num *. Saved keys keep working
 - `ParseActorNames` retries `actors_json` with `\"` unescaped and warns once (`pex not built with pyro`): raw `{{sl.actors.N}}` reached SkyrimNet from a mis-compiled pex
+- **Inja line breaks**: new native `InjaPrepare` (`Papyrus_Utilities.cpp`) turns a literal backslash+`n` (how `compile: papyrus` stores the Papyrus newline escape) into LF; Papyrus `Utilities.ParseInja` runs it, then `SkyrimNetApi.ParseString`, and `RenderSlPrompt` uses it. JSON variable values are not rewritten. Never call `SkyrimNetApi.ParseString` directly. See [docs/developers/papyrus.md](docs/developers/papyrus.md)
 - **API break** (`OrgasmEngineAPI.h`): `Strategy` values follow `strategies.json`; `IOrgasmEngineV1::IsMentallyBroken` and `EngineEventType::kMentalBreak` removed
 
 ### Papyrus

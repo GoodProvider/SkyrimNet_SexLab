@@ -107,6 +107,12 @@ namespace AnimationDB
     std::int64_t BeginSync(bool force_rebuild);
     bool PushAnim(const nlohmann::json& anim);
     int PushAnimBatch(const nlohmann::json& arr);
+    /// Papyrus binding: a batch's first parse failed. Returns that count for the current sync.
+    int NoteBatchParseError();
+    /// Papyrus binding: a batch could not be parsed even after unescaping \"; its rows are lost.
+    void NoteBatchDropped();
+    /// Batch parse failures + rejected rows of the current/last sync.
+    int LastSyncFailures(); // DEBUG-DELETE(pplus-animdb)
     bool EndSync();
 
     std::vector<AnimRow> QueryTopNAnims(const FilterSpec& spec, int n);

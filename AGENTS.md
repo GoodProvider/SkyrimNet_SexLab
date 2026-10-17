@@ -74,7 +74,7 @@ Papyrus (general code): %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special
 
 ## Compile
 
-- Papyrus: VS Code/Cursor task **`compile: papyrus`** only (unless maintainer asks otherwise). P+ bridge: `compile: pyro (P+ bridge)`.
+- Papyrus: VS Code/Cursor task **`compile: pyro`** only (main + P+ bridge; unless maintainer asks otherwise), then `make check-pex`. Never ship `compile: papyrus` pex files: they keep `\"` literally and break Papyrus-built JSON (AnimDB empty in 0.36.0).
 - SKSE / WebUI: [docs/developers/webui.md](docs/developers/webui.md).
 
 Tools under `tools/`: Pyro, Champollion, XEditLib, Spriggit.

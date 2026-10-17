@@ -1013,6 +1013,9 @@ Function SetPosition(int index, Actor akActor, int no_orgasm, String speaking_mo
     int speaking_obj = SetSpeakingObj(index, speaking_modifiers)
     SetActor(index, akActor)
     Trace("SetPosition", "end index:"+index+" name: "+akActor.GetDisplayName()+" no_orgasm: "+SNSL_JMap.getInt(obj, "no_orgasm")+" speaking_modifiers: "+SNSL_JValue.dump(speaking_obj))
+    if NecroDbg() && thread != None ; NECRO-DBG
+        Trace("SetPosition", "[NECRO-DBG] index:"+index+" thread.positions:["+JoinActors(thread.Positions)+"] state:"+thread.GetState()) ; NECRO-DBG
+    endif ; NECRO-DBG
 Endfunction
 
 ; Writes the CSV tokens into position_objs[index].speaking_modifiers; returns the JArray.
@@ -3167,6 +3170,7 @@ Function AnimationStart()
         DbgReturn("AnimationStart", "void")
         return
     endif
+    NecroDbgSnapshot("AnimationStart", thread.Positions, "state:"+thread.GetState()) ; NECRO-DBG
     AlignActors()
     ApplyStyleSpeed()
     Engine_BeginScene()
@@ -3219,6 +3223,19 @@ EndFunction
 Function StageStart()
     DbgEnter("StageStart")
     TraceStageState("StageStart")
+    if thread != None
+        NecroDbgSnapshot("StageStart", thread.Positions, "state:"+thread.GetState()) ; NECRO-DBG
+        ; Backstop: something drained a corpse below SexLab's Health 1 alias check mid-scene.
+        Actor[] corpse_check = thread.Positions
+        int ci = -1
+        if corpse_check
+            ci = corpse_check.length - 1
+        endif
+        while 0 <= ci
+            CorpseHealth_Floor(corpse_check[ci])
+            ci -= 1
+        endwhile
+    endif
     ; An orgasm while this builds its narration folds into it (Orgasm_ApplyGroup); cleared once the
     ; stash is taken below.
     stage_starting = true
@@ -3493,6 +3510,13 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
     if !ended_actors
         ended_actors = PapyrusUtil.ActorArray(0)
     endif
+    NecroDbgSnapshot("AnimationEnd", ended_actors, "before corpse restore") ; NECRO-DBG
+    ; SexLab has already reset the actors (dead ones get their death idle): undo CorpseHealth_Floor.
+    int ck = ended_actors.length - 1
+    while 0 <= ck
+        CorpseHealth_Restore(ended_actors[ck])
+        ck -= 1
+    endwhile
     ending_watching = false
     ending_watch_anim = None
     AlignActors()

@@ -325,8 +325,45 @@ EndFunction
 
 ; Every registered scene id (no proxy alias cap). creature: 0 humans only, 1 creatures only.
 String[] Function AllSceneIds(int creature) global
-    return sslAnimationSlots.CreateProxyArray(0, creature)
+    String[] ids = sslAnimationSlots.CreateProxyArray(0, creature)
+    ; DEBUG-DELETE(pplus-animdb)
+    if ids.Length == 0
+        Trace("AllSceneIds", "DEBUG creature="+creature+" CreateProxyArray returned 0 ids")
+    else
+        Trace("AllSceneIds", "DEBUG creature="+creature+" ids="+ids.Length+" first='"+ids[0]+"'")
+    endif
+    ; DEBUG-DELETE(pplus-animdb) end
+    return ids
 EndFunction
+
+; DEBUG-DELETE(pplus-animdb): one line describing a scene as SexlabRegistry reports it (raw GetPositionSexA flags, race keys, tags).
+String Function SceneDebug(String id) global
+    int[] flags = SexLabRegistry.GetPositionSexA(id)
+    String[] keys = SexLabRegistry.GetRaceKeyPositionA(id)
+    String[] tags = SexLabRegistry.GetSceneTags(id)
+    String out = "id='"+id+"' name='"+SexLabRegistry.GetSceneName(id)+"' enabled="+SexLabRegistry.IsSceneEnabled(id)
+    out += " actors="+SexLabRegistry.GetActorCount(id)+" stages="+SexLabRegistry.GetNumStages(id)+" sex_flags=["
+    int i = 0
+    while i < flags.Length
+        if i > 0
+            out += ","
+        endif
+        out += flags[i]
+        i += 1
+    endwhile
+    out += "] race_keys=["
+    i = 0
+    while i < keys.Length
+        if i > 0
+            out += ","
+        endif
+        out += keys[i]
+        i += 1
+    endwhile
+    out += "] tags="+tags.Length
+    return out
+EndFunction
+; DEBUG-DELETE(pplus-animdb) end
 
 ; ---- Actors ----
 ; 1.6x GetGender coding from P+ GetSex (0 male, 1 female, 2 futa, 3 creature male, 4 creature female):

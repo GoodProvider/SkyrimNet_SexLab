@@ -21,7 +21,7 @@ Contracts: [../reference/papyrus-rules.md](../reference/papyrus-rules.md), [../r
 
 ## Compile
 
-VS Code / Cursor task **`compile: papyrus`** (`.vscode/tasks.json`, default build task): `c:/Skyrim/tools/papyrus-compiler/papyrus.exe compile -nocache` over `Scripts/Source` into `Scripts/`, headers `Headers`, `Headers_Source`, SKSE64 source. The P+ bridge (`skyrimse-pplus.ppj`, compiled against `..\SexLab Framework PPLUS\Source\Scripts`) still builds with **`compile: pyro (P+ bridge)`**. Do not invent other one-off compile commands unless asked.
+VS Code / Cursor task **`compile: pyro`** (`.vscode/tasks.json`, default build task): `C:/Skyrim/tools/Pyro/pyro.exe` runs `skyrimse.ppj` (main scripts) and then `skyrimse-pplus.ppj` (P+ bridge, compiled against `..\SexLab Framework PPLUS\Source\Scripts`). Use `--no-incremental-build` when a pex is newer than its source. Afterwards, **`make check-pex`** must report 0 bad files. **Do not ship pex files from `compile: papyrus`** (papyrus.exe): it stores `"\""` as backslash+quote, which breaks every Papyrus-built JSON. That emptied the AnimDB in 0.36.0 (KNOWLEDGEBASE). Do not invent other one-off compile commands unless asked.
 
 SKSE: [webui.md](webui.md).
 
@@ -67,7 +67,7 @@ Scene_Creator (pooled) ──StartScene──► Scene_Manager.CreateSceneByCrea
 | `review-execution-plan.xml` | Current fix pass |
 | `reviews/*.review.md` | Per-pass notes |
 
-Resume: guide + checkpoint → plan High→Medium→Low (1-based lines, include comments) → apply → `compile: papyrus` → write review → update checkpoint.
+Resume: guide + checkpoint → plan High→Medium→Low (1-based lines, include comments) → apply → `compile: pyro` → write review → update checkpoint.
 
 ## ESP / Spriggit
 

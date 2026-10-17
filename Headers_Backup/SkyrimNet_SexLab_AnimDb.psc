@@ -5,6 +5,7 @@ Function AnimDb_Open() global native
 int Function AnimDb_BeginSync(Bool force_rebuild) global native
 int Function AnimDb_PushAnimBatch(String json) global native
 Bool Function AnimDb_EndSync() global native
+int Function AnimDb_LastSyncFailures() global native ; DEBUG-DELETE(pplus-animdb)
 String Function AnimDb_QueryTopNAnims(String filter_json, int n) global native
 String Function AnimDb_QueryTopNTags(String filter_json, int n) global native
 int Function AnimDb_TotalEnabled() global native

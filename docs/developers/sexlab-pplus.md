@@ -15,7 +15,7 @@ All P+ API calls live in one script, `SkyrimNet_SexLab_PPlus` (global functions 
 | `Headers_Source/SkyrimNet_SexLab_PPlus.psc` | Same signatures, empty bodies: what the main project (`skyrimse.ppj`, 1.6x headers) compiles against |
 | `Headers_Source/SexLabPPlus/` | Header-only stubs P+'s own scripts need to compile (`MfgConsoleFuncExt`, `Lovense`, `VRIK`, SkyUI 5.2 `SKI_ConfigBase`); imported by `skyrimse-pplus.ppj` only |
 
-`compile: papyrus` builds the main scripts; `compile: pyro (P+ bridge)` builds the bridge (`compile: pyro` still runs both ppj projects). Keep the two `SkyrimNet_SexLab_PPlus.psc` signatures identical; the main build never writes the bridge's `.pex`.
+`compile: pyro` (default task) builds the main scripts and then the bridge; `compile: pyro (P+ bridge)` builds only the bridge. Never ship main pex files from `compile: papyrus` (literal `\"` breaks the AnimDB sync JSON; run `make check-pex`). Keep the two `SkyrimNet_SexLab_PPlus.psc` signatures identical; the main build never writes the bridge's `.pex`.
 
 ## Two stage numberings
 

@@ -8,7 +8,7 @@ Agents: use the project `release` skill (`.cursor/skills/release/SKILL.md`). Ses
 
 | Actor | Owns | Does not do unless asked |
 |-------|------|--------------------------|
-| Agent | Changelogs, freshness-matrix docs, Makefile `VERSION` if missing, checkpoint | `compile: papyrus`, `make release`, git tag, GitHub Release, feature work |
+| Agent | Changelogs, freshness-matrix docs, Makefile `VERSION` if missing, checkpoint | `compile: pyro`, `make release`, git tag, GitHub Release, feature work |
 | Maintainer | Compile, package, tag, publish | Inventing changelog bullets the tree does not support |
 
 **Agent done-when:** `CHANGELOG.md`, `CHANGELOG-developer.md` and `CHANGELOG-player.md` cover `next_version`; freshness-matrix files match the delta; checkpoint is current; hand-off lists leftover version mismatches. Packaging is not part of done.
@@ -108,8 +108,8 @@ Ignore the [llms.txt](llms.txt) denylist unless the maintainer says those paths 
 
 ## Packaging (maintainer)
 
-Prereqs: `Scripts/*.pex` current (`compile: papyrus`); SKSE DLL if WebUI ships; `Spriggit/` JSON is ESP source of truth (not hand-edited binaries); animations merged if required.
+Prereqs: `Scripts/*.pex` current (`compile: pyro`; `make check-pex` passes, and `make release` runs it); SKSE DLL if WebUI ships; `Spriggit/` JSON is ESP source of truth (not hand-edited binaries); animations merged if required.
 
 `make release` writes `info.json` and FOMOD from `VERSION`/`NAME`, deserializes `SkyrimNet_SexLab.esp` from `Spriggit/`, stages core + handlers, packs `versions/SkyrimNet_SexLab ${VERSION}.7z`.
 
-Ship order: commit → `compile: papyrus` if needed → `make release` → git tag → GitHub Release.
+Ship order: commit → `compile: pyro` if needed → `make check-pex` → `make release` → git tag → GitHub Release.

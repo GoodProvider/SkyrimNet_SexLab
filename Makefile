@@ -1,4 +1,4 @@
-VERSION=0.36.0
+VERSION=0.36.1
 NAME=SkyrimNet SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.7z
@@ -25,7 +25,11 @@ dd:
 	git clone https://github.com/IHateMyKite/PapyrusSourcesDD
 	python3 ./python_scripts/FOMOD-info.py -v ${VERSION} -n '${NAME}' -o FOMOD/info.xml FOMOD-source/info.xml
 
-release: 
+# Fails when a pex came from papyrus.exe (literal \" breaks Papyrus-built JSON). Rebuild with compile: pyro.
+check-pex:
+	python3 ./python_scripts/check_pex_escapes.py Scripts
+
+release: check-pex
 	python3 ./python_scripts/info.py -v ${VERSION} -n '${NAME}' -o SKSE/Plugins/SkyrimNet_SexLab/info.json
 	python3 ./python_scripts/fomod-update-name-version.py -v ${VERSION} -n '${NAME}' -o FOMOD/info.xml FOMOD_source/info.xml
 	python3 ./python_scripts/fomod-update-name-version.py -v ${VERSION} -n '${NAME}' -o FOMOD/ModuleConfig.xml FOMOD_source/ModuleConfig.xml

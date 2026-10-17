@@ -94,6 +94,82 @@ EndFunction
 ; Hex entity UUID -> decimal string (SKSE native). Decimal input returned unchanged.
 String Function UuidToDecimalString(String entityUuid) global native
 
+; ------------------------------------------------------------
+; Corpses on SexLab 1.6x: ValidateActor and sslActorAlias OnUpdate (Prepare / Animating) reject or
+; EndAnimation(true) an actor that IsDead() with Health < 1. Keep a corpse at Health >= 1 for the scene and put
+; the old value back at its end. P+ tracks dead actors itself (_livestatus): no-op there.
+; ------------------------------------------------------------
+String Function CorpseHealthKey() global
+    return "skyrimnet_sexlab_corpse_health"
+EndFunction
+
+; True when the floor was applied (first time saves the old health).
+bool Function CorpseHealth_Floor(Actor akActor) global
+    if akActor == None || IsSexLabPPlus() || !akActor.IsDead()
+        return false
+    endif
+    float h = akActor.GetActorValue("Health")
+    if h >= 1.0
+        return false
+    endif
+    if !StorageUtil.HasFloatValue(akActor, CorpseHealthKey())
+        StorageUtil.SetFloatValue(akActor, CorpseHealthKey(), h)
+    endif
+    akActor.RestoreActorValue("Health", 2.0 - h)
+    float after = akActor.GetActorValue("Health")
+    if after < 1.0
+        akActor.ForceActorValue("Health", 2.0)
+        after = akActor.GetActorValue("Health")
+    endif
+    Trace("CorpseHealth_Floor", GetDisplayName(akActor)+" dead, health "+h+" -> "+after)
+    return true
+EndFunction
+
+Function CorpseHealth_Restore(Actor akActor) global
+    if akActor == None || !StorageUtil.HasFloatValue(akActor, CorpseHealthKey())
+        return
+    endif
+    float saved = StorageUtil.GetFloatValue(akActor, CorpseHealthKey())
+    StorageUtil.UnsetFloatValue(akActor, CorpseHealthKey())
+    if !akActor.IsDead()
+        return
+    endif
+    float h = akActor.GetActorValue("Health")
+    if h > saved
+        akActor.DamageActorValue("Health", h - saved)
+    endif
+    Trace("CorpseHealth_Restore", GetDisplayName(akActor)+" health "+h+" -> "+akActor.GetActorValue("Health"))
+EndFunction
+
+; NECRO-DBG begin: necro / corpse scene instrumentation, remove with every "NECRO-DBG" line.
+bool Function NecroDbg() global
+    return true
+EndFunction
+
+Function NecroDbgSnapshot(String func, Actor[] actors, String extra="") global
+    if !NecroDbg()
+        return
+    endif
+    if !actors
+        Trace(func, "[NECRO-DBG] actors:none "+extra)
+        return
+    endif
+    int i = 0
+    while i < actors.length
+        Actor a = actors[i]
+        if a == None
+            Trace(func, "[NECRO-DBG] ["+i+"] None "+extra)
+        else
+            Trace(func, "[NECRO-DBG] ["+i+"] "+a.GetDisplayName()+" 0x"+IntToHex(a.GetFormID()) \
+                +" dead:"+a.IsDead()+" health:"+a.GetActorValue("Health")+"/"+a.GetBaseActorValue("Health") \
+                +" 3d:"+a.Is3DLoaded()+" disabled:"+a.IsDisabled()+" unconscious:"+a.IsUnconscious() \
+                +" saved:"+StorageUtil.HasFloatValue(a, CorpseHealthKey())+" "+extra)
+        endif
+        i += 1
+    endwhile
+EndFunction
+; NECRO-DBG end
+
 
 ; ------------------------------------------------------------
 ; Timestamps

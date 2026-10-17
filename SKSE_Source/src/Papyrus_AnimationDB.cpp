@@ -192,17 +192,58 @@ namespace PapyrusBindings_AnimationDB
         return static_cast<std::int32_t>(AnimationDB::BeginSync(force_rebuild));
     }
 
+    // Papyrus-built batch from SkyrimNet_SexLab_AnimDb (WalkPPlusBatch / OnUpdate). A pex built by papyrus.exe keeps
+    // "\"" as backslash+quote (KNOWLEDGEBASE "non-pyro compiler kept \" literally"), so every batch fails to parse:
+    // log where, then retry once unescaped so a bad build still fills the DB.
     std::int32_t AnimDb_PushAnimBatch(RE::StaticFunctionTag*, RE::BSFixedString json)
     {
-        const char* raw = json.c_str() ? json.c_str() : "";
+        const std::string text = json.c_str() ? json.c_str() : "";
         try {
-            auto j = nlohmann::json::parse(raw);
+            auto j = nlohmann::json::parse(text);
             return AnimationDB::PushAnimBatch(j);
-        } catch (...) {
-            webui_log::warn("AnimDb_PushAnimBatch: parse failed");
+        } catch (const nlohmann::json::parse_error& e) {
+            const int failures = AnimationDB::NoteBatchParseError();
+            // DEBUG-DELETE(pplus-animdb): where the parse broke, for the first 3 batches of the sync.
+            if (failures <= 3) {
+                const size_t at = e.byte > 0 ? static_cast<size_t>(e.byte - 1) : 0;
+                const size_t from = at > 60 ? at - 60 : 0;
+                webui_log::warn("AnimDb_PushAnimBatch: parse failed #{} len={} byte={}: {} | near='{}' | head='{}'",
+                    failures, text.size(), e.byte, e.what(), text.substr(from, 120), text.substr(0, 400));
+            } else {
+                webui_log::warn("AnimDb_PushAnimBatch: parse failed #{} len={} byte={}", failures, text.size(),
+                    e.byte);
+            }
+            // DEBUG-DELETE(pplus-animdb) end
+            if (text.find("\\\"") != std::string::npos) {
+                std::string fixed = text;
+                for (size_t pos = 0; (pos = fixed.find("\\\"", pos)) != std::string::npos; ++pos)
+                    fixed.erase(pos, 1);
+                try {
+                    auto j = nlohmann::json::parse(fixed);
+                    if (failures == 1)
+                        webui_log::warn("AnimDb_PushAnimBatch: batch had literal \\\" (pex not built with pyro); "
+                                        "unescaped");
+                    return AnimationDB::PushAnimBatch(j);
+                } catch (const std::exception& e2) {
+                    if (failures <= 3)
+                        webui_log::warn("AnimDb_PushAnimBatch: unescaped retry failed: {}", e2.what());
+                }
+            }
+            AnimationDB::NoteBatchDropped();
+            return 0;
+        } catch (const std::exception& e) {
+            AnimationDB::NoteBatchDropped();
+            webui_log::warn("AnimDb_PushAnimBatch: failed len={}: {}", text.size(), e.what());
             return 0;
         }
     }
+
+    // DEBUG-DELETE(pplus-animdb)
+    std::int32_t AnimDb_LastSyncFailures(RE::StaticFunctionTag*)
+    {
+        return AnimationDB::LastSyncFailures();
+    }
+    // DEBUG-DELETE(pplus-animdb) end
 
     bool AnimDb_EndSync(RE::StaticFunctionTag*)
     {
@@ -365,6 +406,7 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_BeginSync", scriptName, AnimDb_BeginSync);
         a_vm->RegisterFunction("AnimDb_PushAnimBatch", scriptName, AnimDb_PushAnimBatch);
         a_vm->RegisterFunction("AnimDb_EndSync", scriptName, AnimDb_EndSync);
+        a_vm->RegisterFunction("AnimDb_LastSyncFailures", scriptName, AnimDb_LastSyncFailures, true); // DEBUG-DELETE(pplus-animdb)
         a_vm->RegisterFunction("AnimDb_QueryTopNAnims", scriptName, AnimDb_QueryTopNAnims, true);
         a_vm->RegisterFunction("AnimDb_QueryTopNTags", scriptName, AnimDb_QueryTopNTags, true);
         a_vm->RegisterFunction("AnimDb_TotalEnabled", scriptName, AnimDb_TotalEnabled, true);
