@@ -5,7 +5,8 @@
 #include <cstdint>
 
 /// Pre-start scene lock: an actor held by a Scene_Creator cannot be claimed by another
-/// creator and is excluded from the Scene Creator actor table. State persists in the co-save.
+/// creator and is excluded from the Scene Creator actor table. Locks are saved in the co-save
+/// only so Load can release them (and their StorageUtil mirror): SexLab cancels scenes on load.
 /// Papyrus surface: SkyrimNet_SexLab_Locker.psc.
 namespace ActorLocker
 {

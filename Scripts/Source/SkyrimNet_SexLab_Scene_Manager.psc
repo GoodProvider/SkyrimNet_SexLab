@@ -123,8 +123,13 @@ Function Setup()
             Trace("Setup","creators["+i+"] is None, aborting", true)
             return
         endif
-        creators[i].Initialize(i, self) 
-        i -= 1 
+        creators[i].Initialize(i, self)
+        ; SexLab cancels scenes on load; a creator still claimed in the save can never finish.
+        if creators[i].IsActive()
+            Trace("Setup","releasing stale creators["+i+"]")
+            creators[i].Release()
+        endif
+        i -= 1
     endwhile 
 
     if !thread_scene

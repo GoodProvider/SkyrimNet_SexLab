@@ -733,6 +733,15 @@ float Function GetAnimSpeed(Actor akActor) global native
 ; JSON string literal (SKSE native): quoted and escaped; control bytes become unicode escapes.
 String Function JsonQuote(String s) global native
 
+; SKSE native: literal backslash+n -> LF (compile: papyrus keeps "\n" as two characters).
+String Function InjaPrepare(String s) global native
+
+; All SkyrimNet Inja parses go through here: InjaPrepare, then SkyrimNetApi.ParseString.
+; Do not call SkyrimNetApi.ParseString directly. variableValue is JSON and is not rewritten.
+String Function ParseInja(String inputStr, String variableName, String variableValue) global
+    return SkyrimNetApi.ParseString(InjaPrepare(inputStr), variableName, variableValue)
+EndFunction
+
 ; JC writeToFile form token, or null.
 String Function JsonForm(Form akForm) global
     if akForm == None
@@ -920,7 +929,7 @@ String Function ObjectToLowerCaseKeyJson(int obj) global
     return lowered
 EndFunction
 
-; Load helpers/sexlab/*.prompt via RenderTemplate, then bind sl JSON with ParseString
+; Load helpers/sexlab/*.prompt via RenderTemplate, then bind sl JSON with ParseInja
 ; (same namespace as Stages AddActorDescriptionActors). Releases obj. Empty, error,
 ; leftover "{{", or inja text -> fallback so SkyrimNet errors are never DirectNarrated.
 String Function RenderSlPrompt(String template_name, int obj, String fallback="") global
@@ -943,7 +952,7 @@ String Function RenderSlPrompt(String template_name, int obj, String fallback=""
         Trace("RenderSlPrompt", "--- inja error template:"+template_name+" json:"+json+" result:"+result)
         return fallback
     endif
-    String parsed = SkyrimNetApi.ParseString(result, "sl", json)
+    String parsed = ParseInja(result, "sl", json)
     if parsed != "" && StringUtil.Find(parsed, "inja.exception") < 0
         String parsed_head = StringUtil.Substring(parsed, 0, 5)
         if parsed_head != "Error" && parsed_head != "error" && parsed_head != "ERROR"

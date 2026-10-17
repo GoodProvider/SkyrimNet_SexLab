@@ -1,5 +1,10 @@
 # Knowledgebase
 
+## Actor locks restored from the save (2026-10-16)
+
+- **Symptom:** after loading a save made while a scene was being set up, the actors stayed "Name (locked)" and actions / TargetMenu refused them. `ActorLocker::Load` restored the co-saved locks (and re-set the StorageUtil mirror), but SexLab cancels every scene on load, so nothing would ever unlock them.
+- **Fix:** `Load` reads the record only to clear each actor's StorageUtil mirror; `g_locked` starts empty. `Scene_Manager.Setup` releases creators still `IsActive()` from the save (their WebUI state is already dropped by `ClearOnGameLoad`).
+
 ## Scene Creator dropped its own locked actors (2026-10-11)
 
 - **Symptom:** an NPC action (e.g. sexual assault) → Yes on the gate → Scene Creator opened with an empty Positions table. `Scene_Creator.LockActorLock` had locked both actors before `SceneCreator_Open`. The nearby scan reports them as `status:"locked"`, and `scPruneIneligiblePositions` removed them.
@@ -966,6 +971,9 @@ Upstream schema: [WORKFLOW_ACTIONS.md](https://github.com/MinLL/SkyrimNet-GamePl
 ## Papyrus string literals do not treat `\n` as newline (2026-07-15)
 
 `"\n"` / `"\r\n"` in Papyrus source are backslash + letter(s), not control characters. Use `StringUtil.AsChar(10)` (LF) and `StringUtil.AsChar(13)` (CR). This project already does that in `Stages.psc` / `MCM.psc` via a `newline` field.
+
+Text bound for SkyrimNet's Inja parser goes through `SkyrimNet_SexLab_Utilities.ParseInja`, which runs the native `InjaPrepare` (backslash+`n` -> LF) before `SkyrimNetApi.ParseString`. Never call `SkyrimNetApi.ParseString` directly. The JSON variable value is not rewritten: `
+` there is a valid JSON escape.
 
 ## SexLab orgasm narration trigger (2026-07-14)
 

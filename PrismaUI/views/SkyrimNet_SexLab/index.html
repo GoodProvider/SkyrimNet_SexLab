@@ -2260,6 +2260,7 @@
             </div>
             </div>
             <div class="compact-row">
+                <div class="action-btn disabled" id="de-btn-start" onmousedown="event.preventDefault()" onclick="deStartPick()">Start</div>
                 <span class="fav-filter-label" title="favorites">&#9733;</span>
                 <div id="de-favorites-toggle"></div>
                 <span id="de-anim-count"></span>
@@ -11911,6 +11912,22 @@
             host.innerHTML = deAnimTableHead() + rows + `</tbody></table>`;
             const sel = host.querySelector('tr.selected');
             if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+            deRenderStartBtn();
+        }
+
+        // Start (animation filter tab) is live only while a pick differs from the playing animation.
+        function deRenderStartBtn() {
+            const btn = document.getElementById('de-btn-start');
+            if (btn) btn.classList.toggle('disabled', !dePendingActive());
+        }
+
+        // Start: switch the scene to the pending pick now (WebUI_SwitchToRegistry restarts at stage 1),
+        // unpause so Papyrus runs it, and close the WebUI -- like Scene Creator's Start.
+        function deStartPick() {
+            if (!dePendingActive()) return;
+            deAutoSave();
+            deSendPendingSwitch();
+            deContinueAndClose();
         }
 
         function dePickLoadedAnimation(i) {
@@ -11937,6 +11954,7 @@
                     `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
             }).join('');
             host.innerHTML = deAnimTableHead() + rows + `</tbody></table>`;
+            deRenderStartBtn();
         }
 
         function deAddAnimToScene(i) {

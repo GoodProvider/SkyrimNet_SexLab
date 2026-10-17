@@ -11,7 +11,7 @@
 - [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
   - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - [Dragonborn voice over 2](https://www.nexusmods.com/skyrimspecialedition/mods/84329)
-- SkyrimNet (narration enabled). This zip ships LLM content in both layouts: 0.25+ reads plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/`; older SkyrimNet reads `prompts/` and `config/actions/`.
+- SkyrimNet 0.25+ (narration enabled). LLM content ships only as plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/` (since 0.36.0 the old `prompts/` and `config/actions/` copies are gone).
 - SkyrimNet_SexLab (this mod)
 - A **decisions** provider set up in SkyrimNet (for example Jev, `typesafe/jev-*` on OpenRouter), for the Multi-Orgasm Mini-game: it picks each NPC's strategy. Without one, NPCs keep the default strategies (Mini-game settings)
 - Animation utilities: [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232), [XPMSSE](https://www.nexusmods.com/skyrimspecialedition/mods/1988), [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/), [Hug kill move fix for USSEP](https://www.nexusmods.com/skyrimspecialedition/mods/139572)
@@ -23,6 +23,7 @@
 - [SkyrimNet_Arousal](https://github.com/GoodProvider/SkyrimNet_Arousal)
 - [SLO Aroused NG](https://www.loverslab.com/files/file/25318-sexlab-aroused-ng/) — arousal is raised to match enjoyment during scenes (`sexlab.arousal.floor_enjoyment`), and each orgasm gives SLO's orgasm relief once, even with combined orgasms (`sexlab.arousal.engine_orgasm_relief`)
 - [OSL Aroused](https://www.nexusmods.com/skyrimspecialedition/mods/65454)
+- Injury Engine (`Injury_Engine.esp`, a version with the External API) — Punish wounds the chosen body part, Aid heals it, Aid / Punish panels show a torture bar per part, and Punish offers its torture spells
 - [OstimNet](https://github.com/tetherball88/OStimNet) — SkyrimNet dashboard **Sex framework** (`sexlab.ostim.player`) picks SexLab vs OStim for LLM starts
 - `SkyrimNet_Leashed.esp` — SkyMessage / PrismaUI Target Menu **leash** opens that mod’s panel
 

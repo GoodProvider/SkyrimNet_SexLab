@@ -100,6 +100,28 @@ namespace PapyrusBindings_Utilities
         return RE::BSFixedString(out);
     }
 
+    /// Literal backslash+n -> LF. compile: papyrus stores "\n" as two characters, so text bound
+    /// for SkyrimNet's Inja parse is fixed here first. Input without the pair is returned as-is.
+    RE::BSFixedString InjaPrepare(RE::StaticFunctionTag*, RE::BSFixedString s)
+    {
+        const char* raw = s.c_str() ? s.c_str() : "";
+        if (!std::strstr(raw, "\\n")) {
+            return s;
+        }
+        const std::size_t len = std::strlen(raw);
+        std::string out;
+        out.reserve(len);
+        for (std::size_t i = 0; i < len; ++i) {
+            if (raw[i] == '\\' && i + 1 < len && raw[i + 1] == 'n') {
+                out.push_back('\n');
+                ++i;
+            } else {
+                out.push_back(raw[i]);
+            }
+        }
+        return RE::BSFixedString(out);
+    }
+
     /// Hex entity UUID -> arbitrary-precision decimal string. Strings with no a-f/A-F letter are
     /// already decimal and returned unchanged. A leading 0x/0X is stripped and non-hex characters
     /// are skipped, matching the former Papyrus implementation.
@@ -194,6 +216,7 @@ namespace PapyrusBindings_Utilities
         a_vm->RegisterFunction("VkToDxScanCode", scriptName, VkToDxScanCode, true);
         a_vm->RegisterFunction("JsonQuote", scriptName, JsonQuote, true);
         a_vm->RegisterFunction("UuidToDecimalString", scriptName, UuidToDecimalString, true);
+        a_vm->RegisterFunction("InjaPrepare", scriptName, InjaPrepare, true);
         a_vm->RegisterFunction("SetAnimSpeed", scriptName, SetAnimSpeed);
         a_vm->RegisterFunction("ClearAnimSpeed", scriptName, ClearAnimSpeed);
         a_vm->RegisterFunction("GetAnimSpeed", scriptName, GetAnimSpeed);

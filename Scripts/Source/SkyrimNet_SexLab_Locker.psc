@@ -1,6 +1,7 @@
 Scriptname SkyrimNet_SexLab_Locker Hidden
 
-; Pre-start scene lock (C++ ActorLocker, persisted in the SKSE co-save).
+; Pre-start scene lock (C++ ActorLocker). All locks are released on game load
+; (SexLab cancels every scene on load).
 ; A locked actor cannot be claimed by another Scene_Creator and is left out of the
 ; Scene Creator actor table (Control Panel shows it as "Name (locked)").
 

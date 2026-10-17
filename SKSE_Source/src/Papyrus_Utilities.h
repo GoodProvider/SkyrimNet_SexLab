@@ -9,6 +9,10 @@ namespace PapyrusBindings_Utilities {
     /// Papyrus native: JSON string literal (quoted, escaped). Replaces the per-character Papyrus loop.
     RE::BSFixedString JsonQuote(RE::StaticFunctionTag*, RE::BSFixedString s);
 
+    /// Papyrus native: literal backslash+n -> LF before SkyrimNet's Inja parse
+    /// (compile: papyrus keeps "\n" as two characters).
+    RE::BSFixedString InjaPrepare(RE::StaticFunctionTag*, RE::BSFixedString s);
+
     /// Papyrus native: hex entity UUID -> decimal string; decimal input returned unchanged.
     RE::BSFixedString UuidToDecimalString(RE::StaticFunctionTag*, RE::BSFixedString entityUuid);
 

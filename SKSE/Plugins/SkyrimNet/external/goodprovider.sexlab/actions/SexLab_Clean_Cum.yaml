@@ -1,0 +1,28 @@
+name: sexlab_clean_cum
+label: Clean Cum
+description: "[speaker] cleans cum from [target]'s mouth, pussy, ass or whole body (target can be the speaker). Only for someone who has cum on them."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: CleanCum
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Actor who does the cleaning (can be target)
+  - type: dynamic
+    name: target
+    description: Actor whose cum is cleaned (can be speaker)
+  - type: dynamic
+    name: part
+    description: "mouth|pussy|ass|all"
+  - type: dynamic
+    name: style
+    description: "roughly|normally|gently"
+eligibilityRules:
+  - conditions:
+      - decoratorName: papyrus_util
+        arguments: ["FormListCount", "player", "skyrimnet_sexlab_cum_actors"]
+        comparisonOperator: "!="
+        expectedValue: 0
+    logicalOperator: AND
+    required: true

@@ -143,17 +143,18 @@ namespace ActorLocker
         std::uint32_t n = 0;
         if (!intfc->ReadRecordData(n))
             return;
+        // SexLab cancels every scene on load, so no saved lock can still be in use.
+        // Release them and clear the StorageUtil mirror baked into the PapyrusUtil save.
         for (std::uint32_t i = 0; i < n; ++i) {
             RE::FormID oldId = 0, newId = 0;
             if (!intfc->ReadRecordData(oldId))
                 return;
             if (intfc->ResolveFormID(oldId, newId)) {
-                g_locked.insert(newId);
                 if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(newId))
-                    MirrorStorageUtilLock(actor);
+                    MirrorStorageUtilUnlock(actor);
             }
         }
-        webui_log::info("ActorLocker: loaded {} lock(s)", g_locked.size());
+        webui_log::info("ActorLocker: released {} stale lock(s) on load", n);
     }
 
     void Revert()

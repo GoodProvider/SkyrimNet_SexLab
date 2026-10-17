@@ -1,0 +1,35 @@
+name: SexLab_Scene_Punish
+label: Punish (in scene)
+description: "[speaker] punishes [target], someone else in their ongoing sex scene, by hurting them, optionally for a reason (target can be the player)."
+questEditorId: SkyrimNet_SexLab
+scriptName: SkyrimNet_SexLab_Actions
+executionFunctionName: LLM_Punish
+defaultPriority: 5
+parameterMapping:
+  - type: speaker
+    name: speaker
+    description: Speaker Actor parameter (triggering entity), the punisher
+  - type: dynamic
+    name: target
+    description: The person in the scene being punished (anyone but the speaker, the player included)
+  - type: dynamic
+    name: method
+    description: "How [speaker] hurts them: slap|pinch|punch|pull|<the name of a weak attack spell [speaker] knows, e.g. Sparks>|<your own short verb in the third person, e.g. bites>"
+  - type: dynamic
+    name: part
+    description: "Where on [target]: body|face|lips|nipples|back|left arm|right arm|left leg|right leg|pussy|cock|ass. Give only the part."
+  - type: dynamic
+    name: reason
+    description: "What [target] is punished for, a short phrase that follows 'for', e.g. resisting her orgasm. Empty for no reason."
+eligibilityRules:
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments: [currentActor, SexLabAnimatingFaction]
+        comparisonOperator: ">"
+        expectedValue: 0
+      - decoratorName: papyrus_util
+        arguments: ["HasIntValue", currentActor, "skyrimnet_sexlab_can_punish"]
+        comparisonOperator: "=="
+        expectedValue: true
+    logicalOperator: AND
+    required: true

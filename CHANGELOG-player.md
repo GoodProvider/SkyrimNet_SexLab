@@ -1,29 +1,40 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0
+
+Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
+
+### 0.36.0
+
+- SexLab P+ supported: database, scene endings, pause and stage keys all work
+- Force is now Ask / Order / Punish (Num .): ask or order a change, punish a refusal
+- Punish anyone in any scene, for a reason, by slap, pinch, punch, pull or a spell
+- The punished one answers; the AI decides how they react
+- NPCs can punish too (new Scene Punish action)
+- Injury Engine (optional): Punish wounds a body part, Aid heals it
+- Injury Engine: torture bar per body part; Aid opens on the most hurt part
+- Injury Engine: Punish spells are Flames, Frostbite and Sparks; Hits box for several hits
+- Injury Engine sexual body parts stay off until you agree to enable them
+- Aid moves to Num Enter; pick who casts and on whom
+- Aid healing spells keep healing up to the points you choose
+- Strategies renamed (deny self, deny all, focused, ...) and open to every role
+- Together, Greedy, Forced orgasm, Accept force, Hold back, Cum quick and mental break removed
+- NPCs pick strategies from what was said and what just happened
+- NPCs sense enjoyment as closeness to orgasm, not as arousal
+- New Narration settings: each narration can be Direct, Event, ShortEvent or Silent
+- New setting to switch orgasms back to SexLab / SLSO (Enjoyment)
+- SLO Aroused NG: every orgasm now lowers arousal (optional)
+- Fixed SLSO edging hiding orgasms from other mods
+- Fixed actors staying locked ("Name (locked)") after loading a save
+- Changing animation mid-scene restarts at stage 1
+- Animation favorites in Scene Creator (★ column and filter)
+- Description Editor: Start button plays the picked animation at once
+- Scene Creator: Start greyed until an animation is selected
+- Fixed Scene Creator opening empty for NPC-started scenes
+- New Clean Cum option and NPC action
+- Bondage panel: Start now changes devices missing from the bundled list
+- Old pre-Beta-25 action and prompt copies removed
 
 ### 0.35.2
 
-- Punish with Injury Engine: the spell methods are now Flames, Frostbite and Sparks (torture) instead of weak attack spells. You get the ones you know (Injury Engine's "Add gear to player" teaches them); NPCs get all three only when Injury Engine's "NPC must already carry a whip" is off
-- Changing animation mid-scene (hotkey, Scene Menu, Description Editor, SL Tools) now starts the new animation at stage 1 instead of the stage you were on (SexLab P+ already did)
-- Aid and Punish panels with Injury Engine: a bar shows how badly the chosen body part is hurt, followed by its torture points (**body** shows the whole body). The Aid panel now starts on the most hurt body part; healing it doesn't need still goes to other hurt parts (needs the updated Injury Engine)
-- Ask / Order / Punish panel: reopens with what you picked last time (when it still fits the scene); a reason that is gone is swapped for another one at random
-- Punish: **no reason** and **custom** are always offered, so you can punish anyone in the scene
-- Punish with Injury Engine: new **Hits** box (1 up to Injury Engine's "Maximum lashes per action") lands that many hits; the line says "… 3 times"
-- Fixed: answering Yes to "enable torture sexual parts?" only lasted until the next load (needs the updated Injury Engine)
-- Scene HUD: Ask / Order / Punish stays on **Num .**, now drawn under Num 3, and Aid moves from Num 0 to **Num Enter**, to its right. Keys you saved in the dashboard before keep working until you reset them
-- New Narration settings at the top of the dashboard: Start, Stage change, Orgasm, End, Position change, Style change and Strategy / request narration. Each can be turned down to Event, ShortEvent (fades after 30 s) or Silent; Direct (default) keeps today's behaviour. With Orgasm below Direct the scene no longer waits for the orgasm voice. **Narrate position changes** is replaced by Position change narration
-- New setting **Disable OrgasmEngine, switch back to SexLab** (Enjoyment): SexLab or SLSO decides enjoyment and orgasms again and the mod just narrates them. The mini-game, NPC strategies and the orgasm check before the last stage are off while it is on; the WebUI orgasm button still works. Applies from the next scene
-- SexLab P+ supported: the animation database fills from P+, scenes end after the orgasms instead of looping, pause and stage keys work, and animation / actor changes keep the scene going
-- Fixed with SLSO: orgasms sometimes did not count for other mods (Radiant Prostitution clients paid as if they never came) because SLSO's edging swallowed them
-- Scene Creator: Start is greyed out until at least one animation is selected
-- Aid panel (Num Enter): healing spells now have a "Heal up to _ points" field and keep healing at their normal rate until that many points are healed or you run out of magicka; Healing Hands is picked by default
-- Aid panel (Num 0): pick who uses the spell or potion (default you) and who it is used on (default someone else in the scene)
-- Bondage panel: Start now removes or changes devices that were not in the bundled list (for example some armbinders), and tells you when a device could not be changed
-- New Ask / Order / Punish panel (Num .): ask or order someone to change how they play; they answer "agrees to" or "refuses", and a refusal is something they can be punished for
-- Strategies renamed to match strategies.json: deny self, deny all, deny, tease, focused; Together, Greedy, Forced orgasm and Accept force are gone, and so is being forced
-- Mental break is gone, and so is its dashboard setting
-- NPCs now choose their strategy from their own thoughts, what was said and what just happened, not from their current strategy
-- Punish: with Injury Engine, the line is followed by how the hit feels
-- Mini-game strategies are the same for everyone: Hold back and Cum quick are gone, and victims can now tease, force or be greedy too
 - New Num * key: AI auto-plays you, or take control of an NPC's scene
 - Auto play stays on across scenes and saves until you press Num * again
 - Decision model (e.g. Jev) now picks NPC mini-game strategies
@@ -31,20 +42,10 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2
 - Mini-game pacing: no orgasms in the first half; Mutual ends together
 - AI-only scenes: last orgasm at second-to-last stage, then a clean end
 - Fixed scenes stuck on their last stage forever
-- New Aid (Num 0) and Punish (Num .) panels; NPCs can use them too
-- Punish: anyone hurts anyone in the scene, for a reason you type
-- Punish reason: pick "change to ..." a strategy, or type a custom one
-- The punished one answers; the AI decides how they react
-- Punishments work: the punished NPC gives in, wavers or defies, and the narration says so
-- Aid and Punish can target a body part; Punish can use weak attack spells
-- Aid and Punish spells now show their glow, effects and sounds
-- Body part list: face, lips, nipples, back, arms, legs, pussy, cock, ass
-- With Injury Engine: Punish wounds the part, Aid heals it
-- Injury Engine: Flames, Frostbite and Sparks leave burns, frostbite, shocks
-- Injury Engine sexual parts greyed until you agree to enable them
-- New Clean Cum: TargetMenu option and NPC action, pick who cleans which body part
+- New Aid (Num 0) and Force (Num .) panels; NPCs can use them too
+- Aid and Force can target a body part; Force can use weak attack spells
+- Aid and Force spells now show their glow, effects and sounds
 - Arouse/Calm no longer makes anyone speak
-- NPCs now sense enjoyment as closeness to orgasm, not as arousal
 - Hold Shift to arouse/calm the other actor without changing focus
 - Arousal never falls below enjoyment during scenes (optional)
 - Arousal, cooldowns and edging no longer advance while paused or in a menu
