@@ -4,8 +4,11 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ## 0.36.1
 
+### AnimDB bug (untested)
 - Fixed: the animation database stayed empty on 0.36.0 (every rebuild "finished" with 0 animations). Rebuild it once after updating
 - A failed animation database build now says so instead of "ready"
+
+### Dead Actor bug (untested)
 - Fixed: necro animations with a corpse (e.g. FunnyBizness) ended right after starting on SexLab 1.6x
 
 ## 0.36.0

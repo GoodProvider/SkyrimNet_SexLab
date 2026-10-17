@@ -72,10 +72,13 @@ Stop and ask if any of these are unclear:
 - CHANGELOG themes vs docs-only updates
 - handler ESP special cases
 - deliberate omissions
+- the topic list for `next_version` (see Structure in `release-guide.md`) and which topics get `(untested)`
 
 Do not draft `CHANGELOG*`, `README.md`, or `docs/` until answers avoid invention.
 
 ### 3. Rewrite CHANGELOG.md
+
+First write the topic list for `next_version` once, from the delta: `### <Topic>` headings per **Structure** in `release-guide.md` (model: `CHANGELOG-player.md` 0.36.1 / 0.36.0). Steps 3–5 all use this list, in the same order.
 
 Title:
 
@@ -83,17 +86,7 @@ Title:
 ## [VERSION](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/VERSION) — since [BASE](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/BASE)
 ```
 
-Use only these H3 themes, and only when the group has content:
-
-- Actions / scenes
-- Orgasm / narration
-- Papyrus
-- SKSE / WebUI
-- Animations
-- Install / MCM
-- Docs
-
-Prefer concrete identifiers (YAML names, `setting_name`, StorageUtil keys, prompt files). Every bullet must be verifiable in git history or the shipping working tree.
+Then the topics. Internals-only topics (e.g. `Narration`, `Inja`, `Build`, `Docs`) go after the shared ones. Prefer concrete identifiers (YAML names, `setting_name`, StorageUtil keys, prompt files). Every bullet must be verifiable in git history or the shipping working tree.
 
 ### 4. Rewrite CHANGELOG-developer.md
 
@@ -103,11 +96,11 @@ First line:
 https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/VERSION
 ```
 
-Then 5–12 plain-English bullets. No claims missing from `CHANGELOG.md`.
+Then the requirement line, then `## VERSION` with the same topics; 5–12 plain-English bullets per version in total. No claims missing from `CHANGELOG.md`.
 
 ### 5. Write CHANGELOG-player.md
 
-Ships with the release. Same first line (releases URL) and requirement line as before, then a `### VERSION` section per release. Only player-facing bullets from `CHANGELOG.md`; each bullet 100 characters or fewer (check with `awk 'length($0)>100'`). No claims missing from `CHANGELOG.md`.
+Ships with the release. Same first line (releases URL) and requirement line as before, then `## VERSION` with the same topics (leave out internals-only ones). Only player-facing bullets from `CHANGELOG.md`; each bullet 100 characters or fewer (check with `awk 'length($0)>100'`). No claims missing from `CHANGELOG.md`.
 
 ### 6. Align docs
 
@@ -133,6 +126,7 @@ Report:
 ## Done-when
 
 - Changelogs cover `next_version`
+- The three changelogs use the same topic headings in the same order for `next_version`
 - Freshness-matrix files match the shipping delta
 - Checkpoint is current
 - Hand-off lists leftover mismatches

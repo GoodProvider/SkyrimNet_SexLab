@@ -66,33 +66,48 @@ Update only the rows the delta touches. Contracts stay single-sourced under `doc
 
 Ground truth is the git delta since `base_tag` plus working-tree files that will ship. No invented features. Every bullet must be verifiable. Changelogs get a one-line pointer to `docs/reference/…`, never a pasted protocol.
 
+### Structure (all three changelogs)
+
+Model: `CHANGELOG-player.md` 0.36.1 and 0.36.0.
+
+- One `## VERSION` section per release, newest first.
+- Under it, `### <Topic>` groups named after the feature or bug as a player knows it: `Injury Engine`, `SexLab P+`, `Force/Punish/Ask/Order`, `Aid`, `NPC strategy`, `Bug Fixes`, `WebUI`. A single-issue fix gets its own `### <Thing> bug` topic (e.g. `AnimDB bug`, `Dead Actor bug`).
+- Add ` (untested)` to a topic heading when the change has not been verified in game.
+- Topic order: headline features first, then smaller features, then `Bug Fixes`, then `WebUI` / install.
+- For a version, all three files use the same topic headings in the same order. A file leaves out a topic only when it has no bullet for it. `CHANGELOG.md` and `CHANGELOG-developer.md` may add internals-only topics (e.g. `Narration`, `Inja`, `Build`, `Docs`) after the shared ones.
+- A fix bullet starts with `Fixed:`. Add a short player action when one is needed ("Rebuild it once after updating").
+- Versions up to 0.35.2 keep their old format. Do not rewrite them.
+
+Example:
+
+```markdown
+## 0.36.1
+
+### AnimDB bug (untested)
+- Fixed: the animation database stayed empty on 0.36.0 (every rebuild "finished" with 0 animations). Rebuild it once after updating
+- A failed animation database build now says so instead of "ready"
+
+### Dead Actor bug (untested)
+- Fixed: necro animations with a corpse (e.g. FunnyBizness) ended right after starting on SexLab 1.6x
+```
+
 ### `CHANGELOG.md`
 
-Title:
+Version title (unreleased: `## VERSION (unreleased)`):
 
 ```markdown
 ## [VERSION](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/VERSION) — since [BASE](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/BASE)
 ```
 
-Use only these H3 themes, and only when the group has content:
-
-- Actions / scenes
-- Orgasm / narration
-- Papyrus
-- SKSE / WebUI
-- Animations
-- Install / MCM
-- Docs
-
-Prefer concrete identifiers (YAML names, `setting_name`, StorageUtil keys, prompt files).
+Topics per [Structure](#structure-all-three-changelogs). Prefer concrete identifiers (YAML names, `setting_name`, StorageUtil keys, prompt files).
 
 ### `CHANGELOG-developer.md`
 
-First line = GitHub releases URL for `next_version`. Then 5–12 plain-English bullets. No claims missing from `CHANGELOG.md`.
+First line = GitHub releases URL for `next_version`, then the SkyrimNet requirement line. Then `## VERSION` with topics per Structure; 5–12 plain-English bullets per version in total. No claims missing from `CHANGELOG.md`.
 
 ### `CHANGELOG-player.md`
 
-Ships with the release. First line = GitHub releases URL for `next_version`, then the SkyrimNet requirement line, then one `### VERSION` section per release. Only player-facing bullets taken from `CHANGELOG.md` (no Papyrus / SKSE internals); each bullet is 100 characters or fewer. No claims missing from `CHANGELOG.md`.
+Ships with the release. First line = GitHub releases URL for `next_version`, then the SkyrimNet requirement line, then `## VERSION` with topics per Structure. Only player-facing bullets taken from `CHANGELOG.md` (no Papyrus / SKSE internals); each bullet is 100 characters or fewer. No claims missing from `CHANGELOG.md`.
 
 ### Writing bar
 
