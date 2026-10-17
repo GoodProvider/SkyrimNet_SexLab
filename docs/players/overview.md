@@ -58,6 +58,7 @@ Scene files via `setting_name`: [../reference/scene-settings.md](../reference/sc
 | punish | Spanking for any genders. Whip always uses the whipping animations (they are bondage animations; the target is assumed bound) |
 | masturbation | Solo |
 | rapes | Anything except affection/platonic animations, aggressive ones first |
+| OStim | Only with OStimNet installed. Starts an OStim scene through OStimNet: a victim is the submissive actor; affection methods or intents with two actors start an OStim caring scene. No scene setting |
 
 Animations made for Devious Devices bondage are only picked when someone in the scene wears it. If an option finds nothing (for example platonic + kissing), you get "No matching animations" instead of a looser pick.
 

@@ -11,6 +11,9 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 ### Dead Actor bug (untested)
 - Fixed: necro animations with a corpse (e.g. FunnyBizness) ended right after starting on SexLab 1.6x
 
+### OStim TargetMenu (untested)
+- New **OStim** option in the TargetMenu when OStimNet is installed. Pick who joins, the victim, the method and the intent as usual, and OStim plays the scene
+
 ## 0.36.0
 
 ### Injury Engine

@@ -1,0 +1,74 @@
+{
+  "type": "papyrus",
+  "label": "OStim",
+  "panel": "scene_start",
+  "framework": "ostim",
+  "requiresPlugin": "TT_OStimNet.esp",
+  "plugin": "SkyrimNet_SexLab.esp",
+  "questFormId": "0x800",
+  "scriptName": "SkyrimNet_SexLab_Actions",
+  "executionFunctionName": "TM_StartScene_OStim",
+  "panelDefaults": {
+    "participant2": "player",
+    "participant3": "none",
+    "victim": "none",
+    "intent": "sexual activities",
+    "direction": "random",
+    "method": "sexual",
+    "style": "normally"
+  },
+  "parameterMapping": [
+    { "type": "speaker", "name": "speaker" },
+    { "type": "target", "name": "target" },
+    { "type": "dynamic", "name": "cast", "description": "comma-separated signed FormIDs, subject first" },
+    { "type": "dynamic", "name": "victim_fid", "description": "victim FormID, 0 for none" },
+    { "type": "dynamic", "name": "intent", "description": "sexual activities" },
+    { "type": "dynamic", "name": "style", "description": "forcefully|normally|gently" },
+    { "type": "dynamic", "name": "method", "description": "OStim action type, empty for any" },
+    { "type": "dynamic", "name": "direction", "description": "giving|getting|fucking|fucked in" }
+  ],
+  "eligibilityRules": [
+    {
+      "conditions": [
+        {
+          "decoratorName": "is_in_faction",
+          "arguments": [
+            "currentActor",
+            "dse_dm_FactionActorUsingDevice"
+          ],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        },
+        {
+          "decoratorName": "is_in_faction",
+          "arguments": [
+            "currentActor",
+            "OStimActorCountFaction"
+          ],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        },
+        {
+          "decoratorName": "is_in_combat",
+          "arguments": [
+            "currentActor"
+          ],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        },
+        {
+          "decoratorName": "papyrus_util",
+          "arguments": [
+            "HasIntValue",
+            "currentActor",
+            "skyrimnet_sexlab_scene_actor_lock"
+          ],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        }
+      ],
+      "logicalOperator": "AND",
+      "required": true
+    }
+  ]
+}

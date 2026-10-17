@@ -4265,7 +4265,7 @@
         // Treated as "open" (no hover drill) when already shown, or when a scene-start
         // row would reapply defaults to an open Scene Creator instead of showing a panel.
         function tmPapyrusPanelOpen(opt) {
-            if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) return true;
+            if (ssIsCreatorScenePanel(opt) && tmSceneCreatorIsOpen()) return true;
             if (!tmSameOpt(leftSelectedOpt, opt)) return false;
             return !!papyrusSelectedOpt;
         }
@@ -4692,6 +4692,17 @@
             return p === 'scene_start' || p === 'cuddle';
         }
 
+        // Option `framework: "ostim"`: same scene_start panel, but Start hands the cast to
+        // OStimNet (TM_StartScene_OStim). No scene setting row, no AnimDB, no Scene Creator.
+        function ssIsOStim(opt) {
+            return !!opt && String(opt.framework || '').toLowerCase() === 'ostim';
+        }
+
+        // Scene-start rows that feed the SexLab Scene Creator (reapply defaults / creator tags).
+        function ssIsCreatorScenePanel(opt) {
+            return ssIsSceneStartPanel(opt) && !ssIsOStim(opt);
+        }
+
         // Option creatorTags / creatorSuppress (CSV): with Scene Creator open, the option only
         // replaces the creator's tag + suppress chips (its own panel stays closed).
         function ssCreatorField(opt, name) {
@@ -4722,11 +4733,11 @@
 
         function selectPapyrusOption(opt) {
             ssCascade = null;
-            if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen() && ssHasCreatorTags(opt)) {
+            if (ssIsCreatorScenePanel(opt) && tmSceneCreatorIsOpen() && ssHasCreatorTags(opt)) {
                 ssSetCreatorTags(opt);
                 return;
             }
-            if (ssIsSceneStartPanel(opt) && tmSceneCreatorIsOpen()) {
+            if (ssIsCreatorScenePanel(opt) && tmSceneCreatorIsOpen()) {
                 leftSelectedOpt = opt;
                 papyrusSelectedOpt = null;
                 navStack = [];
@@ -5673,6 +5684,37 @@
             }, ssWireMethod(ssUi.method));
         }
 
+        // OStim row: no AnimDB resolve; TM_StartScene_OStim gets the cast as a signed FormID CSV
+        // (subject first) so absent actors never default to player/target in C++.
+        function ssStartOStim(opt) {
+            const pool = ssActorPool();
+            const cast = ssResolveCast(pool);
+            if (!ssCanStart(pool, cast)) {
+                notifyPlayer('Pick valid scene actors before starting.');
+                ssUi.method = 'random';
+                renderPapyrusPanel();
+                return;
+            }
+            const random = ssUi.method === 'random';
+            const ids = [cast.subject, cast.object, cast.third].filter(Boolean)
+                .map(a => formIdU32(a.formId) | 0).filter(id => id);
+            firePapyrusOption(opt, {
+                cast: Array.from(new Set(ids)).join(','),
+                victim_fid: String(cast.victim ? (formIdU32(cast.victim.formId) | 0) : 0),
+                intent: ssPapyrusIntent(),
+                style: ssUi.style || 'normally',
+                method: random ? '' : ssWireMethod(ssUi.method),
+                direction: ssWireDirection(random ? 'random' : ssUi.direction, ssUi.method),
+                closeWebUI: true
+            });
+            ssUi.method = 'random';
+            ssCloseIntentPanel();
+            if (typeof hidePanel === 'function') {
+                hidePanel('target_menu_panel');
+                hidePanel('control_panel');
+            }
+        }
+
         // Shared method-start resolve (ssStart, DOM punish rape): C++ resolves the method tag for the cast and
         // appends the cast's worn DD tags that still match (`_form_ids`), then animDbResolveTagsResult fires.
         function ssRequestResolve(pending, tag) {
@@ -6039,11 +6081,20 @@
                 onPick: (node) => {
                     const v = node.value || {};
                     if (v.random) {
-                        ssStartRandom(opt);
+                        if (ssIsOStim(opt)) {
+                            ssUi.method = 'random';
+                            ssStartOStim(opt);
+                        } else {
+                            ssStartRandom(opt);
+                        }
                         return;
                     }
                     ssUi.direction = v.direction;
                     ssUi.method = v.method;
+                    if (ssIsOStim(opt) && !embedded) {
+                        ssStartOStim(opt);
+                        return;
+                    }
                     if (embedded) {
                         if (embedOpts.onMethodStart) embedOpts.onMethodStart();
                         renderPapyrusPanel();
@@ -6134,10 +6185,12 @@
                 renderPapyrusPanel();
             }));
 
-            addField('scene setting', ssListCascade('setting', 'Scene Setting', SS_SETTINGS, ssUi.settingName, (v) => {
-                ssUi.settingName = v;
-                renderPapyrusPanel();
-            }));
+            if (!ssIsOStim(opt)) {
+                addField('scene setting', ssListCascade('setting', 'Scene Setting', SS_SETTINGS, ssUi.settingName, (v) => {
+                    ssUi.settingName = v;
+                    renderPapyrusPanel();
+                }));
+            }
 
             if (!omitStartBar) {
                 const bar = document.createElement('div');
@@ -6148,7 +6201,8 @@
                 if (!ssCanStart(pool, cast)) startBtn.classList.add('disabled');
                 startBtn.onclick = () => {
                     if (startBtn.classList.contains('disabled')) return;
-                    if (ssUi.method === 'random') ssStartRandom(opt);
+                    if (ssIsOStim(opt)) ssStartOStim(opt);
+                    else if (ssUi.method === 'random') ssStartRandom(opt);
                     else ssStart(opt);
                 };
                 bar.appendChild(startBtn);

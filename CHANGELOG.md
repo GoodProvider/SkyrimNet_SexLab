@@ -11,6 +11,11 @@
 ### Dead Actor bug (untested)
 - **Necro / corpse scenes ended right after starting (SexLab 1.6x)**: `sslActorAlias` OnUpdate calls `EndAnimation(true)` for an actor that `IsDead() && Health < 1`. New `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (StorageUtil float `skyrimnet_sexlab_corpse_health`) raise a corpse to Health 2 before `AddActor` (and again at each `StageStart`) and restore it in `Scene.AnimationEnd` or when the start fails. No-op on P+. Temporary instrumentation is tagged `NECRO-DBG` (`Utilities.NecroDbg` / `NecroDbgSnapshot`, a `HookAnimationEnding` handler in Scene_Manager, snapshots in Scene_Creator.StartScene, Scene.StageStart / AnimationStart / AnimationEnd / SetPosition). See `checkpoints/necro-animations/checkpoint-v01.md`.
 
+### OStim TargetMenu (untested)
+- **OStim row in the TargetMenu**: new Actor option `0120_ostim.json` (`panel: scene_start`, new key `framework: "ostim"`, `requiresPlugin: TT_OStimNet.esp`). It is listed whenever OStimNet is loaded, whatever `sexlab.ostim.player` says. The panel uses the standard with / and / victim / method / intent / style rows. It has no scene setting row and never touches AnimDB or the Scene Creator.
+- `index.html`: `ssIsOStim` / `ssIsCreatorScenePanel` / `ssStartOStim`. Start, the `random` leaf and any method leaf fire `Actions.TM_StartScene_OStim` with the cast as a signed FormID CSV (subject first) plus `victim_fid`, so C++ never defaults an absent actor to player/target.
+- `Actions.TM_StartScene_OStim`: victim → sub; otherwise direction (`getting` / `fucked in`) decides whether the subject is dom or sub. Two actors with an affection intent or method → `TTON_OStimIntegration.StartOStimCaring`; otherwise `StartOstimSex` (method `sexual` → any action). `OStim_Intent` maps intents to OStimNet's (comfort → platonic, affection → romantic, sexual activities → lustful, sexual assault → aggressive, punish → dom). New header stub `Headers_Source/OstimNet/TTON_OStimIntegration.psc`.
+
 ## [0.36.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0) — since [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2)
 
 ### Injury Engine

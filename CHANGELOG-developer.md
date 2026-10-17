@@ -14,6 +14,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 ### Dead Actor bug (untested)
 - **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. Temporary instrumentation is tagged **`NECRO-DBG`**; see `checkpoints/necro-animations/checkpoint-v01.md`.
 
+### OStim TargetMenu (untested)
+- **TargetMenu OStim row**: `webui/TargetMenu/Actor/options/0120_ostim.json` is a `scene_start` panel with `framework: "ostim"` and `requiresPlugin: TT_OStimNet.esp`. Start calls `SkyrimNet_SexLab_Actions.TM_StartScene_OStim(speaker, target, cast, victim_fid, intent, style, method, direction)`, which starts the scene through OStimNet's `TTON_OStimIntegration.StartOstimSex` / `StartOStimCaring`. Any catalog option can set `framework: "ostim"` to get the same panel without the scene setting row, AnimDB or Scene Creator.
+
 ## 0.36.0
 
 ### Injury Engine

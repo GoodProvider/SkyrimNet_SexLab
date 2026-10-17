@@ -1298,6 +1298,13 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 **Cause:** `Scene.AnimationStart` sent its own `RegisterEvent("sexlab update", GetIntentMessage(INTENT_STAGE_START) + GetDescription())`, and the StageStart that always follows narrates the start (first start) or the change (`pending_animation_change`). `CheckDuplicate` only blanks identical text, so it did not catch it.
 **Fix:** `AnimationStart` sends nothing. StageStart owns start / change narration.
 
+## TargetMenu OStim row (2026-10-17)
+
+- `0120_ostim.json` is gated only by `requiresPlugin: TT_OStimNet.esp`. Unlike the SexLab scene-start rows, it has **no** `get_global_value skyrimnet_sexlab_ostim_player == 0` rule: it is listed whatever the framework toggle says. That is on purpose, so do not add the rule.
+- Actors reach `TM_StartScene_OStim` as **strings** (`cast` CSV and `victim_fid`). `ExecutePapyrusOption` resolves an absent Actor arg to player (or target for `victim`), so an optional Actor param in `parameterMapping` would silently add the player or the target to the cast. JS sends signed int32 FormIDs (`| 0`) so that Papyrus `as int` parses FE/FF ids.
+- OStimNet does its own scene search by **its** intents (platonic, romantic, lustful, transactional, dom, aggressive) and OStim action types. `Actions.OStim_Intent` maps the SexLab intents. Method `sexual` and affection leaves on 3 or more actors go through as "any action".
+- The compile-time stub is `Headers_Source/OstimNet/TTON_OStimIntegration.psc`. If OStimNet changes `StartOstimSex` / `StartOStimCaring`, update the stub (installed copy: `C:\Skyrim\dev\mods\OStimNet`).
+
 ## Username privacy (standing rule)
 
 Never commit the Windows username. Use `%USERPROFILE%` in paths. See AGENTS.md Standing rules.

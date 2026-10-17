@@ -578,6 +578,121 @@ Function TM_SceneOutfit(Actor speaker, Actor target, String style, String how)
     Outfit_Narrate(speaker, target, style, how, narration)
 EndFunction
 
+; TargetMenu OStim row (panel scene_start, framework ostim): hands the cast to OStimNet.
+; cast = signed FormID CSV, subject first; victim_fid = 0 for none. Actors travel as strings so
+; C++ never defaults an absent actor to player/target.
+Function TM_StartScene_OStim(Actor speaker, Actor target, String cast, String victim_fid, String intent, String style, String method, String direction)
+    Trace("TM_StartScene_OStim", "cast:"+cast+" victim:"+victim_fid+" intent:"+intent+" style:"+style+" method:"+method+" direction:"+direction)
+    String[] parts = StringUtil.Split(cast, ",")
+    Actor[] actors = PapyrusUtil.ActorArray(parts.length)
+    int n = 0
+    int i = 0
+    while i < parts.length
+        int fid = parts[i] as int
+        Actor a = None
+        if fid != 0
+            a = Game.GetFormEx(fid) as Actor
+        endif
+        if a != None && actors.Find(a) < 0
+            actors[n] = a
+            n += 1
+        endif
+        i += 1
+    endwhile
+    if n < 1
+        Trace("TM_StartScene_OStim", "no valid actors", true)
+        return
+    endif
+    Actor victim = None
+    int vfid = victim_fid as int
+    if vfid != 0
+        victim = Game.GetFormEx(vfid) as Actor
+        if victim != None && actors.Find(victim) < 0
+            victim = None
+        endif
+    endif
+
+    ; Roles: a victim is the sub; otherwise direction decides whether the subject (cast[0]) leads.
+    Actor subject = actors[0]
+    Bool subjectReceives = direction == "fucked in" || direction == "getting"
+    Actor[] dom = PapyrusUtil.ActorArray(n)
+    Actor[] sub = PapyrusUtil.ActorArray(n)
+    int nd = 0
+    int ns = 0
+    i = 0
+    while i < n
+        Actor b = actors[i]
+        Bool isSub
+        if victim != None
+            isSub = b == victim
+        elseif b == subject
+            isSub = subjectReceives
+        else
+            isSub = !subjectReceives
+        endif
+        if isSub
+            sub[ns] = b
+            ns += 1
+        else
+            dom[nd] = b
+            nd += 1
+        endif
+        i += 1
+    endwhile
+    dom = PapyrusUtil.ResizeActorArray(dom, nd)
+    sub = PapyrusUtil.ResizeActorArray(sub, ns)
+
+    String ostimIntent = OStim_Intent(intent)
+    String m = method
+    Bool caring = intent == "showing affection" || intent == "comforting" || m == "kissing" || m == "hugging" \
+        || m == "cuddling" || m == "spooning" || m == "headpat" || m == "sitting" || m == "laying" || m == "standing"
+
+    int thread_id = -1
+    if caring && n == 2
+        Actor giver = subject
+        Actor receiver = actors[1]
+        if subjectReceives
+            giver = actors[1]
+            receiver = subject
+        endif
+        thread_id = TTON_OStimIntegration.StartOStimCaring(giver, receiver, m, ostimIntent)
+    else
+        String actions = m
+        if actions == "sexual" || caring
+            actions = ""
+        endif
+        Actor[] initiator = PapyrusUtil.ActorArray(1)
+        initiator[0] = subject
+        if nd == 0
+            dom = sub
+            sub = PapyrusUtil.ActorArray(0)
+        endif
+        thread_id = TTON_OStimIntegration.StartOstimSex(dom, sub, actions, "", ostimIntent, initiator)
+    endif
+    Trace("TM_StartScene_OStim", "caring:"+caring+" intent:"+ostimIntent+" dom:"+nd+" sub:"+ns+" thread:"+thread_id)
+    if thread_id < 0
+        Debug.Notification("OStim scene could not start")
+    endif
+EndFunction
+
+; SexLab TargetMenu intent -> OStimNet thread intent (platonic|romantic|lustful|transactional|dom|aggressive).
+String Function OStim_Intent(String intent)
+    if intent == "comforting" || intent == "comfort"
+        return "platonic"
+    elseif intent == "showing affection" || intent == "show affection"
+        return "romantic"
+    elseif intent == "sexual activities"
+        return "lustful"
+    elseif intent == "sexual assault"
+        return "aggressive"
+    elseif intent == "punish"
+        return "dom"
+    elseif intent == "platonic" || intent == "romantic" || intent == "lustful" || intent == "transactional" || intent == "dom" || intent == "aggressive"
+        return intent
+    endif
+    return ""
+EndFunction
+
 Function TM_StopSilent(Actor speaker, Actor target)
     Trace("TM_StopSilent", GetDisplayName(speaker)+" -> "+GetDisplayName(target))
     SceneStop_Target(speaker, target, "silent")
