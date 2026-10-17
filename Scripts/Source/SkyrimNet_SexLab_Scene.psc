@@ -3172,12 +3172,11 @@ Function AnimationStart()
     Engine_BeginScene()
     ActorChange_Started()
     manager.SaveThreadsJson()
-    String msg = GetIntentMessage(INTENT_STAGE_START) + GetDescription()
-    RegisterEvent("sexlab update", msg, sender, receiver)
+    ; No narration here: the StageStart that follows sends the start / change (one DN or event).
     ; Scene view showing Scene Creator for a target who just started animating -> Description Editor.
     WebUI_RerouteForFocus(true)
     WebUI_ConfigureIfOverlayVisible()
-    DbgEnd("AnimationStart", "msg:"+msg+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
+    DbgEnd("AnimationStart", "sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
 EndFunction
 
 ; P+ StageStart bookkeeping. True when it ended the animation:
@@ -3315,6 +3314,12 @@ Function StageStart()
             else
                 if has_player
                     DirectNarration(narration, sender, receiver)
+                elseif PlayerSeesScene()
+                    ; NPC-only start the player watches: always Direct, skipping the cooldown.
+                    DirectNarration(narration, sender, receiver)
+                    if main
+                        main.direct_narration_last_time = Utility.GetCurrentRealTime()
+                    endif
                 else
                     DirectNarration_Optional("start", narration, sender, receiver)
                 endif
@@ -4523,6 +4528,11 @@ String Function GetLocation()
     return loc+" "
 EndFunction 
 
+
+; The player is within sexlab.narration.max_distance of sender and has LOS to a scene actor.
+bool Function PlayerSeesScene()
+    return NarrationNearby(sender) && SexLab_Thread_LOS(Game.GetPlayer())
+EndFunction
 
 bool Function SexLab_Thread_LOS(Actor akActor)
     DbgEnter("SexLab_Thread_LOS", "akActor:"+GetDisplayName(akActor))

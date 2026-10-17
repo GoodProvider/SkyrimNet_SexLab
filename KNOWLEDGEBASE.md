@@ -1285,6 +1285,12 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - The tag is only added. Removing a tag from `sex_tags.json` needs a forced AnimDB rebuild to drop `sexual`.
 - TargetMenu options with `creatorTags` / `creatorSuppress` only replace SC tags / suppress while Scene Creator is open. Options without those fields still re-seed the whole creator (`ssApplySceneStartDefaultsToCreator`).
 
+## Scene start narrated twice (2026-10-16)
+
+**Symptom:** at scene start a `sexlab update` event ("Angi Start.<desc>") came right before the start DN / event ("Angi initiates: <desc>").
+**Cause:** `Scene.AnimationStart` sent its own `RegisterEvent("sexlab update", GetIntentMessage(INTENT_STAGE_START) + GetDescription())`, and the StageStart that always follows narrates the start (first start) or the change (`pending_animation_change`). `CheckDuplicate` only blanks identical text, so it did not catch it.
+**Fix:** `AnimationStart` sends nothing. StageStart owns start / change narration.
+
 ## Username privacy (standing rule)
 
 Never commit the Windows username. Use `%USERPROFILE%` in paths. See AGENTS.md Standing rules.

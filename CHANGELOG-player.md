@@ -13,6 +13,8 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Injury Engine: torture bar per body part; Aid opens on the most hurt part
 - Injury Engine: Punish spells are Flames, Frostbite and Sparks; Hits box for several hits
 - Injury Engine sexual body parts stay off until you agree to enable them
+- Scene start is narrated once, not twice
+- An NPC scene you can see always gets its start narrated
 - Aid moves to Num Enter; pick who casts and on whom
 - Aid healing spells keep healing up to the points you choose
 - Strategies renamed (deny self, deny all, focused, ...) and open to every role

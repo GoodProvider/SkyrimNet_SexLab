@@ -10,6 +10,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Aid** moves to Num Enter: pick caster and target, and healing spells channel up to a chosen number of points.
 - **Strategies come from `strategies.json`**: passive, mutual, selfish, selfless, deny self, deny all, deny, tease, focused, nonsexual, open to every role. Together, Greedy, Forced orgasm, Accept force, Hold back, Cum quick, the forced state and mental break are gone. **API break** in `OrgasmEngineAPI.h` (Strategy ids, `IsMentallyBroken`, `kMentalBreak`).
 - **Decision prompts** read one timeline of recent speech, thoughts and events instead of the current approach.
+- **One start narration**: `Scene.AnimationStart` no longer sends a "sexlab update" event with the stage description; the following StageStart's start / change narration is the only one. An NPC-only start the player can see (`Scene.PlayerSeesScene`: within `sexlab.narration.max_distance` and in line of sight) is always a DirectNarration, skipping the cooldown.
 - **Narration levels**: start, stage, orgasm, end, position, style and strategy / request narrations can each be Direct, Event, ShortEvent or Silent.
 - **Engine off switch** (`sexlab.enjoyment.engine_disabled`): SexLab / SLSO decide enjoyment and orgasms again; the mod only narrates.
 - **Arousal and orgasm fixes**: SLO Aroused NG now gets relief for every engine orgasm in Combined mode; SLSO edging no longer swallows our orgasms.
