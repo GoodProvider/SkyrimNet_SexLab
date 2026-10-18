@@ -70,6 +70,8 @@ namespace ActionCatalog
     bool IsAnimationPanelPreferredOpen();
     /// True when the selected main panel maps to `panel` (e.g. "description_editor_panel").
     bool IsMainPanelOpen(const std::string& panel);
+    /// True when any main panel is selected (not None).
+    bool HasMainPanelSelection();
     void SetAnimationPanelPreferredOpen(bool open);
     /// show_scene_panel: set when the Scene view opens, cleared by the main-panel Close. While true, the
     /// Scene view opens with the WebUI: Description Editor when the target is in a SexLab scene, else

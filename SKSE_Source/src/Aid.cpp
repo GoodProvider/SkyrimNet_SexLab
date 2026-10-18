@@ -2,6 +2,7 @@
 
 #include "WebUI_Log.h"
 #include "InjuryEngine.h"
+#include "OrgasmEngine.h"
 
 #include <algorithm>
 #include <cctype>
@@ -197,6 +198,111 @@ namespace Aid
                 return self ? who + " drinks a " + o.name + "." : who + " gives " + whom + " a " + o.name + ".";
             }
             return self ? who + " casts " + o.name + "." : who + " casts " + o.name + " on " + whom + ".";
+        }
+
+        // ── Potions on a body part (Aid panel): drink, lips, ass, pussy, cock ──
+
+        bool IsPotionPart(const std::string& part)
+        {
+            return part == "drink" || part == "lips" || part == "ass" || part == "pussy" || part == "cock";
+        }
+
+        bool HasPenis(RE::Actor* actor)
+        {
+            const auto* base = actor ? actor->GetActorBase() : nullptr;
+            return base && base->GetSex() == RE::SEX::kMale;
+        }
+
+        std::string PotionKindOf(const Option& o)
+        {
+            return o.health > 0.0f ? "healing" : "stamina";
+        }
+
+        // "Lydia's" / "his own" (owner is the giver).
+        std::string Possessive(RE::Actor* owner, RE::Actor* giver)
+        {
+            if (owner != giver) {
+                return ActorName(owner) + "'s";
+            }
+            const auto* base = owner ? owner->GetActorBase() : nullptr;
+            return (base && base->GetSex() == RE::SEX::kFemale) ? "her own" : "his own";
+        }
+
+        // Scene style adverb with its trailing space ("gently " / "forcefully "), "" for normal or no scene.
+        std::string StyleWord(RE::Actor* giver)
+        {
+            const int level = OrgasmEngine::GetSceneSpeedLevel(giver);
+            return level == 0 ? "gently " : level == OrgasmEngine::kSpeedLevelCount - 1 ? "forcefully " : "";
+        }
+
+        // First other actor of the receiver's scene (position order) that want accepts; nullptr when none.
+        template <class Want>
+        RE::Actor* ScenePartner(RE::Actor* receiver, Want want)
+        {
+            std::vector<OrgasmEngine::ActorView> views;
+            if (!OrgasmEngine::GetActorScene(receiver, views)) {
+                return nullptr;
+            }
+            for (const auto& v : views) {
+                auto* a = RE::TESForm::LookupByID<RE::Actor>(v.id);
+                if (a && a != receiver && want(a)) {
+                    return a;
+                }
+            }
+            return nullptr;
+        }
+
+        // Narration of a potion used on part (IsPotionPart). split: the scene's act carries it from one actor to
+        // another (a dick thrust into an ass / pussy / mouth), so giver and receiver share the effect.
+        std::string PotionLine(RE::Actor* giver, RE::Actor* receiver, const Option& o, const std::string& part,
+            bool& split)
+        {
+            split = false;
+            const std::string kind = PotionKindOf(o);
+            if (part == "drink") {
+                return giver == receiver ? ActorName(giver) + " drinks a " + o.name + "."
+                                         : ActorName(receiver) + " drinks " + ActorName(giver) + "'s " + kind + " potion.";
+            }
+            const std::string who = ActorName(giver) + " " + StyleWord(giver);
+            const std::string potion = "the " + kind + " potion";
+            bool vaginal = false;
+            bool anal = false;
+            bool oral = false;
+            OrgasmEngine::GetSceneActs(receiver, vaginal, anal, oral);
+            if (part == "cock") {
+                RE::Actor* hole = nullptr;
+                std::string where;
+                if (vaginal) {
+                    hole = ScenePartner(receiver, [](RE::Actor* a) { return !HasPenis(a); });
+                    where = "pussy";
+                }
+                if (!hole && anal) {
+                    hole = ScenePartner(receiver, [](RE::Actor*) { return true; });
+                    where = "ass";
+                }
+                if (hole) {
+                    split = true;
+                    return who + "puts " + potion + " on " + Possessive(receiver, giver) + " dick and it is thrust into " +
+                           Possessive(hole, giver) + " " + where + ".";
+                }
+                return who + "pours " + potion + " on " + Possessive(receiver, giver) + " penis.";
+            }
+            const bool act = part == "ass" ? anal : part == "pussy" ? vaginal : oral;
+            if (act) {
+                if (auto* penis = ScenePartner(receiver, HasPenis)) {
+                    split = true;
+                    return who + "puts " + potion + " on " + Possessive(penis, giver) + " dick and it is thrust into " +
+                           Possessive(receiver, giver) + " " + (part == "lips" ? std::string("mouth") : part) + ".";
+                }
+            }
+            return who + "pushes " + potion + "'s lip up " + Possessive(receiver, giver) + " " + part + ".";
+        }
+
+        const Option* FindPotion(const std::vector<Option>& options, RE::FormID form)
+        {
+            const auto it = std::find_if(options.begin(), options.end(),
+                [form](const Option& o) { return o.form == form && o.potion; });
+            return it != options.end() ? &*it : nullptr;
         }
 
         // ── Channels (Aid panel points): a spell kept up until a number of points is restored ──
@@ -455,16 +561,21 @@ namespace Aid
         const RE::FormID casterId = caster->GetFormID();
         const RE::FormID targetId = target->GetFormID();
 
-        // HUD body part ("body" / "": none): "on Lydia's ass" / "on her own ass".
-        const std::string part = location == "body" ? "" : location;
-        const std::string line = AidLine(caster, target, o, part);
+        // HUD body part ("body" / "": none): "on Lydia's ass" / "on her own ass". A potion drunk or used on
+        // lips / ass / pussy / cock gets its own line; split shares it between caster and target.
+        bool split = false;
+        const bool potionPart = o.potion && IsPotionPart(location);
+        const std::string part = location == "body" || location == "drink" ? "" : location;
+        const std::string line = potionPart ? PotionLine(caster, target, o, location, split) : AidLine(caster, target, o, part);
+        split = split && caster != target;
+        const float share = split ? 0.5f : 1.0f;
 
         // Injury Engine heals the wounds on the part (and the health with them) and narrates the line.
         const bool toInjuryEngine = o.health > 0.0f && InjuryEngine::Installed();
         if (injuryEngine) {
             *injuryEngine = toInjuryEngine;
         }
-        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toInjuryEngine, line, part]() {
+        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toInjuryEngine, line, part, split, share]() {
             auto* c = RE::TESForm::LookupByID<RE::Actor>(casterId);
             auto* t = RE::TESForm::LookupByID<RE::Actor>(targetId);
             if (!c || !t) {
@@ -479,15 +590,51 @@ namespace Aid
             } else if (auto* owner = c->AsActorValueOwner(); owner && o.cost > 0.0f) {
                 owner->DamageActorValue(RE::ActorValue::kMagicka, o.cost);
             }
-            Restore(t, toInjuryEngine ? 0.0f : o.health, o.stamina);
+            Restore(t, toInjuryEngine ? 0.0f : o.health * share, o.stamina * share);
             if (toInjuryEngine) {
-                InjuryEngine::Heal(c, t, line, o.health, part);
+                InjuryEngine::Heal(c, t, line, o.health * share, part);
             }
-            PlaySpellVisuals(c, t, RE::TESForm::LookupByID<RE::MagicItem>(o.form), o.potion);
+            auto* item = RE::TESForm::LookupByID<RE::MagicItem>(o.form);
+            PlaySpellVisuals(c, t, item, o.potion);
+            if (split) {
+                Restore(c, o.health * share, o.stamina * share);
+                PlaySpellVisuals(c, c, item, o.potion);
+            }
         });
-        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} injuryEngine {}", casterId,
-            targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, toInjuryEngine);
+        webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} split {} injuryEngine {}",
+            casterId, targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, split,
+            toInjuryEngine);
         return line;
+    }
+
+    bool NeedsConsent(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location)
+    {
+        if (!caster || !target || caster == target || (location != "drink" && location != "lips")) {
+            return false;
+        }
+        return FindPotion(ListOptions(caster), form) != nullptr;
+    }
+
+    bool PotionInfo(RE::Actor* caster, RE::FormID form, std::string& name, std::string& kind)
+    {
+        const auto options = ListOptions(caster);
+        const Option* o = FindPotion(options, form);
+        if (!o) {
+            return false;
+        }
+        name = o->name;
+        kind = PotionKindOf(*o);
+        return true;
+    }
+
+    std::string RefusalReason(RE::Actor* caster, RE::Actor* target, RE::FormID form)
+    {
+        std::string name;
+        std::string kind;
+        if (!caster || !target || !PotionInfo(caster, form, name, kind)) {
+            return "";
+        }
+        return ActorName(target) + " refused " + ActorName(caster) + "'s " + kind + " potion";
     }
 
     std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,

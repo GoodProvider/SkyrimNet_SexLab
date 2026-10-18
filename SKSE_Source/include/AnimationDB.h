@@ -111,8 +111,6 @@ namespace AnimationDB
     int NoteBatchParseError();
     /// Papyrus binding: a batch could not be parsed even after unescaping \"; its rows are lost.
     void NoteBatchDropped();
-    /// Batch parse failures + rejected rows of the current/last sync.
-    int LastSyncFailures(); // DEBUG-DELETE(pplus-animdb)
     bool EndSync();
 
     std::vector<AnimRow> QueryTopNAnims(const FilterSpec& spec, int n);

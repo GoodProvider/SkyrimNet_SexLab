@@ -997,12 +997,14 @@
             pointer-events: none;
         }
 
-        #aid-panel {
+        #aid-panel,
+        #aid-offer-panel {
             pointer-events: auto;
             min-width: 420px;
         }
 
-        #aid-panel .option-cancel {
+        #aid-panel .option-cancel,
+        #aid-offer-panel .option-cancel {
             margin-top: 0;
             border-top: none;
             padding: var(--space-xs) var(--space-md);
@@ -2328,6 +2330,19 @@
         <div id="actor-detail-fields"></div>
         <div id="actor-detail-controls"></div>
     </div>
+    <!-- Lover's Ledger view: filled by Menu.WebUI_LoversLedgerOpen -> setMainPanelData({panel:'lovers_ledger'}). -->
+    <div id="lovers-ledger-panel" class="panel" style="display:none">
+        <div class="target-row" id="ll-title">Lover's Ledger</div>
+        <div id="ll-empty" class="compact-row" style="opacity:0.75; display:none"></div>
+        <div id="ll-body" style="overflow:auto; flex:1; min-height:0">
+            <div class="section-header">Summary</div>
+            <div id="ll-summary"></div>
+            <div class="section-header">Actions</div>
+            <div id="ll-actions"></div>
+            <div class="section-header">Lovers</div>
+            <table class="data-table" id="ll-lovers"><thead></thead><tbody></tbody></table>
+        </div>
+    </div>
     </div><!-- #main-panel-host -->
 
     <div id="overlay-panels">
@@ -2428,7 +2443,7 @@
         <div class="target-row">Aid</div>
         <div class="act-sentence">
             <span id="aid-subject"></span> <span id="aid-option"></span>
-            on <span id="aid-actor"></span>'s <span id="aid-part"></span>.
+            <span id="aid-on">on</span> <span id="aid-actor"></span><span id="aid-poss">'s</span> <span id="aid-part"></span>.
         </div>
         <textarea id="aid-part-text" class="part-custom-text" style="display:none" placeholder="inner thigh" oninput="aidUpdate()"></textarea>
         <div id="aid-part-confirm" class="injuryengine-confirm" style="display:none"></div>
@@ -2440,6 +2455,15 @@
         <div class="btn-row">
             <div class="action-btn" id="aid-accept" onmousedown="event.preventDefault()" onclick="aidAccept()">Use</div>
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="aidCancel()">Cancel</div>
+        </div>
+    </div>
+    <!-- Aid offer (an NPC offers the player a potion to drink): Yes drinks it, No refuses (a punish reason). -->
+    <div id="aid-offer-panel" class="panel" style="display:none">
+        <div class="target-row">Potion</div>
+        <div id="aid-offer-question" class="yesno-question"></div>
+        <div class="btn-row">
+            <div class="action-btn" onmousedown="event.preventDefault()" onclick="aidOfferAnswer(true)">Yes</div>
+            <div class="option-cancel" onmousedown="event.preventDefault()" onclick="aidOfferAnswer(false)">No</div>
         </div>
     </div>
     </div><!-- #yesno-overlay -->
@@ -2596,7 +2620,7 @@
 
         function clearMainPanelHost() {
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel'];
+                'data-table-panel', 'actor-detail-panel', 'lovers-ledger-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (el) el.style.display = 'none';
@@ -2830,6 +2854,7 @@
             if (key === 'description_editor_panel') return 'description-editor-panel';
             if (key === 'settings_panel') return 'settings-panel';
             if (key === 'log_panel') return 'log-panel';
+            if (key === 'lovers_ledger_panel') return 'lovers-ledger-panel';
             return key;
         }
 
@@ -2856,7 +2881,7 @@
             mainPanelPulldownBusy = false;
             updateMainPanelClose();
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel'];
+                'data-table-panel', 'actor-detail-panel', 'lovers-ledger-panel'];
             const want = domIdForPanelKey(panelKey);
             const wantSrc = sourceOf(findMainPanelByKey(panelKey));
             for (const pid of builtins) {
@@ -2874,7 +2899,7 @@
                         deApplyBottomTabClass();
                         if (!sceneInfosSeeded) deSetLocked(true);
                     }
-                    el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel') ? 'flex' : 'block';
+                    el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel' || pid === 'lovers-ledger-panel') ? 'flex' : 'block';
                     if (deOpening && sceneInfosSeeded)
                         deBindTargetScene();
                     if (pid === 'description-editor-panel')
@@ -2924,7 +2949,7 @@
             showControlPanel();
             const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel'];
+                'data-table-panel', 'actor-detail-panel', 'lovers-ledger-panel'];
             const wantSrc = sourceOf(findMainPanelByKey(MAIN_SELECTED_KEY));
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -2963,6 +2988,102 @@
                 renderForeignDataTable(payload);
             else if (panel === 'actor_detail')
                 renderForeignActorDetail(payload);
+            else if (panel === 'lovers_ledger')
+                renderLoversLedger(payload);
+        }
+
+        // Lover's Ledger days-ago cell: -1 = never.
+        function llDaysAgo(d) {
+            const n = Number(d);
+            if (!isFinite(n) || n < 0) return 'never';
+            if (n < 1) return 'today';
+            const days = Math.floor(n);
+            return days === 1 ? '1 day ago' : days + ' days ago';
+        }
+
+        function llRow(host, label, value) {
+            const row = document.createElement('div');
+            row.className = 'compact-row';
+            const lab = document.createElement('span');
+            lab.textContent = label + ':';
+            const val = document.createElement('span');
+            val.textContent = value == null ? '' : String(value);
+            row.appendChild(lab);
+            row.appendChild(val);
+            host.appendChild(row);
+        }
+
+        // Names come from game data: textContent only.
+        function renderLoversLedger(payload) {
+            const title = document.getElementById('ll-title');
+            if (title) title.textContent = "Lover's Ledger" + (payload.name ? ' \u2014 ' + payload.name : '');
+            const empty = document.getElementById('ll-empty');
+            const body = document.getElementById('ll-body');
+            if (!empty || !body) return;
+            if (payload.empty) {
+                empty.textContent = payload.empty;
+                empty.style.display = '';
+                body.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            body.style.display = '';
+            const s = payload.summary || {};
+            const summary = document.getElementById('ll-summary');
+            summary.innerHTML = '';
+            llRow(summary, 'Exclusive sex', s.exclusive || 0);
+            llRow(summary, 'Group sex', s.group || 0);
+            llRow(summary, 'Solo sex', s.solo || 0);
+            llRow(summary, 'Same-sex encounters', s.sameSex || 0);
+            llRow(summary, 'With non-unique partners', s.others || 0);
+            llRow(summary, 'Internal climax given / received', (s.icDid || 0) + ' / ' + (s.icGot || 0));
+            llRow(summary, 'Last encounter', llDaysAgo(s.lastDaysAgo));
+            const actions = document.getElementById('ll-actions');
+            actions.innerHTML = '';
+            const joinActs = list => (list || []).map(a => a.name + ' ' + a.count).join(', ') || 'none';
+            llRow(actions, 'Did', joinActs(payload.did));
+            llRow(actions, 'Got', joinActs(payload.got));
+            const table = document.getElementById('ll-lovers');
+            const thead = table.querySelector('thead');
+            const tbody = table.querySelector('tbody');
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            const hr = document.createElement('tr');
+            ['Name', 'Score', 'Exclusive', 'Group', 'Orgasms', 'Internal given / got', 'Last'].forEach(h => {
+                const th = document.createElement('th');
+                th.textContent = h;
+                hr.appendChild(th);
+            });
+            thead.appendChild(hr);
+            const lovers = payload.lovers || [];
+            if (!lovers.length) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 7;
+                td.textContent = 'No lovers recorded';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+            }
+            lovers.forEach(l => {
+                const tr = document.createElement('tr');
+                [l.name || '?', Number(l.score || 0).toFixed(1), l.exclusive || 0, l.group || 0,
+                    Number(l.orgasms || 0).toFixed(0), (l.icDid || 0) + ' / ' + (l.icGot || 0),
+                    llDaysAgo(l.lastDaysAgo)].forEach(v => {
+                    const td = document.createElement('td');
+                    td.textContent = String(v);
+                    tr.appendChild(td);
+                });
+                // Lover row -> make that lover the ControlPanel target (the open view then refreshes for them).
+                const formId = formIdU32(l.formId || 0);
+                if (formId) {
+                    tr.style.cursor = 'pointer';
+                    tr.onclick = () => {
+                        if (typeof window.onMainPanelRow === 'function')
+                            window.onMainPanelRow(JSON.stringify({ formId: formId }));
+                    };
+                }
+                tbody.appendChild(tr);
+            });
         }
 
         // Live TargetMenu cascades from Papyrus (praise buttons, punish/restrain fields).
@@ -3400,6 +3521,10 @@
             }
             if (aidIsOpen()) {
                 aidCancel();
+                return;
+            }
+            if (aidOfferIsOpen()) {
+                aidOfferAnswer(false);
                 return;
             }
             if (overlayElIsOpen('yesno-panel')) {
@@ -8193,7 +8318,7 @@
         const BODY_PARTS = ['body', 'face', 'lips', 'nipples', 'back', 'left arm', 'right arm', 'left leg', 'right leg',
             'pussy', 'cock', 'ass', 'custom'];
         // Injury Engine's "include sexual body parts" setting: shown darker while off; picking one asks to turn it on.
-        const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'ass']);
+        const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'penis', 'ass']);
         // From the Hud payload (injuryengine, injuryengineSexual, injuryengineMaxStrikes).
         let INJURYENGINE = { installed: false, sexual: false, maxStrikes: 1 };
         let PUNISH = { actors: [], subject: 0, object: 0, verb: 'ask', request: '', method: PUNISH_PRESETS[0][0],
@@ -8213,9 +8338,10 @@
 
         // A body-part pulldown into hostId for actor; custom shows textId. onPick(part) on change.
         // current: the part to show (undefined on open: 'body', custom text cleared; one the actor lacks: 'body').
-        function renderPartPulldown(hostId, textId, onPick, actor, current) {
+        // partList: the parts to offer instead of bodyPartsFor(actor) (Aid potions).
+        function renderPartPulldown(hostId, textId, onPick, actor, current, partList) {
             const host = document.getElementById(hostId);
-            const parts = bodyPartsFor(actor);
+            const parts = partList || bodyPartsFor(actor);
             const shown = parts.includes(current) ? current : parts[0];
             const confirmId = hostId + '-confirm';
             host.innerHTML = '';
@@ -8223,8 +8349,8 @@
                 if (partDimmed(v)) {
                     injuryEngineConfirm(confirmId, () => {
                         onPick(v);
-                        renderPartPulldown(hostId, textId, onPick, actor, v);
-                    }, () => renderPartPulldown(hostId, textId, onPick, actor, shown));
+                        renderPartPulldown(hostId, textId, onPick, actor, v, partList);
+                    }, () => renderPartPulldown(hostId, textId, onPick, actor, shown, partList));
                     return;
                 }
                 onPick(v);
@@ -8595,6 +8721,20 @@
 
         // ── Aid panel (HUD aid key): the player's healing / stamina spells and potions on a scene actor ──
         let AID = { actors: [], options: [], subject: 0, actor: 0, option: -1, part: BODY_PARTS[0] };
+        // The values the panel last closed with (aidRemember); null until the first close this session.
+        let AID_LAST = null;
+        // A stamina-only potion: drink or one of these parts. Other potions: drink and the body parts.
+        const AID_STAMINA_PARTS = ['drink', 'lips', 'ass', 'pussy', 'penis'];
+
+        // Parts offered for the option on actor (sex-filtered like bodyPartsFor).
+        function aidPartsFor(actor, o) {
+            if (!o || !o.potion) return bodyPartsFor(actor);
+            if (o.stamina && !o.health) {
+                const female = actor && typeof actor.female === 'boolean' ? actor.female : null;
+                return AID_STAMINA_PARTS.filter(p => !(female === true && p === 'penis') && !(female === false && p === 'pussy'));
+            }
+            return ['drink', ...bodyPartsFor(actor)];
+        }
 
         function aidLabel(o) {
             if (o.potion) return o.count > 1 ? `${o.name} ×${o.count}` : o.name;
@@ -8617,27 +8757,44 @@
             return best;
         }
 
+        // The part to start on: a potion drinks, a spell goes to the most damaged part.
+        function aidDefaultPart() {
+            const o = AID.options[AID.option];
+            return o && o.potion ? 'drink' : aidMostDamagedPart(AID.actors[AID.actor]);
+        }
+
         function aidRenderPart(current) {
+            const actor = AID.actors[AID.actor];
+            const parts = aidPartsFor(actor, AID.options[AID.option]);
+            const shown = parts.includes(current) ? current : aidDefaultPart();
+            // renderPartPulldown only calls onPick when it shows another part than asked.
+            AID.part = parts.includes(shown) ? shown : parts[0];
             renderPartPulldown('aid-part', 'aid-part-text', (v) => {
                 AID.part = v;
                 aidUpdate();
-            }, AID.actors[AID.actor], current);
+            }, actor, shown, parts);
         }
 
-        // The subject's own spells / potions fill the option pulldown; the first affordable one is selected.
-        function aidRenderOptions() {
+        // The subject's own spells / potions fill the option pulldown. Selected: preferId when the subject still has
+        // it affordable, else Healing Hands (Skyrim.esm 0x0004D3F2) when known and affordable, else the first
+        // affordable option.
+        function aidRenderOptions(preferId) {
             const s = AID.actors[AID.subject];
             AID.options = (s && s.options) || [];
-            // Healing Hands (Skyrim.esm 0x0004D3F2) when known and affordable, else the first affordable option.
             const HEALING_HANDS = 0x0004D3F2;
-            AID.option = AID.options.findIndex(o => o.id === HEALING_HANDS && o.affordable);
+            AID.option = preferId ? AID.options.findIndex(o => o.id === preferId && o.affordable) : -1;
+            if (AID.option < 0) AID.option = AID.options.findIndex(o => o.id === HEALING_HANDS && o.affordable);
             if (AID.option < 0) AID.option = AID.options.findIndex(o => o.affordable);
             const labels = AID.options.map(aidLabel);
             const disabled = AID.options.filter(o => !o.affordable).map(aidLabel);
             const optionHost = document.getElementById('aid-option');
             optionHost.innerHTML = '';
             optionHost.appendChild(createPulldown(labels, labels[AID.option] || '', (_, i) => {
+                const wasPotion = !!(AID.options[AID.option] || {}).potion;
                 AID.option = i;
+                // Spell <-> potion (or a stamina potion) changes the part list.
+                const o = AID.options[i];
+                aidRenderPart(wasPotion === !!(o && o.potion) ? AID.part : undefined);
                 aidDefaultPoints();
                 aidUpdate();
             }, disabled));
@@ -8649,7 +8806,7 @@
             actorHost.innerHTML = '';
             actorHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[AID.actor] || {}).name || '', (_, i) => {
                 AID.actor = i;
-                aidRenderPart(aidMostDamagedPart(AID.actors[i]));
+                aidRenderPart(aidDefaultPart());
                 aidDefaultPoints();
                 aidUpdate();
             }));
@@ -8682,6 +8839,10 @@
             const pointsOk = !o || o.potion || aidPoints() > 0;
             const ok = pointsOk && !!o && o.affordable && !!AID.actors[AID.actor] && partLocation(AID.part, 'aid-part-text') !== '';
             document.getElementById('aid-accept').classList.toggle('de-disabled', !ok);
+            // "<subject> <potion> for <actor> to drink." / "... on <actor>'s <part>."
+            const drink = AID.part === 'drink';
+            document.getElementById('aid-on').textContent = drink ? 'for' : 'on';
+            document.getElementById('aid-poss').textContent = drink ? ' to' : "'s";
             renderTortureMeter('aid-torture', AID.actors[AID.actor], AID.part);
             const what = o ? [o.health ? 'health' : '', o.stamina ? 'stamina' : ''].filter(Boolean).join(' and ') : '';
             document.getElementById('aid-note').textContent = !o
@@ -8689,30 +8850,54 @@
                 : (o.potion ? 'Potion' : 'Spell') + ', restores ' + what + (o.potion ? '.' : ' at its normal rate until the points are healed or magicka runs out.');
         }
 
+        // Keeps the panel's values for the next open (Use or Cancel).
+        function aidRemember() {
+            const s = AID.actors[AID.subject];
+            const a = AID.actors[AID.actor];
+            const o = AID.options[AID.option];
+            AID_LAST = { subject: s ? s.id : 0, actor: a ? a.id : 0, option: o ? o.id : 0, part: AID.part,
+                partText: document.getElementById('aid-part-text').value,
+                pointsTyped: !!AID.pointsTyped, points: aidPoints() };
+        }
+
+        // Opens on the last values where still offered (actor in the scene, option carried and affordable, part
+        // in the list); otherwise the defaults.
         function openAidPanel(cfg) {
+            const last = AID_LAST || {};
             AID = { actors: (cfg && cfg.actors) || [], options: [], subject: 0, actor: 0, option: -1,
                 part: BODY_PARTS[0], pointsTyped: false };
             INJURYENGINE = { installed: !!(cfg && cfg.injuryengine), sexual: !!(cfg && cfg.injuryengineSexual) };
             document.getElementById('aid-part-confirm').style.display = 'none';
-            document.getElementById('aid-part-text').value = '';
+            document.getElementById('aid-part-text').value = last.partText || '';
             // Subject defaults to the player; the object to the first actor that is not the player (else the subject).
+            const lastSubject = AID.actors.findIndex(a => a.id === last.subject);
             const defSubject = AID.actors.findIndex(a => a.id === (cfg && cfg.defaultSubject));
-            AID.subject = Math.max(0, defSubject);
+            AID.subject = lastSubject >= 0 ? lastSubject : Math.max(0, defSubject);
+            const lastObject = AID.actors.findIndex(a => a.id === last.actor);
             const defObject = AID.actors.findIndex(a => !a.isPlayer);
-            AID.actor = defObject >= 0 ? defObject : AID.subject;
+            AID.actor = lastObject >= 0 ? lastObject : defObject >= 0 ? defObject : AID.subject;
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
                 'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
             const subjectHost = document.getElementById('aid-subject');
             subjectHost.innerHTML = '';
             subjectHost.appendChild(createPulldown(AID.actors.map(a => a.name), (AID.actors[AID.subject] || {}).name || 'You', (_, i) => {
+                const was = AID.options[AID.option];
                 AID.subject = i;
-                aidRenderOptions();
+                aidRenderOptions(was && was.id);
+                aidRenderPart(AID.part);
                 aidUpdate();
             }));
-            aidRenderOptions();
+            if (last.pointsTyped && last.points > 0) {
+                AID.pointsTyped = true;
+                document.getElementById('aid-points').value = last.points;
+            }
+            aidRenderOptions(last.option);
             aidRenderActor();
-            aidRenderPart(aidMostDamagedPart(AID.actors[AID.actor]));
+            // A sexual part remembered from before Injury Engine's setting was turned off: the default part.
+            const lastOption = AID.options[AID.option];
+            const samePick = !!lastOption && lastOption.id === last.option;
+            aidRenderPart(samePick && last.part && !partDimmed(last.part) ? last.part : undefined);
             document.body.classList.add('yesno-solo');
             hideControlPanel();
             hideTargetMenuRow();
@@ -8744,12 +8929,48 @@
             const a = AID.actors[AID.actor];
             if (!o || !a || document.getElementById('aid-accept').classList.contains('de-disabled')) return;
             const s = AID.actors[AID.subject];
-            aidSend({ subject: s ? s.id : 0, target: a.id, option: o.id, location: partLocation(AID.part, 'aid-part-text'),
+            const location = partLocation(AID.part, 'aid-part-text');
+            aidRemember();
+            aidSend({ subject: s ? s.id : 0, target: a.id, option: o.id, location: location === 'penis' ? 'cock' : location,
                 points: o.potion ? 0 : aidPoints() });
         }
 
         function aidCancel() {
+            aidRemember();
             aidSend({ cancel: true });
+        }
+
+        // ── Aid offer (C++ AidAskConsent): an NPC offers the player a potion to drink; reply onAidOfferResult ──
+        let AID_OFFER_TOKEN = 0;
+
+        function openAidOffer(cfg) {
+            AID_OFFER_TOKEN = (cfg && cfg.token) || 0;
+            document.getElementById('aid-offer-question').textContent = (cfg && cfg.question) || '';
+            for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
+                'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
+                hidePanel(id);
+            document.body.classList.add('yesno-solo');
+            hideControlPanel();
+            hideTargetMenuRow();
+            const host = document.getElementById('main-panel-host');
+            if (host) host.style.display = 'none';
+            document.getElementById('aid-offer-panel').style.display = 'block';
+        }
+
+        function hideAidOffer() {
+            document.getElementById('aid-offer-panel').style.display = 'none';
+            clearYesNoSolo();
+        }
+
+        function aidOfferIsOpen() {
+            return document.getElementById('aid-offer-panel').style.display === 'block';
+        }
+
+        function aidOfferAnswer(accept) {
+            if (typeof window.onAidOfferResult === 'function')
+                window.onAidOfferResult(JSON.stringify({ token: AID_OFFER_TOKEN, accept: !!accept }));
+            else
+                hideAidOffer();
         }
 
         // ── SceneInfo store (one per live thread + one Scene Creator draft) ──

@@ -203,17 +203,12 @@ namespace PapyrusBindings_AnimationDB
             return AnimationDB::PushAnimBatch(j);
         } catch (const nlohmann::json::parse_error& e) {
             const int failures = AnimationDB::NoteBatchParseError();
-            // DEBUG-DELETE(pplus-animdb): where the parse broke, for the first 3 batches of the sync.
-            if (failures <= 3) {
+            if (failures == 1) {
                 const size_t at = e.byte > 0 ? static_cast<size_t>(e.byte - 1) : 0;
                 const size_t from = at > 60 ? at - 60 : 0;
-                webui_log::warn("AnimDb_PushAnimBatch: parse failed #{} len={} byte={}: {} | near='{}' | head='{}'",
-                    failures, text.size(), e.byte, e.what(), text.substr(from, 120), text.substr(0, 400));
-            } else {
-                webui_log::warn("AnimDb_PushAnimBatch: parse failed #{} len={} byte={}", failures, text.size(),
-                    e.byte);
+                webui_log::warn("AnimDb_PushAnimBatch: parse failed len={} byte={}: {} | near='{}'", text.size(),
+                    e.byte, e.what(), text.substr(from, 120));
             }
-            // DEBUG-DELETE(pplus-animdb) end
             if (text.find("\\\"") != std::string::npos) {
                 std::string fixed = text;
                 for (size_t pos = 0; (pos = fixed.find("\\\"", pos)) != std::string::npos; ++pos)
@@ -237,13 +232,6 @@ namespace PapyrusBindings_AnimationDB
             return 0;
         }
     }
-
-    // DEBUG-DELETE(pplus-animdb)
-    std::int32_t AnimDb_LastSyncFailures(RE::StaticFunctionTag*)
-    {
-        return AnimationDB::LastSyncFailures();
-    }
-    // DEBUG-DELETE(pplus-animdb) end
 
     bool AnimDb_EndSync(RE::StaticFunctionTag*)
     {
@@ -406,7 +394,6 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_BeginSync", scriptName, AnimDb_BeginSync);
         a_vm->RegisterFunction("AnimDb_PushAnimBatch", scriptName, AnimDb_PushAnimBatch);
         a_vm->RegisterFunction("AnimDb_EndSync", scriptName, AnimDb_EndSync);
-        a_vm->RegisterFunction("AnimDb_LastSyncFailures", scriptName, AnimDb_LastSyncFailures, true); // DEBUG-DELETE(pplus-animdb)
         a_vm->RegisterFunction("AnimDb_QueryTopNAnims", scriptName, AnimDb_QueryTopNAnims, true);
         a_vm->RegisterFunction("AnimDb_QueryTopNTags", scriptName, AnimDb_QueryTopNTags, true);
         a_vm->RegisterFunction("AnimDb_TotalEnabled", scriptName, AnimDb_TotalEnabled, true);

@@ -31,4 +31,9 @@ namespace StrategyDecision
     /// this returns.
     void RequestAnswer(RE::FormID target, const std::string& trigger, const std::string& line,
         std::function<void(OrgasmEngine::DecisionResult)> done);
+    /// Game thread. The receiver NPC is offered giver's potion (how "drink" | "lips"; potionKind "healing" |
+    /// "stamina"): asks the decision model (prompts/decisions/sexlab/aid_accept.prompt) whether it accepts, then calls
+    /// done(accepted) on the game thread, exactly once. No decisions provider or a failed request: accepted.
+    void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,
+        const std::string& potionName, std::function<void(bool)> done);
 }

@@ -225,6 +225,10 @@ namespace OrgasmEngine
             bool calibrated = false;
             float mgPassiveRate = 0.0f;
             float mgStepRate = 0.0f;
+            // Current animation's acts (SetSceneActs: start and animation change). Not saved.
+            bool actVaginal = false;
+            bool actAnal = false;
+            bool actOral = false;
         };
 
         // Work collected under the lock, run after it is released (Papyrus dispatch / events / HUD).
@@ -2444,6 +2448,33 @@ namespace OrgasmEngine
         if (auto* st = Find(actor)) {
             st->sceneBlocked = blocked;
         }
+    }
+
+    void SetSceneActs(RE::Actor* anchor, bool vaginal, bool anal, bool oral)
+    {
+        std::lock_guard lock(g_lock);
+        auto* st = Find(anchor);
+        if (auto* sc = st ? SceneOf(*st) : nullptr) {
+            sc->actVaginal = vaginal;
+            sc->actAnal = anal;
+            sc->actOral = oral;
+            webui_log::info("OrgasmEngine: scene {} acts vaginal {} anal {} oral {}", sc->sid, vaginal, anal, oral);
+        }
+    }
+
+    bool GetSceneActs(RE::Actor* anchor, bool& vaginal, bool& anal, bool& oral)
+    {
+        vaginal = anal = oral = false;
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(anchor);
+        const auto* sc = st ? SceneOf(*st) : nullptr;
+        if (!sc) {
+            return false;
+        }
+        vaginal = sc->actVaginal;
+        anal = sc->actAnal;
+        oral = sc->actOral;
+        return true;
     }
 
     void SetOrgasmExpected(RE::Actor* actor, bool expected)

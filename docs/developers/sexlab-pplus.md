@@ -43,7 +43,3 @@ For SLSB-converted SLAL packs the legacy number matches the original stage, so t
 ## AnimDB
 
 The walk does not use slots (a proxy array, empty until `SyncBackEnd`, capped by the quest's aliases). It enumerates `sslAnimationSlots.CreateProxyArray(0, creature)` and builds rows from `SexlabRegistry` (`AnimDb.BuildAnimJson_PPlus`). Rows carry `"_case":1`: the C++ AnimationDB keeps that registry's case as the key and returns it as `_registry` (1.6x registrars stay lowercased). Lookups try the exact key, then lowercase. Anidata matches `<nanoid>.json`, else `<scene name>.json`. AniDescriber is compiled out (`SKYRIMNET_ANIDESCRIBER_HKX=0`) and was not re-checked against P+ event names.
-
-## Not verified in game yet
-
-`CreateProxyArray(0, …)` returning every scene, `SetActiveScene` accepting a scene outside the playing set, P+'s scene-HUD focus vs our `PauseTimer`, and `ClearCum` clearing the overlay (it calls `RemoveCumFx(FX_ALL)`). Each is traced on use (`SkyrimNet_SexLab_PPlus`, `PPlus_RefreshPath`, `PPlus_SwitchScene`, `WalkPPlusBatch`).

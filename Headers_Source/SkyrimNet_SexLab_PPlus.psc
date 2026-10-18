@@ -87,9 +87,6 @@ EndFunction
 String[] Function AllSceneIds(int creature) global
     return None
 EndFunction
-String Function SceneDebug(String id) global ; DEBUG-DELETE(pplus-animdb)
-    return ""
-EndFunction
 
 int Function LegacyGender(Actor akActor) global
     return 0

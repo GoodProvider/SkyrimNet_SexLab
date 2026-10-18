@@ -35,8 +35,19 @@ namespace Aid
     /// location: body part ("" / "body": none). Returns the narration line, "" when refused.
     /// With Injury Engine installed a health option heals whip wounds on the part through Injury Engine, which also
     /// narrates the line: *injuryEngine is set true and the caller must not narrate it.
+    /// A potion's location may also be "drink" (no body part) or lips / ass / pussy / cock with their own lines:
+    /// when the scene's act (OrgasmEngine::GetSceneActs) carries the potion between two actors (a dick thrust into
+    /// an ass / pussy / mouth) the effect is split half to caster, half to target; otherwise the target gets it all.
+    /// Drink / lips on someone else need consent first (NeedsConsent); Apply assumes it was given.
     std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location = "",
         bool* injuryEngine = nullptr);
+    /// A carried potion offered to someone else to drink or on the lips: the target accepts or refuses first
+    /// (NPC: decision model; player: Yes / No dialogue).
+    bool NeedsConsent(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location);
+    /// Name and kind ("healing" / "stamina") of a potion the caster carries. False when not carried.
+    bool PotionInfo(RE::Actor* caster, RE::FormID form, std::string& name, std::string& kind);
+    /// "Amy refused Bob's stamina potion" (no period; a punish reason), "" when the potion is not carried.
+    std::string RefusalReason(RE::Actor* caster, RE::Actor* target, RE::FormID form);
     /// Aid panel: keeps spell form going from caster to target at its normal rate (a concentration spell every second,
     /// a fire-and-forget spell recast every max(1, charge + 0.5) s) until points are restored (health; stamina for a
     /// stamina-only spell), the caster lacks the magicka for the next tick, the target is full, an actor is gone, or

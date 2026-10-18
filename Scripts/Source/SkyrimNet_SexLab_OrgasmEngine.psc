@@ -59,6 +59,8 @@ float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native
 ; Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
 Function SetOrgasmExpected(Actor akActor, bool expected) global native
+; Current animation's acts (Aid potion narration): Vaginal, Anal, Oral / Blowjob tags. Start and animation change.
+Function SetSceneActs(Actor akAnchor, bool vaginal, bool anal, bool oral) global native
 ; DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync); DOM decides the orgasm.
 Function SetDomSlave(Actor akActor, bool dom) global native
 ; DOM slave: 0-100 meter computed from DOM's orgasm values (HUD bar + SexLab mirror).

@@ -205,8 +205,8 @@
 
 - One **Scene** main panel (`scene_panel`) replaces the separate Scene Menu / Description Editor entries: C++ shows the Description Editor when the ControlPanel target is in SexLabAnimatingFaction, else Scene Creator. The old `scene_creator_panel` / `description_editor_panel` keys are aliases.
 - C++ `ActionCatalog` `g_showScenePanel` is set by every `SwitchMainPanel` to the Scene view and cleared **only** by the shared main-panel **Close** on it (`onSceneCreatorResult` `_action:"close"` for Scene Creator, `onScenePanelClose` for the Description Editor). `"cancel"` (Escape release of a Papyrus creator), Escape, Cancel and overlay hide/reset leave it set. In-memory only — resets on game restart, not saved.
-- While set, `WebUI_MaybeRestoreScenePanel` (hotkey open + ControlPanel actor change) opens the Scene view for any focus actor. With it cleared, the hotkey no longer opens the Description Editor mid-scene (pick **Scene** from the views pulldown once).
-- Picking another main panel / None from the pulldown does not clear it — the Scene view returns on the next target selection by design.
+- While set, `WebUI_MaybeRestoreScenePanel` (hotkey open + ControlPanel actor change) opens the Scene view for any focus actor, but only while the selected main panel is None or Scene: another selected view (Lover's Ledger, Settings, Log, ...) stays on an actor change. With it cleared, the hotkey no longer opens the Description Editor mid-scene (pick **Scene** from the views pulldown once).
+- Picking another main panel / None from the pulldown does not clear it — the Scene view returns on the next hotkey open (overlay hide/reset leaves the selection at None) or on a target change while the view is None, by design.
 - Scene start/end inside `AnimationStart` / `AnimationEnd` cannot rely on the faction check (it may not have changed yet), so the scene tells C++ which panel to show (`WebUI_RerouteScenePanel(inScene)`).
 
 ## Description Editor animation filter lists one animation (2026-09-29)
@@ -355,6 +355,15 @@ the case a stale post-load handle satisfies. Grep `dead handle` / `attaching a d
 `isFormMap` probe silently, so every logged `dead handle` is a real use); it only reproduces after a save load, not on a
 fresh game, so always test lock/persistence fixes against a loaded save.
 
+**2026-10-18:** a user log had about 300 `dead handle … session=17/18` lines after a load, in bursts of
+2 reads then 4 accesses on one handle every engine tick. That pattern matches `Mirror_Apply` on the
+`GetObjFromActor` handle exactly. `GetObjFromActor` already probes `isExists`, so how the handle got
+through is **not yet proven**. `Mirror_Apply` / `ApplySexLabVoice` now re-probe at the use site.
+`Resolve` now logs each dead handle **once per session**, and every `SNSL_*` native carries the VM
+stack ID (`WithCaller<Fn>` in `Papyrus_Json.cpp`), so that one line also writes the calling Papyrus
+stack to `Papyrus.0.log` via `TraceStack`. If the problem returns, read the caller there instead of
+inferring it from access patterns.
+
 ## The .pex and the .dll deploy in opposite directions (2026-09-23)
 
 **Symptom:** the C++ JSON store (`SNSL_JMap`/`SNSL_JArray`/`SNSL_JValue`/`SNSL_JFormMap`,
@@ -477,6 +486,19 @@ instead of the Papyrus walker, so there is no multi-second window for anything t
 `checkpoints/skse-scene/` for the staged migration (this fixes the reported pulldown bug; the rest
 of this mod's ~870 remaining JContainers call sites migrate in later stages, with JContainers and
 the new store coexisting via small JSON-string bridges until the last file moves over).
+
+**Second victim, `GetThreadsJson` (2026-10-18):** a user (0.35.2 and 0.36.1) got a third-party
+"JMapValueToJson … stuck in a recursion loop" dialog about 15 times in a row, then a crash a few
+minutes later. `Get_Threads json:` in `SkyrimNet_SexLab.log` held **another mod's data**
+(`{"Area":"face","name":"Sob 2","section":"Tears","texture":"drool\\sob2.dds","Threads":{…}`),
+with our `counter` missing, and `Papyrus.0.log` showed `StackFrameOverFlow` in
+`JMapToJson → … → JArrayToJson → … → JMapToJson`. The cause was the same as above, with a worse outcome:
+`GetThreadsJson` held an unretained JC root and array across its slow scene loop. JC collected them
+and handed the ids to another mod. `setObj(obj, "threads", threads_array)` then linked that mod's
+objects into a cycle, and `JValue.release(obj)` (with no matching retain) freed that mod's data. Moved
+to the JSON store. The JC walker now caps depth at 32. **Rules:** never `JValue.release` a JC object
+you did not `retain`. Never hold an unretained JC handle across anything slow (SexLab calls, loops
+over scenes, P+ legacy getters). Prefer the JSON store for anything you build yourself.
 
 ## WebUI script aborts at load: TDZ from hidePanel (2026-09-20)
 
@@ -1304,6 +1326,12 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - Actors reach `TM_StartScene_OStim` as **strings** (`cast` CSV and `victim_fid`). `ExecutePapyrusOption` resolves an absent Actor arg to player (or target for `victim`), so an optional Actor param in `parameterMapping` would silently add the player or the target to the cast. JS sends signed int32 FormIDs (`| 0`) so that Papyrus `as int` parses FE/FF ids.
 - OStimNet does its own scene search by **its** intents (platonic, romantic, lustful, transactional, dom, aggressive) and OStim action types. `Actions.OStim_Intent` maps the SexLab intents. Method `sexual` and affection leaves on 3 or more actors go through as "any action".
 - The compile-time stub is `Headers_Source/OstimNet/TTON_OStimIntegration.psc`. If OStimNet changes `StartOstimSex` / `StartOStimCaring`, update the stub (installed copy: `C:\Skyrim\dev\mods\OStimNet`).
+
+## Bondage device ids named the override patch (2026-10-17)
+
+**Symptom:** picking a DD/UD device did nothing. Log: `ChangeDevice --- cannot resolve wanted device Synthesis - Unforgiving Devices.esp:0x13354`.
+**Cause:** CommonLib `TESForm::GetFile()` defaults to index -1, the **last** override file, not the plugin that defines the form. The `plugin:0xhex` id paired the patch name with the original local id, so `Game.GetFormFromFile` returned None.
+**Rule:** use `GetFile(0)` when building a `plugin:id` reference (`BondageCatalog.cpp` `OriginFile`, `JsonStore.cpp` `MakeFormRef`).
 
 ## Username privacy (standing rule)
 

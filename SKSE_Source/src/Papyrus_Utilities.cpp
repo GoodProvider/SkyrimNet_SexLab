@@ -7,10 +7,13 @@
 
 #include <Windows.h>
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -202,6 +205,67 @@ namespace PapyrusBindings_Utilities
         return false;
     }
 
+    namespace
+    {
+        // NPC base FormID -> reference FormID. Built from one walk over all forms; rebuilt on a miss.
+        std::mutex g_baseRefLock;
+        std::unordered_map<RE::FormID, RE::FormID> g_baseToRef;
+        std::chrono::steady_clock::time_point g_baseToRefBuilt{};
+
+        void RebuildBaseToRef()
+        {
+            g_baseToRef.clear();
+            const auto [forms, lock] = RE::TESForm::GetAllForms();
+            if (!forms)
+                return;
+            RE::BSReadLockGuard guard{ lock.get() };
+            for (const auto& [id, form] : *forms) {
+                auto* actor = form ? form->As<RE::Actor>() : nullptr;
+                if (!actor)
+                    continue;
+                if (auto* raw = actor->data.objectReference)
+                    g_baseToRef.emplace(raw->GetFormID(), actor->GetFormID());
+                if (auto* npc = actor->GetActorBase())
+                    g_baseToRef.emplace(npc->GetFormID(), actor->GetFormID());
+            }
+            webui_log::info("ActorFromBase: indexed {} NPC bases", g_baseToRef.size());
+        }
+
+        RE::Actor* LookupRef(RE::FormID baseId)
+        {
+            auto it = g_baseToRef.find(baseId);
+            if (it == g_baseToRef.end())
+                return nullptr;
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(it->second);
+            if (!actor)
+                return nullptr;
+            auto* npc = actor->GetActorBase();
+            auto* raw = actor->data.objectReference;
+            if ((npc && npc->GetFormID() == baseId) || (raw && raw->GetFormID() == baseId))
+                return actor;
+            return nullptr;
+        }
+    }
+
+    RE::Actor* ActorFromBase(RE::StaticFunctionTag*, RE::TESNPC* base)
+    {
+        if (!base)
+            return nullptr;
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (player && player->GetActorBase() == base)
+            return player;
+        std::scoped_lock guard{ g_baseRefLock };
+        if (auto* actor = LookupRef(base->GetFormID()))
+            return actor;
+        // A miss rebuilds the index, at most every 5 s (a panel asks for up to 25 lovers in a row).
+        const auto now = std::chrono::steady_clock::now();
+        if (!g_baseToRef.empty() && now - g_baseToRefBuilt < std::chrono::seconds(5))
+            return nullptr;
+        g_baseToRefBuilt = now;
+        RebuildBaseToRef();
+        return LookupRef(base->GetFormID());
+    }
+
     /// Binds JsonLowerCaseKeys on SkyrimNet_SexLab_Utilities.
     bool Register_Utilities_Functions(RE::BSScript::IVirtualMachine* a_vm)
     {
@@ -221,6 +285,7 @@ namespace PapyrusBindings_Utilities
         a_vm->RegisterFunction("ClearAnimSpeed", scriptName, ClearAnimSpeed);
         a_vm->RegisterFunction("GetAnimSpeed", scriptName, GetAnimSpeed);
         a_vm->RegisterFunction("QueueDirectNarration", scriptName, QueueDirectNarration);
+        a_vm->RegisterFunction("ActorFromBase", scriptName, ActorFromBase);
         webui_log::info("Successfully registered Papyrus functions for {}", scriptName);
         return true;
     }

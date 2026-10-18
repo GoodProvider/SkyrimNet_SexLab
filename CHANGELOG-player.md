@@ -4,15 +4,29 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ## 0.36.1
 
-### AnimDB bug (untested)
+### AnimDB bug
 - Fixed: the animation database stayed empty on 0.36.0 (every rebuild "finished" with 0 animations). Rebuild it once after updating
 - A failed animation database build now says so instead of "ready"
 
 ### Dead Actor bug (untested)
 - Fixed: necro animations with a corpse (e.g. FunnyBizness) ended right after starting on SexLab 1.6x
 
+### Recursion warning bug (untested)
+- Fixed: a "JMapValueToJson … stuck in a recursion loop" warning that kept coming back during scenes and could be followed by a crash. It could also damage another mod's saved data (seen with a tears/drool overlay mod)
+- Less log spam after loading a save mid-scene
+
 ### OStim TargetMenu (untested)
 - New **OStim** option in the TargetMenu when OStimNet is installed. Pick who joins, the victim, the method and the intent as usual, and OStim plays the scene
+
+### Aid panel potions (untested)
+- The Aid panel remembers what you picked last time
+- Potions can be **drunk**. Offering one to an NPC (to drink or on the lips) lets them accept or refuse; a refusal can be punished. When an NPC offers you one, you get a Yes / No choice
+- Stamina potions offer drink, lips, ass, pussy and penis
+- Using a potion on ass, pussy, lips or penis during a matching act shares it between both of you, with its own narration
+
+### Lover's Ledger view (untested)
+- New **Lover's Ledger** view in the WebUI when TT Lover's Ledger is installed. It shows the target's encounter counts, favorite acts and lovers. Click a lover to switch the target to them
+- Changing the actor in the ControlPanel no longer closes the Lover's Ledger view; it shows the new actor
 
 ## 0.36.0
 
@@ -22,7 +36,7 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Injury Engine: Punish spells are Flames, Frostbite and Sparks; Hits box for several hits
 - Injury Engine sexual body parts stay off until you agree to enable them
 
-### SexLab P+ (untested)
+### SexLab P+
 - SexLab P+ supported: database, scene endings, pause and stage keys all work 
 
 ### Force/Punish/Ask/Order 

@@ -1848,24 +1848,24 @@ String Function GetThreadsJson(Actor speaker = None)
 
     sslThreadController[] threads = ThreadSlots.Threads
 
-    int obj = JMap.object() 
-    JMap.setStr(obj, "counter", thread_counter)
-    thread_counter += 1 
+    ; JSON store, not JContainers: the scene loop below can take seconds, and JC garbage-collects
+    ; unretained objects mid-build and hands their ids to other mods (KNOWLEDGEBASE "JContainers
+    ; garbage-collects mid-serialization").
+    int obj = SNSL_JMap.object()
+    SNSL_JMap.setStr(obj, "counter", thread_counter)
+    thread_counter += 1
 
-    int threads_array = JArray.object() 
+    int threads_array = SNSL_JArray.object()
     int i = 0
     while i < threads.length
         ; Read-only: do not allocate/Setup scenes while dumping JSON
         SkyrimNet_SexLab_Scene sl_scene = GetSceneByThread(threads[i], False, False)
-        if sl_scene != None 
+        if sl_scene != None
             if sl_scene.GetThreadActive()
-                ; sl_scene.GetThreadObj() returns an SNSL_JValue handle (Scene.psc's thread_obj is
-                ; now JsonStore-backed); this array is still a legacy JContainers structure, so
-                ; bridge via a JSON round-trip rather than embedding the raw handle (see
-                ; BuildWebUIAnimationMenuState's identical bridge for group_info's subtrees).
-                JArray.addObj(threads_array, JValue.objectFromPrototype(SNSL_JValue.dump(sl_scene.GetThreadObj(speaker))))
+                ; thread_obj is a retained root owned by the scene: add a fresh copy, never the root.
+                SNSL_JArray.addObj(threads_array, SNSL_JValue.objectFromPrototype(SNSL_JValue.dump(sl_scene.GetThreadObj(speaker))))
             endif
-        endif 
+        endif
         i += 1
     endwhile
 
@@ -1876,6 +1876,8 @@ String Function GetThreadsJson(Actor speaker = None)
         threads_dom = main.handler_dom.GetThreads()
     endif
     if threads_dom
+        ; Still JContainers (SkyrimNet_DOM): retain for the enrich loop and its JSON bridge.
+        JValue.retain(threads_dom)
         dom_count = JArray.count(threads_dom)
         i = dom_count - 1
         while i >= 0
@@ -1916,7 +1918,10 @@ String Function GetThreadsJson(Actor speaker = None)
                 AddStrIfNotDefined(thread, "style", "normal")
                 JMap.setFlt(thread, "speaker_distance", distance)
                 JMap.setInt(thread, "speaker_los", los as int)
-                JArray.addObj(threads_array, thread)
+                int thread_snsl = SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(thread))
+                if thread_snsl
+                    SNSL_JArray.addObj(threads_array, thread_snsl)
+                endif
                 dom_kept += 1
             endif
             i -= 1
@@ -1924,11 +1929,15 @@ String Function GetThreadsJson(Actor speaker = None)
     endif
     Trace("GetThreadsJson", "--- dom threads:"+dom_count+" kept:"+dom_kept)
 
-    JMap.setObj(obj, "threads", threads_array) 
+    SNSL_JMap.setObj(obj, "threads", threads_array)
 
-    String json = SkyrimNet_SexLab_Utilities.ObjectToLowerCaseKeyJson(obj) 
-    
-    JValue.release(obj) 
+    String json = JsonLowerCaseKeys(SNSL_JValue.dump(obj))
+    if !json
+        Trace("GetThreadsJson", "JsonLowerCaseKeys failed")
+        json = "{}"
+    endif
+
+    SNSL_JValue.release(obj)
     if threads_dom
         JValue.release(threads_dom)
     endif

@@ -98,7 +98,7 @@ namespace BondageCatalog
         {
             if (!form)
                 return nullptr;
-            return form->GetFile();
+            return form->GetFile(0);  // defining plugin; GetFile() is the last override
         }
 
         uint32_t LocalId(const RE::TESForm* form, const RE::TESFile* file)

@@ -1,0 +1,57 @@
+{# Decision template: whether an NPC in a SexLab scene accepts a healing / stamina potion someone offers it, to
+   drink or on the lips. Sent by SkyrimNet_SexLab.dll (StrategyDecision.cpp RequestAidAccept) through
+   PublicSendCustomDecisionToLLM from the Aid panel. The game narrates the answer ("Amy drinks Bob's stamina
+   potion." / "Amy refused Bob's stamina potion."); a refusal becomes a punishment reason.
+   Rendered into a decisions request, never into chat messages.
+
+   Context pushed by the game (C++ snapshot): focus_uuid, focus_name (the NPC offered the potion), giver_uuid,
+   giver_name, giver_is_player, how (drink | lips), potion_kind (healing | stamina), potion_name, relationship
+   (focus to giver: lovers .. archnemeses, strangers), relationship_rank (4 .. -4), timeline [lines, oldest first].
+   Keys are read back by the game: keep accept / refuse as given. #}
+{% set _focus = decnpc(focus_uuid) %}
+[ state focus ]
+{{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}.
+{{ render_character_profile("short_inline", focus_uuid) }}
+[ end state ]
+
+[ state scene ]
+{% set _sexlab = sexlab_get_threads(focus_uuid) %}
+{% if existsIn(_sexlab, "threads") %}
+{% for thread in _sexlab.threads %}
+{% for actor_record in thread.actors %}
+{% if to_number(actor_record.uuid) == focus_uuid %}
+{% if existsIn(thread, "location") and thread.location != "" %}On {{ thread.location }}, {% endif %}{{ thread.description }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+[ end state ]
+
+[ state giver ]
+{{ giver_name }}{% if giver_is_player %} (the player){% endif %}. {{ focus_name }} and {{ giver_name }} are {{ relationship }}.
+- {{ render_character_profile("short_inline", giver_uuid) }}
+[ end state ]
+
+[ state timeline ]
+{% if length(timeline) > 0 %}
+{% for line in timeline %}
+{{ line }}
+{% endfor %}
+{% else %}
+Nothing has happened yet.
+{% endif %}
+[ end state ]
+
+[ state offer ]
+{% if how == "lips" %}{{ giver_name }} pushes a {{ potion_kind }} potion ({{ potion_name }}) to {{ focus_name }}'s lips.{% else %}{{ giver_name }} offers {{ focus_name }} a {{ potion_kind }} potion ({{ potion_name }}) to drink.{% endif %}
+[ end state ]
+
+[ question accept choice ]
+Decide whether {{ focus_name }} accepts {{ giver_name }}'s {{ potion_kind }} potion right now.
+Base it on their relationship (`giver`), what is happening (`scene`), and what {{ focus_name }} has thought, said and experienced (`timeline`), recent events over older ones.
+A {{ potion_kind }} potion helps whoever takes it. A lover, friend or someone tired and willing is likely to accept. A resisting victim, a rival or an enemy who distrusts the giver may refuse.
+[ criteria ]
+accept: {{ focus_name }} takes the potion
+refuse: {{ focus_name }} refuses the potion
+[ end criteria ]
+[ end question ]

@@ -1805,6 +1805,9 @@ namespace PapyrusBindings_WebUI
         auto* target = TargetCurrent();
         if (!target)
             return;
+        // A view the user picked (Lover's Ledger, Settings, Log, ...) stays on an actor change.
+        if (ActionCatalog::HasMainPanelSelection() && !ActionCatalog::IsMainPanelOpen("scene_panel"))
+            return;
         // An in-scene target always opens the Scene view (Description Editor); otherwise only restore it
         // when show_scene_panel is set.
         const bool wasShown = ActionCatalog::IsShowScenePanel();

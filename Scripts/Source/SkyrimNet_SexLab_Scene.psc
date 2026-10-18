@@ -1116,7 +1116,7 @@ Function ApplySexLabVoice(int i)
     bool voiced = StringUtil.Find(csv, "_pleasure_") >= 0 || StringUtil.Find(csv, "_pain_") >= 0
     ; Not expected to orgasm: the animation does not arouse them, silent until enjoyment reaches 50.
     int obj = GetObjFromActor(a)
-    if voiced && obj > 0 && SNSL_JMap.getInt(obj, "orgasm_expected", 1) == 0 && Voice_BelowGate(a)
+    if voiced && obj > 0 && SNSL_JValue.isExists(obj) && SNSL_JMap.getInt(obj, "orgasm_expected", 1) == 0 && Voice_BelowGate(a)
         voiced = false
     endif
     sslBaseVoice v = thread.GetVoice(a)
@@ -1839,6 +1839,9 @@ Function Engine_SetSkills()
         act_skill = 3
     endif
     Actor[] positions = thread.Positions
+    if positions.length > 0
+        SkyrimNet_SexLab_OrgasmEngine.SetSceneActs(positions[0], AnimHasTag("Vaginal"), AnimHasTag("Anal"),             AnimHasTag("Oral") || AnimHasTag("Blowjob"))
+    endif
     Engine_SetBonusInputs(positions, act_skill)
     ; Not expected to orgasm (AnimDB orgasm_expected 0, or the scene's no_orgasm): no passive gain,
     ; mini-game only. Missing: expected.
@@ -2868,6 +2871,10 @@ Function Mirror_Apply(Actor akActor, int value)
     endif
     int current = actorAlias.GetEnjoyment()
     int obj = GetObjFromActor(akActor)
+    ; Runs every engine tick; post-load logs showed this obj dead (session mismatch). Re-probe here.
+    if obj > 0 && !SNSL_JValue.isExists(obj)
+        obj = 0
+    endif
     int baseline = -1
     String anim_key = ""
     if thread.Animation != None
@@ -3319,6 +3326,10 @@ Function StageStart()
             if initiator != None
                 narration = initiator.GetDisplayName()+" initiates: "+desc
                 narration += orgasm_narration
+            endif
+            String first_times = SkyrimNet_SexLab_LoversLedger.FirstTimesSentence(thread.Positions, GetTagsString(thread.animation))
+            if first_times != ""
+                narration += " " + first_times
             endif
             if orgasm_narration != ""
                 ; Do not RegisterEvent the orgasm sentence — CheckDuplicate would blank the DN below.

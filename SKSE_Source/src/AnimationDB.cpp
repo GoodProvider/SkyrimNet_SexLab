@@ -26,12 +26,6 @@ namespace AnimationDB
         // Papyrus batches that failed to parse this sync (BeginSync resets). Guarded by g_mutex.
         int g_sync_batch_parse_errors = 0; // first parse failed (unescaped retry may still have saved it)
         int g_sync_batches_dropped = 0;    // no parse at all: every row in it lost
-        // DEBUG-DELETE(pplus-animdb): per-sync batch / row counters for the P+ AnimDB investigation.
-        int g_sync_batches = 0;
-        int g_sync_rows_received = 0;
-        int g_sync_rows_accepted = 0;
-        int g_sync_rows_rejected = 0;
-        // DEBUG-DELETE(pplus-animdb) end
         std::unordered_map<std::string, AnimRow> g_rows;
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
         /// Favorited registries (lowercase). Own table so animation resyncs never wipe it. Guarded by g_mutex.
@@ -1701,12 +1695,6 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         g_sync_upsert_failures = 0;
         g_sync_batch_parse_errors = 0;
         g_sync_batches_dropped = 0;
-        // DEBUG-DELETE(pplus-animdb)
-        g_sync_batches = 0;
-        g_sync_rows_received = 0;
-        g_sync_rows_accepted = 0;
-        g_sync_rows_rejected = 0;
-        // DEBUG-DELETE(pplus-animdb) end
         if (g_force_rebuild) {
             Exec("DELETE FROM animations");
             Exec("DELETE FROM animation_tags");
@@ -1876,33 +1864,13 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     int PushAnimBatch(const nlohmann::json& arr)
     {
         std::lock_guard lock(g_mutex);
-        ++g_sync_batches; // DEBUG-DELETE(pplus-animdb)
-        if (!arr.is_array()) {
-            webui_log::warn("AnimationDB: batch {} is not an array ({})", g_sync_batches, arr.type_name()); // DEBUG-DELETE(pplus-animdb)
+        if (!arr.is_array())
             return 0;
-        }
         int n = 0;
         for (const auto& el : arr) {
-            if (el.is_object() && PushAnim(el)) {
+            if (el.is_object() && PushAnim(el))
                 ++n;
-                continue;
-            }
-            // DEBUG-DELETE(pplus-animdb): log the first rejected rows of the sync.
-            if (++g_sync_rows_rejected <= 5) {
-                std::string why = !g_db             ? "db closed"
-                                  : !el.is_object() ? std::string("not an object: ") + el.type_name()
-                                                    : "no _registry";
-                webui_log::warn("AnimationDB: row rejected ({}) in batch {}: {}", why, g_sync_batches,
-                    SafeDump(el).substr(0, 300));
-            }
-            // DEBUG-DELETE(pplus-animdb) end
         }
-        // DEBUG-DELETE(pplus-animdb)
-        g_sync_rows_received += static_cast<int>(arr.size());
-        g_sync_rows_accepted += n;
-        if (n != static_cast<int>(arr.size()))
-            webui_log::warn("AnimationDB: batch {} accepted {}/{}", g_sync_batches, n, arr.size());
-        // DEBUG-DELETE(pplus-animdb) end
         return n;
     }
 
@@ -1915,17 +1883,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
     void NoteBatchDropped()
     {
         std::lock_guard lock(g_mutex);
-        ++g_sync_batches; // DEBUG-DELETE(pplus-animdb)
         ++g_sync_batches_dropped;
     }
-
-    // DEBUG-DELETE(pplus-animdb)
-    int LastSyncFailures()
-    {
-        std::lock_guard lock(g_mutex);
-        return g_sync_batches_dropped + g_sync_rows_rejected;
-    }
-    // DEBUG-DELETE(pplus-animdb) end
 
     bool EndSync()
     {
@@ -1943,13 +1902,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         LoadAllRowsLocked();
         webui_log::info("AnimationDB: EndSync gen={} rows={} duplicate_registries={} upsert_failures={}",
             g_sync_gen, g_rows.size(), g_sync_collisions, g_sync_upsert_failures);
-        // DEBUG-DELETE(pplus-animdb)
-        webui_log::info("AnimationDB: EndSync gen={} batches={} batch_parse_errors={} batches_dropped={} "
-                        "rows_received={} rows_accepted={} rows_rejected={}",
-            g_sync_gen, g_sync_batches, g_sync_batch_parse_errors, g_sync_batches_dropped, g_sync_rows_received,
-            g_sync_rows_accepted, g_sync_rows_rejected);
-        // DEBUG-DELETE(pplus-animdb) end
-        if (g_sync_batches_dropped > 0 && g_sync_rows_received == 0)
+        if (g_sync_batches_dropped > 0 && g_rows.empty())
             webui_log::error("AnimationDB: every batch failed to parse ({}); the AnimDb pex is likely not built "
                              "with pyro (KNOWLEDGEBASE: non-pyro compiler kept \\\" literally)",
                 g_sync_batches_dropped);

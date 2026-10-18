@@ -753,6 +753,19 @@ namespace ActionCatalog
             });
         }
 
+        // Zero-arg Papyrus call named by entry[field] on the entry's quest script; no-op when unset.
+        void DispatchEntryFunction(const nlohmann::json& entry, const char* field)
+        {
+            const std::string fn = entry.value(field, "");
+            if (fn.empty())
+                return;
+            std::string plugin = entry.value("plugin", "");
+            if (plugin.empty())
+                plugin = entry.value("questPlugin", "");
+            const auto formId = entry.contains("questFormId") ? ParseFormId(entry["questFormId"]) : 0;
+            DispatchPapyrusNoArg(plugin, formId, entry.value("scriptName", ""), fn);
+        }
+
         void CloseMainPanelEntry(const nlohmann::json& entry)
         {
             const std::string type = entry.value("type", "");
@@ -760,18 +773,12 @@ namespace ActionCatalog
                 const std::string panel = MainPanelKey(entry);
                 if (!panel.empty())
                     WebUI_Invoke("concealMainPanel('" + panel + "');");
+                DispatchEntryFunction(entry, "closeFunction");
             } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
                        EqualsIgnoreCase(type, "actor_detail")) {
                 if (EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail"))
                     WebUI_Invoke("concealForeignMainPanel('" + type + "');");
-                std::string plugin = entry.value("plugin", "");
-                if (plugin.empty())
-                    plugin = entry.value("questPlugin", "");
-                const auto formId = entry.contains("questFormId") ? ParseFormId(entry["questFormId"]) : 0;
-                const std::string script = entry.value("scriptName", "");
-                const std::string fn = entry.value("closeFunction", "");
-                if (!fn.empty())
-                    DispatchPapyrusNoArg(plugin, formId, script, fn);
+                DispatchEntryFunction(entry, "closeFunction");
             }
         }
 
@@ -794,18 +801,13 @@ namespace ActionCatalog
                     else if (panel == "log_panel")
                         SexLabNet::InvokeLogPanelOpen();
                 }
+                // Optional on builtins: Papyrus fills the panel (e.g. Lover's Ledger pushes its data).
+                DispatchEntryFunction(entry, "openFunction");
             } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
                        EqualsIgnoreCase(type, "actor_detail")) {
                 if (EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail"))
                     WebUI_Invoke("revealForeignMainPanel('" + type + "');");
-                std::string plugin = entry.value("plugin", "");
-                if (plugin.empty())
-                    plugin = entry.value("questPlugin", "");
-                const auto formId = entry.contains("questFormId") ? ParseFormId(entry["questFormId"]) : 0;
-                const std::string script = entry.value("scriptName", "");
-                const std::string fn = entry.value("openFunction", "");
-                if (!fn.empty())
-                    DispatchPapyrusNoArg(plugin, formId, script, fn);
+                DispatchEntryFunction(entry, "openFunction");
             }
         }
 
@@ -1316,6 +1318,11 @@ namespace ActionCatalog
             return panel == "scene_panel" || panel == g_scenePanelResolved;
         auto* cur = FindMainPanelByKey(g_currentMainPanelKey);
         return cur && MainPanelKey(*cur) == panel;
+    }
+
+    bool HasMainPanelSelection()
+    {
+        return !g_currentMainPanelKey.empty();
     }
 
     void SetAnimationPanelPreferredOpen(bool open)

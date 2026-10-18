@@ -6,9 +6,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <format>
 #include <fstream>
 #include <mutex>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -95,6 +97,25 @@ namespace SexLabNet::Json
         // made by an older build). OnNewSession never reuses it.
         std::uint32_t g_loadedSaveSession = 0;
         std::uint64_t g_reparentCopies = 0;
+        // Dead handles already logged this session: a stale member handle is read every tick,
+        // and one line (plus its Papyrus stack) identifies it. Cleared by OnNewSession.
+        std::unordered_set<Handle> g_loggedDead;
+        // Papyrus caller of the current native call (CallerScope); null outside SNSL natives.
+        thread_local RE::BSScript::IVirtualMachine* t_callerVM = nullptr;
+        thread_local RE::VMStackID t_callerStack = 0;
+
+        void LogDeadHandle(Handle h, const std::string& msg)
+        {
+            if (!g_loggedDead.insert(h).second) {
+                return;
+            }
+            if (!t_callerVM) {
+                webui_log::error("{}", msg);
+                return;
+            }
+            webui_log::error("{} (caller stack in Papyrus.0.log)", msg);
+            t_callerVM->TraceStack(("SkyrimNet_SexLab JSON store: " + msg).c_str(), t_callerStack);
+        }
 
         void EnsureDummySlot()
         {
@@ -138,7 +159,7 @@ namespace SexLabNet::Json
                 if (quiet) {
                     return nullptr;
                 }
-                webui_log::error("dead handle 0x{:X} (slot {} out of range)", static_cast<std::uint32_t>(h), parts.slot);
+                LogDeadHandle(h, std::format("dead handle 0x{:X} (slot {} out of range)", static_cast<std::uint32_t>(h), parts.slot));
                 return nullptr;
             }
             Node& n = g_slots[parts.slot];
@@ -146,8 +167,8 @@ namespace SexLabNet::Json
                 if (quiet) {
                     return nullptr;
                 }
-                webui_log::error("dead handle 0x{:X} (slot={} alive={} gen={}/{} session={}/{})",
-                    static_cast<std::uint32_t>(h), parts.slot, n.alive, parts.gen, n.gen, parts.session, n.session);
+                LogDeadHandle(h, std::format("dead handle 0x{:X} (slot={} alive={} gen={}/{} session={}/{})",
+                    static_cast<std::uint32_t>(h), parts.slot, n.alive, parts.gen, n.gen, parts.session, n.session));
                 return nullptr;
             }
             return &n;
@@ -356,7 +377,7 @@ namespace SexLabNet::Json
             if (!form) {
                 return {};
             }
-            const auto* file = form->GetFile();
+            const auto* file = form->GetFile(0);  // defining plugin; GetFile() is the last override
             FormRef ref;
             ref.localId = LocalFormId(form, file);
             ref.file = file ? std::string(file->GetFilename()) : std::string();
@@ -1085,6 +1106,21 @@ namespace SexLabNet::Json
         }
     }
 
+    // --- Diagnostics ---
+
+    CallerScope::CallerScope(RE::BSScript::IVirtualMachine* vm, RE::VMStackID stackID) :
+        prevVM_(t_callerVM), prevStack_(t_callerStack)
+    {
+        t_callerVM = vm;
+        t_callerStack = stackID;
+    }
+
+    CallerScope::~CallerScope()
+    {
+        t_callerVM = prevVM_;
+        t_callerStack = prevStack_;
+    }
+
     // --- Lifecycle ---
 
     void OnNewSession()
@@ -1095,6 +1131,7 @@ namespace SexLabNet::Json
         const std::size_t freed = g_slots.empty() ? 0 : g_slots.size() - 1 - g_freeSlots.size();
         g_slots.clear();
         g_freeSlots.clear();
+        g_loggedDead.clear();
         // With the store empty, the only handles that could alias a new node are the ones in the
         // loaded save, all tagged with the session it was made in. Never reuse that session.
         do {

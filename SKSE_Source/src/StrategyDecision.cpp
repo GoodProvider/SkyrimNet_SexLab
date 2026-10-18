@@ -848,4 +848,62 @@ namespace StrategyDecision
     {
         Request(target, trigger, line, std::move(done));
     }
+
+    void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,
+        const std::string& potionName, std::function<void(bool)> done)
+    {
+        constexpr const char* kAidTemplate = "sexlab/aid_accept";
+        RE::Actor* r = RE::TESForm::LookupByID<RE::Actor>(receiver);
+        RE::Actor* g = RE::TESForm::LookupByID<RE::Actor>(giver);
+        if (g_noRoute || !g_installed || !ApiReady() || !r || !g) {
+            webui_log::info("StrategyDecision: aid accept {:#x} skipped (no decisions): accepted", receiver);
+            done(true);
+            return;
+        }
+        OrgasmEngine::DecisionInput in;
+        in.id = receiver;
+        in.name = r->GetDisplayFullName() ? r->GetDisplayFullName() : "";
+        const auto [label, rank] = Relationship(r, g);
+        nlohmann::json ctx;
+        ctx["focus_uuid"] = UuidOf(receiver);
+        ctx["focus_name"] = in.name;
+        ctx["giver_uuid"] = UuidOf(giver);
+        ctx["giver_name"] = g->GetDisplayFullName() ? g->GetDisplayFullName() : "";
+        ctx["giver_is_player"] = g->IsPlayerRef();
+        ctx["how"] = how;
+        ctx["potion_kind"] = potionKind;
+        ctx["potion_name"] = potionName;
+        ctx["relationship"] = label;
+        ctx["relationship_rank"] = rank;
+        ctx["timeline"] = BuildTimeline(in);
+        auto shared = std::make_shared<std::function<void(bool)>>(std::move(done));
+        const bool queued = PublicSendCustomDecisionToLLM(kAidTemplate, ctx.dump().c_str(), kMaxProbabilities,
+            [receiver, shared](const char* answer, const char* resultJson, int success) {
+                std::string a = answer ? answer : "";
+                std::string j = resultJson ? resultJson : "";
+                SKSE::GetTaskInterface()->AddTask([receiver, shared, success, a = std::move(a), j = std::move(j)]() {
+                    if (!success) {
+                        NoteFailure(receiver, j);
+                        (*shared)(true);
+                        return;
+                    }
+                    std::string key = a;
+                    try {
+                        key = nlohmann::json::parse(j).at("answers").at("accept").value("choice", key);
+                    } catch (...) {
+                    }
+                    const bool accepted = key != "refuse";
+                    webui_log::info("StrategyDecision: aid accept {:#x} answer '{}' ({})", receiver, key,
+                        accepted ? "accepted" : "refused");
+                    (*shared)(accepted);
+                });
+            });
+        if (!queued) {
+            webui_log::warn("StrategyDecision: aid accept {:#x} not queued: accepted", receiver);
+            (*shared)(true);
+            return;
+        }
+        webui_log::info("StrategyDecision: aid accept send {:#x} giver {:#x} how={} potion='{}'", receiver, giver, how,
+            potionName);
+    }
 }

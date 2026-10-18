@@ -29,3 +29,8 @@ AnimationDB inference still not working
 
 When inferring orgasm and speaking. orgasm and pleasure always go together. 
 Manual might be different. 
+
+Claude suggests;
+- Reinstall or update SexLab (or SexLab P+) as a complete package so its Interface/Translations files match its scripts and ESM. Don't let another mod overwrite SexLab_*.txt. Once the slider shows numbers again, set the cum timer.
+- Reinstall SkyrimNet_SexLab completely: webui\TargetMenu\Actor\options is missing. After that, use TargetMenu → Clean cum on yourself (choose "all").
+- To clear it right away, use SexLab's own clean option if their version has one, or a wait/sleep longer than the cum timer once the timer works.

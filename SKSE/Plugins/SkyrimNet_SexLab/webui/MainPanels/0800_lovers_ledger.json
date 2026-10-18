@@ -1,0 +1,11 @@
+{
+  "type": "builtin",
+  "label": "Lover's Ledger",
+  "panel": "lovers_ledger_panel",
+  "requiresPlugin": "TT_LoversLedger.esp",
+  "requiresDll": "LoversLedger.dll",
+  "plugin": "SkyrimNet_SexLab.esp",
+  "questFormId": "0x800",
+  "scriptName": "SkyrimNet_SexLab_Menu",
+  "openFunction": "WebUI_LoversLedgerOpen"
+}

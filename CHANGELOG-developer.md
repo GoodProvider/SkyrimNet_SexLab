@@ -4,25 +4,42 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## 0.36.1
 
-### AnimDB bug (untested)
+### AnimDB bug
 - **AnimDB empty on 0.36.0 (SexLab P+ and 1.6x)**: the 0.36.0 `Scripts/*.pex` were built with `compile: papyrus` (papyrus.exe), which stores the Papyrus literal `"\""` as backslash+quote. Every JSON string built in Papyrus broke, including every `AnimDb_PushAnimBatch` batch, so `EndSync` kept 0 rows. The pex files are rebuilt with pyro, and **`compile: pyro` is the default build task again**. It now uses `C:/Skyrim/tools/Pyro/pyro.exe`; the VS Code extension no longer ships pyro.
 - **`make check-pex`** (`python_scripts/check_pex_escapes.py`) fails on any pex with a literal `\"`. `make release` runs it first.
 - **`AnimDb_PushAnimBatch`** now logs the parse error, byte offset and nearby text. On a parse failure it retries once with `\"` unescaped, so a bad build still fills the DB. `EndSync` errors when every batch failed to parse.
 - `FinishSourceOrDone` notifies "AnimDB build failed" when 0 rows are stored, and its misleading `duplicates=` is renamed `not_stored=`.
-- Temporary P+ / AnimDB instrumentation is tagged **`DEBUG-DELETE(pplus-animdb)`**: per-sync batch/row counters, `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, first-batch JSON trace, and skipped-id traces. See `checkpoints/pplus_animdb/checkpoint_v01.md`.
 
 ### Dead Actor bug (untested)
 - **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. Temporary instrumentation is tagged **`NECRO-DBG`**; see `checkpoints/necro-animations/checkpoint-v01.md`.
 
+### Recursion warning bug (untested)
+- **`GetThreadsJson` is off JContainers**: it held an unretained `JMap`/`JArray` across a multi-second loop. JC collected them and handed the ids to another mod, so the thread JSON contained that mod's data, `setObj` created a cycle, and the walker overflowed the Papyrus stack. A third-party recursion detector turned that into a repeating dialog. The function now builds on `SNSL_JMap`/`SNSL_JArray` and serializes with `SNSL_JValue.dump` + `JsonLowerCaseKeys`. The DOM threads array (JC, from SkyrimNet_DOM) is `retain`ed for the duration and bridged per thread with `objectFromPrototype(ObjectToLowerCaseKeyJson(...))`. Rule: never `JValue.release` a JC object you did not `retain`.
+- **JC walker depth cap**: `JValueToJsonString(obj, depth = 0)` and the map/array/form-map/int-map helpers pass `depth + 1` per level and return `null` (with a trace) past 32.
+- **Dead SNSL handles after a load**: `Mirror_Apply` / `ApplySexLabVoice` check `isExists` on the `GetObjFromActor` handle. `JsonStore::Resolve` logs each dead handle once per session. All `SNSL_*` natives are registered through `WithCaller<Fn>` (`IVirtualMachine*`, `VMStackID` prefix), so the first error for a handle also calls `TraceStack`, which puts the calling script and function in `Papyrus.0.log`.
+
 ### OStim TargetMenu (untested)
 - **TargetMenu OStim row**: `webui/TargetMenu/Actor/options/0120_ostim.json` is a `scene_start` panel with `framework: "ostim"` and `requiresPlugin: TT_OStimNet.esp`. Start calls `SkyrimNet_SexLab_Actions.TM_StartScene_OStim(speaker, target, cast, victim_fid, intent, style, method, direction)`, which starts the scene through OStimNet's `TTON_OStimIntegration.StartOstimSex` / `StartOStimCaring`. Any catalog option can set `framework: "ostim"` to get the same panel without the scene setting row, AnimDB or Scene Creator.
+
+### Lover's Ledger view (untested)
+- **MainPanels `0800_lovers_ledger.json`**: `type: builtin`, `panel: lovers_ledger_panel` (DOM `#lovers-ledger-panel`), gated by `requiresPlugin: TT_LoversLedger.esp` + `requiresDll: LoversLedger.dll`. Builtins may now set `plugin` / `questFormId` / `scriptName` / `openFunction` / `closeFunction`; `OpenMainPanelEntry` / `CloseMainPanelEntry` dispatch them through `DispatchEntryFunction` (the old `papyrus` / `data_table` / `actor_detail` code now uses it too). Re-selecting the view re-runs `openFunction`.
+- **Papyrus**: `SkyrimNet_SexLab_LoversLedger.BuildPanelJson(target, maxLovers=25, maxActions=10)` reads `TTLL_Store` and is the only SexLab script that references it (checks `GetModByName("TT_LoversLedger.esp")`). `Menu.WebUI_LoversLedgerOpen` pushes the payload with `WebUI_PushMainPanelData`; `Menu.WebUI_OnControlActorFocus` re-pushes while `WebUI_IsMainPanelOpen("lovers_ledger_panel")`. `WebUI_MaybeRestoreScenePanel` now returns early when a main panel other than Scene is selected (`ActionCatalog::HasMainPanelSelection()`); before, a sticky `show_scene_panel` or an in-scene target switched to the Scene view and closed the Ledger. JS `setMainPanelData` → `renderLoversLedger` (`panel: "lovers_ledger"`; `empty` string replaces the body).
+- **`Utilities.ActorFromBase(ActorBase)`** (Papyrus_Utilities.cpp): player base → player, otherwise a TESNPC → Actor index built from `TESForm::GetAllForms()` and rebuilt on a miss (at most every 5 s). Needed because `TTLL_Store.GetAllLovers` returns TESNPC bases while `GetLoverInt` / `GetLoverFlt` / `GetLoverScore` take `RE::Actor*` and return 0 for None.
+- Compile-only header `Headers_Source/LoversLedger/TTLL_Store.psc`, imported by both ppj files. Checkpoint: `checkpoints/lover/checkpoint-v00.md`.
+
+### Aid panel potions (untested)
+- **Remember**: `AID_LAST` / `aidRemember()` (Use and Cancel) restore subject, target, option (by form id, if still affordable), part (if still in the list and not dimmed), custom part text and typed points. Session only. Fixed in passing: `aidRenderPart` sets `AID.part` itself (`renderPartPulldown` only calls `onPick` when it changes the part).
+- **Part lists**: `aidPartsFor(actor, option)`; `renderPartPulldown` takes an optional `partList`. Stamina-only potion: `drink, lips, ass, pussy, penis` (sex-filtered); other potion: `drink` + `bodyPartsFor`. `penis` is sent as `cock`. Sentence reads "… for <actor> to drink." for drink.
+- **Scene acts**: native `OrgasmEngine.SetSceneActs(anchor, vaginal, anal, oral)` from `Scene.Engine_SetSkills` (start + animation change); `SceneState.actVaginal/actAnal/actOral` (not saved); `OrgasmEngine::GetSceneActs`.
+- **`Aid::Apply`** potion locations `drink` / `lips` / `ass` / `pussy` / `cock` → `PotionLine`: with the matching act and a partner from `GetActorScene` (penis = male base sex) the "puts … on X's dick and it is thrust into Y's …" line and a 0.5 share to receiver and caster (`split`); else "pushes … lip up" / "pours … on penis" with the full effect. Style from `GetSceneSpeedLevel` (gently / forcefully / none). Injury Engine still heals the receiver's share and narrates.
+- **Consent**: `Aid::NeedsConsent` (drink / lips on someone else). WebUI.cpp `AidAskConsent`: player receiver of a drink → `openAidOffer({token, question})` / `onAidOfferResult({token, accept})` (Escape = No; lips on the player needs no answer); NPC → `StrategyDecision::RequestAidAccept` with `prompts/decisions/sexlab/aid_accept.prompt` (question `accept`, keys `accept` / `refuse`; no provider / failure = accepted). `AidFinishConsent`: refusal narrates `Aid::RefusalReason` + "." and `AddPunishReason`s it; the potion is not used.
 
 ## 0.36.0
 
 ### Injury Engine
 - **Injury Engine** (optional, formerly SkyrimNet_Whipped): Punish wounds the chosen body part, Aid heals it, and the panels show a torture bar per part. With Injury Engine the spell methods are Flames, Frostbite and Sparks (torture), and a Hits box lands several hits.
 
-### SexLab P+ (untested)
+### SexLab P+
 - **SexLab P+ support**: the animation database fills from P+, scenes end after the orgasms instead of looping, pause and stage keys work, and animation / actor changes keep the scene going. See docs/developers/sexlab-pplus.md.
 
 ### Force/Punish/Ask/Order

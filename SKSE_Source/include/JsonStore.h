@@ -147,4 +147,21 @@ namespace SexLabNet::Json
     /// Session read from the co-save of the save being loaded; 0 = none (revert / old save).
     void SetLoadedSaveSession(std::uint32_t session);
     std::string Stats();
+
+    // --- Diagnostics -------------------------------------------------------------------------
+    /// Papyrus caller of the SNSL native running on this thread (set by Papyrus_Json's binding
+    /// wrapper). A dead-handle error is logged once per handle per session, and with a caller it
+    /// also traces the calling Papyrus stack into Papyrus.0.log, naming the script that held it.
+    class CallerScope
+    {
+    public:
+        CallerScope(RE::BSScript::IVirtualMachine* vm, RE::VMStackID stackID);
+        ~CallerScope();
+        CallerScope(const CallerScope&) = delete;
+        CallerScope& operator=(const CallerScope&) = delete;
+
+    private:
+        RE::BSScript::IVirtualMachine* prevVM_;
+        RE::VMStackID prevStack_;
+    };
 }

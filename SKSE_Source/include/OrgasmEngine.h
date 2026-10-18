@@ -79,6 +79,11 @@ namespace OrgasmEngine
     bool GetPlayerSceneStage(int& stage, int& count);
     bool GetSceneStage(RE::Actor* anchor, int& stage, int& count);
     void SetSceneBlocked(RE::Actor* actor, bool blocked);
+    /// Current animation's act tags (Vaginal / Anal / Oral or Blowjob) for the anchor's scene; Papyrus sends them on
+    /// start and animation change. Not saved.
+    void SetSceneActs(RE::Actor* anchor, bool vaginal, bool anal, bool oral);
+    /// False (all false) when the anchor is in no managed scene.
+    bool GetSceneActs(RE::Actor* anchor, bool& vaginal, bool& anal, bool& oral);
     // Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
     void SetOrgasmExpected(RE::Actor* actor, bool expected);
     /// DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync) and DOM decides the orgasm.

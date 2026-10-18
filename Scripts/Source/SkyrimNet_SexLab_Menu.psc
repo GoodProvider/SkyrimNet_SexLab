@@ -209,6 +209,16 @@ Function WebUI_OnControlActorFocus(Actor target)
     Trace("WebUI_OnControlActorFocus", target.GetDisplayName()+" hasStripped:"+hasStripped)
     SkyrimNet_SexLab_WebUI.Target_Menu_Refresh(hasStripped)
     SkyrimNet_SexLab_WebUI.WebUI_MaybeRestoreScenePanel()
+    if SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("lovers_ledger_panel")
+        WebUI_LoversLedgerOpen()
+    endif
+EndFunction
+
+; MainPanels 0800_lovers_ledger.json openFunction: push the focus actor's Lover's Ledger page.
+Function WebUI_LoversLedgerOpen()
+    Actor target = SkyrimNet_SexLab_WebUI.WebUI_GetFocusActor()
+    String json = SkyrimNet_SexLab_LoversLedger.BuildPanelJson(target)
+    SkyrimNet_SexLab_WebUI.WebUI_PushMainPanelData(json)
 EndFunction
 
 Function WebUI_ConfigureFocusScene()

@@ -29,6 +29,10 @@ namespace PapyrusBindings_Utilities {
     bool QueueDirectNarration(RE::StaticFunctionTag*, RE::BSFixedString msg, RE::Actor* source,
         RE::Actor* target, bool purgeDialogue);
 
+    /// Papyrus native: the reference Actor of an NPC base (player base -> player). None when no
+    /// reference uses that base. For unique NPCs the reference is persistent, so it resolves in any cell.
+    RE::Actor* ActorFromBase(RE::StaticFunctionTag*, RE::TESNPC* base);
+
     /// Registers SkyrimNet_SexLab_Utilities natives on the Papyrus VM.
     bool Register_Utilities_Functions(RE::BSScript::IVirtualMachine* a_vm);
 }

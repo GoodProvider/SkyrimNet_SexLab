@@ -809,6 +809,10 @@ float Function GetAnimSpeed(Actor akActor) global native
 ; JSON string literal (SKSE native): quoted and escaped; control bytes become unicode escapes.
 String Function JsonQuote(String s) global native
 
+; SKSE native: the reference Actor of an NPC base (player base -> player), None if none.
+; Unique NPC references are persistent, so this works for actors in unloaded cells.
+Actor Function ActorFromBase(ActorBase base) global native
+
 ; SKSE native: literal backslash+n -> LF (compile: papyrus keeps "\n" as two characters).
 String Function InjaPrepare(String s) global native
 
@@ -827,23 +831,29 @@ String Function JsonForm(Form akForm) global
 EndFunction
 
 ; Walk JMap/JArray/JFormMap/JIntMap. Do not call JValue.toJsonString (JC 4.2.13.1+ only).
-String Function JValueToJsonString(int obj) global
+; depth caps nesting: a cycle (a JC id garbage-collected and reused by another mod) would
+; otherwise recurse to Papyrus's 1000-frame limit.
+String Function JValueToJsonString(int obj, int depth = 0) global
     if obj == 0 || !JValue.isExists(obj)
         return "null"
     endif
+    if depth > 32
+        Trace("JValueToJsonString", "depth cap hit, cyclic or recycled JC object "+obj)
+        return "null"
+    endif
     if JValue.isMap(obj)
-        return JMapToJson(obj)
+        return JMapToJson(obj, depth)
     elseif JValue.isArray(obj)
-        return JArrayToJson(obj)
+        return JArrayToJson(obj, depth)
     elseif JValue.isFormMap(obj)
-        return JFormMapToJson(obj)
+        return JFormMapToJson(obj, depth)
     elseif JValue.isIntegerMap(obj)
-        return JIntMapToJson(obj)
+        return JIntMapToJson(obj, depth)
     endif
     return "null"
 EndFunction
 
-String Function JMapToJson(int obj) global
+String Function JMapToJson(int obj, int depth = 0) global
     String json = "{"
     bool first = true
     String map_key = JMap.nextKey(obj, "", "")
@@ -852,7 +862,7 @@ String Function JMapToJson(int obj) global
             json += ","
         endif
         first = false
-        String piece = JMapValueToJson(obj, map_key)
+        String piece = JMapValueToJson(obj, map_key, depth)
         if piece == ""        ; a None return from a VM-aborted call
             piece = "null"
         endif
@@ -862,7 +872,7 @@ String Function JMapToJson(int obj) global
     return json + "}"
 EndFunction
 
-String Function JMapValueToJson(int obj, String map_key) global
+String Function JMapValueToJson(int obj, String map_key, int depth = 0) global
     int t = JMap.valueType(obj, map_key)
     if t == 2
         return JMap.getInt(obj, map_key)
@@ -871,14 +881,14 @@ String Function JMapValueToJson(int obj, String map_key) global
     elseif t == 4
         return JsonForm(JMap.getForm(obj, map_key))
     elseif t == 5
-        return JValueToJsonString(JMap.getObj(obj, map_key))
+        return JValueToJsonString(JMap.getObj(obj, map_key), depth + 1)
     elseif t == 6
         return JsonQuote(JMap.getStr(obj, map_key))
     endif
     return "null"
 EndFunction
 
-String Function JArrayToJson(int obj) global
+String Function JArrayToJson(int obj, int depth = 0) global
     String json = "["
     int n = JArray.count(obj)
     int i = 0
@@ -887,7 +897,7 @@ String Function JArrayToJson(int obj) global
         if i > 0
             json += ","
         endif
-        String piece = JArrayValueToJson(obj, i)
+        String piece = JArrayValueToJson(obj, i, depth)
         if piece == ""        ; a None return from a VM-aborted call
             piece = "null"
             null_count += 1
@@ -901,7 +911,7 @@ String Function JArrayToJson(int obj) global
     return json + "]"
 EndFunction
 
-String Function JArrayValueToJson(int obj, int index) global
+String Function JArrayValueToJson(int obj, int index, int depth = 0) global
     int t = JArray.valueType(obj, index)
     if t == 2
         return JArray.getInt(obj, index)
@@ -910,14 +920,14 @@ String Function JArrayValueToJson(int obj, int index) global
     elseif t == 4
         return JsonForm(JArray.getForm(obj, index))
     elseif t == 5
-        return JValueToJsonString(JArray.getObj(obj, index))
+        return JValueToJsonString(JArray.getObj(obj, index), depth + 1)
     elseif t == 6
         return JsonQuote(JArray.getStr(obj, index))
     endif
     return "null"
 EndFunction
 
-String Function JFormMapToJson(int obj) global
+String Function JFormMapToJson(int obj, int depth = 0) global
     String json = "{"
     bool first = true
     Form map_key = JFormMap.nextKey(obj, None, None)
@@ -926,7 +936,7 @@ String Function JFormMapToJson(int obj) global
             json += ","
         endif
         first = false
-        String piece = JFormMapValueToJson(obj, map_key)
+        String piece = JFormMapValueToJson(obj, map_key, depth)
         if piece == ""        ; a None return from a VM-aborted call
             piece = "null"
         endif
@@ -936,7 +946,7 @@ String Function JFormMapToJson(int obj) global
     return json + "}"
 EndFunction
 
-String Function JFormMapValueToJson(int obj, Form map_key) global
+String Function JFormMapValueToJson(int obj, Form map_key, int depth = 0) global
     int t = JFormMap.valueType(obj, map_key)
     if t == 2
         return JFormMap.getInt(obj, map_key)
@@ -945,14 +955,14 @@ String Function JFormMapValueToJson(int obj, Form map_key) global
     elseif t == 4
         return JsonForm(JFormMap.getForm(obj, map_key))
     elseif t == 5
-        return JValueToJsonString(JFormMap.getObj(obj, map_key))
+        return JValueToJsonString(JFormMap.getObj(obj, map_key), depth + 1)
     elseif t == 6
         return JsonQuote(JFormMap.getStr(obj, map_key))
     endif
     return "null"
 EndFunction
 
-String Function JIntMapToJson(int obj) global
+String Function JIntMapToJson(int obj, int depth = 0) global
     String json = "{"
     int[] keys = JIntMap.allKeysPArray(obj)
     if keys
@@ -963,7 +973,7 @@ String Function JIntMapToJson(int obj) global
                 json += ","
             endif
             int map_key = keys[i]
-            String piece = JIntMapValueToJson(obj, map_key)
+            String piece = JIntMapValueToJson(obj, map_key, depth)
             if piece == ""        ; a None return from a VM-aborted call
                 piece = "null"
             endif
@@ -974,7 +984,7 @@ String Function JIntMapToJson(int obj) global
     return json + "}"
 EndFunction
 
-String Function JIntMapValueToJson(int obj, int map_key) global
+String Function JIntMapValueToJson(int obj, int map_key, int depth = 0) global
     int t = JIntMap.valueType(obj, map_key)
     if t == 2
         return JIntMap.getInt(obj, map_key)
@@ -983,7 +993,7 @@ String Function JIntMapValueToJson(int obj, int map_key) global
     elseif t == 4
         return JsonForm(JIntMap.getForm(obj, map_key))
     elseif t == 5
-        return JValueToJsonString(JIntMap.getObj(obj, map_key))
+        return JValueToJsonString(JIntMap.getObj(obj, map_key), depth + 1)
     elseif t == 6
         return JsonQuote(JIntMap.getStr(obj, map_key))
     endif

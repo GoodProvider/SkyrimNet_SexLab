@@ -23,6 +23,7 @@
         <Import>.\Headers_Source</Import>
         <Import>.\Headers_Source\OstimNet</Import>
         <Import>.\Headers_Source\Ostim</Import>
+        <Import>.\Headers_Source\LoversLedger</Import>
         <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
             <Import>@ModsFolder\SkyrimNet_DOM\Headers_Source\DOM</Import>
 

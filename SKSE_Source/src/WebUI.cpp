@@ -10,6 +10,7 @@
 #include "Hud.h"
 #include "OrgasmEngine.h"
 #include "InjuryEngine.h"
+#include "StrategyDecision.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -695,6 +696,77 @@ void Reset_To_Default()
     WebUI_Reset();
 }
 
+namespace {
+
+/// A potion offered to the player (drink): waiting for the Yes / No dialogue. Game thread only; one at a time.
+struct AidOffer
+{
+    std::uint64_t token = 0;
+    RE::FormID giver = 0;
+    RE::FormID receiver = 0;
+    RE::FormID form = 0;
+    std::string location;
+};
+AidOffer g_aidOffer;
+std::uint64_t g_aidOfferNext = 0;
+
+/// Game thread. The receiver took (Aid::Apply, narrated unless Injury Engine does) or refused the potion: "Amy
+/// refused Bob's stamina potion." is narrated, kept as a punish reason and the potion stays with the giver.
+void AidFinishConsent(RE::FormID giverId, RE::FormID receiverId, RE::FormID form, const std::string& location,
+    bool accepted)
+{
+    auto* giver = RE::TESForm::LookupByID<RE::Actor>(giverId);
+    auto* receiver = RE::TESForm::LookupByID<RE::Actor>(receiverId);
+    if (!giver || !receiver)
+        return;
+    if (!accepted) {
+        const std::string reason = Aid::RefusalReason(giver, receiver, form);
+        if (reason.empty())
+            return;
+        OrgasmEngine::NarrateDirect(reason + ".", receiver, giver);
+        OrgasmEngine::AddPunishReason(giver, receiver, reason);
+        return;
+    }
+    bool injuryEngine = false;
+    const std::string line = Aid::Apply(giver, receiver, form, location, &injuryEngine);
+    if (!line.empty() && !injuryEngine)
+        OrgasmEngine::NarrateDirect(line, giver, receiver);
+}
+
+/// Game thread. Drink / lips on someone else (Aid::NeedsConsent): the player answers a Yes / No dialogue (drink);
+/// an NPC asks the decision model (StrategyDecision::RequestAidAccept). Lips on the player needs no answer.
+void AidAskConsent(RE::Actor* giver, RE::Actor* receiver, RE::FormID form, const std::string& location)
+{
+    std::string name;
+    std::string kind;
+    if (!Aid::PotionInfo(giver, form, name, kind))
+        return;
+    const RE::FormID giverId = giver->GetFormID();
+    const RE::FormID receiverId = receiver->GetFormID();
+    if (receiver->IsPlayerRef()) {
+        if (location != "drink") {
+            AidFinishConsent(giverId, receiverId, form, location, true);
+            return;
+        }
+        g_aidOffer = { ++g_aidOfferNext, giverId, receiverId, form, location };
+        const char* who = giver->GetDisplayFullName();
+        nlohmann::json cfg;
+        cfg["token"] = g_aidOffer.token;
+        cfg["question"] = std::string(who ? who : "Someone") + " offers you a " + kind + " potion (" + name +
+                          "). Drink it?";
+        webui_log::info("Aid offer {} to the player: {:#x} '{}'", g_aidOffer.token, giverId, name);
+        WebUI_Invoke("openAidOffer(" + cfg.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace) + ");");
+        WebUI_Visibility_Show(false);
+        return;
+    }
+    StrategyDecision::RequestAidAccept(receiverId, giverId, location, kind, name,
+        [giverId, receiverId, form, location](bool accepted) {
+            AidFinishConsent(giverId, receiverId, form, location, accepted);
+        });
+}
+
+}  // namespace
+
 /// One-shot WebUI bootstrap: PrismaUI API, action catalog, view, JS listeners, hotkeys.
 /// View path must exist under Data/PrismaUI/views/SkyrimNet_SexLab/index.html.
 /// Escape hides UI; menu hotkey toggles ControlPanel (hide if visible, else ProcessHotkey).
@@ -839,6 +911,10 @@ void InitWebUI()
                         auto* caster = subject ? RE::TESForm::LookupByID<RE::Actor>(subject)
                                                : static_cast<RE::Actor*>(RE::PlayerCharacter::GetSingleton());
                         auto* actor = RE::TESForm::LookupByID<RE::Actor>(target);
+                        if (Aid::NeedsConsent(caster, actor, option, location)) {
+                            AidAskConsent(caster, actor, option, location);
+                            return;
+                        }
                         bool injuryEngine = false;
                         const std::string line = Aid::StartChannel(caster, actor, option, location, points, &injuryEngine);
                         if (!line.empty() && !injuryEngine)
@@ -846,6 +922,32 @@ void InitWebUI()
                     });
                 } catch (...) {
                     webui_log::warn("onAidResult: bad JSON");
+                }
+            });
+        });
+
+        // Aid offer dialogue (openAidOffer): the player answered an NPC's potion offer.
+        PrismaUI->RegisterJSListener(g_view, "onAidOfferResult", [](const char* value) {
+            RunGuarded("onAidOfferResult", [&] {
+                WebUI_Invoke("hideAidOffer();");
+                WebUI_Visibility_HideWithoutCommit();
+                if (!value)
+                    return;
+                try {
+                    auto j = nlohmann::json::parse(value);
+                    const auto token = j.value("token", std::uint64_t{ 0 });
+                    const bool accept = j.value("accept", false);
+                    webui_log::info("onAidOfferResult token={} accept={}", token, accept);
+                    SKSE::GetTaskInterface()->AddTask([token, accept]() {
+                        if (token == 0 || token != g_aidOffer.token) {
+                            webui_log::warn("onAidOfferResult: stale offer {}", token);
+                            return;
+                        }
+                        const AidOffer offer = std::exchange(g_aidOffer, AidOffer{});
+                        AidFinishConsent(offer.giver, offer.receiver, offer.form, offer.location, accept);
+                    });
+                } catch (...) {
+                    webui_log::warn("onAidOfferResult: bad JSON");
                 }
             });
         });

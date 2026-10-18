@@ -2,19 +2,35 @@
 
 ## 0.36.1 (unreleased)
 
-### AnimDB bug (untested)
+### AnimDB bug
 - **AnimDB fix**: on 0.36.0 every `AnimDb_PushAnimBatch` logged `parse failed` and the DB stayed at 0 rows on both SexLab P+ and 1.6x. Cause: `Scripts/*.pex` built with `compile: papyrus` (papyrus.exe) keep `"\""` as backslash+quote. Five scripts were affected: AnimDb, MCM, Menu, Scene and Utilities. All pex files are rebuilt with pyro. `compile: pyro` is the default task again, now at `C:/Skyrim/tools/Pyro/pyro.exe`.
 - New `make check-pex` (`python_scripts/check_pex_escapes.py`), a dependency of `make release`.
 - `AnimDb_PushAnimBatch`: logs the parse error with byte and nearby text, retries once with `\"` unescaped, and `EndSync` logs an error when every batch failed. `FinishSourceOrDone` notifies when 0 rows are stored and logs `not_stored=` (was `duplicates=`).
-- Temporary instrumentation is tagged `DEBUG-DELETE(pplus-animdb)` (Papyrus_AnimationDB.cpp, AnimationDB.cpp/.h, AnimDb.psc, PPlus.psc and the header stubs): batch/row counters on a second `EndSync` line, native `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, `AllSceneIds` count traces, the first batch's JSON head, and skipped-id traces.
 
 ### Dead Actor bug (untested)
 - **Necro / corpse scenes ended right after starting (SexLab 1.6x)**: `sslActorAlias` OnUpdate calls `EndAnimation(true)` for an actor that `IsDead() && Health < 1`. New `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (StorageUtil float `skyrimnet_sexlab_corpse_health`) raise a corpse to Health 2 before `AddActor` (and again at each `StageStart`) and restore it in `Scene.AnimationEnd` or when the start fails. No-op on P+. Temporary instrumentation is tagged `NECRO-DBG` (`Utilities.NecroDbg` / `NecroDbgSnapshot`, a `HookAnimationEnding` handler in Scene_Manager, snapshots in Scene_Creator.StartScene, Scene.StageStart / AnimationStart / AnimationEnd / SetPosition). See `checkpoints/necro-animations/checkpoint-v01.md`.
+
+### Recursion warning bug (untested)
+- **"JMapValueToJson … stuck in a recursion loop" dialog, repeating, then a crash**: `Scene_Manager.GetThreadsJson` (every `sexlab_get_threads` decorator call) built its root and `threads` array in JContainers without retaining them. During the slow per-thread loop, JC garbage-collected both and reused the ids for another mod's objects (a tears/drool overlay mod in the report). Our `setObj` then linked them into a cycle, the Papyrus walker recursed to the 1000-frame limit, and the unmatched `JValue.release(obj)` freed the other mod's data. Now built on the JSON store (`SNSL_JMap`/`SNSL_JArray`, `SNSL_JValue.dump` + `JsonLowerCaseKeys`). DOM threads (still JC) are retained and released as a pair and bridged per thread.
+- The JC walker (`Utilities.JValueToJsonString` and helpers) takes a `depth` argument and returns `null` past 32 levels with one trace, so a cycle can no longer overflow the stack.
+- **Post-load `dead handle … session=N/N+1` spam**: `Scene.Mirror_Apply` and `ApplySexLabVoice` re-probe the actor's position handle with `isExists` before using it. `JsonStore` logs each dead handle once per session, and the SNSL natives now take the VM stack ID, so that line also traces the calling Papyrus stack into `Papyrus.0.log`.
 
 ### OStim TargetMenu (untested)
 - **OStim row in the TargetMenu**: new Actor option `0120_ostim.json` (`panel: scene_start`, new key `framework: "ostim"`, `requiresPlugin: TT_OStimNet.esp`). It is listed whenever OStimNet is loaded, whatever `sexlab.ostim.player` says. The panel uses the standard with / and / victim / method / intent / style rows. It has no scene setting row and never touches AnimDB or the Scene Creator.
 - `index.html`: `ssIsOStim` / `ssIsCreatorScenePanel` / `ssStartOStim`. Start, the `random` leaf and any method leaf fire `Actions.TM_StartScene_OStim` with the cast as a signed FormID CSV (subject first) plus `victim_fid`, so C++ never defaults an absent actor to player/target.
 - `Actions.TM_StartScene_OStim`: victim → sub; otherwise direction (`getting` / `fucked in`) decides whether the subject is dom or sub. Two actors with an affection intent or method → `TTON_OStimIntegration.StartOStimCaring`; otherwise `StartOstimSex` (method `sexual` → any action). `OStim_Intent` maps intents to OStimNet's (comfort → platonic, affection → romantic, sexual activities → lustful, sexual assault → aggressive, punish → dom). New header stub `Headers_Source/OstimNet/TTON_OStimIntegration.psc`.
+
+### Lover's Ledger view (untested)
+- **ControlPanel view "Lover's Ledger"** when TT Lover's Ledger is installed: new MainPanels entry `0800_lovers_ledger.json` (`type: builtin`, `panel: lovers_ledger_panel`, `requiresPlugin: TT_LoversLedger.esp`, `requiresDll: LoversLedger.dll`). Shows the ControlPanel target's summary counts, top 10 actions did / got, and up to 25 lovers by score (exclusive, group, orgasms, internal given / got, last encounter). It refreshes when the target changes and stays open (`WebUI_MaybeRestoreScenePanel` only switches to the Scene view when the selection is None or Scene); clicking a lover makes them the target.
+- Builtin MainPanels entries can now carry `plugin` / `questFormId` / `scriptName` / `openFunction` / `closeFunction` (`ActionCatalog::DispatchEntryFunction`, shared with the `papyrus` type).
+- New `SkyrimNet_SexLab_LoversLedger.psc` (`BuildPanelJson`) is the only script that calls `TTLL_Store`; `Menu.WebUI_LoversLedgerOpen` pushes it with `WebUI_PushMainPanelData` (`panel: "lovers_ledger"`). Compile-only header `Headers_Source/LoversLedger/TTLL_Store.psc`.
+- New native `Utilities.ActorFromBase(ActorBase)`: Lover's Ledger returns lovers as NPC bases, but its lover getters need a reference Actor. See `checkpoints/lover/checkpoint-v00.md`.
+
+### Aid panel potions (untested)
+- **Aid panel remembers** subject, target, spell / potion, part, custom part text and typed points between opens (Use or Cancel), where still offered (`AID_LAST`, like the Punish panel).
+- **Potions get `drink`** (default part for a potion). A stamina-only potion offers drink / lips / ass / pussy / penis; other potions drink plus the body parts.
+- **Consent**: drink or lips on an NPC asks the decision model (new `prompts/decisions/sexlab/aid_accept.prompt`, `StrategyDecision::RequestAidAccept`; no provider = accepted). An NPC offering the player a drink opens a Yes / No dialogue (`openAidOffer` / `onAidOfferResult`). Refused: "Amy refused Bob's stamina potion." is narrated and kept as a punish reason; the potion stays.
+- **Scene-aware lines**: ass / pussy / lips / penis with a matching act tag (anal / vaginal / oral, new native `OrgasmEngine.SetSceneActs` from `Scene.Engine_SetSkills`) and a partner: "Bob gently puts the stamina potion on Bob's dick and it is thrust into Amy's pussy." and the effect is split half to giver, half to receiver. Without: "… pushes the potion's lip up Amy's ass." / "… pours the potion on Bob's penis.", full effect to the receiver. Style word from the scene speed (gentle / forceful).
 
 ## [0.36.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0) — since [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2)
 
@@ -24,7 +40,7 @@
 - **Torture bar**: `Hud.cpp` `OpenPanel` asks `External_PartPoints` (`InjuryEngine::PartPoints`, async) for every panel actor and opens once all answers are in; actors carry `injury` (`total`, `max`, `parts` by `InjuryEngine::PartTerm`). The Aid panel opens on the most damaged part (`aidMostDamagedPart`). Older Injury Engine: no bar
 - Punish **Hits** box (1 to Injury Engine's max lashes, `injuryengineMaxStrikes` via `GetForeignConfigInt`)
 
-### SexLab P+ (untested)
+### SexLab P+
 - **SexLab P+ support**: AnimDB fills from P+, scenes end after the orgasms instead of looping (`Ending_Watch` calls `EndAnimation()`), pause and stage keys work, animation switches use `ResetScene` (`Scene.PPlus_SwitchScene`). Bridge `Scripts/Source_PPlus/SkyrimNet_SexLab_PPlus.psc` built with `skyrimse-pplus.ppj` (task "compile: pyro (P+ bridge)"). See [docs/developers/sexlab-pplus.md](docs/developers/sexlab-pplus.md)
 
 ### Force/Punish/Ask/Order
