@@ -694,6 +694,9 @@ namespace PapyrusBindings_WebUI
     /// sexlab.debug.verbose (dashboard Verbose logging), read live.
     bool IsVerbose_Native(RE::StaticFunctionTag*) { return SexLabNet::IsVerbose(); }
 
+    /// sexlab.actors.dead_allowed (dashboard Dead actors can join scenes), read live.
+    bool IsDeadAllowed_Native(RE::StaticFunctionTag*) { return SexLabNet::IsDeadAllowed(); }
+
     /// TraceLog that only writes when verbose; tagged [V]. Info level so it shows without the debug level.
     void DebugLog(RE::StaticFunctionTag*, RE::BSFixedString script_name, RE::BSFixedString func,
         RE::BSFixedString msg)
@@ -756,7 +759,7 @@ namespace PapyrusBindings_WebUI
                 out.status = "child";
                 return out;
             }
-            if (actor->IsDead()) {
+            if (actor->IsDead() && !SexLabNet::IsDeadAllowed()) {
                 out.status = "dead";
                 return out;
             }
@@ -927,7 +930,7 @@ namespace PapyrusBindings_WebUI
             return false;
         if (!actor->Is3DLoaded())
             return false;
-        if (actor->IsDead())
+        if (actor->IsDead() && !SexLabNet::IsDeadAllowed())
             return false;
         if (actor->IsInCombat())
             return false;
@@ -1895,6 +1898,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog, true);
         a_vm->RegisterFunction("IsVerbose", scriptName, IsVerbose_Native, true);
+        a_vm->RegisterFunction("IsDeadAllowed", scriptName, IsDeadAllowed_Native, true);
         a_vm->RegisterFunction("DebugLog", scriptName, DebugLog, true);
         a_vm->RegisterFunction("SetNearbyActorsJson", scriptName, SetNearbyActorsJson);
         a_vm->RegisterFunction("IsAvailableActor", scriptName, IsAvailableActor_Native);

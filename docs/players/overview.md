@@ -74,6 +74,7 @@ Configure in SkyrimNet under plugin **SkyrimNet_SexLab** (`goodprovider.sexlab`)
 
 - Prompt: hide hermaphrodites; public sex accepted
 - Rape: add rape actions (off unregisters LLM actions; on needs save/reload)
+- Dead actors can join scenes (`sexlab.actors.dead_allowed`, default off): corpses show in the TargetMenu and can be picked. On SexLab 1.6x a corpse in any scene, including one started by another mod, is kept at a little Health so SexLab doesn't end the scene. It stays dead, and its Health is put back at the end. NPC dialogue actions never pick a corpse
 - Tag Edit dialogs; Start Sex / Edit Stage hotkey (default backslash `\`)
 - Devious devices are added to tags (`sexlab.tags.filter_by_devious_devices`, default on): when actors wear DD heavy bondage, every TargetMenu scene start (method, random, Custom, DOM punish) adds `armbinder`, `yoke`, `cuffs` or `bound`, and the Scene Creator / Description Editor animation filter starts with them. A tag with no matching animation is dropped; in the Scene Creator / Description Editor you can remove any of them
 - Direct Narration: cooldown, max distance

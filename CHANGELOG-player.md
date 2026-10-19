@@ -2,6 +2,14 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## 0.36.3 (unreleased)
+
+### Dead actors can join scenes
+- New SkyrimNet dashboard option **Dead actors can join scenes** (Actions, default off)
+- When on, corpses show in the TargetMenu and can be picked for a scene
+- Necro scenes on SexLab 1.6x are no longer cancelled right after they start, also when another mod starts them
+- The corpse stays dead. NPC dialogue actions never pick a corpse
+
 ## 0.36.2
 
 ### Victim scene ending

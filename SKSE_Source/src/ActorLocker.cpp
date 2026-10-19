@@ -1,5 +1,6 @@
 #include "ActorLocker.h"
 
+#include "Config.h"
 #include "WebUI_Log.h"
 
 #include <mutex>
@@ -74,7 +75,9 @@ namespace ActorLocker
 
     bool TryLock(RE::Actor* actor)
     {
-        if (!actor || actor->IsDeleted() || actor->IsDead() || actor->IsInCombat())
+        if (!actor || actor->IsDeleted() || actor->IsInCombat())
+            return false;
+        if (actor->IsDead() && !SexLabNet::IsDeadAllowed())
             return false;
         if (auto* f = SexLabAnimatingFaction(); f && actor->IsInFaction(f))
             return false;

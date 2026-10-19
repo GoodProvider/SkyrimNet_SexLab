@@ -118,6 +118,13 @@ schema:
       defaultValue: true
       category: "Actions"
 
+    - name: "Dead actors can join scenes"
+      path: "sexlab.actors.dead_allowed"
+      type: "bool"
+      description: "Corpses show in the TargetMenu and can be picked for a scene. On SexLab 1.6x a corpse in any scene (also one started by another mod) is kept at a sliver of Health so SexLab does not end the scene; it stays dead and its Health is put back at the end. NPC dialogue actions never pick a corpse."
+      defaultValue: false
+      category: "Actions"
+
     - name: "Tag dialogs for player actions"
       path: "sexlab.tags.player"
       type: "bool"

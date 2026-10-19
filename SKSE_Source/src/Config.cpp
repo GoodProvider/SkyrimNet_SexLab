@@ -167,6 +167,11 @@ bool IsVerbose()
     return GetBool("sexlab.debug.verbose", false);
 }
 
+bool IsDeadAllowed()
+{
+    return GetBool("sexlab.actors.dead_allowed", false);
+}
+
 std::uint32_t HotkeyVkToDx(int vk)
 {
     switch (vk) {

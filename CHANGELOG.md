@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.36.3 (unreleased)
+
+### Dead actors can join scenes
+- **Necro scenes started by another mod were still cancelled on SexLab 1.6x**: we only adopt such a thread (`GetSceneByThread`), so the 0.36.1 floor in `StartScene` never ran, and `StageStart` comes after `sslActorAlias` has already ended the thread. The other mod had lifted the corpse to about 1 Health, which passed `ValidateActor` but was still `< 1.0` (`checkpoints/necro-animations/02-checkpoint.md`).
+- New dashboard bool `sexlab.actors.dead_allowed` ("Dead actors can join scenes", Actions, default off), read live: C++ `SexLabNet::IsDeadAllowed`, Papyrus native `SkyrimNet_SexLab_WebUI.IsDeadAllowed()`.
+- With it on: the TargetMenu nearby list (`ClassifyNearbyActor`), `IsAvailableActor`, `ActorLocker::TryLock`, `Menu.IsAvailableActor` and `MultiTarget_Menu_Selection` accept dead actors, and `Scene_Creator.EnsureSexLabActorsValid` accepts `ValidateActor` -13 for a corpse. LLM action eligibility is unchanged.
+- `Utilities.CorpseHealth_Floor` only runs with the toggle on, and it now lifts a corpse under Health 5 to 10 (was under 1 to 2). `Scene_Manager` `HookAnimationStarting` floors every dead position (`CorpseHealth_FloorThread`) and keeps them in a per-thread StorageUtil form list. `HookAnimationEnd` restores that list (`CorpseHealth_RestoreThread`).
+
 ## 0.36.2 (unreleased)
 
 ### Victim scene ending
