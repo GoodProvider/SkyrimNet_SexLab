@@ -300,35 +300,6 @@ Function CorpseHealth_Restore(Actor akActor) global
     Trace("CorpseHealth_Restore", GetDisplayName(akActor)+" health "+h+" -> "+akActor.GetActorValue("Health"))
 EndFunction
 
-; NECRO-DBG begin: necro / corpse scene instrumentation, remove with every "NECRO-DBG" line.
-bool Function NecroDbg() global
-    return true
-EndFunction
-
-Function NecroDbgSnapshot(String func, Actor[] actors, String extra="") global
-    if !NecroDbg()
-        return
-    endif
-    if !actors
-        Trace(func, "[NECRO-DBG] actors:none "+extra)
-        return
-    endif
-    int i = 0
-    while i < actors.length
-        Actor a = actors[i]
-        if a == None
-            Trace(func, "[NECRO-DBG] ["+i+"] None "+extra)
-        else
-            Trace(func, "[NECRO-DBG] ["+i+"] "+a.GetDisplayName()+" 0x"+IntToHex(a.GetFormID()) \
-                +" dead:"+a.IsDead()+" health:"+a.GetActorValue("Health")+"/"+a.GetBaseActorValue("Health") \
-                +" 3d:"+a.Is3DLoaded()+" disabled:"+a.IsDisabled()+" unconscious:"+a.IsUnconscious() \
-                +" saved:"+StorageUtil.HasFloatValue(a, CorpseHealthKey())+" "+extra)
-        endif
-        i += 1
-    endwhile
-EndFunction
-; NECRO-DBG end
-
 
 ; ------------------------------------------------------------
 ; Timestamps

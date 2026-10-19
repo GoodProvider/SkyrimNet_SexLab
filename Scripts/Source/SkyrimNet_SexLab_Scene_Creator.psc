@@ -399,13 +399,11 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     ; -----------------------------------------
     ; Add Actors and Victims 
     ; -----------------------------------------
-    NecroDbgSnapshot("StartScene", actors, "before corpse floor") ; NECRO-DBG
     int i = 0
     while i < num_actors
         CorpseHealth_Floor(actors[i])
         i += 1
     endwhile
-    NecroDbgSnapshot("StartScene", actors, "after corpse floor") ; NECRO-DBG
 
     i = 0
     bool failed = False
@@ -416,9 +414,6 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
             Trace("StartScene","AddActor failed on actor:"+actors[i].GetDisplayName()+" ValidateActor:"+code)
             failed = True
         else
-            if NecroDbg() ; NECRO-DBG
-                Trace("StartScene", "[NECRO-DBG] AddActor ok: "+actors[i].GetDisplayName()) ; NECRO-DBG
-            endif ; NECRO-DBG
             ; Override off: the animation's defaults are applied once SexLab picks it (Scene.Setup).
             if no_orgasm_mask[i] == 1 && position_override
                 Trace("StartScene","no orgasm for "+actors[i].GetDisplayname())
