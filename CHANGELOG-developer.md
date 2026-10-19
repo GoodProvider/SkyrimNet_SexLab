@@ -1,31 +1,32 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## 0.36.1
+## 0.36.2
 
-### AnimDB bug
-- **AnimDB empty on 0.36.0 (SexLab P+ and 1.6x)**: the 0.36.0 `Scripts/*.pex` were built with `compile: papyrus` (papyrus.exe), which stores the Papyrus literal `"\""` as backslash+quote. Every JSON string built in Papyrus broke, including every `AnimDb_PushAnimBatch` batch, so `EndSync` kept 0 rows. The pex files are rebuilt with pyro, and **`compile: pyro` is the default build task again**. It now uses `C:/Skyrim/tools/Pyro/pyro.exe`; the VS Code extension no longer ships pyro.
-- **`make check-pex`** (`python_scripts/check_pex_escapes.py`) fails on any pex with a literal `\"`. `make release` runs it first.
-- **`AnimDb_PushAnimBatch`** now logs the parse error, byte offset and nearby text. On a parse failure it retries once with `\"` unescaped, so a bad build still fills the DB. `EndSync` errors when every batch failed to parse.
-- `FinishSourceOrDone` notifies "AnimDB build failed" when 0 rows are stored, and its misleading `duplicates=` is renamed `not_stored=`.
+### Victim scene ending
+- **Victim hold**: `OrgasmEngine::VictimHoldScene(sc)` = mini-game, engine on, timed, no LeadIn, a `Role::kVictim` and a non-DOM `Role::kAggressor` expected to orgasm. The Scene holds the second-to-last stage at its `StageStart` (`Victim_StageStart` → `Victim_Hold`, once per (animation, stage), `UpdateTimer` or P+ `PauseTimer` via `Timer_SyncHold`).
+- **Free mini-game**: `JoinGroup`'s early final roll also runs when an aggressor is in the group in the second-to-last stage (log `victim_hold=true`), whatever the ending target. `Ending_Check` / `Ending_WillJump` (`Victim_AggressorFinished`) then release the hold and call `Ending_ToFinal`, so the stash folds into the final-stage DN.
+- **Gate scenes**: the `gateHeld` 98 cap skips aggressors, and the gate fires when an aggressor with `CanOrgasmNow` reaches 100, or on `VictimHoldExpired(sid)` (new `SceneState::victimHoldExpired`, not saved, cleared with `gateDone`), instead of `penultElapsed`. `Engine_GatePassed` hands the victim hold to `gate_holding` without touching the timer.
+- **Cap**: `Victim_Poll` (1 s, frozen while paused, skipped while the orgasm window is open) reads `sexlab.ending.victim_hold_max` (120, 0 = none). Gate scene: `VictimHoldExpired`, release 3 s later if nobody passed. Else `Victim_Release` (`UpdateTimer(-PAUSE_HOLD_SECONDS)`, no held time). A stage move drops the hold (`Victim_Drop`).
+- New natives `IsVictimHoldScene(int sid)` and `VictimHoldExpired(int sid)` on `SkyrimNet_SexLab_OrgasmEngine`.
+- **Removed** the no-gate "aggressor ends" rule (`ending_end_after`, `EndAnimation` from `Ending_Poll`).
 
-### Dead Actor bug (untested)
-- **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. Temporary instrumentation is tagged **`NECRO-DBG`**; see `checkpoints/necro-animations/checkpoint-v01.md`.
+### NPC-only ending hold
+- **`Ending_HoldMax()`** returns half of `sexlab.ending.dialogue_hold_max` (after the `ENDING_HOLD_CAP` clamp) when `!thread.HasPlayer`. It is the only cap source for `Ending_Hold` / `Ending_Poll` on 1.6x and P+, so NPC-only scenes release the final-stage hold at 15 s by default (log `Ending_Hold ... max:15`). The response-played / speech-queue release is unchanged.
 
-### Recursion warning bug (untested)
-- **`GetThreadsJson` is off JContainers**: it held an unretained `JMap`/`JArray` across a multi-second loop. JC collected them and handed the ids to another mod, so the thread JSON contained that mod's data, `setObj` created a cycle, and the walker overflowed the Papyrus stack. A third-party recursion detector turned that into a repeating dialog. The function now builds on `SNSL_JMap`/`SNSL_JArray` and serializes with `SNSL_JValue.dump` + `JsonLowerCaseKeys`. The DOM threads array (JC, from SkyrimNet_DOM) is `retain`ed for the duration and bridged per thread with `objectFromPrototype(ObjectToLowerCaseKeyJson(...))`. Rule: never `JValue.release` a JC object you did not `retain`.
-- **JC walker depth cap**: `JValueToJsonString(obj, depth = 0)` and the map/array/form-map/int-map helpers pass `depth + 1` per level and return `null` (with a trace) past 32.
-- **Dead SNSL handles after a load**: `Mirror_Apply` / `ApplySexLabVoice` check `isExists` on the `GetObjFromActor` handle. `JsonStore::Resolve` logs each dead handle once per session. All `SNSL_*` natives are registered through `WithCaller<Fn>` (`IVirtualMachine*`, `VMStackID` prefix), so the first error for a handle also calls `TraceStack`, which puts the calling script and function in `Papyrus.0.log`.
+### Actor Info view (untested)
+- **MainPanels `0800_actor_info.json`** (`actor_info_panel`) replaces `0800_lovers_ledger.json`. `SkyrimNet_SexLab_ActorInfo.BuildPanelJson` → `{panel:"actor_info", name, gender, genderEditable, genderNote, source, sourceTitle, ledger | sexlab, empty}`: `ledger` from `LoversLedger.LedgerJson` (renamed from `BuildPanelJson`, the only script that references `TTLL_Store`) when TT Lover's Ledger is loaded, else `sexlab` from `sslActorStats`. JS `renderActorInfo`; `Menu.WebUI_OnControlActorFocus` re-pushes while `WebUI_IsMainPanelOpen("actor_info_panel")`.
+- **Gender pulldown**: `fireStatusApply` → `Menu.WebUI_ActorInfoApply(control "gender")` → `Utilities.SetGenderChoice` (StorageUtil `SkyrimNet_SexLab_ChosenSex`; P+ `TreatAsSex` / `ClearForcedSex`, 1.6x `TreatAsGender` / `ClearForcedGender`). OStim has no gender setter.
+- Builtins may set `plugin` / `questFormId` / `scriptName` / `openFunction` / `closeFunction`; `OpenMainPanelEntry` / `CloseMainPanelEntry` dispatch them through `DispatchEntryFunction`. `WebUI_MaybeRestoreScenePanel` returns early when a main panel other than Scene is selected (`ActionCatalog::HasMainPanelSelection()`).
+- **`Utilities.ActorFromBase(ActorBase)`** (Papyrus_Utilities.cpp): player base → player, otherwise a TESNPC → Actor index from `TESForm::GetAllForms()`, rebuilt on a miss (at most every 5 s). `TTLL_Store.GetAllLovers` returns TESNPC bases while the lover getters take `RE::Actor*`. Compile-only header `Headers_Source/LoversLedger/TTLL_Store.psc`.
+
+### Futa / intersex (untested)
+- **TNG futa (P+)**: `Utilities.HasTNGPenis` (`TNG_PapyrusUtil.GetActorAddon`, stub `Headers_Source/TNG_PapyrusUtil.psc`); `EnsureFutaSex` (`TreatAsSex 2`, StorageUtil `SkyrimNet_SexLab_ForcedFuta`) in `EnsureSexLabActorsValid`, `ClearFutaSex` in `Scene.AnimationEnd` (marked overwrites only). Bridge stubs `GetSex` / `TreatAsSex` / `ClearForcedSex` in `Headers_Source/SkyrimNet_SexLab_PPlus.psc`.
+- **AnimDB**: per-position `_intersex` (Scene Creator, Scene) → `spec.pos_intersex` / `spec.intersex` (Papyrus_AnimationDB.cpp); an intersex position matches male or female rows, and the human slot total must equal the cast.
 
 ### OStim TargetMenu (untested)
 - **TargetMenu OStim row**: `webui/TargetMenu/Actor/options/0120_ostim.json` is a `scene_start` panel with `framework: "ostim"` and `requiresPlugin: TT_OStimNet.esp`. Start calls `SkyrimNet_SexLab_Actions.TM_StartScene_OStim(speaker, target, cast, victim_fid, intent, style, method, direction)`, which starts the scene through OStimNet's `TTON_OStimIntegration.StartOstimSex` / `StartOStimCaring`. Any catalog option can set `framework: "ostim"` to get the same panel without the scene setting row, AnimDB or Scene Creator.
-
-### Lover's Ledger view (untested)
-- **MainPanels `0800_lovers_ledger.json`**: `type: builtin`, `panel: lovers_ledger_panel` (DOM `#lovers-ledger-panel`), gated by `requiresPlugin: TT_LoversLedger.esp` + `requiresDll: LoversLedger.dll`. Builtins may now set `plugin` / `questFormId` / `scriptName` / `openFunction` / `closeFunction`; `OpenMainPanelEntry` / `CloseMainPanelEntry` dispatch them through `DispatchEntryFunction` (the old `papyrus` / `data_table` / `actor_detail` code now uses it too). Re-selecting the view re-runs `openFunction`.
-- **Papyrus**: `SkyrimNet_SexLab_LoversLedger.BuildPanelJson(target, maxLovers=25, maxActions=10)` reads `TTLL_Store` and is the only SexLab script that references it (checks `GetModByName("TT_LoversLedger.esp")`). `Menu.WebUI_LoversLedgerOpen` pushes the payload with `WebUI_PushMainPanelData`; `Menu.WebUI_OnControlActorFocus` re-pushes while `WebUI_IsMainPanelOpen("lovers_ledger_panel")`. `WebUI_MaybeRestoreScenePanel` now returns early when a main panel other than Scene is selected (`ActionCatalog::HasMainPanelSelection()`); before, a sticky `show_scene_panel` or an in-scene target switched to the Scene view and closed the Ledger. JS `setMainPanelData` → `renderLoversLedger` (`panel: "lovers_ledger"`; `empty` string replaces the body).
-- **`Utilities.ActorFromBase(ActorBase)`** (Papyrus_Utilities.cpp): player base → player, otherwise a TESNPC → Actor index built from `TESForm::GetAllForms()` and rebuilt on a miss (at most every 5 s). Needed because `TTLL_Store.GetAllLovers` returns TESNPC bases while `GetLoverInt` / `GetLoverFlt` / `GetLoverScore` take `RE::Actor*` and return 0 for None.
-- Compile-only header `Headers_Source/LoversLedger/TTLL_Store.psc`, imported by both ppj files. Checkpoint: `checkpoints/lover/checkpoint-v00.md`.
 
 ### Aid panel potions (untested)
 - **Remember**: `AID_LAST` / `aidRemember()` (Use and Cancel) restore subject, target, option (by form id, if still affordable), part (if still in the list and not dimmed), custom part text and typed points. Session only. Fixed in passing: `aidRenderPart` sets `AID.part` itself (`renderPartPulldown` only calls `onPick` when it changes the part).
@@ -46,16 +47,34 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - `Scene.ApplySpeakerFields(obj, speaker)`: speaker fields are computed in locals; `GetThreadObj` applies them to `thread_obj`, and `GetThreadsJson` re-applies them to its copy. Fixes cross-actor speaker fields from concurrent `sexlab_get_threads` calls.
 - `GetThreadsJson`: `GetSceneByThread(t, True, False)` + `GetThreadInScene()` (was the animating/prepare-only lookup + `GetThreadActive()`), so `threads.json` keeps the thread while SexLab is `Advancing` / `Refresh` (scene start, stage changes). `GetThreadObj` skips the `CheckAnimationChange` poll outside animating / prepare. `DebugTraceThread` logs `state:`.
 
-### NPC-only ending hold
-- **`Ending_HoldMax()`** returns half of `sexlab.ending.dialogue_hold_max` (after the `ENDING_HOLD_CAP` clamp) when `!thread.HasPlayer`. It is the only cap source for `Ending_Hold` / `Ending_Poll` on 1.6x and P+, so NPC-only scenes release the final-stage hold at 15 s by default (log `Ending_Hold ... max:15`). The response-played / speech-queue release is unchanged.
+### Scene start messages (untested)
+- `Scene_Creator.ValidateActorReason(code)` maps SexLab `ValidateActor` codes to text; `EnsureSexLabActorsValid` notifies and logs it.
 
-### Victim scene ending
-- **Victim hold**: `OrgasmEngine::VictimHoldScene(sc)` = mini-game, engine on, timed, no LeadIn, a `Role::kVictim` and a non-DOM `Role::kAggressor` expected to orgasm. The Scene holds the second-to-last stage at its `StageStart` (`Victim_StageStart` → `Victim_Hold`, once per (animation, stage), `UpdateTimer` or P+ `PauseTimer` via `Timer_SyncHold`).
-- **Free mini-game**: `JoinGroup`'s early final roll also runs when an aggressor is in the group in the second-to-last stage (log `victim_hold=true`), whatever the ending target. `Ending_Check` / `Ending_WillJump` (`Victim_AggressorFinished`) then release the hold and call `Ending_ToFinal`, so the stash folds into the final-stage DN.
-- **Gate scenes**: the `gateHeld` 98 cap skips aggressors, and the gate fires when an aggressor with `CanOrgasmNow` reaches 100, or on `VictimHoldExpired(sid)` (new `SceneState::victimHoldExpired`, not saved, cleared with `gateDone`), instead of `penultElapsed`. `Engine_GatePassed` hands the victim hold to `gate_holding` without touching the timer.
-- **Cap**: `Victim_Poll` (1 s, frozen while paused, skipped while the orgasm window is open) reads `sexlab.ending.victim_hold_max` (120, 0 = none). Gate scene: `VictimHoldExpired`, release 3 s later if nobody passed. Else `Victim_Release` (`UpdateTimer(-PAUSE_HOLD_SECONDS)`, no held time). A stage move drops the hold (`Victim_Drop`).
-- New natives `IsVictimHoldScene(int sid)` and `VictimHoldExpired(int sid)` on `SkyrimNet_SexLab_OrgasmEngine`.
-- **Removed** the no-gate "aggressor ends" rule (`ending_end_after`, `EndAnimation` from `Ending_Poll`).
+### Recursion warning bug (untested)
+- **`GetThreadsJson` is off JContainers**: it held an unretained `JMap`/`JArray` across a multi-second loop. JC collected them and handed the ids to another mod, so the thread JSON contained that mod's data, `setObj` created a cycle, and the walker overflowed the Papyrus stack. A third-party recursion detector turned that into a repeating dialog. The function now builds on `SNSL_JMap`/`SNSL_JArray` and serializes with `SNSL_JValue.dump` + `JsonLowerCaseKeys`. The DOM threads array (JC, from SkyrimNet_DOM) is `retain`ed for the duration and bridged per thread with `objectFromPrototype(ObjectToLowerCaseKeyJson(...))`. Rule: never `JValue.release` a JC object you did not `retain`.
+- **JC walker depth cap**: `JValueToJsonString(obj, depth = 0)` and the map/array/form-map/int-map helpers pass `depth + 1` per level and return `null` (with a trace) past 32.
+- **Dead SNSL handles after a load**: `Mirror_Apply` / `ApplySexLabVoice` check `isExists` on the `GetObjFromActor` handle. `JsonStore::Resolve` logs each dead handle once per session. All `SNSL_*` natives are registered through `WithCaller<Fn>` (`IVirtualMachine*`, `VMStackID` prefix), so the first error for a handle also calls `TraceStack`, which puts the calling script and function in `Papyrus.0.log`.
+
+### Enjoyment runaway bug (untested)
+- **`Scene.Mirror_Apply`**: one per position at a time (`Mirror_ApplyLocked`, `mirror_busy_at`), external fold only for 3..`MIRROR_EXTERNAL_MAX` (25), wait up to `MIRROR_WAIT_TICKS` while SexLab still reads `sl_mirror_pre`. `Arousal_Floor` tracks `sla_floor_last` so a gap is added once.
+
+### Slow P+ start bug (untested)
+- **`Utilities.ResolveAnimation(sexlab, id)`**: P+ → bridge `ResolveAnimation` (`AnimSlots` / `CreatureSlots.GetSetAnimation`), 1.6x → `GetAnimationByRegistry` then `GetCreatureAnimationByRegistry`. Never call `GetAnimationByRegistry` on P+ (`SyncBackEnd` twice per call, ~1 s each). `QuerySexLabAnimsFromAnimDb` resolves one random row on P+.
+
+### Build
+- `DEBUG-DELETE(pplus-animdb)` instrumentation removed; the unescape retry and the `EndSync` error (keyed on `g_rows.empty()`) stay.
+
+## 0.36.1
+
+### AnimDB bug
+- **AnimDB empty on 0.36.0 (SexLab P+ and 1.6x)**: the 0.36.0 `Scripts/*.pex` were built with `compile: papyrus` (papyrus.exe), which stores the Papyrus literal `"\""` as backslash+quote. Every JSON string built in Papyrus broke, including every `AnimDb_PushAnimBatch` batch, so `EndSync` kept 0 rows. The pex files are rebuilt with pyro, and **`compile: pyro` is the default build task again**. It now uses `C:/Skyrim/tools/Pyro/pyro.exe`; the VS Code extension no longer ships pyro.
+- **`make check-pex`** (`python_scripts/check_pex_escapes.py`) fails on any pex with a literal `\"`. `make release` runs it first.
+- **`AnimDb_PushAnimBatch`** now logs the parse error, byte offset and nearby text. On a parse failure it retries once with `\"` unescaped, so a bad build still fills the DB. `EndSync` errors when every batch failed to parse.
+- `FinishSourceOrDone` notifies "AnimDB build failed" when 0 rows are stored, and its misleading `duplicates=` is renamed `not_stored=`.
+- Temporary P+ / AnimDB instrumentation is tagged **`DEBUG-DELETE(pplus-animdb)`**: per-sync batch/row counters, `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, first-batch JSON trace, and skipped-id traces. See `checkpoints/pplus_animdb/checkpoint_v01.md`.
+
+### Dead Actor bug (untested)
+- **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. Temporary instrumentation is tagged **`NECRO-DBG`**; see `checkpoints/necro-animations/checkpoint-v01.md`.
 
 ## 0.36.0
 

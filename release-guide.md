@@ -1,6 +1,6 @@
 # Release guide
 
-Align docs and version metadata with what will ship as `next_version`. Packaging, git tags, and GitHub Releases are a separate maintainer step.
+Align docs and version metadata with what will ship as `next_version`. Git tags, pushes and GitHub Releases are a separate maintainer step.
 
 Agents: use the project `release` skill (`.cursor/skills/release/SKILL.md`). Session state: [release-checkpoint.xml](release-checkpoint.xml). Protocol contracts: [docs/reference/](docs/reference/) — do not restate them here.
 
@@ -8,10 +8,10 @@ Agents: use the project `release` skill (`.cursor/skills/release/SKILL.md`). Ses
 
 | Actor | Owns | Does not do unless asked |
 |-------|------|--------------------------|
-| Agent | Changelogs, freshness-matrix docs, Makefile `VERSION` if missing, checkpoint | `compile: pyro`, `make release`, git tag, GitHub Release, feature work |
-| Maintainer | Compile, package, tag, publish | Inventing changelog bullets the tree does not support |
+| Agent | Changelogs, freshness-matrix docs, Makefile `VERSION`, checkpoint, release commits, `make check-pex`, `make release` | `compile: papyrus`, git tag, push, GitHub, feature work |
+| Maintainer | Compile, tag, push, publish | Inventing changelog bullets the tree does not support |
 
-**Agent done-when:** `CHANGELOG.md`, `CHANGELOG-developer.md` and `CHANGELOG-player.md` cover `next_version`; freshness-matrix files match the delta; checkpoint is current; hand-off lists leftover version mismatches. Packaging is not part of done.
+**Agent done-when:** `CHANGELOG.md`, `CHANGELOG-developer.md` and `CHANGELOG-player.md` cover `next_version`; freshness-matrix files match the delta; checkpoint is current; release committed; `make check-pex` and `make release` passed; hand-off lists leftover version mismatches. Tag, push and GitHub Release are not part of done.
 
 ## Version sources
 
@@ -121,10 +121,10 @@ Ships with the release. First line = GitHub releases URL for `next_version`, the
 
 Ignore the [llms.txt](llms.txt) denylist unless the maintainer says those paths ship: `SSEEdit Cache/`, `reviews/`, `Source/*.pex`, crash logs, `versions/`, `dist/`, `z-*`, `handler_*` unpack dirs, `SKSE_Source/build/`, vendored CommonLibSSE-NG.
 
-## Packaging (maintainer)
+## Packaging
 
-Prereqs: `Scripts/*.pex` current (`compile: pyro`; `make check-pex` passes, and `make release` runs it); SKSE DLL if WebUI ships; `Spriggit/` JSON is ESP source of truth (not hand-edited binaries); animations merged if required.
+Prereqs: `Scripts/*.pex` current (`compile: papyrus`; `make check-pex` passes, and `make release` runs it); SKSE DLL if WebUI ships; `Spriggit/` JSON is ESP source of truth (not hand-edited binaries); animations merged if required.
 
 `make release` writes `info.json` and FOMOD from `VERSION`/`NAME`, deserializes `SkyrimNet_SexLab.esp` from `Spriggit/`, stages core + handlers, packs `versions/SkyrimNet_SexLab ${VERSION}.7z`.
 
-Ship order: commit → `compile: pyro` if needed → `make check-pex` → `make release` → git tag → GitHub Release.
+Ship order: commit → `compile: papyrus` if needed → `make check-pex` → `make release` → commit version files (agent stops here) → git tag → push → GitHub Release (maintainer).

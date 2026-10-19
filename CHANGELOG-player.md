@@ -1,6 +1,68 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
+
+## 0.36.2
+
+### Victim scene ending
+- With a victim, the stage before the last waits for the aggressor's orgasm (Multi-Orgasm Mini-game)
+- Everyone else then gets their chance to orgasm with them, and the scene moves to the last stage
+- New MCM setting **Longest wait for the aggressor** (Scene ending, default 120 s, 0 = no limit)
+- An aggressor's early orgasm no longer ends the scene
+
+### NPC-only ending hold
+- Without the player, the last stage waits half as long for the orgasm dialogue (15 s, not 30)
+
+### Actor Info view (untested)
+- New **Actor Info** view in the WebUI, replacing the Lover's Ledger view
+- With TT Lover's Ledger: encounter counts, favorite acts and lovers; click a lover to target them
+- Without it: SexLab's stats (sex count, last partner, sexuality, purity, skills)
+- Pick an actor's gender (male / female / intersex) for SexLab. OStim still uses the body
+- Changing the actor in the ControlPanel keeps the view open and shows the new actor
+
+### Futa / intersex (untested)
+- SexLab P+: a female with a The New Gentleman penis now counts as futa when picking animations
+- Intersex actors can fill male or female positions
+
+### OStim TargetMenu (untested)
+- New **OStim** option in the TargetMenu when OStimNet is installed; OStim plays the scene
+- Pick who joins, the victim, the method and the intent as usual
+
+### Aid panel potions (untested)
+- The Aid panel remembers what you picked last time
+- Potions can be **drunk**
+- An NPC offered one (to drink or on the lips) can accept or refuse; a refusal can be punished
+- When an NPC offers you one, you get a Yes / No choice
+- Stamina potions offer drink, lips, ass, pussy and penis
+- A potion on ass, pussy, lips or penis during a matching act is shared by both, with narration
+- An Aid spell on an undamaged part or someone at full health still shows its effect and is narrated
+
+### Punish panel (untested)
+- A custom reason no longer punishes straight away: OK sets the reason, and Punish starts it
+- An NPC's current mini-game behavior is offered as a reason ("Nina appears to be focused on…")
+- Punish and Aid list damaged parts first, worst on top, in red; hover one for its torture bar
+- With TT Lover's Ledger, a first vaginal or anal scene marks pussy or ass as damaged
+
+### Verbose logging (untested)
+- New SkyrimNet dashboard option **Debug > Verbose logging**. Turn it on when reporting a bug
+- It adds much more detail to the logs and shows in the prompts what the SexLab sections saw
+- Turn it off afterwards: the extra lines are also sent to the LLM
+- Fixed: onlookers were sometimes told they could or couldn't see a scene from another's position
+- Fixed: characters in a scene didn't know about it in what they said in its first seconds
+
+### Scene start messages (untested)
+- When SexLab refuses an actor, a message says why ("SexLab: Lydia can't join - dead")
+
+### Recursion warning bug (untested)
+- Fixed: a repeating "JMapValueToJson … stuck in a recursion loop" warning, sometimes then a crash
+- It could also damage another mod's saved data (seen with a tears/drool overlay mod)
+- Less log spam after loading a save mid-scene
+
+### Enjoyment runaway bug (untested)
+- Fixed: on SexLab P+, enjoyment could run far out of range during a scene
+
+### Slow P+ start bug (untested)
+- Fixed: on SexLab P+, scenes from the animation database could take close to a minute to start
 
 ## 0.36.1
 
@@ -10,43 +72,6 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ### Dead Actor bug (untested)
 - Fixed: necro animations with a corpse (e.g. FunnyBizness) ended right after starting on SexLab 1.6x
-
-### Recursion warning bug (untested)
-- Fixed: a "JMapValueToJson … stuck in a recursion loop" warning that kept coming back during scenes and could be followed by a crash. It could also damage another mod's saved data (seen with a tears/drool overlay mod)
-- Less log spam after loading a save mid-scene
-
-### OStim TargetMenu (untested)
-- New **OStim** option in the TargetMenu when OStimNet is installed. Pick who joins, the victim, the method and the intent as usual, and OStim plays the scene
-
-### Aid panel potions (untested)
-- The Aid panel remembers what you picked last time
-- Potions can be **drunk**. Offering one to an NPC (to drink or on the lips) lets them accept or refuse; a refusal can be punished. When an NPC offers you one, you get a Yes / No choice
-- Stamina potions offer drink, lips, ass, pussy and penis
-- Using a potion on ass, pussy, lips or penis during a matching act shares it between both of you, with its own narration
-- An Aid spell on a part with no damage (or someone at full health) now still shows its effect and is narrated
-
-### Lover's Ledger view (untested)
-- New **Lover's Ledger** view in the WebUI when TT Lover's Ledger is installed. It shows the target's encounter counts, favorite acts and lovers. Click a lover to switch the target to them
-- Changing the actor in the ControlPanel no longer closes the Lover's Ledger view; it shows the new actor
-
-### Punish panel (untested)
-- A custom reason no longer punishes straight away: OK puts it in the reason, and Punish starts it
-- An NPC's current mini-game behavior is always offered as a reason ("Nina appears to be focused on her own enjoyment")
-- Punish and Aid list damaged body parts first, most damaged on top, in red; hover one to see its torture bar
-- With TT Lover's Ledger, a first vaginal or anal scene marks pussy or ass as damaged
-
-### Verbose logging (untested)
-- New SkyrimNet dashboard option **Debug > Verbose logging**. Turn it on when reporting a bug: the logs get much more detail, and the prompts show what the SexLab sections saw. Turn it off afterwards (the extra lines are also sent to the LLM).
-- Fixed onlookers sometimes being told they could or couldn't see a scene based on another character's position
-- Fixed characters in a scene not knowing about it in what they said during its first couple of seconds
-
-### NPC-only ending hold
-- In scenes without the player, the last stage waits at most half as long for the orgasm dialogue (15 s instead of 30 at the default)
-
-### Victim scene ending
-- With a victim, the stage before the last now waits for the aggressor to orgasm. Everyone else then gets their chance to orgasm with them, and the scene moves to the last stage (Multi-Orgasm Mini-game)
-- New MCM setting **Longest wait for the aggressor** (Scene ending, default 120 s, 0 = no limit)
-- An aggressor's early orgasm no longer ends the scene
 
 ## 0.36.0
 

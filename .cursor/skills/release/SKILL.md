@@ -5,8 +5,8 @@ description: >-
   Use when preparing a release, writing CHANGELOG.md, CHANGELOG-developer.md or CHANGELOG-player.md,
   bumping Makefile VERSION, updating release-checkpoint.xml, documenting the
   delta since base_tag, or when the user asks to ship, tag-prep, or run a
-  release-doc pass. Does not create git tags, GitHub Releases, or run make
-  release unless asked.
+  release-doc pass. Commits, runs make check-pex and make release; never
+  creates git tags, pushes, or touches GitHub.
 ---
 
 # Release documentation
@@ -23,7 +23,7 @@ Read, in order:
 
 Then:
 
-1. Take `base_tag` and `next_version` from the checkpoint (fallback: `git describe` / latest version tag).
+1. Take `base_tag` and `next_version` from the checkpoint (fallback: `git describe` / latest version tag). If `next_version` already has a git tag, it has shipped: the new `next_version` is the patch bump, `base_tag` becomes that tag, and bullets added to its sections after tagging move to the new version (restore the tagged sections with `git show <tag>:<file>`).
 2. Reconcile with Makefile `VERSION`, `SKSE/Plugins/SkyrimNet_SexLab/info.json`, `FOMOD/info.xml`, and the latest version tag. **If they disagree, stop and ask. Do not invent a version.**
 3. Diff `base_tag...HEAD` plus uncommitted files that will ship.
 4. For protocol contracts, open the single canonical file under `docs/reference/`. Changelogs get a one-line pointer, never a pasted contract.
@@ -32,11 +32,10 @@ Ignore the `llms.txt` denylist unless the maintainer says those paths ship (`SSE
 
 ## Hard stops
 
-- Do not create the git tag or GitHub Release.
-- Do not run `make release` or pack the `.7z`.
+- Do not create the git tag, push, or touch GitHub (`gh`, GitHub Releases).
 - Do not do feature work, refactors, or review fixes (`review-guide.xml` is a different job).
 - Do not invent changelog bullets or README claims.
-- Do not commit or push unless the maintainer explicitly asks.
+- Commit only the release pass (docs, Makefile, checkpoint, `make release` outputs); never the omit list.
 - Do not promise VR-specific behavior unless verified. SE ≠ VR.
 - Before any game/script/ESP fix that sneaks into this pass: state confidence ≥ 90% and assumptions.
 
@@ -54,7 +53,10 @@ Release-doc progress:
 - [ ] 6. Align docs (freshness matrix)
 - [ ] 7. Makefile VERSION if missing
 - [ ] 8. Update checkpoint
-- [ ] 9. Hand-off
+- [ ] 9. Commit
+- [ ] 10. make check-pex
+- [ ] 11. make release
+- [ ] 12. Hand-off
 ```
 
 ### 1. Establish delta
@@ -114,14 +116,26 @@ If `next_version` is missing from Makefile, update Makefile `VERSION` only. `mak
 
 Update `release-checkpoint.xml`: `updated`, `base_tag`, `next_version`, `version_status`, status notes, `related_artifacts`, `doc_files`.
 
-### 9. Hand-off
+### 9. Commit
+
+Commit the release-doc changes, Makefile and checkpoint. Summary in the first 72 chars (e.g. `0.36.2: release docs and version bump`). Leave the checkpoint omit list untracked.
+
+### 10. make check-pex
+
+Run `make check-pex`. If it fails, stop and report; rebuilding with `compile: papyrus` needs the maintainer's go-ahead.
+
+### 11. make release
+
+Run `make release`. Confirm `versions/SkyrimNet_SexLab <VERSION>.7z` exists with a fresh timestamp and that `info.json` / FOMOD now say `VERSION`. Commit the files it changed (`<VERSION>: make release version files`).
+
+### 12. Hand-off
 
 Report:
 
-- files touched
+- files touched and commits made
 - version mismatches left
 - preflight notes
-- suggested maintainer ship steps: commit → `compile: pyro` if needed → `make check-pex` → `make release` → git tag → GitHub Release
+- remaining maintainer steps: git tag → push → GitHub Release
 
 ## Done-when
 
@@ -129,6 +143,7 @@ Report:
 - The three changelogs use the same topic headings in the same order for `next_version`
 - Freshness-matrix files match the shipping delta
 - Checkpoint is current
+- `make check-pex` and `make release` passed; `.7z` built; release commits made
 - Hand-off lists leftover mismatches
 
-Packaging is not part of done.
+Tag, push and GitHub Release are not part of done.
