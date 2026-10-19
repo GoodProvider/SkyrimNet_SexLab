@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.36.3 (unreleased)
+## [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3) — since [0.36.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2)
 
-### Scene narration: start delay, keep-talking nudge, role wording
+### Scene narration
 - **Start narration came about a minute late** (report in `checkpoints/2026-10-19-no-narration`): the first `StageStart` reached its start branch only after its bookkeeping (SyncAnimationDefaults, Engine, Ending, voices, P+…), 66 s after the animation began. The stage 2 and 3 StageStarts still saw `status:Setup`. `StageStart` now claims `STATUS_ACTIVE` first and sends the start through the new `StageStart_NarrateStart` before any bookkeeping. An orgasm stash taken there goes out as the same StageStart's orgasm DN. Log: `StageStart_NarrateStart start DN after Xs`.
 - **New keep-talking nudge**: setting `sexlab.narration.silence_seconds` (Narration, default 8, 0 = off). `Scene.SilenceTick` runs on the 2 s animation poll. Once SkyrimNet has nothing queued, no audio ended within that time, and the mod sent no DN within it, a non-player actor is sent `"continue scene"` (`Utilities.SilenceAllows` / `SilenceNudge`, which skip CheckDuplicate). The speaker rotates. It is skipped while a start / stage / orgasm / ending narration is pending, below Direct stage narration, and for NPC-only scenes the player can't see. A stage change with an unchanged description uses the same nudge, replacing `ContinueActivity`.
 - **Dropped continues blanked every retry**: `CheckDuplicate` stored the text before `DirectNarration_Optional` dropped it. A drop now clears the stored text.
@@ -13,11 +13,15 @@
 - New dashboard bool `sexlab.actors.dead_allowed` ("Dead actors can join scenes", Actions, default off), read live: C++ `SexLabNet::IsDeadAllowed`, Papyrus native `SkyrimNet_SexLab_WebUI.IsDeadAllowed()`.
 - With it on: the TargetMenu nearby list (`ClassifyNearbyActor`), `IsAvailableActor`, `ActorLocker::TryLock`, `Menu.IsAvailableActor` and `MultiTarget_Menu_Selection` accept dead actors, and `Scene_Creator.EnsureSexLabActorsValid` accepts `ValidateActor` -13 for a corpse. LLM action eligibility is unchanged.
 - `Utilities.CorpseHealth_Floor` only runs with the toggle on, and it now lifts a corpse under Health 5 to 10 (was under 1 to 2). `Scene_Manager` `HookAnimationStarting` floors every dead position (`CorpseHealth_FloorThread`) and keeps them in a per-thread StorageUtil form list. `HookAnimationEnd` restores that list (`CorpseHealth_RestoreThread`).
+- The temporary `NECRO-DBG` instrumentation from 0.36.1 (`Utilities.NecroDbg` / `NecroDbgSnapshot`, the Scene_Manager `HookAnimationEnding` handler and its snapshots) has been removed.
 
 ### Actor Info layout
 - The header (source title, name, gender) showed as a left column: `#actor-info-panel` is shown as `display:flex` with no `flex-direction`. It now sets `flex-direction: column`, so the header spans the top and the facts sit below it.
 
-## 0.36.2 (unreleased)
+### Build
+- `.gitignore` now ignores `bug-logs`, `extern` and `checkpoints`.
+
+## [0.36.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2) — since [0.36.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.1)
 
 ### Victim scene ending
 - **Victim scenes wait for the aggressor**: in the Multi-Orgasm Mini-game, a scene with a victim holds its second-to-last stage until an aggressor orgasms. That orgasm runs the orgasm check for everyone (the early final roll, one DN) and jumps to the final stage. Gate scenes (engine plays everyone): aggressors are no longer capped at 98 there, and an aggressor reaching 100 fires the gate instead of the stage timer. New native `OrgasmEngine.IsVictimHoldScene` / `VictimHoldExpired`; Scene `Victim_Hold` / `Victim_Release` / `Victim_Poll` / `Victim_StageStart`.
@@ -90,7 +94,7 @@
 - Temporary instrumentation is tagged `DEBUG-DELETE(pplus-animdb)` (Papyrus_AnimationDB.cpp, AnimationDB.cpp/.h, AnimDb.psc, PPlus.psc and the header stubs): batch/row counters on a second `EndSync` line, native `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, `AllSceneIds` count traces, the first batch's JSON head, and skipped-id traces.
 
 ### Dead Actor bug (untested)
-- **Necro / corpse scenes ended right after starting (SexLab 1.6x)**: `sslActorAlias` OnUpdate calls `EndAnimation(true)` for an actor that `IsDead() && Health < 1`. New `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (StorageUtil float `skyrimnet_sexlab_corpse_health`) raise a corpse to Health 2 before `AddActor` (and again at each `StageStart`) and restore it in `Scene.AnimationEnd` or when the start fails. No-op on P+. The temporary `NECRO-DBG` instrumentation has been removed. See `checkpoints/necro-animations/checkpoint-v01.md`.
+- **Necro / corpse scenes ended right after starting (SexLab 1.6x)**: `sslActorAlias` OnUpdate calls `EndAnimation(true)` for an actor that `IsDead() && Health < 1`. New `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (StorageUtil float `skyrimnet_sexlab_corpse_health`) raise a corpse to Health 2 before `AddActor` (and again at each `StageStart`) and restore it in `Scene.AnimationEnd` or when the start fails. No-op on P+. Temporary instrumentation is tagged `NECRO-DBG` (`Utilities.NecroDbg` / `NecroDbgSnapshot`, a `HookAnimationEnding` handler in Scene_Manager, snapshots in Scene_Creator.StartScene, Scene.StageStart / AnimationStart / AnimationEnd / SetPosition). See `checkpoints/necro-animations/checkpoint-v01.md`.
 
 ## [0.36.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0) — since [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2)
 

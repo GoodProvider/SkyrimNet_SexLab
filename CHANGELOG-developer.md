@@ -1,8 +1,8 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## 0.36.3 (unreleased)
+## 0.36.3
 
 ### Scene narration
 - **`Scene.StageStart`** sets `STATUS_ACTIVE` and calls `StageStart_NarrateStart(GetDescription())` before `AlignActors` / `SyncAnimationDefaults`, recording `started_now`. The later branch only hands `start_orgasm_narration` (or a stash that arrived since) to the orgasm DN block. If StageStart now wins the race with `AnimationStart`, AnimationStart skips its Setup reset, because `Setup()` already set `animating_started_at` and the stash is empty for a new scene.
@@ -14,6 +14,10 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Config `sexlab.actors.dead_allowed` (bool, default false): `SexLabNet::IsDeadAllowed()` in C++, `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (global native) in Papyrus.
 - On: the nearby list, `IsAvailableActor` and `ActorLocker::TryLock` stop rejecting `IsDead()`. `Menu.IsAvailableActor` skips `sexlab.IsValidActor` for a corpse, and `EnsureSexLabActorsValid` treats `ValidateActor` -13 as OK.
 - `CorpseHealth_Floor` is gated by the toggle and lifts a corpse under 5 Health to 10. `Scene_Manager.CorpseHealth_FloorThread(tid)` runs from `HookAnimationStarting`, so it covers threads other mods start. Floored actors go in StorageUtil form list `skyrimnet_sexlab_corpses_tid_<tid>` on the manager. `CorpseHealth_RestoreThread(tid)` runs from `HookAnimationEnd`.
+- The temporary `NECRO-DBG` instrumentation has been removed.
+
+### Actor Info layout
+- `#actor-info-panel` sets `flex-direction: column`, so the header (source title, name, gender) spans the top instead of a left column.
 
 ## 0.36.2
 
@@ -87,7 +91,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Temporary P+ / AnimDB instrumentation is tagged **`DEBUG-DELETE(pplus-animdb)`**: per-sync batch/row counters, `AnimDb_LastSyncFailures`, `SkyrimNet_SexLab_PPlus.SceneDebug`, first-batch JSON trace, and skipped-id traces. See `checkpoints/pplus_animdb/checkpoint_v01.md`.
 
 ### Dead Actor bug (untested)
-- **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. The temporary `NECRO-DBG` instrumentation has been removed; see `checkpoints/necro-animations/checkpoint-v01.md`.
+- **Corpses on SexLab 1.6x**: `sslActorAlias` OnUpdate ends the thread (`EndAnimation(true)`) for an actor that `IsDead() && Health < 1`. `Utilities.CorpseHealth_Floor` raises a corpse to Health 2 before `AddActor` and at each `StageStart`; `CorpseHealth_Restore` puts it back in `Scene.AnimationEnd` (StorageUtil float `skyrimnet_sexlab_corpse_health`). No-op on P+. Temporary instrumentation is tagged **`NECRO-DBG`**; see `checkpoints/necro-animations/checkpoint-v01.md`.
 
 ## 0.36.0
 

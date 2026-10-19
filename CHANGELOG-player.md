@@ -1,22 +1,25 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
-## 0.36.3 (unreleased)
+## 0.36.3
 
 ### Scene narration
 - The scene-start narration no longer comes up to a minute late
-- New dashboard setting **Silence before keep-talking** (Narration, default 8 s, 0 = off): after that much silence, an actor in your scene keeps talking. Speakers take turns
-- Scenes without a written description now say who receives ("Hulda is receiving anal sex from …"), so NPCs stop swapping who is doing what
+- New dashboard setting **Silence before keep-talking** (Narration, default 8 s, 0 = off)
+- After that much silence, an actor in your scene keeps talking. Speakers take turns
+- Scenes without a written description now say who receives ("Hulda is receiving anal sex from …")
+- So NPCs no longer swap who is doing what to whom
 
 ### Dead actors can join scenes
 - New SkyrimNet dashboard option **Dead actors can join scenes** (Actions, default off)
 - When on, corpses show in the TargetMenu and can be picked for a scene
-- Necro scenes on SexLab 1.6x are no longer cancelled right after they start, also when another mod starts them
+- Necro scenes on SexLab 1.6x are no longer cancelled right after they start
+- That includes necro scenes started by another mod
 - The corpse stays dead. NPC dialogue actions never pick a corpse
 
 ### Actor Info layout
-- The Actor Info title (source, name, gender) now runs across the top of the view instead of down a left column
+- The Actor Info title (source, name, gender) now runs across the top of the view, not down the left
 
 ## 0.36.2
 
