@@ -64,7 +64,7 @@ Update only the rows the delta touches. Contracts stay single-sourced under `doc
 
 ## Changelog rules
 
-Ground truth is the git delta since `base_tag` plus working-tree files that will ship. No invented features. Every bullet must be verifiable. Changelogs get a one-line pointer to `docs/reference/…`, never a pasted protocol.
+Ground truth is the git delta since `base_tag` plus working-tree files that will ship. No invented features. Every bullet must be verifiable. Net delta only: anything added and then removed or reverted before the release (temporary debug instrumentation, a feature dropped mid-cycle) gets no bullet, not even a "removed" one. Changelogs get a one-line pointer to `docs/reference/…`, never a pasted protocol.
 
 ### Structure (all three changelogs)
 

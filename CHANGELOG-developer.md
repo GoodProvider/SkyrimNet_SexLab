@@ -14,7 +14,6 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Config `sexlab.actors.dead_allowed` (bool, default false): `SexLabNet::IsDeadAllowed()` in C++, `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (global native) in Papyrus.
 - On: the nearby list, `IsAvailableActor` and `ActorLocker::TryLock` stop rejecting `IsDead()`. `Menu.IsAvailableActor` skips `sexlab.IsValidActor` for a corpse, and `EnsureSexLabActorsValid` treats `ValidateActor` -13 as OK.
 - `CorpseHealth_Floor` is gated by the toggle and lifts a corpse under 5 Health to 10. `Scene_Manager.CorpseHealth_FloorThread(tid)` runs from `HookAnimationStarting`, so it covers threads other mods start. Floored actors go in StorageUtil form list `skyrimnet_sexlab_corpses_tid_<tid>` on the manager. `CorpseHealth_RestoreThread(tid)` runs from `HookAnimationEnd`.
-- The temporary `NECRO-DBG` instrumentation has been removed.
 
 ### Actor Info layout
 - `#actor-info-panel` sets `flex-direction: column`, so the header (source title, name, gender) spans the top instead of a left column.

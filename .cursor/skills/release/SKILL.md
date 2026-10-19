@@ -35,6 +35,7 @@ Ignore the `llms.txt` denylist unless the maintainer says those paths ship (`SSE
 - Do not create the git tag, push, or touch GitHub (`gh`, GitHub Releases).
 - Do not do feature work, refactors, or review fixes (`review-guide.xml` is a different job).
 - Do not invent changelog bullets or README claims.
+- Do not changelog anything added and removed (or reverted) between `base_tag` and `next_version`, such as temporary debug instrumentation; as far as the release is concerned it never existed.
 - Commit only the release pass (docs, Makefile, checkpoint, `make release` outputs); never the omit list.
 - Do not promise VR-specific behavior unless verified. SE ≠ VR.
 - Before any game/script/ESP fix that sneaks into this pass: state confidence ≥ 90% and assumptions.
