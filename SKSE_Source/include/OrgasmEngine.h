@@ -84,6 +84,11 @@ namespace OrgasmEngine
     void SetSceneActs(RE::Actor* anchor, bool vaginal, bool anal, bool oral);
     /// False (all false) when the anchor is in no managed scene.
     bool GetSceneActs(RE::Actor* anchor, bool& vaginal, bool& anal, bool& oral);
+    /// This scene is the actor's first vaginal / anal (Lover's Ledger, from Papyrus on start and animation change).
+    /// Sticky: a false never clears a flag for the rest of the scene. Not saved.
+    void SetFirstTimes(RE::Actor* actor, bool vaginal, bool anal);
+    /// The Punish / Aid panel parts of the actor's first times this scene: "pussy" (vaginal), "ass" (anal).
+    std::vector<std::string> GetFirstTimes(RE::FormID actor);
     // Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
     void SetOrgasmExpected(RE::Actor* actor, bool expected);
     /// DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync) and DOM decides the orgasm.
@@ -187,8 +192,8 @@ namespace OrgasmEngine
     /// controls) or not in mini-game mode.
     std::vector<RequestOption> GetRequestOptions(RE::FormID target);
     /// What `target` can be punished for this scene, newest last: "Nina refused Bob's order to be passive" (a
-    /// refused ask / order) or a reason a mod supplied (AddPunishReason). The punish verb is offered only when
-    /// this is not empty.
+    /// refused ask / order) or a reason a mod supplied (AddPunishReason), then an AI actor's current strategy as
+    /// others see it ("Nina appears to be focused on her own enjoyment") while the mini-game is on.
     std::vector<std::string> GetPunishReasons(RE::FormID target);
     /// Another mod (SkyrimNet_DOM) supplies a reason `target` can be punished for ("Nina spoke without permission").
     void AddPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason);

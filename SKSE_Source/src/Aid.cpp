@@ -385,7 +385,9 @@ namespace Aid
             if (owed < 0.5f) {
                 return stop("target reached");
             }
-            if (missing < 0.5f) {
+            // Nothing to heal: the first tick still casts (visuals, narration), then the channel ends.
+            const bool full = missing < 0.5f;
+            if (full && !ch.first) {
                 return stop("full");
             }
             float health = 0.0f;
@@ -408,8 +410,11 @@ namespace Aid
                 InjuryEngine::Heal(c, t, ch.line, health, ch.part, ch.first);
             }
             ch.first = false;
-            ch.done += std::min(counted * scale, missing);
+            ch.done += std::min(counted * scale, std::max(missing, 0.0f));
             PlaySpellVisuals(c, t, spell, false, ch.interval + kChannelPollSeconds);
+            if (full) {
+                return stop("full");
+            }
             return ch.done < ch.points - 0.5f || stop("target reached");
         }
 

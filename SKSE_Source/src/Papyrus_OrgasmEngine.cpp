@@ -129,6 +129,10 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetSceneActs(a, vaginal, anal, oral);
         }
+        void SetFirstTimes(RE::StaticFunctionTag*, RE::Actor* a, bool vaginal, bool anal)
+        {
+            OrgasmEngine::SetFirstTimes(a, vaginal, anal);
+        }
         void SetOrgasmExpected(RE::StaticFunctionTag*, RE::Actor* a, bool expected)
         {
             OrgasmEngine::SetOrgasmExpected(a, expected);
@@ -282,6 +286,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetSceneBlocked", s, SetSceneBlocked);
         a_vm->RegisterFunction("SetOrgasmExpected", s, SetOrgasmExpected);
         a_vm->RegisterFunction("SetSceneActs", s, SetSceneActs);
+        a_vm->RegisterFunction("SetFirstTimes", s, SetFirstTimes);
         a_vm->RegisterFunction("SetDomSlave", s, SetDomSlave);
         a_vm->RegisterFunction("SetDomMeter", s, SetDomMeter);
         a_vm->RegisterFunction("SetActorSkills", s, SetActorSkills);

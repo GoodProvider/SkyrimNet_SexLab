@@ -174,6 +174,10 @@ namespace OrgasmEngine
             bool autoPlay = false;
             bool playerDriven = false;
             std::vector<PunishRecord> reasons;  // punishment reasons held (last kPunishKept), oldest first
+            // This scene is the actor's first vaginal / anal (SetFirstTimes, Lover's Ledger). Sticky for the
+            // scene. Not saved.
+            bool firstVaginal = false;
+            bool firstAnal = false;
         };
 
         struct SceneState
@@ -2462,6 +2466,32 @@ namespace OrgasmEngine
         }
     }
 
+    void SetFirstTimes(RE::Actor* actor, bool vaginal, bool anal)
+    {
+        std::lock_guard lock(g_lock);
+        if (auto* st = Find(actor); st && ((vaginal && !st->firstVaginal) || (anal && !st->firstAnal))) {
+            st->firstVaginal = st->firstVaginal || vaginal;
+            st->firstAnal = st->firstAnal || anal;
+            webui_log::info("OrgasmEngine: {:08X} first time vaginal {} anal {}", st->id, st->firstVaginal,
+                st->firstAnal);
+        }
+    }
+
+    std::vector<std::string> GetFirstTimes(RE::FormID id)
+    {
+        std::vector<std::string> out;
+        std::lock_guard lock(g_lock);
+        if (const auto it = g_actors.find(id); it != g_actors.end()) {
+            if (it->second.firstVaginal) {
+                out.emplace_back("pussy");
+            }
+            if (it->second.firstAnal) {
+                out.emplace_back("ass");
+            }
+        }
+        return out;
+    }
+
     bool GetSceneActs(RE::Actor* anchor, bool& vaginal, bool& anal, bool& oral)
     {
         vaginal = anal = oral = false;
@@ -3106,9 +3136,21 @@ namespace OrgasmEngine
         std::vector<std::string> out;
         std::lock_guard lock(g_lock);
         if (const auto it = g_actors.find(target); it != g_actors.end() && SceneOf(it->second)) {
-            for (const auto& r : it->second.reasons) {
+            const ActorState& st = it->second;
+            for (const auto& r : st.reasons) {
                 if (std::find(out.begin(), out.end(), r.reason) == out.end()) {
                     out.push_back(r.reason);
+                }
+            }
+            // An AI actor's current strategy, as others see it: "Nina appears to be focused on her own enjoyment".
+            if (g_settings.miniGame && AiDriven(st)) {
+                const std::string name = NameOf(ActorFor(st.id));
+                const std::string seen = ObservedPhrase(st);
+                if (!name.empty() && !seen.empty()) {
+                    std::string why = name + " " + seen;
+                    if (std::find(out.begin(), out.end(), why) == out.end()) {
+                        out.push_back(std::move(why));
+                    }
                 }
             }
         }

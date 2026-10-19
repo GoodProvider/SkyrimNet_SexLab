@@ -1846,10 +1846,23 @@ Function Engine_SetSkills()
     ; Not expected to orgasm (AnimDB orgasm_expected 0, or the scene's no_orgasm): no passive gain,
     ; mini-game only. Missing: expected.
     int[] orgasm = animdb.GetOrgasmExpected(thread)
+    ; Lover's Ledger first times (Punish / Aid panel parts): vaginal for a female position, anal for the
+    ; receiving position (0). A count of 0 while the act is on means this scene is the first; the flag is sticky
+    ; in the engine, so a later call after the ledger counts it does not clear it.
+    bool ledger = SkyrimNet_SexLab_LoversLedger.IsInstalled()
+    bool vaginal = ledger && AnimHasTag("Vaginal")
+    bool anal = ledger && AnimHasTag("Anal")
     int i = 0
     while i < positions.length
         Actor a = positions[i]
         if a != None
+            if vaginal || anal
+                bool first_vaginal = vaginal && a.GetLeveledActorBase().GetSex() == 1 && SkyrimNet_SexLab_LoversLedger.NeverGot(a, "Vaginal")
+                bool first_anal = anal && i == 0 && SkyrimNet_SexLab_LoversLedger.NeverGot(a, "Anal")
+                if first_vaginal || first_anal
+                    SkyrimNet_SexLab_OrgasmEngine.SetFirstTimes(a, first_vaginal, first_anal)
+                endif
+            endif
             int lewd = sexlab.Stats.GetLewdLevel(a) - sexlab.Stats.GetPureLevel(a)
             SkyrimNet_SexLab_OrgasmEngine.SetActorSkills(a, sexlab.GetSkillLevel(a, skill_name), lewd)
             int obj = GetObjFromActor(a)

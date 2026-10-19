@@ -1018,6 +1018,28 @@
             color: var(--text-muted);
         }
 
+        /* Damaged part (torture points or a first time): red, also while dimmed, hovered or selected. */
+        .pulldown .pulldown-option.part-damaged,
+        .pulldown .pulldown-value.part-damaged {
+            color: var(--danger);
+        }
+
+        /* Hovered damaged part's torture bar, right of its pulldown option. */
+        #part-damage-pop {
+            display: none;
+            position: fixed;
+            z-index: 60;
+            margin-left: 0;
+            padding: var(--space-xs) var(--space-sm);
+            font-family: var(--font-ui);
+            font-size: var(--text-sm);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            pointer-events: none;
+        }
+
         .injuryengine-confirm {
             font-family: var(--font-ui);
             color: var(--text-primary);
@@ -2426,7 +2448,9 @@
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="punishCancel()">Cancel</div>
         </div>
     </div>
-    <!-- Punish reason "custom": OK / Enter closes this and the Punish panel and punishes. -->
+    <!-- Punish / Aid body-part pulldown: the hovered damaged part's torture bar (showPartDamagePop). -->
+    <span id="part-damage-pop" class="torture-meter"><span class="torture-track"><span class="torture-fill"></span></span><span class="torture-points"></span></span>
+    <!-- Punish reason "custom": OK / Enter closes this and puts the text in the Punish panel's reason. -->
     <div id="punish-reason-dialog">
         <div class="stop-dialog">
             <div class="target-row">Custom reason</div>
@@ -4510,6 +4534,7 @@
         }
 
         function closeAllPulldowns(except) {
+            hidePartDamagePop();
             document.querySelectorAll('.pulldown.open').forEach((el) => {
                 if (el === except) return;
                 el.classList.remove('open');
@@ -8304,7 +8329,9 @@
         //   ask / order: {verb, subject, object, request (a request key) | text (free phrase after "to")}
         //   punish:      {verb, subject, object, method, location, reason ("" for no reason), amount (hits)}
         // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
-        // be punished for (refused requests, reasons other mods supply); "no reason" and custom are always offered.
+        // be punished for (refused requests, reasons other mods supply, then an AI actor's current strategy as
+        // "<name> appears to ..."); "no reason" and custom are always offered. firstTimes: ["pussy", "ass"] when this
+        // scene is the actor's first vaginal / anal (Lover's Ledger); those parts show as damaged.
         // The panel reopens on the last values (accepted or cancelled) that are still offered.
         // Presets: [key sent, label]. Then the subject's weak attack spells (with Injury Engine: its torture spells, see
         // Aid::PunishSpells), then custom (a phrase like "biting").
@@ -8339,13 +8366,15 @@
         // A body-part pulldown into hostId for actor; custom shows textId. onPick(part) on change.
         // current: the part to show (undefined on open: 'body', custom text cleared; one the actor lacks: 'body').
         // partList: the parts to offer instead of bodyPartsFor(actor) (Aid potions).
+        // Listed by damage (sortPartsByDamage); damaged parts red, hovering one shows its damage bar to the right.
         function renderPartPulldown(hostId, textId, onPick, actor, current, partList) {
             const host = document.getElementById(hostId);
-            const parts = partList || bodyPartsFor(actor);
+            const parts = sortPartsByDamage(actor, partList || bodyPartsFor(actor));
             const shown = parts.includes(current) ? current : parts[0];
             const confirmId = hostId + '-confirm';
             host.innerHTML = '';
             host.appendChild(createPulldown(parts, shown, (v) => {
+                hidePartDamagePop();
                 if (partDimmed(v)) {
                     injuryEngineConfirm(confirmId, () => {
                         onPick(v);
@@ -8358,9 +8387,67 @@
             }, null, (el, text) => {
                 el.textContent = text;
                 el.classList.toggle('part-dim', partDimmed(text));
+                el.classList.toggle('part-damaged', partDamaged(actor, text));
+                if (el.classList.contains('pulldown-option')) {
+                    el.onmouseenter = () => showPartDamagePop(el, actor, text);
+                    el.onmouseleave = hidePartDamagePop;
+                }
             }));
             if (current === undefined) document.getElementById(textId).value = '';
             if (shown !== current) onPick(shown);
+        }
+
+        // {points, max, first} of actor's part: Injury Engine torture points (injuryFor) and Lover's Ledger first
+        // vaginal / anal (actor.firstTimes). null for drink / body / custom (the whole body, not a part).
+        function partDamage(actor, part) {
+            if (part === 'drink' || part === 'body' || part === 'custom') return null;
+            const inj = injuryFor(actor, part);
+            const first = !!(actor && Array.isArray(actor.firstTimes) && actor.firstTimes.includes(part));
+            return { points: inj ? inj.points : 0, max: inj ? inj.max : 0, first };
+        }
+
+        function partDamaged(actor, part) {
+            const d = partDamage(actor, part);
+            return !!d && (d.points > 0 || d.first);
+        }
+
+        // drink / body first, then damaged parts by points (a first time with no points after the pointed ones),
+        // then the rest as listed, custom last.
+        function sortPartsByDamage(actor, parts) {
+            const top = parts.filter(p => p === 'drink' || p === 'body');
+            const rest = parts.filter(p => p !== 'drink' && p !== 'body' && p !== 'custom');
+            const damaged = rest.filter(p => partDamaged(actor, p))
+                .sort((a, b) => partDamage(actor, b).points - partDamage(actor, a).points);
+            const undamaged = rest.filter(p => !partDamaged(actor, p));
+            return top.concat(damaged, undamaged, parts.filter(p => p === 'custom'));
+        }
+
+        // The hovered damaged part's bar (percent of its max) and points / "first time", right of the option.
+        function showPartDamagePop(el, actor, part) {
+            const pop = document.getElementById('part-damage-pop');
+            const d = partDamage(actor, part);
+            if (!d || !(d.points > 0 || d.first)) {
+                hidePartDamagePop();
+                return;
+            }
+            const pct = d.max > 0 ? Math.min(100, Math.round(d.points / d.max * 100)) : 0;
+            const notes = [];
+            if (d.points > 0) notes.push(d.max > 0 ? `${d.points} pts (${pct}%)` : `${d.points} pts`);
+            if (d.first) notes.push('first time');
+            pop.querySelector('.torture-fill').style.width = (d.points > 0 ? pct : 0) + '%';
+            pop.querySelector('.torture-points').textContent = notes.join(' · ');
+            pop.style.display = 'inline-flex';
+            const r = el.getBoundingClientRect();
+            const vw = window.innerWidth;
+            let left = r.right + 8;
+            if (left + pop.offsetWidth > vw - 8) left = Math.max(8, r.left - pop.offsetWidth - 8);
+            pop.style.left = left + 'px';
+            pop.style.top = (r.top + (r.height - pop.offsetHeight) / 2) + 'px';
+        }
+
+        function hidePartDamagePop() {
+            const pop = document.getElementById('part-damage-pop');
+            if (pop) pop.style.display = 'none';
         }
 
         // "Do you wish to enable torture sexual parts?" Yes: turns Injury Engine's setting on, then onYes. No: onNo.
@@ -8553,8 +8640,7 @@
                 document.getElementById('punish-reason-text').value.trim() === '');
         }
 
-        // OK / Enter: the custom reason, then punish (closes the panel). Blocked (custom method / part empty): the
-        // panel stays open with the custom reason picked.
+        // OK / Enter: closes the dialog and picks the custom reason in the pulldown; Punish still starts it.
         function punishReasonDialogOk() {
             const reason = document.getElementById('punish-reason-text').value.trim();
             if (!reason) return;
@@ -8562,7 +8648,7 @@
             PUNISH.reasonCustom = true;
             punishReasonDialogClose();
             punishRenderReason();
-            punishAccept();
+            punishUpdate();
         }
 
         function punishRenderPart(current) {

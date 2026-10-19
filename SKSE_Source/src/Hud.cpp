@@ -351,7 +351,8 @@ namespace Hud
         // Ask / Order / Punish key (anyone in a managed scene): the panel, solo in the WebUI. Every actor of the
         // acting actor's scene can be the subject (default: the acting actor) or the object; each brings its punish
         // spells (Aid::PunishSpells: weak attack or Injury Engine torture) and, as an object, the requests it could be asked
-        // for (strategy order phrases) and its punishment reasons (the punish verb needs one).
+        // for (strategy order phrases), its punishment reasons (held ones, then an AI actor's current strategy) and
+        // its first times this scene (firstTimes: "pussy" / "ass", Lover's Ledger).
         // The panel replies through WebUI onPunishResult.
         void OnPunish()
         {
@@ -378,7 +379,8 @@ namespace Hud
                 auto* player = RE::PlayerCharacter::GetSingleton();
                 list.push_back({ { "id", id }, { "name", name }, { "female", IsFemaleId(id) },
                     { "isPlayer", player && id == player->GetFormID() }, { "spells", std::move(spells) },
-                    { "requests", std::move(requests) }, { "reasons", OrgasmEngine::GetPunishReasons(id) } });
+                    { "requests", std::move(requests) }, { "reasons", OrgasmEngine::GetPunishReasons(id) },
+                    { "firstTimes", OrgasmEngine::GetFirstTimes(id) } });
             }
             nlohmann::json cfg;
             cfg["actors"] = std::move(list);
@@ -430,13 +432,15 @@ namespace Hud
             nlohmann::json list = nlohmann::json::array();
             list.push_back({ { "id", player->GetFormID() }, { "name", NameOf(player) },
                 { "female", IsFemaleId(player->GetFormID()) }, { "isPlayer", true },
-                { "missingHealth", missingHealth(player) }, { "options", optionsJson(options) } });
+                { "missingHealth", missingHealth(player) }, { "options", optionsJson(options) },
+                { "firstTimes", OrgasmEngine::GetFirstTimes(player->GetFormID()) } });
             for (const auto& a : actors) {
                 if (a.id != player->GetFormID()) {
                     auto* actor = ActorFor(a.id);
                     list.push_back({ { "id", a.id }, { "name", a.name }, { "female", IsFemaleId(a.id) },
                         { "isPlayer", false }, { "missingHealth", missingHealth(actor) },
-                        { "options", optionsJson(Aid::ListOptions(actor)) } });
+                        { "options", optionsJson(Aid::ListOptions(actor)) },
+                        { "firstTimes", OrgasmEngine::GetFirstTimes(a.id) } });
                 }
             }
             cfg["actors"] = std::move(list);

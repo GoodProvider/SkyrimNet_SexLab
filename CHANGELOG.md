@@ -31,6 +31,13 @@
 - **Potions get `drink`** (default part for a potion). A stamina-only potion offers drink / lips / ass / pussy / penis; other potions drink plus the body parts.
 - **Consent**: drink or lips on an NPC asks the decision model (new `prompts/decisions/sexlab/aid_accept.prompt`, `StrategyDecision::RequestAidAccept`; no provider = accepted). An NPC offering the player a drink opens a Yes / No dialogue (`openAidOffer` / `onAidOfferResult`). Refused: "Amy refused Bob's stamina potion." is narrated and kept as a punish reason; the potion stays.
 - **Scene-aware lines**: ass / pussy / lips / penis with a matching act tag (anal / vaginal / oral, new native `OrgasmEngine.SetSceneActs` from `Scene.Engine_SetSkills`) and a partner: "Bob gently puts the stamina potion on Bob's dick and it is thrust into Amy's pussy." and the effect is split half to giver, half to receiver. Without: "… pushes the potion's lip up Amy's ass." / "… pours the potion on Bob's penis.", full effect to the receiver. Style word from the scene speed (gentle / forceful).
+- **Aid spell on an undamaged part / full target**: `AdvanceChannel` no longer stops "full" before the first tick. That tick casts as normal (magicka, `PlaySpellVisuals`, `InjuryEngine::Heal` narration), then the channel stops.
+
+### Punish panel (untested)
+- **Custom reason no longer punishes**: OK / Enter in the custom reason box (`punishReasonDialogOk`) closes it and selects the typed reason; the Punish button starts it.
+- **Strategy as a reason**: `OrgasmEngine::GetPunishReasons` appends an AI actor's current strategy as others see it, `<name> <observed>` ("Nina appears to be focused on her own enjoyment"), while the mini-game is on. Listed after held reasons, so a refused request stays the default.
+- **Part pulldown by damage** (Punish and Aid, shared `renderPartPulldown`): `sortPartsByDamage` keeps drink / body on top, then damaged parts by torture points, then the rest, custom last. Damaged parts are red (`.part-damaged`); hovering one shows its torture bar and points to the right (`#part-damage-pop`).
+- **First times (Lover's Ledger only)**: `Scene.Engine_SetSkills` calls new native `OrgasmEngine.SetFirstTimes(actor, vaginal, anal)` when the animation is Vaginal (female positions) / Anal (position 0) and `TTLL_Store.GetActionCount(actor, false, "Vaginal" | "Anal")` is 0 (new `LoversLedger.NeverGot`). Sticky for the scene, not saved. Hud payloads (Punish and Aid) carry `firstTimes: ["pussy", "ass"]`; those parts sort and show as damaged ("first time") even at 0 points.
 
 ## [0.36.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0) — since [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2)
 

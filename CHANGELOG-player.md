@@ -23,10 +23,17 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Potions can be **drunk**. Offering one to an NPC (to drink or on the lips) lets them accept or refuse; a refusal can be punished. When an NPC offers you one, you get a Yes / No choice
 - Stamina potions offer drink, lips, ass, pussy and penis
 - Using a potion on ass, pussy, lips or penis during a matching act shares it between both of you, with its own narration
+- An Aid spell on a part with no damage (or someone at full health) now still shows its effect and is narrated
 
 ### Lover's Ledger view (untested)
 - New **Lover's Ledger** view in the WebUI when TT Lover's Ledger is installed. It shows the target's encounter counts, favorite acts and lovers. Click a lover to switch the target to them
 - Changing the actor in the ControlPanel no longer closes the Lover's Ledger view; it shows the new actor
+
+### Punish panel (untested)
+- A custom reason no longer punishes straight away: OK puts it in the reason, and Punish starts it
+- An NPC's current mini-game behavior is always offered as a reason ("Nina appears to be focused on her own enjoyment")
+- Punish and Aid list damaged body parts first, most damaged on top, in red; hover one to see its torture bar
+- With TT Lover's Ledger, a first vaginal or anal scene marks pussy or ass as damaged
 
 ## 0.36.0
 

@@ -61,6 +61,9 @@ Function SetSceneBlocked(Actor akActor, bool blocked) global native
 Function SetOrgasmExpected(Actor akActor, bool expected) global native
 ; Current animation's acts (Aid potion narration): Vaginal, Anal, Oral / Blowjob tags. Start and animation change.
 Function SetSceneActs(Actor akAnchor, bool vaginal, bool anal, bool oral) global native
+; This scene is the actor's first vaginal / anal (Lover's Ledger): the Punish / Aid panels show pussy / ass as
+; damaged. Sticky for the scene (false never clears).
+Function SetFirstTimes(Actor akActor, bool vaginal, bool anal) global native
 ; DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync); DOM decides the orgasm.
 Function SetDomSlave(Actor akActor, bool dom) global native
 ; DOM slave: 0-100 meter computed from DOM's orgasm values (HUD bar + SexLab mirror).

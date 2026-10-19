@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## Punish / Aid part list: first times need Lover's Ledger (2026-10-18)
+
+- Pussy / ass show as damaged on a first vaginal / anal scene only with TT Lover's Ledger: `Scene.Engine_SetSkills` checks `TTLL_Store.GetActionCount(actor, false, "Vaginal" | "Anal") == 0` while the animation has that tag (vaginal: female positions; anal: position 0). No ledger, no first-time marks (the user chose this over SexLab skill stats).
+- The flag is sticky in the engine for the scene (`SetFirstTimes` never clears), so the ledger counting the act during the scene does not undo it. If the ledger counted an act before the first `Engine_SetSkills` call, that scene would not be marked. Not verified in game, and the ledger action names "Vaginal" / "Anal" are taken from its header example, not checked.
+- The strategy reason ("Nina appears to …") is computed on panel open from `ObservedPhrase`, not stored as a `PunishRecord`, so it never fills the 8-record cap.
+
 ## Necro / corpse scenes end right after they start on SexLab 1.6x (2026-10-17)
 
 - **Symptom:** a FunnyBizness necro animation with a corpse starts, then ends within seconds. The log shows `StageStart stage:1/N state:Animating` and then `AnimationStart stage:N/N state:Ending` with none of our `EndAnimation` traces. `sslThreadController.EndAnimation` sets `Stage = StageCount` before `Ending`, so "stage N/N, Ending" right after the start means SexLab ended the thread.

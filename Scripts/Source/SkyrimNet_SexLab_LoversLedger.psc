@@ -39,6 +39,14 @@ String Function FirstTimesSentence(Actor[] positions, String tags) global
     return joined
 EndFunction
 
+; True when the ledger has no record of a receiving `act` ("Vaginal", "Anal") for a; false when not installed.
+Bool Function NeverGot(Actor a, String act) global
+    if !IsInstalled() || a == None
+        return false
+    endif
+    return TTLL_Store.GetActionCount(a, false, act) == 0
+EndFunction
+
 ; Game days since a ledger "lasttime"; -1 when never.
 Float Function DaysAgo(Float lastTime, Float now) global
     if lastTime <= 0.0
