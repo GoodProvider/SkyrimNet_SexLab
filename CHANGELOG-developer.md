@@ -2,12 +2,6 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## Unreleased
-
-### Scene start messages
-- `Scene.StageStart_NarrateStart`: before the start narration it sends `NarrateBelowDirect(min(start_level, 2), "sexlab start info", IntersexSentence() + first times, sender, receiver, force=True)`. Virgin-blood sentences are appended to `desc`, so they ride with the start in every branch (hold stash, orgasm stash, DN / event).
-- `SkyrimNet_SexLab_LoversLedger.FirstTimesParts(positions, tags)` returns `String[2]` (first times, blood) and replaces `FirstTimesSentence`. Blood is matched on " is a little sore and is bleeding": keep it in sync with Lover's Ledger `FirstTimes.cpp`.
-
 ## 0.36.3
 
 ### Scene narration
@@ -15,6 +9,10 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Silence nudge**: config `sexlab.narration.silence_seconds` (float, 8, 0 = off). `Scene.PollAnimationChange` → `SilenceTick` → `SilenceNudge_IfQuiet`, which rotates `silence_turn` over the non-player `thread.Positions`. `Utilities.SilenceAllows(source, silence)`: no mod DN within `silence`, `GetSpeechQueueSize() == 0`, `GetTimeSinceLastAudioEnded()` 0 or ≥ `silence`, `NarrationNearby`. `Utilities.SilenceNudge(speaker, partner)` → `SendDirectNarration("continue scene", …)` (no CheckDuplicate). The devkit (beta28-rc2) has no scene-scoped continue API: `TriggerContinueNarration` and continuous mode are global, and CppAPI has no audio or queue query.
 - `DirectNarration_Optional`: a `dropped` result clears StorageUtil `sexlab_narration_last_msg` on the source (or the player).
 - `GetDescriptionFromTags`: passive receiver verbs for anal, vaginal, cunnilingus and the fallback.
+
+### Scene start messages
+- `Scene.StageStart_NarrateStart`: before the start narration it sends `NarrateBelowDirect(min(start_level, 2), "sexlab start info", IntersexSentence() + first times, sender, receiver, force=True)`. Virgin-blood sentences are appended to `desc`, so they ride with the start in every branch (hold stash, orgasm stash, DN / event).
+- `SkyrimNet_SexLab_LoversLedger.FirstTimesParts(positions, tags)` returns `String[2]` (first times, blood) and replaces `FirstTimesSentence`. Blood is matched on " is a little sore and is bleeding": keep it in sync with Lover's Ledger `FirstTimes.cpp`.
 
 ### Dead actors can join scenes
 - Config `sexlab.actors.dead_allowed` (bool, default false): `SexLabNet::IsDeadAllowed()` in C++, `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (global native) in Papyrus.

@@ -1,11 +1,5 @@
 # Changelog
 
-## Unreleased — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
-
-### Scene start messages
-- **Start DN too long**: the whole Lover's Ledger first-times text was appended to it. `StageStart_NarrateStart` now first sends a `"sexlab start info"` event with `Scene.IntersexSentence()` ("<Name> is intersex." per `IsIntersex` position) plus the first times. The event follows `start_level` capped at Event and is forced, so CheckDuplicate cannot blank the start. Only the virgin-blood sentences stay on the start text.
-- `LoversLedger.FirstTimesSentence` → `FirstTimesParts` (`[0]` first times, `[1]` sentences containing " is a little sore and is bleeding", the text Lover's Ledger `FirstTimes.cpp` writes when `loversledger.first_time.virgin_blood` is on).
-
 ## [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3) — since [0.36.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2)
 
 ### Scene narration
@@ -13,6 +7,10 @@
 - **New keep-talking nudge**: setting `sexlab.narration.silence_seconds` (Narration, default 8, 0 = off). `Scene.SilenceTick` runs on the 2 s animation poll. Once SkyrimNet has nothing queued, no audio ended within that time, and the mod sent no DN within it, a non-player actor is sent `"continue scene"` (`Utilities.SilenceAllows` / `SilenceNudge`, which skip CheckDuplicate). The speaker rotates. It is skipped while a start / stage / orgasm / ending narration is pending, below Direct stage narration, and for NPC-only scenes the player can't see. A stage change with an unchanged description uses the same nudge, replacing `ContinueActivity`.
 - **Dropped continues blanked every retry**: `CheckDuplicate` stored the text before `DirectNarration_Optional` dropped it. A drop now clears the stored text.
 - **Tag-fallback descriptions read position 0 as the doer** ("Hulda is having anal sex with Prisoner", while Hulda was the receiver). Anal and vaginal now read "receiving … from", cunnilingus has its own "receiving cunnilingus from" (it said "giving a blowjob to"), and the generic fallback reads "being fucked by".
+
+### Scene start messages
+- **Start DN too long**: the whole Lover's Ledger first-times text was appended to it. `StageStart_NarrateStart` now first sends a `"sexlab start info"` event with `Scene.IntersexSentence()` ("<Name> is intersex." per `IsIntersex` position) plus the first times. The event follows `start_level` capped at Event and is forced, so CheckDuplicate cannot blank the start. Only the virgin-blood sentences stay on the start text.
+- `LoversLedger.FirstTimesSentence` → `FirstTimesParts` (`[0]` first times, `[1]` sentences containing " is a little sore and is bleeding", the text Lover's Ledger `FirstTimes.cpp` writes when `loversledger.first_time.virgin_blood` is on).
 
 ### Dead actors can join scenes
 - **Necro scenes started by another mod were still cancelled on SexLab 1.6x**: we only adopt such a thread (`GetSceneByThread`), so the 0.36.1 floor in `StartScene` never ran, and `StageStart` comes after `sslActorAlias` has already ended the thread. The other mod had lifted the corpse to about 1 Health, which passed `ValidateActor` but was still `< 1.0` (`checkpoints/necro-animations/02-checkpoint.md`).
