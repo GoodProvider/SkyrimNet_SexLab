@@ -15,6 +15,9 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Necro scenes on SexLab 1.6x are no longer cancelled right after they start, also when another mod starts them
 - The corpse stays dead. NPC dialogue actions never pick a corpse
 
+### Actor Info layout
+- The Actor Info title (source, name, gender) now runs across the top of the view instead of down a left column
+
 ## 0.36.2
 
 ### Victim scene ending

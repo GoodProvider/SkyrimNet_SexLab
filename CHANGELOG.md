@@ -14,6 +14,9 @@
 - With it on: the TargetMenu nearby list (`ClassifyNearbyActor`), `IsAvailableActor`, `ActorLocker::TryLock`, `Menu.IsAvailableActor` and `MultiTarget_Menu_Selection` accept dead actors, and `Scene_Creator.EnsureSexLabActorsValid` accepts `ValidateActor` -13 for a corpse. LLM action eligibility is unchanged.
 - `Utilities.CorpseHealth_Floor` only runs with the toggle on, and it now lifts a corpse under Health 5 to 10 (was under 1 to 2). `Scene_Manager` `HookAnimationStarting` floors every dead position (`CorpseHealth_FloorThread`) and keeps them in a per-thread StorageUtil form list. `HookAnimationEnd` restores that list (`CorpseHealth_RestoreThread`).
 
+### Actor Info layout
+- The header (source title, name, gender) showed as a left column: `#actor-info-panel` is shown as `display:flex` with no `flex-direction`. It now sets `flex-direction: column`, so the header spans the top and the facts sit below it.
+
 ## 0.36.2 (unreleased)
 
 ### Victim scene ending
