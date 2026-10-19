@@ -32,22 +32,22 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 ### NPC-only ending hold
 - Without the player, the last stage waits half as long for the orgasm dialogue (15 s, not 30)
 
-### Actor Info view (untested)
+### Actor Info view
 - New **Actor Info** view in the WebUI, replacing the Lover's Ledger view
 - With TT Lover's Ledger: encounter counts, favorite acts and lovers; click a lover to target them
 - Without it: SexLab's stats (sex count, last partner, sexuality, purity, skills)
 - Pick an actor's gender (male / female / intersex) for SexLab. OStim still uses the body
 - Changing the actor in the ControlPanel keeps the view open and shows the new actor
 
-### Futa / intersex (untested)
+### Futa / intersex
 - SexLab P+: a female with a The New Gentleman penis now counts as futa when picking animations
 - Intersex actors can fill male or female positions
 
-### OStim TargetMenu (untested)
+### OStim TargetMenu
 - New **OStim** option in the TargetMenu when OStimNet is installed; OStim plays the scene
 - Pick who joins, the victim, the method and the intent as usual
 
-### Aid panel potions (untested)
+### Aid panel potions
 - The Aid panel remembers what you picked last time
 - Potions can be **drunk**
 - An NPC offered one (to drink or on the lips) can accept or refuse; a refusal can be punished
@@ -56,13 +56,13 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - A potion on ass, pussy, lips or penis during a matching act is shared by both, with narration
 - An Aid spell on an undamaged part or someone at full health still shows its effect and is narrated
 
-### Punish panel (untested)
+### Punish panel
 - A custom reason no longer punishes straight away: OK sets the reason, and Punish starts it
 - An NPC's current mini-game behavior is offered as a reason ("Nina appears to be focused on…")
 - Punish and Aid list damaged parts first, worst on top, in red; hover one for its torture bar
 - With TT Lover's Ledger, a first vaginal or anal scene marks pussy or ass as damaged
 
-### Verbose logging (untested)
+### Verbose logging
 - New SkyrimNet dashboard option **Debug > Verbose logging**. Turn it on when reporting a bug
 - It adds much more detail to the logs and shows in the prompts what the SexLab sections saw
 - Turn it off afterwards: the extra lines are also sent to the LLM
@@ -77,7 +77,7 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - It could also damage another mod's saved data (seen with a tears/drool overlay mod)
 - Less log spam after loading a save mid-scene
 
-### Enjoyment runaway bug (untested)
+### Enjoyment runaway bug
 - Fixed: on SexLab P+, enjoyment could run far out of range during a scene
 
 ### Slow P+ start bug (untested)

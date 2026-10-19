@@ -31,20 +31,20 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 ### NPC-only ending hold
 - **`Ending_HoldMax()`** returns half of `sexlab.ending.dialogue_hold_max` (after the `ENDING_HOLD_CAP` clamp) when `!thread.HasPlayer`. It is the only cap source for `Ending_Hold` / `Ending_Poll` on 1.6x and P+, so NPC-only scenes release the final-stage hold at 15 s by default (log `Ending_Hold ... max:15`). The response-played / speech-queue release is unchanged.
 
-### Actor Info view (untested)
+### Actor Info view
 - **MainPanels `0800_actor_info.json`** (`actor_info_panel`) replaces `0800_lovers_ledger.json`. `SkyrimNet_SexLab_ActorInfo.BuildPanelJson` → `{panel:"actor_info", name, gender, genderEditable, genderNote, source, sourceTitle, ledger | sexlab, empty}`: `ledger` from `LoversLedger.LedgerJson` (renamed from `BuildPanelJson`, the only script that references `TTLL_Store`) when TT Lover's Ledger is loaded, else `sexlab` from `sslActorStats`. JS `renderActorInfo`; `Menu.WebUI_OnControlActorFocus` re-pushes while `WebUI_IsMainPanelOpen("actor_info_panel")`.
 - **Gender pulldown**: `fireStatusApply` → `Menu.WebUI_ActorInfoApply(control "gender")` → `Utilities.SetGenderChoice` (StorageUtil `SkyrimNet_SexLab_ChosenSex`; P+ `TreatAsSex` / `ClearForcedSex`, 1.6x `TreatAsGender` / `ClearForcedGender`). OStim has no gender setter.
 - Builtins may set `plugin` / `questFormId` / `scriptName` / `openFunction` / `closeFunction`; `OpenMainPanelEntry` / `CloseMainPanelEntry` dispatch them through `DispatchEntryFunction`. `WebUI_MaybeRestoreScenePanel` returns early when a main panel other than Scene is selected (`ActionCatalog::HasMainPanelSelection()`).
 - **`Utilities.ActorFromBase(ActorBase)`** (Papyrus_Utilities.cpp): player base → player, otherwise a TESNPC → Actor index from `TESForm::GetAllForms()`, rebuilt on a miss (at most every 5 s). `TTLL_Store.GetAllLovers` returns TESNPC bases while the lover getters take `RE::Actor*`. Compile-only header `Headers_Source/LoversLedger/TTLL_Store.psc`.
 
-### Futa / intersex (untested)
+### Futa / intersex
 - **TNG futa (P+)**: `Utilities.HasTNGPenis` (`TNG_PapyrusUtil.GetActorAddon`, stub `Headers_Source/TNG_PapyrusUtil.psc`); `EnsureFutaSex` (`TreatAsSex 2`, StorageUtil `SkyrimNet_SexLab_ForcedFuta`) in `EnsureSexLabActorsValid`, `ClearFutaSex` in `Scene.AnimationEnd` (marked overwrites only). Bridge stubs `GetSex` / `TreatAsSex` / `ClearForcedSex` in `Headers_Source/SkyrimNet_SexLab_PPlus.psc`.
 - **AnimDB**: per-position `_intersex` (Scene Creator, Scene) → `spec.pos_intersex` / `spec.intersex` (Papyrus_AnimationDB.cpp); an intersex position matches male or female rows, and the human slot total must equal the cast.
 
-### OStim TargetMenu (untested)
+### OStim TargetMenu
 - **TargetMenu OStim row**: `webui/TargetMenu/Actor/options/0120_ostim.json` is a `scene_start` panel with `framework: "ostim"` and `requiresPlugin: TT_OStimNet.esp`. Start calls `SkyrimNet_SexLab_Actions.TM_StartScene_OStim(speaker, target, cast, victim_fid, intent, style, method, direction)`, which starts the scene through OStimNet's `TTON_OStimIntegration.StartOstimSex` / `StartOStimCaring`. Any catalog option can set `framework: "ostim"` to get the same panel without the scene setting row, AnimDB or Scene Creator.
 
-### Aid panel potions (untested)
+### Aid panel potions
 - **Remember**: `AID_LAST` / `aidRemember()` (Use and Cancel) restore subject, target, option (by form id, if still affordable), part (if still in the list and not dimmed), custom part text and typed points. Session only. Fixed in passing: `aidRenderPart` sets `AID.part` itself (`renderPartPulldown` only calls `onPick` when it changes the part).
 - **Part lists**: `aidPartsFor(actor, option)`; `renderPartPulldown` takes an optional `partList`. Stamina-only potion: `drink, lips, ass, pussy, penis` (sex-filtered); other potion: `drink` + `bodyPartsFor`. `penis` is sent as `cock`. Sentence reads "… for <actor> to drink." for drink.
 - **Scene acts**: native `OrgasmEngine.SetSceneActs(anchor, vaginal, anal, oral)` from `Scene.Engine_SetSkills` (start + animation change); `SceneState.actVaginal/actAnal/actOral` (not saved); `OrgasmEngine::GetSceneActs`.
@@ -52,13 +52,13 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Consent**: `Aid::NeedsConsent` (drink / lips on someone else). WebUI.cpp `AidAskConsent`: player receiver of a drink → `openAidOffer({token, question})` / `onAidOfferResult({token, accept})` (Escape = No; lips on the player needs no answer); NPC → `StrategyDecision::RequestAidAccept` with `prompts/decisions/sexlab/aid_accept.prompt` (question `accept`, keys `accept` / `refuse`; no provider / failure = accepted). `AidFinishConsent`: refusal narrates `Aid::RefusalReason` + "." and `AddPunishReason`s it; the potion is not used.
 - **Zero-damage Aid spell**: `Aid::AdvanceChannel` skips the `missing < 0.5` "full" stop on the channel's first tick, so one normal cast runs (magicka cost, `PlaySpellVisuals`, `InjuryEngine::Heal` with `narrate`, which heals 0 points but narrates); the channel then stops "full". Before, the channel ended silently with no effect and, with Injury Engine, no narration.
 
-### Punish panel (untested)
+### Punish panel
 - **Custom reason**: `punishReasonDialogOk` no longer calls `punishAccept`; it sets `PUNISH.reason` / `reasonCustom`, closes the dialog and re-renders.
 - **`GetPunishReasons`** appends `NameOf(actor) + " " + ObservedPhrase(st)` for an `AiDriven` actor while `g_settings.miniGame`, after the held `PunishRecord`s (deduplicated).
 - **Part pulldown**: `renderPartPulldown` sorts with `sortPartsByDamage(actor, parts)` (drink / body, damaged by points desc, undamaged, custom). `partDamage` / `partDamaged` combine `injuryFor` and `actor.firstTimes`. `decorateDisplay` adds `.part-damaged` (`var(--danger)`) and, on options, hover handlers for one fixed `#part-damage-pop` (torture-meter markup), hidden by `closeAllPulldowns`.
 - **First times**: native `OrgasmEngine.SetFirstTimes(Actor, bool vaginal, bool anal)` → `ActorState.firstVaginal/firstAnal` (sticky OR, reset with the actor's scene, not saved); `OrgasmEngine::GetFirstTimes(FormID)` → `"pussy"` / `"ass"`. Called from `Scene.Engine_SetSkills` only when `LoversLedger.IsInstalled()`; new `LoversLedger.NeverGot(actor, act)` reads `TTLL_Store.GetActionCount(actor, false, act)`. `Hud::OnPunish` / `OnAid` add `firstTimes` to each actor.
 
-### Verbose logging (untested)
+### Verbose logging
 - Dashboard `sexlab.debug.verbose`: `Config::ApplyLogLevel` (spdlog debug/info, on load and in `ApplyHudConfig`), C++ decorator `sexlab_verbose`, natives `SkyrimNet_SexLab_WebUI.IsVerbose` / `DebugLog`, `Utilities.DebugTrace`. `GetThreadsJson` per-thread `[V]` line (uuid, formid, AnimatingFaction); `Get_Threads` full JSON only when verbose. `0050` / `0550` emit `[SNSL DEBUG]` prompt lines for the `_thread_live` gate.
 - `Scene.ApplySpeakerFields(obj, speaker)`: speaker fields are computed in locals; `GetThreadObj` applies them to `thread_obj`, and `GetThreadsJson` re-applies them to its copy. Fixes cross-actor speaker fields from concurrent `sexlab_get_threads` calls.
 - `GetThreadsJson`: `GetSceneByThread(t, True, False)` + `GetThreadInScene()` (was the animating/prepare-only lookup + `GetThreadActive()`), so `threads.json` keeps the thread while SexLab is `Advancing` / `Refresh` (scene start, stage changes). `GetThreadObj` skips the `CheckAnimationChange` poll outside animating / prepare. `DebugTraceThread` logs `state:`.
@@ -71,7 +71,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **JC walker depth cap**: `JValueToJsonString(obj, depth = 0)` and the map/array/form-map/int-map helpers pass `depth + 1` per level and return `null` (with a trace) past 32.
 - **Dead SNSL handles after a load**: `Mirror_Apply` / `ApplySexLabVoice` check `isExists` on the `GetObjFromActor` handle. `JsonStore::Resolve` logs each dead handle once per session. All `SNSL_*` natives are registered through `WithCaller<Fn>` (`IVirtualMachine*`, `VMStackID` prefix), so the first error for a handle also calls `TraceStack`, which puts the calling script and function in `Papyrus.0.log`.
 
-### Enjoyment runaway bug (untested)
+### Enjoyment runaway bug
 - **`Scene.Mirror_Apply`**: one per position at a time (`Mirror_ApplyLocked`, `mirror_busy_at`), external fold only for 3..`MIRROR_EXTERNAL_MAX` (25), wait up to `MIRROR_WAIT_TICKS` while SexLab still reads `sl_mirror_pre`. `Arousal_Floor` tracks `sla_floor_last` so a gap is added once.
 
 ### Slow P+ start bug (untested)
