@@ -352,3 +352,42 @@ bool Function IsFuta(Actor akActor) global
     endif
     return SexLabRegistry.GetSex(akActor, false) == 2
 EndFunction
+
+
+; ---- Animations ----
+; Scene id -> legacy animation object without the registry scan. SexLabFramework.GetAnimationByRegistry
+; (sslAnimationSlots.GetbyRegistrar) rebuilds the proxy array twice per call and only finds ids already in
+; the alias cap, so most AnimDB picks resolved None after seconds of Papyrus each. GetSetAnimation binds
+; the id to a proxy alias (what sslThreadModel.Animation does).
+sslBaseAnimation Function ResolveAnimation(SexLabFramework sexlab, String id) global
+    if sexlab == None || id == "" || !SexLabRegistry.SceneExists(id)
+        return None
+    endif
+    int[] sexes = SexLabRegistry.GetPositionSexA(id)
+    if sexes.Find(3) > -1 || sexes.Find(4) > -1
+        return sexlab.CreatureSlots.GetSetAnimation(id)
+    endif
+    return sexlab.AnimSlots.GetSetAnimation(id)
+EndFunction
+
+; ---- Sex overwrite ----
+; P+ GetSex: 0 male, 1 female, 2 futa, 3 creature male, 4 creature female.
+int Function GetSex(Actor akActor, bool ignore_overwrite) global
+    if akActor == None
+        return -1
+    endif
+    return SexLabRegistry.GetSex(akActor, ignore_overwrite)
+EndFunction
+
+; GenderFaction overwrite (persists on the actor until cleared).
+Function TreatAsSex(SexLabFramework sexlab, Actor akActor, int sex) global
+    if sexlab != None && akActor != None
+        sexlab.TreatAsSex(akActor, sex)
+    endif
+EndFunction
+
+Function ClearForcedSex(SexLabFramework sexlab, Actor akActor) global
+    if sexlab != None && akActor != None
+        sexlab.ClearForcedSex(akActor)
+    endif
+EndFunction

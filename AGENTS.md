@@ -88,6 +88,7 @@ First ~72 characters summarize the commit. Prefer multi-line body with concrete 
 - **Nexus first:** search the mod’s Nexus page before investigating blind.
 - **Knowledgebase:** consult [KNOWLEDGEBASE.md](KNOWLEDGEBASE.md) before changes; append new quirks after sessions.
 - **User scratch:** `z-*` files and directories (repo root) are local scratch. Never ingest, treat as ship set, changelog, or commit.
+- **Checkpoints:** if a session starts from a checkpoint (`checkpoints/<topic>/checkpoint-vNN.md`), end it by writing the next one (`checkpoint-v<NN+1>.md` in the same folder, same naming style as the existing files there) that supersedes the previous one: status, what changed, what's verified vs untested, and next steps.
 - **INI load order:** Skyrim.ini then SkyrimPrefs.ini (last wins).
 - **SE ≠ VR** — never assume parity.
 - **Never commit the Windows username:** write user paths as `%USERPROFILE%\...` (VS Code JSON: `${env:USERPROFILE}`; PowerShell: `$env:USERPROFILE`) and expand at runtime. The real username is in `.secrets.md` (git-ignored) for local reference only. Before committing, `git grep -i <username>` must return nothing in text files.

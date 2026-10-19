@@ -17,6 +17,11 @@
 {% endif %}
 
 {% set speaker = {"speaking_modifiers":[], "victim":0, "notice_level":0, "active":false} %}
+{# Dashboard Verbose logging: [SNSL DEBUG] lines show what this template saw #}
+{% set _verbose = sexlab_verbose(npc.UUID) == "1" %}
+{% if _verbose %}
+[SNSL DEBUG 0050] npc:{{ npc.UUID }} paused:{{ isTimePaused }} source:{% if existsIn(sexlab,"source") %}{{ sexlab.source }}{% endif %} threads:{% if existsIn(sexlab,"threads") %}{{ length(sexlab.threads) }}{% else %}none{% endif %} speaker_animating:{{ is_in_faction(npc.UUID, "SexLabAnimatingFaction") }}
+{% endif %}
 
 {% if existsIn(sexlab,"threads") and length(sexlab.threads) > 0 %}
      {% for thread in sexlab.threads %}
@@ -25,7 +30,13 @@
                {% if is_in_faction(to_number(actor_record.uuid), "SexLabAnimatingFaction") or is_in_faction(to_number(actor_record.uuid), "OStimActorCountFaction") or is_in_faction(to_number(actor_record.uuid), "DOMActionMasturbating") %}
                     {% set _thread_live = true %}
                {% endif %}
+               {% if _verbose %}
+[SNSL DEBUG 0050] actor:{{ actor_record.name }} uuid:{{ actor_record.uuid }} to_number:{{ to_number(actor_record.uuid) }} is_speaker:{{ to_number(actor_record.uuid) == npc.UUID }} animating:{{ is_in_faction(to_number(actor_record.uuid), "SexLabAnimatingFaction") }}
+               {% endif %}
           {% endfor %}
+          {% if _verbose %}
+[SNSL DEBUG 0050] thread:{{ thread.description }} status:{% if existsIn(thread,"status") %}{{ thread.status }}{% endif %} live:{{ _thread_live }} los:{{ thread.speaker_los }} distance:{{ thread.speaker_distance }}
+          {% endif %}
           {% if _thread_live %}
           {% set _notice_level = 0 %} 
 
@@ -73,7 +84,10 @@
 {% endif %} 
 {# Missing/null on recreated slots: contains() requires an array #}
 {% if not speaker.speaking_modifiers %}{% set speaker.speaking_modifiers = [] %}{% endif %}
-{% if speaker.notice_level > 1 %} 
+{% if _verbose %}
+[SNSL DEBUG 0050] result speaker_active:{{ speaker.active }} notice_level:{{ speaker.notice_level }}
+{% endif %}
+{% if speaker.notice_level > 1 %}
 **Reaction must evolve—don't loop on the same observation.**
      {% if speaker.active %}
           {% if contains(speaker.speaking_modifiers,"_pleasure_") or contains(speaker.speaking_modifiers,"_pain_") %}

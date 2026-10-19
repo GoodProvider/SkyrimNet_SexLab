@@ -40,6 +40,8 @@ std::string GetConfigString(const char* path, const char* def);
 bool IsMiniGameMode();
 /// sexlab.enjoyment.engine_disabled: SexLab owns enjoyment and orgasms; the OrgasmEngine only records them.
 bool IsOrgasmEngineDisabled();
+/// sexlab.debug.verbose: debug-level SKSE log, Papyrus DebugTrace lines, [SNSL DEBUG] prompt lines. Read live.
+bool IsVerbose();
 /// VK (dashboard type:hotkey) -> DX scancode. Mouse VKs map to SKSE's 256+ codes
 /// (VK_LBUTTON 256, VK_RBUTTON 257, VK_MBUTTON 258). 0 when unmapped.
 std::uint32_t HotkeyVkToDx(int vk);
@@ -63,6 +65,8 @@ private:
 
     void ApplyGlobals();
     void ApplyMenuHotkey();
+    /// spdlog level from sexlab.debug.verbose (debug when on, info when off).
+    void ApplyLogLevel();
     /// Data/SKSE/Plugins/SkyrimNet_SexLab/hotkey-map.json: every live binding (menu, Escape, HUD keys).
     void WriteHotkeyMap();
 

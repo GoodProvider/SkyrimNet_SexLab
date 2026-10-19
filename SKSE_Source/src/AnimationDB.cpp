@@ -994,8 +994,12 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 if (static_cast<int>(spec.pos_genders.size()) != row.position_count)
                     return false;
                 for (int i = 0; i < row.position_count; ++i) {
-                    if (i >= static_cast<int>(row.pos_genders.size()) ||
-                        row.pos_genders[i] != spec.pos_genders[i])
+                    if (i >= static_cast<int>(row.pos_genders.size()))
+                        return false;
+                    // Intersex (penis + pussy) fills any male or female position.
+                    const bool intersex = i < static_cast<int>(spec.pos_intersex.size()) && spec.pos_intersex[i];
+                    if (intersex ? (row.pos_genders[i] != 0 && row.pos_genders[i] != 1)
+                                 : row.pos_genders[i] != spec.pos_genders[i])
                         return false;
                     if (i < static_cast<int>(spec.pos_race_keys.size()) &&
                         !spec.pos_race_keys[i].empty()) {
@@ -1009,10 +1013,20 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             }
 
             if (spec.gender_match) {
-                if (spec.males >= 0 && row.males != spec.males)
-                    return false;
-                if (spec.females >= 0 && row.females != spec.females)
-                    return false;
+                if (spec.intersex > 0) {
+                    // Each intersex actor takes a male or a female slot: at least the fixed sexes, and
+                    // the human slots add up to the human cast.
+                    const int males = std::max(spec.males, 0);
+                    const int females = std::max(spec.females, 0);
+                    if (row.males < males || row.females < females ||
+                        row.males + row.females != males + females + spec.intersex)
+                        return false;
+                } else {
+                    if (spec.males >= 0 && row.males != spec.males)
+                        return false;
+                    if (spec.females >= 0 && row.females != spec.females)
+                        return false;
+                }
                 if (spec.male_creatures >= 0 && row.male_creatures != spec.male_creatures)
                     return false;
                 if (spec.female_creatures >= 0 && row.female_creatures != spec.female_creatures)

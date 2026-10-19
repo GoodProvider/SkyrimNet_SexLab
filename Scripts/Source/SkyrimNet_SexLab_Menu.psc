@@ -209,16 +209,29 @@ Function WebUI_OnControlActorFocus(Actor target)
     Trace("WebUI_OnControlActorFocus", target.GetDisplayName()+" hasStripped:"+hasStripped)
     SkyrimNet_SexLab_WebUI.Target_Menu_Refresh(hasStripped)
     SkyrimNet_SexLab_WebUI.WebUI_MaybeRestoreScenePanel()
-    if SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("lovers_ledger_panel")
-        WebUI_LoversLedgerOpen()
+    if SkyrimNet_SexLab_WebUI.WebUI_IsMainPanelOpen("actor_info_panel")
+        WebUI_ActorInfoOpen()
     endif
 EndFunction
 
-; MainPanels 0800_lovers_ledger.json openFunction: push the focus actor's Lover's Ledger page.
-Function WebUI_LoversLedgerOpen()
+; MainPanels 0800_actor_info.json openFunction: push the focus actor's Actor Info page.
+Function WebUI_ActorInfoOpen()
     Actor target = SkyrimNet_SexLab_WebUI.WebUI_GetFocusActor()
-    String json = SkyrimNet_SexLab_LoversLedger.BuildPanelJson(target)
+    String json = SkyrimNet_SexLab_ActorInfo.BuildPanelJson(target)
     SkyrimNet_SexLab_WebUI.WebUI_PushMainPanelData(json)
+EndFunction
+
+; Actor Info controls (JS fireStatusApply). "gender": male / female / intersex, written to SexLab.
+Function WebUI_ActorInfoApply(Actor speaker, Actor target, String control, String value)
+    Actor focus = SkyrimNet_SexLab_WebUI.WebUI_GetFocusActor()
+    Trace("WebUI_ActorInfoApply", control + "=" + value + " focus:" + SkyrimNet_SexLab_Utilities.GetDisplayName(focus))
+    if control == "gender" && focus != None
+        int choice = SkyrimNet_SexLab_ActorInfo.GenderFromName(value)
+        if choice >= 0
+            SkyrimNet_SexLab_Utilities.SetGenderChoice(SexLabUtil.GetAPI(), focus, choice)
+        endif
+    endif
+    WebUI_ActorInfoOpen()
 EndFunction
 
 Function WebUI_ConfigureFocusScene()

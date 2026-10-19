@@ -33,8 +33,12 @@ String Function Get_Threads(Actor speaker) global
         Trace("Get_Threads","manger is None, aborting")
         return "{}" 
     endif 
-    String json = manager.GetThreadsJson(speaker) 
-    Trace("Get_Threads", "json:"+json)
+    String json = manager.GetThreadsJson(speaker)
+    if SkyrimNet_SexLab_WebUI.IsVerbose()
+        SkyrimNet_SexLab_WebUI.DebugLog("SkyrimNet_SexLab_Decorators", "Get_Threads", "speaker:"+GetDisplayName(speaker)+" json:"+json)
+    else
+        Trace("Get_Threads", "speaker:"+GetDisplayName(speaker)+" chars:"+StringUtil.GetLength(json))
+    endif
     return json
 EndFunction 
 

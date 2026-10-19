@@ -1197,6 +1197,37 @@ Function LoadSetting(String setting_name)
     DbgEnd("LoadSetting")
 EndFunction 
 
+; SexLab ValidateActor codes (P+ SexLabFramework.ValidateActor doc; 1.6x sslActorLibrary uses the same
+; numbers, with -11 also for "not supported for animation" and -19 for a creature without animations).
+String Function ValidateActorReason(int code)
+    if code == -1
+        return "no actor"
+    elseif code == -2
+        return "race disabled in SexLab"
+    elseif code == -10
+        return "already in a SexLab animation"
+    elseif code == -11
+        return "forbidden from or not supported for SexLab animations"
+    elseif code == -12
+        return "3D not loaded"
+    elseif code == -13
+        return "dead"
+    elseif code == -14
+        return "disabled"
+    elseif code == -15
+        return "flying"
+    elseif code == -16
+        return "mounted"
+    elseif code == -17
+        return "creature animations disabled"
+    elseif code == -18
+        return "creature not supported"
+    elseif code == -19
+        return "no animations for this creature"
+    endif
+    return "code "+code
+EndFunction
+
 ; Clear sticky SexLab ForbiddenFaction, then ValidateActor. Call before UI and before NewThread.
 bool Function EnsureSexLabActorsValid()
     DbgEnter("EnsureSexLabActorsValid")
@@ -1222,9 +1253,11 @@ bool Function EnsureSexLabActorsValid()
             Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" was forbidden, AllowActor")
             sexlab.AllowActor(akActor)
         endif
+        EnsureFutaSex(sexlab, akActor)
         int code = sexlab.ValidateActor(akActor)
         if code < 0
-            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" ValidateActor:"+code)
+            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" ValidateActor:"+code+" ("+ValidateActorReason(code)+")")
+            Debug.Notification("SexLab: "+GetDisplayName(akActor)+" can't join - "+ValidateActorReason(code))
             DbgReturn("EnsureSexLabActorsValid", "False")
             return False
         endif
@@ -1468,6 +1501,7 @@ int Function BuildWebUIObject()
         JMap.setInt(po, "_victim", victim_mask[i])
         JMap.setStr(po, "_speaking", speaking_modifiers[i])
         JMap.setInt(po, "_gender", SexLabGender(sexlab, actors[i]))
+        JMap.setInt(po, "_intersex", IsIntersex(sexlab, actors[i]) as int)
         JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, actors[i]))
         JArray.addObj(pos_arr, po)
         i += 1
@@ -1766,10 +1800,7 @@ sslBaseAnimation[] Function ResolveAnimationsFromUI()
     int i = 0
     while i < num_pending_registries
         String reg = pending_registries[i]
-        sslBaseAnimation anim = sexlab.GetAnimationByRegistry(reg)
-        if anim == None
-            anim = sexlab.GetCreatureAnimationByRegistry(reg)
-        endif
+        sslBaseAnimation anim = ResolveAnimation(sexlab, reg)
         if anim != None
             animations = sslUtility.PushAnimation(anim, animations)
         endif
@@ -2033,26 +2064,33 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
         return manager.empty
     endif
 
+    ; P+ plays one animation of the set (SelectAnimations caps it): pick one row at random and resolve
+    ; only that one, falling forward on a miss, instead of resolving every row.
+    bool pplus = IsSexLabPPlus()
     sslBaseAnimation[] animations = sslUtility.EmptyAnimationArray()
-    int i = 0
     int count = JArray.count(arr)
-    while i < count
-        int row = JArray.getObj(arr, i)
+    int start = 0
+    if pplus
+        start = Utility.RandomInt(0, count - 1)
+    endif
+    int tried = 0
+    int n = 0
+    while n < count && !(pplus && animations.length > 0)
+        int row = JArray.getObj(arr, (start + n) % count)
         String reg = JMap.getStr(row, "_registry", "")
         if reg != ""
-            sslBaseAnimation anim = sexlab.GetAnimationByRegistry(reg)
-            if anim == None
-                anim = sexlab.GetCreatureAnimationByRegistry(reg)
-            endif
+            tried += 1
+            sslBaseAnimation anim = ResolveAnimation(sexlab, reg)
             if anim != None
                 animations = sslUtility.PushAnimation(anim, animations)
             endif
         endif
-        i += 1
+        n += 1
     endwhile
     JValue.release(arr)
 
     if !animations || animations.length == 0
+        Trace("QuerySexLabAnimsFromAnimDb", "AnimDB rows:"+count+" tried:"+tried+" none resolved in SexLab")
         return manager.empty
     endif
     return animations

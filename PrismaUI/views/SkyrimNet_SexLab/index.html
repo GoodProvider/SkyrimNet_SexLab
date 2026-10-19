@@ -1156,6 +1156,45 @@
             color: var(--accent);
         }
 
+        /* Actor Info: facts at 2x the usual row size, source title 1.5x the facts. */
+        #actor-info-panel {
+            --ai-fact: calc(var(--text-sm) * 2);
+        }
+
+        #ai-header {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: var(--space-md);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: var(--space-xs);
+            margin-bottom: var(--space-sm);
+            flex-shrink: 0;
+        }
+
+        #ai-source-title {
+            font-family: var(--font-ui);
+            font-size: calc(var(--ai-fact) * 1.5);
+            color: var(--text-muted);
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+        }
+
+        #ai-name {
+            font-family: var(--font-ui);
+            font-size: var(--ai-fact);
+            color: var(--text-primary);
+        }
+
+        #ai-body .compact-row,
+        #ai-body .data-table {
+            font-size: var(--ai-fact);
+        }
+
+        #ai-body .subsection-header {
+            font-size: calc(var(--text-xs) * 2);
+        }
+
         .cell-toggle {
             cursor: pointer;
             border: 1px solid var(--border);
@@ -2352,17 +2391,29 @@
         <div id="actor-detail-fields"></div>
         <div id="actor-detail-controls"></div>
     </div>
-    <!-- Lover's Ledger view: filled by Menu.WebUI_LoversLedgerOpen -> setMainPanelData({panel:'lovers_ledger'}). -->
-    <div id="lovers-ledger-panel" class="panel" style="display:none">
-        <div class="target-row" id="ll-title">Lover's Ledger</div>
-        <div id="ll-empty" class="compact-row" style="opacity:0.75; display:none"></div>
-        <div id="ll-body" style="overflow:auto; flex:1; min-height:0">
-            <div class="section-header">Summary</div>
-            <div id="ll-summary"></div>
-            <div class="section-header">Actions</div>
-            <div id="ll-actions"></div>
-            <div class="section-header">Lovers</div>
-            <table class="data-table" id="ll-lovers"><thead></thead><tbody></tbody></table>
+    <!-- Actor Info view: filled by Menu.WebUI_ActorInfoOpen -> setMainPanelData({panel:'actor_info'}). -->
+    <div id="actor-info-panel" class="panel" style="display:none">
+        <div id="ai-header">
+            <span id="ai-source-title"></span>
+            <span id="ai-name"></span>
+            <span id="ai-gender"></span>
+        </div>
+        <div id="ai-empty" class="compact-row" style="opacity:0.75; display:none"></div>
+        <div id="ai-body" style="overflow:auto; flex:1; min-height:0">
+            <div id="ai-ledger">
+                <div id="ai-ledger-empty" class="compact-row" style="opacity:0.75; display:none"></div>
+                <div id="ai-ledger-body">
+                    <div class="subsection-header">summary</div>
+                    <div id="ai-summary"></div>
+                    <div class="subsection-header">actions</div>
+                    <div id="ai-actions"></div>
+                    <div class="subsection-header">lovers</div>
+                    <div style="overflow-x:auto"><table class="data-table" id="ai-lovers"><thead></thead><tbody></tbody></table></div>
+                </div>
+            </div>
+            <div id="ai-sexlab">
+                <div id="ai-sexlab-rows"></div>
+            </div>
         </div>
     </div>
     </div><!-- #main-panel-host -->
@@ -2644,7 +2695,7 @@
 
         function clearMainPanelHost() {
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'lovers-ledger-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (el) el.style.display = 'none';
@@ -2878,7 +2929,7 @@
             if (key === 'description_editor_panel') return 'description-editor-panel';
             if (key === 'settings_panel') return 'settings-panel';
             if (key === 'log_panel') return 'log-panel';
-            if (key === 'lovers_ledger_panel') return 'lovers-ledger-panel';
+            if (key === 'actor_info_panel') return 'actor-info-panel';
             return key;
         }
 
@@ -2905,7 +2956,7 @@
             mainPanelPulldownBusy = false;
             updateMainPanelClose();
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'lovers-ledger-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
             const want = domIdForPanelKey(panelKey);
             const wantSrc = sourceOf(findMainPanelByKey(panelKey));
             for (const pid of builtins) {
@@ -2923,7 +2974,7 @@
                         deApplyBottomTabClass();
                         if (!sceneInfosSeeded) deSetLocked(true);
                     }
-                    el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel' || pid === 'lovers-ledger-panel') ? 'flex' : 'block';
+                    el.style.display = (pid === 'scene-creator-panel' || pid === 'log-panel' || pid === 'description-editor-panel' || pid === 'actor-info-panel') ? 'flex' : 'block';
                     if (deOpening && sceneInfosSeeded)
                         deBindTargetScene();
                     if (pid === 'description-editor-panel')
@@ -2973,7 +3024,7 @@
             showControlPanel();
             const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'lovers-ledger-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
             const wantSrc = sourceOf(findMainPanelByKey(MAIN_SELECTED_KEY));
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -3012,12 +3063,12 @@
                 renderForeignDataTable(payload);
             else if (panel === 'actor_detail')
                 renderForeignActorDetail(payload);
-            else if (panel === 'lovers_ledger')
-                renderLoversLedger(payload);
+            else if (panel === 'actor_info')
+                renderActorInfo(payload);
         }
 
-        // Lover's Ledger days-ago cell: -1 = never.
-        function llDaysAgo(d) {
+        // Actor Info days-ago cell: -1 = never.
+        function aiDaysAgo(d) {
             const n = Number(d);
             if (!isFinite(n) || n < 0) return 'never';
             if (n < 1) return 'today';
@@ -3025,25 +3076,37 @@
             return days === 1 ? '1 day ago' : days + ' days ago';
         }
 
-        function llRow(host, label, value) {
+        // value: text, or a Node (e.g. a pulldown) placed after the label.
+        function aiRow(host, label, value) {
             const row = document.createElement('div');
             row.className = 'compact-row';
             const lab = document.createElement('span');
             lab.textContent = label + ':';
-            const val = document.createElement('span');
-            val.textContent = value == null ? '' : String(value);
             row.appendChild(lab);
-            row.appendChild(val);
+            if (value instanceof Node) row.appendChild(value);
+            else {
+                const val = document.createElement('span');
+                val.textContent = value == null ? '' : String(value);
+                row.appendChild(val);
+            }
             host.appendChild(row);
+            return row;
         }
 
+        const AI_GENDERS = ['male', 'female', 'intersex'];
+
         // Names come from game data: textContent only.
-        function renderLoversLedger(payload) {
-            const title = document.getElementById('ll-title');
-            if (title) title.textContent = "Lover's Ledger" + (payload.name ? ' \u2014 ' + payload.name : '');
-            const empty = document.getElementById('ll-empty');
-            const body = document.getElementById('ll-body');
-            if (!empty || !body) return;
+        function renderActorInfo(payload) {
+            const isLedger = payload.source === 'ledger';
+            const sourceTitle = document.getElementById('ai-source-title');
+            const nameEl = document.getElementById('ai-name');
+            const genderHost = document.getElementById('ai-gender');
+            const empty = document.getElementById('ai-empty');
+            const body = document.getElementById('ai-body');
+            if (!sourceTitle || !nameEl || !genderHost || !empty || !body) return;
+            sourceTitle.textContent = payload.sourceTitle || (isLedger ? "Lover's Ledger" : 'SexLab Facts');
+            nameEl.textContent = payload.name || '';
+            genderHost.innerHTML = '';
             if (payload.empty) {
                 empty.textContent = payload.empty;
                 empty.style.display = '';
@@ -3052,22 +3115,68 @@
             }
             empty.style.display = 'none';
             body.style.display = '';
-            const s = payload.summary || {};
-            const summary = document.getElementById('ll-summary');
+
+            const gender = String(payload.gender || '');
+            genderHost.title = payload.genderNote || '';
+            // Pick -> Menu.WebUI_ActorInfoApply("gender", value) writes SexLab, then re-pushes this view.
+            if (payload.genderEditable && AI_GENDERS.includes(gender) && typeof createPulldown === 'function') {
+                genderHost.appendChild(createPulldown(AI_GENDERS, gender, picked => {
+                    if (picked !== gender) fireStatusApply('gender', picked);
+                }));
+            } else {
+                genderHost.textContent = '(' + (gender || '?') + ')';
+            }
+
+            document.getElementById('ai-ledger').style.display = isLedger ? '' : 'none';
+            document.getElementById('ai-sexlab').style.display = isLedger ? 'none' : '';
+            if (isLedger) renderActorInfoLedger(payload.ledger || {});
+            else renderActorInfoSexLab(payload.sexlab || {});
+        }
+
+        function renderActorInfoSexLab(s) {
+            const host = document.getElementById('ai-sexlab-rows');
+            host.innerHTML = '';
+            if (s.empty) {
+                aiRow(host, 'SexLab', s.empty);
+                return;
+            }
+            if (s.sexuality != null)
+                aiRow(host, 'Sexuality', s.sexuality + ' (' + Number(s.sexualityPct || 0) + '% straight)');
+            if (s.purity != null) aiRow(host, 'Purity', s.purity);
+            (s.skills || []).forEach(k => aiRow(host, k.name || '?', k.title || ''));
+            aiRow(host, 'Sex count', s.sexCount || 0);
+            aiRow(host, 'With the player', s.playerSexCount || 0);
+            aiRow(host, 'Last partner', s.lastPartner || 'none');
+            aiRow(host, 'Last sex', aiDaysAgo(s.lastDaysAgo));
+        }
+
+        function renderActorInfoLedger(ledger) {
+            const empty = document.getElementById('ai-ledger-empty');
+            const body = document.getElementById('ai-ledger-body');
+            if (ledger.empty) {
+                empty.textContent = ledger.empty;
+                empty.style.display = '';
+                body.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            body.style.display = '';
+            const s = ledger.summary || {};
+            const summary = document.getElementById('ai-summary');
             summary.innerHTML = '';
-            llRow(summary, 'Exclusive sex', s.exclusive || 0);
-            llRow(summary, 'Group sex', s.group || 0);
-            llRow(summary, 'Solo sex', s.solo || 0);
-            llRow(summary, 'Same-sex encounters', s.sameSex || 0);
-            llRow(summary, 'With non-unique partners', s.others || 0);
-            llRow(summary, 'Internal climax given / received', (s.icDid || 0) + ' / ' + (s.icGot || 0));
-            llRow(summary, 'Last encounter', llDaysAgo(s.lastDaysAgo));
-            const actions = document.getElementById('ll-actions');
+            aiRow(summary, 'Exclusive sex', s.exclusive || 0);
+            aiRow(summary, 'Group sex', s.group || 0);
+            aiRow(summary, 'Solo sex', s.solo || 0);
+            aiRow(summary, 'Same-sex encounters', s.sameSex || 0);
+            aiRow(summary, 'With non-unique partners', s.others || 0);
+            aiRow(summary, 'Internal climax given / received', (s.icDid || 0) + ' / ' + (s.icGot || 0));
+            aiRow(summary, 'Last encounter', aiDaysAgo(s.lastDaysAgo));
+            const actions = document.getElementById('ai-actions');
             actions.innerHTML = '';
             const joinActs = list => (list || []).map(a => a.name + ' ' + a.count).join(', ') || 'none';
-            llRow(actions, 'Did', joinActs(payload.did));
-            llRow(actions, 'Got', joinActs(payload.got));
-            const table = document.getElementById('ll-lovers');
+            aiRow(actions, 'Did', joinActs(ledger.did));
+            aiRow(actions, 'Got', joinActs(ledger.got));
+            const table = document.getElementById('ai-lovers');
             const thead = table.querySelector('thead');
             const tbody = table.querySelector('tbody');
             thead.innerHTML = '';
@@ -3079,7 +3188,7 @@
                 hr.appendChild(th);
             });
             thead.appendChild(hr);
-            const lovers = payload.lovers || [];
+            const lovers = ledger.lovers || [];
             if (!lovers.length) {
                 const tr = document.createElement('tr');
                 const td = document.createElement('td');
@@ -3092,7 +3201,7 @@
                 const tr = document.createElement('tr');
                 [l.name || '?', Number(l.score || 0).toFixed(1), l.exclusive || 0, l.group || 0,
                     Number(l.orgasms || 0).toFixed(0), (l.icDid || 0) + ' / ' + (l.icGot || 0),
-                    llDaysAgo(l.lastDaysAgo)].forEach(v => {
+                    aiDaysAgo(l.lastDaysAgo)].forEach(v => {
                     const td = document.createElement('td');
                     td.textContent = String(v);
                     tr.appendChild(td);
@@ -5665,7 +5774,11 @@
             const state = ssBuildCreatorState(opt);
             if (!state || typeof window.onAnimDbQuery !== 'function') return;
             ssApplySettingChainToState(state)
-                .then(() => requestDeviousTags(ssCastFormIds(cast)))
+                .then(() => requestActorMeta(ssCastFormIds(cast)))
+                .then(meta => {
+                    ssApplyActorMeta(state, meta);
+                    return requestDeviousTags(ssCastFormIds(cast));
+                })
                 .then(dd => {
                     const have = ssSplitTags(state._tags).concat(ssSplitTags(state._tags_suppress));
                     ssRandomQuery({
@@ -5678,6 +5791,16 @@
                     });
                 });
             renderPapyrusPanel();
+        }
+
+        // requestActorMeta reply -> the draft cast's SexLab gender (overrides the body's sex) and intersex flag.
+        function ssApplyActorMeta(state, byForm) {
+            (state._positions || []).forEach(p => {
+                const meta = byForm.get(formIdU32(p._form_id));
+                if (!meta) return;
+                if (scGenderKnown(meta._gender)) p._gender = Number(meta._gender);
+                p._intersex = Number(meta._intersex) ? 1 : 0;
+            });
         }
 
         function ssSplitTags(csv) {
@@ -5700,13 +5823,8 @@
             };
             const genders = positions.map(p => scPosGender(p));
             filter._creature = genders.some(g => g != null && g >= 2) ? 'require' : 'exclude';
-            if (withGenders && genders.length && genders.every(g => g != null)) {
-                filter._gender_match = true;
-                filter._males = genders.filter(g => g === 0).length;
-                filter._females = genders.filter(g => g === 1).length;
-                filter._male_creatures = genders.filter(g => g === 2).length;
-                filter._female_creatures = genders.filter(g => g === 3).length;
-            }
+            if (withGenders && genders.length && genders.every(g => g != null))
+                scApplyGenderCounts(filter, positions);
             return filter;
         }
 
@@ -7771,6 +7889,33 @@
             return scGenderKnown(p._gender) ? Number(p._gender) : null;
         }
 
+        /// Intersex (Actor Info gender, from Papyrus meta): a human with a penis and a pussy.
+        function scPosIntersex(p) {
+            if (!p || !Number(p._intersex)) return false;
+            const g = scPosGender(p);
+            return g === 0 || g === 1;
+        }
+
+        /// AnimDB gender-count filter for a cast. Intersex actors are counted apart (`_intersex`):
+        /// C++ lets each one stand in for a male or a female.
+        function scApplyGenderCounts(filter, positions) {
+            let males = 0, females = 0, intersex = 0, maleCreatures = 0, femaleCreatures = 0;
+            (positions || []).forEach(p => {
+                const g = scPosGender(p);
+                if (scPosIntersex(p)) intersex++;
+                else if (g === 0) males++;
+                else if (g === 1) females++;
+                else if (g === 2) maleCreatures++;
+                else if (g === 3) femaleCreatures++;
+            });
+            filter._gender_match = true;
+            filter._males = males;
+            filter._females = females;
+            filter._male_creatures = maleCreatures;
+            filter._female_creatures = femaleCreatures;
+            if (intersex) filter._intersex = intersex;
+        }
+
         function scPositionsGendersReady() {
             const pos = SC.positions || [];
             if (!pos.length) return true;
@@ -7783,6 +7928,7 @@
             return pos.map(p => {
                 const g = scPosGender(p);
                 if (g == null) return '?';
+                if (scPosIntersex(p)) return 'I';
                 return (g === 0 || g === 2) ? 'M' : 'F';
             }).join(' ');
         }
@@ -10239,6 +10385,32 @@
             return true;
         }
 
+        // TargetMenu starts: SexLab gender / intersex of the cast (nearby rows carry only the body's sex).
+        // Never rejects: no listener or no reply within META_TIMEOUT_MS resolves an empty Map.
+        const META_TIMEOUT_MS = 1500;
+        const metaPending = new Map();
+        let metaRequestSeq = 0;
+
+        function requestActorMeta(formIds) {
+            return new Promise(resolve => {
+                const ids = (formIds || []).map(id => formIdU32(id)).filter(id => id);
+                if (typeof window.onResolveActorMeta !== 'function' || !ids.length) {
+                    resolve(new Map());
+                    return;
+                }
+                const rid = 't' + (++metaRequestSeq);
+                const timer = setTimeout(() => {
+                    metaPending.delete(rid);
+                    resolve(new Map());
+                }, META_TIMEOUT_MS);
+                metaPending.set(rid, byForm => {
+                    clearTimeout(timer);
+                    resolve(byForm);
+                });
+                window.onResolveActorMeta(JSON.stringify({ _request_id: rid, _form_ids: ids }));
+            });
+        }
+
         function actorAnimMetaResult(payload) {
             const rid = String((payload && payload._request_id) || '');
             const actors = (payload && payload._actors) || [];
@@ -10247,6 +10419,12 @@
                 const fid = formIdU32(a._form_id != null ? a._form_id : 0);
                 if (fid) byForm.set(fid, a);
             });
+            const done = metaPending.get(rid);
+            if (done) {
+                metaPending.delete(rid);
+                done(byForm);
+                return;
+            }
             let changed = false;
             (SC.positions || []).forEach(p => {
                 const meta = byForm.get(formIdU32(p._form_id != null ? p._form_id : p.formId));
@@ -10257,6 +10435,11 @@
                         p._gender = g;
                         changed = true;
                     }
+                }
+                const ix = Number(meta._intersex) ? 1 : 0;
+                if ((p._intersex ? 1 : 0) !== ix) {
+                    p._intersex = ix;
+                    changed = true;
                 }
                 const rk = meta._race_key != null ? meta._race_key : '';
                 if (p._race_key !== rk) {
@@ -10643,23 +10826,14 @@
             if (mode === 'positions' && gendersReady && posCount > 0) {
                 filter._position_match = true;
                 filter._pos_genders = SC.positions.map(p => scPosGender(p));
+                // Intersex (penis + pussy) fills any male or female position.
+                if (SC.positions.some(scPosIntersex))
+                    filter._pos_intersex = SC.positions.map(p => scPosIntersex(p) ? 1 : 0);
                 if (hasCreature) {
                     filter._pos_race_keys = SC.positions.map(p => (p._race_key || '').toLowerCase());
                 }
             } else if (mode === 'gender' && gendersReady && posCount > 0) {
-                let males = 0, females = 0, maleCreatures = 0, femaleCreatures = 0;
-                SC.positions.forEach(p => {
-                    const g = scPosGender(p);
-                    if (g === 0) males++;
-                    else if (g === 1) females++;
-                    else if (g === 2) maleCreatures++;
-                    else if (g === 3) femaleCreatures++;
-                });
-                filter._gender_match = true;
-                filter._males = males;
-                filter._females = females;
-                filter._male_creatures = maleCreatures;
-                filter._female_creatures = femaleCreatures;
+                scApplyGenderCounts(filter, SC.positions);
             }
             if (SC.hasDescription && SC.hasDescription !== 'any') {
                 filter._has_description = SC.hasDescription;

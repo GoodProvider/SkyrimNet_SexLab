@@ -1,6 +1,6 @@
 Scriptname SkyrimNet_SexLab_LoversLedger Hidden
 
-; Lover's Ledger (TT_LoversLedger.esp) bridge for the ControlPanel "Lover's Ledger" view.
+; Lover's Ledger (TT_LoversLedger.esp) bridge: the ControlPanel Actor Info view's ledger section, first times.
 ; The only SexLab script that references TTLL_Store: call it only when TT_LoversLedger.esp is loaded.
 
 Function Trace(String func, String msg, Bool notification=False) global
@@ -71,16 +71,15 @@ String Function ActionsJson(Actor target, Bool isDid, Int topK) global
     return json + "]"
 EndFunction
 
-; Payload for JS renderLoversLedger (setMainPanelData). Lovers by score, capped.
-String Function BuildPanelJson(Actor target, Int maxLovers = 25, Int maxActions = 10) global
-    String head = "{\"panel\":\"lovers_ledger\",\"id\":\"lovers_ledger_panel\""
+; Actor Info "ledger" object (ActorInfo.BuildPanelJson; JS renderActorInfo): {now, summary, did, got,
+; lovers} or {empty}. Lovers by score, capped.
+String Function LedgerJson(Actor target, Int maxLovers = 25, Int maxActions = 10) global
     if target == None
-        return head + ",\"name\":\"\",\"empty\":\"No target\"}"
+        return "{\"empty\":\"No target\"}"
     endif
     String name = target.GetDisplayName()
-    head += ",\"name\":" + SkyrimNet_SexLab_Utilities.JsonQuote(name)
     if !IsInstalled()
-        return head + ",\"empty\":\"Lover's Ledger is not installed\"}"
+        return "{\"empty\":\"Lover's Ledger is not installed\"}"
     endif
 
     Float now = Utility.GetCurrentGameTime()
@@ -97,13 +96,13 @@ String Function BuildPanelJson(Actor target, Int maxLovers = 25, Int maxActions 
     if exclusive + group + solo + others == 0 && lastTime <= 0.0 && lovers.Length == 0
         ActorBase base = target.GetActorBase()
         if base != None && !base.IsUnique()
-            return head + ",\"empty\":" + SkyrimNet_SexLab_Utilities.JsonQuote( \
+            return "{\"empty\":" + SkyrimNet_SexLab_Utilities.JsonQuote( \
                 name + " is not unique; Lover's Ledger tracks unique NPCs only") + "}"
         endif
-        return head + ",\"empty\":" + SkyrimNet_SexLab_Utilities.JsonQuote("No ledger entries for " + name) + "}"
+        return "{\"empty\":" + SkyrimNet_SexLab_Utilities.JsonQuote("No ledger entries for " + name) + "}"
     endif
 
-    String json = head + ",\"formId\":" + target.GetFormID() + ",\"now\":" + now
+    String json = "{\"now\":" + now
     json += ",\"summary\":{\"exclusive\":" + exclusive + ",\"group\":" + group + ",\"solo\":" + solo \
         + ",\"sameSex\":" + sameSex + ",\"others\":" + others + ",\"icDid\":" + icDid + ",\"icGot\":" + icGot \
         + ",\"lastDaysAgo\":" + DaysAgo(lastTime, now) + "}"
@@ -144,6 +143,6 @@ String Function BuildPanelJson(Actor target, Int maxLovers = 25, Int maxActions 
         i += 1
     endwhile
     json += "]}"
-    Trace("BuildPanelJson", name + " lovers:" + lovers.Length + " unresolved:" + missing)
+    Trace("LedgerJson", name + " lovers:" + lovers.Length + " unresolved:" + missing)
     return json
 EndFunction

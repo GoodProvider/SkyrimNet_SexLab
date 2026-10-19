@@ -1,0 +1,9 @@
+{
+  "type": "builtin",
+  "label": "Actor Info",
+  "panel": "actor_info_panel",
+  "plugin": "SkyrimNet_SexLab.esp",
+  "questFormId": "0x800",
+  "scriptName": "SkyrimNet_SexLab_Menu",
+  "openFunction": "WebUI_ActorInfoOpen"
+}

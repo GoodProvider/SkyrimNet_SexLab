@@ -67,6 +67,11 @@ namespace OrgasmEngine
     /// The scene's actors (empty when unknown).
     std::vector<RE::FormID> SceneActors(std::int32_t sid);
     bool IsGateScene(std::int32_t sid);
+    /// Mini-game scene with a victim and an aggressor expected to orgasm (timed, no LeadIn): the Scene holds
+    /// the second-to-last stage until an aggressor orgasms (gate scenes: until one reaches 100 and the gate runs).
+    bool IsVictimHoldScene(std::int32_t sid);
+    /// The Scene's victim hold cap ran out: a gate scene runs its gate on the next tick.
+    void VictimHoldExpired(std::int32_t sid);
     /// Scene ending lead and orgasm target (0 = off). The lead reaching it in the second-to-last stage
     /// triggers the early final roll in the group join (the Scene jumps to the final stage).
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target);

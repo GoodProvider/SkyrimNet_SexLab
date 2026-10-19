@@ -94,3 +94,16 @@ EndFunction
 bool Function IsFuta(Actor akActor) global
     return false
 EndFunction
+
+
+sslBaseAnimation Function ResolveAnimation(SexLabFramework sexlab, String id) global
+    return None
+EndFunction
+
+int Function GetSex(Actor akActor, bool ignore_overwrite) global
+    return -1
+EndFunction
+Function TreatAsSex(SexLabFramework sexlab, Actor akActor, int sex) global
+EndFunction
+Function ClearForcedSex(SexLabFramework sexlab, Actor akActor) global
+EndFunction

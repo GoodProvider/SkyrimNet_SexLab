@@ -4,7 +4,13 @@ Function Trace(String func, String msg, Bool notification=False) global
     String logged = SkyrimNet_SexLab_WebUI.TraceLog("SkyrimNet_SexLab_Utilities", func, msg)
     if notification
         Debug.Notification(msg)
-    endif 
+    endif
+EndFunction
+
+; Trace only when the dashboard Verbose logging option is on (tagged [V]). Build costly messages
+; inside `if SkyrimNet_SexLab_WebUI.IsVerbose()`.
+Function DebugTrace(String func, String msg) global
+    SkyrimNet_SexLab_WebUI.DebugLog("SkyrimNet_SexLab_Utilities", func, msg)
 EndFunction
 
 ; Vanilla SexLabUtil SKSE versions are ~16000–17000 (1.62–1.66).
@@ -41,7 +47,11 @@ int Function SexLabGender(SexLabFramework sexlab, Actor akActor) global
         return 0
     endif
     if IsSexLabPPlus()
-        return SkyrimNet_SexLab_PPlus.LegacyGender(akActor)
+        int g = SkyrimNet_SexLab_PPlus.LegacyGender(akActor)
+        if g == 1 && HasTNGPenis(akActor)
+            return 0
+        endif
+        return g
     endif
     if sexlab == None
         return 0
@@ -49,9 +59,156 @@ int Function SexLabGender(SexLabFramework sexlab, Actor akActor) global
     return sexlab.GetGender(akActor)
 EndFunction
 
-; P+ futa (SexlabRegistry.GetSex 2): has a penis and keeps its base sex's body. Always false on 1.6x.
+; Registry / P+ scene id -> animation object. P+ binds the id straight to a proxy alias (the registry scan
+; there costs seconds per call and misses most ids); 1.6x looks up humans, then creatures.
+sslBaseAnimation Function ResolveAnimation(SexLabFramework sexlab, String reg) global
+    if sexlab == None || reg == ""
+        return None
+    endif
+    if IsSexLabPPlus()
+        return SkyrimNet_SexLab_PPlus.ResolveAnimation(sexlab, reg)
+    endif
+    sslBaseAnimation anim = sexlab.GetAnimationByRegistry(reg)
+    if anim == None
+        anim = sexlab.GetCreatureAnimationByRegistry(reg)
+    endif
+    return anim
+EndFunction
+
+; P+ futa (SexlabRegistry.GetSex 2, or a female with a TNG penis P+ does not see): has a penis and keeps
+; its base sex's body. Always false on 1.6x.
 bool Function IsFuta(Actor akActor) global
-    return akActor != None && IsSexLabPPlus() && SkyrimNet_SexLab_PPlus.IsFuta(akActor)
+    if akActor == None || !IsSexLabPPlus()
+        return false
+    endif
+    if SkyrimNet_SexLab_PPlus.IsFuta(akActor)
+        return true
+    endif
+    return SkyrimNet_SexLab_PPlus.GetSex(akActor, false) == 1 && HasTNGPenis(akActor)
+EndFunction
+
+; The New Gentleman: a female with a genital addon (TNG female addons are penises). P+ reads SOS schlong
+; factions for futa, not TNG, so these actors come back female from SexlabRegistry.GetSex.
+bool Function HasTNGPenis(Actor akActor) global
+    if akActor == None || Game.GetModByName("TheNewGentleman.esp") == 255
+        return false
+    endif
+    if akActor.GetActorBase().GetSex() != 1
+        return false
+    endif
+    return TNG_PapyrusUtil.GetActorAddon(akActor) != None
+EndFunction
+
+String Function ForcedFutaKey() global
+    return "SkyrimNet_SexLab_ForcedFuta"
+EndFunction
+
+; P+: a female with a TNG penis is set to futa (GenderFaction, TreatAsSex 2) before SexLab sees her, so
+; P+ position sorting, animation choice and GetSex agree with her body. Marked so only our overwrite is
+; cleared at scene end (ClearFutaSex); an overwrite the player made is left alone.
+Function EnsureFutaSex(SexLabFramework sexlab, Actor akActor) global
+    if akActor == None || !IsSexLabPPlus()
+        return
+    endif
+    ; The player picked this actor's gender in Actor Info: keep it.
+    if StorageUtil.HasIntValue(akActor, ChosenSexKey())
+        return
+    endif
+    if SkyrimNet_SexLab_PPlus.GetSex(akActor, false) != 1 || !HasTNGPenis(akActor)
+        return
+    endif
+    SkyrimNet_SexLab_PPlus.TreatAsSex(sexlab, akActor, 2)
+    StorageUtil.SetIntValue(akActor, ForcedFutaKey(), 1)
+    Trace("EnsureFutaSex", GetDisplayName(akActor)+" TNG penis, P+ sex 1 -> "+SkyrimNet_SexLab_PPlus.GetSex(akActor, false))
+EndFunction
+
+Function ClearFutaSex(SexLabFramework sexlab, Actor akActor) global
+    if akActor == None || !IsSexLabPPlus() || StorageUtil.GetIntValue(akActor, ForcedFutaKey(), 0) != 1
+        return
+    endif
+    StorageUtil.UnsetIntValue(akActor, ForcedFutaKey())
+    SkyrimNet_SexLab_PPlus.ClearForcedSex(sexlab, akActor)
+EndFunction
+
+; ControlPanel Actor Info gender pick (0 male, 1 female, 2 intersex); unset until the player changes it.
+String Function ChosenSexKey() global
+    return "SkyrimNet_SexLab_ChosenSex"
+EndFunction
+
+; 0 male, 1 female, 2 intersex, -1 creature. The player's pick when set; otherwise intersex when the
+; SexLab gender and the Skyrim gender disagree (P+ futa, a TNG female EnsureFutaSex will make futa, or a
+; SexLab overwrite to the other sex), else the Skyrim gender.
+int Function GenderChoice(SexLabFramework sexlab, Actor akActor) global
+    if akActor == None
+        return -1
+    endif
+    int base = akActor.GetLeveledActorBase().GetSex()
+    int sl = base
+    if IsSexLabPPlus()
+        sl = SkyrimNet_SexLab_PPlus.GetSex(akActor, false)
+        if sl >= 3
+            return -1
+        endif
+        if sl == 1 && HasTNGPenis(akActor) && !StorageUtil.HasIntValue(akActor, ChosenSexKey())
+            sl = 2
+        endif
+    elseif sexlab != None
+        sl = sexlab.GetGender(akActor)
+        if sl >= 2
+            return -1
+        endif
+    endif
+    if StorageUtil.HasIntValue(akActor, ChosenSexKey())
+        return StorageUtil.GetIntValue(akActor, ChosenSexKey())
+    endif
+    if sl == base
+        return base
+    endif
+    return 2
+EndFunction
+
+; Has both a penis and a pussy: AnimDB filters let it fill any male or female position.
+bool Function IsIntersex(SexLabFramework sexlab, Actor akActor) global
+    return GenderChoice(sexlab, akActor) == 2
+EndFunction
+
+; Store the player's pick and write it to SexLab (OStim has no gender setter: it reads the body / SoS).
+; Same sex as the body clears the overwrite. Intersex: P+ futa; 1.6x has no futa, so the other sex.
+Function SetGenderChoice(SexLabFramework sexlab, Actor akActor, int choice) global
+    if akActor == None || choice < 0 || choice > 2
+        return
+    endif
+    int before = GenderChoice(sexlab, akActor)
+    if before < 0
+        Trace("SetGenderChoice", GetDisplayName(akActor)+" is a creature, not changed")
+        return
+    endif
+    int base = akActor.GetLeveledActorBase().GetSex()
+    StorageUtil.SetIntValue(akActor, ChosenSexKey(), choice)
+    ; A pick is the player's own overwrite: scene end (ClearFutaSex) must leave it.
+    StorageUtil.UnsetIntValue(akActor, ForcedFutaKey())
+    if IsSexLabPPlus()
+        if choice == base && !HasTNGPenis(akActor)
+            SkyrimNet_SexLab_PPlus.ClearForcedSex(sexlab, akActor)
+        else
+            SkyrimNet_SexLab_PPlus.TreatAsSex(sexlab, akActor, choice)
+        endif
+        Trace("SetGenderChoice", GetDisplayName(akActor)+" "+before+" -> "+choice+" (P+ sex "+SkyrimNet_SexLab_PPlus.GetSex(akActor, false)+")")
+        return
+    endif
+    if sexlab == None
+        return
+    endif
+    bool as_female = choice == 1
+    if choice == 2
+        as_female = base == 0
+    endif
+    if (as_female as int) == base
+        sexlab.ClearForcedGender(akActor)
+    else
+        sexlab.TreatAsGender(akActor, as_female)
+    endif
+    Trace("SetGenderChoice", GetDisplayName(akActor)+" "+before+" -> "+choice+" (SexLab gender "+sexlab.GetGender(akActor)+")")
 EndFunction
 
 ; SexLab owns creature vs non-creature. Race key only for SexLab creature genders (2/3).

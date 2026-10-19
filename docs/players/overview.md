@@ -18,6 +18,10 @@ On SkyrimNet 0.25+, check **Plugins > Installed Plugins** for `goodprovider.sexl
 - Match social-world settings to the tone you want.
 - SkyrimNet dashboard **Public sex accepted** (`sexlab.prompt.public_sex_accepted`) changes prompt treatment of public sex.
 
+### Reporting a bug
+
+- Turn on SkyrimNet dashboard **Debug > Verbose logging** (`sexlab.debug.verbose`), reproduce, then send `SkyrimNet_SexLab.log`, `SkyrimNet.log` and `openrouter_input.log`. It adds `[V]` lines to the SexLab log and `[SNSL DEBUG]` lines to the prompts (the LLM sees them too), so turn it off afterwards.
+
 ### Too much sex
 
 - Tune [arousal prompts](https://github.com/GoodProvider/SkyrimNet_SexLab/blob/main/SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/prompts/submodules/character_bio/0005_sexlab_variables.prompt#L12).

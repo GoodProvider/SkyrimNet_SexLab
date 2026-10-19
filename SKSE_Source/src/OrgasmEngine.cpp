@@ -201,6 +201,9 @@ namespace OrgasmEngine
             bool staged = false;        // SetStage seen once (no spike for the first stage)
             bool gateDone = false;      // gate rolled for this pass through the last two stages
             double penultElapsed = 0.0;  // animating, unpaused seconds in the second-to-last stage
+            // Victim hold (VictimHoldScene): the Scene's cap ran out (VictimHoldExpired), so the gate runs as
+            // the timer would have. Not saved; cleared with gateDone.
+            bool victimHoldExpired = false;
             // Scene ending lead and orgasm target (SetEndingTarget; 0 = off). Not saved: the Scene re-sends
             // it on every BeginScene.
             RE::FormID endingLead = 0;
@@ -457,6 +460,34 @@ namespace OrgasmEngine
                 any = true;
             }
             return any;
+        }
+
+        // Caller holds g_lock. Mini-game scene with a victim and an aggressor expected to orgasm (timed, no
+        // LeadIn): the second-to-last stage waits for an aggressor's orgasm (the Scene holds it), which runs
+        // the orgasm check for everyone and goes to the final stage. aiGate: it triggers the gate.
+        bool VictimHoldScene(const SceneState& sc)
+        {
+            if (!g_settings.miniGame || g_settings.engineOff || sc.leadIn) {
+                return false;
+            }
+            if (sc.baseRate <= 0.0f || sc.stageSecs.size() < 2 || sc.stageCount < 2) {
+                return false;
+            }
+            bool victim = false;
+            bool aggressor = false;
+            for (const auto id : sc.actors) {
+                const auto at = g_actors.find(id);
+                if (at == g_actors.end()) {
+                    continue;
+                }
+                const ActorState& st = at->second;
+                if (st.role == Role::kVictim) {
+                    victim = true;
+                } else if (st.role == Role::kAggressor && !st.dom && st.orgasmExpected) {
+                    aggressor = true;
+                }
+            }
+            return victim && aggressor;
         }
 
         // Target = stages 1..N-1 + kFinalShare x the final stage (LeadIn: all x kLeadInStretch);
@@ -1265,8 +1296,8 @@ namespace OrgasmEngine
 
         // Caller holds g_lock. Someone in the scene orgasmed: everyone else at groupJoin or more joins outright,
         // the rest roll once (RollOrgasm, no bonus).
-        // Second-to-last stage, and the lead just reached their target (the Scene jumps to the final
-        // stage): everyone still out rolls again with the stage spike as bonus, so
+        // Second-to-last stage, and the lead just reached their target or (victim hold) an aggressor orgasmed
+        // (the Scene jumps to the final stage): everyone still out rolls again with the stage spike as bonus, so
         // whoever would finish in the final stage goes into this one DN. A fail there is final.
         void JoinGroup(const SceneState& sc, OrgasmGroupFx& group, double now, Effects& fx)
         {
@@ -1302,12 +1333,29 @@ namespace OrgasmEngine
             }
 
             const bool timed = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2 && !sc.leadIn;
-            if (!timed || sc.stage != sc.stageCount - 1 || sc.endingTarget <= 0 || !InGroup(group, sc.endingLead)) {
+            if (!timed || sc.stage != sc.stageCount - 1) {
                 return;
             }
-            const auto lead = g_actors.find(sc.endingLead);
-            if (lead == g_actors.end() || lead->second.orgasmCount < sc.endingTarget) {
-                return;
+            // Victim hold: an aggressor's orgasm in the second-to-last stage ends the wait (the Scene jumps),
+            // whatever the ending target.
+            bool aggressorFired = false;
+            if (VictimHoldScene(sc)) {
+                for (const auto id : group.actors) {
+                    const auto at = g_actors.find(id);
+                    if (at != g_actors.end() && at->second.role == Role::kAggressor) {
+                        aggressorFired = true;
+                        break;
+                    }
+                }
+            }
+            if (!aggressorFired) {
+                if (sc.endingTarget <= 0 || !InGroup(group, sc.endingLead)) {
+                    return;
+                }
+                const auto lead = g_actors.find(sc.endingLead);
+                if (lead == g_actors.end() || lead->second.orgasmCount < sc.endingTarget) {
+                    return;
+                }
             }
             for (const auto id : sc.actors) {
                 ActorState* st = canJoin(id);
@@ -1316,8 +1364,9 @@ namespace OrgasmEngine
                 }
                 float r = 0.0f;
                 const bool passed = RollOrgasm(*st, g_settings.stageSpike, r);
-                webui_log::info("OrgasmEngine: final roll {:#x} enjoyment={:.1f} bonus={:.1f} roll=+{:.1f} pass={}",
-                    id, st->enjoyment, g_settings.stageSpike, r, passed);
+                webui_log::info("OrgasmEngine: final roll {:#x} enjoyment={:.1f} bonus={:.1f} roll=+{:.1f} pass={} "
+                                "victim_hold={}",
+                    id, st->enjoyment, g_settings.stageSpike, r, passed, aggressorFired);
                 if (passed) {
                     Fire(*st, group, false, "group", now, fx);
                 } else {
@@ -1620,6 +1669,9 @@ namespace OrgasmEngine
                     const bool useGate = (together || aiGate) && g_settings.gate && timedScene && !sc.leadIn;
                     // aiGate, last two stages: no orgasm but the gate's (or a forced one), so the gate's is last.
                     const bool gateHeld = aiGate && useGate && sc.stage >= sc.stageCount - 1;
+                    // Victim hold: the second-to-last stage waits for an aggressor's orgasm; under aiGate an
+                    // aggressor reaching 100 there triggers the gate instead of the stage timer.
+                    const bool victimHold = VictimHoldScene(sc);
                     if (finalStage && !sc.paused) {
                         sc.finalElapsed += dt;
                     }
@@ -1733,7 +1785,8 @@ namespace OrgasmEngine
                             // Mini-game: NPCs play their strategy.
                             StrategyStep(sc, st, now, fx);
                             // aiGate: held below the threshold until the gate rolls (it starts the rush).
-                            if (gateHeld && !st.dom) {
+                            // Victim hold: aggressors climb to 100, which triggers the gate.
+                            if (gateHeld && !st.dom && !(victimHold && st.role == Role::kAggressor)) {
                                 st.enjoyment = std::min(st.enjoyment, kRushHover);
                             }
 
@@ -1847,7 +1900,28 @@ namespace OrgasmEngine
                         const bool penultimate = sc.stage == sc.stageCount - 1;
                         const float gateSecs = sc.stageSecs[sc.stageSecs.size() - 2];
                         const double lead = NarrationTiming::EstimateSeconds(g_settings.gateLeadDefault);
-                        if (!penultimate || sc.penultElapsed >= std::max(0.0, gateSecs - lead - kGateDispatchMargin)) {
+                        // Victim hold (aiGate): an aggressor at 100 who can orgasm now, or the Scene's cap
+                        // ran out (VictimHoldExpired); not the stage timer.
+                        bool due = !penultimate;
+                        if (penultimate && aiGate && victimHold) {
+                            due = sc.victimHoldExpired;
+                            for (const auto id : sc.actors) {
+                                const auto at = g_actors.find(id);
+                                if (!due && at != g_actors.end() && at->second.role == Role::kAggressor &&
+                                    at->second.orgasmExpected && at->second.enjoyment >= kMaxEnjoyment &&
+                                    CanOrgasmNow(at->second, now)) {
+                                    due = true;
+                                    webui_log::info("OrgasmEngine: scene {} victim hold: aggressor {:#x} at 100, gate",
+                                        sid, id);
+                                }
+                            }
+                            if (due && sc.victimHoldExpired) {
+                                webui_log::info("OrgasmEngine: scene {} victim hold expired, gate", sid);
+                            }
+                        } else if (penultimate) {
+                            due = sc.penultElapsed >= std::max(0.0, gateSecs - lead - kGateDispatchMargin);
+                        }
+                        if (due) {
                             sc.gateDone = true;
                             GatePassFx pass{ {}, penultimate };
                             // Victims an aggressor is set on forcing to orgasm, or teasing at the edge.
@@ -2296,6 +2370,7 @@ namespace OrgasmEngine
             }
             sc.gateDone = false;
             sc.gateAwait = false;
+            sc.victimHoldExpired = false;
         }
         if (stageCount > 0 && stage >= stageCount) {
             sc.gateAwait = false;  // final stage reached (voice, SexLab's timer or a manual advance)
@@ -2384,6 +2459,24 @@ namespace OrgasmEngine
         // Same test as Tick's aiGate && useGate.
         const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
         return g_settings.miniGame && g_settings.gate && SceneAiDriven(sc) && timedScene && !sc.leadIn;
+    }
+
+    bool IsVictimHoldScene(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        return it != g_scenes.end() && VictimHoldScene(it->second);
+    }
+
+    void VictimHoldExpired(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it == g_scenes.end() || it->second.victimHoldExpired) {
+            return;
+        }
+        it->second.victimHoldExpired = true;
+        webui_log::info("OrgasmEngine: scene {} victim hold cap reached", sid);
     }
 
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target)

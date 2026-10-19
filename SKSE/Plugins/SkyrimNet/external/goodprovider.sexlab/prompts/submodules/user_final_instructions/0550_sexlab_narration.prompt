@@ -21,6 +21,9 @@
                     {% set _thread_live = true %}
                {% endif %}
           {% endfor %}
+          {% if sexlab_verbose(npc.UUID) == "1" %}
+[SNSL DEBUG 0550] npc:{{ npc.UUID }} source:{% if existsIn(sexlab,"source") %}{{ sexlab.source }}{% endif %} thread:{{ thread.description }} live:{{ _thread_live }} speaker_animating_rank:{{ get_faction_rank(npc.UUID, "SexLabAnimatingFaction") }}
+          {% endif %}
           {% if _thread_live %}
           {% set _has_npc = false %}
           {% for actor_record in thread.actors %}

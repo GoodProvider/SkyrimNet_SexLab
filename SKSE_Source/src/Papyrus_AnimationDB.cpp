@@ -62,6 +62,10 @@ namespace PapyrusBindings_AnimationDB
                             spec.pos_genders.push_back(el.get<int>());
                     }
                 }
+                if (j.contains("_pos_intersex") && j["_pos_intersex"].is_array()) {
+                    for (const auto& el : j["_pos_intersex"])
+                        spec.pos_intersex.push_back(el.is_number() && el.get<double>() != 0 ? 1 : 0);
+                }
                 if (j.contains("_pos_race_keys") && j["_pos_race_keys"].is_array()) {
                     for (const auto& el : j["_pos_race_keys"]) {
                         if (el.is_string())
@@ -76,6 +80,8 @@ namespace PapyrusBindings_AnimationDB
                     spec.males = j["_males"].get<int>();
                 if (j.contains("_females") && j["_females"].is_number_integer())
                     spec.females = j["_females"].get<int>();
+                if (j.contains("_intersex") && j["_intersex"].is_number_integer())
+                    spec.intersex = j["_intersex"].get<int>();
                 if (j.contains("_male_creatures") && j["_male_creatures"].is_number_integer())
                     spec.male_creatures = j["_male_creatures"].get<int>();
                 if (j.contains("_female_creatures") && j["_female_creatures"].is_number_integer())

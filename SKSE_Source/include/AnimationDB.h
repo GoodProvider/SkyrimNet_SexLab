@@ -60,11 +60,15 @@ namespace AnimationDB
         bool enabled_only = true;
         bool position_match = false;
         std::vector<int> pos_genders;
+        /// Parallel to pos_genders: 1 = intersex actor (fills a male or a female position).
+        std::vector<int> pos_intersex;
         std::vector<std::string> pos_race_keys;
         int has_description = 0;
         bool gender_match = false;
         int males = -1;
         int females = -1;
+        /// gender_match: intersex actors, not in males / females; each stands in for either.
+        int intersex = 0;
         int male_creatures = -1;
         int female_creatures = -1;
         std::string name_contains; // lowercase; case-insensitive substring of AnimRow::name

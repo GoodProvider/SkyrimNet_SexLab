@@ -603,10 +603,19 @@ schema:
       defaultValue: 20
       category: "Scene ending"
 
+    - name: "Longest wait for the aggressor"
+      path: "sexlab.ending.victim_hold_max"
+      type: "float"
+      description: "With a victim, the stage before the last waits for an aggressor's orgasm, which runs the orgasm check for everyone and goes to the last stage. At most this many seconds (0 = no limit), then the scene goes on as normal. Multi-Orgasm Mini-game only."
+      min: 0
+      max: 600
+      defaultValue: 120
+      category: "Scene ending"
+
     - name: "Hold last stage for orgasm dialogue"
       path: "sexlab.ending.dialogue_hold_max"
       type: "float"
-      description: "After the orgasm that ends the scene, the last stage is held until the response to the orgasm has played, for at most this many seconds (30 at most). 0: no hold."
+      description: "After the orgasm that ends the scene, the last stage is held until the response to the orgasm has played, for at most this many seconds (30 at most; half in NPC-only scenes). 0: no hold."
       min: 0
       max: 30
       defaultValue: 30
@@ -845,3 +854,10 @@ schema:
       max: 10
       defaultValue: 3
       category: "Mini-game"
+
+    - name: "Verbose logging"
+      path: "sexlab.debug.verbose"
+      type: "bool"
+      description: "Writes extra debug lines to SkyrimNet_SexLab.log (thread JSON per actor, faction checks, decisions) and adds [SNSL DEBUG] lines to the SexLab prompt sections so you can see what the template saw. For bug reports only: logs get large and the debug lines are sent to the LLM."
+      defaultValue: false
+      category: "Debug"

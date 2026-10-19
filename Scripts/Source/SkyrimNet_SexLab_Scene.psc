@@ -56,8 +56,15 @@ bool ending_hold_pending = false
 float ending_hold_started = 0.0
 float ending_orgasm_at = 0.0
 float ending_narrated_at = 0.0
-; An aggressive NPC lead reached the target: Ending_Poll ends the animation instead of releasing the hold.
-bool ending_end_after = false
+; Victim hold (OrgasmEngine.IsVictimHoldScene): the second-to-last stage is held until an aggressor
+; orgasms (Ending_Check jumps to the final stage; gate scenes hand it to the gate), at most
+; sexlab.ending.victim_hold_max seconds (0 = no cap).
+bool victim_holding = false
+bool victim_hold_timer = false
+bool victim_hold_expired = false
+float victim_hold_started = 0.0
+int victim_hold_stage = 0
+sslBaseAnimation victim_hold_anim = None
 ; NarrationMark() taken just before the last orgasm DN went out: the final-stage hold ends once its response
 ; has played (ResponseDoneSince). -1: none yet.
 int ending_response_mark = -1
@@ -1189,8 +1196,12 @@ bool Function SetActor(int i, Actor akActor)
         has_pussy = 1
     endif
 
+    ; 1.6x GetTrans 0 = female treated as male. P+ GetTrans is configSex-1 (1 for a natural futa), so
+    ; there the futa check stands in.
     int is_hermaphrodiate = 0
-    if actorLib.GetTrans(akActor) == 0 
+    if IsSexLabPPlus()
+        is_hermaphrodiate = futa as int
+    elseif actorLib.GetTrans(akActor) == 0
         is_hermaphrodiate = 1
     endif 
 
@@ -2004,7 +2015,7 @@ Function Timer_SyncHold()
     if thread == None || !IsSexLabPPlus()
         return
     endif
-    SkyrimNet_SexLab_PPlus.PauseTimer(thread as Quest, scene_paused || gate_holding || ending_holding || ending_watching)
+    SkyrimNet_SexLab_PPlus.PauseTimer(thread as Quest, scene_paused || gate_holding || victim_holding || ending_holding || ending_watching)
 EndFunction
 
 ; --------------------------------------------
@@ -2015,7 +2026,7 @@ EndFunction
 ; --------------------------------------------
 Function Ending_Reset()
     bool pplus = IsSexLabPPlus()
-    bool was_holding = ending_holding || gate_holding || ending_watching
+    bool was_holding = ending_holding || gate_holding || victim_holding || ending_watching
     if !pplus && ending_holding && thread != None && !scene_paused
         thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
         thread.ResolveTimers()
@@ -2024,6 +2035,16 @@ Function Ending_Reset()
         thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
         thread.ResolveTimers()
     endif
+    if !pplus && victim_holding && victim_hold_timer && thread != None
+        thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+    endif
+    victim_holding = false
+    victim_hold_timer = false
+    victim_hold_expired = false
+    victim_hold_started = 0.0
+    victim_hold_stage = 0
+    victim_hold_anim = None
     gate_holding = false
     gate_hold_timer = false
     gate_hold_started = 0.0
@@ -2035,7 +2056,6 @@ Function Ending_Reset()
     ending_hold_started = 0.0
     ending_orgasm_at = 0.0
     ending_narrated_at = 0.0
-    ending_end_after = false
     ending_response_mark = -1
     ending_hold_stage = 0
     ending_hold_anim = None
@@ -2073,6 +2093,10 @@ float Function Ending_HoldMax()
     float hold_max = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.dialogue_hold_max", ENDING_HOLD_CAP)
     if hold_max > ENDING_HOLD_CAP
         hold_max = ENDING_HOLD_CAP
+    endif
+    ; NPC-only scene: half the final-stage hold.
+    if thread != None && !thread.HasPlayer
+        hold_max = hold_max * 0.5
     endif
     return hold_max
 EndFunction
@@ -2152,9 +2176,34 @@ Function Engine_SetEndingTarget()
     SkyrimNet_SexLab_OrgasmEngine.SetEndingTarget(sid, ending_actor, target)
 EndFunction
 
-; Ending_Check will jump to the final stage for this group (lead at target, not an aggressive NPC lead,
-; second-to-last stage or later, not yet in the final stage). No side effects.
+; Victim hold scene, second-to-last stage, and an aggressor (not a victim) is in this orgasm group: the
+; group (the engine's final roll included) ends the wait and jumps to the final stage, whatever the target.
+bool Function Victim_AggressorFinished(Actor[] actors)
+    if ending_done || thread == None || thread.Animation == None || thread.LeadIn || !actors
+        return false
+    endif
+    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true)
+        return false
+    endif
+    if thread.Stage != Engine_StageCount() - 1 || !SkyrimNet_SexLab_OrgasmEngine.IsVictimHoldScene(sid)
+        return false
+    endif
+    int i = 0
+    while i < actors.length
+        if actors[i] != None && thread.Positions.Find(actors[i]) >= 0 && !thread.IsVictim(actors[i])
+            return true
+        endif
+        i += 1
+    endwhile
+    return false
+EndFunction
+
+; Ending_Check will jump to the final stage for this group (an aggressor finished the victim hold, or the
+; lead at target in the second-to-last stage or later, not yet in the final stage). No side effects.
 bool Function Ending_WillJump(Actor[] actors)
+    if Victim_AggressorFinished(actors)
+        return true
+    endif
     if ending_done || ending_actor == None || ending_target <= 0 || thread == None || thread.Animation == None || thread.LeadIn
         return false
     endif
@@ -2164,17 +2213,20 @@ bool Function Ending_WillJump(Actor[] actors)
     if actors.Find(ending_actor) < 0 || SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) < ending_target
         return false
     endif
-    if ending_actor != Game.GetPlayer() && thread.IsAggressive && !thread.IsVictim(ending_actor) && !SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid)
-        return false
-    endif
     int stages = Engine_StageCount()
     return thread.Stage >= stages - 1 && thread.Stage < stages
 EndFunction
 
-; After an orgasm group (the engine's group roll already ran, so a lead who joined counts): the lead
-; reached the target. Aggressive NPC lead: hold the current stage and end the animation once the
-; dialogue has played. Otherwise: final stage + dialogue hold, from the second-to-last stage only.
+; After an orgasm group (the engine's group roll already ran, so a lead who joined counts). Victim hold:
+; an aggressor in the group in the second-to-last stage jumps to the final stage. Otherwise the lead
+; reached the target: final stage + dialogue hold, from the second-to-last stage only.
 Function Ending_Check(Actor[] actors)
+    if Victim_AggressorFinished(actors)
+        Trace("Ending_Check", "victim hold: aggressor orgasmed at stage "+thread.Stage+"/"+Engine_StageCount()+", final stage")
+        Victim_Release()
+        Ending_ToFinal()
+        return
+    endif
     if ending_done || ending_actor == None || ending_target <= 0 || thread == None || thread.Animation == None || thread.LeadIn
         return
     endif
@@ -2190,17 +2242,6 @@ Function Ending_Check(Actor[] actors)
         return
     endif
     int stages = Engine_StageCount()
-    ; Gate scene: the aggressor may orgasm more than once and always finishes in the gate group at the end
-    ; of the second-to-last stage, so an early orgasm does not end the scene.
-    if ending_actor != Game.GetPlayer() && thread.IsAggressive && !thread.IsVictim(ending_actor) && !SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid)
-        Trace("Ending_Check", GetDisplayName(ending_actor)+" (aggressor) reached target "+count+"/"+ending_target+" at stage "+thread.Stage+"/"+stages+", ending after dialogue")
-        ending_done = true
-        ending_end_after = true
-        ending_orgasm_at = Utility.GetCurrentRealTime()
-        ending_narrated_at = 0.0
-        Ending_Hold()
-        return
-    endif
     if thread.Stage < stages - 1
         Trace("Ending_Check", GetDisplayName(ending_actor)+" reached target "+count+"/"+ending_target+" at stage "+thread.Stage+"/"+stages+", not second-to-last: no jump")
         return
@@ -2253,6 +2294,7 @@ Function Engine_GatePassed(Actor[] actors, bool hold_stage)
     if NarrationLevel("sexlab.narration.orgasm_level") < 3
         ; Orgasm narration below Direct: no voice will start, so do not hold for one.
         Trace("Engine_GatePassed", "--- orgasm_level below Direct, no gate hold")
+        Victim_Release()
         if hold_stage
             Engine_AdvanceToFinal()
         elseif !ending_done && !thread.LeadIn
@@ -2268,10 +2310,22 @@ Function Engine_GatePassed(Actor[] actors, bool hold_stage)
         ; engine once it actually goes out (FlushOrgasmWindow).
         gate_pending_notify = true
     endif
-    if hold_stage
+    if hold_stage && victim_holding
+        ; The victim hold already holds this stage: the gate's voice wait takes it over as is.
+        victim_holding = false
+        gate_holding = true
+        gate_hold_timer = victim_hold_timer
+        victim_hold_timer = false
+        gate_hold_started = Utility.GetCurrentRealTime()
+        Trace("Engine_GatePassed", "victim hold handed to the gate hold, stage:"+thread.Stage)
+        RegisterForSingleUpdate(1.0)
+    elseif hold_stage
         Gate_Hold()
-    elseif !ending_done && !thread.LeadIn
-        Ending_ToFinal()
+    else
+        Victim_Release()
+        if !ending_done && !thread.LeadIn
+            Ending_ToFinal()
+        endif
     endif
 EndFunction
 
@@ -2336,6 +2390,125 @@ Function Gate_Poll()
     Engine_AdvanceToFinal()
 EndFunction
 
+; Victim hold: the second-to-last stage of a victim scene waits for an aggressor's orgasm. Free mini-game:
+; Ending_Check jumps on it. Gate scene: the engine runs the gate once an aggressor reaches 100 and
+; Engine_GatePassed takes the hold over.
+Function Victim_Hold()
+    if victim_holding || thread == None
+        return
+    endif
+    victim_holding = true
+    victim_hold_expired = false
+    victim_hold_started = Utility.GetCurrentRealTime()
+    victim_hold_stage = thread.Stage
+    victim_hold_anim = thread.Animation
+    ; The pause key already holds the stage; its resume restores the timer.
+    victim_hold_timer = !scene_paused
+    if IsSexLabPPlus()
+        Timer_SyncHold()
+    elseif victim_hold_timer
+        thread.UpdateTimer(PAUSE_HOLD_SECONDS)
+    endif
+    Trace("Victim_Hold", "holding stage:"+thread.Stage+"/"+Engine_StageCount()+" for an aggressor's orgasm gate:"+SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid))
+    ; An open orgasm window keeps its own update; its flush re-registers the poll (FlushOrgasmWindow).
+    if !orgasm_window_open
+        RegisterForSingleUpdate(1.0)
+    endif
+EndFunction
+
+; Back to the stage's own timer without the held time: the stage ends at the later of its timer and the hold.
+Function Victim_Release()
+    if !victim_holding
+        return
+    endif
+    victim_holding = false
+    if IsSexLabPPlus()
+        Timer_SyncHold()
+    elseif victim_hold_timer && thread != None
+        thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+    endif
+    victim_hold_timer = false
+EndFunction
+
+; The stage moved under the hold (manual advance, animation change): GoToStage already reset its timer.
+Function Victim_Drop(String why)
+    if !victim_holding
+        return
+    endif
+    Trace("Victim_Drop", "--- "+why+", dropping the victim hold")
+    victim_holding = false
+    victim_hold_timer = false
+    Timer_SyncHold()
+EndFunction
+
+; StageStart: drop a hold the stage moved out from under, and hold the second-to-last stage of a victim
+; scene once per (animation, stage). Stepping back before it re-arms the hold, as the engine re-arms its gate.
+Function Victim_StageStart()
+    if thread == None || thread.Animation == None
+        return
+    endif
+    if victim_holding && (thread.Stage != victim_hold_stage || thread.Animation != victim_hold_anim)
+        Victim_Drop("stage changed")
+    endif
+    int count = Engine_StageCount()
+    if thread.Stage < count - 1
+        victim_hold_stage = 0
+        victim_hold_anim = None
+        return
+    endif
+    if victim_holding || gate_holding || ending_done || thread.LeadIn || count < 2 || thread.Stage != count - 1
+        return
+    endif
+    if victim_hold_stage == thread.Stage && victim_hold_anim == thread.Animation
+        return
+    endif
+    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true)
+        return
+    endif
+    if !SkyrimNet_SexLab_OrgasmEngine.IsVictimHoldScene(sid)
+        return
+    endif
+    Victim_Hold()
+EndFunction
+
+; Cap: sexlab.ending.victim_hold_max (0 = none). Gate scene: ask the engine for its gate and keep holding
+; for the handover (Engine_GatePassed); nobody passing releases a few seconds later.
+Function Victim_Poll()
+    if !victim_holding || thread == None
+        return
+    endif
+    if thread.Animation != victim_hold_anim || thread.Stage != victim_hold_stage
+        Victim_Drop("stage changed")
+        return
+    endif
+    Timer_SyncHold()
+    if scene_paused
+        ; Freeze the countdown while paused (the hotkey pause, not a save/load); re-check next tick.
+        victim_hold_started += 1.0
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    float cap = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.victim_hold_max", 120.0)
+    float held = Utility.GetCurrentRealTime() - victim_hold_started
+    ; held < 0: a save/load reset the real-time clock mid-hold; treat the cap as reached.
+    if held >= 0.0 && (cap <= 0.0 || held < cap)
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    if SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid) && (!victim_hold_expired || (held >= 0.0 && held < cap + 3.0))
+        if !victim_hold_expired
+            victim_hold_expired = true
+            Trace("Victim_Poll", "no aggressor orgasm after "+held+"s, asking the gate")
+            SkyrimNet_SexLab_OrgasmEngine.VictimHoldExpired(sid)
+        endif
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    Trace("Victim_Poll", "no aggressor orgasm after "+held+"s, releasing stage:"+thread.Stage)
+    Victim_Release()
+EndFunction
+
 ; The gate narration's voice started (engine) or Gate_Poll gave up: release the gate hold and go to
 ; the final stage (plus the dialogue hold); the engine's rush fires the orgasm there.
 Function Engine_AdvanceToFinal()
@@ -2375,6 +2548,7 @@ Function Ending_ToFinal()
 EndFunction
 
 Function Ending_StageStart()
+    Victim_StageStart()
     ; A new animation started while the gate hold was active: the engine already dropped gateAwait /
     ; rushing on this SetStage (stage < stageCount-1), so the old hold is stale. Drop it without
     ; touching this animation's fresh timer or forcing it to its final stage.
@@ -2413,8 +2587,7 @@ EndFunction
 Function Ending_Hold()
     ending_hold_pending = false
     float hold_max = Ending_HoldMax()
-    ; Ending after the dialogue still needs the poll, even with no hold cap (ends at the first poll).
-    if (hold_max <= 0.0 && !ending_end_after) || ending_holding
+    if hold_max <= 0.0 || ending_holding
         return
     endif
     ending_holding = true
@@ -2471,12 +2644,6 @@ Function Ending_Poll()
         return
     endif
     ending_holding = false
-    if ending_end_after
-        ending_end_after = false
-        Trace("Ending_Poll", "aggressor finished, ending the animation after "+held+"s")
-        thread.EndAnimation()
-        return
-    endif
     if IsSexLabPPlus()
         ; P+: never hand the final stage back to its own timer -- at its end P+ checks ThreadWaitsForOrgasm and
         ; restarts the graph. Keep it held (ending_watching) and end the animation at the stage's remaining
@@ -2748,7 +2915,7 @@ float Function StageRemaining()
     if thread == None || thread.Animation == None || thread.LeadIn || stage_started_at <= 0.0
         return -1.0
     endif
-    if scene_paused || gate_holding || ending_holding
+    if scene_paused || gate_holding || victim_holding || ending_holding
         return -1.0
     endif
     int stage = thread.Stage
@@ -2780,7 +2947,7 @@ bool Function StageStart_HoldStash()
         UnregisterForUpdate()
         orgasm_window_open = false
         orgasm_window_started_at = 0.0
-        if ending_holding || gate_holding
+        if ending_holding || gate_holding || victim_holding
             RegisterForSingleUpdate(1.0)
         endif
         Trace("StageStart", "--- folding the orgasm stash into the stage DN")
@@ -2843,13 +3010,24 @@ Actor Function FirstOtherPosition(Actor akActor)
     return None
 EndFunction
 
-; SexLab enjoyment the last mirror left behind (position obj "sl_mirror_set"; -1 = no baseline), with the
-; stage and animation it was taken at ("sl_mirror_stage" / "sl_mirror_anim"). Within one stage SexLab only
-; drifts a little on its own (time term), so a larger move means another plugin called AdjustEnjoyment:
-; fold it into the engine instead of overwriting it. SexLab's stage term jumps (about +10) on a stage or
-; animation change, often a mirror before Engine_SetStage rebaselines: a baseline from another stage or
-; animation is stale and never folded.
+; The value the last mirror wrote into SexLab (position obj "sl_mirror_set"; MIRROR_NONE = no baseline) and
+; SexLab's value just before that write ("sl_mirror_pre"), with the stage and animation it was taken at
+; ("sl_mirror_stage" / "sl_mirror_anim"). Within one stage SexLab only drifts a little on its own (time
+; term), so a move away from what we wrote means another plugin called AdjustEnjoyment: fold it into the
+; engine instead of overwriting it. SexLab's stage term jumps (about +10) on a stage or animation change,
+; often a mirror before Engine_SetStage rebaselines: a baseline from another stage or animation is stale
+; and never folded.
+; Some P+ builds apply AdjustEnjoyment late (on their next recalc) or do not clamp it: SexLab still
+; reading "sl_mirror_pre" means our write has not landed, so nothing is folded and nothing is re-written
+; (that re-imported our own write and doubled corrections into a runaway, -4000 and beyond). A fold
+; bigger than MIRROR_EXTERNAL_MAX, or SexLab outside -100..100, is SexLab's own drift, not a plugin: dropped.
 int Property MIRROR_EXTERNAL_THRESHOLD = 3 AutoReadOnly
+int Property MIRROR_EXTERNAL_MAX = 25 AutoReadOnly
+int Property MIRROR_NONE = -100000 AutoReadOnly
+; Mirror ticks to wait for a pending write before writing again anyway.
+int Property MIRROR_WAIT_TICKS = 3 AutoReadOnly
+; One mirror per position at a time (engine ticks can queue while menus pause the VM). Real time it began.
+float[] mirror_busy_at
 ; Not expected to orgasm: SexLab voice stays silent below this enjoyment.
 int Property VOICE_GATE_ENJOYMENT = 50 AutoReadOnly
 
@@ -2857,7 +3035,9 @@ int Property VOICE_GATE_ENJOYMENT = 50 AutoReadOnly
 Function Mirror_Rebaseline(Actor akActor)
     int obj = GetObjFromActor(akActor)
     if obj > 0
-        SNSL_JMap.setInt(obj, "sl_mirror_set", -1)
+        SNSL_JMap.setInt(obj, "sl_mirror_set", MIRROR_NONE)
+        SNSL_JMap.setInt(obj, "sl_mirror_wait", 0)
+        SNSL_JMap.setInt(obj, "sla_floor_last", -1)
     endif
 EndFunction
 
@@ -2878,6 +3058,27 @@ Function Mirror_Apply(Actor akActor, int value)
     if thread == None || akActor == None
         return
     endif
+    int idx = thread.Positions.Find(akActor)
+    if idx < 0
+        return
+    endif
+    float now = Utility.GetCurrentRealTime()
+    ; Check and claim with no external call in between: the script instance serializes that.
+    if !mirror_busy_at || mirror_busy_at.Length == 0
+        mirror_busy_at = new float[8]
+    endif
+    if idx >= mirror_busy_at.Length
+        return
+    endif
+    if mirror_busy_at[idx] > 0.0 && now - mirror_busy_at[idx] < 5.0
+        return
+    endif
+    mirror_busy_at[idx] = now
+    Mirror_ApplyLocked(akActor, value)
+    mirror_busy_at[idx] = 0.0
+EndFunction
+
+Function Mirror_ApplyLocked(Actor akActor, int value)
     sslActorAlias actorAlias = thread.ActorAlias(akActor)
     if actorAlias == None
         return
@@ -2888,35 +3089,61 @@ Function Mirror_Apply(Actor akActor, int value)
     if obj > 0 && !SNSL_JValue.isExists(obj)
         obj = 0
     endif
-    int baseline = -1
+    int target = MIRROR_NONE
+    int pre = MIRROR_NONE
+    int wait = 0
     String anim_key = ""
     if thread.Animation != None
         anim_key = thread.Animation.Registry
     endif
     if obj > 0
-        baseline = SNSL_JMap.getInt(obj, "sl_mirror_set", -1)
+        target = SNSL_JMap.getInt(obj, "sl_mirror_set", MIRROR_NONE)
+        pre = SNSL_JMap.getInt(obj, "sl_mirror_pre", MIRROR_NONE)
+        wait = SNSL_JMap.getInt(obj, "sl_mirror_wait", 0)
         if SNSL_JMap.getInt(obj, "sl_mirror_stage", -1) != thread.Stage || SNSL_JMap.getStr(obj, "sl_mirror_anim", "") != anim_key
-            baseline = -1
+            target = MIRROR_NONE
         endif
     endif
+    bool pending = false
     if SkyrimNet_SexLab_OrgasmEngine.IsEngineDisabled()
         ; SexLab owns enjoyment: pull its value into the engine (HUD) instead of pushing ours.
         SkyrimNet_SexLab_OrgasmEngine.SetEnjoyment(akActor, current as float, "sexlab")
         value = current
-    elseif baseline >= 0
-        int external = current - baseline
-        if external >= MIRROR_EXTERNAL_THRESHOLD || external <= -MIRROR_EXTERNAL_THRESHOLD
-            SkyrimNet_SexLab_OrgasmEngine.AddEnjoyment(akActor, external as float, "sexlab")
-            value = SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(akActor) as int
-            Trace("Mirror_Apply", GetDisplayName(akActor)+" external SexLab change "+external+" -> engine "+value)
+    elseif target != MIRROR_NONE
+        if current == pre && pre != target && wait < MIRROR_WAIT_TICKS
+            ; Our last write has not landed yet: neither fold it back nor write it twice.
+            pending = true
+        elseif current >= -100 && current <= 100
+            int external = current - target
+            int size = external
+            if size < 0
+                size = -size
+            endif
+            if size >= MIRROR_EXTERNAL_THRESHOLD && size <= MIRROR_EXTERNAL_MAX
+                SkyrimNet_SexLab_OrgasmEngine.AddEnjoyment(akActor, external as float, "sexlab")
+                value = SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(akActor) as int
+                Trace("Mirror_Apply", GetDisplayName(akActor)+" external SexLab change "+external+" -> engine "+value)
+            elseif size > MIRROR_EXTERNAL_MAX
+                Trace("Mirror_Apply", GetDisplayName(akActor)+" SexLab moved "+external+" (over "+MIRROR_EXTERNAL_MAX+"), not folded")
+            endif
+        else
+            Trace("Mirror_Apply", GetDisplayName(akActor)+" SexLab enjoyment "+current+" out of range, pulling back to "+value)
         endif
+    endif
+    if pending
+        if obj > 0
+            SNSL_JMap.setInt(obj, "sl_mirror_wait", wait + 1)
+        endif
+        return
     endif
     int delta = value - current
     if delta != 0
         actorAlias.AdjustEnjoyment(delta)
     endif
     if obj > 0
-        SNSL_JMap.setInt(obj, "sl_mirror_set", actorAlias.GetEnjoyment())
+        SNSL_JMap.setInt(obj, "sl_mirror_pre", current)
+        SNSL_JMap.setInt(obj, "sl_mirror_set", value)
+        SNSL_JMap.setInt(obj, "sl_mirror_wait", 0)
         SNSL_JMap.setInt(obj, "sl_mirror_stage", thread.Stage)
         SNSL_JMap.setStr(obj, "sl_mirror_anim", anim_key)
         ; Not expected: re-voice when enjoyment crosses the gate either way.
@@ -2928,15 +3155,18 @@ Function Mirror_Apply(Actor akActor, int value)
             endif
         endif
     endif
-    Arousal_Floor(akActor, value)
+    Arousal_Floor(akActor, value, obj)
 EndFunction
 
 ; ---- SLO Aroused NG / OSL Aroused (optional): arousal never below enjoyment ----
-; Raise only: arousal above enjoyment is left alone; below it, exposure is raised by the gap.
+; Raise only: arousal above enjoyment is left alone; below it, exposure is raised by the gap. Each raise is
+; remembered on the position obj ("sla_floor_last"): while enjoyment stays at or under the last value we
+; raised to, nothing more is added. Some setups (P+ writing its own arousal stat) read 0 again right after,
+; and re-adding the full gap every tick grew exposure without bound.
 slaFrameworkScr sla_fw = None
 bool sla_checked = false
 
-Function Arousal_Floor(Actor akActor, int enjoyment)
+Function Arousal_Floor(Actor akActor, int enjoyment, int obj = 0)
     if !sla_checked
         sla_checked = true
         if Game.GetModByName("SexLabAroused.esm") != 255 && SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.arousal.floor_enjoyment", true)
@@ -2946,10 +3176,28 @@ Function Arousal_Floor(Actor akActor, int enjoyment)
     if sla_fw == None || akActor == None || sla_fw.IsActorArousalLocked(akActor)
         return
     endif
+    if SkyrimNet_SexLab_OrgasmEngine.IsEngineDisabled()
+        return
+    endif
+    int last = -1
+    if obj > 0
+        last = SNSL_JMap.getInt(obj, "sla_floor_last", -1)
+        if enjoyment <= last
+            return
+        endif
+    endif
     int current = sla_fw.GetActorArousal(akActor)
     if enjoyment > current
-        sla_fw.SetActorExposure(akActor, sla_fw.GetActorExposure(akActor) + (enjoyment - current))
+        int gap = enjoyment - current
+        if last > current
+            ; Already raised up to "last" once; add only the new part of the gap.
+            gap = enjoyment - last
+        endif
+        sla_fw.SetActorExposure(akActor, sla_fw.GetActorExposure(akActor) + gap)
         Trace("Arousal_Floor", GetDisplayName(akActor)+" arousal "+current+" -> "+enjoyment)
+    endif
+    if obj > 0
+        SNSL_JMap.setInt(obj, "sla_floor_last", enjoyment)
     endif
 EndFunction
 
@@ -3539,6 +3787,7 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
     int ck = ended_actors.length - 1
     while 0 <= ck
         CorpseHealth_Restore(ended_actors[ck])
+        ClearFutaSex(SexLab, ended_actors[ck])
         ck -= 1
     endwhile
     ending_watching = false
@@ -4141,7 +4390,7 @@ EndFunction
 
 Function FlushOrgasmWindow()
     UnregisterForUpdate()
-    if ending_holding || gate_holding || ending_watching
+    if ending_holding || gate_holding || victim_holding || ending_watching
         RegisterForSingleUpdate(1.0)
     endif
     orgasm_window_open = false
@@ -4260,12 +4509,12 @@ Event OnUpdate()
         Trace("OnUpdate", "--- orgasm window waiting on menu")
         return
     endif
-    if actor_change_ended && !orgasm_window_open && !ending_holding && !gate_holding && !ending_watching
+    if actor_change_ended && !orgasm_window_open && !ending_holding && !gate_holding && !victim_holding && !ending_watching
         ActorChange_Poll()
         return
     endif
-    ; Shared with the scene-ending dialogue hold poll and the gate voice wait.
-    if orgasm_window_open || (!ending_holding && !gate_holding)
+    ; Shared with the scene-ending dialogue hold poll, the gate voice wait and the victim hold.
+    if orgasm_window_open || (!ending_holding && !gate_holding && !victim_holding)
         if !orgasm_messages_set
             orgasm_window_open = false
             orgasm_window_started_at = 0.0
@@ -4277,6 +4526,10 @@ Event OnUpdate()
     endif
     if gate_holding
         Gate_Poll()
+    endif
+    ; An open orgasm window keeps its own timing; its flush re-registers this poll.
+    if victim_holding && !orgasm_window_open
+        Victim_Poll()
     endif
     if ending_holding
         Ending_Poll()
@@ -4402,27 +4655,16 @@ int Function GetThreadObj(Actor speaker)
     endif
     alignactors()
     ; Poll: some plugins switch animation via a bare SetAnimation that sends no SexLab event.
-    CheckAnimationChange()
-
-    float distance = 0.0
-    bool los = true 
-    String speaker_name = ""
-    if speaker == None
-        ; No viewing speaker: treat as present/close so prompts do not gate on LOS.
-        distance = 1.0
-        los = true
-        speaker_name = "none"
-    else
-        los = false 
-    endif 
+    ; Not mid stage-change (GetThreadsJson also lists Advancing / Refresh): StageStart syncs those.
+    String sl_state = (thread as sslThreadModel).GetState()
+    if sl_state == "animating" || sl_state == "prepare"
+        CheckAnimationChange()
+    endif
 
     int i = 0
     int num_actors = thread.positions.length
-    bool actor_changed = false 
-    while i < num_actors 
-        if speaker != None && thread.positions[i] == speaker 
-            los = true 
-        endif 
+    bool actor_changed = false
+    while i < num_actors
         if updateactor(i, thread.positions[i])
             actor_changed = true
         endif
@@ -4442,23 +4684,12 @@ int Function GetThreadObj(Actor speaker)
         setnames() 
     endif 
 
-    if speaker != None
-        speaker_name = speaker.GetDisplayName()
-        if !los
-            distance = 0.0142875*speaker.getdistance(thread.positions[0])
-            los = speaker.haslos(thread.positions[0]) 
-        endif 
-    endif 
-
-
     SNSL_JMap.setint(thread_obj, "active", getthreadactive() as int )
     SNSL_JMap.SetStr(thread_obj, "status",status)
     SNSL_JMap.SetStr(thread_obj, "description", getdescription())
     SNSL_JMap.SetStr(thread_obj, "style", style)
     SNSL_JMap.SetStr(thread_obj, "speed", GetSpeedName())
-    SNSL_JMap.setStr(thread_obj, "speaker_name", speaker_name)
-    SNSL_JMap.SetFlt(thread_obj, "speaker_distance", distance)
-    SNSL_JMap.setint(thread_obj, "speaker_los", los as int)
+    ApplySpeakerFields(thread_obj, speaker)
 
     int names_arr = SNSL_JArray.object()
     int victims_arr = SNSL_JArray.object()
@@ -4478,6 +4709,31 @@ int Function GetThreadObj(Actor speaker)
 
     dbgreturn("getThreadobj", "thread_obj")
     return thread_obj
+EndFunction
+
+; speaker_name / speaker_distance / speaker_los for one viewing speaker, computed in locals and
+; written to obj. thread_obj is shared: concurrent sexlab_get_threads calls (one per nearby actor)
+; interleave in GetThreadObj, so GetThreadsJson re-applies these to its own copy.
+Function ApplySpeakerFields(int obj, Actor speaker)
+    if thread == None || obj == 0
+        return
+    endif
+    float distance = 0.0
+    bool los = true
+    String speaker_name = "none"
+    if speaker == None
+        ; No viewing speaker: treat as present/close so prompts do not gate on LOS.
+        distance = 1.0
+    else
+        speaker_name = speaker.GetDisplayName()
+        if thread.positions.Find(speaker) < 0
+            distance = 0.0142875*speaker.GetDistance(thread.positions[0])
+            los = speaker.HasLOS(thread.positions[0])
+        endif
+    endif
+    SNSL_JMap.setStr(obj, "speaker_name", speaker_name)
+    SNSL_JMap.SetFlt(obj, "speaker_distance", distance)
+    SNSL_JMap.setint(obj, "speaker_los", los as int)
 EndFunction
 
 String Function GetLocation()
@@ -5418,6 +5674,7 @@ int Function BuildWebUISceneMenuObject()
         SNSL_JMap.setStr(po, "_speaking", speaking)
         if gender >= 0
             SNSL_JMap.setInt(po, "_gender", gender)
+            SNSL_JMap.setInt(po, "_intersex", IsIntersex(sexlab, ak) as int)
         endif
         SNSL_JArray.addObj(pos_arr, po)
         i += 1
@@ -5745,7 +6002,7 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
         WebUI_ConfigureIfOverlayVisible()
         return true
     endif
-    sslBaseAnimation next_anim = sexlab.GetAnimationByRegistry(reg)
+    sslBaseAnimation next_anim = ResolveAnimation(sexlab, reg)
     if next_anim == None
         Trace("WebUI_SwitchToRegistry", "unknown registry:"+reg, true)
         return false
@@ -5986,7 +6243,7 @@ Function WebUI_RestoreCancelSnapshot()
     while i < n
         sslBaseAnimation a = None
         if snap_regs[i] != ""
-            a = sexlab.GetAnimationByRegistry(snap_regs[i])
+            a = ResolveAnimation(sexlab, snap_regs[i])
         endif
         if a
             anims[w] = a

@@ -48,6 +48,11 @@ Function SetEndingTarget(int sid, Actor lead, int target) global native
 ; The engine plays this scene's ending gate (mini-game, everyone AI driven, timed): its last orgasm lands
 ; at the end of the second-to-last stage.
 bool Function IsGateScene(int sid) global native
+; Mini-game scene with a victim and an aggressor expected to orgasm (timed, no LeadIn): hold the
+; second-to-last stage until an aggressor orgasms (gate scenes: the gate runs when one reaches 100).
+bool Function IsVictimHoldScene(int sid) global native
+; The victim hold cap ran out: a gate scene runs its gate on the next tick.
+Function VictimHoldExpired(int sid) global native
 ; Final-stage hold: take a mark just before sending the orgasm narration. Only the scene's own actors count:
 ; ResponseStartedSince(sid, mark) once one of them speaks, ResponseDoneSince(sid, mark) once that reply has
 ; finished playing (SkyrimNet_SpeechComplete).

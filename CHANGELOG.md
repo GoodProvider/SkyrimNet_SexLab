@@ -39,6 +39,20 @@
 - **Part pulldown by damage** (Punish and Aid, shared `renderPartPulldown`): `sortPartsByDamage` keeps drink / body on top, then damaged parts by torture points, then the rest, custom last. Damaged parts are red (`.part-damaged`); hovering one shows its torture bar and points to the right (`#part-damage-pop`).
 - **First times (Lover's Ledger only)**: `Scene.Engine_SetSkills` calls new native `OrgasmEngine.SetFirstTimes(actor, vaginal, anal)` when the animation is Vaginal (female positions) / Anal (position 0) and `TTLL_Store.GetActionCount(actor, false, "Vaginal" | "Anal")` is 0 (new `LoversLedger.NeverGot`). Sticky for the scene, not saved. Hud payloads (Punish and Aid) carry `firstTimes: ["pussy", "ass"]`; those parts sort and show as damaged ("first time") even at 0 points.
 
+### Verbose logging (untested)
+- New dashboard option **Debug > Verbose logging** (`sexlab.debug.verbose`, default off). C++ `Config::ApplyLogLevel` sets the SKSE log to debug level (applied at load and on dashboard save). New natives `SkyrimNet_SexLab_WebUI.IsVerbose` / `DebugLog` and `Utilities.DebugTrace` write `[V]` lines only while it is on. `Scene_Manager.GetThreadsJson` logs every SexLab thread with each actor's formid, uuid and live `SexLabAnimatingFaction` state. `Decorators.Get_Threads` logs a one-line summary unless verbose (it was the full JSON on every call).
+- New C++ decorator `sexlab_verbose`. `0050_sexlab_activity` / `0550_sexlab_narration` add `[SNSL DEBUG]` lines to the prompt with what the `_thread_live` gate saw. Added to trace a missing ongoing-sex block in an NPC-only scene (Angi + Skadi).
+- Fix: `sexlab_get_threads` results could carry another actor's `speaker_name` / `speaker_distance` / `speaker_los`. Concurrent per-actor decorator calls wrote them into the scene's shared `thread_obj`. `GetThreadsJson` now re-applies them to its own copy (`Scene.ApplySpeakerFields`). Observers could get the wrong LOS / distance; participants match by uuid and were unaffected.
+- Fix: the ongoing scene was missing from NPC dialogue for the first ~2 s of a scene. SkyrimNet's decorator cache was still cold, and `threads.json` was empty because the `AnimationStart` save ran while SexLab was `Advancing`, which `GetThreadsJson` skipped. `GetThreadsJson` now looks scenes up in any state and lists them via `GetThreadInScene` (animating / prepare / advancing / refresh). `GetThreadObj` polls `CheckAnimationChange` only while animating / prepare. The verbose `[V]` line adds `state:` and also logs skipped slots.
+
+### NPC-only ending hold
+- `Scene.Ending_HoldMax()` halves `sexlab.ending.dialogue_hold_max` (after the `ENDING_HOLD_CAP` clamp) when `!thread.HasPlayer`, so NPC-only scenes hold the final stage for the orgasm dialogue at most half as long (15 s at the default 30). Early release on response played / speech queue empty is unchanged.
+
+### Victim scene ending
+- **Victim scenes wait for the aggressor**: in the Multi-Orgasm Mini-game, a scene with a victim holds its second-to-last stage until an aggressor orgasms. That orgasm runs the orgasm check for everyone (the early final roll, one DN) and jumps to the final stage. Gate scenes (engine plays everyone): aggressors are no longer capped at 98 there, and an aggressor reaching 100 fires the gate instead of the stage timer. New native `OrgasmEngine.IsVictimHoldScene` / `VictimHoldExpired`; Scene `Victim_Hold` / `Victim_Release` / `Victim_Poll` / `Victim_StageStart`.
+- New setting `sexlab.ending.victim_hold_max` (Scene ending, 120 s, 0 = no limit): after it the scene goes on as before (gate scenes run their gate).
+- **Removed**: an NPC aggressor reaching their orgasm target at any stage no longer ends the animation in scenes under the player's control (`ending_end_after`).
+
 ## [0.36.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.0) — since [0.35.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.35.2)
 
 ### Injury Engine

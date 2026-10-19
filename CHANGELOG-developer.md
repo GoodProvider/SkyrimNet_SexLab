@@ -41,6 +41,22 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - **Part pulldown**: `renderPartPulldown` sorts with `sortPartsByDamage(actor, parts)` (drink / body, damaged by points desc, undamaged, custom). `partDamage` / `partDamaged` combine `injuryFor` and `actor.firstTimes`. `decorateDisplay` adds `.part-damaged` (`var(--danger)`) and, on options, hover handlers for one fixed `#part-damage-pop` (torture-meter markup), hidden by `closeAllPulldowns`.
 - **First times**: native `OrgasmEngine.SetFirstTimes(Actor, bool vaginal, bool anal)` → `ActorState.firstVaginal/firstAnal` (sticky OR, reset with the actor's scene, not saved); `OrgasmEngine::GetFirstTimes(FormID)` → `"pussy"` / `"ass"`. Called from `Scene.Engine_SetSkills` only when `LoversLedger.IsInstalled()`; new `LoversLedger.NeverGot(actor, act)` reads `TTLL_Store.GetActionCount(actor, false, act)`. `Hud::OnPunish` / `OnAid` add `firstTimes` to each actor.
 
+### Verbose logging (untested)
+- Dashboard `sexlab.debug.verbose`: `Config::ApplyLogLevel` (spdlog debug/info, on load and in `ApplyHudConfig`), C++ decorator `sexlab_verbose`, natives `SkyrimNet_SexLab_WebUI.IsVerbose` / `DebugLog`, `Utilities.DebugTrace`. `GetThreadsJson` per-thread `[V]` line (uuid, formid, AnimatingFaction); `Get_Threads` full JSON only when verbose. `0050` / `0550` emit `[SNSL DEBUG]` prompt lines for the `_thread_live` gate.
+- `Scene.ApplySpeakerFields(obj, speaker)`: speaker fields are computed in locals; `GetThreadObj` applies them to `thread_obj`, and `GetThreadsJson` re-applies them to its copy. Fixes cross-actor speaker fields from concurrent `sexlab_get_threads` calls.
+- `GetThreadsJson`: `GetSceneByThread(t, True, False)` + `GetThreadInScene()` (was the animating/prepare-only lookup + `GetThreadActive()`), so `threads.json` keeps the thread while SexLab is `Advancing` / `Refresh` (scene start, stage changes). `GetThreadObj` skips the `CheckAnimationChange` poll outside animating / prepare. `DebugTraceThread` logs `state:`.
+
+### NPC-only ending hold
+- **`Ending_HoldMax()`** returns half of `sexlab.ending.dialogue_hold_max` (after the `ENDING_HOLD_CAP` clamp) when `!thread.HasPlayer`. It is the only cap source for `Ending_Hold` / `Ending_Poll` on 1.6x and P+, so NPC-only scenes release the final-stage hold at 15 s by default (log `Ending_Hold ... max:15`). The response-played / speech-queue release is unchanged.
+
+### Victim scene ending
+- **Victim hold**: `OrgasmEngine::VictimHoldScene(sc)` = mini-game, engine on, timed, no LeadIn, a `Role::kVictim` and a non-DOM `Role::kAggressor` expected to orgasm. The Scene holds the second-to-last stage at its `StageStart` (`Victim_StageStart` → `Victim_Hold`, once per (animation, stage), `UpdateTimer` or P+ `PauseTimer` via `Timer_SyncHold`).
+- **Free mini-game**: `JoinGroup`'s early final roll also runs when an aggressor is in the group in the second-to-last stage (log `victim_hold=true`), whatever the ending target. `Ending_Check` / `Ending_WillJump` (`Victim_AggressorFinished`) then release the hold and call `Ending_ToFinal`, so the stash folds into the final-stage DN.
+- **Gate scenes**: the `gateHeld` 98 cap skips aggressors, and the gate fires when an aggressor with `CanOrgasmNow` reaches 100, or on `VictimHoldExpired(sid)` (new `SceneState::victimHoldExpired`, not saved, cleared with `gateDone`), instead of `penultElapsed`. `Engine_GatePassed` hands the victim hold to `gate_holding` without touching the timer.
+- **Cap**: `Victim_Poll` (1 s, frozen while paused, skipped while the orgasm window is open) reads `sexlab.ending.victim_hold_max` (120, 0 = none). Gate scene: `VictimHoldExpired`, release 3 s later if nobody passed. Else `Victim_Release` (`UpdateTimer(-PAUSE_HOLD_SECONDS)`, no held time). A stage move drops the hold (`Victim_Drop`).
+- New natives `IsVictimHoldScene(int sid)` and `VictimHoldExpired(int sid)` on `SkyrimNet_SexLab_OrgasmEngine`.
+- **Removed** the no-gate "aggressor ends" rule (`ending_end_after`, `EndAnimation` from `Ending_Poll`).
+
 ## 0.36.0
 
 ### Injury Engine

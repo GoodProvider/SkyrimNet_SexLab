@@ -1220,6 +1220,7 @@ Function WebUI_OnResolveActorMeta(String json)
                 gender = SexLabGender(sexlab, ak)
             endif
             SNSL_JMap.setInt(po, "_gender", gender)
+            SNSL_JMap.setInt(po, "_intersex", (sexlab && IsIntersex(sexlab, ak)) as int)
             SNSL_JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, ak))
             SNSL_JMap.setStr(po, "_name", ak.GetDisplayName())
         else
@@ -1855,15 +1856,26 @@ String Function GetThreadsJson(Actor speaker = None)
     SNSL_JMap.setStr(obj, "counter", thread_counter)
     thread_counter += 1
 
+    bool verbose = SkyrimNet_SexLab_WebUI.IsVerbose()
     int threads_array = SNSL_JArray.object()
     int i = 0
     while i < threads.length
-        ; Read-only: do not allocate/Setup scenes while dumping JSON
-        SkyrimNet_SexLab_Scene sl_scene = GetSceneByThread(threads[i], False, False)
+        ; Read-only: do not allocate/Setup scenes while dumping JSON. Any state, then GetThreadInScene:
+        ; Advancing / Refresh are listed too, so the scene-start save (thread still Advancing) and
+        ; stage-change saves keep the thread in threads.json.
+        SkyrimNet_SexLab_Scene sl_scene = GetSceneByThread(threads[i], True, False)
         if sl_scene != None
-            if sl_scene.GetThreadActive()
+            bool thread_listed = sl_scene.GetThreadInScene()
+            if verbose
+                DebugTraceThread(speaker, i, threads[i], thread_listed)
+            endif
+            if thread_listed
                 ; thread_obj is a retained root owned by the scene: add a fresh copy, never the root.
-                SNSL_JArray.addObj(threads_array, SNSL_JValue.objectFromPrototype(SNSL_JValue.dump(sl_scene.GetThreadObj(speaker))))
+                ; Re-apply this speaker's fields on the copy: a concurrent call may have overwritten
+                ; them on the shared root between GetThreadObj and the dump.
+                int thread_copy = SNSL_JValue.objectFromPrototype(SNSL_JValue.dump(sl_scene.GetThreadObj(speaker)))
+                sl_scene.ApplySpeakerFields(thread_copy, speaker)
+                SNSL_JArray.addObj(threads_array, thread_copy)
             endif
         endif
         i += 1
@@ -1943,7 +1955,27 @@ String Function GetThreadsJson(Actor speaker = None)
     endif
     Miscutil.WriteToFile(threads_filename, json, append=False)
     return json
-EndFunction 
+EndFunction
+
+; Verbose logging: one line per SexLab thread GetThreadsJson looks at, with each actor's uuid and
+; live SexLab AnimatingFaction state (what 0050 / 0550's _thread_live gate should agree with).
+Function DebugTraceThread(Actor speaker, int index, sslThreadController thread, bool thread_listed)
+    Faction animating = Game.GetFormFromFile(0xE50F, "SexLab.esm") as Faction
+    String line = "speaker:"+GetDisplayName(speaker)+" slot:"+index+" tid:"+thread.tid+" kept:"+thread_listed+" state:"+(thread as sslThreadModel).GetState()
+    Actor[] positions = thread.Positions
+    int j = 0
+    while j < positions.length
+        Actor a = positions[j]
+        if a != None
+            line += " | "+GetDisplayName(a)+" formid:"+a.GetFormID()+" uuid:"+UuidToDecimalString(SkyrimNetApi.GetEntityUUID(a))
+            if animating
+                line += " animating:"+a.IsInFaction(animating)+" rank:"+a.GetFactionRank(animating)
+            endif
+        endif
+        j += 1
+    endwhile
+    SkyrimNet_SexLab_WebUI.DebugLog("SkyrimNet_SexLab_Scene_Manager", "GetThreadsJson", line)
+EndFunction
 
 ; Prompt-safe actor fields for DOM threads. No StorageUtil / SexLab thread mutation.
 Function EnrichActorObjForJson(int actor_obj, Actor akActor)

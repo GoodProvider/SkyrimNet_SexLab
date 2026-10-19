@@ -48,12 +48,14 @@ Keep literals character-for-character or matching breaks.
 
 ## Activity flow (`0050`)
 
-1. `sexlab_get_threads(npc.UUID)` or `threads.json` fallback.
+1. `sexlab_get_threads(npc.UUID)` or `threads.json` fallback (used whenever the decorator returns no threads, e.g. SkyrimNet's cache is still cold at scene start). Both list a thread while SexLab is animating, preparing, or mid stage change (`Advancing` / `Refresh`).
 2. v0.34.1+: skip a thread unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating` (stale DOM masturbate rows after stop).
 3. Match speaker by `uuid`; read `speaking_modifiers`, `victim`, etc.
 4. Emit context + Speaking Rules when modifiers present.
 
 `contains(speaker.speaking_modifiers, "_pain_")` is case-sensitive.
+
+Verbose logging: when the dashboard **Verbose logging** option (`sexlab.debug.verbose`) is on, the C++ decorator `sexlab_verbose` returns `"1"` and `0050` / `0550` add `[SNSL DEBUG 0050]` / `[SNSL DEBUG 0550]` lines to the prompt: data source, thread count, each actor's `uuid` / `to_number(uuid)` / speaker match / `SexLabAnimatingFaction`, and the `_thread_live` result. Search `openrouter_input.log` for them.
 
 v0.31.5+ length rules in `0050_sexlab_activity.prompt` when `_pain_` / `_pleasure_` (not `_gagged_`): one to two vocalizations (not every N words); 9-word dialogue cap (vocalizations do not count); if narration is enabled and the speaker is active, one narration sentence ≤ 20 words that should move the action forward. Edit that file; do not copy the full prompt here.
 

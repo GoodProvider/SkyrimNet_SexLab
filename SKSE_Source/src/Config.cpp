@@ -7,6 +7,7 @@
 #include "WebUI_Log.h"
 
 #include <Windows.h>
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -161,6 +162,11 @@ bool IsOrgasmEngineDisabled()
     return GetBool("sexlab.enjoyment.engine_disabled", false);
 }
 
+bool IsVerbose()
+{
+    return GetBool("sexlab.debug.verbose", false);
+}
+
 std::uint32_t HotkeyVkToDx(int vk)
 {
     switch (vk) {
@@ -231,6 +237,17 @@ void RegisterDecorators()
         webui_log::info("RegisterDecorators: registered sexlab_npc_stop_allowed");
     else
         webui_log::error("RegisterDecorators: failed to register sexlab_npc_stop_allowed");
+
+    // Prompt debug lines: "1" when sexlab.debug.verbose is on (0050 / 0550 [SNSL DEBUG] lines).
+    const bool okVerbose = PublicRegisterDecorator("sexlab_verbose",
+        "1 when the SkyrimNet_SexLab Verbose logging option is on, else 0",
+        [](RE::Actor*) -> std::string {
+            return IsVerbose() ? "1" : "0";
+        });
+    if (okVerbose)
+        webui_log::info("RegisterDecorators: registered sexlab_verbose");
+    else
+        webui_log::error("RegisterDecorators: failed to register sexlab_verbose");
 }
 
 Config& Config::GetSingleton()
@@ -241,6 +258,7 @@ Config& Config::GetSingleton()
 
 void Config::ApplyFromConfig()
 {
+    ApplyLogLevel();
     ApplyGlobals();
     ApplyMenuHotkey();
     ApplyHudConfig();
@@ -268,8 +286,23 @@ void Config::ApplyMenuHotkey()
     WebUI_SetMenuHotkey(dx, enabled);
 }
 
+void Config::ApplyLogLevel()
+{
+    const bool verbose = IsVerbose();
+    const auto level = verbose ? spdlog::level::debug : spdlog::level::info;
+    auto logger = spdlog::default_logger();
+    if (!logger || logger->level() == level)
+        return;
+    logger->set_level(level);
+    logger->flush_on(level);
+    // info so the switch is visible whichever way it went.
+    webui_log::info("ApplyLogLevel: verbose={} level={}", verbose, verbose ? "debug" : "info");
+}
+
 void Config::ApplyHudConfig()
 {
+    // Dashboard saves arrive here (OrgasmEngine.ReloadConfig), not through ApplyFromConfig.
+    ApplyLogLevel();
     OrgasmEngine::ReloadConfig();
     Hud::ApplyConfig();
     WriteHotkeyMap();

@@ -101,6 +101,8 @@ namespace PapyrusBindings_OrgasmEngine
             OrgasmEngine::SetEndingTarget(sid, lead, target);
         }
         bool IsGateScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsGateScene(sid); }
+        bool IsVictimHoldScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsVictimHoldScene(sid); }
+        void VictimHoldExpired(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::VictimHoldExpired(sid); }
         // Response tracking for the final-stage hold, scoped to the scene's actors: mark before sending a
         // narration, then ResponseStartedSince (one of them is speaking) / ResponseDoneSince (that reply ended).
         std::int32_t NarrationMark(RE::StaticFunctionTag*)
@@ -279,6 +281,8 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
         a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
         a_vm->RegisterFunction("IsGateScene", s, IsGateScene);
+        a_vm->RegisterFunction("IsVictimHoldScene", s, IsVictimHoldScene);
+        a_vm->RegisterFunction("VictimHoldExpired", s, VictimHoldExpired);
         a_vm->RegisterFunction("NarrationMark", s, NarrationMark);
         a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince);
         a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince);

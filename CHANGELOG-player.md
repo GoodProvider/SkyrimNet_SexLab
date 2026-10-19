@@ -35,6 +35,19 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Punish and Aid list damaged body parts first, most damaged on top, in red; hover one to see its torture bar
 - With TT Lover's Ledger, a first vaginal or anal scene marks pussy or ass as damaged
 
+### Verbose logging (untested)
+- New SkyrimNet dashboard option **Debug > Verbose logging**. Turn it on when reporting a bug: the logs get much more detail, and the prompts show what the SexLab sections saw. Turn it off afterwards (the extra lines are also sent to the LLM).
+- Fixed onlookers sometimes being told they could or couldn't see a scene based on another character's position
+- Fixed characters in a scene not knowing about it in what they said during its first couple of seconds
+
+### NPC-only ending hold
+- In scenes without the player, the last stage waits at most half as long for the orgasm dialogue (15 s instead of 30 at the default)
+
+### Victim scene ending
+- With a victim, the stage before the last now waits for the aggressor to orgasm. Everyone else then gets their chance to orgasm with them, and the scene moves to the last stage (Multi-Orgasm Mini-game)
+- New MCM setting **Longest wait for the aggressor** (Scene ending, default 120 s, 0 = no limit)
+- An aggressor's early orgasm no longer ends the scene
+
 ## 0.36.0
 
 ### Injury Engine

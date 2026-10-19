@@ -249,6 +249,10 @@ namespace PapyrusBindings_WebUI
                         spec.pos_genders.push_back(el.get<int>());
                 }
             }
+            if (j.contains("_pos_intersex") && j["_pos_intersex"].is_array()) {
+                for (const auto& el : j["_pos_intersex"])
+                    spec.pos_intersex.push_back(el.is_number() && el.get<double>() != 0 ? 1 : 0);
+            }
             if (j.contains("_pos_race_keys") && j["_pos_race_keys"].is_array()) {
                 for (const auto& el : j["_pos_race_keys"]) {
                     if (el.is_string())
@@ -263,6 +267,8 @@ namespace PapyrusBindings_WebUI
                 spec.males = j["_males"].get<int>();
             if (j.contains("_females") && j["_females"].is_number_integer())
                 spec.females = j["_females"].get<int>();
+            if (j.contains("_intersex") && j["_intersex"].is_number_integer())
+                spec.intersex = j["_intersex"].get<int>();
             if (j.contains("_male_creatures") && j["_male_creatures"].is_number_integer())
                 spec.male_creatures = j["_male_creatures"].get<int>();
             if (j.contains("_female_creatures") && j["_female_creatures"].is_number_integer())
@@ -683,6 +689,19 @@ namespace PapyrusBindings_WebUI
         std::string formatted = std::format("[{}.{}] {}", script, fn, body);
         SKSE::log::info("{}", formatted);
         return RE::BSFixedString(formatted);
+    }
+
+    /// sexlab.debug.verbose (dashboard Verbose logging), read live.
+    bool IsVerbose_Native(RE::StaticFunctionTag*) { return SexLabNet::IsVerbose(); }
+
+    /// TraceLog that only writes when verbose; tagged [V]. Info level so it shows without the debug level.
+    void DebugLog(RE::StaticFunctionTag*, RE::BSFixedString script_name, RE::BSFixedString func,
+        RE::BSFixedString msg)
+    {
+        if (!SexLabNet::IsVerbose())
+            return;
+        SKSE::log::info("[V] [{}.{}] {}", script_name.c_str() ? script_name.c_str() : "",
+            func.c_str() ? func.c_str() : "", msg.c_str() ? msg.c_str() : "");
     }
 
     namespace
@@ -1875,6 +1894,8 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog, true);
+        a_vm->RegisterFunction("IsVerbose", scriptName, IsVerbose_Native, true);
+        a_vm->RegisterFunction("DebugLog", scriptName, DebugLog, true);
         a_vm->RegisterFunction("SetNearbyActorsJson", scriptName, SetNearbyActorsJson);
         a_vm->RegisterFunction("IsAvailableActor", scriptName, IsAvailableActor_Native);
         a_vm->RegisterFunction("WebUI_PushMainPanelData", scriptName, WebUI_PushMainPanelData);
