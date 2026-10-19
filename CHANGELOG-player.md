@@ -4,6 +4,11 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ## 0.36.3 (unreleased)
 
+### Scene narration
+- The scene-start narration no longer comes up to a minute late
+- New dashboard setting **Silence before keep-talking** (Narration, default 8 s, 0 = off): after that much silence, an actor in your scene keeps talking. Speakers take turns
+- Scenes without a written description now say who receives ("Hulda is receiving anal sex from …"), so NPCs stop swapping who is doing what
+
 ### Dead actors can join scenes
 - New SkyrimNet dashboard option **Dead actors can join scenes** (Actions, default off)
 - When on, corpses show in the TargetMenu and can be picked for a scene

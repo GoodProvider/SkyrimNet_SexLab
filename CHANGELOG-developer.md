@@ -4,6 +4,12 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## 0.36.3 (unreleased)
 
+### Scene narration
+- **`Scene.StageStart`** sets `STATUS_ACTIVE` and calls `StageStart_NarrateStart(GetDescription())` before `AlignActors` / `SyncAnimationDefaults`, recording `started_now`. The later branch only hands `start_orgasm_narration` (or a stash that arrived since) to the orgasm DN block. If StageStart now wins the race with `AnimationStart`, AnimationStart skips its Setup reset, because `Setup()` already set `animating_started_at` and the stash is empty for a new scene.
+- **Silence nudge**: config `sexlab.narration.silence_seconds` (float, 8, 0 = off). `Scene.PollAnimationChange` → `SilenceTick` → `SilenceNudge_IfQuiet`, which rotates `silence_turn` over the non-player `thread.Positions`. `Utilities.SilenceAllows(source, silence)`: no mod DN within `silence`, `GetSpeechQueueSize() == 0`, `GetTimeSinceLastAudioEnded()` 0 or ≥ `silence`, `NarrationNearby`. `Utilities.SilenceNudge(speaker, partner)` → `SendDirectNarration("continue scene", …)` (no CheckDuplicate). The devkit (beta28-rc2) has no scene-scoped continue API: `TriggerContinueNarration` and continuous mode are global, and CppAPI has no audio or queue query.
+- `DirectNarration_Optional`: a `dropped` result clears StorageUtil `sexlab_narration_last_msg` on the source (or the player).
+- `GetDescriptionFromTags`: passive receiver verbs for anal, vaginal, cunnilingus and the fallback.
+
 ### Dead actors can join scenes
 - Config `sexlab.actors.dead_allowed` (bool, default false): `SexLabNet::IsDeadAllowed()` in C++, `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (global native) in Papyrus.
 - On: the nearby list, `IsAvailableActor` and `ActorLocker::TryLock` stop rejecting `IsDead()`. `Menu.IsAvailableActor` skips `sexlab.IsValidActor` for a corpse, and `EnsureSexLabActorsValid` treats `ValidateActor` -13 as OK.

@@ -253,8 +253,10 @@ String Function UuidToDecimalString(String entityUuid) global native
 
 ; ------------------------------------------------------------
 ; Corpses on SexLab 1.6x: ValidateActor and sslActorAlias OnUpdate (Prepare / Animating) reject or
-; EndAnimation(true) an actor that IsDead() with Health < 1. Keep a corpse at Health >= 1 for the scene and put
-; the old value back at its end. P+ tracks dead actors itself (_livestatus): no-op there.
+; EndAnimation(true) an actor that IsDead() with Health < 1. Keep a corpse at Health 10 for the scene and put
+; the old value back at its end. Only with the dashboard Dead actors can join scenes on. P+ tracks dead actors
+; itself (_livestatus): no-op there. Another mod may already have raised the corpse to about 1 (it then reads
+; 1.000000 but is still < 1.0), hence the margin.
 ; ------------------------------------------------------------
 String Function CorpseHealthKey() global
     return "skyrimnet_sexlab_corpse_health"
@@ -262,20 +264,20 @@ EndFunction
 
 ; True when the floor was applied (first time saves the old health).
 bool Function CorpseHealth_Floor(Actor akActor) global
-    if akActor == None || IsSexLabPPlus() || !akActor.IsDead()
+    if akActor == None || IsSexLabPPlus() || !akActor.IsDead() || !SkyrimNet_SexLab_WebUI.IsDeadAllowed()
         return false
     endif
     float h = akActor.GetActorValue("Health")
-    if h >= 1.0
+    if h >= 5.0
         return false
     endif
     if !StorageUtil.HasFloatValue(akActor, CorpseHealthKey())
         StorageUtil.SetFloatValue(akActor, CorpseHealthKey(), h)
     endif
-    akActor.RestoreActorValue("Health", 2.0 - h)
+    akActor.RestoreActorValue("Health", 10.0 - h)
     float after = akActor.GetActorValue("Health")
-    if after < 1.0
-        akActor.ForceActorValue("Health", 2.0)
+    if after < 2.0
+        akActor.ForceActorValue("Health", 10.0)
         after = akActor.GetActorValue("Health")
     endif
     Trace("CorpseHealth_Floor", GetDisplayName(akActor)+" dead, health "+h+" -> "+after)
@@ -765,6 +767,40 @@ Bool Function NarrationCoolOffAllows(Actor source, Actor target) global
     return time_delta > cool_off && queue_size == 0 && last_audio >= cool_off && NarrationNearby(source)
 EndFunction
 
+; Silence nudge gate: SkyrimNet has nothing queued, no audio ended within silence seconds (0 = nothing
+; played yet, which counts as silent), no mod DN within silence seconds, and the player is nearby.
+Bool Function SilenceAllows(Actor source, float silence) global
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    if main == None
+        return False
+    endif
+    if Utility.GetCurrentRealTime() - main.direct_narration_last_time < silence
+        return False
+    endif
+    if SkyrimNetAPI.GetSpeechQueueSize() != 0
+        return False
+    endif
+    int last_audio_ms = SkyrimNetAPI.GetTimeSinceLastAudioEnded()
+    if last_audio_ms > 0 && last_audio_ms < silence * 1000.0
+        return False
+    endif
+    return NarrationNearby(source)
+EndFunction
+
+; "continue scene" DN from speaker. Skips CheckDuplicate: the text repeats on purpose.
+Function SilenceNudge(Actor speaker, Actor partner=None) global
+    SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
+    SendDirectNarration("continue scene", speaker, partner)
+    if main != None
+        main.direct_narration_last_time = Utility.GetCurrentRealTime()
+    endif
+    String msg = "speaker:"+speaker.GetDisplayName()
+    if partner != None
+        msg += " partner:"+partner.GetDisplayName()
+    endif
+    Trace("SilenceNudge", msg)
+EndFunction
+
 ; Must-react narrations in NPC-only scenes (orgasm, finish with orgasm / afterglow): a DirectNarration
 ; whenever the player is nearby, skipping the cooldown / audio checks; else an event.
 ; Returns false only when CheckDuplicate blanked msg (nothing sent).
@@ -812,6 +848,12 @@ bool Function DirectNarration_Optional(String event_type, String msg, Actor sour
     else 
         if optional_is_dropped || msg == ""
             type = "dropped"
+            ; CheckDuplicate stored msg as sent: forget it, or the retry would be blanked as a duplicate.
+            Actor storage_actor = source
+            if storage_actor == None
+                storage_actor = Game.GetPlayer()
+            endif
+            StorageUtil.SetStringValue(storage_actor, "sexlab_narration_last_msg", "")
         else
             SkyrimNetApi.RegisterEvent(event_type, msg, source, target)
             type = "event"

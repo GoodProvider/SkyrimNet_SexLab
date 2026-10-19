@@ -93,6 +93,10 @@ bool stage_starting = false
 float stage_started_at = 0.0
 ; Real-time stamp of the last orgasm DN: optional DNs right after it would only cancel its reply.
 float orgasm_dn_at = 0.0
+; Orgasm stash taken by StageStart_NarrateStart, sent by the same StageStart as the orgasm DN.
+String start_orgasm_narration = ""
+; Silence nudge: index into thread.Positions of the next speaker (SilenceTick rotates it).
+int silence_turn = 0
 ; Engine gate passed in the second-to-last stage: that stage is held until the gate narration's voice
 ; starts (Engine_AdvanceToFinal) or sexlab.ending.gate_wait_max. gate_hold_timer: UpdateTimer applied.
 bool gate_holding = false
@@ -805,7 +809,60 @@ bool Function PollAnimationChange()
         return false
     endif
     CheckAnimationChange()
+    SilenceTick()
     return true
+EndFunction
+
+; Silence nudge (every animation poll): an actor of an active scene keeps talking once SkyrimNet has
+; been quiet for sexlab.narration.silence_seconds. Skipped while a start / stage / orgasm / ending
+; narration is pending, below Direct stage narration, or for an NPC-only scene out of the player's sight.
+Function SilenceTick()
+    if status != STATUS_ACTIVE || stage_starting || gate_holding || ending_done || OrgasmDNRecent()
+        return
+    endif
+    if NarrationLevel("sexlab.narration.stage_level") < 3
+        return
+    endif
+    if !has_player && !PlayerSeesScene()
+        return
+    endif
+    SilenceNudge_IfQuiet()
+EndFunction
+
+; Sends the nudge when SilenceAllows; the speaker rotates over the non-player positions.
+Function SilenceNudge_IfQuiet()
+    if thread == None
+        return
+    endif
+    float silence = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.narration.silence_seconds", 8.0)
+    if silence <= 0.0
+        return
+    endif
+    Actor[] positions = thread.Positions
+    int n = positions.length
+    if n == 0
+        return
+    endif
+    Actor player = Game.GetPlayer()
+    Actor speaker = None
+    int speaker_idx = 0
+    int tries = 0
+    while tries < n && speaker == None
+        int idx = (silence_turn + tries) % n
+        if positions[idx] != None && positions[idx] != player
+            speaker = positions[idx]
+            speaker_idx = idx
+        endif
+        tries += 1
+    endwhile
+    if speaker == None
+        return
+    endif
+    if !SilenceAllows(speaker, silence)
+        return
+    endif
+    silence_turn = speaker_idx + 1
+    SilenceNudge(speaker, FirstOtherPosition(speaker))
 EndFunction
 
 Function QueueAnimationChangeStage(String from_desc)
@@ -3488,6 +3545,54 @@ bool Function PPlus_StageStart()
     return false
 EndFunction
 
+; The scene start (one DN or event), sent by the first StageStart before its bookkeeping. An orgasm stash
+; taken here is left in start_orgasm_narration for that StageStart's orgasm DN.
+Function StageStart_NarrateStart(String desc)
+    start_orgasm_narration = ""
+    int start_level = NarrationLevel("sexlab.narration.start_level")
+    bool hold_stash = StageStart_HoldStash()
+    String orgasm_narration = ""
+    if !hold_stash
+        orgasm_narration = StageStart_TakeStash(0)
+    endif
+    if animating_started_at > 0.0
+        Trace("StageStart_NarrateStart", "start DN after "+(Utility.GetCurrentRealTime() - animating_started_at)+"s")
+    endif
+    if hold_stash
+        NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)
+        return
+    endif
+    String narration = desc + orgasm_narration
+    if initiator != None
+        narration = initiator.GetDisplayName()+" initiates: "+desc
+        narration += orgasm_narration
+    endif
+    String first_times = SkyrimNet_SexLab_LoversLedger.FirstTimesSentence(thread.Positions, GetTagsString(thread.animation))
+    if first_times != ""
+        narration += " " + first_times
+    endif
+    if orgasm_narration != ""
+        ; Do not RegisterEvent the orgasm sentence — CheckDuplicate would blank the DN that follows.
+        if desc != ""
+            NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)
+        endif
+        start_orgasm_narration = orgasm_narration
+    elseif start_level < 3
+        ; sexlab.narration.start_level below Direct: no orgasm here, so narration is just the start.
+        NarrateBelowDirect(start_level, "start", narration, sender, receiver)
+    elseif has_player
+        DirectNarration(narration, sender, receiver)
+    elseif PlayerSeesScene()
+        ; NPC-only start the player watches: always Direct, skipping the cooldown.
+        DirectNarration(narration, sender, receiver)
+        if main
+            main.direct_narration_last_time = Utility.GetCurrentRealTime()
+        endif
+    else
+        DirectNarration_Optional("start", narration, sender, receiver)
+    endif
+EndFunction
+
 Function StageStart()
     DbgEnter("StageStart")
     TraceStageState("StageStart")
@@ -3508,6 +3613,14 @@ Function StageStart()
     ; stash is taken below.
     stage_starting = true
     stage_started_at = Utility.GetCurrentRealTime()
+    ; Start narration first: the bookkeeping below can take a minute on a busy Papyrus VM, and later
+    ; StageStarts racing this one must not see Setup and narrate the start again.
+    bool started_now = false
+    if status != STATUS_ACTIVE && thread != None && SexLab != None
+        status = STATUS_ACTIVE
+        started_now = true
+        StageStart_NarrateStart(GetDescription())
+    endif
     AlignActors()
     if pending_stage_restart
         pending_stage_restart = false
@@ -3573,46 +3686,12 @@ Function StageStart()
     ; if not player send DN if allowed by cool off 
     ; GetDescription: stage JSON, else tag fallback (raw GetStageDescription alone leaves initiates: empty)
     bool hold_stash = false
-    if status != STATUS_ACTIVE
-        status = STATUS_ACTIVE
-        int start_level = NarrationLevel("sexlab.narration.start_level")
-        hold_stash = StageStart_HoldStash()
-        if !hold_stash
+    if started_now
+        ; Start narrated at the top; an orgasm stash that arrived since goes out below as an orgasm DN.
+        orgasm_narration = start_orgasm_narration
+        start_orgasm_narration = ""
+        if orgasm_narration == "" && !StageStart_HoldStash()
             orgasm_narration = StageStart_TakeStash(0)
-        endif
-        if hold_stash
-            NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)
-        else
-            String narration = desc + orgasm_narration
-            if initiator != None
-                narration = initiator.GetDisplayName()+" initiates: "+desc
-                narration += orgasm_narration
-            endif
-            String first_times = SkyrimNet_SexLab_LoversLedger.FirstTimesSentence(thread.Positions, GetTagsString(thread.animation))
-            if first_times != ""
-                narration += " " + first_times
-            endif
-            if orgasm_narration != ""
-                ; Do not RegisterEvent the orgasm sentence — CheckDuplicate would blank the DN below.
-                if desc != ""
-                    NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)
-                endif
-            elseif start_level < 3
-                ; sexlab.narration.start_level below Direct: no orgasm here, so narration is just the start.
-                NarrateBelowDirect(start_level, "start", narration, sender, receiver)
-            else
-                if has_player
-                    DirectNarration(narration, sender, receiver)
-                elseif PlayerSeesScene()
-                    ; NPC-only start the player watches: always Direct, skipping the cooldown.
-                    DirectNarration(narration, sender, receiver)
-                    if main
-                        main.direct_narration_last_time = Utility.GetCurrentRealTime()
-                    endif
-                else
-                    DirectNarration_Optional("start", narration, sender, receiver)
-                endif
-            endif
         endif
     ; Late Dom custom msgs may arrive after Combined; flush any leftovers before send/Release
     else
@@ -3678,7 +3757,7 @@ Function StageStart()
             endif
         else
             if !change_scene
-                ContinueActivity(sender, receiver, True)
+                SilenceNudge_IfQuiet()
             elseif OrgasmDNRecent()
                 ; An orgasm DN just went out: a DN now would only cancel its reply.
                 RegisterEventForce("change", narration, sender, receiver)
@@ -5006,8 +5085,9 @@ String Function GetDescriptionFromTags()
         buffer += ", standing position,"
     EndIf
 
+    ; Position 0 is the receiver: passive verbs, so the LLM does not read sub_name as the one penetrating.
     If AnimTag(anim, "anal")
-        buffer += " having anal sex with"
+        buffer += " receiving anal sex from"
     ElseIf AnimTag(anim, "assjob")
         buffer += " having an assjob by"
     ElseIf AnimTag(anim, "boobjob")
@@ -5015,10 +5095,12 @@ String Function GetDescriptionFromTags()
     ElseIf AnimTag(anim, "thighjob")
         buffer += " giving a thighjob to"
     ElseIf AnimTag(anim, "vaginal")
-        buffer += " having vaginal sex with"
+        buffer += " receiving vaginal sex from"
     ElseIf AnimTag(anim, "fisting")
         buffer += " having her pussy fisted by"
-    ElseIf AnimTag(anim, "oral") || AnimTag(anim, "blowjob") || AnimTag(anim, "cunnilingus")
+    ElseIf AnimTag(anim, "cunnilingus")
+        buffer += " receiving cunnilingus from"
+    ElseIf AnimTag(anim, "oral") || AnimTag(anim, "blowjob")
         buffer += " giving a blowjob to"
     ElseIf AnimTag(anim, "spanking")
         buffer += " being spanked by"
@@ -5037,7 +5119,7 @@ String Function GetDescriptionFromTags()
     ElseIf AnimTag(anim, "hugging")
         buffer += " hugging"
     Else
-        buffer += " having sex with"
+        buffer += " being fucked by"
         Trace("GetDescriptionFromTags", "no matching animation tag")
     EndIf
 

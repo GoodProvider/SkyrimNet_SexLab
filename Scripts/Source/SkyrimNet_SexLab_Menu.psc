@@ -483,7 +483,11 @@ Function MultiTarget_Menu_Selection(Actor player)
     i = actors_all.length - 1
 
     while 0 <= i 
-        if actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
+        bool ok = actions.BodyAnimation_IsEligible(actors_all[i], "", "") && main.sexlab.IsValidActor(actors_all[i])
+        if !ok && actors_all[i].IsDead()
+            ok = IsAvailableActor(actors_all[i]) ; corpses with Dead actors can join scenes on
+        endif
+        if ok
             valid[i] = True
             num_actors += 1
         else 
@@ -725,6 +729,10 @@ bool Function IsAvailableActor(Actor akActor)
     endif
     if !akActor.Is3DLoaded()
         return false
+    endif
+    ; SexLab 1.6x IsValidActor rejects a corpse with Health < 1; CorpseHealth_Floor lifts it at the start.
+    if akActor.IsDead() && SkyrimNet_SexLab_WebUI.IsDeadAllowed()
+        return true
     endif
     if main == None || main.sexlab == None
         return false

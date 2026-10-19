@@ -2,6 +2,12 @@
 
 ## 0.36.3 (unreleased)
 
+### Scene narration: start delay, keep-talking nudge, role wording
+- **Start narration came about a minute late** (report in `checkpoints/2026-10-19-no-narration`): the first `StageStart` reached its start branch only after its bookkeeping (SyncAnimationDefaults, Engine, Ending, voices, P+…), 66 s after the animation began. The stage 2 and 3 StageStarts still saw `status:Setup`. `StageStart` now claims `STATUS_ACTIVE` first and sends the start through the new `StageStart_NarrateStart` before any bookkeeping. An orgasm stash taken there goes out as the same StageStart's orgasm DN. Log: `StageStart_NarrateStart start DN after Xs`.
+- **New keep-talking nudge**: setting `sexlab.narration.silence_seconds` (Narration, default 8, 0 = off). `Scene.SilenceTick` runs on the 2 s animation poll. Once SkyrimNet has nothing queued, no audio ended within that time, and the mod sent no DN within it, a non-player actor is sent `"continue scene"` (`Utilities.SilenceAllows` / `SilenceNudge`, which skip CheckDuplicate). The speaker rotates. It is skipped while a start / stage / orgasm / ending narration is pending, below Direct stage narration, and for NPC-only scenes the player can't see. A stage change with an unchanged description uses the same nudge, replacing `ContinueActivity`.
+- **Dropped continues blanked every retry**: `CheckDuplicate` stored the text before `DirectNarration_Optional` dropped it. A drop now clears the stored text.
+- **Tag-fallback descriptions read position 0 as the doer** ("Hulda is having anal sex with Prisoner", while Hulda was the receiver). Anal and vaginal now read "receiving … from", cunnilingus has its own "receiving cunnilingus from" (it said "giving a blowjob to"), and the generic fallback reads "being fucked by".
+
 ### Dead actors can join scenes
 - **Necro scenes started by another mod were still cancelled on SexLab 1.6x**: we only adopt such a thread (`GetSceneByThread`), so the 0.36.1 floor in `StartScene` never ran, and `StageStart` comes after `sslActorAlias` has already ended the thread. The other mod had lifted the corpse to about 1 Health, which passed `ValidateActor` but was still `< 1.0` (`checkpoints/necro-animations/02-checkpoint.md`).
 - New dashboard bool `sexlab.actors.dead_allowed` ("Dead actors can join scenes", Actions, default off), read live: C++ `SexLabNet::IsDeadAllowed`, Papyrus native `SkyrimNet_SexLab_WebUI.IsDeadAllowed()`.

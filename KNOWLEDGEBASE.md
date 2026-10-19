@@ -1,5 +1,15 @@
 # Knowledgebase
 
+## Start narration a minute late; no keep-talking; receiver read as doer (2026-10-19, fixed, tested in game)
+
+- **Report (Delicious Nuts):** hotkey scene, Hulda + player, with the player giving. There was no dialogue for a long time, then Hulda was described as the one penetrating. The ending narration was fine. Logs: `checkpoints/2026-10-19-no-narration/logs/2026-10-19-08-53-21/`.
+- **Late start:** the animation began at 20:19:39 and the start DN went out at 20:20:45 (`SkyrimNet_SexLab.log:668`, `:798`). The StageStarts for stages 2 and 3 still logged `status:Setup` (`:734`, `:768`): the first StageStart was still in its bookkeeping (each Papyrus call took about 0.2 s). **Rule:** narrate first, then do the bookkeeping. `StageStart` claims `STATUS_ACTIVE` at its top and calls `StageStart_NarrateStart`.
+- **No silence timer existed.** The only continue was on a stage change with an unchanged description, gated by `NarrationCoolOffAllows` (20 s since *any* audio ended). Bystander chatter in the inn kept that under 20 s, so it was dropped (`:843`).
+- **CheckDuplicate stores before the send decision:** `DirectNarration_Optional` dropped the continue but the text was already stored, so each later identical continue was blanked (`:846`, `:907`). A drop now clears the stored text. Silence nudges (`SilenceNudge`, `"continue scene"`) bypass CheckDuplicate on purpose.
+- **Tag-fallback wording:** SexLab sorts the receiver to position 0. "<pos0> is having anal sex with <pos1>" made the LLM read position 0 as the doer. Use receiver verbs ("receiving … from").
+- **Tongue out:** this mod sets no expressions. It comes from SexLab expressions or an expression mod.
+- **Devkit (beta28-rc2):** there is no per-scene continue API, no trigger interval, and no C++ audio or queue query. Own the timer and use `SkyrimNetApi.DirectNarration` with an explicit speaker.
+
 ## Ongoing-sex block missing for an NPC-only scene; Verbose logging (2026-10-18, fixed; outcome verified, Advancing path untested)
 
 - **Report:** in Angi + Skadi (NPC-only, Skadi futa, ESL-range FormID `FE04B83C`), `0050_sexlab_activity` rendered nothing in any request during the scene (`openrouter_input.log` 18:47:27–31). There was no `- On the floor, …` line and no Speaking Rules. The same gate rendered for Angi + Bob (17:20) and for an earlier NPC-only Angi + Skadi scene (12:33).

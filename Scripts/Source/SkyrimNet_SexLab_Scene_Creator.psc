@@ -1255,6 +1255,11 @@ bool Function EnsureSexLabActorsValid()
         endif
         EnsureFutaSex(sexlab, akActor)
         int code = sexlab.ValidateActor(akActor)
+        ; Dead actors can join scenes: StartScene lifts the corpse's Health (CorpseHealth_Floor) before AddActor.
+        if code == -13 && akActor.IsDead() && SkyrimNet_SexLab_WebUI.IsDeadAllowed()
+            Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" is dead, allowed by Dead actors can join scenes")
+            code = 0
+        endif
         if code < 0
             Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" ValidateActor:"+code+" ("+ValidateActorReason(code)+")")
             Debug.Notification("SexLab: "+GetDisplayName(akActor)+" can't join - "+ValidateActorReason(code))

@@ -248,6 +248,15 @@ schema:
       defaultValue: 20
       category: "Narration"
 
+    - name: "Silence before keep-talking (sec)"
+      path: "sexlab.narration.silence_seconds"
+      type: "float"
+      description: "Seconds of silence (no SkyrimNet speech queued or playing) before an actor in an active scene is prompted to keep talking (\"continue scene\"). Speakers rotate among the non-player actors. Needs Stage change narration at Direct; NPC-only scenes only when the player can see them. 0 = off."
+      min: 0
+      max: 120
+      defaultValue: 8
+      category: "Narration"
+
     - name: "Narration max distance (m)"
       path: "sexlab.narration.max_distance"
       type: "float"

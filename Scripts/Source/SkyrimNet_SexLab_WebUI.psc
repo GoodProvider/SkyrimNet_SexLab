@@ -46,6 +46,8 @@ Bool Function ConsumeSkipSceneCreator() global native
 String Function TraceLog(String script_name, String func, String msg) global native
 ; Dashboard Verbose logging (sexlab.debug.verbose), read live.
 Bool Function IsVerbose() global native
+; Dashboard Dead actors can join scenes (sexlab.actors.dead_allowed), read live.
+Bool Function IsDeadAllowed() global native
 ; TraceLog only when Verbose logging is on; tagged [V]. Guard costly message building with IsVerbose().
 Function DebugLog(String script_name, String func, String msg) global native
 ; Soft availability (dead/combat/SexLab+OStim factions/3D). Papyrus adds StorageUtil + SexLab IsValidActor.

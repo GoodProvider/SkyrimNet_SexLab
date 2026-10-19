@@ -1485,7 +1485,45 @@ Event AnimationStarting(int ThreadID, bool HasPlayer)
     if HasPlayer && scene_camera_state < 0
         scene_camera_state = Game.GetCameraState()
     endif
+    CorpseHealth_FloorThread(ThreadID)
 EndEvent
+
+; Dead actors can join scenes: before Prepare / Animating, lift every corpse in the thread (also one another
+; mod started) so sslActorAlias OnUpdate does not end it. Remembered per thread: thread.Positions can already
+; be cleared at HookAnimationEnd.
+String Function CorpseThreadKey(int ThreadID)
+    return "skyrimnet_sexlab_corpses_tid_"+ThreadID
+EndFunction
+
+Function CorpseHealth_FloorThread(int ThreadID)
+    if sexlab == None || IsSexLabPPlus() || !SkyrimNet_SexLab_WebUI.IsDeadAllowed()
+        return
+    endif
+    sslThreadController thread = SexLab.GetController(ThreadID)
+    if thread == None
+        return
+    endif
+    Actor[] positions = thread.Positions
+    int i = 0
+    while i < positions.length
+        if positions[i] != None && positions[i].IsDead()
+            CorpseHealth_Floor(positions[i])
+            StorageUtil.FormListAdd(self, CorpseThreadKey(ThreadID), positions[i], false)
+        endif
+        i += 1
+    endwhile
+EndFunction
+
+Function CorpseHealth_RestoreThread(int ThreadID)
+    String list_key = CorpseThreadKey(ThreadID)
+    int n = StorageUtil.FormListCount(self, list_key)
+    int i = 0
+    while i < n
+        CorpseHealth_Restore(StorageUtil.FormListGet(self, list_key, i) as Actor)
+        i += 1
+    endwhile
+    StorageUtil.FormListClear(self, list_key)
+EndFunction
 
 ; Back to the camera the player had before the scene (TFC off, first person if that was the start mode).
 Function RestoreCameraAfterScene()
@@ -1657,6 +1695,7 @@ EndEvent
 
 ; ----------------------------------------------------------
 event AnimationEnd(int ThreadID, bool HasPlayer)
+    CorpseHealth_RestoreThread(ThreadID)
     ; create_if_missing=False: Action_Stop may already have AnimationEnd+Release; do not allocate a new scene.
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByThreadId(ThreadID, any_state=True, create_if_missing=False)
     if sl_scene == None 
