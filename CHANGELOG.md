@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
+
+### Scene start messages
+- **Start DN too long**: the whole Lover's Ledger first-times text was appended to it. `StageStart_NarrateStart` now first sends a `"sexlab start info"` event with `Scene.IntersexSentence()` ("<Name> is intersex." per `IsIntersex` position) plus the first times. The event follows `start_level` capped at Event and is forced, so CheckDuplicate cannot blank the start. Only the virgin-blood sentences stay on the start text.
+- `LoversLedger.FirstTimesSentence` → `FirstTimesParts` (`[0]` first times, `[1]` sentences containing " is a little sore and is bleeding", the text Lover's Ledger `FirstTimes.cpp` writes when `loversledger.first_time.virgin_blood` is on).
+
 ## [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3) — since [0.36.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2)
 
 ### Scene narration

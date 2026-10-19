@@ -2,6 +2,12 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+## Unreleased
+
+### Scene start messages
+- `Scene.StageStart_NarrateStart`: before the start narration it sends `NarrateBelowDirect(min(start_level, 2), "sexlab start info", IntersexSentence() + first times, sender, receiver, force=True)`. Virgin-blood sentences are appended to `desc`, so they ride with the start in every branch (hold stash, orgasm stash, DN / event).
+- `SkyrimNet_SexLab_LoversLedger.FirstTimesParts(positions, tags)` returns `String[2]` (first times, blood) and replaces `FirstTimesSentence`. Blood is matched on " is a little sore and is bleeding": keep it in sync with Lover's Ledger `FirstTimes.cpp`.
+
 ## 0.36.3
 
 ### Scene narration

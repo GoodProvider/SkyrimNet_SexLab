@@ -2,6 +2,13 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## Unreleased
+
+### Scene start messages
+- The scene-start narration is shorter
+- First times (Lover's Ledger) and who is intersex now go out as an event just before it
+- Only the virgin-blood line (when that Lover's Ledger option is on) stays in the start narration
+
 ## 0.36.3
 
 ### Scene narration

@@ -3541,8 +3541,28 @@ bool Function PPlus_StageStart()
     return false
 EndFunction
 
+; "<Name> is intersex." for each intersex position; "" when none.
+String Function IntersexSentence()
+    String out = ""
+    Actor[] positions = thread.Positions
+    int i = 0
+    while i < positions.Length
+        if positions[i] != None && IsIntersex(sexlab, positions[i])
+            if out != ""
+                out += " "
+            endif
+            out += positions[i].GetDisplayName()+" is intersex."
+        endif
+        i += 1
+    endwhile
+    return out
+EndFunction
+
 ; The scene start (one DN or event), sent by the first StageStart before its bookkeeping. An orgasm stash
 ; taken here is left in start_orgasm_narration for that StageStart's orgasm DN.
+; Add-on info (intersex positions, Lover's Ledger first times) goes first as a "sexlab start info" event
+; (start_level, capped at Event; forced so CheckDuplicate cannot blank the start). Only the virgin-blood
+; sentences stay on the start text.
 Function StageStart_NarrateStart(String desc)
     start_orgasm_narration = ""
     int start_level = NarrationLevel("sexlab.narration.start_level")
@@ -3554,6 +3574,27 @@ Function StageStart_NarrateStart(String desc)
     if animating_started_at > 0.0
         Trace("StageStart_NarrateStart", "start DN after "+(Utility.GetCurrentRealTime() - animating_started_at)+"s")
     endif
+    String[] first_times = SkyrimNet_SexLab_LoversLedger.FirstTimesParts(thread.Positions, GetTagsString(thread.animation))
+    String info = IntersexSentence()
+    if first_times[0] != ""
+        if info != ""
+            info += " "
+        endif
+        info += first_times[0]
+    endif
+    if info != ""
+        int info_level = start_level
+        if info_level > 2
+            info_level = 2
+        endif
+        NarrateBelowDirect(info_level, "sexlab start info", info, sender, receiver, force=True)
+    endif
+    if first_times[1] != ""
+        if desc != ""
+            desc += " "
+        endif
+        desc += first_times[1]
+    endif
     if hold_stash
         NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)
         return
@@ -3562,10 +3603,6 @@ Function StageStart_NarrateStart(String desc)
     if initiator != None
         narration = initiator.GetDisplayName()+" initiates: "+desc
         narration += orgasm_narration
-    endif
-    String first_times = SkyrimNet_SexLab_LoversLedger.FirstTimesSentence(thread.Positions, GetTagsString(thread.animation))
-    if first_times != ""
-        narration += " " + first_times
     endif
     if orgasm_narration != ""
         ; Do not RegisterEvent the orgasm sentence — CheckDuplicate would blank the DN that follows.
