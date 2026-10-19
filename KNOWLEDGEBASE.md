@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## Intersex read as male by Lover's Ledger on SexLab 1.6x (2026-10-19, fixed in Lover's Ledger, untested in game)
+
+- **Report:** Skadi was intersex in Actor Info, but the first-times line in Bob's start DN said "the first time Bob has had sex with a man" (`SkyrimNet_SexLab.log` 09:04:08, `FirstTimesSentence`).
+- **Cause:** 1.6x has no futa. `SetGenderChoice` stores the pick in StorageUtil `SkyrimNet_SexLab_ChosenSex` = 2 and calls `TreatAsGender` to the other sex. Lover's Ledger's `HasPenis` / `HasVagina` read only `GetGender`, so a female intersex actor became penis-only.
+- **Fix (Lover's Ledger):** `TTLL_SexlabIntegration.IsChosenIntersex` reads that StorageUtil key on AE and counts the actor as both, as P+ futa already was. The first-time wording is now "an intersex partner" (was "a futa"). **Rule:** don't rename `ChosenSexKey()`; Lover's Ledger reads the string directly.
+
 ## Start narration a minute late; no keep-talking; receiver read as doer (2026-10-19, fixed, tested in game)
 
 - **Report (Delicious Nuts):** hotkey scene, Hulda + player, with the player giving. There was no dialogue for a long time, then Hulda was described as the one penetrating. The ending narration was fine. Logs: `checkpoints/2026-10-19-no-narration/logs/2026-10-19-08-53-21/`.
