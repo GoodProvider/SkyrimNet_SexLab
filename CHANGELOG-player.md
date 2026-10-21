@@ -1,4 +1,4 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
@@ -6,12 +6,24 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ### Lover's Ledger
 - Works with the latest Lover's Ledger
-- The virgin-blood line moved from Lover's Ledger into this mod: new dashboard option **Virgin blood on first vaginal / anal** (Narration, default off, needs Lover's Ledger)
+- The virgin-blood line moved from Lover's Ledger into this mod
+- New dashboard option **Virgin blood on first vaginal / anal** (Narration, default off)
+- It needs Lover's Ledger
 - It is added to the scene-start narration on an actor's first time receiving vaginal or anal sex
+- New installer option **First vaginal or anal sex causes soreness and bleeding** (off by default)
+- It turns the dashboard option on once at first load. You can turn it off again in the dashboard
 - The damaged pussy / ass marks of a first time now use the same check
 
-### Scenes
-- NPCs no longer walk out of a scene to follow a sandbox / camp package from a SkyrimNet action mod. Their packages come back when the scene ends
+### Dead actors can join scenes (untested)
+- SkyrimNet_SexLab no longer changes a corpse's Health
+- On SexLab 1.66, pick the new installer option **SexLab 1.66 corpse patch**
+- The patch is not needed on SexLab P+
+- Don't use the patch with SLSO (SexLab Separate Orgasm)
+- Without the patch, the option turns itself off when you unpause and a message names the file
+
+### Scenes (untested)
+- NPCs no longer walk out of a scene to follow a sandbox / camp package from a SkyrimNet action mod
+- Their packages come back when the scene ends
 - AP Anal descriptions: "lays on their hands and knees with feet in the air" (was "there" / "hair")
 
 ## 0.36.3
@@ -28,15 +40,12 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - First times (Lover's Ledger) and who is intersex now go out as an event just before it
 - Only the virgin-blood line (when that Lover's Ledger option is on) stays in the start narration
 
-### Dead actors can join scenes (untested)
+### Dead actors can join scenes
 - New SkyrimNet dashboard option **Dead actors can join scenes** (Actions, default off)
 - When on, corpses show in the TargetMenu and can be picked for a scene
+- Necro scenes on SexLab 1.6x are no longer cancelled right after they start
 - That includes necro scenes started by another mod
 - The corpse stays dead. NPC dialogue actions never pick a corpse
-- SkyrimNet_SexLab no longer changes a corpse's Health
-- On SexLab 1.66, pick the new installer option **SexLab 1.66 corpse patch**. It is not needed on SexLab P+
-- Don't use the patch with SLSO (SexLab Separate Orgasm)
-- Without the patch, the option turns itself off when you unpause and a message names the file that doesn't match
 
 ### Actor Info layout
 - The Actor Info title (source, name, gender) now runs across the top of the view, not down the left

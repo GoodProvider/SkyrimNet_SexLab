@@ -1,4 +1,4 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
@@ -11,8 +11,17 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - `LoversLedger.FirstGot(a, act)` replaces `NeverGot`: ledger received count 0 **and** `SexLabCount(a, act)` (P+ statistic 10 / 11, AE `VaginalCount` / `AnalCount`) ≤ ledger given count, the "seeded" test of Lover's Ledger `FirstTimes.cpp`. Used by the blood sentences and `Scene.Engine_SetSkills` first-time marks.
 - FOMOD option "First vaginal or anal sex causes soreness and bleeding" (`option_virgin_blood/`, added to the `make release` 7z) installs `SKSE/Plugins/SkyrimNet_SexLab/fomod/virgin_blood.txt`. `MCM.VirginBlood_FomodApply` (Setup) sets `sexlab.narration.virgin_blood` true via `PatchConfig` once and writes `fomod/virgin_blood_applied.txt`.
 
-### Scenes
+### Dead actors can join scenes (untested)
+- `SexLabNet::IsDeadAllowed()` (C++) and `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (Papyrus) are false until `CorpsePatch::Recheck` finds the patch (or P+).
+- Removed: `Utilities.CorpseHealthKey` / `CorpseHealth_Floor` / `CorpseHealth_Restore`, `Scene_Creator.RestoreCorpseHealth`. Nothing in the mod changes a corpse's Health.
+- SexLab 1.66 corpse patch: `patch_sexlab166/Source/sslActorAlias.psc` + `sslActorLibrary.psc` (copies of SexLabFrameworkAE 1.66.01 with three `; SkyrimNet_SexLab patch:` edits) → `patch_sexlab166/Scripts`. `make corpse-patch` compiles them and rewrites `SKSE_Source/include/CorpsePatchHashes.h` (`python_scripts/corpse-patch-hashes.py`). A pex embeds its compile time, so rebuild the DLL after every patch compile. `make check-pex` fails on a stale header.
+- New global native `SkyrimNet_SexLab_WebUI.CorpsePatchMismatch(Bool pplus)`: first missing / mismatched file, or "". `MCM.CorpsePatch_Check()` (Setup, `OnPluginConfigSaved`) sends mod event `SkyrimNet_SexLab_CorpsePatchOff` to `CorpsePatch_TurnOff`, which runs `Utility.Wait(0.1)`, then `PatchConfig` `sexlab.actors.dead_allowed` false, then `SkyMessage.Show(…, "Close")`.
+
+### Scenes (untested)
 - `Scene_Manager.HoldScenePackages(thread)` / `ReleaseIdlePackageHolds()`: SkyrimNet `HoldPackages` / `ReleaseHeldPackages` with owner `"SkyrimNet_SexLab"`, list in StorageUtil `SkyrimNet_SexLab_PackageHold` (form list on None). Hold on `AnimationStarting` + `AnimationStart`; release on `AnimationEnd` and `Setup` for listed actors that are dead or not `SexLab.IsActorActive`.
+
+### Build
+- `make release` packs `patch_sexlab166/Scripts` and `option_virgin_blood`; `make check-pex` also checks the patch pex and `CorpsePatchHashes.h`.
 
 ## 0.36.3
 
@@ -26,12 +35,10 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - `Scene.StageStart_NarrateStart`: before the start narration it sends `NarrateBelowDirect(min(start_level, 2), "sexlab start info", IntersexSentence() + first times, sender, receiver, force=True)`. Virgin-blood sentences are appended to `desc`, so they ride with the start in every branch (hold stash, orgasm stash, DN / event).
 - `SkyrimNet_SexLab_LoversLedger.FirstTimesParts(positions, tags)` returns `String[2]` (first times, blood) and replaces `FirstTimesSentence`. Blood is matched on " is a little sore and is bleeding": keep it in sync with Lover's Ledger `FirstTimes.cpp`.
 
-### Dead actors can join scenes (untested)
-- Config `sexlab.actors.dead_allowed` (bool, default false): `SexLabNet::IsDeadAllowed()` in C++, `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (global native) in Papyrus. Both are false until `CorpsePatch::Recheck` finds the patch (or P+).
+### Dead actors can join scenes
+- Config `sexlab.actors.dead_allowed` (bool, default false): `SexLabNet::IsDeadAllowed()` in C++, `SkyrimNet_SexLab_WebUI.IsDeadAllowed()` (global native) in Papyrus.
 - On: the nearby list, `IsAvailableActor` and `ActorLocker::TryLock` stop rejecting `IsDead()`. `Menu.IsAvailableActor` skips `sexlab.IsValidActor` for a corpse, and `EnsureSexLabActorsValid` treats `ValidateActor` -13 as OK.
-- Removed: `Utilities.CorpseHealthKey` / `CorpseHealth_Floor` / `CorpseHealth_Restore`, `Scene_Creator.RestoreCorpseHealth`. Nothing in the mod changes a corpse's Health.
-- SexLab 1.66 corpse patch: `patch_sexlab166/Source/sslActorAlias.psc` + `sslActorLibrary.psc` (copies of SexLabFrameworkAE 1.66.01 with three `; SkyrimNet_SexLab patch:` edits) → `patch_sexlab166/Scripts`. `make corpse-patch` compiles them and rewrites `SKSE_Source/include/CorpsePatchHashes.h` (`python_scripts/corpse-patch-hashes.py`). A pex embeds its compile time, so rebuild the DLL after every patch compile. `make check-pex` fails on a stale header.
-- New global native `SkyrimNet_SexLab_WebUI.CorpsePatchMismatch(Bool pplus)`: first missing / mismatched file, or "". `MCM.CorpsePatch_Check()` (Setup, `OnPluginConfigSaved`) sends mod event `SkyrimNet_SexLab_CorpsePatchOff` to `CorpsePatch_TurnOff`, which runs `Utility.Wait(0.1)`, then `PatchConfig` `sexlab.actors.dead_allowed` false, then `SkyMessage.Show(…, "Close")`.
+- `CorpseHealth_Floor` is gated by the toggle and lifts a corpse under 5 Health to 10. `Scene_Manager.CorpseHealth_FloorThread(tid)` runs from `HookAnimationStarting`, so it covers threads other mods start. Floored actors go in StorageUtil form list `skyrimnet_sexlab_corpses_tid_<tid>` on the manager. `CorpseHealth_RestoreThread(tid)` runs from `HookAnimationEnd`.
 
 ### Actor Info layout
 - `#actor-info-panel` sets `flex-direction: column`, so the header (source title, name, gender) spans the top instead of a left column.

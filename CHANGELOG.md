@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.36.4 — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
+## [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4) — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
 
 ### Lover's Ledger
 - **Virgin blood was gone**: Lover's Ledger dropped its virgin-blood sentences and their setting, so `FirstTimesParts()[1]` was always empty. New dashboard bool `sexlab.narration.virgin_blood` ("Virgin blood on first vaginal / anal", Narration, default off). `LoversLedger.VirginBloodSentences` adds "This is <name>'s first time having vaginal|anal sex; there is some bleeding and their pussy|ass is a little sore." to the start text (vaginal: female positions; anal: position 0). `FirstTimesParts` → `FirstTimes` (first-times event only).
@@ -8,9 +8,19 @@
 - **First-time check waits for the ledger's SexLab seeding**: `LoversLedger.FirstGot` (replaces `NeverGot`) needs the ledger's received count at 0 and SexLab's count no higher than the ledger's, so SexLab history the ledger hasn't backfilled yet is not a first. The `Engine_SetSkills` damaged pussy / ass marks use it too.
 - Aligned with Lover's Ledger's SexLab integration refactor: no API change. New header stubs `TTLL_SexlabIntegration.IsPPlus`, `TTLL_SexlabPPlus.GetCount`.
 
-### Scenes
+### Dead actors can join scenes (untested)
+- **SkyrimNet_SexLab no longer changes a corpse's Health.** The 0.36.1 `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (and their calls in `Scene_Creator.StartScene`, `Scene.StageStart`, `Scene.AnimationEnd`) are gone. Necro scenes started by another mod were still cancelled with the floor, and a user with the floor working (1 → 10 before Prepare) was still cancelled by their `sslActorAlias` variant (`checkpoints/necro-animations/04-checkpoint.md`).
+- **New optional FOMOD patch "SexLab 1.66 corpse patch"** (`patch_sexlab166/`, project `skyrimse-sexlab166.ppj`, `make corpse-patch`): SexLab 1.66.01 `sslActorLibrary.ValidateActor` (-13) and both `sslActorAlias` OnUpdate checks add `&& !SkyrimNet_SexLab_WebUI.IsDeadAllowed()` to `IsDead() && Health < 1.0`. Toggle off, or SkyrimNet_SexLab removed, acts as stock. Not usable with SLSO (it replaces `sslActorAlias`).
+- **Install check**: C++ `CorpsePatch::Recheck` SHA-256s `Data/Scripts/sslActorAlias.pex` / `sslActorLibrary.pex` against the generated `CorpsePatchHashes.h`. `IsDeadAllowed()` is false until they match (P+ needs no patch). Papyrus native `SkyrimNet_SexLab_WebUI.CorpsePatchMismatch(pplus)` runs from `MCM.Setup` and `SkyrimNet_OnPluginConfigSaved`. With the toggle on and a mismatch, `MCM.CorpsePatch_TurnOff` waits for unpause, `PatchConfig`s the toggle off and shows "The file <file> does not match the patched .pex file, this feature is not possible." with a Close button.
+- Dashboard description of `sexlab.actors.dead_allowed` updated to point at the patch.
+
+### Scenes (untested)
 - **NPCs walked out of scenes**: SexLab's `DoNothing` ActorUtil override is priority 100, so a SkyrimNet-registered package at the same priority (e.g. SeverActions `CampSandbox`, priority 100) could win. `Scene_Manager.HoldScenePackages` calls `SkyrimNetApi.HoldPackages(actor, "SkyrimNet_SexLab")` for every non-player position on `HookAnimationStarting` and again on `HookAnimationStart` (P+ ChangeActors). `ReleaseIdlePackageHolds` calls `ReleaseHeldPackages` for each listed actor no longer `IsActorActive` (or dead) on `HookAnimationEnd` and in `Setup` (a hold survives saves). Held actors are kept in the StorageUtil form list `SkyrimNet_SexLab_PackageHold`. Other mods' ActorUtil overrides are not covered.
 - `apanal.json`: "there hands" → "their hands", "feet in the hair" → "feet in the air".
+
+### Build
+- `make check-pex` also checks `patch_sexlab166/Scripts` and fails when `CorpsePatchHashes.h` is stale (`python_scripts/corpse-patch-hashes.py --check`). New target `make corpse-patch` and VS Code task "compile: pyro (SexLab 1.66 patch)"; rebuild the DLL after.
+- `make release` packs `patch_sexlab166/Scripts` and `option_virgin_blood` into the 7z for the two new FOMOD options.
 
 ## [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3) — since [0.36.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.2)
 
@@ -24,12 +34,11 @@
 - **Start DN too long**: the whole Lover's Ledger first-times text was appended to it. `StageStart_NarrateStart` now first sends a `"sexlab start info"` event with `Scene.IntersexSentence()` ("<Name> is intersex." per `IsIntersex` position) plus the first times. The event follows `start_level` capped at Event and is forced, so CheckDuplicate cannot blank the start. Only the virgin-blood sentences stay on the start text.
 - `LoversLedger.FirstTimesSentence` → `FirstTimesParts` (`[0]` first times, `[1]` sentences containing " is a little sore and is bleeding", the text Lover's Ledger `FirstTimes.cpp` writes when `loversledger.first_time.virgin_blood` is on).
 
-### Dead actors can join scenes (untested)
+### Dead actors can join scenes
+- **Necro scenes started by another mod were still cancelled on SexLab 1.6x**: we only adopt such a thread (`GetSceneByThread`), so the 0.36.1 floor in `StartScene` never ran, and `StageStart` comes after `sslActorAlias` has already ended the thread. The other mod had lifted the corpse to about 1 Health, which passed `ValidateActor` but was still `< 1.0` (`checkpoints/necro-animations/02-checkpoint.md`).
 - New dashboard bool `sexlab.actors.dead_allowed` ("Dead actors can join scenes", Actions, default off), read live: C++ `SexLabNet::IsDeadAllowed`, Papyrus native `SkyrimNet_SexLab_WebUI.IsDeadAllowed()`.
 - With it on: the TargetMenu nearby list (`ClassifyNearbyActor`), `IsAvailableActor`, `ActorLocker::TryLock`, `Menu.IsAvailableActor` and `MultiTarget_Menu_Selection` accept dead actors, and `Scene_Creator.EnsureSexLabActorsValid` accepts `ValidateActor` -13 for a corpse. LLM action eligibility is unchanged.
-- **SkyrimNet_SexLab no longer changes a corpse's Health.** The 0.36.1 `Utilities.CorpseHealth_Floor` / `CorpseHealth_Restore` (and their calls in `Scene_Creator.StartScene`, `Scene.StageStart`, `Scene.AnimationEnd`) are gone. Necro scenes started by another mod were still cancelled with the floor, and a user with the floor working (1 → 10 before Prepare) was still cancelled by their `sslActorAlias` variant (`checkpoints/necro-animations/04-checkpoint.md`).
-- **New optional FOMOD patch "SexLab 1.66 corpse patch"** (`patch_sexlab166/`, project `skyrimse-sexlab166.ppj`, `make corpse-patch`): SexLab 1.66.01 `sslActorLibrary.ValidateActor` (-13) and both `sslActorAlias` OnUpdate checks add `&& !SkyrimNet_SexLab_WebUI.IsDeadAllowed()` to `IsDead() && Health < 1.0`. Toggle off, or SkyrimNet_SexLab removed, acts as stock. Not usable with SLSO (it replaces `sslActorAlias`).
-- **Install check**: C++ `CorpsePatch::Recheck` SHA-256s `Data/Scripts/sslActorAlias.pex` / `sslActorLibrary.pex` against the generated `CorpsePatchHashes.h`. `IsDeadAllowed()` is false until they match (P+ needs no patch). Papyrus native `SkyrimNet_SexLab_WebUI.CorpsePatchMismatch(pplus)` runs from `MCM.Setup` and `SkyrimNet_OnPluginConfigSaved`. With the toggle on and a mismatch, `MCM.CorpsePatch_TurnOff` waits for unpause, `PatchConfig`s the toggle off and shows "The file <file> does not match the patched .pex file, this feature is not possible." with a Close button.
+- `Utilities.CorpseHealth_Floor` only runs with the toggle on, and it now lifts a corpse under Health 5 to 10 (was under 1 to 2). `Scene_Manager` `HookAnimationStarting` floors every dead position (`CorpseHealth_FloorThread`) and keeps them in a per-thread StorageUtil form list. `HookAnimationEnd` restores that list (`CorpseHealth_RestoreThread`).
 
 ### Actor Info layout
 - The header (source title, name, gender) showed as a left column: `#actor-info-panel` is shown as `display:flex` with no `flex-direction`. It now sets `flex-direction: column`, so the header spans the top and the facts sit below it.
