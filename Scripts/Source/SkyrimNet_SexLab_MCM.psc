@@ -66,6 +66,7 @@ Function Setup()
     RegisterForModEvent("SkyrimNet_OnPluginConfigSaved", "OnPluginConfigSaved")
 
     ApplyPluginConfig()
+    VirginBlood_FomodApply()
     CorpsePatch_Check()
     Trace("Setup", "complete hotkey enabled="+hot_key_toggle+" dx="+sex_edit_key)
 EndFunction
@@ -241,6 +242,20 @@ Event OnPluginConfigSaved(string eventName, string strArg, float numArg, Form se
     ApplyPluginConfig()
     CorpsePatch_Check()
 EndEvent
+
+; FOMOD option "First vaginal or anal sex causes soreness and bleeding" installs fomod/virgin_blood.txt. Turn
+; sexlab.narration.virgin_blood on once; the applied file (global, not per save) leaves the dashboard to the player after.
+Function VirginBlood_FomodApply()
+    String folder = "Data/SKSE/Plugins/SkyrimNet_SexLab/fomod/"
+    if !MiscUtil.FileExists(folder+"virgin_blood.txt") || MiscUtil.FileExists(folder+"virgin_blood_applied.txt")
+        return
+    endif
+    bool ok = SkyrimNetApi.PatchConfig(PLUGIN_CONFIG, "{ \"sexlab\": { \"narration\": { \"virgin_blood\": true } } }")
+    if ok
+        MiscUtil.WriteToFile(folder+"virgin_blood_applied.txt", "applied", append=False)
+    endif
+    Trace("VirginBlood_FomodApply", "virgin_blood -> true ok:"+ok)
+EndFunction
 
 ; Dead actors can join scenes needs the SexLab 1.66 corpse patch (FOMOD option) unless P+. Always re-hashes, so
 ; IsDeadAllowed() sees the result. Toggle on without the patch: CorpsePatch_TurnOff runs as its own mod event so

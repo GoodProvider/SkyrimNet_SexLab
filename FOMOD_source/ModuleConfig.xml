@@ -74,6 +74,16 @@
 								</dependencyType>
 							</typeDescriptor>
 						</plugin>
+						<plugin name="First vaginal or anal sex causes soreness and bleeding">
+							<description> Turns on the SkyrimNet dashboard setting Virgin blood on first vaginal / anal the first time the game loads with this mod. On an actor's first time receiving vaginal or anal sex, the scene start mentions some bleeding and soreness. Needs TT Lover's Ledger. You can turn it off again in the dashboard; it is not turned back on.</description>
+							<image path="images\sexlab_logo.png" />
+							<files>
+								<folder source="option_virgin_blood\SKSE" destination="SKSE" alwaysInstall="false" installIfUsable="false" priority="0"/>
+							</files>
+							<typeDescriptor>
+								<type name="Optional"/>
+							</typeDescriptor>
+						</plugin>
 					</plugins>
 				</group>
 			</optionalFileGroups>

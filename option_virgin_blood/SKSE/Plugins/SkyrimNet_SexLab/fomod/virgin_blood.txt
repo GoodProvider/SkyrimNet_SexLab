@@ -1,0 +1,1 @@
+FOMOD option: First vaginal or anal sex causes soreness and bleeding. SkyrimNet_SexLab turns on the dashboard setting Virgin blood on first vaginal / anal once, then writes virgin_blood_applied.txt next to this file.

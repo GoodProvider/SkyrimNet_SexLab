@@ -61,7 +61,8 @@ release: check-pex
 		images \
 		handler_udng \
 		handler_dom \
-		patch_sexlab166/Scripts
+		patch_sexlab166/Scripts \
+		option_virgin_blood
 
 	if exist "$(subst /,\\,core)" rmdir /s /q "$(subst /,\\,core)"		
 	if exist "$(subst /,\\,handler_udng)" rmdir /s /q "$(subst /,\\,handler_udng)"	

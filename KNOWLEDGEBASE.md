@@ -807,6 +807,7 @@ Always **ignore** files matching `z-*.*` (e.g. `z-plan.md`). Local scratch / not
 
 - **One source of truth:** optional-handler files that the game reads at runtime live under `SKSE/Plugins/SkyrimNet_SexLab/` in the repo (Actor `options/`, `bondage/group-devices.json`, etc.). Do not keep a second copy under `optional/handler_udng/`.
 - **Split at release:** `make release` copies `SKSE` into `core`, then **moves** those files into `handler_udng/` (same Data-relative paths) so Nexus FOMOD can install them only with the handler ESP. Dev/MO2 overlay uses the repo tree as-is.
+- **Setting-only FOMOD options:** FOMOD **First vaginal or anal sex causes soreness and bleeding** installs marker `option_virgin_blood/SKSE/Plugins/SkyrimNet_SexLab/fomod/virgin_blood.txt` (kept out of the repo SKSE tree so the dev overlay doesn't trigger it). `MCM.VirginBlood_FomodApply` (in `Setup`) `PatchConfig`s `sexlab.narration.virgin_blood` true once, then writes `fomod/virgin_blood_applied.txt` (global, not per save) so a player who turns it off is not overridden.
 
 ## ControlPanel actor focus + active TargetMenu (2026-08-07)
 

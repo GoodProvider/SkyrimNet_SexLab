@@ -4,6 +4,7 @@
 
 ### Lover's Ledger
 - **Virgin blood was gone**: Lover's Ledger dropped its virgin-blood sentences and their setting, so `FirstTimesParts()[1]` was always empty. New dashboard bool `sexlab.narration.virgin_blood` ("Virgin blood on first vaginal / anal", Narration, default off). `LoversLedger.VirginBloodSentences` adds "This is <name>'s first time having vaginal|anal sex; there is some bleeding and their pussy|ass is a little sore." to the start text (vaginal: female positions; anal: position 0). `FirstTimesParts` → `FirstTimes` (first-times event only).
+- **New FOMOD option** "First vaginal or anal sex causes soreness and bleeding" (off by default): turns the virgin-blood dashboard setting on once at first load; it can be turned off again in the dashboard.
 - **First-time check waits for the ledger's SexLab seeding**: `LoversLedger.FirstGot` (replaces `NeverGot`) needs the ledger's received count at 0 and SexLab's count no higher than the ledger's, so SexLab history the ledger hasn't backfilled yet is not a first. The `Engine_SetSkills` damaged pussy / ass marks use it too.
 - Aligned with Lover's Ledger's SexLab integration refactor: no API change. New header stubs `TTLL_SexlabIntegration.IsPPlus`, `TTLL_SexlabPPlus.GetCount`.
 
