@@ -2,6 +2,14 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## 0.36.4
+
+### Lover's Ledger
+- Works with the latest Lover's Ledger
+- The virgin-blood line moved from Lover's Ledger into this mod: new dashboard option **Virgin blood on first vaginal / anal** (Narration, default off, needs Lover's Ledger)
+- It is added to the scene-start narration on an actor's first time receiving vaginal or anal sex
+- The damaged pussy / ass marks of a first time now use the same check
+
 ## 0.36.3
 
 ### Scene narration

@@ -1912,8 +1912,9 @@ Function Engine_SetSkills()
     ; mini-game only. Missing: expected.
     int[] orgasm = animdb.GetOrgasmExpected(thread)
     ; Lover's Ledger first times (Punish / Aid panel parts): vaginal for a female position, anal for the
-    ; receiving position (0). A count of 0 while the act is on means this scene is the first; the flag is sticky
-    ; in the engine, so a later call after the ledger counts it does not clear it.
+    ; receiving position (0). LoversLedger.FirstGot (ledger count 0, once seeded from SexLab) while the act is on
+    ; means this scene is the first; the flag is sticky in the engine, so a later call after the ledger counts it
+    ; does not clear it.
     bool ledger = SkyrimNet_SexLab_LoversLedger.IsInstalled()
     bool vaginal = ledger && AnimHasTag("Vaginal")
     bool anal = ledger && AnimHasTag("Anal")
@@ -1922,8 +1923,8 @@ Function Engine_SetSkills()
         Actor a = positions[i]
         if a != None
             if vaginal || anal
-                bool first_vaginal = vaginal && a.GetLeveledActorBase().GetSex() == 1 && SkyrimNet_SexLab_LoversLedger.NeverGot(a, "Vaginal")
-                bool first_anal = anal && i == 0 && SkyrimNet_SexLab_LoversLedger.NeverGot(a, "Anal")
+                bool first_vaginal = vaginal && a.GetLeveledActorBase().GetSex() == 1 && SkyrimNet_SexLab_LoversLedger.FirstGot(a, "Vaginal")
+                bool first_anal = anal && i == 0 && SkyrimNet_SexLab_LoversLedger.FirstGot(a, "Anal")
                 if first_vaginal || first_anal
                     SkyrimNet_SexLab_OrgasmEngine.SetFirstTimes(a, first_vaginal, first_anal)
                 endif
@@ -3562,7 +3563,7 @@ EndFunction
 ; taken here is left in start_orgasm_narration for that StageStart's orgasm DN.
 ; Add-on info (intersex positions, Lover's Ledger first times) goes first as a "sexlab start info" event
 ; (start_level, capped at Event; forced so CheckDuplicate cannot blank the start). Only the virgin-blood
-; sentences stay on the start text.
+; sentences (LoversLedger.VirginBloodSentences, sexlab.narration.virgin_blood) stay on the start text.
 Function StageStart_NarrateStart(String desc)
     start_orgasm_narration = ""
     int start_level = NarrationLevel("sexlab.narration.start_level")
@@ -3574,13 +3575,13 @@ Function StageStart_NarrateStart(String desc)
     if animating_started_at > 0.0
         Trace("StageStart_NarrateStart", "start DN after "+(Utility.GetCurrentRealTime() - animating_started_at)+"s")
     endif
-    String[] first_times = SkyrimNet_SexLab_LoversLedger.FirstTimesParts(thread.Positions, GetTagsString(thread.animation))
+    String first_times = SkyrimNet_SexLab_LoversLedger.FirstTimes(thread.Positions, GetTagsString(thread.animation))
     String info = IntersexSentence()
-    if first_times[0] != ""
+    if first_times != ""
         if info != ""
             info += " "
         endif
-        info += first_times[0]
+        info += first_times
     endif
     if info != ""
         int info_level = start_level
@@ -3589,11 +3590,12 @@ Function StageStart_NarrateStart(String desc)
         endif
         NarrateBelowDirect(info_level, "sexlab start info", info, sender, receiver, force=True)
     endif
-    if first_times[1] != ""
+    String blood = SkyrimNet_SexLab_LoversLedger.VirginBloodSentences(thread.Positions, AnimHasTag("Vaginal"), AnimHasTag("Anal"))
+    if blood != ""
         if desc != ""
             desc += " "
         endif
-        desc += first_times[1]
+        desc += blood
     endif
     if hold_stash
         NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)

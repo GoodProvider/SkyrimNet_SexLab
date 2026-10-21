@@ -257,6 +257,13 @@ schema:
       defaultValue: 8
       category: "Narration"
 
+    - name: "Virgin blood on first vaginal / anal"
+      path: "sexlab.narration.virgin_blood"
+      type: "bool"
+      description: "Needs TT Lover's Ledger. When a scene is an actor's first time receiving vaginal or anal sex, the scene start narration adds that there is some bleeding and their pussy / ass is a little sore."
+      defaultValue: false
+      category: "Narration"
+
     - name: "Narration max distance (m)"
       path: "sexlab.narration.max_distance"
       type: "float"

@@ -14,58 +14,79 @@ Bool Function IsInstalled() global
     return Game.GetModByName("TT_LoversLedger.esp") != 255
 EndFunction
 
-; Each position's first sexual experience in this scene, split for the scene start:
-; [0] the first-times sentences (start info event), [1] the virgin-blood sentences (start DN).
-; Both "" when none or not installed. The blood text matches Lover's Ledger FirstTimes.cpp
-; ("<name>'s vagina|asshole is a little sore and is bleeding."): keep the two in sync.
-String[] Function FirstTimesParts(Actor[] positions, String tags) global
-    String[] result = new String[2]
-    result[0] = ""
-    result[1] = ""
+; Each position's first sexual experience in this scene (the scene start info event), one line;
+; "" when none or not installed.
+String Function FirstTimes(Actor[] positions, String tags) global
     if !IsInstalled() || positions.Length == 0
-        return result
+        return ""
     endif
     String lines = TTLL_SexlabIntegration.GetFirstTimes(positions, tags)
     if lines == ""
-        return result
+        return ""
     endif
-    String[] parts = StringUtil.Split(lines, "\n")
-    int i = 0
-    while i < parts.Length
-        ; Sentences end in ". " (Split takes single characters, so walk with Find).
-        String rest = parts[i]
-        while rest != ""
-            String s = rest
-            int cut = StringUtil.Find(rest, ". ")
-            if cut >= 0
-                s = StringUtil.Substring(rest, 0, cut + 1)
-                rest = StringUtil.Substring(rest, cut + 2)
-            else
-                rest = ""
-            endif
-            if s != ""
-                int k = 0
-                if StringUtil.Find(s, " is a little sore and is bleeding") >= 0
-                    k = 1
-                endif
-                if result[k] != ""
-                    result[k] = result[k] + " "
-                endif
-                result[k] = result[k] + s
-            endif
-        endwhile
-        i += 1
-    endwhile
-    Trace("FirstTimesParts", "first_times:"+result[0]+" | blood:"+result[1])
+    String result = PapyrusUtil.StringJoin(StringUtil.Split(lines, "\n"), " ")
+    Trace("FirstTimes", result)
     return result
 EndFunction
 
-; True when the ledger has no record of a receiving `act` ("Vaginal", "Anal") for a; false when not installed.
-Bool Function NeverGot(Actor a, String act) global
+; SexLab's own count of `act` ("Vaginal", "Anal") for a: P+ statistics 10 / 11, AE skills VaginalCount / AnalCount.
+; The same counts Lover's Ledger seeds itself from (TTLL_SexlabIntegration.CheckHistory).
+Int Function SexLabCount(Actor a, String act) global
+    if TTLL_SexlabIntegration.IsPPlus()
+        int id = 10
+        if act == "Anal"
+            id = 11
+        endif
+        return TTLL_SexlabPPlus.GetCount(a, id)
+    endif
+    SexLabFramework slf = Game.GetFormFromFile(0xD62, "SexLab.esm") as SexLabFramework
+    if slf == None
+        return 0
+    endif
+    return slf.Stats.GetSkill(a, act + "Count")
+EndFunction
+
+; True when this is a's first receiving `act` ("Vaginal", "Anal"); false when not installed.
+; The ledger decides, once it holds SexLab's history: SexLab knowing more than the ledger (not seeded yet,
+; or a past lover still queued) is not a first. Same test as Lover's Ledger FirstTimes.cpp.
+Bool Function FirstGot(Actor a, String act) global
     if !IsInstalled() || a == None
         return false
     endif
-    return TTLL_Store.GetActionCount(a, false, act) == 0
+    int got = TTLL_Store.GetActionCount(a, false, act)
+    if got != 0
+        return false
+    endif
+    return SexLabCount(a, act) <= TTLL_Store.GetActionCount(a, true, act)
+EndFunction
+
+; Virgin-blood sentences for the scene start DN (sexlab.narration.virgin_blood, default off). Receivers as in
+; Scene.Engine_SetSkills: vaginal for a female position, anal for position 0. "" when none.
+String Function VirginBloodSentences(Actor[] positions, Bool vaginal, Bool anal) global
+    if !(vaginal || anal) || !IsInstalled() \
+            || !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.narration.virgin_blood", false)
+        return ""
+    endif
+    String result = ""
+    int i = 0
+    while i < positions.Length
+        Actor a = positions[i]
+        if a != None
+            String name = a.GetDisplayName()
+            if vaginal && a.GetLeveledActorBase().GetSex() == 1 && FirstGot(a, "Vaginal")
+                result += " This is " + name + "'s first time having vaginal sex; there is some bleeding and their pussy is a little sore."
+            endif
+            if anal && i == 0 && FirstGot(a, "Anal")
+                result += " This is " + name + "'s first time having anal sex; there is some bleeding and their ass is a little sore."
+            endif
+        endif
+        i += 1
+    endwhile
+    if result != ""
+        result = StringUtil.Substring(result, 1)
+        Trace("VirginBloodSentences", result)
+    endif
+    return result
 EndFunction
 
 ; Game days since a ledger "lasttime"; -1 when never.

@@ -2,6 +2,14 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+## 0.36.4
+
+### Lover's Ledger
+- Lover's Ledger's SexLab refactor (handlers moved from `TTLL_MainController` to `TTLL_SexlabIntegration`) keeps every signature we call. Header stubs gain `TTLL_SexlabIntegration.IsPPlus()` and `TTLL_SexlabPPlus.GetCount(Actor, int)`.
+- Lover's Ledger `DescribeFirstTimes` no longer writes virgin blood (`loversledger.first_time.virgin_blood` is gone). `LoversLedger.FirstTimesParts` → `FirstTimes(positions, tags)` (one string, lines joined by " ").
+- New config `sexlab.narration.virgin_blood` (bool, default false). `LoversLedger.VirginBloodSentences(positions, vaginal, anal)` is appended to the start `desc` in `Scene.StageStart_NarrateStart`: "This is <name>'s first time having vaginal|anal sex; there is some bleeding and their pussy|ass is a little sore."
+- `LoversLedger.FirstGot(a, act)` replaces `NeverGot`: ledger received count 0 **and** `SexLabCount(a, act)` (P+ statistic 10 / 11, AE `VaginalCount` / `AnalCount`) ≤ ledger given count, the "seeded" test of Lover's Ledger `FirstTimes.cpp`. Used by the blood sentences and `Scene.Engine_SetSkills` first-time marks.
+
 ## 0.36.3
 
 ### Scene narration

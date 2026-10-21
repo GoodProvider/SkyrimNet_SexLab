@@ -47,8 +47,10 @@
 
 ## Punish / Aid part list: first times need Lover's Ledger (2026-10-18)
 
-- Pussy / ass show as damaged on a first vaginal / anal scene only with TT Lover's Ledger: `Scene.Engine_SetSkills` checks `TTLL_Store.GetActionCount(actor, false, "Vaginal" | "Anal") == 0` while the animation has that tag (vaginal: female positions; anal: position 0). No ledger, no first-time marks (the user chose this over SexLab skill stats).
-- The flag is sticky in the engine for the scene (`SetFirstTimes` never clears), so the ledger counting the act during the scene does not undo it. If the ledger counted an act before the first `Engine_SetSkills` call, that scene would not be marked. Not verified in game, and the ledger action names "Vaginal" / "Anal" are taken from its header example, not checked.
+- Pussy / ass show as damaged on a first vaginal / anal scene only with TT Lover's Ledger: `Scene.Engine_SetSkills` checks `LoversLedger.FirstGot(actor, "Vaginal" | "Anal")` while the animation has that tag (vaginal: female positions; anal: position 0). No ledger, no first-time marks (the user chose this over SexLab skill stats).
+- **2026-10-20:** `FirstGot` = ledger received count 0 **and** SexLab's count (P+ statistic 10 / 11, AE `VaginalCount` / `AnalCount`) ≤ the ledger's given count. The ledger decides, but only once it has been seeded from SexLab (`TTLL_SexlabIntegration.CheckHistory`, or a past lover still queued for the LLM). Ledger canonicalizes "Vaginal" / "Anal" to `vaginalsex` / `analsex` (`synonyms.json`), so those names are right.
+- **Rule:** virgin-blood text is ours (`LoversLedger.VirginBloodSentences`, `sexlab.narration.virgin_blood`). Lover's Ledger removed it from `DescribeFirstTimes` (its commit f9ec526); don't expect it in `GetFirstTimes`.
+- The flag is sticky in the engine for the scene (`SetFirstTimes` never clears), so the ledger counting the act during the scene does not undo it. If the ledger counted an act before the first `Engine_SetSkills` call, that scene would not be marked. Not verified in game.
 - The strategy reason ("Nina appears to …") is computed on panel open from `ObservedPhrase`, not stored as a `PunishRecord`, so it never fills the 8-record cap.
 
 ## Necro / corpse scenes end right after they start on SexLab 1.6x (2026-10-17)

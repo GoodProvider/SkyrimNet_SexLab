@@ -7,3 +7,8 @@ Scriptname TTLL_SexlabIntegration Hidden
 String Function GetFirstTimes(Actor[] positions, string tags) global
     return ""
 EndFunction
+
+; True on SexLab P+ (SexLabUtil plugin version > 20000).
+bool Function IsPPlus() global
+    return false
+EndFunction

@@ -59,6 +59,7 @@ Scene_Creator (pooled) ──StartScene──► Scene_Manager.CreateSceneByCrea
 - Start narration (v0.36.3+): `Scene.StageStart` claims `STATUS_ACTIVE` and calls `StageStart_NarrateStart` before its bookkeeping (`AlignActors`, `SyncAnimationDefaults`, …), so the start DN is not delayed. Intersex positions and Lover's Ledger first times go first as a forced `"sexlab start info"` event; see [orgasm-narration.md](../reference/orgasm-narration.md).
 - Keep-talking nudge (v0.36.3+): `sexlab.narration.silence_seconds` (default 8, 0 = off). `PollAnimationChange` → `SilenceTick` → `SilenceNudge_IfQuiet` rotates over non-player positions; `Utilities.SilenceAllows` gates, `Utilities.SilenceNudge` sends `"continue scene"` (no CheckDuplicate).
 - Dead actors (v0.36.3+): `sexlab.actors.dead_allowed` (default off), native `SkyrimNet_SexLab_WebUI.IsDeadAllowed()`. On SexLab 1.6x `Scene_Manager` `HookAnimationStarting` → `CorpseHealth_FloorThread` lifts each corpse position under Health 5 to 10; `HookAnimationEnd` → `CorpseHealth_RestoreThread`. LLM action eligibility unchanged.
+- Virgin blood (v0.36.4+): `sexlab.narration.virgin_blood` (default false). `StageStart_NarrateStart` appends `LoversLedger.VirginBloodSentences(positions, vaginal, anal)` to the start text; first-times lines (`LoversLedger.FirstTimes`) go in the `"sexlab start info"` event. Lover's Ledger no longer writes blood text.
 - Quirks (initiator vs victim, P+ hop vs end, DOM bind race): [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 
 ## Review

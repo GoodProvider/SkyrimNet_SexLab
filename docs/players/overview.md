@@ -39,6 +39,7 @@ SkyrimNet is not seeing Actions functions.
 
 - SkyrimNet dashboard **Narration cooldown** — min seconds since last audio before optional Direct Narration.
 - SkyrimNet dashboard **Silence before keep-talking** — seconds of SkyrimNet silence before an actor in the scene keeps talking (default 8, 0 = off).
+- SkyrimNet dashboard **Virgin blood on first vaginal / anal** (needs Lover's Ledger, default off) — the scene start mentions bleeding and soreness on an actor's first time receiving vaginal or anal sex.
 - SkyrimNet dashboard **Narration max distance** — player distance for optional narration.
 
 ## Shipped LLM actions
