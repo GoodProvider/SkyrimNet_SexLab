@@ -66,6 +66,7 @@ Function Setup()
     RegisterForModEvent("SkyrimNet_OnPluginConfigSaved", "OnPluginConfigSaved")
 
     ApplyPluginConfig()
+    CorpsePatch_Check()
     Trace("Setup", "complete hotkey enabled="+hot_key_toggle+" dx="+sex_edit_key)
 EndFunction
 
@@ -238,6 +239,29 @@ EndFunction
 Event OnPluginConfigSaved(string eventName, string strArg, float numArg, Form sender)
     Trace("OnPluginConfigSaved", "--- reloading plugin config")
     ApplyPluginConfig()
+    CorpsePatch_Check()
+EndEvent
+
+; Dead actors can join scenes needs the SexLab 1.66 corpse patch (FOMOD option) unless P+. Always re-hashes, so
+; IsDeadAllowed() sees the result. Toggle on without the patch: CorpsePatch_TurnOff runs as its own mod event so
+; the dialog does not hold up Setup.
+Function CorpsePatch_Check()
+    String bad = SkyrimNet_SexLab_WebUI.CorpsePatchMismatch(SkyrimNet_SexLab_Utilities.IsSexLabPPlus())
+    if bad == "" || !SkyrimNetApi.GetConfigBool(PLUGIN_CONFIG, "sexlab.actors.dead_allowed", false)
+        return
+    endif
+    Trace("CorpsePatch_Check", bad+" does not match the patch, turning Dead actors can join scenes off after unpause")
+    UnRegisterForModEvent("SkyrimNet_SexLab_CorpsePatchOff")
+    RegisterForModEvent("SkyrimNet_SexLab_CorpsePatchOff", "CorpsePatch_TurnOff")
+    SendModEvent("SkyrimNet_SexLab_CorpsePatchOff", bad)
+EndFunction
+
+; Wait does not advance in menus: this returns once the game unpauses.
+Event CorpsePatch_TurnOff(string eventName, string bad, float numArg, Form sender)
+    Utility.Wait(0.1)
+    bool ok = SkyrimNetApi.PatchConfig(PLUGIN_CONFIG, "{ \"sexlab\": { \"actors\": { \"dead_allowed\": false } } }")
+    Trace("CorpsePatch_Check", "dead_allowed -> false ok:"+ok)
+    SkyMessage.Show("The file "+bad+" does not match the patched .pex file, this feature is not possible.", "Close")
 EndEvent
 
 Event OnConfigOpen()

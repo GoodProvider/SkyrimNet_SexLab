@@ -1,6 +1,6 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Cutleast/FOMOD-Creation-Kit/master/res/schemas/ModConfig5.0.xsd">
   	<!-- this file is generated from FOMOD_source/ModuleConfig.xml -->
-	<moduleName>SkyrimNet SexLab (0.36.3)</moduleName>
+	<moduleName>SkyrimNet SexLab (0.36.4-rc1)</moduleName>
 	<moduleImage path="images\sexlab_logo.png"/>
 	<requiredInstallFiles>
 		<folder source="core" destination="" alwaysInstall="true" priority="0"/>
@@ -49,6 +49,26 @@
 												<fileDependency file="SkyrimNet_DOM.esp" state="Active"/>
 											</dependencies>
 											<type name="Recommended"/>
+										</pattern>
+									</patterns>
+								</dependencyType>
+							</typeDescriptor>
+						</plugin>
+						<plugin name="SexLab 1.66 corpse patch">
+							<description> Lets dead actors join scenes on SexLab 1.66 (dashboard: Dead actors can join scenes). Replaces SexLab's sslActorAlias.pex and sslActorLibrary.pex with versions that do not end a scene over a corpse's Health; with the option off they act as stock. Not needed for SexLab P+. Do not use with SLSO or any other mod that replaces sslActorAlias.pex: SkyrimNet_SexLab checks both files and turns the option off if they do not match.</description>
+							<image path="images\sexlab_logo.png" />
+							<files>
+								<folder source="patch_sexlab166\Scripts" destination="Scripts" alwaysInstall="false" installIfUsable="false" priority="0"/>
+							</files>
+							<typeDescriptor>
+								<dependencyType>
+									<defaultType name="Optional"/>
+									<patterns>
+										<pattern>
+											<dependencies operator="And">
+												<fileDependency file="SLSO.esp" state="Active"/>
+											</dependencies>
+											<type name="NotUsable"/>
 										</pattern>
 									</patterns>
 								</dependencyType>

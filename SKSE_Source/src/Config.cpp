@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "CorpsePatch.h"
 #include "Hud.h"
 #include "JsonUtil.h"
 #include "OrgasmEngine.h"
@@ -169,7 +170,7 @@ bool IsVerbose()
 
 bool IsDeadAllowed()
 {
-    return GetBool("sexlab.actors.dead_allowed", false);
+    return CorpsePatch::IsInstalled() && GetBool("sexlab.actors.dead_allowed", false);
 }
 
 std::uint32_t HotkeyVkToDx(int vk)

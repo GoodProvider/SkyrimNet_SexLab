@@ -400,12 +400,6 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     ; Add Actors and Victims 
     ; -----------------------------------------
     int i = 0
-    while i < num_actors
-        CorpseHealth_Floor(actors[i])
-        i += 1
-    endwhile
-
-    i = 0
     bool failed = False
     while i < num_actors && !failed
         DbgMsg("StartScene", "model.AddActor "+actors[i].GetDisplayName())
@@ -441,7 +435,6 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     endif
 
     if failed
-        RestoreCorpseHealth()
         ; Unlock SexLab Making slot claimed by NewThread (not Creator.Release).
         model.Initialize()
         Release() 
@@ -493,7 +486,6 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     DbgMsg("StartScene", "model.StartThread() returned thread="+thread)
     if thread == None 
         Trace("StartScene","StartThread returned None, releasing sl_scene.sid")
-        RestoreCorpseHealth()
         model.Initialize()
         Release() 
         DbgReturn("StartScene", "None")
@@ -504,7 +496,6 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     if sl_scene == None
         Trace("StartScene","CreateSceneByCreator returned None, ending orphan thread")
         thread.EndAnimation(true)
-        RestoreCorpseHealth()
         Release()
         DbgReturn("StartScene", "None")
         return None
@@ -533,15 +524,6 @@ Function ApplyMajorityClothed(sslThreadModel model, sslBaseAnimation[] animation
         if majority[i] == 1
             model.SetNoStripping(actors[i])
         endif
-        i += 1
-    endwhile
-EndFunction
-
-; The scene never started: undo CorpseHealth_Floor.
-Function RestoreCorpseHealth()
-    int i = 0
-    while i < num_actors
-        CorpseHealth_Restore(actors[i])
         i += 1
     endwhile
 EndFunction
@@ -1250,7 +1232,7 @@ bool Function EnsureSexLabActorsValid()
         endif
         EnsureFutaSex(sexlab, akActor)
         int code = sexlab.ValidateActor(akActor)
-        ; Dead actors can join scenes: StartScene lifts the corpse's Health (CorpseHealth_Floor) before AddActor.
+        ; Dead actors can join scenes: IsDeadAllowed is only true on P+ or with the SexLab 1.66 corpse patch.
         if code == -13 && akActor.IsDead() && SkyrimNet_SexLab_WebUI.IsDeadAllowed()
             Trace("EnsureSexLabActorsValid", GetDisplayName(akActor)+" is dead, allowed by Dead actors can join scenes")
             code = 0

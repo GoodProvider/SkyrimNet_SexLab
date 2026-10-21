@@ -1,4 +1,4 @@
-VERSION=0.36.3
+VERSION=0.36.4-rc1
 NAME=SkyrimNet SexLab
 
 RELEASE_FILE=versions/SkyrimNet_SexLab ${VERSION}.7z
@@ -28,6 +28,13 @@ dd:
 # Fails when a pex came from papyrus.exe (literal \" breaks Papyrus-built JSON). Rebuild with compile: pyro.
 check-pex:
 	python3 ./python_scripts/check_pex_escapes.py Scripts
+	python3 ./python_scripts/check_pex_escapes.py patch_sexlab166/Scripts
+	python3 ./python_scripts/corpse-patch-hashes.py --check
+
+# SexLab 1.66 corpse patch: compile, then refresh CorpsePatchHashes.h (a pex embeds its compile time). Rebuild the DLL after.
+corpse-patch:
+	C:/Skyrim/tools/Pyro/pyro.exe skyrimse-sexlab166.ppj --game-path "C:\Skyrim\dev\skyrim"
+	python3 ./python_scripts/corpse-patch-hashes.py
 
 release: check-pex
 	python3 ./python_scripts/info.py -v ${VERSION} -n '${NAME}' -o SKSE/Plugins/SkyrimNet_SexLab/info.json
@@ -53,7 +60,8 @@ release: check-pex
 		core \
 		images \
 		handler_udng \
-		handler_dom 
+		handler_dom \
+		patch_sexlab166/Scripts
 
 	if exist "$(subst /,\\,core)" rmdir /s /q "$(subst /,\\,core)"		
 	if exist "$(subst /,\\,handler_udng)" rmdir /s /q "$(subst /,\\,handler_udng)"	

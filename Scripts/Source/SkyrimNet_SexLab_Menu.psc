@@ -730,7 +730,8 @@ bool Function IsAvailableActor(Actor akActor)
     if !akActor.Is3DLoaded()
         return false
     endif
-    ; SexLab 1.6x IsValidActor rejects a corpse with Health < 1; CorpseHealth_Floor lifts it at the start.
+    ; Stock SexLab 1.66 IsValidActor rejects a corpse with Health < 1; IsDeadAllowed is only true on P+ or with
+    ; the SexLab 1.66 corpse patch.
     if akActor.IsDead() && SkyrimNet_SexLab_WebUI.IsDeadAllowed()
         return true
     endif

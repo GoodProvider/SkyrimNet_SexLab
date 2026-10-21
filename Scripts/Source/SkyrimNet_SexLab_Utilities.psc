@@ -251,55 +251,6 @@ EndFunction
 ; Hex entity UUID -> decimal string (SKSE native). Decimal input returned unchanged.
 String Function UuidToDecimalString(String entityUuid) global native
 
-; ------------------------------------------------------------
-; Corpses on SexLab 1.6x: ValidateActor and sslActorAlias OnUpdate (Prepare / Animating) reject or
-; EndAnimation(true) an actor that IsDead() with Health < 1. Keep a corpse at Health 10 for the scene and put
-; the old value back at its end. Only with the dashboard Dead actors can join scenes on. P+ tracks dead actors
-; itself (_livestatus): no-op there. Another mod may already have raised the corpse to about 1 (it then reads
-; 1.000000 but is still < 1.0), hence the margin.
-; ------------------------------------------------------------
-String Function CorpseHealthKey() global
-    return "skyrimnet_sexlab_corpse_health"
-EndFunction
-
-; True when the floor was applied (first time saves the old health).
-bool Function CorpseHealth_Floor(Actor akActor) global
-    if akActor == None || IsSexLabPPlus() || !akActor.IsDead() || !SkyrimNet_SexLab_WebUI.IsDeadAllowed()
-        return false
-    endif
-    float h = akActor.GetActorValue("Health")
-    if h >= 5.0
-        return false
-    endif
-    if !StorageUtil.HasFloatValue(akActor, CorpseHealthKey())
-        StorageUtil.SetFloatValue(akActor, CorpseHealthKey(), h)
-    endif
-    akActor.RestoreActorValue("Health", 10.0 - h)
-    float after = akActor.GetActorValue("Health")
-    if after < 2.0
-        akActor.ForceActorValue("Health", 10.0)
-        after = akActor.GetActorValue("Health")
-    endif
-    Trace("CorpseHealth_Floor", GetDisplayName(akActor)+" dead, health "+h+" -> "+after)
-    return true
-EndFunction
-
-Function CorpseHealth_Restore(Actor akActor) global
-    if akActor == None || !StorageUtil.HasFloatValue(akActor, CorpseHealthKey())
-        return
-    endif
-    float saved = StorageUtil.GetFloatValue(akActor, CorpseHealthKey())
-    StorageUtil.UnsetFloatValue(akActor, CorpseHealthKey())
-    if !akActor.IsDead()
-        return
-    endif
-    float h = akActor.GetActorValue("Health")
-    if h > saved
-        akActor.DamageActorValue("Health", h - saved)
-    endif
-    Trace("CorpseHealth_Restore", GetDisplayName(akActor)+" health "+h+" -> "+akActor.GetActorValue("Health"))
-EndFunction
-
 
 ; ------------------------------------------------------------
 ; Timestamps

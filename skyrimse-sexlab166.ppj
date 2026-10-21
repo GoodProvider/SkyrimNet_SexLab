@@ -1,0 +1,76 @@
+<?xml version='1.0'?><!-- SexLab 1.66 corpse patch (patch_sexlab166/Source). Rebuild with make corpse-patch: it also refreshes CorpsePatchHashes.h. -->
+<PapyrusProject xmlns="PapyrusProject.xsd" 
+    Flags="TESV_Papyrus_Flags.flg" 
+    Game="sse" 
+    Output="patch_sexlab166\Scripts" 
+    Optimize="false" 
+    Release="false" 
+    Zip="false"
+    Final="false">
+    <Variables>
+        <!-- Set the name of your mod: -->
+        <Variable Name="ModName" Value="SkyrimNet SexLab SexLab 1.66 patch" />
+        <!-- The folder where you store all of your mods -->
+        <Variable Name="ModsFolder" Value="C:\Skyrim\dev\mods" />
+    </Variables>
+
+    <Imports>
+        <!-- Patched SexLab scripts first so they win over SexLabFrameworkAE. -->
+        <Import>patch_sexlab166\Source</Import>
+        <Import>Scripts\Source</Import>
+        <Import>.\Headers_Source</Import>
+        <Import>.\Headers_Source\OstimNet</Import>
+        <Import>.\Headers_Source\Ostim</Import>
+        <Import>.\Headers_Source\LoversLedger</Import>
+        <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
+            <Import>@ModsFolder\SkyrimNet_DOM\Headers_Source\DOM</Import>
+
+        <Import>@ModsFolder\SKSE64\Scripts\Source</Import>
+        <Import>@ModsFolder\SkyrimNet\Source\Scripts</Import>
+        <Import>@ModsFolder\powerofthree's Tweaks\Source\Scripts</Import>
+        <Import>@ModsFolder\powerofthree's Papyrus Extender\Source\Scripts</Import>
+        <Import>@ModsFolder\Papyrus MessageBox - SKSE NG\Scripts\Source</Import>
+
+
+        <Import>@ModsFolder\Devious Devices for SE-AE-VR\Scripts\Source</Import>
+        <Import>@ModsFolder\Devious Devices for SE-AE-VR\PapyrusSourcesDD\SRC_SLA</Import>
+
+        <Import>@ModsFolder\JContainers\scripts\source</Import>
+
+        <Import>@ModsFolder\MfgFix\Source\Scripts</Import>
+        <Import>@ModsFolder\FNIS Creature Pack SE\scripts\source</Import>
+        <Import>@ModsFolder\PAPYRUS\SRC_RM</Import>
+        <Import>@ModsFolder\JContainers\scripts\source</Import>
+        <Import>@ModsFolder\SkyUI\scripts\Source</Import>
+        <Import>@ModsFolder\UIExtensions\scripts\Source</Import>
+        <Import>@ModsFolder\FNIS Behavior SE 7_6\source\scripts</Import>
+
+        <Import>@ModsFolder\SexLabFrameworkAE\scripts\Source</Import>
+
+        <!--
+        <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
+        <Import>.\Headers\SLO Aroused NG</Import>
+        <Import>.\Headers\OStim</Import>
+        <Import>.\Headers\Devious Devices</Import>
+        
+        <Import>@ModsFolder\SkyrimNet_DOM\Headers\Ostim</Import>
+        <Import>@ModsFolder\SkyrimNet_DOM\Headers\DOM</Import>
+        <Import>@ModsFolder\Fores New Idles in Skyrim SE - FNIS SE\scripts\source</Import>
+        <Import>@ModsFolder\OSL Aroused\Scripts\Source</Import>
+        <Import>.\Headers</Import>
+        <Import>.\Headers\PAH Diary Of Mine</Import>
+        <Import>@ModsFolder\SLO Aroused NG\Source\Scripts</Import>
+            <Import>@ModsFolder\SkyUI\Scripts\Source</Import>
+            <Import>@ModsFolder\Devious Devices NG\Source\Scripts</Import>
+                <Import>@ModsFolder\Devious Devices for SE-AE-VR\Scripts\Source</Import>
+                    <Import>@ModsFolder\SexLab Inflation Framework\Scripts\Source</Import>
+                    <Import>@ModsFolder\XP32 Maximum Skeleton Special Extended\Scripts\Source</Import>
+                    <Import>@ModsFolder\Devious Devices for SE-AE-VR\PapyrusSourcesDD/SRC_OTHER</Import>
+            <Import>@ModsFolder/OStim Standalone - Advanced Adult Animation Framework/Scripts/Source</Import>
+        -->
+        <Import>C:\Skyrim\dev\skyrim\Data\Source\Scripts</Import>
+    </Imports>
+    <Folders>
+        <Folder>patch_sexlab166\Source</Folder>
+    </Folders>
+</PapyrusProject>

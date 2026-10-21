@@ -151,6 +151,8 @@ Function Setup()
 
     ; SexLab always starts with no active threads; clear stale file from prior session
     GetThreadsJson()
+    ; A hold survives saves: give back packages of NPCs whose scene died with the old session.
+    ReleaseIdlePackageHolds()
 EndFunction 
 
 Bool Function Setup_CheckLinks()
@@ -1482,44 +1484,54 @@ Event AnimationStarting(int ThreadID, bool HasPlayer)
     if HasPlayer && scene_camera_state < 0
         scene_camera_state = Game.GetCameraState()
     endif
-    CorpseHealth_FloorThread(ThreadID)
+    if sexlab != None
+        HoldScenePackages(SexLab.GetController(ThreadID))
+    endif
 EndEvent
 
-; Dead actors can join scenes: before Prepare / Animating, lift every corpse in the thread (also one another
-; mod started) so sslActorAlias OnUpdate does not end it. Remembered per thread: thread.Positions can already
-; be cleared at HookAnimationEnd.
-String Function CorpseThreadKey(int ThreadID)
-    return "skyrimnet_sexlab_corpses_tid_"+ThreadID
-EndFunction
+; ----------------------------------------------------------
+; SkyrimNet package hold: SexLab's DoNothing override is priority 100, so a SkyrimNet package at
+; the same priority (e.g. a mod's camp sandbox) can win and walk the NPC out of the scene.
+; HoldPackages stops SkyrimNet applying the actor's packages (kept registered); released when the
+; actor is no longer animating. Held actors are listed so release does not depend on thread.positions.
+String PACKAGE_HOLD_OWNER = "SkyrimNet_SexLab"
+String PACKAGE_HOLD_LIST = "SkyrimNet_SexLab_PackageHold"
 
-Function CorpseHealth_FloorThread(int ThreadID)
-    if sexlab == None || IsSexLabPPlus() || !SkyrimNet_SexLab_WebUI.IsDeadAllowed()
-        return
-    endif
-    sslThreadController thread = SexLab.GetController(ThreadID)
+Function HoldScenePackages(sslThreadController thread)
     if thread == None
         return
     endif
-    Actor[] positions = thread.Positions
-    int i = 0
-    while i < positions.length
-        if positions[i] != None && positions[i].IsDead()
-            CorpseHealth_Floor(positions[i])
-            StorageUtil.FormListAdd(self, CorpseThreadKey(ThreadID), positions[i], false)
+    Actor[] actors = thread.Positions
+    if !actors
+        return
+    endif
+    Actor player = Game.GetPlayer()
+    int i = actors.length - 1
+    while 0 <= i
+        Actor a = actors[i]
+        if a != None && a != player
+            int held = SkyrimNetApi.HoldPackages(a, PACKAGE_HOLD_OWNER)
+            StorageUtil.FormListAdd(None, PACKAGE_HOLD_LIST, a, false)
+            a.EvaluatePackage()
+            Trace("HoldScenePackages", a.GetDisplayName()+" held:"+held)
         endif
-        i += 1
+        i -= 1
     endwhile
 EndFunction
 
-Function CorpseHealth_RestoreThread(int ThreadID)
-    String list_key = CorpseThreadKey(ThreadID)
-    int n = StorageUtil.FormListCount(self, list_key)
-    int i = 0
-    while i < n
-        CorpseHealth_Restore(StorageUtil.FormListGet(self, list_key, i) as Actor)
-        i += 1
+Function ReleaseIdlePackageHolds()
+    int i = StorageUtil.FormListCount(None, PACKAGE_HOLD_LIST) - 1
+    while 0 <= i
+        Actor a = StorageUtil.FormListGet(None, PACKAGE_HOLD_LIST, i) as Actor
+        if a == None || a.IsDead() || sexlab == None || !sexlab.IsActorActive(a)
+            if a != None
+                int restored = SkyrimNetApi.ReleaseHeldPackages(a, PACKAGE_HOLD_OWNER)
+                Trace("ReleaseIdlePackageHolds", a.GetDisplayName()+" restored:"+restored)
+            endif
+            StorageUtil.FormListRemoveAt(None, PACKAGE_HOLD_LIST, i)
+        endif
+        i -= 1
     endwhile
-    StorageUtil.FormListClear(self, list_key)
 EndFunction
 
 ; Back to the camera the player had before the scene (TFC off, first person if that was the start mode).
@@ -1555,6 +1567,8 @@ Event AnimationStart(int ThreadID, bool HasPlayer)
     endif
     sl_scene.AnimationStart()
     StartAnimationPoll()
+    ; Idempotent: covers P+ ChangeActors restarts and actors added after AnimationStarting.
+    HoldScenePackages(thread)
 EndEvent
 
 ; ----------------------------------------------------------
@@ -1674,7 +1688,6 @@ EndEvent
 
 ; ----------------------------------------------------------
 event AnimationEnd(int ThreadID, bool HasPlayer)
-    CorpseHealth_RestoreThread(ThreadID)
     ; create_if_missing=False: Action_Stop may already have AnimationEnd+Release; do not allocate a new scene.
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByThreadId(ThreadID, any_state=True, create_if_missing=False)
     if sl_scene == None 
@@ -1705,6 +1718,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
     if HasPlayer && sexlab != None && !sexlab.IsActorActive(Game.GetPlayer())
         RestoreCameraAfterScene()
     endif
+    ReleaseIdlePackageHolds()
 EndEvent
 
 ; Function AllowedDeniedOnlyIncrease(Actor[] actors, sslThreadController thread, String status)

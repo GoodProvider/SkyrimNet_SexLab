@@ -100,6 +100,20 @@
             "problemMatcher": "$PapyrusCompiler"
         },
         {
+            // Not part of compile: pyro. Refreshes CorpsePatchHashes.h too: rebuild the DLL after.
+            "label": "compile: pyro (SexLab 1.66 patch)",
+            "type": "shell",
+            "command": "make corpse-patch",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": "$PapyrusCompiler"
+        },
+        {
             "label": "compile: skyrim",
             "type": "shell",
             "command": "C:\\Skyrim\\dev\\skyrim\\Papyrus Compiler\\PapyrusCompiler.exe",

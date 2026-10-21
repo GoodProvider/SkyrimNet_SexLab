@@ -4,6 +4,7 @@
 #include "WebUI_Log.h"
 #include "WebUI.h"
 #include "ActionCatalog.h"
+#include "CorpsePatch.h"
 #include "ActorLocker.h"
 #include "AnimationDB.h"
 #include "BondageCatalog.h"
@@ -696,6 +697,12 @@ namespace PapyrusBindings_WebUI
 
     /// sexlab.actors.dead_allowed (dashboard Dead actors can join scenes), read live.
     bool IsDeadAllowed_Native(RE::StaticFunctionTag*) { return SexLabNet::IsDeadAllowed(); }
+
+    /// Re-hashes the SexLab 1.66 corpse patch pex files: the first missing / mismatched file, or "".
+    RE::BSFixedString CorpsePatchMismatch_Native(RE::StaticFunctionTag*, bool pplus)
+    {
+        return CorpsePatch::Recheck(pplus);
+    }
 
     /// TraceLog that only writes when verbose; tagged [V]. Info level so it shows without the debug level.
     void DebugLog(RE::StaticFunctionTag*, RE::BSFixedString script_name, RE::BSFixedString func,
@@ -1899,6 +1906,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog, true);
         a_vm->RegisterFunction("IsVerbose", scriptName, IsVerbose_Native, true);
         a_vm->RegisterFunction("IsDeadAllowed", scriptName, IsDeadAllowed_Native, true);
+        a_vm->RegisterFunction("CorpsePatchMismatch", scriptName, CorpsePatchMismatch_Native);
         a_vm->RegisterFunction("DebugLog", scriptName, DebugLog, true);
         a_vm->RegisterFunction("SetNearbyActorsJson", scriptName, SetNearbyActorsJson);
         a_vm->RegisterFunction("IsAvailableActor", scriptName, IsAvailableActor_Native);

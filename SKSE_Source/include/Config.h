@@ -43,6 +43,7 @@ bool IsOrgasmEngineDisabled();
 /// sexlab.debug.verbose: debug-level SKSE log, Papyrus DebugTrace lines, [SNSL DEBUG] prompt lines. Read live.
 bool IsVerbose();
 /// sexlab.actors.dead_allowed: corpses can be picked in the TargetMenu and kept in scenes. Read live.
+/// False until CorpsePatch::Recheck finds the SexLab 1.66 corpse patch (or P+).
 bool IsDeadAllowed();
 /// VK (dashboard type:hotkey) -> DX scancode. Mouse VKs map to SKSE's 256+ codes
 /// (VK_LBUTTON 256, VK_RBUTTON 257, VK_MBUTTON 258). 0 when unmapped.
