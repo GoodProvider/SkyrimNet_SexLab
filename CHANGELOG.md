@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### WebUI
+- **Lock-up when a scene request came in with the SkyrimNet dashboard open**: our dialogue took focus from the dashboard (both PrismaUI views at order 101). After Accept, no view had focus and the game stayed paused, with no cursor, Escape, console or menus. Now the dashboard and any other focused PrismaUI view are closed before the dialogue opens, and the dialogue never takes focus from another view. If a view will not let go, it shows "SexLab: request waiting - close the open menu" and opens once it does. Show / Hide log PrismaUI focus state.
+
 ## [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4) — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
 
 ### Lover's Ledger

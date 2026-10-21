@@ -14,6 +14,8 @@
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
+#include <algorithm>
+#include <charconv>
 #include <cstring>
 #include <deque>
 #include <filesystem>
@@ -22,6 +24,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -38,6 +41,11 @@ static std::string g_lastRebuildTimestamp;
 static int g_sexlabAnimCount = -1;  // -1 = not yet reported by Papyrus
 static std::mutex g_logFileMutex;
 static std::uintmax_t g_logFileOffset = 0;
+// Show held while another PrismaUI view (e.g. the SkyrimNet dashboard) has focus. The generation
+// changes on each save load, so a held Show from the previous game is dropped.
+static std::atomic<bool> g_showPending{false};
+static std::atomic<bool> g_showPendingControlPanel{true};
+static std::atomic<uint32_t> g_showGeneration{0};
 
 namespace {
 
@@ -517,6 +525,8 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
 void WebUI_SetGameReady()
 {
     g_gameReady = true;
+    ++g_showGeneration;
+    g_showPending = false;
     if (!ActionCatalog::Load()) {
         webui_log::error("Game ready — ActionCatalog reload failed.");
     } else {
@@ -550,8 +560,147 @@ bool WebUI_IsReady()
     return PrismaUI->IsValid(g_view);
 }
 
+/// True when some other PrismaUI view (SkyrimNet dashboard / chat, another mod) holds focus.
+static bool WebUI_ForeignFocus()
+{
+    return PrismaUI && PrismaUI->HasAnyActiveFocus() && !PrismaUI->HasFocus(g_view);
+}
+
+namespace {
+
+constexpr std::string_view kDashboardPath = "SkyrimNet/dashboard/index.html";
+constexpr int kDeferTimeoutTicks = 12;  // 12 × 250 ms
+
+struct ForeignView
+{
+    std::string path;  // relative to file:///views/
+    PrismaView id;
+};
+
+/// Other mods' PrismaUI views. PrismaUI has no view list and its ids change each session, but
+/// PrismaUI.log records "View [<id>] creation requested for path: file:///views/<path> ...".
+/// The last id per path wins; our own views are skipped. Empty when the log is missing.
+std::vector<ForeignView> ForeignViews()
+{
+    std::vector<ForeignView> out;
+    auto dir = SKSE::log::log_directory();
+    std::ifstream f;
+    if (dir)
+        f.open(*dir / "PrismaUI.log");
+    if (!f) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            webui_log::warn("ForeignViews: PrismaUI.log not readable; other views can't be closed");
+        return out;
+    }
+    constexpr std::string_view kId = "View [";
+    constexpr std::string_view kPath = "creation requested for path: file:///views/";
+    std::string line;
+    while (std::getline(f, line)) {
+        const auto p = line.find(kPath);
+        auto i = line.find(kId);
+        if (p == std::string::npos || i == std::string::npos || i > p)
+            continue;
+        i += kId.size();
+        const auto close = line.find(']', i);
+        PrismaView id = 0;
+        if (close == std::string::npos ||
+            std::from_chars(line.data() + i, line.data() + close, id).ptr != line.data() + close)
+            continue;
+        const auto ps = p + kPath.size();
+        const auto pe = line.find(' ', ps);
+        std::string path = line.substr(ps, pe == std::string::npos ? std::string::npos : pe - ps);
+        if (id == g_view || path.starts_with("SkyrimNet_SexLab/"))
+            continue;
+        auto it = std::find_if(out.begin(), out.end(), [&](const ForeignView& v) { return v.path == path; });
+        if (it != out.end())
+            it->id = id;
+        else
+            out.push_back({ std::move(path), id });
+    }
+    return out;
+}
+
+bool DashboardOpen(const std::vector<ForeignView>& views)
+{
+    for (const auto& v : views)
+        if (v.path == kDashboardPath)
+            return PrismaUI->IsValid(v.id) && (!PrismaUI->IsHidden(v.id) || PrismaUI->HasFocus(v.id));
+    return false;
+}
+
+/// SkyrimNet's own close path, so its open/closed state stays in sync. Only call when open.
+void ToggleSkyrimNetDashboard()
+{
+    auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+    if (!vm)
+        return;
+    RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+    vm->DispatchStaticCall(RE::BSFixedString("SkyrimNetApi"), RE::BSFixedString("TriggerToggleDashboard"),
+                           new EmptyArgs(), callback);
+}
+
+/// Closes the SkyrimNet dashboard (via SkyrimNet) and unfocuses + hides any other focused view.
+/// Unfocused overlays (HUDs, Injury Engine) are left alone.
+void CloseForeignViews(const std::vector<ForeignView>& views)
+{
+    for (const auto& v : views) {
+        if (!PrismaUI->IsValid(v.id))
+            continue;
+        const bool hidden = PrismaUI->IsHidden(v.id);
+        const bool focus = PrismaUI->HasFocus(v.id);
+        const char* action = "none";
+        if (v.path == kDashboardPath) {
+            if (!hidden || focus) {
+                ToggleSkyrimNetDashboard();
+                action = "TriggerToggleDashboard";
+            }
+        } else if (focus) {
+            PrismaUI->Unfocus(v.id);
+            PrismaUI->Hide(v.id);
+            action = "Unfocus+Hide";
+        }
+        webui_log::info("CloseForeignViews: {} [{}] hidden={} focus={} -> {}", v.path, v.id, hidden, focus, action);
+    }
+}
+
+}  // namespace
+
+static void WebUI_ShowNow(bool showControlPanel);
+
+/// Polls off the game thread; on the game thread, runs the held Show once other views are closed.
+/// After the timeout a still-focused view gets a notification and the Show keeps waiting on focus.
+static void WebUI_StartDeferredShowWatcher()
+{
+    const auto generation = g_showGeneration.load();
+    std::thread([generation]() {
+        for (int tick = 1; g_showPending.load() && g_showGeneration.load() == generation; ++tick) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            SKSE::GetTaskInterface()->AddTask([generation, tick]() {
+                if (g_showGeneration.load() != generation || !g_showPending.load())
+                    return;
+                const bool focus = WebUI_ForeignFocus();
+                if (focus || (tick < kDeferTimeoutTicks && DashboardOpen(ForeignViews()))) {
+                    if (focus && tick == kDeferTimeoutTicks) {
+                        webui_log::info("WebUI_Visibility_Show: another view still has focus after close");
+                        PapyrusBindings_WebUI::HandleNotify("SexLab: request waiting - close the open menu");
+                    }
+                    return;
+                }
+                if (!g_showPending.exchange(false))
+                    return;
+                webui_log::info("WebUI_Visibility_Show: other views released focus, showing held overlay");
+                if (g_gameReady && WebUI_IsReady())
+                    WebUI_ShowNow(g_showPendingControlPanel.load());
+            });
+        }
+    }).detach();
+}
+
 /// Shows and focuses the PrismaUI overlay after refreshing nearby actors for the menu.
 /// No-ops if PrismaUI is missing, no game is loaded, DomReady has not fired, or the view is invalid.
+/// Other PrismaUI views are closed first and the Show waits for them: focusing over the SkyrimNet
+/// dashboard (same order 101) left the game paused with no cursor once we hid.
 void WebUI_Visibility_Show(bool showControlPanel)
 {
     if (!PrismaUI) return;
@@ -565,11 +714,29 @@ void WebUI_Visibility_Show(bool showControlPanel)
         return;
     }
 
+    if (g_showPending.load()) {
+        g_showPendingControlPanel = showControlPanel;
+        return;
+    }
+    if (const auto views = ForeignViews(); WebUI_ForeignFocus() || DashboardOpen(views)) {
+        webui_log::info("WebUI_Visibility_Show deferred: closing other PrismaUI views first");
+        g_showPendingControlPanel = showControlPanel;
+        g_showPending = true;
+        CloseForeignViews(views);
+        WebUI_StartDeferredShowWatcher();
+        return;
+    }
+    WebUI_ShowNow(showControlPanel);
+}
+
+static void WebUI_ShowNow(bool showControlPanel)
+{
     PapyrusBindings_WebUI::PopulateNearbyActors();
     WebUI_InvokeFrameworkToggle();
     SexLabNet::InvokeConfigureSettingsPanel();  // AnimDB mismatch → ControlPanel Rebuild DB button
 
-    webui_log::info("WebUI Show + Focus.");
+    webui_log::info("WebUI Show + Focus. anyFocus={} ourFocus={}", PrismaUI->HasAnyActiveFocus(),
+                    PrismaUI->HasFocus(g_view));
     PrismaUI->Show(g_view);
     PrismaUI->Focus(g_view, true);
     KeyHandler::PromoteSink();
@@ -594,6 +761,7 @@ static void WebUI_Visibility_HideImpl(bool commit)
     if (!PrismaUI) return;
     PrismaUI->Unfocus(g_view);
     PrismaUI->Hide(g_view);
+    webui_log::info("WebUI Unfocus + Hide. anyFocus={}", PrismaUI->HasAnyActiveFocus());
     g_webuiGamePaused = true;
     WebUI_Invoke("setGamePaused(true);");
 }
