@@ -14,8 +14,8 @@
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
     <updated>2026-10-20</updated>
     <base_tag>0.36.3</base_tag>
-    <next_version>0.36.4</next_version>
-    <version_status>Makefile VERSION 0.36.4 (2026-10-20, was 0.36.4-rc1); info.json and FOMOD info.xml / ModuleConfig.xml written by make release; latest git tag 0.36.3; 0.36.4 not tagged</version_status>
+    <next_version>0.36.5</next_version>
+    <version_status>Makefile VERSION 0.36.5 (2026-10-20); info.json and FOMOD info.xml / ModuleConfig.xml written by make release; latest git tag 0.36.4; 0.36.5 not tagged</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -66,6 +66,7 @@
   </doc_files>
 
   <status>
+    <note>2026-10-20: 0.36.5 since tagged 0.36.4. Delta: bff44ff5 WebUI closes other PrismaUI views (SkyrimNet dashboard) before Show, fixing the dashboard lock-up (tested). Topic: WebUI.</note>
     <note>2026-10-20: 0.36.4 since tagged 0.36.3, HEAD 9df1c2d0. Delta: a9cba7da Lover's Ledger alignment + virgin blood ours (sexlab.narration.virgin_blood, LoversLedger.FirstGot / FirstTimes / VirginBloodSentences), ecb2f44b SkyrimNet package hold in scenes (Scene_Manager.HoldScenePackages) + SexLab 1.66 corpse patch (patch_sexlab166/, CorpsePatch::Recheck, CorpseHealth_Floor removed) + apanal.json typos, 9df1c2d0 FOMOD option virgin blood (option_virgin_blood/, MCM.VirginBlood_FomodApply). Corpse-patch bullets had been written into the tagged 0.36.3 sections; those sections were restored to the tag text and the bullets moved to 0.36.4 topic Dead actors can join scenes. Topics: Lover's Ledger (tested), Dead actors can join scenes (untested), Scenes (untested), Build (CHANGELOG.md / developer only). Player bullets split to 100 chars. Docs (papyrus.md, overview.md, orgasm-narration.md, KNOWLEDGEBASE) already current. Leftover: sexlab.minigame.fear_cooldown unused; SLSO endanim stage advance. Omit: injury-engine-handoff.md, sexlab-p-handoff.md, create-what-was-changed-and-why.md, z-*, reviews/.</note>
     <note>2026-10-19 (latest): 116df33e (forced "sexlab start info" event before the start DN, LoversLedger.FirstTimesParts, tested) folded into untagged 0.36.3 per maintainer; its "Unreleased" sections became 0.36.3 topic Scene start messages, after Scene narration in all three changelogs. papyrus.md start narration line points to orgasm-narration.md. 0.36.3 .7z rebuilt. Leftover: sexlab.minigame.fear_cooldown unused; SLSO endanim stage advance. Omit: injury-engine-handoff.md, sexlab-p-handoff.md, create-what-was-changed-and-why.md, z-*, reviews/.</note>
     <note>2026-10-19 (later): Maintainer tested 0.36.2 topics Actor Info view, Futa / intersex, OStim TargetMenu, Aid panel potions, Punish panel, Verbose logging, Enjoyment runaway bug; "(untested)" dropped from those headings in all three changelogs (post-tag, same as the 0.36.1 AnimDB precedent). Still untested in 0.36.2: Scene start messages, Recursion warning bug, Slow P+ start bug; 0.36.1 Dead Actor bug.</note>

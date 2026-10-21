@@ -1,6 +1,12 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
+
+## 0.36.5
+
+### WebUI
+- Fixed a lock-up when a sex request arrived with the SkyrimNet dashboard open
+- The dashboard (or any other focused menu) now closes before the SexLab dialogue opens
 
 ## 0.36.4
 

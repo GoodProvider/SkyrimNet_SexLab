@@ -1,6 +1,11 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
+
+## 0.36.5
+
+### WebUI
+- `WebUI_Visibility_Show` closes foreign PrismaUI views first: `ForeignViews()` reads view ids from `PrismaUI.log`; `CloseForeignViews()` toggles the dashboard via `SkyrimNetApi.TriggerToggleDashboard` (only when `DashboardOpen()`) and `Unfocus` + `Hide`s other focused views. A 250 ms watcher then calls `WebUI_ShowNow` once no foreign view has focus (dashboard-hidden wait capped at 3 s; "SexLab: request waiting - close the open menu" if focus is held). Fixes the paused-game lock-up after Accept with the dashboard open.
 
 ## 0.36.4
 
