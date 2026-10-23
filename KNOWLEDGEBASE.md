@@ -1,5 +1,11 @@
 # Knowledgebase
 
+## `key` is not a Papyrus parameter name (2026-10-22)
+
+- **Symptom:** pyro failed `SkyrimNet_SexLab_WebUI.psc(106,32): key is not a variable` on a global function that took `String key` and used it.
+- **Cause:** `Key` is a Papyrus form type (`Key extends MiscObject`). A native declaration with a `key` parameter compiles, but using the name in a body does not.
+- **Rule:** don't name a Papyrus parameter or local after a form type (`key`, `book`, `spell`, …). The profiler natives use `probe_key`.
+
 ## Intersex read as male by Lover's Ledger on SexLab 1.6x (2026-10-19, fixed in Lover's Ledger, untested in game)
 
 - **Report:** Skadi was intersex in Actor Info, but the first-times line in Bob's start DN said "the first time Bob has had sex with a man" (`SkyrimNet_SexLab.log` 09:04:08, `FirstTimesSentence`).

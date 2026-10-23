@@ -1259,33 +1259,41 @@ EndFunction
 
 ; LLM SexLab_Change_Style: style (and so animation speed) of the speaker's scene.
 Event Action_Style(Form f_speaker, String style)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.Action_Style", -1)
     Actor speaker = f_speaker as Actor
     if speaker == None
         Trace("Action_Style", "speaker is none, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(speaker)
     if sl_scene == None
         Trace("Action_Style", "No sl_scene found for speaker: "+speaker.GetDisplayName())
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Trace("Action_Style", "speaker: "+speaker.GetDisplayName()+" style: "+style)
     sl_scene.ChangeStyle(speaker, style)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 Event Action_Stop(Form f_speaker,Form f_target, String style)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.Action_Stop", -1)
     Actor speaker = f_speaker as Actor 
     Actor target = f_target as Actor 
     if speaker == None 
         Trace("Action_Stop", "f_speaker is none, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
     if f_target == None 
         Trace("Action_Stop", "f_target is none, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
     if target == None 
         Trace("Action_Stop", "target is none, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
 
@@ -1293,10 +1301,12 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(target)
     if sl_scene == None 
         Trace("Action_Stop", "No sl_scene found for target: "+target.GetDisplayName())
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
     if main == None 
         Trace("Action_Stop", "main is None")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return  
     endif 
 
@@ -1319,6 +1329,7 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
             int button = SkyMessage.showArray(question, buttons, getIndex = True) as int 
             if button != yes
                 if button == no_silently
+                    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
                     return 
                 endif 
                 String player_style = "" 
@@ -1330,6 +1341,7 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
                 String msg = player.GetDisplayName()+" "+player_style+" refuses "+speaker.GetDisplayName()+"'s attempt to "+style+" stop "\
                     +sl_scene.GetIntentMessage(sl_scene.INTENT_STAGE_ONGOING)+"."
                 DirectNarration(msg, speaker)
+                SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
                 return
             endif 
         endif 
@@ -1338,6 +1350,7 @@ Event Action_Stop(Form f_speaker,Form f_target, String style)
     sslThreadController cachedThread = sl_scene.GetThread()
     sl_scene.AnimationEnd(speaker,style)
     threadSlots.StopThread(cachedThread)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent 
 
 
@@ -1362,6 +1375,8 @@ Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, 
     string style, string tags, int speaker_position,\ 
     String event_hook, String setting_name,\ 
     Form f_participate_3)
+    SkyrimNet_SexLab_WebUI.Prof_Mark("scene.action_start", -1, intent)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.Action_Start", -1)
     Trace("Action_Start","intent:"+intent)
     Actor speaker = f_speaker as Actor 
     Actor target = f_target as Actor 
@@ -1375,6 +1390,7 @@ Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, 
 
     if speaker == None 
         Trace("StartScene_Event", "speaker is None")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
 
@@ -1409,6 +1425,7 @@ Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, 
     Bool skipSceneCreator = SkyrimNet_SexLab_WebUI.ConsumeSkipSceneCreator()
     if creator == None 
         Trace("Action_Start", "CreateCreator returned None, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
     ; User chose Start (not Custom) — do not open Scene Creator for this scene.
@@ -1433,6 +1450,7 @@ Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, 
     else 
         creator.Release()
     endif 
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent 
 
 
@@ -1481,12 +1499,14 @@ EndFunction
 Int scene_camera_state = -1
 
 Event AnimationStarting(int ThreadID, bool HasPlayer)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.AnimationStarting", ThreadID)
     if HasPlayer && scene_camera_state < 0
         scene_camera_state = Game.GetCameraState()
     endif
     if sexlab != None
         HoldScenePackages(SexLab.GetController(ThreadID))
     endif
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 ; ----------------------------------------------------------
@@ -1551,24 +1571,30 @@ EndFunction
 
 ; ----------------------------------------------------------
 Event AnimationStart(int ThreadID, bool HasPlayer)
+    SkyrimNet_SexLab_WebUI.Prof_Mark("scene.animation_start", ThreadID, "")
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.AnimationStart", ThreadID)
     if sexlab == None
         Trace("AnimationStart","Sexlab is None, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     if thread == None
         Trace("AnimationStart","Thread is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
     if sl_scene == None 
         Trace("AnimationStart","Scene is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sl_scene.AnimationStart()
     StartAnimationPoll()
     ; Idempotent: covers P+ ChangeActors restarts and actors added after AnimationStarting.
     HoldScenePackages(thread)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 ; ----------------------------------------------------------
@@ -1601,43 +1627,53 @@ EndEvent
 
 ; ----------------------------------------------------------
 Event StageStart(int ThreadID, bool HasPlayer)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.StageStart", ThreadID)
     if sexlab == None
         Trace("StageStart","Sexlab is None, aborting")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     if thread == None
         Trace("StageStart","Thread is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
     if sl_scene == None 
         Trace("StageStart","Scene is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sl_scene.StageStart()
     ; Also covers a scene resumed from a save (no AnimationStart after load).
     StartAnimationPoll()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 ; Sent by sslThreadController.ChangeAnimation (SexLab hotkey, SL Tools) after the new animation is
 ; set. A bare SetAnimation (e.g. SL Tools' animation list) sends nothing; Scene.GetThreadObj polls
 ; for that case.
 Event AnimationChange(int ThreadID, bool HasPlayer)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.AnimationChange", ThreadID)
     if sexlab == None
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     if thread == None
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Trace("AnimationChange", "tid:"+ThreadID+" stage:"+thread.Stage)
     SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
     if sl_scene == None
         Trace("AnimationChange","Scene is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sl_scene.CheckAnimationChange()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 Event ActorChangeStart(int ThreadID, bool HasPlayer)
@@ -1670,24 +1706,30 @@ EndFunction
 
 ; An animation switch is handled as a stage start (narrates old stage -> new stage).
 Event AnimationChangedStage(int ThreadID)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.AnimationChangedStage", ThreadID)
     if sexlab == None
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sslThreadController thread = SexLab.GetController(ThreadID)
     if thread == None
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     SkyrimNet_SexLab_Scene sl_scene = EnsureSceneForThread(thread)
     if sl_scene == None
         Trace("AnimationChangedStage","Scene is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sl_scene.StageStart()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 
 ; ----------------------------------------------------------
 event AnimationEnd(int ThreadID, bool HasPlayer)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.AnimationEnd", ThreadID)
     ; create_if_missing=False: Action_Stop may already have AnimationEnd+Release; do not allocate a new scene.
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByThreadId(ThreadID, any_state=True, create_if_missing=False)
     if sl_scene == None 
@@ -1719,6 +1761,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
         RestoreCameraAfterScene()
     endif
     ReleaseIdlePackageHolds()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 ; Function AllowedDeniedOnlyIncrease(Actor[] actors, sslThreadController thread, String status)
@@ -1759,29 +1802,36 @@ EndEvent
 ; This function is not called when flag SLSO, as it has its own orgasm handling
 ; ----------------------------------------------------------------------------------------------------
 Event OrgasmCombined(int ThreadID, bool HasPlayer)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.OrgasmCombined", ThreadID)
     ; Ignore if separate orgasms is on, as it has its own handling
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
     if config.SeparateOrgasms 
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByThreadId(ThreadID)
     if sl_scene == None
         Trace("OrgasmCombined","Scene is None for ThreadID "+ThreadID)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     ; OrgasmEngine scenes: this hook is the one Scene.Orgasm_ApplyGroup sent itself (already narrated).
     sslThreadController hook_thread = sl_scene.GetThread()
     if hook_thread != None && hook_thread.Positions.length > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(hook_thread.Positions[0])
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sl_scene.OrgasmCombined()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent 
 
 ; Used for SLSO.esp orgasm handling
 ; SexLab PushForm sends attached-script type (e.g. WIDeadBodyCleanupScript); receive Form then cast.
 Event OrgasmIndividual(Form akForm, int full_enjoyment, int num_orgasms)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.OrgasmIndividual", -1)
     Actor akActor = akForm as Actor
     if !akActor
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
 
@@ -1791,10 +1841,12 @@ Event OrgasmIndividual(Form akForm, int full_enjoyment, int num_orgasms)
     ; sexlab.enjoyment.engine_disabled SexLab's trigger is on, and its orgasms take this same path.
     if SkyrimNet_SexLab_OrgasmEngine.IsManaged(akActor)
         if SkyrimNet_SexLab_OrgasmEngine.ConsumeOwnOrgasm(akActor)
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
         SkyrimNet_SexLab_OrgasmEngine.NoteExternalOrgasm(akActor, "sexlab")
         if main.handler_dom.IsDOMSlave(akActor)
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
         SkyrimNet_SexLab_Scene ext_scene = GetSceneByActor(akActor)
@@ -1802,25 +1854,30 @@ Event OrgasmIndividual(Form akForm, int full_enjoyment, int num_orgasms)
             ext_scene.Mirror_Rebaseline(akActor)
             ext_scene.OrgasmIndividual(akActor, full_enjoyment, -1, true)
         endif
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
 
     sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
     if !config.SeparateOrgasms
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
 
     ; DOM handles it's own orgasms
     if main.handler_dom.IsDOMSlave(akActor)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif 
 
     SkyrimNet_SexLab_Scene sl_scene = GetSceneByActor(akActor)
     if sl_scene == None
         Trace("OrgasmIndividual","Scene is none for actor: "+akActor.GetDisplayName())
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sl_scene.OrgasmIndividual(akActor, full_enjoyment, num_orgasms) 
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 int Function GettotalOrgasms(Actor akActor)

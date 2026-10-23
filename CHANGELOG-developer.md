@@ -2,6 +2,16 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+## Unreleased (branch `profile`)
+
+### Profiling (first in-game runs: `checkpoints/profile/checkpoint-06.md`)
+- WebUI **Profile** main panel (`webui/MainPanels/1100_profile.json`, builtin `profile_panel`) drives a run: Start Calibration → Start Profiling → Stop Profiling. See `docs/developers/webui.md` (Profile panel) and `checkpoints/profile/checkpoint-04.md`.
+- `SKSE_Source/src/Profiler.h/.cpp`: raw event recorder (B/E/X/M, 112-byte events, two 200,000-event buffers, 80% swap, drop only at 100%), part writer thread with one retry, `[Profiler] run:<key>` markers, pending-note queue, `SNSL_PROF("key")` scope timer.
+- New `SkyrimNet_SexLab_WebUI` natives (tasklet-callable, record the VM stack id): `Prof_Begin`, `Prof_End`, `Prof_Mark`, `Prof_CalibMark`, `Prof_SetRecording`, `Prof_EnterProfiling`, `Prof_CalibrateCpp`; Papyrus globals `Prof_Calibrate(n)` and `Prof_Wait(secs, probe_key)` (no call sites). `TraceLog` now takes the VM stack id and adds one `X` event (source `trace`) while recording.
+- Probes: Scene_Manager (11 events), Scene (9 functions; `prof_tid` caches `thread.tid`, set in `SetThread`), `Scene_Creator.StartScene`, `Actions.StartScene_Event`, AnimDb (5). Marks `action.received`, `scene.action_start` (detail = intent), `scene.animation_start`, `narration.queue` (`queued`/`immediate`, from `QueueDirectNarration`), `narration.sent` (`immediate`/`flush`).
+- SKSE timers: AnimationDB `ResolveTags`, `QueryTopNAnims`, `QueryTopNTags`, `GetStageDescription`, `SubstituteActors`; `QueueDirectNarration`; the `sexlab_npc_stop_allowed` / `sexlab_verbose` decorators.
+- `python_scripts/profile_report.py` (stdlib, `uv run`): `ingest` copies a run into `checkpoints/<name>/profiles/<run key>/` and runs `report`, which writes `report.md` (and `events.csv` with `--csv`). `report` adds a per-phase **Player input and scenes** table (minigame input and OrgasmEngine actor counts from the log). `compare <profiles dir>` reports every run and writes `compare.md`; it excludes runs where the minigame was played only during profiling (`--keep-all` keeps them). Overhead gaps also start at `Scene_Manager.CreateCreator` (Scene Creator), the end match ignores case, and the cross-check is skipped when a phase has fewer than two gaps.
+
 ## 0.36.5
 
 ### WebUI

@@ -44,6 +44,69 @@ Function ActorAnimMeta_Result(String json) global native
 ; TargetMenu Start: consume one-shot skip so this scene does not open Scene Creator.
 Bool Function ConsumeSkipSceneCreator() global native
 String Function TraceLog(String script_name, String func, String msg) global native
+
+; --- Profiler (WebUI Profile panel; checkpoints/profile/checkpoint-04.md) ---
+; Span open: returns the span id, or 0 when recording is off. source: "papyrus" or "wait".
+Int Function Prof_Begin(String source, String probe_key, Int slThread) global native
+; Span close; id 0 returns at once.
+Function Prof_End(Int id, String detail) global native
+; Instant event, recorded only while recording is on.
+Function Prof_Mark(String probe_key, Int slThread, String detail) global native
+; Instant event written even while recording is off (calibration brackets only).
+Function Prof_CalibMark(String probe_key) global native
+; Gated natives: no-ops unless the profiler is in its `starting` state.
+Function Prof_SetRecording(Bool on) global native
+Function Prof_EnterProfiling() global native
+Function Prof_CalibrateCpp(Int n, Bool on) global native
+
+; C++ Start Profiling dispatches this. Measures the disabled and recording probe costs, then turns
+; recording on for gameplay. No Utility.Wait and no Trace, so the windows hold only probe cost.
+Function Prof_Calibrate(Int n) global
+    Prof_CalibMark("calib.off.start")
+    Int i = 0
+    While i < n
+        Prof_End(Prof_Begin("papyrus", "calib.pair", -1), "")
+        i += 1
+    EndWhile
+    Prof_CalibMark("calib.off.end")
+
+    Prof_CalibMark("calib.mark.off.start")
+    i = 0
+    While i < n
+        Prof_Mark("calib.mark", -1, "")
+        i += 1
+    EndWhile
+    Prof_CalibMark("calib.mark.off.end")
+
+    Prof_CalibrateCpp(n, false)
+    Prof_SetRecording(true)
+
+    Prof_CalibMark("calib.on.start")
+    i = 0
+    While i < n
+        Prof_End(Prof_Begin("papyrus", "calib.pair", -1), "")
+        i += 1
+    EndWhile
+    Prof_CalibMark("calib.on.end")
+
+    Prof_CalibMark("calib.mark.on.start")
+    i = 0
+    While i < n
+        Prof_Mark("calib.mark", -1, "")
+        i += 1
+    EndWhile
+    Prof_CalibMark("calib.mark.on.end")
+
+    Prof_CalibrateCpp(n, true)
+    Prof_EnterProfiling()
+EndFunction
+
+; Times a blocking wait as source "wait". No call sites yet.
+Function Prof_Wait(Float secs, String probe_key) global
+    Int id = Prof_Begin("wait", probe_key, -1)
+    Utility.Wait(secs)
+    Prof_End(id, "")
+EndFunction
 ; Dashboard Verbose logging (sexlab.debug.verbose), read live.
 Bool Function IsVerbose() global native
 ; Dashboard Dead actors can join scenes (sexlab.actors.dead_allowed), read live. False unless the SexLab 1.66

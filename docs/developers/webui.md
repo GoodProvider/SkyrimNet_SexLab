@@ -166,6 +166,20 @@ Starters in core: `0900_log_panel.json` (Log), `1000_settings.json` (Settings), 
 
 **Log panel:** reads `SKSE::log::log_directory()` / `SkyrimNet_SexLab.log` (same sink as `webui_log` / Papyrus `TraceLog`). Regex filter in JS; follow-tail unless the user scrolls away. C++ tails by file offset; JS polls `onLogPoll` while visible.
 
+**Profile panel** (`1100_profile.json`, builtin `profile_panel`): the only control for a profiling run. `SKSE_Source/src/Profiler.*` records raw events; `python_scripts/profile_report.py` decodes and reports them. Full design: `checkpoints/profile/checkpoint-04.md`.
+
+| state | enabled button | press |
+|---|---|---|
+| idle | Start Calibration | creates `<log_directory>/SkyrimNet_SexLab/<yyyy-MM-dd-HH-mm-ss>/`, marker `calibration_start`; recording stays off |
+| calibrating | Start Profiling, Cancel | Start → `starting`, marker `profiling_start`, dispatches `SkyrimNet_SexLab_WebUI.Prof_Calibrate(1000)` (probe-cost windows, then recording on, then `profiling`). Cancel → marker `calibration_cancel`, removes the empty run dir |
+| starting | none | a callback with the state still `starting` writes `profiling_start_failed` and returns to `calibrating` |
+| profiling | Stop Profiling | recording off, marker `profiling_end`, writes the last part, asks for every pending note |
+
+- The C++ state machine is the only writer; a press in the wrong state is a no-op. JS disables every button before the round trip, and `configureProfilePanel({state, run, parts, fill_pct, pending_notes})` re-enables the right ones. C++ pushes it on each transition and part write, and once a second while the Profile panel is the open main panel. `OpenMainPanelEntry` sends one `openProfilePanel(cfg)` (reveal + configure in one Invoke).
+- JS → C++: `onProfileStartCalibration`, `onProfileStartProfiling`, `onProfileCancel`, `onProfileStop`, `onProfileNote({run, part, text})`.
+- Parts: `part-NNN.bin` written off the game thread when the buffer reaches 80% (200,000 events, 112 bytes each). A HUD line says the part was written; the next overlay open (`WebUI_ShowNow` → `Profiler::OnOverlayShown`) shows `openProfileNote` ("Describe just what happened in the game"). OK writes `part-NNN.note.txt` (empty text is valid). Escape closes the dialog and leaves the note pending.
+- Log weight: only `[Profiler] run:<key> …` marker and note lines go to `SkyrimNet_SexLab.log`. A run survives save loads; `kNewGame` ends it.
+
 ### Optional integrations (FOMOD / third parties)
 
 Drink your own champagne: official optional packages use the same filesystem JSON contract as third parties. Ship JSON under `Data/SKSE/Plugins/SkyrimNet_SexLab/webui/…` next to the handler ESP. Load order can overwrite files.

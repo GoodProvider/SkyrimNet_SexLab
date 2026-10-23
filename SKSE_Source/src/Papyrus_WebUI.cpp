@@ -9,6 +9,7 @@
 #include "AnimationDB.h"
 #include "BondageCatalog.h"
 #include "Config.h"
+#include "Profiler.h"
 #include "RE/V/VirtualMachine.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -351,6 +352,7 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke("hidePanel('scene_creator_panel');");
         WebUI_Invoke("hidePanel('description_editor_panel');");
         WebUI_Invoke("hidePanel('settings_panel');");
+        WebUI_Invoke("hidePanel('profile_panel');");
         WebUI_Invoke("hidePanel('log_panel');");
     }
 
@@ -365,6 +367,7 @@ namespace PapyrusBindings_WebUI
         WebUI_Invoke("hidePanel('scene_creator_panel');");
         WebUI_Invoke("hidePanel('description_editor_panel');");
         WebUI_Invoke("hidePanel('settings_panel');");
+        WebUI_Invoke("hidePanel('profile_panel');");
         WebUI_Invoke("hidePanel('log_panel');");
         WebUI_Visibility_Hide();
     }
@@ -681,15 +684,75 @@ namespace PapyrusBindings_WebUI
     }
 
     /// Formats [script.func] msg, logs it through SKSE, and returns the same string to Papyrus.
-    RE::BSFixedString TraceLog(RE::StaticFunctionTag*, RE::BSFixedString script_name,
+    RE::BSFixedString TraceLog(RE::BSScript::IVirtualMachine*, RE::VMStackID stackID, RE::StaticFunctionTag*,
+        RE::BSFixedString script_name,
         RE::BSFixedString func, RE::BSFixedString msg)
     {
         const char* script = script_name.c_str() ? script_name.c_str() : "";
         const char* fn = func.c_str() ? func.c_str() : "";
         const char* body = msg.c_str() ? msg.c_str() : "";
+        const bool prof = Profiler::Recording();
+        const auto t0 = prof ? Profiler::Now() : 0;
         std::string formatted = std::format("[{}.{}] {}", script, fn, body);
         SKSE::log::info("{}", formatted);
-        return RE::BSFixedString(formatted);
+        RE::BSFixedString out(formatted);
+        if (prof)
+            Profiler::Complete(Profiler::kSrcTrace, std::string(script) + "." + fn, t0, Profiler::Now() - t0,
+                static_cast<std::uint32_t>(stackID));
+        return out;
+    }
+
+    // --- Profiler natives (SkyrimNet_SexLab_WebUI.Prof_*). Contract: checkpoints/profile/checkpoint-04.md ---
+
+    std::int32_t Prof_Begin(RE::BSScript::IVirtualMachine*, RE::VMStackID stackID, RE::StaticFunctionTag*,
+        RE::BSFixedString source, RE::BSFixedString key, std::int32_t slThread)
+    {
+        if (!Profiler::Recording())
+            return 0;
+        const std::string_view src = source.c_str() ? source.c_str() : "";
+        const auto s = src == "wait" ? Profiler::kSrcWait : Profiler::kSrcPapyrus;
+        return static_cast<std::int32_t>(
+            Profiler::Begin(s, key.c_str() ? key.c_str() : "", slThread, static_cast<std::uint32_t>(stackID)));
+    }
+
+    void Prof_End(RE::BSScript::IVirtualMachine*, RE::VMStackID stackID, RE::StaticFunctionTag*, std::int32_t id,
+        RE::BSFixedString detail)
+    {
+        if (id == 0)
+            return;
+        Profiler::End(static_cast<std::uint32_t>(id), detail.c_str() ? detail.c_str() : "",
+            static_cast<std::uint32_t>(stackID));
+    }
+
+    void Prof_Mark(RE::BSScript::IVirtualMachine*, RE::VMStackID stackID, RE::StaticFunctionTag*,
+        RE::BSFixedString key, std::int32_t slThread, RE::BSFixedString detail)
+    {
+        if (!Profiler::Recording())
+            return;
+        Profiler::Mark(key.c_str() ? key.c_str() : "", slThread, detail.c_str() ? detail.c_str() : "",
+            static_cast<std::uint32_t>(stackID));
+    }
+
+    void Prof_CalibMark(RE::BSScript::IVirtualMachine*, RE::VMStackID stackID, RE::StaticFunctionTag*,
+        RE::BSFixedString key)
+    {
+        Profiler::CalibMark(key.c_str() ? key.c_str() : "", static_cast<std::uint32_t>(stackID));
+    }
+
+    void Prof_SetRecording(RE::BSScript::IVirtualMachine*, RE::VMStackID, RE::StaticFunctionTag*, bool on)
+    {
+        Profiler::SetRecordingFromCalibration(on);
+    }
+
+    void Prof_EnterProfiling(RE::BSScript::IVirtualMachine*, RE::VMStackID, RE::StaticFunctionTag*)
+    {
+        Profiler::EnterProfiling();
+    }
+
+    void Prof_CalibrateCpp(RE::BSScript::IVirtualMachine*, RE::VMStackID, RE::StaticFunctionTag*, std::int32_t n,
+        bool on)
+    {
+        Profiler::CalibrateCpp(n, on);
     }
 
     /// sexlab.debug.verbose (dashboard Verbose logging), read live.
@@ -1904,6 +1967,13 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog, true);
+        a_vm->RegisterFunction("Prof_Begin", scriptName, Prof_Begin, true);
+        a_vm->RegisterFunction("Prof_End", scriptName, Prof_End, true);
+        a_vm->RegisterFunction("Prof_Mark", scriptName, Prof_Mark, true);
+        a_vm->RegisterFunction("Prof_CalibMark", scriptName, Prof_CalibMark, true);
+        a_vm->RegisterFunction("Prof_SetRecording", scriptName, Prof_SetRecording, true);
+        a_vm->RegisterFunction("Prof_EnterProfiling", scriptName, Prof_EnterProfiling, true);
+        a_vm->RegisterFunction("Prof_CalibrateCpp", scriptName, Prof_CalibrateCpp, true);
         a_vm->RegisterFunction("IsVerbose", scriptName, IsVerbose_Native, true);
         a_vm->RegisterFunction("IsDeadAllowed", scriptName, IsDeadAllowed_Native, true);
         a_vm->RegisterFunction("CorpsePatchMismatch", scriptName, CorpsePatchMismatch_Native);

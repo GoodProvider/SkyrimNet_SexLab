@@ -324,6 +324,7 @@ EndFunction
 ; Start with Thread
 ; --------------------------------------------
 SkyrimNet_SexLab_Scene Function StartScene() 
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Creator.StartScene", -1)
     DbgEnter("StartScene")
     bool e_c = manager.empty == manager.cancel
     Trace("StartScene", "manager.empty == manager.cancel: "+e_c)    
@@ -335,6 +336,7 @@ SkyrimNet_SexLab_Scene Function StartScene()
         Trace("StartScene","no actors, aborting before NewThread")
         Release()
         DbgReturn("StartScene", "None")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return None
     endif
 
@@ -342,6 +344,7 @@ SkyrimNet_SexLab_Scene Function StartScene()
         Trace("StartScene","actors not valid for SexLab, aborting before SelectAnimations")
         Release()
         DbgReturn("StartScene", "None")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return None
     endif
 
@@ -350,16 +353,20 @@ SkyrimNet_SexLab_Scene Function StartScene()
     if animations == manager.ui_pending
         start_scene_pending = true
         DbgReturn("StartScene", "ui_pending")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return None
     endif
     if animations == manager.cancel
         Trace("StartScene","SelectAnimations returned cancel")
         Release() 
         DbgReturn("StartScene", "None")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return None
     endif
 
-    return FinishStartScene(animations)
+    SkyrimNet_SexLab_Scene prof_ret = FinishStartScene(animations)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+    return prof_ret
 EndFunction
 
 SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)

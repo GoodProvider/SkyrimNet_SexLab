@@ -175,6 +175,8 @@ int stage_last = 0
 ; Thread
 ; --------------------------------------------
 sslThreadController thread
+; Profiler sl_thread cache (thread.tid); -1 until SetThread or the first probe fills it.
+int prof_tid = -1
 
 ; --------------------------------------------
 ; Fallback / generic scene flag
@@ -1714,6 +1716,11 @@ Function SetThread(sslThreadController _thread)
         DbgEnter("SetThread")
     endif
     thread = _thread
+    if _thread != None
+        prof_tid = _thread.tid
+    else
+        prof_tid = -1
+    endif
     DbgEnd("SetThread")
 EndFunction 
 sslThreadController Function GetThread()
@@ -2423,7 +2430,12 @@ EndFunction
 
 ; No voice by sexlab.ending.gate_wait_max (DN dropped, TTS off, load mid-wait): go on anyway.
 Function Gate_Poll()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.Gate_Poll", prof_tid)
     if !gate_holding
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Timer_SyncHold()
@@ -2431,6 +2443,7 @@ Function Gate_Poll()
         ; Freeze the countdown while paused (the hotkey pause, not a save/load); re-check next tick.
         gate_hold_started += 1.0
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     float held = Utility.GetCurrentRealTime() - gate_hold_started
@@ -2439,10 +2452,12 @@ Function Gate_Poll()
     ; up to the old gate_hold_started's worth of real seconds.
     if held >= 0.0 && held < wait_max
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Trace("Gate_Poll", "no gate voice after "+held+"s")
     Engine_AdvanceToFinal()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; Victim hold: the second-to-last stage of a victim scene waits for an aggressor's orgasm. Free mini-game:
@@ -2530,11 +2545,17 @@ EndFunction
 ; Cap: sexlab.ending.victim_hold_max (0 = none). Gate scene: ask the engine for its gate and keep holding
 ; for the handover (Engine_GatePassed); nobody passing releases a few seconds later.
 Function Victim_Poll()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.Victim_Poll", prof_tid)
     if !victim_holding || thread == None
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if thread.Animation != victim_hold_anim || thread.Stage != victim_hold_stage
         Victim_Drop("stage changed")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Timer_SyncHold()
@@ -2542,6 +2563,7 @@ Function Victim_Poll()
         ; Freeze the countdown while paused (the hotkey pause, not a save/load); re-check next tick.
         victim_hold_started += 1.0
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     float cap = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.victim_hold_max", 120.0)
@@ -2549,6 +2571,7 @@ Function Victim_Poll()
     ; held < 0: a save/load reset the real-time clock mid-hold; treat the cap as reached.
     if held >= 0.0 && (cap <= 0.0 || held < cap)
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid) && (!victim_hold_expired || (held >= 0.0 && held < cap + 3.0))
@@ -2558,10 +2581,12 @@ Function Victim_Poll()
             SkyrimNet_SexLab_OrgasmEngine.VictimHoldExpired(sid)
         endif
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Trace("Victim_Poll", "no aggressor orgasm after "+held+"s, releasing stage:"+thread.Stage)
     Victim_Release()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; The gate narration's voice started (engine) or Gate_Poll gave up: release the gate hold and go to
@@ -2666,7 +2691,12 @@ EndFunction
 ; 1 s after that (a narration that never got a paired response); or at sexlab.ending.dialogue_hold_max
 ; (at most ENDING_HOLD_CAP).
 Function Ending_Poll()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.Ending_Poll", prof_tid)
     if !ending_holding || thread == None
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Timer_SyncHold()
@@ -2696,6 +2726,7 @@ Function Ending_Poll()
     endif
     if !release
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     ending_holding = false
@@ -2715,6 +2746,7 @@ Function Ending_Poll()
         Timer_SyncHold()
         Trace("Ending_Poll", "P+ released final stage after "+held+"s ("+why+"), ending in "+left+"s")
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     ; Back to the stage's own timer, without the held time: the final stage ends at the later of its timer
@@ -2734,6 +2766,7 @@ Function Ending_Poll()
     ending_watch_stage = thread.Stage
     ending_watch_anim = thread.Animation
     RegisterForSingleUpdate(1.0)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; SexLab advances on (AutoAdvance || TimedStage) && StageTimer < now; StageTimer / TimedStage are
@@ -2750,7 +2783,12 @@ EndFunction
 
 ; Safety net after the final-stage release: the stage should end at its own timer.
 Function Ending_Watch()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.Ending_Watch", prof_tid)
     if !ending_watching
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if thread == None || thread.Animation == None || thread.Stage != ending_watch_stage || thread.Animation != ending_watch_anim || thread.GetState() != "Animating"
@@ -2758,6 +2796,7 @@ Function Ending_Watch()
         ending_watch_anim = None
         ; P+: the watch was holding the stage; a manual move releases it.
         Timer_SyncHold()
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Timer_SyncHold()
@@ -2767,10 +2806,12 @@ Function Ending_Watch()
         ending_watch_released = now
         ending_watch_deadline = now + ENDING_WATCH_GRACE
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if now < ending_watch_deadline
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     ending_watching = false
@@ -2781,6 +2822,7 @@ Function Ending_Watch()
         Trace("Ending_Watch", "final stage stuck "+(now - ending_watch_released)+"s after release, ending the animation "+Ending_TimerState())
     endif
     thread.EndAnimation()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; --------------------------------------------
@@ -3443,12 +3485,18 @@ EndFunction
 
 ; OnUpdate: the thread ended for a change but never started again.
 Function ActorChange_Poll()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.ActorChange_Poll", prof_tid)
     if !actor_change_pending || !actor_change_ended
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     float waited = Utility.GetCurrentRealTime() - actor_change_at
     if waited >= 0.0 && waited < ACTOR_CHANGE_WAIT
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     Trace("ActorChange_Poll", "P+ thread did not restart after "+waited+"s, ending the scene")
@@ -3459,6 +3507,7 @@ Function ActorChange_Poll()
         pending_commit_obj = 0
     endif
     AnimationEnd()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 Function AnimationStart()
@@ -3565,6 +3614,10 @@ EndFunction
 ; (start_level, capped at Event; forced so CheckDuplicate cannot blank the start). Only the virgin-blood
 ; sentences (LoversLedger.VirginBloodSentences, sexlab.narration.virgin_blood) stay on the start text.
 Function StageStart_NarrateStart(String desc)
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.StageStart_NarrateStart", prof_tid)
     start_orgasm_narration = ""
     int start_level = NarrationLevel("sexlab.narration.start_level")
     bool hold_stash = StageStart_HoldStash()
@@ -3599,6 +3652,7 @@ Function StageStart_NarrateStart(String desc)
     endif
     if hold_stash
         NarrateBelowDirect(start_level, "sexlab update", desc, sender, receiver)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     String narration = desc + orgasm_narration
@@ -3626,9 +3680,14 @@ Function StageStart_NarrateStart(String desc)
     else
         DirectNarration_Optional("start", narration, sender, receiver)
     endif
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 Function StageStart()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.StageStart", prof_tid)
     DbgEnter("StageStart")
     TraceStageState("StageStart")
     ; An orgasm while this builds its narration folds into it (Orgasm_ApplyGroup); cleared once the
@@ -3652,6 +3711,7 @@ Function StageStart()
             thread.GoToStage(1)
             stage_starting = false
             DbgReturn("StageStart", "deferred restart at stage 1")
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
     endif
@@ -3663,6 +3723,7 @@ Function StageStart()
             ; The stage-1 StageStart that follows narrates the change and runs the rest.
             stage_starting = false
             DbgReturn("StageStart", "restart at stage 1")
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
         ; Deferred restart (not animating yet): run this stage now; the next StageStart restarts.
@@ -3681,12 +3742,14 @@ Function StageStart()
         Trace("StageStart","sexlab is None | actors:"+actor_names)
         stage_starting = false
         DbgReturn("StageStart", "void")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif
     if thread == None 
         Trace("StageStart","thread is None | actors:"+actor_names)
         stage_starting = false
         DbgReturn("StageStart", "void")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     ; thread.stage is the truth (also covers the game advancing on its own): tell the editor before the slow narration work.
@@ -3694,6 +3757,7 @@ Function StageStart()
     if IsSexLabPPlus() && PPlus_StageStart()
         stage_starting = false
         DbgReturn("StageStart", "P+ ended")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
 
@@ -3850,6 +3914,7 @@ Function StageStart()
     endif  
     WebUI_ConfigureIfOverlayVisible()
     DbgEnd("StageStart")
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; "<speaker> [forcefully|gently] stops <intent>[, because <reason>]. " (no adverb for normally / stop).
@@ -4487,6 +4552,10 @@ Function ArmOrgasmWindow()
 EndFunction
 
 Function FlushOrgasmWindow()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.FlushOrgasmWindow", prof_tid)
     UnregisterForUpdate()
     if ending_holding || gate_holding || victim_holding || ending_watching
         RegisterForSingleUpdate(1.0)
@@ -4500,6 +4569,7 @@ Function FlushOrgasmWindow()
         ClearOrgasmStash()
         gate_pending_force = false
         gate_pending_notify = false
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     bool force = gate_pending_force
@@ -4509,6 +4579,7 @@ Function FlushOrgasmWindow()
         gate_pending_notify = false
         SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid, ending_response_mark)
     endif
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; One DirectNarration for everything stashed, then the parts that did not fit as one event.
@@ -4602,13 +4673,19 @@ bool Function OrgasmWindow_HoldForStage()
 EndFunction
 
 Event OnUpdate()
+    if prof_tid < 0 && thread != None
+        prof_tid = thread.tid
+    endif
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.OnUpdate", prof_tid)
     if Utility.IsInMenuMode()
         RegisterForSingleUpdate(0.5)
         Trace("OnUpdate", "--- orgasm window waiting on menu")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if actor_change_ended && !orgasm_window_open && !ending_holding && !gate_holding && !victim_holding && !ending_watching
         ActorChange_Poll()
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     ; Shared with the scene-ending dialogue hold poll, the gate voice wait and the victim hold.
@@ -4637,6 +4714,7 @@ Event OnUpdate()
     if actor_change_ended
         ActorChange_Poll()
     endif
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 ;----------------------------------------------------

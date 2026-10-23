@@ -803,6 +803,7 @@ Function SendDirectNarration(String msg, Actor source=None, Actor target=None, b
     if purge_dialogue
         SkyrimNetApi.PurgeDialogue(True)
     endif
+    SkyrimNet_SexLab_WebUI.Prof_Mark("narration.sent", -1, "immediate")
     SkyrimNetApi.DirectNarration(msg, source, target)
 EndFunction
 
@@ -812,6 +813,7 @@ Function DirectNarration_Flush(String msg, Actor source, Actor target, bool purg
     if purge_dialogue
         SkyrimNetApi.PurgeDialogue(True)
     endif
+    SkyrimNet_SexLab_WebUI.Prof_Mark("narration.sent", -1, "flush")
     SkyrimNetApi.DirectNarration(msg, source, target)
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
     if main != None

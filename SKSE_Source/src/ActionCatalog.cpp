@@ -1,4 +1,5 @@
 #include "ActionCatalog.h"
+#include "Profiler.h"
 #include "JsonUtil.h"
 #include "TargetMenuRegistry.h"
 #include "WebUI_Log.h"
@@ -794,6 +795,9 @@ namespace ActionCatalog
                     g_scenePanelResolved = FocusIsInSexLabScene() ? "description_editor_panel" : "scene_creator_panel";
                     webui_log::info("scene_panel -> {}", g_scenePanelResolved);
                     WebUI_Invoke("revealMainPanel('scene_panel', '" + g_scenePanelResolved + "');");
+                } else if (panel == "profile_panel") {
+                    // One Invoke: reveal + configure (separate Invokes are not applied in order).
+                    WebUI_Invoke("openProfilePanel(" + Profiler::PanelJson() + ");");
                 } else if (!panel.empty()) {
                     WebUI_Invoke("revealMainPanel('" + panel + "');");
                     if (panel == "settings_panel")

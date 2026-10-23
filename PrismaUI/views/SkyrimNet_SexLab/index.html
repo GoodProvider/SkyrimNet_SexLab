@@ -927,6 +927,30 @@
             min-width: 420px;
         }
 
+        #profile-note-panel {
+            pointer-events: auto;
+            min-width: 420px;
+        }
+
+        #profile-note-text {
+            width: 100%;
+            min-height: 120px;
+            box-sizing: border-box;
+            resize: vertical;
+            margin: var(--space-sm) 0 var(--space-md);
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-solid);
+            border-radius: var(--radius);
+            padding: var(--space-sm);
+            font-family: var(--font-ui);
+        }
+
+        #profile-panel .action-btn.de-disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
         .act-sentence {
             font-family: var(--font-ui);
             font-size: var(--text-lg);
@@ -2370,6 +2394,30 @@
         </p>
     </div>
 
+    <!-- Profile: one run = calibration phase (recording off) + profiling phase (recording on).
+         C++ Profiler owns the state; buttons only send requests and configureProfilePanel pushes the result. -->
+    <div id="profile-panel" class="panel" style="display:none">
+        <div class="target-row">Profile</div>
+        <div class="compact-row" style="margin-bottom:4px"><span>State:</span> <span id="profile-state">idle</span></div>
+        <div class="compact-row" style="margin-bottom:4px"><span>Run:</span> <span id="profile-run" style="user-select:text">none</span></div>
+        <div class="compact-row" style="margin-bottom:4px"><span>Parts written:</span> <span id="profile-parts">0</span></div>
+        <div class="compact-row" style="margin-bottom:4px"><span>Buffer fill:</span> <span id="profile-fill">0%</span></div>
+        <div class="compact-row" style="margin-bottom:12px"><span>Notes pending:</span> <span id="profile-pending">0</span></div>
+        <div class="btn-row" style="margin-bottom:12px">
+            <div class="action-btn" id="profile-btn-calibration" onmousedown="event.preventDefault()" onclick="profileSend('onProfileStartCalibration')">Start Calibration</div>
+            <div class="action-btn" id="profile-btn-profiling" onmousedown="event.preventDefault()" onclick="profileSend('onProfileStartProfiling')">Start Profiling</div>
+            <div class="action-btn" id="profile-btn-cancel" onmousedown="event.preventDefault()" onclick="profileSend('onProfileCancel')">Cancel</div>
+            <div class="action-btn" id="profile-btn-stop" onmousedown="event.preventDefault()" onclick="profileSend('onProfileStop')">Stop Profiling</div>
+        </div>
+        <div class="section-header">Recommendations</div>
+        <p style="opacity:0.85; font-size:var(--text-sm)">
+            Do the same things in both phases: same save, same NPCs, same request wording, same number and size of
+            scenes, same location, no other menus. Start Calibration records nothing. Start Profiling measures the
+            probe cost, then records until Stop Profiling. Each written part asks for a short description of what
+            happened in the game.
+        </p>
+    </div>
+
     <div id="log-panel" class="panel" style="display:none">
         <div class="target-row">Log</div>
         <div class="compact-row" style="margin-bottom:8px">
@@ -2479,6 +2527,14 @@
     <!-- Ask / Order / Punish (HUD punish key, anyone in the scene):
          "<subject> asks|orders <object> to <request>." / "<subject> punishes <object> by <method> <object>'s <part>, because <reason>."
          Punish with Injury Engine also takes a hit count (1 to its max strikes). -->
+    <div id="profile-note-panel" class="panel" style="display:none">
+        <div class="target-row">Describe just what happened in the game</div>
+        <div id="profile-note-part" class="compact-row" style="opacity:0.8"></div>
+        <textarea id="profile-note-text"></textarea>
+        <div class="btn-row">
+            <div class="action-btn" onmousedown="event.preventDefault()" onclick="profileNoteOk()">OK</div>
+        </div>
+    </div>
     <div id="punish-panel" class="panel" style="display:none">
         <div class="target-row" id="punish-title">Ask</div>
         <div class="act-sentence">
@@ -2642,7 +2698,7 @@
         // C++ Invoke adapters (Papyrus_WebUI / WebUI.cpp panel names)
         const PANEL_IDS = [
             'control-panel', 'target-menu-row', 'sex-menu-panel', 'yesno-panel',
-            'scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel'
+            'scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel'
         ];
 
         // Fallback when C++ configureControlPanel has not run / main_panels/*.json missing from Data.
@@ -2650,7 +2706,8 @@
         const DEFAULT_MAIN_PANELS = [
             { type: 'builtin', label: 'Scene', panel: 'scene_panel' },
             { type: 'builtin', label: 'Log', panel: 'log_panel' },
-            { type: 'builtin', label: 'Settings', panel: 'settings_panel' }
+            { type: 'builtin', label: 'Settings', panel: 'settings_panel' },
+            { type: 'builtin', label: 'Profile', panel: 'profile_panel' }
         ];
         let MAIN_PANELS = DEFAULT_MAIN_PANELS.slice();
         // Empty key = None (no panel in main_panel host).
@@ -2695,7 +2752,7 @@
         }
 
         function clearMainPanelHost() {
-            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
+            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -2929,6 +2986,7 @@
             if (key === 'scene_creator_panel') return 'scene-creator-panel';
             if (key === 'description_editor_panel') return 'description-editor-panel';
             if (key === 'settings_panel') return 'settings-panel';
+            if (key === 'profile_panel') return 'profile-panel';
             if (key === 'log_panel') return 'log-panel';
             if (key === 'actor_info_panel') return 'actor-info-panel';
             return key;
@@ -2956,7 +3014,7 @@
             renderControlPanelPulldown();
             mainPanelPulldownBusy = false;
             updateMainPanelClose();
-            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
+            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
             const want = domIdForPanelKey(panelKey);
             const wantSrc = sourceOf(findMainPanelByKey(panelKey));
@@ -3024,7 +3082,7 @@
         function revealForeignMainPanel(type) {
             showControlPanel();
             const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
-            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'log-panel',
+            const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel',
                 'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
             const wantSrc = sourceOf(findMainPanelByKey(MAIN_SELECTED_KEY));
             for (const pid of builtins) {
@@ -3427,6 +3485,7 @@
             const isMainBuiltin =
                 isScenePanelKey(id) ||
                 id === 'settings_panel' || id === 'settings-panel' ||
+                id === 'profile_panel' || id === 'profile-panel' ||
                 id === 'log_panel' || id === 'log-panel';
 
             if (!isMainBuiltin) {
@@ -3468,6 +3527,15 @@
                 } else {
                     revealMainPanel('settings_panel');
                 }
+            } else if (id === 'profile_panel' || id === 'profile-panel') {
+                showControlPanel();
+                if (MAIN_SELECTED_KEY === 'profile_panel') {
+                    revealMainPanel('profile_panel');
+                } else if (typeof window.onMainPanelChange === 'function') {
+                    window.onMainPanelChange(JSON.stringify({ key: 'profile_panel' }));
+                } else {
+                    revealMainPanel('profile_panel');
+                }
             } else if (id === 'log_panel' || id === 'log-panel') {
                 showControlPanel();
                 if (MAIN_SELECTED_KEY === 'log_panel' || MAIN_SELECTED_KEY === 'log-panel') {
@@ -3493,6 +3561,8 @@
                 concealMainPanel('description_editor_panel');
             } else if (id === 'settings_panel' || id === 'settings-panel') {
                 concealMainPanel('settings_panel');
+            } else if (id === 'profile_panel' || id === 'profile-panel') {
+                concealMainPanel('profile_panel');
             } else if (id === 'log_panel' || id === 'log-panel') {
                 concealMainPanel('log_panel');
             } else if (id === 'control_panel' || id === 'control-panel') {
@@ -3557,6 +3627,81 @@
         function settingsOpenSkyrimNet() {
             if (typeof window.onSettingsOpenSkyrimNet === 'function')
                 window.onSettingsOpenSkyrimNet('{}');
+        }
+
+        // --- Profile panel (C++ Profiler state machine; checkpoints/profile/checkpoint-04.md) ---
+        const PROFILE_BUTTONS = {
+            idle: ['profile-btn-calibration'],
+            calibrating: ['profile-btn-profiling', 'profile-btn-cancel'],
+            starting: [],
+            profiling: ['profile-btn-stop']
+        };
+
+        function profileSetButtons(enabled) {
+            for (const id of ['profile-btn-calibration', 'profile-btn-profiling', 'profile-btn-cancel', 'profile-btn-stop']) {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('de-disabled', !enabled.includes(id));
+            }
+        }
+
+        function configureProfilePanel(cfg) {
+            cfg = cfg || {};
+            const state = cfg.state || 'idle';
+            const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+            set('profile-state', state);
+            set('profile-run', cfg.run || 'none');
+            set('profile-parts', String(cfg.parts || 0));
+            set('profile-fill', (Number(cfg.fill_pct) || 0).toFixed(1) + '%');
+            set('profile-pending', String(cfg.pending_notes || 0));
+            profileSetButtons(PROFILE_BUTTONS[state] || []);
+        }
+
+        // C++ OpenMainPanelEntry: reveal + configure in one Invoke.
+        function openProfilePanel(cfg) {
+            revealMainPanel('profile_panel');
+            configureProfilePanel(cfg);
+        }
+
+        // Every button goes down before the round trip; the C++ push enables the right ones again.
+        function profileSend(listener) {
+            profileSetButtons([]);
+            if (typeof window[listener] === 'function')
+                window[listener]('{}');
+        }
+
+        let PROFILE_NOTE = null;
+
+        function openProfileNote(cfg) {
+            if (!cfg) return;
+            const same = PROFILE_NOTE && PROFILE_NOTE.run === cfg.run && PROFILE_NOTE.part === cfg.part;
+            PROFILE_NOTE = { run: cfg.run || '', part: cfg.part || 0 };
+            document.getElementById('profile-note-part').textContent = 'Part ' + String(PROFILE_NOTE.part).padStart(3, '0')
+                + ' of run ' + PROFILE_NOTE.run + (cfg.remaining > 1 ? ' (' + cfg.remaining + ' notes pending)' : '');
+            const ta = document.getElementById('profile-note-text');
+            if (!same) ta.value = '';
+            document.getElementById('profile-note-panel').style.display = 'block';
+            ta.focus();
+        }
+
+        function profileNoteIsOpen() {
+            return document.getElementById('profile-note-panel').style.display === 'block';
+        }
+
+        // Escape: the note stays pending and is asked again on the next overlay open.
+        function profileNoteClose() {
+            document.getElementById('profile-note-panel').style.display = 'none';
+            PROFILE_NOTE = null;
+        }
+
+        // Empty text is valid: OK always writes the note file.
+        function profileNoteOk() {
+            if (!PROFILE_NOTE) return;
+            const text = document.getElementById('profile-note-text').value || '';
+            const payload = JSON.stringify({ run: PROFILE_NOTE.run, part: PROFILE_NOTE.part, text });
+            profileNoteClose();
+            document.getElementById('profile-note-text').value = '';
+            if (typeof window.onProfileNote === 'function')
+                window.onProfileNote(payload);
         }
 
         // ── Log panel (regex filter + follow-tail) ─────────────────
@@ -3643,6 +3788,10 @@
                     ssIntentCancel();
                 else
                     ssCloseIntentPanel();
+                return;
+            }
+            if (profileNoteIsOpen()) {
+                profileNoteClose();
                 return;
             }
             if (punishReasonDialogIsOpen()) {
@@ -8410,7 +8559,7 @@
         function openYesNoSolo(cfg) {
             configureYesNo(cfg);
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
-                'description_editor_panel', 'settings_panel', 'log_panel'])
+                'description_editor_panel', 'settings_panel', 'profile_panel', 'log_panel'])
                 hidePanel(id);
             showYesNoSolo();
         }
@@ -8422,7 +8571,7 @@
         function openSceneCreatorPanel(state, spareTargetMenu) {
             clearYesNoSolo();
             for (const id of ['sex_menu_panel', 'yesno_panel',
-                'description_editor_panel', 'settings_panel', 'log_panel'])
+                'description_editor_panel', 'settings_panel', 'profile_panel', 'log_panel'])
                 hidePanel(id);
             if (!spareTargetMenu) hidePanel('target_menu_panel');
             configureSceneCreator(state);
@@ -8872,7 +9021,7 @@
             document.getElementById('punish-part-confirm').style.display = 'none';
             punishReasonDialogClose();
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
-                'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
+                'description_editor_panel', 'settings_panel', 'profile_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
             const subjectHost = document.getElementById('punish-punisher');
             subjectHost.innerHTML = '';
@@ -9110,7 +9259,7 @@
             const defObject = AID.actors.findIndex(a => !a.isPlayer);
             AID.actor = lastObject >= 0 ? lastObject : defObject >= 0 ? defObject : AID.subject;
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
-                'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
+                'description_editor_panel', 'settings_panel', 'profile_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
             const subjectHost = document.getElementById('aid-subject');
             subjectHost.innerHTML = '';
@@ -9180,7 +9329,7 @@
             AID_OFFER_TOKEN = (cfg && cfg.token) || 0;
             document.getElementById('aid-offer-question').textContent = (cfg && cfg.question) || '';
             for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
-                'description_editor_panel', 'settings_panel', 'log_panel', 'yesno_panel'])
+                'description_editor_panel', 'settings_panel', 'profile_panel', 'log_panel', 'yesno_panel'])
                 hidePanel(id);
             document.body.classList.add('yesno-solo');
             hideControlPanel();

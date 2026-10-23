@@ -220,6 +220,8 @@ EndFunction
 Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, Actor victim=None, \
      string style="", string tags="", String direction="", String event_hook="", String setting_name="",\
      Actor participate_3=None)
+    SkyrimNet_SexLab_WebUI.Prof_Mark("action.received", -1, intent)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Actions.StartScene_Event", -1)
 
     if target == None && participate_3 != None 
         target = participate_3 
@@ -243,6 +245,7 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
     ; would yank an in-scene target out of its animation, so check everyone here.
     if ActorUnavailable(speaker) || ActorUnavailable(target) || ActorUnavailable(participate_3)
         Trace("StartScene_Event", "skip: actor busy (in scene/locked) speaker="+speaker_name+" target="+target_name+" participate_3="+participate_3_name)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return False
     endif
 
@@ -251,6 +254,7 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
         resolved = SkyrimNet_SexLab_AnimDb.AnimDb_ResolveTags(tags, actor_count)
         if resolved == ""
             Trace("StartScene_Event", "AnimDB ResolveTags empty for tags='"+tags+"' actors="+actor_count)
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return False
         endif
     endif
@@ -272,6 +276,7 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
         ; The actor who called the action is always the hugger, whatever the direction.
         String msg = speaker_name+" hugs "+target_name+"."
         DirectNarration(msg, speaker, target)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return True
     endif
 
@@ -318,6 +323,7 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
     ModEvent.PushString(handle, setting_name)
     ModEvent.PushForm(handle, participate_3)
     ModEvent.Send(handle)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
     return True
 EndFunction 
 

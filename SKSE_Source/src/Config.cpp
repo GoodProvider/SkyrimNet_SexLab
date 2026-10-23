@@ -6,6 +6,7 @@
 #include "PublicAPI.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
+#include "Profiler.h"
 
 #include <Windows.h>
 #include <spdlog/spdlog.h>
@@ -237,6 +238,7 @@ void RegisterDecorators()
     const bool ok = PublicRegisterDecorator("sexlab_npc_stop_allowed",
         "1 when NPCs may use the Stop action to end a SexLab scene, else 0",
         [](RE::Actor*) -> std::string {
+            SNSL_PROF("decorator.sexlab_npc_stop_allowed");
             return GetBool("sexlab.actions.npc_stop_allowed", true) ? "1" : "0";
         });
     if (ok)
@@ -248,6 +250,7 @@ void RegisterDecorators()
     const bool okVerbose = PublicRegisterDecorator("sexlab_verbose",
         "1 when the SkyrimNet_SexLab Verbose logging option is on, else 0",
         [](RE::Actor*) -> std::string {
+            SNSL_PROF("decorator.sexlab_verbose");
             return IsVerbose() ? "1" : "0";
         });
     if (okVerbose)

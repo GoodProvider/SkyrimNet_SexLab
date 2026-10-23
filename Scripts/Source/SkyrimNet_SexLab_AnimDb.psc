@@ -193,6 +193,7 @@ EndFunction
 
 ; Kick cooperative sync after SexLab is ready. Callers must opt in (MCM / Settings / alignment prompt).
 Function StartSync(Bool force_rebuild=False)
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "AnimDb.StartSync", -1)
     align_check_pending = False
     if align_mbox_id != 0
         SkyMessage.Delete(align_mbox_id)
@@ -201,10 +202,12 @@ Function StartSync(Bool force_rebuild=False)
     if sync_phase != 0
         Trace("StartSync", "already walking, requesting restart force="+force_rebuild)
         walk_force = force_rebuild
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if sexlab == None
         Trace("StartSync", "sexlab is None", True)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     walk_force = force_rebuild
@@ -214,12 +217,15 @@ Function StartSync(Bool force_rebuild=False)
         Trace("StartSync", "SkyrimNet_SexLab is waiting for SexLab", True)
         RegisterForModEvent("SexLabEnabled", "OnSexLabEnabled")
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     BeginWalk()
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 Function BeginWalk()
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "AnimDb.BeginWalk", -1)
     UnregisterForModEvent("SexLabEnabled")
     RefreshSlotCounts()
     if !walk_force
@@ -228,6 +234,7 @@ Function BeginWalk()
             walk_active = False
             sync_phase = 0
             Trace("BeginWalk", "skip reload db_count="+db_count+" registered="+walk_slots_total)
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
     endif
@@ -245,10 +252,13 @@ Function BeginWalk()
     AnimDb_BeginSync(walk_force)
     Trace("BeginWalk", "SkyrimNet SexLab loading", True)
     RegisterForSingleUpdate(0.05)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 Function RebuildDatabase()
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "AnimDb.RebuildDatabase", -1)
     StartSync(True)
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 Event OnSexLabEnabled()
@@ -262,8 +272,10 @@ Event OnSexLabEnabled()
 EndEvent
 
 Event OnUpdate()
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "AnimDb.OnUpdate", -1)
     if align_mbox_id != 0
         FinishAlignmentPrompt()
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if align_check_pending
@@ -272,6 +284,7 @@ Event OnUpdate()
         else
             RegisterForSingleUpdate(1.0)
         endif
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if sync_phase == 1
@@ -280,13 +293,16 @@ Event OnUpdate()
         else
             RegisterForSingleUpdate(1.0)
         endif
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if sync_phase != 2
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
         WalkPPlusBatch()
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     sslAnimationSlots slots = None
@@ -297,6 +313,7 @@ Event OnUpdate()
     endif
     if !slots
         FinishSourceOrDone()
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
     int slotted = slots.Slotted
@@ -356,10 +373,12 @@ Event OnUpdate()
     else
         RegisterForSingleUpdate(0.01)
     endif
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
 ; P+ walk: one batch of registry scene ids for walk_source (0 humans, 1 creatures).
 Function WalkPPlusBatch()
+    Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "AnimDb.WalkPPlusBatch", -1)
     if pplus_ids_source != walk_source
         pplus_ids = SkyrimNet_SexLab_PPlus.AllSceneIds(walk_source)
         pplus_ids_source = walk_source
@@ -413,6 +432,7 @@ Function WalkPPlusBatch()
     else
         RegisterForSingleUpdate(0.01)
     endif
+    SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
 ; P+ row from SexlabRegistry (the proxy's Name / Enabled / tags stay empty). Same keys as BuildAnimJson;

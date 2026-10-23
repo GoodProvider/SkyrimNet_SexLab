@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "JsonUtil.h"
 #include "WebUI_Log.h"
+#include "Profiler.h"
 
 #include <Windows.h>
 #include <sqlite3.h>
@@ -1307,6 +1308,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     std::string ResolveTags(const std::string& tags_csv, int actor_count, SynonymMode mode, const FilterSpec* base)
     {
+        SNSL_PROF("animdb.resolve_tags");
         auto tags = ParseSanitizeTagsCsv(tags_csv);
         if (tags.empty())
             return {};
@@ -1929,6 +1931,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     std::vector<AnimRow> QueryTopNAnims(const FilterSpec& spec, int n)
     {
+        SNSL_PROF("animdb.query_top_n_anims");
         std::lock_guard lock(g_mutex);
         const auto ex = ExpandSpecTagsLocked(spec);
         std::vector<AnimRow> out;
@@ -1960,6 +1963,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     std::vector<TagCount> QueryTopNTags(const FilterSpec& spec, int n)
     {
+        SNSL_PROF("animdb.query_top_n_tags");
         auto anims = QueryTopNAnims(spec, 0);
         std::unordered_map<std::string, int> counts;
         for (const auto& row : anims) {
@@ -2048,6 +2052,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     std::string GetStageDescription(const std::string& registry, int stage)
     {
+        SNSL_PROF("animdb.get_stage_description");
         // Look up under the lock without copying the whole AnimRow (4 maps + 6 vectors).
         std::lock_guard lock(g_mutex);
         auto row = FindRowLocked(registry);
@@ -2094,6 +2099,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 
     std::string SubstituteActors(const std::string& desc, const std::vector<std::string>& actor_names)
     {
+        SNSL_PROF("animdb.substitute_actors");
         std::string out = desc;
         for (size_t i = 0; i < actor_names.size(); ++i) {
             std::string token = "{{sl.actors." + std::to_string(i) + "}}";

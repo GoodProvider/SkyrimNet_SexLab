@@ -82,7 +82,9 @@ namespace PapyrusBindings_WebUI {
     void WebUI_SetSexLabAnimCount(RE::StaticFunctionTag*, std::int32_t sexlabCount);
 
     /// Papyrus native: format and write a script log line via SKSE::log.
-    RE::BSFixedString TraceLog(RE::StaticFunctionTag*, RE::BSFixedString script_name,
+    /// Takes the VM stack id so the profiler's trace span nests under its calling Papyrus span.
+    RE::BSFixedString TraceLog(RE::BSScript::IVirtualMachine*, RE::VMStackID stackID, RE::StaticFunctionTag*,
+        RE::BSFixedString script_name,
         RE::BSFixedString func, RE::BSFixedString msg);
 
     /// Registers SkyrimNet_SexLab_WebUI natives on the Papyrus VM.

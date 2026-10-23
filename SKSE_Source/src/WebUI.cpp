@@ -11,6 +11,7 @@
 #include "OrgasmEngine.h"
 #include "InjuryEngine.h"
 #include "StrategyDecision.h"
+#include "Profiler.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -747,6 +748,7 @@ static void WebUI_ShowNow(bool showControlPanel)
     if (showControlPanel)
         WebUI_Invoke("showControlPanel();");
     DispatchMenuNoArg("WebUI_SeedSceneInfos");
+    Profiler::OnOverlayShown();
 }
 
 static void WebUI_Visibility_HideImpl(bool commit)
@@ -1648,6 +1650,27 @@ void InitWebUI()
             RunGuarded("onSettingsRefresh", [&] {
                 SexLabNet::InvokeConfigureSettingsPanel();
             });
+        });
+
+        // Profile panel (Profiler state machine is the only writer; wrong-state presses are no-ops).
+        PrismaUI->RegisterJSListener(g_view, "onProfileStartCalibration", [](const char*) {
+            RunGuarded("onProfileStartCalibration", [&] { Profiler::StartCalibration(); });
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onProfileStartProfiling", [](const char*) {
+            RunGuarded("onProfileStartProfiling", [&] { Profiler::StartProfiling(); });
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onProfileCancel", [](const char*) {
+            RunGuarded("onProfileCancel", [&] { Profiler::Cancel(); });
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onProfileStop", [](const char*) {
+            RunGuarded("onProfileStop", [&] { Profiler::Stop(); });
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onProfileNote", [](const char* value) {
+            RunGuarded("onProfileNote", [&] { Profiler::Note(value ? value : ""); });
         });
 
         PrismaUI->RegisterJSListener(g_view, "onLogPanelOpen", [](const char*) {

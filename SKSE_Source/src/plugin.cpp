@@ -23,6 +23,7 @@
 #include "ActorLocker.h"
 #include "Papyrus_ActorLocker.h"
 #include "StrategyDecision.h"
+#include "Profiler.h"
 
 using namespace SKSE;
 
@@ -139,6 +140,9 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             JsonStore_SelfTest();
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
+            // A profiling run survives save loads; only a new game ends it.
+            if (message->type == SKSE::MessagingInterface::kNewGame)
+                Profiler::OnNewGame();
             TargetMenuRegistry::Clear();
             AnimationDB::LoadSynonyms();
             PapyrusBindings_WebUI::ClearOnGameLoad();

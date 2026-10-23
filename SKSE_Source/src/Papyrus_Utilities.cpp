@@ -4,6 +4,7 @@
 #include "NarrationQueue.h"
 #include "NarrationTiming.h"
 #include "WebUI_Log.h"
+#include "Profiler.h"
 
 #include <Windows.h>
 #include <algorithm>
@@ -197,11 +198,15 @@ namespace PapyrusBindings_Utilities
     bool QueueDirectNarration(RE::StaticFunctionTag*, RE::BSFixedString msg, RE::Actor* source,
         RE::Actor* target, bool purgeDialogue)
     {
+        SNSL_PROF("narration.queue_direct");
         const char* raw = msg.c_str() ? msg.c_str() : "";
-        if (NarrationQueue::Enqueue(raw, source, target, purgeDialogue))
+        if (NarrationQueue::Enqueue(raw, source, target, purgeDialogue)) {
+            Profiler::Mark("narration.queue", -1, "queued", 0);
             return true;
+        }
         // Not paused: Papyrus sends it to SkyrimNet right after this returns.
         NarrationTiming::MarkSent(raw);
+        Profiler::Mark("narration.queue", -1, "immediate", 0);
         return false;
     }
 
