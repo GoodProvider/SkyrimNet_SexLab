@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Target menu
+- **New target menu option "hug"**: a quick hug (the short hug animation, not a SexLab scene). Shown only when the target is not in a scene or locked by the Scene Creator.
+
 ## [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5) — since [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4)
 
 ### WebUI

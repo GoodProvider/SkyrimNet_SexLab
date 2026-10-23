@@ -261,21 +261,7 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
 
     ; Lone hug -> idle
     if resolved == "hug" && target != None && pa_HugA != None
-        ; Paired idle with a drawn weapon desyncs the player's graph (can't attack after).
-        Bool sheathed = CalmForPairedIdle(speaker)
-        sheathed = CalmForPairedIdle(target) || sheathed
-        if sheathed
-            int waits = 0
-            while waits < 15 && (speaker.IsWeaponDrawn() || target.IsWeaponDrawn())
-                Utility.Wait(0.1)
-                waits += 1
-            endwhile
-        endif
-        Trace("StartScene_Event", "lone hug pa_HugA target="+target_name+" speaker="+speaker_name+" sheathed="+sheathed)
-        target.playIdleWithTarget(pa_HugA, speaker)
-        ; The actor who called the action is always the hugger, whatever the direction.
-        String msg = speaker_name+" hugs "+target_name+"."
-        DirectNarration(msg, speaker, target)
+        PlayLoneHug(speaker, target)
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return True
     endif
@@ -326,6 +312,27 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
     return True
 EndFunction 
+
+; Short paired hug idle (pa_HugA), bypasses SexLab. Callers check ActorUnavailable first.
+Function PlayLoneHug(Actor speaker, Actor target)
+    String speaker_name = GetDisplayName(speaker)
+    String target_name = GetDisplayName(target)
+    ; Paired idle with a drawn weapon desyncs the player's graph (can't attack after).
+    Bool sheathed = CalmForPairedIdle(speaker)
+    sheathed = CalmForPairedIdle(target) || sheathed
+    if sheathed
+        int waits = 0
+        while waits < 15 && (speaker.IsWeaponDrawn() || target.IsWeaponDrawn())
+            Utility.Wait(0.1)
+            waits += 1
+        endwhile
+    endif
+    Trace("PlayLoneHug", "lone hug pa_HugA target="+target_name+" speaker="+speaker_name+" sheathed="+sheathed)
+    target.playIdleWithTarget(pa_HugA, speaker)
+    ; The actor who called the action is always the hugger, whatever the direction.
+    String msg = speaker_name+" hugs "+target_name+"."
+    DirectNarration(msg, speaker, target)
+EndFunction
 
 ; In a SexLab/OStim scene, dead, in combat, or held by the Scene Creator lock.
 Bool Function ActorUnavailable(Actor a)
@@ -541,6 +548,19 @@ EndFunction
 ; -------------------------------------------------
 ; TargetMenu Papyrus APIs (type: papyrus — no SkyrimNet YAML)
 ; -------------------------------------------------
+
+Function TM_Hug(Actor speaker, Actor target)
+    Trace("TM_Hug", GetDisplayName(speaker)+" -> "+GetDisplayName(target))
+    if speaker == None || target == None || pa_HugA == None
+        return
+    endif
+    ; Runtime guard: menu eligibility only checks the target.
+    if ActorUnavailable(speaker) || ActorUnavailable(target)
+        Trace("TM_Hug", "skip: actor busy (in scene/locked)")
+        return
+    endif
+    PlayLoneHug(speaker, target)
+EndFunction
 
 Function TM_Outfit(Actor speaker, Actor target, String style)
     Trace("TM_Outfit", GetDisplayName(speaker)+" -> "+GetDisplayName(target)+" style:"+style)

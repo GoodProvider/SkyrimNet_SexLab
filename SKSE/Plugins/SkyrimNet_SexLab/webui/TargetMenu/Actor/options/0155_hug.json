@@ -1,0 +1,45 @@
+{
+  "type": "papyrus",
+  "label": "hug",
+  "plugin": "SkyrimNet_SexLab.esp",
+  "questFormId": "0x800",
+  "scriptName": "SkyrimNet_SexLab_Actions",
+  "executionFunctionName": "TM_Hug",
+  "closeWebUI": true,
+  "parameterMapping": [
+    { "type": "speaker", "name": "speaker" },
+    { "type": "target", "name": "target" }
+  ],
+  "eligibilityRules": [
+    {
+      "conditions": [
+        {
+          "decoratorName": "is_in_faction",
+          "arguments": ["currentActor", "dse_dm_FactionActorUsingDevice"],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        },
+        {
+          "decoratorName": "is_in_faction",
+          "arguments": ["currentActor", "OStimActorCountFaction"],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        },
+        {
+          "decoratorName": "is_in_combat",
+          "arguments": ["currentActor"],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        },
+        {
+          "decoratorName": "papyrus_util",
+          "arguments": ["HasIntValue", "currentActor", "skyrimnet_sexlab_scene_actor_lock"],
+          "comparisonOperator": "==",
+          "expectedValue": false
+        }
+      ],
+      "logicalOperator": "AND",
+      "required": true
+    }
+  ]
+}

@@ -4,6 +4,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased (branch `profile`)
 
+### TargetMenu hug
+- New Actor option `0155_hug.json` → `Actions.TM_Hug(speaker, target)` (no panel). The lone-hug block of `StartScene_Event` moved into `Actions.PlayLoneHug(speaker, target)`, shared by both; `TM_Hug` guards both actors with `ActorUnavailable`.
+
 ### Profiling (first in-game runs: `checkpoints/profile/checkpoint-06.md`)
 - WebUI **Profile** main panel (`webui/MainPanels/1100_profile.json`, builtin `profile_panel`) drives a run: Start Calibration → Start Profiling → Stop Profiling. See `docs/developers/webui.md` (Profile panel) and `checkpoints/profile/checkpoint-04.md`.
 - `SKSE_Source/src/Profiler.h/.cpp`: raw event recorder (B/E/X/M, 112-byte events, two 200,000-event buffers, 80% swap, drop only at 100%), part writer thread with one retry, `[Profiler] run:<key>` markers, pending-note queue, `SNSL_PROF("key")` scope timer.
