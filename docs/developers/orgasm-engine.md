@@ -277,6 +277,9 @@ The shell-only natives (`BeginScene`, `SetStage`, `SetStageTimers`, `SetScenePau
 | `SkyrimNet_SexLab_Orgasm` | orgasm count this scene |
 | `SkyrimNet_SexLab_OrgasmDenied` | orgasm count |
 | `SkyrimNet_SexLab_Edge` | edge seconds |
+| `SkyrimNet_SexLab_AidStart` | health restored |
+
+`SkyrimNet_SexLab_AidStart` fires once per health Aid (spell or potion, any entry point) on another actor. Its `strArg` is `"<spell|potion>|<caster FormID>"`, and the FormID is a signed decimal, so Papyrus `as Int` parses ESL ids. Aid casts nothing, so Injury Engine sends no `Injury_Engine_HealStart` for it. SkyrimNet_DOM uses this event to praise healed slaves.
 
 ## C++ API
 

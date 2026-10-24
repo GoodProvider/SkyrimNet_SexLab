@@ -4,6 +4,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased (branch `profile`)
 
+### Aid mod event
+- New ModEvent `SkyrimNet_SexLab_AidStart`: sender = target, strArg `"<spell|potion>|<caster FormID signed decimal>"`, numArg = health. `Aid.cpp` `NotifyAidStart` runs on the game thread from `Aid::Apply` (the task, after the restore) and once per `Aid::StartChannel`. Skipped for self-aid and stamina-only Aid. SkyrimNet_DOM listens to it (Aid casts nothing, so Injury Engine's HealStart never fires). See `docs/developers/orgasm-engine.md` ModEvents.
+
 ### TargetMenu hug
 - New Actor option `0155_hug.json` → `Actions.TM_Hug(speaker, target)` (no panel). The lone-hug block of `StartScene_Event` moved into `Actions.PlayLoneHug(speaker, target)`, shared by both; `TM_Hug` guards both actors with `ActorUnavailable`.
 

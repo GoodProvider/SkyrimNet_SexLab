@@ -182,6 +182,23 @@ namespace Aid
                 caster ? caster->GetFormID() : 0, target->GetFormID(), art, shaders, sounds, dur);
         }
 
+        // Game thread. Mod event "SkyrimNet_SexLab_AidStart" once per health Aid on another actor (Aid casts nothing,
+        // so Injury Engine sends no HealStart for it). sender = target; strArg "<spell|potion>|<caster FormID, signed
+        // decimal for Papyrus as Int>"; numArg = health restored. SkyrimNet_DOM praises / cares for the slave.
+        void NotifyAidStart(RE::Actor* caster, RE::Actor* target, bool potion, float health)
+        {
+            auto* source = SKSE::GetModCallbackEventSource();
+            if (!source || !caster || !target || caster == target || health <= 0.0f) {
+                return;
+            }
+            const std::string str = std::string(potion ? "potion" : "spell") + "|" +
+                                    std::to_string(static_cast<std::int32_t>(caster->GetFormID()));
+            SKSE::ModCallbackEvent ev{ "SkyrimNet_SexLab_AidStart", str.c_str(), health, target };
+            source->SendEvent(&ev);
+            webui_log::info("Aid: AidStart {:#x} -> {:#x} {} health {:.0f}", caster->GetFormID(), target->GetFormID(),
+                potion ? "potion" : "spell", health);
+        }
+
         // Narration line; part "" means no body part.
         std::string AidLine(RE::Actor* caster, RE::Actor* target, const Option& o, const std::string& part)
         {
@@ -605,6 +622,7 @@ namespace Aid
                 Restore(c, o.health * share, o.stamina * share);
                 PlaySpellVisuals(c, c, item, o.potion);
             }
+            NotifyAidStart(c, t, o.potion, o.health * share);
         });
         webui_log::info("Aid: {:#x} -> {:#x} {} '{}' on '{}' health {:.0f} stamina {:.0f} cost {:.0f} split {} injuryEngine {}",
             casterId, targetId, o.potion ? "potion" : "spell", o.name, location, o.health, o.stamina, o.cost, split,
@@ -683,6 +701,12 @@ namespace Aid
             }
             g_channels[casterId] = ch;
             EnsureChannelThread();
+        }
+        if (!ch.stamina) {
+            SKSE::GetTaskInterface()->AddTask([casterId, targetId = ch.target, points]() {
+                NotifyAidStart(RE::TESForm::LookupByID<RE::Actor>(casterId), RE::TESForm::LookupByID<RE::Actor>(targetId),
+                    false, points);
+            });
         }
         webui_log::info("Aid: channel {:#x} -> {:#x} '{}' on '{}' {:.0f} {} every {:.2f}s injuryEngine {}", casterId,
             ch.target, o.name, location, points, ch.stamina ? "stamina" : "health", ch.interval, ch.toInjuryEngine);
