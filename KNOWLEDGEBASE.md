@@ -1427,3 +1427,7 @@ Never commit the Windows username. Use `%USERPROFILE%` in paths. See AGENTS.md S
 ## Punish panel → SkyrimNet_DOM reason (2026-10-23)
 
 The Punish panel lands Injury Engine hits through `External_TortureText`, which takes no cause, so Injury Engine's `Injury_Engine_Torture` event can't carry the reason. `OrgasmEngine::PunishNarrated` therefore dispatches `SkyrimNet_DOM_API.PanelPunished(by, target, reason, isStrategy)` in the game-thread task before `PunishText`, and only when `GetScriptObjectType("SkyrimNet_DOM_API")` succeeds (no warning spam without DOM). `isStrategy` is true for a held `PunishRecord` whose type is not `external`, or for the AI actor's observed strategy line. DOM-seeded reasons are `external` (`AddPunishReason`).
+
+## Punished decision line ≠ punishment narration (2026-10-24)
+
+The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feeling>, because <reason>."`, painful part first, reason last), not the narrated `plan.line` (`"<act>, because <reason>. <feeling>"`). `ContinuePunish` then calls `InjuryEngine::PartPoints`: above 80% of the target's total torture points it adds `"It's too much, <target> can't resist anymore!"`. On the older Injury Engine path (no `External_TortureText`, hit through `External_Damage`) the points may lag one hit behind. Without `External_PartPoints` there is no cue and the decision goes out right away.

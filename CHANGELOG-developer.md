@@ -12,6 +12,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 ### Strategy decision: timeline and punishments
 - `StrategyDecision.cpp` `BuildTimeline` reads `PublicGetRecentEvents`' `data` field (new `EventText`; legacy `text` fallback). The timeline was always empty before. Debug log of the first raw event per request.
 - `DecisionInput::currentOption` (options key of the current strategy, `deny_p2`), filled in `GetStrategyDecisionInput`. `BuildContext` sends it as `current_key` for `trigger=punished` only (`""` otherwise); `minigame_strategy.prompt` uses it in `last_line` and the strategy question.
+- Punished `last_line_text` is its own line now, not the narration: `PunishDecisionLine` → `"<act>. <feeling>, because <reason>."` (`PunishPlan::act`). `ContinuePunish` asks `InjuryEngine::PartPoints` first and adds `" It's too much, <target> can't resist anymore!"` when `total > 0.8 × max`. Without `External_PartPoints` the request goes out right away. The narration line is unchanged.
 - `strategies.json`: keys `resist` / `forbid` / `focus` → `deny_self` / `deny_all` / `focused` (matching `kStrategyKeys`; `LoadStrategies` ignored them).
 
 ### Player HUD narration

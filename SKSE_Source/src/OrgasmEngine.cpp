@@ -3129,6 +3129,7 @@ namespace OrgasmEngine
         struct PunishPlan
         {
             std::string line;         // "Bob punishes Nina by pinching Nina's nipples, because ..."
+            std::string act;          // "Bob punishes Nina by pinching Nina's nipples" (no reason, no period)
             bool direct = false;      // PlayerScene
             bool fromPlayer = false;  // HUD panel: NarratePlayer, Injury Engine never narrates
             // The refused request the reason came from (empty key: none).
@@ -3180,8 +3181,8 @@ namespace OrgasmEngine
             if (why.size() > 8 && _strnicmp(why.c_str(), "because ", 8) == 0) {
                 why = Trimmed(why.substr(8));
             }
-            plan.line = NameOf(punisherActor) + " punishes " + name + " by " + act +
-                        (why.empty() ? "" : ", because " + why) + ".";
+            plan.act = NameOf(punisherActor) + " punishes " + name + " by " + act;
+            plan.line = plan.act + (why.empty() ? "" : ", because " + why) + ".";
             plan.direct = PlayerScene(*sc);
             plan.reason = why;
             if (const auto at = g_actors.find(target); at != g_actors.end() && !why.empty()) {
@@ -3209,9 +3210,20 @@ namespace OrgasmEngine
             return plan;
         }
 
+        // The punished actor's decision last_line: the painful part, then why. "<act>. <feeling>, because <reason>."
+        std::string PunishDecisionLine(const PunishPlan& plan, const std::string& feeling)
+        {
+            std::string out = feeling.empty() ? plan.act : plan.act + ". " + feeling;
+            while (!out.empty() && (out.back() == '.' || out.back() == '!' || out.back() == ' ')) {
+                out.pop_back();
+            }
+            return out + (plan.reason.empty() ? "" : ", because " + plan.reason) + ".";
+        }
+
         // Game thread. The hit has landed (feeling: Injury Engine's text, "" when none): narrate the punishment, then
-        // ask the target's strategy decision with that narration as last_line; a punishment for a refused request
-        // gets the agree / refuse answer.
+        // ask the target's strategy decision (PunishDecisionLine as last_line, plus "It's too much, <target> can't
+        // resist anymore!" above 80% Injury Engine torture); a punishment for a refused request gets the agree /
+        // refuse answer.
         void ContinuePunish(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan,
             const std::string& method, const std::string& location, RE::FormID spell, float spellDamage,
             const std::string& feeling, bool feelingFromInjuryEngine, std::int32_t amount)
@@ -3240,13 +3252,27 @@ namespace OrgasmEngine
                 Aid::QueueWeakSpellHit(punisher, target, spell,
                     feelingFromInjuryEngine || injuryEngineNarrates ? 0.0f : spellDamage);
             }
-            StrategyDecision::RequestAnswer(targetId, "punished", text,
-                [plan, targetId](DecisionResult result) {
+            const auto ask = [plan, targetId](const std::string& line) {
+                StrategyDecision::RequestAnswer(targetId, "punished", line, [plan, targetId](DecisionResult result) {
                     if (!plan.requestKey.empty()) {
                         FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
                             plan.direct, result);
                     }
                 });
+            };
+            const std::string line = PunishDecisionLine(plan, feeling);
+            const std::string name = NameOf(target);
+            // Torture share from Injury Engine (Papyrus VM thread), then back to the game thread to ask.
+            const bool points = InjuryEngine::PartPoints(target, [ask, line, name](std::string json) {
+                const auto j = nlohmann::json::parse(json, nullptr, false);
+                const bool tooMuch = j.is_object() && j.value("max", 0.0) > 0.0 &&
+                                     j.value("total", 0.0) > 0.8 * j.value("max", 0.0);
+                const std::string full = tooMuch ? line + " It's too much, " + name + " can't resist anymore!" : line;
+                SKSE::GetTaskInterface()->AddTask([ask, full]() { ask(full); });
+            });
+            if (!points) {
+                ask(line);
+            }
         }
     }
 
