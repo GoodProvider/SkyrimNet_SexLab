@@ -781,15 +781,6 @@ schema:
       defaultValue: 3
       category: "Mini-game"
 
-    - name: "NPC strategy step interval (sec)"
-      path: "sexlab.minigame.npc_interval"
-      type: "float"
-      description: "Seconds between an NPC's mini-game moves for its strategy."
-      min: 0.25
-      max: 30
-      defaultValue: 2
-      category: "Mini-game"
-
     - name: "Fear cooldown"
       path: "sexlab.minigame.fear_cooldown"
       type: "float"

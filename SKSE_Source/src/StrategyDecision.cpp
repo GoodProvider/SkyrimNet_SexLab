@@ -45,7 +45,7 @@ namespace StrategyDecision
         constexpr double kEndConfidence = 0.8;    // ending the scene can't be undone
         constexpr std::size_t kMaxAidOptions = 20;
         // Aid / Punish part pulldown (index.html BODY_PARTS without "custom"); the sexual ones as SEXUAL_PARTS.
-        constexpr const char* kBodyParts[] = { "body", "face", "lips", "nipples", "back", "left arm", "right arm",
+        constexpr const char* kBodyParts[] = { "body", "face", "lips", "throat", "nipples", "back", "left arm", "right arm",
             "left leg", "right leg", "pussy", "cock", "ass" };
         constexpr std::string_view kSexualParts[] = { "lips", "nipples", "pussy", "cock", "ass" };
 

@@ -17,7 +17,7 @@ parameterMapping:
     description: "How [speaker] hurts them: slap|pinch|punch|pull|<the name of a weak attack spell [speaker] knows, e.g. Sparks>|<your own short verb in the third person, e.g. bites>"
   - type: dynamic
     name: part
-    description: "Where on [target]: body|face|lips|nipples|back|left arm|right arm|left leg|right leg|pussy|cock|ass. Give only the part."
+    description: "Where on [target]: body|face|lips|throat|nipples|back|left arm|right arm|left leg|right leg|pussy|cock|ass. Give only the part."
   - type: dynamic
     name: reason
     description: "What [target] is punished for, a short phrase that follows 'for', e.g. resisting her orgasm. Empty for no reason."

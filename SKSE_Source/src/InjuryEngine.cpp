@@ -84,8 +84,8 @@ namespace InjuryEngine
 
     std::string PartName(const std::string& part)
     {
-        static constexpr std::array<std::pair<std::string_view, std::string_view>, 11> kParts{ {
-            { "face", "face" }, { "lips", "lips" }, { "nipples", "nipples" }, { "back", "back" },
+        static constexpr std::array<std::pair<std::string_view, std::string_view>, 12> kParts{ {
+            { "face", "face" }, { "lips", "lips" }, { "throat", "lungs" }, { "nipples", "nipples" }, { "back", "back" },
             { "left arm", "left arm" }, { "right arm", "right arm" }, { "left leg", "left leg" },
             { "right leg", "right leg" }, { "pussy", "pussy" }, { "cock", "penis" }, { "ass", "ass hole" },
         } };
@@ -295,6 +295,9 @@ namespace InjuryEngine
         }
         if (name == "ass hole") {
             return "ass";
+        }
+        if (name == "lungs") {
+            return "throat";
         }
         return name;
     }

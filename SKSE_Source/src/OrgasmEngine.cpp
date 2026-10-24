@@ -53,6 +53,11 @@ namespace OrgasmEngine
         constexpr float kDomStepShare = 0.1f;       // DOM slave: step roll share of one full DOM roll
         constexpr float kRegenFloor = -10.0f;       // Sex is hard work: regen floor; a non-victim here ends the scene
         constexpr double kUntimedGrace = 10.0;      // NPC steps start this long after BeginScene without timers
+        constexpr double kPressTick = 1.0;          // NPC strategy: seconds between bursts of presses
+        constexpr int kPressMin = 5;                // NPC strategy: presses per burst, random kPressMin..kPressMax
+        constexpr int kPressMax = 10;
+        constexpr double kPressGap = 0.1;           // NPC strategy: seconds between presses of a burst
+        constexpr double kRestSecs = 2.0;           // NPC strategy: rest after running out of stamina / magicka
 
         struct Settings
         {
@@ -85,7 +90,6 @@ namespace OrgasmEngine
             float bonusClamp = 0.75f;
             float togetherK = 2.0f;          // Together: curve exponent k = 1 + togetherK x bonus
             float miniGameBonusMult = 1.0f;  // Mini-game: passive gain x (1 + this x bonus)
-            float npcInterval = 2.0f;        // Mini-game: seconds between an NPC's strategy steps
             float npcStepMin = 4.0f;         // Mini-game: enjoyment per NPC step, random in [min, max]
             float npcStepMax = 8.0f;         // (timed scenes: only the spread around the calibrated step)
             float mutualTarget = 87.0f;      // Mini-game: all on Mutual reach this at the end of stage N-1
@@ -168,6 +172,9 @@ namespace OrgasmEngine
             Strategy strategy = Strategy::kPassive;
             RE::FormID strategyTarget = 0;
             double nextStepAt = 0.0;
+            int pressesLeft = 0;       // presses still queued in the current burst
+            double nextPressAt = 0.0;  // when the next queued press fires
+            float pressAmount = 0.0f;  // size of each press of the current burst
             float regen = 100.0f;  // stamina regen, percent of the actor's default (staminaFatigue)
             // HUD take-control key. autoPlay (player): the engine plays the player's strategy like an NPC's.
             // playerDriven (NPC): the player drives this NPC with the HUD; its strategy stops. Not saved.
@@ -1092,6 +1099,7 @@ namespace OrgasmEngine
             st.strategy = s;
             st.strategyTarget = NeedsTarget(s) ? target : 0;
             st.nextStepAt = Now();
+            st.pressesLeft = 0;
             webui_log::info("OrgasmEngine: {:#x} strategy {} target {:#x}", st.id, InfoOf(s).key, st.strategyTarget);
             if (announce) {
                 Announce(sc, st, StrategyPhrase(st), fx, narrate, ObservedPhrase(st));
@@ -1202,90 +1210,130 @@ namespace OrgasmEngine
             return count > 0 && sum > 0.0f ? sum / static_cast<float>(count) : 1.0f;
         }
 
-        // Caller holds g_lock. One mini-game step for an NPC with a strategy, every npc_interval seconds.
-        // Timed scenes: the step is the scene's calibrated step rate x the interval, spread by
-        // random(npc_step_min, npc_step_max) / their mean, over the scene's mean NPC skill factor (arouse
-        // re-applies the actor's own), so every NPC on Mutual lands on mutualTarget. Untimed: random(min,
-        // max) as is. Costs and edging as for a player press. Not narrated (the strategy
-        // choice is). No step until the scene's timers arrived (SexLab's are empty at first), or kUntimedGrace
-        // after BeginScene for a scene that never sends any.
+        // Caller holds g_lock. Mini-game presses for an NPC with a strategy: every kPressTick a burst of random
+        // kPressMin..kPressMax presses is queued kPressGap apart, and each tick fires the ones due (the tick is
+        // coarser than the gap). Each is paid like a player press. A press it cannot pay (out of stamina /
+        // magicka) drops the rest of the burst and rests kRestSecs. Press size: the scene's calibrated step rate per
+        // second, spread by random(npc_step_min, npc_step_max) / their mean, over the scene's mean NPC skill
+        // factor (arouse re-applies the actor's own), split over the mean presses per burst, so every NPC on
+        // Mutual lands on mutualTarget while not resting. Untimed: random(min, max) per 2 s, split the same
+        // way. Edging as for a player press. Not narrated (the strategy choice is). No burst until the
+        // scene's timers arrived (SexLab's are empty at first), or kUntimedGrace after BeginScene for a scene
+        // that never sends any.
         void StrategyStep(const SceneState& sc, ActorState& st, double now, Effects& fx)
         {
             RE::Actor* self = ActorFor(st.id);
             const bool stepsReady = sc.ratesKnown || now - sc.beganAt >= kUntimedGrace;
-            if (!g_settings.miniGame || !stepsReady || !self || !AiDriven(st) || now < st.nextStepAt) {
+            if (!g_settings.miniGame || !stepsReady || !self || !AiDriven(st)) {
+                st.pressesLeft = 0;
                 return;
             }
-            const float interval = std::max(0.25f, g_settings.npcInterval);
-            st.nextStepAt = now + interval;
+            if (st.pressesLeft == 0) {
+                if (now < st.nextStepAt) {
+                    return;
+                }
+                st.nextStepAt = now + kPressTick;
 
-            const float lo = std::max(0.0f, std::min(g_settings.npcStepMin, g_settings.npcStepMax));
-            const float hi = std::max(lo, g_settings.npcStepMax);
-            std::uniform_real_distribution<float> roll(lo, hi);
-            float amount = roll(g_rng);
-            if (sc.mgRates) {
-                const float mean = 0.5f * (lo + hi);
-                const float spread = mean > 0.0f ? amount / mean : 1.0f;
-                amount = sc.mgStepRate * interval * spread / MeanNpcSkillFactor(sc);
+                const float lo = std::max(0.0f, std::min(g_settings.npcStepMin, g_settings.npcStepMax));
+                const float hi = std::max(lo, g_settings.npcStepMax);
+                std::uniform_real_distribution<float> roll(lo, hi);
+                const float rolled = roll(g_rng);
+                float perSec = rolled / 2.0f;  // untimed: random(min, max) per 2 s
+                if (sc.mgRates) {
+                    const float mean = 0.5f * (lo + hi);
+                    const float spread = mean > 0.0f ? rolled / mean : 1.0f;
+                    perSec = sc.mgStepRate * spread / MeanNpcSkillFactor(sc);
+                }
+                st.pressAmount = perSec * static_cast<float>(kPressTick) /
+                                 (0.5f * static_cast<float>(kPressMin + kPressMax));
+                std::uniform_int_distribution<int> presses(kPressMin, kPressMax);
+                st.pressesLeft = presses(g_rng);
+                st.nextPressAt = now;
             }
+            const float amount = st.pressAmount;
 
+            // false: the actor could not pay (no target is not a failed press).
             const auto arouse = [&](RE::FormID id) {
                 auto at = g_actors.find(id);
                 RE::Actor* target = ActorFor(id);
-                if (at != g_actors.end() && target && InScene(sc, id)) {
-                    ArouseLocked(self, target, at->second, amount, false, fx);
+                if (at == g_actors.end() || !target || !InScene(sc, id)) {
+                    return true;
                 }
+                return ArouseLocked(self, target, at->second, amount, false, fx);
             };
             const auto calm = [&](RE::FormID id) {
                 auto at = g_actors.find(id);
                 RE::Actor* target = ActorFor(id);
-                if (at != g_actors.end() && target && InScene(sc, id)) {
-                    CalmLocked(self, target, at->second, amount, false, fx);
+                if (at == g_actors.end() || !target || !InScene(sc, id)) {
+                    return true;
                 }
+                return CalmLocked(self, target, at->second, amount, false, fx);
             };
 
             // The strategy's target, or another actor of the scene when it left.
             const auto targetOf = [&]() {
                 return InScene(sc, st.strategyTarget) ? st.strategyTarget : PickOther(sc, st.id, true, false);
             };
-            switch (st.strategy) {
-            case Strategy::kMutual:
-                arouse(PickOther(sc, st.id, true, true));
-                break;
-            case Strategy::kSelfish:
-                arouse(st.id);
-                break;
-            case Strategy::kSelfless:
-                arouse(PickOther(sc, st.id, true, false));
-                break;
-            case Strategy::kDenySelf:
-                calm(st.id);
-                break;
-            case Strategy::kDenyAll:
-                for (const auto id : sc.actors) {
-                    calm(id);
-                }
-                break;
-            case Strategy::kDeny:
-                calm(targetOf());
-                break;
-            case Strategy::kFocused:
-                arouse(targetOf());
-                break;
-            case Strategy::kTease: {
-                const RE::FormID target = targetOf();
-                const auto tt = g_actors.find(target);
-                if (tt != g_actors.end()) {
-                    if (tt->second.enjoyment < kEdgeThreshold) {
-                        arouse(target);
-                    } else {
-                        calm(target);
+            // One press of the strategy; false (with the resource) when the actor could not pay.
+            const auto press = [&](RE::ActorValue& spent) {
+                switch (st.strategy) {
+                case Strategy::kMutual:
+                    spent = RE::ActorValue::kStamina;
+                    return arouse(PickOther(sc, st.id, true, true));
+                case Strategy::kSelfish:
+                    spent = RE::ActorValue::kStamina;
+                    return arouse(st.id);
+                case Strategy::kSelfless:
+                    spent = RE::ActorValue::kStamina;
+                    return arouse(PickOther(sc, st.id, true, false));
+                case Strategy::kDenySelf:
+                    spent = RE::ActorValue::kMagicka;
+                    return calm(st.id);
+                case Strategy::kDenyAll:
+                    spent = RE::ActorValue::kMagicka;
+                    for (const auto id : sc.actors) {
+                        if (!calm(id)) {
+                            return false;
+                        }
                     }
+                    return true;
+                case Strategy::kDeny:
+                    spent = RE::ActorValue::kMagicka;
+                    return calm(targetOf());
+                case Strategy::kFocused:
+                    spent = RE::ActorValue::kStamina;
+                    return arouse(targetOf());
+                case Strategy::kTease: {
+                    const RE::FormID target = targetOf();
+                    const auto tt = g_actors.find(target);
+                    if (tt == g_actors.end()) {
+                        return true;
+                    }
+                    if (tt->second.enjoyment < kEdgeThreshold) {
+                        spent = RE::ActorValue::kStamina;
+                        return arouse(target);
+                    }
+                    spent = RE::ActorValue::kMagicka;
+                    return calm(target);
                 }
-                break;
-            }
-            default:
-                break;
+                default:
+                    return true;
+                }
+            };
+
+            while (st.pressesLeft > 0 && st.nextPressAt <= now) {
+                --st.pressesLeft;
+                st.nextPressAt += kPressGap;
+                RE::ActorValue spent = RE::ActorValue::kStamina;
+                if (!press(spent)) {
+                    st.pressesLeft = 0;
+                    st.nextStepAt = now + kRestSecs;
+                    const bool stamina = spent == RE::ActorValue::kStamina;
+                    webui_log::info("OrgasmEngine: {:#x} out of {} ({:.1f}/{:.1f}), rests {}s", st.id,
+                        stamina ? "stamina" : "magicka", CurrentAv(self, spent),
+                        stamina ? ArouseCost(&st) : CalmCost(&st), kRestSecs);
+                    break;
+                }
             }
         }
 
@@ -2201,7 +2249,6 @@ namespace OrgasmEngine
         s.bonusClamp = std::clamp(GetConfigFloat("sexlab.enjoyment.bonus_clamp", 0.75f), 0.0f, 1.0f);
         s.togetherK = std::clamp(GetConfigFloat("sexlab.enjoyment.together_k_range", 2.0f), 0.0f, 5.0f);
         s.miniGameBonusMult = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.minigame_bonus_mult", 1.0f));
-        s.npcInterval = std::clamp(GetConfigFloat("sexlab.minigame.npc_interval", 2.0f), 0.25f, 60.0f);
         s.npcStepMin = std::clamp(GetConfigFloat("sexlab.minigame.npc_step_min", 4.0f), 0.0f, 100.0f);
         s.npcStepMax = std::clamp(GetConfigFloat("sexlab.minigame.npc_step_max", 8.0f), s.npcStepMin, 100.0f);
         s.mutualTarget = std::clamp(GetConfigFloat("sexlab.enjoyment.mutual_target", 87.0f), 50.0f, kMaxEnjoyment);
@@ -2227,9 +2274,9 @@ namespace OrgasmEngine
             s.domArousalScalePlayer, s.arouseAmount, s.calmAmount, s.staminaCost, s.magickaCost, s.edgeSeconds,
             s.randomBonus, s.narrateWindow, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
         webui_log::info("OrgasmEngine: config engine_off={} mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
-                        "interval={}s step={}-{} mutual_target={} passive_share={} defaults={}/{}/{}",
+                        "press={}-{}x/{}s gap={}s rest={}s step={}-{} mutual_target={} passive_share={} defaults={}/{}/{}",
             s.engineOff, s.engineOff ? "sexlab" : s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
-            s.npcInterval, s.npcStepMin, s.npcStepMax, s.mutualTarget, s.passiveShare, InfoOf(s.defaultNormal).key,
+            kPressMin, kPressMax, kPressTick, kPressGap, kRestSecs, s.npcStepMin, s.npcStepMax, s.mutualTarget, s.passiveShare, InfoOf(s.defaultNormal).key,
             InfoOf(s.defaultAggressor).key, InfoOf(s.defaultVictim).key);
     }
 
@@ -2314,7 +2361,11 @@ namespace OrgasmEngine
                     webui_log::info("OrgasmEngine: auto play on (scene {}, sticky)", sid);
                 }
                 at->second.strategy = DefaultStrategy(sc, at->second);
-                webui_log::info("OrgasmEngine: {:#x} default strategy {}", id, InfoOf(at->second.strategy).key);
+                RE::Actor* actor = ActorFor(id);
+                webui_log::info("OrgasmEngine: {:#x} default strategy {} stamina={:.0f}/{:.0f} magicka={:.0f}/{:.0f}", id,
+                    InfoOf(at->second.strategy).key, CurrentAv(actor, RE::ActorValue::kStamina),
+                    MaxAv(actor, RE::ActorValue::kStamina), CurrentAv(actor, RE::ActorValue::kMagicka),
+                    MaxAv(actor, RE::ActorValue::kMagicka));
             }
         }
         PostEffects(std::move(fx));
@@ -3879,6 +3930,7 @@ namespace OrgasmEngine
                 st->strategy = DefaultStrategy(*sc, *st);
                 st->strategyTarget = 0;
                 st->nextStepAt = Now();
+                st->pressesLeft = 0;
             }
             webui_log::info("OrgasmEngine: auto play {} (scene {}, strategy {})", on ? "on" : "off", sc->sid,
                 InfoOf(st->strategy).key);
@@ -3913,6 +3965,7 @@ namespace OrgasmEngine
                 st->strategyTarget = 0;
             }
             st->nextStepAt = Now();
+            st->pressesLeft = 0;
             webui_log::info("OrgasmEngine: {:#x} player-driven {} (scene {})", st->id, on, sc->sid);
         }
         PostEffects(std::move(fx));

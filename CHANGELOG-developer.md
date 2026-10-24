@@ -4,6 +4,11 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased (branch `profile`)
 
+### NPC strategy presses
+- `OrgasmEngine.cpp` `StrategyStep`: every `kPressTick` (1 s) a burst of `uniform_int(kPressMin = 5, kPressMax = 10)` presses, queued `kPressGap` (0.1 s) apart in `ActorState::pressesLeft` / `nextPressAt` / `pressAmount` and fired as they come due on the 250 ms tick, through `ArouseLocked` / `CalmLocked`. `ApplyStrategy`, auto play and take-control clear the queue. The first press the actor can't pay drops the rest of the burst and sets `nextStepAt = now + kRestSecs` (2 s), logged `OrgasmEngine: 0x… out of stamina|magicka (cur/cost), rests 2s`. Press size = per-second rate (`mgStepRate × spread / MeanNpcSkillFactor`, untimed `random(npc_step_min, npc_step_max) / 2`) × `kPressTick / mean(kPressMin, kPressMax)`, so the average enjoyment per second while not resting matches the old 2 s step. DenyAll: each calm is a paid press. Tease: stamina or magicka by the target's enjoyment.
+- Removed `sexlab.minigame.npc_interval` (manifest, `Settings::npcInterval`). The config log reads `npc press=3x/1s rest=2s`. BeginScene's `default strategy` line adds `stamina=cur/max magicka=cur/max`.
+- Cause: 7.27 stamina every 2 s (about 3.6/s) is below NPC out-of-combat regen, and the regen-cancelling fatigue ("Sex is hard work") has been off since 0.35.2.
+
 ### Strategy decision: timeline and punishments
 - `StrategyDecision.cpp` `BuildTimeline` reads `PublicGetRecentEvents`' `data` field (new `EventText`; legacy `text` fallback). The timeline was always empty before. Debug log of the first raw event per request.
 - `DecisionInput::currentOption` (options key of the current strategy, `deny_p2`), filled in `GetStrategyDecisionInput`. `BuildContext` sends it as `current_key` for `trigger=punished` only (`""` otherwise); `minigame_strategy.prompt` uses it in `last_line` and the strategy question.
@@ -15,6 +20,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ### Aid mod event
 - New ModEvent `SkyrimNet_SexLab_AidStart`: sender = target, strArg `"<spell|potion>|<caster FormID signed decimal>"`, numArg = health. `Aid.cpp` `NotifyAidStart` runs on the game thread from `Aid::Apply` (the task, after the restore) and once per `Aid::StartChannel`. Skipped for self-aid and stamina-only Aid. SkyrimNet_DOM listens to it (Aid casts nothing, so Injury Engine's HealStart never fires). See `docs/developers/orgasm-engine.md` ModEvents.
+
+### Throat body part
+- `throat` added (non-sexual) to index.html `BODY_PARTS`, `StrategyDecision.cpp` `kBodyParts` and the `SexLab_Scene_Punish` location description. `InjuryEngine::PartName` maps `throat` → `lungs`, and `PartTerm` maps `lungs` → `throat` (part points).
 
 ### Animation table filter row (WebUI)
 - `#sc-anims-list` / `#de-anims-list` now hold a static `<thead>` (label row plus `.anim-filter-row`), and the renderers write only `#sc-anims-tbody` / `#de-anims-tbody`. Filter row: `#*-fav-filter` star (`scRenderFavoritesToggle`, replaces the off/on pulldowns), `#*-gender-filter` (`scRenderFilterByPulldown`, moved from `*-filter-by-pulldown`), `#*-anim-name-filter` (`scOnNameFilterInput`).
