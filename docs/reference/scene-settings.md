@@ -54,10 +54,11 @@ TargetMenu scene-start options and their settings:
 |--------|---------|--------|
 | sex | `consensual` | any sex act; no `aggressive`; not an affection/platonic animation |
 | affection | `nonsexual` | strict; any of cuddling/hug/spooning/kissing/headpat/handholding/lappillow; suppresses `sexual` (see [tag-synonyms](tag-synonyms.md)), spanking, aggressive |
-| platonic | `nonsexual_platonic` | strict; any of cuddling/hug/spooning/headpat/handholding; also no kissing or submission |
 | punish | `punish_spanking` | strict; `spanking` (broad: spank/punish/discipline); any gender. Option `methodSettings` sends **whip** to `punish_whipping_oral` (`assume_bound`, so whip always finds its DD animations) |
 | masturbation | `default` | DD-only animations only when bound |
 | rapes | `punish_pleasure_pain_rape` | everything except affection/platonic animations; prefers `aggressive` |
+
+`nonsexual_platonic` (strict; any of cuddling/hug/spooning/headpat/handholding; no kissing or submission) is no longer a TargetMenu option. Scene Creator and `exclude_settings` still use it.
 
 `default.json` sets `synonyms: broad` and `tags_suppress_unless_bound: armbinder,yoke,cuffs,bound` (every `deviousdevice` animation has one of these).
 

@@ -394,11 +394,6 @@
             font-style: italic;
         }
 
-        #de-anim-name-filter {
-            flex: 1 1 auto;
-            min-width: 8em;
-        }
-
         #description-editor-panel #de-anims-list {
             flex: 1 1 auto;
             min-height: 0;
@@ -1022,9 +1017,24 @@
         }
 
         #aid-panel,
-        #aid-offer-panel {
+        #aid-offer-panel,
+        #choice-panel {
             pointer-events: auto;
             min-width: 420px;
+        }
+
+        /* Choice_Open list (e.g. DOM torture reasons): scrolls instead of growing past the screen. */
+        #choice-list {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        #choice-panel .option-cancel {
+            margin-top: var(--space-xs);
+            border-top: none;
+            padding: var(--space-xs) var(--space-md);
+            border: 1px solid rgba(229, 69, 69, 0.25);
+            border-radius: var(--radius);
         }
 
         #aid-panel .option-cancel,
@@ -1269,18 +1279,39 @@
             font-weight: 600;
         }
 
-        #sc-anims-list .col-fav {
+        #sc-anims-list .col-fav,
+        #de-anims-list .col-fav {
             width: 1.5em;
             text-align: center;
             cursor: pointer;
             user-select: none;
         }
 
-        .fav-filter-label {
-            color: var(--accent);
+        /* Anim table filter row (SC + DE): favorites star, gender pulldown, name field. */
+        .anim-filter-row th {
+            vertical-align: middle;
+        }
+
+        .anim-filter-row .col-fav {
             font-size: 1.15em;
             line-height: 1;
-            user-select: none;
+            opacity: 0.55;
+        }
+
+        .anim-filter-row .col-fav.on {
+            color: var(--accent);
+            opacity: 1;
+        }
+
+        .anim-filter-row .pulldown {
+            min-width: 0;
+            width: 6.5em;
+        }
+
+        .anim-filter-row .anim-name-filter {
+            width: 100%;
+            min-width: 10em;
+            box-sizing: border-box;
         }
 
         .sc-col-positions > .section-header,
@@ -2231,8 +2262,6 @@
                         <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />                    </div>
                     <div id="sc-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
-                        <span>filter by:</span>
-                        <div id="sc-filter-by-pulldown"></div>
                         <span>description:</span>
                         <div id="sc-filter-has-description"></div>
                         <span>synonyms:</span>
@@ -2246,19 +2275,27 @@
             <div class="compact-row">
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
-                <span class="fav-filter-label" title="favorites">&#9733;</span>
-                <div id="sc-favorites-toggle"></div>
+                <span id="sc-by-label">by</span>
                 <div id="sc-initiator-pulldown"></div>
-                <span id="sc-initiates-label">initiates</span>
                 <div id="sc-style-pulldown"></div>
                 <span id="sc-anim-count"></span>
                 <span id="sc-selected-count"></span>
                 <div class="action-btn" id="sc-btn-all" onclick="scClearAnims()">All</div>
                 <div class="action-btn" id="sc-btn-none" onclick="scNoneAnims()">None</div>
-                <div id="sc-anim-show-pulldown"></div>
                 <div class="action-btn" id="sc-btn-update" onclick="scAnimUpdate()" style="display:none">Update</div>
             </div>
-            <div id="sc-anims-list" class="scroll-list"></div>
+            <div id="sc-anims-list" class="scroll-list">
+                <table class="data-table anim-table"><thead><tr>
+                    <th class="col-fav"></th><th class="col-an"></th><th class="col-genders">genders</th>
+                    <th class="col-mods">modifiers</th><th class="col-name">name</th><th class="col-stages">stages</th>
+                    <th class="col-desc">description</th>
+                </tr><tr class="anim-filter-row">
+                    <th class="col-fav" id="sc-fav-filter"></th><th class="col-an"></th>
+                    <th class="col-genders"><div id="sc-gender-filter"></div></th><th class="col-mods"></th>
+                    <th class="col-name"><input id="sc-anim-name-filter" class="anim-name-filter" type="text" placeholder="filter name" oninput="scOnNameFilterInput(this.value)" /></th>
+                    <th class="col-stages"></th><th class="col-desc"></th>
+                </tr></thead><tbody id="sc-anims-tbody"></tbody></table>
+            </div>
         </div>
         <div class="compact-row" id="sc-stage-row" style="display:none; margin-top:8px">
             <div class="action-btn" onclick="scPrevNext(-1)">Previous</div>
@@ -2327,16 +2364,10 @@
                     </div>
                     <div id="de-available-tags" class="scroll-list"></div>
                     <div class="compact-row">
-                        <span>filter by:</span>
-                        <div id="de-filter-by-pulldown"></div>
                         <span>description:</span>
                         <div id="de-filter-has-description"></div>
                         <span>synonyms:</span>
                         <div id="de-filter-synonyms"></div>
-                    </div>
-                    <div class="compact-row">
-                        <span>name:</span>
-                        <input id="de-anim-name-filter" type="text" placeholder="part of the animation name" oninput="deOnNameFilterInput(this.value)" />
                     </div>
                 </div>
             </div>
@@ -2349,11 +2380,20 @@
             </div>
             <div class="compact-row">
                 <div class="action-btn disabled" id="de-btn-start" onmousedown="event.preventDefault()" onclick="deStartPick()">Start</div>
-                <span class="fav-filter-label" title="favorites">&#9733;</span>
-                <div id="de-favorites-toggle"></div>
                 <span id="de-anim-count"></span>
             </div>
-            <div id="de-anims-list" class="scroll-list"></div>
+            <div id="de-anims-list" class="scroll-list">
+                <table class="data-table anim-table"><thead><tr>
+                    <th class="col-fav"></th><th class="col-an"></th><th class="col-genders">genders</th>
+                    <th class="col-mods">modifiers</th><th class="col-name">name</th><th class="col-stages">stages</th>
+                    <th class="col-desc">description</th>
+                </tr><tr class="anim-filter-row">
+                    <th class="col-fav" id="de-fav-filter"></th><th class="col-an"></th>
+                    <th class="col-genders"><div id="de-gender-filter"></div></th><th class="col-mods"></th>
+                    <th class="col-name"><input id="de-anim-name-filter" class="anim-name-filter" type="text" placeholder="filter name" oninput="scOnNameFilterInput(this.value)" /></th>
+                    <th class="col-stages"></th><th class="col-desc"></th>
+                </tr></thead><tbody id="de-anims-tbody"></tbody></table>
+            </div>
         </div>
         <div id="de-lock-overlay"><div class="de-lock-text">loading...</div></div>
     </div>
@@ -2596,6 +2636,20 @@
         <div class="btn-row">
             <div class="action-btn" onmousedown="event.preventDefault()" onclick="aidOfferAnswer(true)">Yes</div>
             <div class="option-cancel" onmousedown="event.preventDefault()" onclick="aidOfferAnswer(false)">No</div>
+        </div>
+    </div>
+    <!-- Choice list (C++ Choice_Open): one papyrus option per row; Close (or Esc) picks nothing.
+         An opensText row shows #choice-text; Ok fires it with the text as its dynamic parameter. -->
+    <div id="choice-panel" class="panel" style="display:none">
+        <div id="choice-title" class="target-row"></div>
+        <div id="choice-list" class="option-list"></div>
+        <div id="choice-text" class="btn-row" style="display:none">
+            <input id="choice-text-input" type="text" placeholder="custom" style="flex:1"
+                onkeydown="if (event.key === 'Enter') { event.preventDefault(); choiceTextOk(); }">
+            <div class="action-btn" onmousedown="event.preventDefault()" onclick="choiceTextOk()">Ok</div>
+        </div>
+        <div class="btn-row">
+            <div class="option-cancel" onmousedown="event.preventDefault()" onclick="choiceCancel()">Close</div>
         </div>
     </div>
     </div><!-- #yesno-overlay -->
@@ -3808,6 +3862,11 @@
             }
             if (aidOfferIsOpen()) {
                 aidOfferAnswer(false);
+                return;
+            }
+            if (choiceIsOpen()) {
+                if (choiceTextIsOpen()) choiceTextClose();
+                else choiceCancel();
                 return;
             }
             if (overlayElIsOpen('yesno-panel')) {
@@ -9336,6 +9395,99 @@
             document.getElementById('aid-offer-panel').style.display = 'block';
         }
 
+        // ── Choice list (C++ Choice_Open): { title, options:[{type:papyrus,…}] } ──
+        let choiceTextOpt = null;
+
+        function configureChoice(cfg) {
+            document.getElementById('choice-title').textContent = (cfg && (cfg.title || cfg.label)) || 'choose';
+            const list = document.getElementById('choice-list');
+            list.innerHTML = '';
+            choiceTextClose();
+            ((cfg && cfg.options) || []).forEach(opt => {
+                if (!opt || opt.type !== 'papyrus') return;
+                const row = document.createElement('div');
+                row.className = 'option';
+                decorateTargetOption(row, opt);
+                row.onclick = () => {
+                    if (opt.opensText || opt.openstext) {
+                        choiceTextOpen(opt);
+                        return;
+                    }
+                    hideChoice();
+                    firePapyrusOption(opt, {});
+                };
+                list.appendChild(row);
+            });
+            list.scrollTop = 0;
+        }
+
+        // WebUI already open: the list on top, current view untouched.
+        function openChoiceOnTop(cfg) {
+            configureChoice(cfg);
+            document.getElementById('choice-panel').style.display = 'block';
+        }
+
+        // WebUI closed: every panel down, then the list alone (one Invoke, like openYesNoSolo).
+        function openChoiceSolo(cfg) {
+            configureChoice(cfg);
+            for (const id of ['target_menu_panel', 'sex_menu_panel', 'scene_creator_panel',
+                'description_editor_panel', 'settings_panel', 'profile_panel', 'log_panel', 'yesno_panel'])
+                hidePanel(id);
+            document.body.classList.add('yesno-solo');
+            hideControlPanel();
+            hideTargetMenuRow();
+            const host = document.getElementById('main-panel-host');
+            if (host) host.style.display = 'none';
+            document.getElementById('choice-panel').style.display = 'block';
+        }
+
+        function choiceTextOpen(opt) {
+            choiceTextOpt = opt;
+            const input = document.getElementById('choice-text-input');
+            input.value = '';
+            document.getElementById('choice-text').style.display = 'flex';
+            setTimeout(() => input.focus(), 0);
+        }
+
+        function choiceTextClose() {
+            choiceTextOpt = null;
+            document.getElementById('choice-text').style.display = 'none';
+        }
+
+        function choiceTextIsOpen() {
+            return choiceTextOpt != null;
+        }
+
+        // The text goes to the option's first dynamic mapping (e.g. DOM heal praise "reason").
+        function choiceTextOk() {
+            const opt = choiceTextOpt;
+            const text = document.getElementById('choice-text-input').value.trim();
+            if (!opt || !text) return;
+            const maps = opt.parameterMapping || opt.parametermapping || [];
+            const dyn = maps.find(m => m && m.type === 'dynamic');
+            const params = {};
+            if (dyn) params[dyn.name] = text;
+            choiceTextClose();
+            hideChoice();
+            firePapyrusOption(opt, params);
+        }
+
+        function hideChoice() {
+            const solo = document.body.classList.contains('yesno-solo');
+            document.getElementById('choice-panel').style.display = 'none';
+            if (solo) clearYesNoSolo();
+            return solo;
+        }
+
+        function choiceIsOpen() {
+            return document.getElementById('choice-panel').style.display === 'block';
+        }
+
+        // Close: nothing picked. Opened solo: the WebUI closes too.
+        function choiceCancel() {
+            if (hideChoice()) requestWebUIHide(false);
+        }
+
         function hideAidOffer() {
             document.getElementById('aid-offer-panel').style.display = 'none';
             clearYesNoSolo();
@@ -9620,14 +9772,12 @@
             SC.ddAuto = [];
             SC.ddProbe = false;
             SC.ddDismissed = new Set();
-            SC.show_all_selected_unselected_pulldown = true;
-            if (DE.nameFilterTimer) clearTimeout(DE.nameFilterTimer);
-            DE.nameFilterTimer = 0;
-            DE.animNameFilter = '';
+            if (SC.nameFilterTimer) clearTimeout(SC.nameFilterTimer);
+            SC.nameFilterTimer = 0;
+            SC.animNameFilter = '';
             DE.filterAnims = [];
             deSyncTagFilter('');
-            const nameEl = document.getElementById('de-anim-name-filter');
-            if (nameEl) nameEl.value = '';
+            scSyncNameFilterInputs();
         }
 
         // WebUI Cancel (non-commit close): drop every draft, and have each live scene put back the state it
@@ -9950,6 +10100,9 @@
             filterByOnce: '',
             hasDescription: 'any',
             favoritesOnly: false,
+            // Animation table name filter (lowercase substring), shared by the SC and DE tables.
+            animNameFilter: '',
+            nameFilterTimer: 0,
             synonyms: SC_SYNONYM_DEFAULT,
             // Devious Devices tags (sexlab.tags.filter_by_devious_devices): ddAuto = tags auto-added from worn
             // devices, ddProbe = still dropping them when nothing matches, ddDismissed = removed by the player.
@@ -9958,10 +10111,7 @@
             ddDismissed: new Set(),
             ddQueryId: 0,
             // "override animation settings": off = dressed/O/modifiers come from the animation.
-            positionOverride: false,
-            // Anim table view filter: true = show every listed animation, false = show only
-            // currently-selected registries. Client-side only, not persisted or sent to Papyrus.
-            show_all_selected_unselected_pulldown: true
+            positionOverride: false
         };
 
         const SC_NEARBY_RANGES = [100, 200, 400, 800, 1600];
@@ -9991,7 +10141,7 @@
                 scRefreshAnims();
                 scRefreshTags();
             };
-            for (const hostId of ['sc-filter-by-pulldown', 'de-filter-by-pulldown']) {
+            for (const hostId of ['sc-gender-filter', 'de-gender-filter']) {
                 const host = document.getElementById(hostId);
                 if (!host) continue;
                 host.innerHTML = '';
@@ -10016,21 +10166,54 @@
             }
         }
 
+        // Anim table filter-row star: filled = favorites only, hollow = show all. SC and DE copies stay in sync.
         function scRenderFavoritesToggle() {
-            const cur = SC.favoritesOnly ? 'on' : 'off';
-            const onPick = v => {
-                const on = v === 'on';
-                if (on === !!SC.favoritesOnly) return;
-                SC.favoritesOnly = on;
-                scRenderFavoritesToggle(); // keep the SC and DE copies in sync
-                scRefreshAnims();
-                scRefreshTags();
-            };
-            for (const hostId of ['sc-favorites-toggle', 'de-favorites-toggle']) {
+            for (const hostId of ['sc-fav-filter', 'de-fav-filter']) {
                 const host = document.getElementById(hostId);
                 if (!host) continue;
-                host.innerHTML = '';
-                host.appendChild(createPulldown(['off', 'on'], cur, onPick));
+                host.innerHTML = SC.favoritesOnly ? '&#9733;' : '&#9734;';
+                host.classList.toggle('on', !!SC.favoritesOnly);
+                host.title = SC.favoritesOnly ? 'showing favorites only' : 'show favorites only';
+                host.onclick = (ev) => {
+                    ev.stopPropagation();
+                    SC.favoritesOnly = !SC.favoritesOnly;
+                    scRenderFavoritesToggle();
+                    scRefreshAnims();
+                    scRefreshTags();
+                };
+            }
+        }
+
+        // Anim table filter-row name field: debounced re-query; the SC and DE inputs mirror each other.
+        function scOnNameFilterInput(value) {
+            SC.animNameFilter = String(value || '').trim().toLowerCase();
+            for (const id of ['sc-anim-name-filter', 'de-anim-name-filter']) {
+                const el = document.getElementById(id);
+                if (el && el !== document.activeElement && el.value !== value) el.value = value;
+            }
+            if (SC.nameFilterTimer) clearTimeout(SC.nameFilterTimer);
+            SC.nameFilterTimer = setTimeout(() => {
+                SC.nameFilterTimer = 0;
+                scRefreshTags();
+                scRefreshAnims();
+            }, 250);
+        }
+
+        // Both thead rows are sticky (top: 0): push the filter row below the label row.
+        function animTableStickFilterRow(tbodyId) {
+            const tbody = document.getElementById(tbodyId);
+            const table = tbody && tbody.parentElement;
+            if (!table || !table.tHead || table.tHead.rows.length < 2) return;
+            const top = table.tHead.rows[0].offsetHeight + 'px';
+            for (const th of Array.from(table.tHead.rows[1].cells)) {
+                if (th.style.top !== top) th.style.top = top;
+            }
+        }
+
+        function scSyncNameFilterInputs() {
+            for (const id of ['sc-anim-name-filter', 'de-anim-name-filter']) {
+                const el = document.getElementById(id);
+                if (el && el.value.trim().toLowerCase() !== SC.animNameFilter) el.value = SC.animNameFilter;
             }
         }
 
@@ -10067,23 +10250,6 @@
             }
         }
 
-        const SC_ANIM_SHOW_OPTIONS = ['all', 'selected'];
-        const SC_ANIM_SHOW_LABELS = { all: 'All', selected: 'Selected only' };
-
-        function scRenderAnimShowPulldown() {
-            const host = document.getElementById('sc-anim-show-pulldown');
-            if (!host) return;
-            const cur = SC.show_all_selected_unselected_pulldown ? 'all' : 'selected';
-            const onPick = v => {
-                const show = v === 'all';
-                if (show === SC.show_all_selected_unselected_pulldown) return;
-                SC.show_all_selected_unselected_pulldown = show;
-                scRenderAnimList();
-            };
-            host.innerHTML = '';
-            host.appendChild(createPulldown(SC_ANIM_SHOW_OPTIONS, cur, onPick, null,
-                (el, v) => { el.textContent = SC_ANIM_SHOW_LABELS[v] || v; }));
-        }
 
         // Arms the open-time downgrade: start at startMode (default gender) and keep the
         // looser modes as fallbacks for scRefreshAnims to walk when a query returns nothing.
@@ -10144,7 +10310,7 @@
             scRenderHasDescriptionPulldown();
             scRenderSynonymsPulldown();
             scRenderFavoritesToggle();
-            scRenderAnimShowPulldown();
+            scSyncNameFilterInputs();
             scApplyModeChrome();
             scEnsurePositionSeed();
             scRenderPositions();
@@ -10174,12 +10340,11 @@
             };
             setDisp('sc-btn-start', !active);
             setDisp('sc-initiator-pulldown', !active);
-            setDisp('sc-initiates-label', !active);
+            setDisp('sc-by-label', !active);
             setDisp('sc-btn-stop', active);
             setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
             setDisp('sc-btn-none', !active);
-            setDisp('sc-anim-show-pulldown', !active);
             setDisp('sc-btn-update', active);
             setDisp('sc-stage-row', active);
             const stageLabel = document.getElementById('sc-stage-label');
@@ -10985,9 +11150,8 @@
             if (SC.hasDescription && SC.hasDescription !== 'any') {
                 filter._has_description = SC.hasDescription;
             }
-            // Description Editor animation filter tab: case-insensitive substring of the animation name.
-            if (typeof deFilterTabActive === 'function' && deFilterTabActive() && DE.animNameFilter)
-                filter._name_contains = DE.animNameFilter;
+            // Animation table name filter (SC and DE share it): case-insensitive substring of the animation name.
+            if (SC.animNameFilter) filter._name_contains = SC.animNameFilter;
             if (SC.favoritesOnly) filter._favorites_only = true;
             filter._synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
             // Scene start draft: the TargetMenu scene setting's tags_any / tags_prefer / exclude_settings
@@ -11225,14 +11389,11 @@
             document.getElementById('sc-btn-start').classList.toggle('disabled',
                 SC.mode !== 'active' && selectedCount === 0);
             const inThread = new Set(SC.inThreadRegistries || []);
-            let indices = sortAnimListRows(anims, {
+            const indices = sortAnimListRows(anims, {
                 active: SC.mode === 'active',
                 inThread: SC.inThreadRegistries,
                 activeRegistry: SC.activeRegistry
             });
-            if (SC.mode !== 'active' && !SC.show_all_selected_unselected_pulldown) {
-                indices = indices.filter(i => scIsAnimSelected(anims[i]._registry || ''));
-            }
             const rows = indices.map((i) => {
                 const a = anims[i];
                 const reg = a._registry || '';
@@ -11257,16 +11418,9 @@
                     `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>` +
                     `</tr>`;
             }).join('');
-            document.getElementById('sc-anims-list').innerHTML =
-                `<table class="data-table anim-table"><thead><tr>` +
-                `<th class="col-fav"></th>` +
-                `<th class="col-an"></th>` +
-                `<th class="col-genders">genders</th>` +
-                `<th class="col-mods">modifiers</th>` +
-                `<th class="col-name">name</th>` +
-                `<th class="col-stages">num stages</th>` +
-                `<th class="col-desc">description</th>` +
-                `</tr></thead><tbody>${rows}</tbody></table>`;
+            // Static thead (filter row inputs keep focus); only the rows re-render.
+            document.getElementById('sc-anims-tbody').innerHTML = rows;
+            animTableStickFilterRow('sc-anims-tbody');
             scUpdateSaveAnimButton();
             scRenderLastAnimTags();
         }
@@ -11539,8 +11693,6 @@
             currentAnimation: '',
             // Bottom tabs: 'stages' (stage descriptions) or 'filter' (animation filter).
             bottomTab: 'stages',
-            animNameFilter: '',
-            nameFilterTimer: 0,
             // Animation filter tab query results (request id prefix 'f'); never SC.lastAnims.
             filterAnims: [],
             filterQueryId: 0,
@@ -12488,21 +12640,10 @@
             scRenderHasDescriptionPulldown();
             scRenderSynonymsPulldown();
             scRenderFavoritesToggle();
-            const nameEl = document.getElementById('de-anim-name-filter');
-            if (nameEl && nameEl.value !== DE.animNameFilter) nameEl.value = DE.animNameFilter;
+            scSyncNameFilterInputs();
             deRenderLoadedList();
             scRefreshTags();
             deRefreshFilterAnims();
-        }
-
-        function deOnNameFilterInput(value) {
-            DE.animNameFilter = String(value || '').trim().toLowerCase();
-            if (DE.nameFilterTimer) clearTimeout(DE.nameFilterTimer);
-            DE.nameFilterTimer = setTimeout(() => {
-                DE.nameFilterTimer = 0;
-                scRefreshTags();
-                deRefreshFilterAnims();
-            }, 250);
         }
 
         function deRefreshFilterAnims() {
@@ -12621,7 +12762,8 @@
         // The animation filter tab's result list. L = already loaded, A = playing. A click adds the animation to
         // the scene's loaded list (on unpause) and makes it the current pick.
         function deRenderAnimList() {
-            const host = document.getElementById('de-anims-list');
+            // Static thead (filter row inputs keep focus); only the rows re-render.
+            const host = document.getElementById('de-anims-tbody');
             if (!host) return;
             const info = deSceneInfoForPick();
             const inThread = info ? (info.inThreadRegistries || []) : [];
@@ -12633,10 +12775,28 @@
                 const reg = a._registry || '';
                 const mark = info && deRegEq(reg, info.activeRegistry) ? 'A' : (deRegInList(inThread, reg) ? 'L' : '');
                 return `<tr class="${deRegEq(reg, current) ? 'selected' : ''}" onclick="deAddAnimToScene(${i})">` +
+                    `<td class="col-fav" onclick="deToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
                     `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
             }).join('');
-            host.innerHTML = deAnimTableHead() + rows + `</tbody></table>`;
+            host.innerHTML = rows;
+            animTableStickFilterRow('de-anims-tbody');
             deRenderStartBtn();
+        }
+
+        // Star click on a filter-tab row: same AnimDB favorite as Scene Creator's scToggleFavorite.
+        function deToggleFavorite(idx, ev) {
+            if (ev) ev.stopPropagation();
+            const a = (DE.filterAnims || [])[idx];
+            if (!a || !a._registry) return;
+            a._favorite = !a._favorite;
+            if (typeof window.onAnimFavoriteSet === 'function')
+                window.onAnimFavoriteSet(JSON.stringify({ _registry: a._registry, _favorite: !!a._favorite }));
+            if (SC.favoritesOnly) {
+                scRefreshTags();
+                deRefreshFilterAnims();
+            } else {
+                deRenderAnimList();
+            }
         }
 
         function deAddAnimToScene(i) {

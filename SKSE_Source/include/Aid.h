@@ -34,13 +34,14 @@ namespace Aid
     /// Applies option form from caster to target (re-validated). Game state changes are queued on the main thread.
     /// location: body part ("" / "body": none). Returns the narration line, "" when refused.
     /// With Injury Engine installed a health option heals whip wounds on the part through Injury Engine, which also
-    /// narrates the line: *injuryEngine is set true and the caller must not narrate it.
+    /// narrates the line: *injuryEngine is set true and the caller must not narrate it. callerNarrates (HUD Aid):
+    /// Injury Engine heals silently, *injuryEngine stays false and the caller always narrates the line.
     /// A potion's location may also be "drink" (no body part) or lips / ass / pussy / cock with their own lines:
     /// when the scene's act (OrgasmEngine::GetSceneActs) carries the potion between two actors (a dick thrust into
     /// an ass / pussy / mouth) the effect is split half to caster, half to target; otherwise the target gets it all.
     /// Drink / lips on someone else need consent first (NeedsConsent); Apply assumes it was given.
     std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location = "",
-        bool* injuryEngine = nullptr);
+        bool* injuryEngine = nullptr, bool callerNarrates = false);
     /// A carried potion offered to someone else to drink or on the lips: the target accepts or refuses first
     /// (NPC: decision model; player: Yes / No dialogue).
     bool NeedsConsent(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location);
@@ -52,9 +53,10 @@ namespace Aid
     /// a fire-and-forget spell recast every max(1, charge + 0.5) s) until points are restored (health; stamina for a
     /// stamina-only spell), the caster lacks the magicka for the next tick, the target is full, an actor is gone, or
     /// a newer channel from the caster replaces it. A potion or points <= 0 is a one-shot Apply. Returns the line for
-    /// the caller to narrate once ("" when refused); *injuryEngine as for Apply (Injury Engine narrates on the first tick).
+    /// the caller to narrate once ("" when refused); *injuryEngine and callerNarrates as for Apply (Injury Engine
+    /// narrates on the first tick unless callerNarrates).
     std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,
-        float points, bool* injuryEngine = nullptr);
+        float points, bool* injuryEngine = nullptr, bool callerNarrates = false);
 
     struct WeakSpell
     {

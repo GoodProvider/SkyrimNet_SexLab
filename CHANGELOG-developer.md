@@ -4,11 +4,34 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased (branch `profile`)
 
+### Strategy decision: timeline and punishments
+- `StrategyDecision.cpp` `BuildTimeline` reads `PublicGetRecentEvents`' `data` field (new `EventText`; legacy `text` fallback). The timeline was always empty before. Debug log of the first raw event per request.
+- `DecisionInput::currentOption` (options key of the current strategy, `deny_p2`), filled in `GetStrategyDecisionInput`. `BuildContext` sends it as `current_key` for `trigger=punished` only (`""` otherwise); `minigame_strategy.prompt` uses it in `last_line` and the strategy question.
+- `strategies.json`: keys `resist` / `forbid` / `focus` → `deny_self` / `deny_all` / `focused` (matching `kStrategyKeys`; `LoadStrategies` ignored them).
+
+### Player HUD narration
+- New `OrgasmEngine::NarratePlayer` → Papyrus `OrgasmEngine.Effect_NarratePlayer` → `Utilities.DirectNarration(…, purge_dialogue=true)` (not capped by `minigame_level`). Used by `WebUI.cpp` `onAidResult`, `AidFinishConsent` (accept and refusal lines) and `onPunishResult`.
+- `AskOrderNarrated` / `PunishNarrated` gain `fromPlayer = false` (`PunishPlan::fromPlayer`); `Aid::Apply` / `Aid::StartChannel` gain `callerNarrates = false` (`Channel::callerNarrates`). `InjuryEngine::Strike` / `Torture` / `PunishHit` gain `narrate = true` (`External_Damage`'s 7th arg). Papyrus natives, actions and StrategyDecision keep the old routes.
+
 ### Aid mod event
 - New ModEvent `SkyrimNet_SexLab_AidStart`: sender = target, strArg `"<spell|potion>|<caster FormID signed decimal>"`, numArg = health. `Aid.cpp` `NotifyAidStart` runs on the game thread from `Aid::Apply` (the task, after the restore) and once per `Aid::StartChannel`. Skipped for self-aid and stamina-only Aid. SkyrimNet_DOM listens to it (Aid casts nothing, so Injury Engine's HealStart never fires). See `docs/developers/orgasm-engine.md` ModEvents.
 
+### Animation table filter row (WebUI)
+- `#sc-anims-list` / `#de-anims-list` now hold a static `<thead>` (label row plus `.anim-filter-row`), and the renderers write only `#sc-anims-tbody` / `#de-anims-tbody`. Filter row: `#*-fav-filter` star (`scRenderFavoritesToggle`, replaces the off/on pulldowns), `#*-gender-filter` (`scRenderFilterByPulldown`, moved from `*-filter-by-pulldown`), `#*-anim-name-filter` (`scOnNameFilterInput`).
+- The name filter is now shared state `SC.animNameFilter` (was `DE.animNameFilter`). `scBuildFilter` sends `_name_contains` for Scene Creator too.
+- New `deToggleFavorite`. Removed `scRenderAnimShowPulldown`, `SC.show_all_selected_unselected_pulldown` and `#sc-initiates-label`. Added `#sc-by-label`.
+
 ### TargetMenu hug
 - New Actor option `0155_hug.json` → `Actions.TM_Hug(speaker, target)` (no panel). The lone-hug block of `StartScene_Event` moved into `Actions.PlayLoneHug(speaker, target)`, shared by both; `TM_Hug` guards both actors with `ActorUnavailable`.
+- Removed Actor option `0160_platonic.json`. `scenes/nonsexual_platonic.json` stays (Scene Creator, `exclude_settings` in consensual / punish_pleasure_pain_rape, the kissing-switch exception in `Scene_Creator.Setup`).
+
+### Decorators moved to C++
+- `SKSE_Source/src/Decorators.cpp/.h` (new): `sexlab_get_threads`, `sexlab_activities`, `sexlab_cum` and the new `sexlab_has_cum` / `sexlab_cum_count` are C++ `PublicRegisterDecorator` callbacks (registered in `Config.cpp RegisterDecorators` with `sexlab_npc_stop_allowed` / `sexlab_verbose`). `SkyrimNet_SexLab_Decorators.RegisterDecorators` and the `Main.Setup` call are gone.
+- Removed decorators with no consumers: `sexlab_intent`, `sexlab_get_player_los_distance`, `sexlab_ostim_player` (and `Intent`, `Player_LOS_Distance`, `Ostim_Player`, `Outfit_HasStrippedItems`, `Is_Nudity`).
+- Threads: `Scene.GetThreadObj(speaker)` → `RefreshThreadObj()` (no speaker fields, no OrgasmEngine overlay), called by the new `Scene.PushThread` → native `Decorators.Threads_Set(sid, thread_obj, positions)` / `Threads_Remove(sid)`. PushThread replaces `manager.SaveThreadsJson()` in AnimationStart / StageStart / AnimationEnd / SetDenyOrgasm and runs from `PollAnimationChange`; `Release` removes the thread. `Scene_Manager.GetThreadsJson`, `DebugTraceThread`, `Scene.GetThreadJson`, `ApplySpeakerFields`, `thread_counter`, `speaker_last` removed. DOM threads: `Scene_Manager.PushDomThreads` → `Threads_SetDom`; `SaveThreadsJson` kept as a shim for SkyrimNet_DOM. C++ adds live `enjoyment` / `strategy` / `stamina_regen`, the speaker fields (LOS from a main-thread `HasLineOfSight` cache) and writes `threads.json` when the threads change. New native `Threads_Get(speaker)` for debugging.
+- Cum: `RecordCum`, `CumParts` and new `CumClear` are natives over C++ state (co-save record `SCUM`); `ClearCumPart` stays in Papyrus for the SexLab overlay. StorageUtil `skyrimnet_sexlab_cum_*` keys dropped. Gates: `SexLab_Clean_Cum.yaml` → `sexlab_cum_count [currentActor] != 0` (every PublicAPI decorator takes one actor argument; without it SkyrimNet logs `expects 1 arguments, got 0` and the gate fails); TargetMenu `0510_clean_cum.json` → `sexlab_has_cum currentActor > 0` (`ActionCatalog EvalCondition`); `0416_sexlab_cum.prompt` → `sexlab_has_cum(actorUUID) == "1"`.
+- Stripped clothing: SkyrimNet `papyrus_util` has no `FormListCount`, so the `outfit_dress` / `outfit_undress` gates never passed. New decorator `sexlab_has_stripped_items` reads a C++ mirror of StorageUtil `skyrimnet_sexlab_storage_items` (co-save record `SSTR`), kept by `Main.StoreStrippedItems` / `UnStoreStrippedItems` / `HasStrippedItems` through the new native `Decorators.SetStrippedItems`. Gates: dress `== 1`, undress `== 0`. TargetMenu `0500/0501` stay on `papyrus_util FormListCount` (C++ `EvalCondition`).
+- Afterglow: `SkyrimNetApi.RenderTemplate` does not bind the `sl` variable, so `{% if %}` in a `RenderSlPrompt` template renders empty. `afterglow.prompt` is now plain (orgasmed) and `afterglow_failed.prompt` is new; `Scene.AnimationEnd` picks the template.
 
 ### Profiling (first in-game runs: `checkpoints/profile/checkpoint-06.md`)
 - WebUI **Profile** main panel (`webui/MainPanels/1100_profile.json`, builtin `profile_panel`) drives a run: Start Calibration → Start Profiling → Stop Profiling. See `docs/developers/webui.md` (Profile panel) and `checkpoints/profile/checkpoint-04.md`.

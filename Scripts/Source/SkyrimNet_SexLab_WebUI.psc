@@ -7,6 +7,9 @@ Bool Function Target_Menu_Open(Actor target, Bool hasStrippedItems, Bool editTag
 Function Target_Menu_Refresh(Bool hasStrippedItems) global native
 Function Sex_Menu_Open(Form thread, bool has_player) global native
 Function YesNo_Open(String question, int creator_sid) global native
+; Solo choice list: json { title, options:[{type:"papyrus", label, plugin, questFormId, scriptName,
+; executionFunctionName, closeWebUI, parameterMapping}] }. Opens the WebUI when it is closed; Close / Esc picks nothing.
+Function Choice_Open(String json) global native
 Function SceneCreator_Open(String state_json) global native
 ; Soft refresh Scene Menu state without HideAll / showPanel (connection pulldown / main panel switch).
 Function SceneCreator_Configure(String state_json) global native

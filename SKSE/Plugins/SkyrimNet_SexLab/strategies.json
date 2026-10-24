@@ -32,18 +32,18 @@
     "observed": "appears to be focused on pleasing the others"
   },
   {
-    "key": "resist",
+    "key": "deny_self",
     "label": "deny self",
     "text": "resists pleasure and cumming",
-    "option": "resist: {name} resists the pleasure and refuses to cum",
+    "option": "deny_self: {name} resists the pleasure and refuses to cum",
     "order": "resist your own pleasure, don't cum",
     "observed": "appears to be resisting pleasure and fighting not to cum"
   },
   {
-    "key": "forbid",
+    "key": "deny_all",
     "label": "deny all",
     "text": "fights anyone experiencing pleasure or cumming",
-    "option": "forbid: {name} fights anyone experiencing pleasure or cumming, {self} included",
+    "option": "deny_all: {name} fights anyone experiencing pleasure or cumming, {self} included",
     "order": "forbid anyone pleasure or cumming",
     "observed": "appears to be fighting anyone experiencing pleasure or cumming"
   },
@@ -64,10 +64,10 @@
     "observed": "appears to be teasing {target}, keeping them at the edge"
   },
   {
-    "key": "focus",
+    "key": "focused",
     "label": "focus {target}",
     "text": "focuses on {target}'s pleasure",
-    "option": "focus {target}: {name} focuses on {target}'s pleasure, doing whatever it takes to make them cum",
+    "option": "focused {target}: {name} focuses on {target}'s pleasure, doing whatever it takes to make them cum",
     "order": "focus on {target}'s pleasure",
     "observed": "appears to be focusing on {target}'s pleasure"
   },

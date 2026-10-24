@@ -1,5 +1,6 @@
 #include "Config.h"
 #include "CorpsePatch.h"
+#include "Decorators.h"
 #include "Hud.h"
 #include "JsonUtil.h"
 #include "OrgasmEngine.h"
@@ -234,29 +235,34 @@ void RegisterDecorators()
         webui_log::warn("RegisterDecorators: PublicRegisterDecorator is null (SkyrimNet API v5+ required)");
         return;
     }
+    auto reg = [](const char* name, const char* description, std::function<std::string(RE::Actor*)> fn) {
+        if (PublicRegisterDecorator(name, description, std::move(fn)))
+            webui_log::info("RegisterDecorators: registered {}", name);
+        else
+            webui_log::error("RegisterDecorators: failed to register {}", name);
+    };
     // SEXLAB_STOP eligibility: "1" when NPCs may stop a scene (sexlab.actions.npc_stop_allowed).
-    const bool ok = PublicRegisterDecorator("sexlab_npc_stop_allowed",
-        "1 when NPCs may use the Stop action to end a SexLab scene, else 0",
+    reg("sexlab_npc_stop_allowed", "1 when NPCs may use the Stop action to end a SexLab scene, else 0",
         [](RE::Actor*) -> std::string {
             SNSL_PROF("decorator.sexlab_npc_stop_allowed");
             return GetBool("sexlab.actions.npc_stop_allowed", true) ? "1" : "0";
         });
-    if (ok)
-        webui_log::info("RegisterDecorators: registered sexlab_npc_stop_allowed");
-    else
-        webui_log::error("RegisterDecorators: failed to register sexlab_npc_stop_allowed");
-
     // Prompt debug lines: "1" when sexlab.debug.verbose is on (0050 / 0550 [SNSL DEBUG] lines).
-    const bool okVerbose = PublicRegisterDecorator("sexlab_verbose",
-        "1 when the SkyrimNet_SexLab Verbose logging option is on, else 0",
+    reg("sexlab_verbose", "1 when the SkyrimNet_SexLab Verbose logging option is on, else 0",
         [](RE::Actor*) -> std::string {
             SNSL_PROF("decorator.sexlab_verbose");
             return IsVerbose() ? "1" : "0";
         });
-    if (okVerbose)
-        webui_log::info("RegisterDecorators: registered sexlab_verbose");
-    else
-        webui_log::error("RegisterDecorators: failed to register sexlab_verbose");
+    reg("sexlab_get_threads", "JSON of every SexLab / DOM scene, with this speaker's distance and line of sight",
+        Decorators::GetThreads);
+    reg("sexlab_activities", "JSON {activity}: stage description of the actor's SexLab scene",
+        Decorators::Activities);
+    reg("sexlab_cum", "JSON {warm, drying, warm_mouth, drying_mouth}: cum left on the actor",
+        Decorators::Cum);
+    reg("sexlab_has_cum", "1 when the actor has cum on them, else 0", Decorators::HasCum);
+    reg("sexlab_cum_count", "Number of actors with cum on them", Decorators::CumCount);
+    reg("sexlab_has_stripped_items", "1 when the actor has stored stripped clothing, else 0",
+        Decorators::HasStrippedItems);
 }
 
 Config& Config::GetSingleton()

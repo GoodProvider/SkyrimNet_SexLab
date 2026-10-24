@@ -36,4 +36,13 @@ String Function ObjectToLowerCaseKeyJson(int obj) global
 EndFunction
 ```
 
-Call sites include scene/thread export in `SkyrimNet_SexLab_Scene.psc` / `SkyrimNet_SexLab_Scene_Manager.psc`, stages export in `SkyrimNet_SexLab_Stages.psc`, and `RenderSlPrompt` in `SkyrimNet_SexLab_Utilities.psc`.
+Call sites include DOM thread export in `SkyrimNet_SexLab_Scene_Manager.psc` (`PushDomThreads`), stages export in `SkyrimNet_SexLab_Stages.psc`, and `RenderSlPrompt` in `SkyrimNet_SexLab_Utilities.psc`.
+
+## `sexlab_get_threads` / `threads.json`
+
+Built in C++ (`SKSE_Source/src/Decorators.cpp`), live on every call. Papyrus only pushes data:
+
+- `Scene.PushThread` (AnimationStart, StageStart, AnimationEnd, SetDenyOrgasm, the 2 s animation poll) runs `RefreshThreadObj` and hands its `thread_obj` handle to `Decorators.Threads_Set(sid, thread_obj, positions)`, or calls `Threads_Remove(sid)` once `GetThreadInScene()` is false. `Scene.Release` removes too.
+- `Scene_Manager.PushDomThreads` (DOM behaviour change, setup) sends the DOM threads, already enriched by `EnrichActorObjForJson`, to `Threads_SetDom`.
+
+Per call, C++ dumps each `thread_obj` (keys are already lowercase in the JSON store), overlays OrgasmEngine `enjoyment` / `strategy` / `stamina_regen` per actor, and adds `speaker_name` / `speaker_distance` (meters) / `speaker_los`. LOS comes from a main-thread cache (`HasLineOfSight`), primed for nearby actors on each push; an uncached pair reads `0` until its first check. `threads.json` (player view) is rewritten on every push whose threads changed. Shape: `{"counter", "threads": [{"active", "status", "description", "style", "speed", "location", "speaker_name", "speaker_distance", "speaker_los", "names", "victims", "actors": [...]}]}`.

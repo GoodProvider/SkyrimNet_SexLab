@@ -82,6 +82,13 @@ Bool Function IsDOMSlave(Actor akActor)
 
 EndFunction
 
+Function SeedPunishReasons(Actor akActor)
+    if akActor == None
+        return
+    endif
+    SkyrimNet_DOM_API.PanelPunishReasons(akActor)
+EndFunction
+
 
 
 String Function HandleOrgasmDenied(Actor akActor)
@@ -463,8 +470,8 @@ int Function GetThreads()
     return SkyrimNet_DOM_API.GetThreads()
 EndFunction
 
-; DOM solo masturbation is not a SexLab thread. Dump threads.json on start/stop so
-; 0050_sexlab_activity can read it when SkyrimNet blocks sexlab_get_threads (menu pause).
+; DOM solo masturbation is not a SexLab thread: push it to sexlab_get_threads / threads.json on
+; start/stop (Scene_Manager.PushDomThreads).
 Event OnBehaviourChange(Form akRef, String type)
     Actor slave = akRef as Actor
     if slave == None
@@ -482,8 +489,8 @@ Event OnBehaviourChange(Form akRef, String type)
         Trace("OnBehaviourChange", "manager is None, aborting")
         return
     endif
-    manager.SaveThreadsJson()
-    Trace("OnBehaviourChange", "--- refreshed threads.json for "+GetDisplayName(slave)+" type:"+type)
+    manager.PushDomThreads()
+    Trace("OnBehaviourChange", "--- pushed DOM threads for "+GetDisplayName(slave)+" type:"+type)
 EndEvent
 
 

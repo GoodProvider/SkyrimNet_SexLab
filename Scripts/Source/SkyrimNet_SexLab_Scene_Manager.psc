@@ -24,14 +24,6 @@ SkyrimNet_SexLab_Scene_Creator[] Property creators Auto
 ; -------------------------------------
 Faction Property SkyrimNet_SexLab_Faction_Victim Auto
 
-; Threads filename 
-String threads_filename = "Data/SKSE/Plugins/SkyrimNet_SexLab/threads.json"
-
-; -------------------------------------
-; Thread Count
-; -------------------------------------
-int thread_counter = 0 
-
 ; -------------------------------------
 ; Group Info Object 
 ; -------------------------------------
@@ -41,11 +33,6 @@ int Property group_info = 0 Auto
 ; Location of the Scenes 
 ; ---------------------------------------
 String SCENES_FOLDER = "Data/SKSE/Plugins/SkyrimNet_SexLab/scenes/"
-
-; ---------------------------------------
-; speaker_last is used when save is called 
-; ---------------------------------------
-Actor speaker_last = None
 
 ; --------------------------------------------
 ; Since returning a None array cause an error
@@ -149,8 +136,8 @@ Function Setup()
     RegisterEventsActions()
     RegisterEventsSexLab()
 
-    ; SexLab always starts with no active threads; clear stale file from prior session
-    GetThreadsJson()
+    ; SexLab always starts with no active threads; rewrites threads.json from the prior session
+    PushDomThreads()
     ; A hold survives saves: give back packages of NPCs whose scene died with the old session.
     ReleaseIdlePackageHolds()
 EndFunction 
@@ -1652,7 +1639,7 @@ Event StageStart(int ThreadID, bool HasPlayer)
 EndEvent
 
 ; Sent by sslThreadController.ChangeAnimation (SexLab hotkey, SL Tools) after the new animation is
-; set. A bare SetAnimation (e.g. SL Tools' animation list) sends nothing; Scene.GetThreadObj polls
+; set. A bare SetAnimation (e.g. SL Tools' animation list) sends nothing; Scene.PollAnimationChange polls
 ; for that case.
 Event AnimationChange(int ThreadID, bool HasPlayer)
     Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene_Manager.AnimationChange", ThreadID)
@@ -1916,109 +1903,46 @@ EndFunction
 ; ------------------------------------------------------
 ; JSON 
 ; ------------------------------------------------------
+; Kept for SkyrimNet_DOM (SkyrimNet_DOM_Actions.SaveThreadsJson after masturbate start / stop).
 Function SaveThreadsJson()
-    GetThreadsJson()
+    PushDomThreads()
 EndFunction
 
-String Function GetThreadsJson(Actor speaker = None)
-    if speaker == None 
-        if speaker_last != None 
-            speaker = speaker_last
-        else 
-            speaker = Game.GetPlayer()
-        endif 
-    else 
-        speaker_last = speaker
-    endif 
-
+; DOM threads (solo masturbation is not a SexLab thread) for sexlab_get_threads / threads.json.
+; Pushed on DOM behaviour changes; C++ adds the speaker fields per call.
+Function PushDomThreads()
     if main == None
-        Trace("GetthreadsJson","main is None")
-        return "{}"
+        Trace("PushDomThreads","main is None")
+        return
     endif
-
-    sslThreadController[] threads = ThreadSlots.Threads
-
-    ; JSON store, not JContainers: the scene loop below can take seconds, and JC garbage-collects
-    ; unretained objects mid-build and hands their ids to other mods (KNOWLEDGEBASE "JContainers
-    ; garbage-collects mid-serialization").
-    int obj = SNSL_JMap.object()
-    SNSL_JMap.setStr(obj, "counter", thread_counter)
-    thread_counter += 1
-
-    bool verbose = SkyrimNet_SexLab_WebUI.IsVerbose()
-    int threads_array = SNSL_JArray.object()
-    int i = 0
-    while i < threads.length
-        ; Read-only: do not allocate/Setup scenes while dumping JSON. Any state, then GetThreadInScene:
-        ; Advancing / Refresh are listed too, so the scene-start save (thread still Advancing) and
-        ; stage-change saves keep the thread in threads.json.
-        SkyrimNet_SexLab_Scene sl_scene = GetSceneByThread(threads[i], True, False)
-        if sl_scene != None
-            bool thread_listed = sl_scene.GetThreadInScene()
-            if verbose
-                DebugTraceThread(speaker, i, threads[i], thread_listed)
-            endif
-            if thread_listed
-                ; thread_obj is a retained root owned by the scene: add a fresh copy, never the root.
-                ; Re-apply this speaker's fields on the copy: a concurrent call may have overwritten
-                ; them on the shared root between GetThreadObj and the dump.
-                int thread_copy = SNSL_JValue.objectFromPrototype(SNSL_JValue.dump(sl_scene.GetThreadObj(speaker)))
-                sl_scene.ApplySpeakerFields(thread_copy, speaker)
-                SNSL_JArray.addObj(threads_array, thread_copy)
-            endif
-        endif
-        i += 1
-    endwhile
-
     int threads_dom = 0
-    int dom_count = 0
-    int dom_kept = 0
     if main.handler_dom
         threads_dom = main.handler_dom.GetThreads()
     endif
+    int threads_array = SNSL_JArray.object()
+    int dom_count = 0
+    int dom_kept = 0
     if threads_dom
         ; Still JContainers (SkyrimNet_DOM): retain for the enrich loop and its JSON bridge.
         JValue.retain(threads_dom)
         dom_count = JArray.count(threads_dom)
-        i = dom_count - 1
+        int i = dom_count - 1
         while i >= 0
             int thread = JArray.getObj(threads_dom, i)
-            String description = JMap.getStr(thread, "description")
-            if description != ""
+            if JMap.getStr(thread, "description") != ""
                 ; Enrich actors for prompts without SetActor StorageUtil / orgasm side effects
                 int actor_objs = JMap.getObj(thread, "actors")
                 int j = JArray.count(actor_objs) - 1
-                Actor akActor = None
-                bool speaker_in_thread = false
                 while j >= 0
                     int actor_obj = JArray.getObj(actor_objs, j)
                     Actor a = JMap.getForm(actor_obj, "form") as Actor
                     if a != None
-                        akActor = a
-                        if speaker != None && a == speaker
-                            speaker_in_thread = true
-                        endif
                         EnrichActorObjForJson(actor_obj, a)
                     endif
                     j -= 1
                 endwhile
-
-                float distance = 0.0
-                bool los = false
-                if speaker != None
-                    if speaker_in_thread
-                        distance = 1.0
-                        los = true
-                    elseif akActor != None
-                        distance = 0.0142875 * speaker.GetDistance(akActor)
-                        los = speaker.HasLOS(akActor)
-                    endif
-                endif
-
                 AddStrIfNotDefined(thread, "location", "floor")
                 AddStrIfNotDefined(thread, "style", "normal")
-                JMap.setFlt(thread, "speaker_distance", distance)
-                JMap.setInt(thread, "speaker_los", los as int)
                 int thread_snsl = SNSL_JValue.objectFromPrototype(ObjectToLowerCaseKeyJson(thread))
                 if thread_snsl
                     SNSL_JArray.addObj(threads_array, thread_snsl)
@@ -2027,43 +1951,11 @@ String Function GetThreadsJson(Actor speaker = None)
             endif
             i -= 1
         endwhile
-    endif
-    Trace("GetThreadsJson", "--- dom threads:"+dom_count+" kept:"+dom_kept)
-
-    SNSL_JMap.setObj(obj, "threads", threads_array)
-
-    String json = JsonLowerCaseKeys(SNSL_JValue.dump(obj))
-    if !json
-        Trace("GetThreadsJson", "JsonLowerCaseKeys failed")
-        json = "{}"
-    endif
-
-    SNSL_JValue.release(obj)
-    if threads_dom
         JValue.release(threads_dom)
     endif
-    Miscutil.WriteToFile(threads_filename, json, append=False)
-    return json
-EndFunction
-
-; Verbose logging: one line per SexLab thread GetThreadsJson looks at, with each actor's uuid and
-; live SexLab AnimatingFaction state (what 0050 / 0550's _thread_live gate should agree with).
-Function DebugTraceThread(Actor speaker, int index, sslThreadController thread, bool thread_listed)
-    Faction animating = Game.GetFormFromFile(0xE50F, "SexLab.esm") as Faction
-    String line = "speaker:"+GetDisplayName(speaker)+" slot:"+index+" tid:"+thread.tid+" kept:"+thread_listed+" state:"+(thread as sslThreadModel).GetState()
-    Actor[] positions = thread.Positions
-    int j = 0
-    while j < positions.length
-        Actor a = positions[j]
-        if a != None
-            line += " | "+GetDisplayName(a)+" formid:"+a.GetFormID()+" uuid:"+UuidToDecimalString(SkyrimNetApi.GetEntityUUID(a))
-            if animating
-                line += " animating:"+a.IsInFaction(animating)+" rank:"+a.GetFactionRank(animating)
-            endif
-        endif
-        j += 1
-    endwhile
-    SkyrimNet_SexLab_WebUI.DebugLog("SkyrimNet_SexLab_Scene_Manager", "GetThreadsJson", line)
+    SkyrimNet_SexLab_Decorators.Threads_SetDom(SNSL_JValue.dump(threads_array))
+    SNSL_JValue.release(threads_array)
+    Trace("PushDomThreads", "dom threads:"+dom_count+" kept:"+dom_kept)
 EndFunction
 
 ; Prompt-safe actor fields for DOM threads. No StorageUtil / SexLab thread mutation.

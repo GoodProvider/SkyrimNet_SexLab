@@ -423,7 +423,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     SLA_ReliefBegin()
     if !position_override
         ; No Scene Creator values: the first SyncAnimationDefaults (AnimationStart's
-        ; GetThreadObj, or StageStart) seeds the starting animation's defaults. Not here: the
+        ; PushThread, or StageStart) seeds the starting animation's defaults. Not here: the
         ; thread is still preparing, and SexLab's own stripping would undo ApplyDressedToActor.
         seed_first_animation = true
     elseif thread.animation
@@ -578,6 +578,7 @@ EndFunction
 ; AlignActors must not tear down; only Release owns resource cleanup.
 Function Release()
     DbgEnter("Release")
+    SkyrimNet_SexLab_Decorators.Threads_Remove(sid)
     UnregisterForUpdate()
     ClearStyleSpeed()
     seeded_registry = ""
@@ -770,8 +771,8 @@ bool pending_stage_restart = false
 
 ; Call from anywhere that may observe a changed thread.animation outside StageStart (poll, hooks,
 ; menus). Reloads the new animation's defaults now, and queues StageStart through a mod event
-; (asynchronous: this can run inside GetThreadObj while a prompt decorator is building JSON, where
-; narrating directly would be wrong). StageStart itself calls SyncAnimationDefaults directly.
+; (asynchronous: this can run inside RefreshThreadObj, mid-push, where narrating directly would be
+; wrong). StageStart itself calls SyncAnimationDefaults directly.
 Function CheckAnimationChange()
     String from_desc = description_last
     if SyncAnimationDefaults()
@@ -810,7 +811,9 @@ bool Function PollAnimationChange()
     if thread == None || (thread as sslThreadModel).GetState() != "animating"
         return false
     endif
-    CheckAnimationChange()
+    ; CheckAnimationChange (in RefreshThreadObj), and keeps sexlab_get_threads current between
+    ; events (orgasm counts, strapons, WebUI edits).
+    PushThread()
     SilenceTick()
     return true
 EndFunction
@@ -1218,7 +1221,7 @@ bool Function SetActor(int i, Actor akActor)
         return False 
     endif
     int obj = position_objs[i]
-    ; actors_objs is refreshed by RelinkActorsObjs (AlignActors / GetThreadObj), not here.
+    ; actors_objs is refreshed by RelinkActorsObjs (AlignActors / RefreshThreadObj), not here.
 
     ; SetPosition re-runs SetActor on anim change / WebUI / TargetMenu edits. Keep the orgasm counts
     ; when the actor is already bound to this scene (same or moved slot). Read them per actor from
@@ -1880,7 +1883,11 @@ Function Engine_BeginScene()
             ; Only the player's deny blocks; not expected (no_orgasm) just stops passive gain (Engine_SetSkills).
             bool blocked = obj > 0 && SNSL_JMap.getInt(obj, "deny_orgasm") == 1
             SkyrimNet_SexLab_OrgasmEngine.SetSceneBlocked(a, blocked)
-            SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(a, main.handler_dom.IsDOMSlave(a))
+            Bool domSlave = main.handler_dom.IsDOMSlave(a)
+            SkyrimNet_SexLab_OrgasmEngine.SetDomSlave(a, domSlave)
+            if domSlave
+                main.handler_dom.SeedPunishReasons(a) ; DOM's open reasons in the Punish panel
+            endif
             ; SexLab_Aid / SexLab_Scene_Punish eligibility (roles are known now).
             SkyrimNet_SexLab_OrgasmEngine.ActionKeys_Refresh(a)
         endif
@@ -3546,7 +3553,7 @@ Function AnimationStart()
     ApplyStyleSpeed()
     Engine_BeginScene()
     ActorChange_Started()
-    manager.SaveThreadsJson()
+    PushThread()
     ; No narration here: the StageStart that follows sends the start / change (one DN or event).
     ; Scene view showing Scene Creator for a target who just started animating -> Description Editor.
     WebUI_RerouteForFocus(true)
@@ -3737,7 +3744,7 @@ Function StageStart()
     Ending_StageStart()
     ApplyAnimDbSpeaking()
     ApplySexLabVoices()
-    manager.SaveThreadsJson()
+    PushThread()
     if SexLab == None
         Trace("StageStart","sexlab is None | actors:"+actor_names)
         stage_starting = false
@@ -3956,7 +3963,7 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
     ending_watching = false
     ending_watch_anim = None
     AlignActors()
-    manager.SaveThreadsJson()
+    PushThread()
 
     if SexLab != None && thread != None
         Trace("AnimationEnd","thread id:"+thread.tid+" status:"+thread.GetState())
@@ -4020,12 +4027,17 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
                 elseif total_orgasms >= 1
                     glow_fallback = name+"'s body is recovering from "+total_orgasms+" orgasms. "
                 endif
-                if glow_fallback != "" || total_orgasms >= 1
+                if glow_fallback != ""
+                    ; RenderTemplate does not bind sl, so the branch lives here, not in the template.
+                    String glow_template = "helpers/sexlab/afterglow"
+                    if total_orgasms < 1
+                        glow_template = "helpers/sexlab/afterglow_failed"
+                    endif
                     int glow_obj = JMap.object()
                     JMap.setStr(glow_obj, "name", name)
                     JMap.setInt(glow_obj, "total_orgasms", total_orgasms)
                     JMap.setInt(glow_obj, "expected", expected)
-                    afterglow += RenderSlPrompt("helpers/sexlab/afterglow", glow_obj, glow_fallback)
+                    afterglow += RenderSlPrompt(glow_template, glow_obj, glow_fallback)
                 endif
                 j -= 1 
             endwhile
@@ -4815,23 +4827,28 @@ String Function GetDescription()
     return desc 
 EndFunction 
 
-String Function GetThreadJson(Actor speaker) 
-    DbgEnter("GetThreadJson", "speaker:"+GetDisplayName(speaker))
-    GetThreadObj(speaker)
-    String json = SNSL_JValue.dump(thread_obj)
-    DbgReturn("GetThreadJson", "json")
-    return json 
-EndFunction 
+; sexlab_get_threads source (C++, Decorators.cpp): refresh thread_obj and hand it over, or drop it
+; once the thread is no longer listed. Advancing / Refresh stay listed, so the scene-start push
+; (thread still Advancing) and stage-change pushes keep it.
+Function PushThread()
+    if GetThreadInScene()
+        RefreshThreadObj()
+        SkyrimNet_SexLab_Decorators.Threads_Set(sid, thread_obj, thread.Positions)
+    else
+        SkyrimNet_SexLab_Decorators.Threads_Remove(sid)
+    endif
+EndFunction
 
-int Function GetThreadObj(Actor speaker)
-    DbgEnter("GetThreadObj", "speaker:"+GetDisplayName(speaker))
+; Live enjoyment / strategy / stamina_regen and the speaker fields are added in C++ per call.
+int Function RefreshThreadObj()
+    DbgEnter("RefreshThreadObj")
     if thread == None
-        DbgReturn("GetThreadObj", "thread_obj (no thread)")
+        DbgReturn("RefreshThreadObj", "thread_obj (no thread)")
         return thread_obj
     endif
     alignactors()
     ; Poll: some plugins switch animation via a bare SetAnimation that sends no SexLab event.
-    ; Not mid stage-change (GetThreadsJson also lists Advancing / Refresh): StageStart syncs those.
+    ; Not mid stage-change (Advancing / Refresh are listed too): StageStart syncs those.
     String sl_state = (thread as sslThreadModel).GetState()
     if sl_state == "animating" || sl_state == "prepare"
         CheckAnimationChange()
@@ -4843,14 +4860,6 @@ int Function GetThreadObj(Actor speaker)
     while i < num_actors
         if updateactor(i, thread.positions[i])
             actor_changed = true
-        endif
-        ; Live OrgasmEngine enjoyment for sexlab_get_threads / 0050 prompt.
-        if i < position_objs.length && position_objs[i] > 0 && SkyrimNet_SexLab_OrgasmEngine.IsManaged(thread.positions[i])
-            SNSL_JMap.setInt(position_objs[i], "enjoyment", SkyrimNet_SexLab_OrgasmEngine.GetEnjoyment(thread.positions[i]) as int)
-            ; Mini-game NPC strategy phrase ("focuses on self enjoyment"); "" in Together mode.
-            SNSL_JMap.setStr(position_objs[i], "strategy", SkyrimNet_SexLab_OrgasmEngine.GetStrategyText(thread.positions[i]))
-            ; Stamina regen, percent of default (0550 tiredness tiers).
-            SNSL_JMap.setInt(position_objs[i], "stamina_regen", SkyrimNet_SexLab_OrgasmEngine.GetStaminaRegen(thread.positions[i]) as int)
         endif
         i += 1
     endwhile
@@ -4865,7 +4874,6 @@ int Function GetThreadObj(Actor speaker)
     SNSL_JMap.SetStr(thread_obj, "description", getdescription())
     SNSL_JMap.SetStr(thread_obj, "style", style)
     SNSL_JMap.SetStr(thread_obj, "speed", GetSpeedName())
-    ApplySpeakerFields(thread_obj, speaker)
 
     int names_arr = SNSL_JArray.object()
     int victims_arr = SNSL_JArray.object()
@@ -4873,7 +4881,7 @@ int Function GetThreadObj(Actor speaker)
     while i < num_actors
         Actor akActor = thread.positions[i]
         SNSL_JArray.addstr(names_arr, akActor.getdisplayname())
-        dbgmsg("GetThreadObj", "thread.isvictim "+akActor.getdisplayname())
+        dbgmsg("RefreshThreadObj", "thread.isvictim "+akActor.getdisplayname())
         if thread.isvictim(akActor)
             SNSL_JArray.addstr(victims_arr, akActor.getdisplayname())
         endif
@@ -4883,33 +4891,8 @@ int Function GetThreadObj(Actor speaker)
     SNSL_JMap.setobj(thread_obj, "victims", victims_arr)
     SNSL_JMap.SetStr(thread_obj, "location", getlocation())
 
-    dbgreturn("getThreadobj", "thread_obj")
+    dbgreturn("RefreshThreadObj", "thread_obj")
     return thread_obj
-EndFunction
-
-; speaker_name / speaker_distance / speaker_los for one viewing speaker, computed in locals and
-; written to obj. thread_obj is shared: concurrent sexlab_get_threads calls (one per nearby actor)
-; interleave in GetThreadObj, so GetThreadsJson re-applies these to its own copy.
-Function ApplySpeakerFields(int obj, Actor speaker)
-    if thread == None || obj == 0
-        return
-    endif
-    float distance = 0.0
-    bool los = true
-    String speaker_name = "none"
-    if speaker == None
-        ; No viewing speaker: treat as present/close so prompts do not gate on LOS.
-        distance = 1.0
-    else
-        speaker_name = speaker.GetDisplayName()
-        if thread.positions.Find(speaker) < 0
-            distance = 0.0142875*speaker.GetDistance(thread.positions[0])
-            los = speaker.HasLOS(thread.positions[0])
-        endif
-    endif
-    SNSL_JMap.setStr(obj, "speaker_name", speaker_name)
-    SNSL_JMap.SetFlt(obj, "speaker_distance", distance)
-    SNSL_JMap.setint(obj, "speaker_los", los as int)
 EndFunction
 
 String Function GetLocation()
@@ -6057,7 +6040,7 @@ bool Function SetDenyOrgasm(Actor akActor, bool deny, Actor denier, bool from_ll
         msg = GetDisplayName(denier)+" permits "+GetDisplayName(akActor)+" to orgasm."
     endif
     PersistPositions()
-    manager.SaveThreadsJson()
+    PushThread()
     Trace("SetDenyOrgasm", GetDisplayName(akActor)+" deny:"+deny+" by:"+GetDisplayName(denier)+" fired:"+fired+" llm:"+from_llm)
     if fired || !narrate
         ; The group orgasm DN carries the allow prefix.

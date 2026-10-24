@@ -21,14 +21,15 @@ namespace InjuryEngine
     bool RequireWhip();
     /// Pulldown term -> Injury Engine part name: cock -> penis, ass -> ass hole; body / custom text / "" -> "" (random).
     std::string PartName(const std::string& part);
-    /// count whip hits on part; Injury Engine narrates line plus the injury. False when not installed.
+    /// count whip hits on part; Injury Engine narrates line plus the injury when narrate. False when not installed.
     bool Strike(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& part,
-        std::int32_t count = 1);
+        std::int32_t count = 1, bool narrate = true);
     /// Punish hit (count of them): slap/pinch/punch/pull use their torture types; a weak spell (spell != 0) uses fire/frost/shock by its
     /// damage effect's resist; free text uses Strike. location is the body part pulldown ("body" or "" = no named
-    /// part). False when not installed, or for a spell with no fire/frost/shock effect.
+    /// part). Injury Engine narrates line when narrate. False when not installed, or for a spell with no
+    /// fire/frost/shock effect.
     bool PunishHit(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& method,
-        const std::string& location, RE::FormID spell = 0, std::int32_t count = 1);
+        const std::string& location, RE::FormID spell = 0, std::int32_t count = 1, bool narrate = true);
     /// Punish hit that Injury Engine does not narrate: same routing as PunishHit, through External_TortureText. done gets
     /// the feeling text ("" when no hit landed) on a Papyrus VM thread; hop to the game thread before using it.
     /// False (done never called) when not installed, Injury Engine has no External_TortureText, or the spell has no

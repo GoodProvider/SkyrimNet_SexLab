@@ -17,8 +17,8 @@
     {
       "conditions": [
         {
-          "decoratorName": "papyrus_util",
-          "arguments": ["GetFloatValue", "currentActor", "skyrimnet_sexlab_cum_time", 0],
+          "decoratorName": "sexlab_has_cum",
+          "arguments": ["currentActor"],
           "comparisonOperator": ">",
           "expectedValue": 0
         }

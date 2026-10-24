@@ -13,6 +13,10 @@ Bool Function IsDOMSlave(Actor akActor)
     return false 
 EndFunction
 
+; Scene start: adds the slave's open DOM punishment reasons to the Punish panel (OrgasmEngine.AddPunishReason)
+Function SeedPunishReasons(Actor akActor)
+EndFunction
+
 String Function HandleOrgasmDenied(Actor akActor) 
     return "" 
 EndFunction

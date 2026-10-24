@@ -334,6 +334,7 @@ namespace Aid
             std::string line;
             std::string part;
             bool toInjuryEngine = false;
+            bool callerNarrates = false;  // HUD Aid: Injury Engine heals silently, the caller narrated the line
             bool stamina = false;     // counts stamina (a stamina-only spell), else health
             float points = 0.0f;      // to restore
             float done = 0.0f;        // restored so far
@@ -424,7 +425,7 @@ namespace Aid
             }
             Restore(t, ch.toInjuryEngine ? 0.0f : health, stamina);
             if (ch.toInjuryEngine) {
-                InjuryEngine::Heal(c, t, ch.line, health, ch.part, ch.first);
+                InjuryEngine::Heal(c, t, ch.line, health, ch.part, ch.first && !ch.callerNarrates);
             }
             ch.first = false;
             ch.done += std::min(counted * scale, std::max(missing, 0.0f));
@@ -565,7 +566,8 @@ namespace Aid
         return best ? best->form : 0;
     }
 
-    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location, bool* injuryEngine)
+    std::string Apply(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location, bool* injuryEngine,
+        bool callerNarrates)
     {
         if (injuryEngine) {
             *injuryEngine = false;
@@ -595,9 +597,10 @@ namespace Aid
         // Injury Engine heals the wounds on the part (and the health with them) and narrates the line.
         const bool toInjuryEngine = o.health > 0.0f && InjuryEngine::Installed();
         if (injuryEngine) {
-            *injuryEngine = toInjuryEngine;
+            *injuryEngine = toInjuryEngine && !callerNarrates;
         }
-        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toInjuryEngine, line, part, split, share]() {
+        SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toInjuryEngine, callerNarrates, line, part, split,
+                                              share]() {
             auto* c = RE::TESForm::LookupByID<RE::Actor>(casterId);
             auto* t = RE::TESForm::LookupByID<RE::Actor>(targetId);
             if (!c || !t) {
@@ -614,7 +617,7 @@ namespace Aid
             }
             Restore(t, toInjuryEngine ? 0.0f : o.health * share, o.stamina * share);
             if (toInjuryEngine) {
-                InjuryEngine::Heal(c, t, line, o.health * share, part);
+                InjuryEngine::Heal(c, t, line, o.health * share, part, !callerNarrates);
             }
             auto* item = RE::TESForm::LookupByID<RE::MagicItem>(o.form);
             PlaySpellVisuals(c, t, item, o.potion);
@@ -661,7 +664,7 @@ namespace Aid
     }
 
     std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,
-        float points, bool* injuryEngine)
+        float points, bool* injuryEngine, bool callerNarrates)
     {
         if (injuryEngine) {
             *injuryEngine = false;
@@ -671,7 +674,7 @@ namespace Aid
         }
         auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(form);
         if (points <= 0.0f || !spell) {
-            return Apply(caster, target, form, location, injuryEngine);
+            return Apply(caster, target, form, location, injuryEngine, callerNarrates);
         }
         const auto options = ListOptions(caster);
         const auto it = std::find_if(options.begin(), options.end(), [form](const Option& o) { return o.form == form; });
@@ -687,10 +690,11 @@ namespace Aid
         ch.line = AidLine(caster, target, o, ch.part);
         ch.stamina = o.health <= 0.0f;
         ch.toInjuryEngine = !ch.stamina && InjuryEngine::Installed();
+        ch.callerNarrates = callerNarrates;
         ch.points = points;
         ch.interval = IsConcentration(spell) ? 1.0f : std::max(1.0f, spell->GetChargeTime() + 0.5f);
         if (injuryEngine) {
-            *injuryEngine = ch.toInjuryEngine;
+            *injuryEngine = ch.toInjuryEngine && !callerNarrates;
         }
         const RE::FormID casterId = caster->GetFormID();
         {

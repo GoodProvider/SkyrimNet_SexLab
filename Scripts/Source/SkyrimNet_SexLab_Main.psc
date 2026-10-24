@@ -102,10 +102,6 @@ Function Setup()
         Trace("Setup", "Can't find Data/SexLab.esm | SkyrimNet_SexLab will not work.", true)
         return 
     endif 
-    ; --------------------------------
-    ; Decorators
-    ; --------------------------------
-    SkyrimNet_SexLab_Decorators.RegisterDecorators() 
     SkyrimNet_SexLab_Actions actions = (self as Quest) as SkyrimNet_SexLab_Actions
     if actions != None
         actions.Setup()
@@ -244,7 +240,8 @@ Function StoreStrippedItems(Actor akActor, Form[] forms)
         StorageUtil.FormListAdd(akActor, storage_items_key, forms[i])
         i += 1
     endwhile
-EndFunction 
+    SkyrimNet_SexLab_Decorators.SetStrippedItems(akActor, true)
+EndFunction
 
 Form[] Function UnStoreStrippedItems(Actor akActor)
     if akActor == None 
@@ -256,15 +253,19 @@ Form[] Function UnStoreStrippedItems(Actor akActor)
     endif
     Form[] forms = StorageUtil.FormListToArray(akActor, storage_items_key)
     StorageUtil.FormListClear(akActor, storage_items_key)
+    SkyrimNet_SexLab_Decorators.SetStrippedItems(akActor, false)
     Trace("UnStoreStrippedItems",akActor.GetDisplayName()+" removed stored items: "+forms.Length)
     return forms
 EndFunction
 
+; Also re-seeds the C++ mirror (sexlab_has_stripped_items) for strips stored before it existed.
 Bool Function HasStrippedItems(Actor akActor)
-    if akActor == None || StorageUtil.FormListCount(akActor, storage_items_key) == 0
+    if akActor == None
         return False
-    endif 
-    return true 
+    endif
+    bool has_items = StorageUtil.FormListCount(akActor, storage_items_key) > 0
+    SkyrimNet_SexLab_Decorators.SetStrippedItems(akActor, has_items)
+    return has_items
 EndFunction
 
 ;----------------------------------------------------

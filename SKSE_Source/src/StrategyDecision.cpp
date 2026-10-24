@@ -175,6 +175,27 @@ namespace StrategyDecision
             }
         }
 
+        // An event's text. SkyrimNet's devkit puts it in `data`: a JSON object ({"dialogue": "..."}) or the raw
+        // string; older builds used `text`.
+        std::string EventText(const nlohmann::json& e)
+        {
+            if (const auto d = e.find("data"); d != e.end()) {
+                if (d->is_string()) {
+                    return Trim(d->get<std::string>());
+                }
+                if (d->is_object()) {
+                    for (const char* k : { "dialogue", "text", "content", "message", "msg" }) {
+                        if (const auto v = d->find(k); v != d->end() && v->is_string()) {
+                            if (std::string s = Trim(v->get<std::string>()); !s.empty()) {
+                                return s;
+                            }
+                        }
+                    }
+                }
+            }
+            return Trim(e.value("text", std::string{}));
+        }
+
         // The focus actor's recent events as one timeline, oldest first, one line each: speech ("Bob said: ..."),
         // thoughts ("Nina thought: ..."), direct narrations and other events as their text. Narration inside
         // speech is pulled out into its own line.
@@ -193,6 +214,10 @@ namespace StrategyDecision
             if (!events.is_array()) {
                 return out;
             }
+            if (!events.empty()) {
+                webui_log::debug("StrategyDecision: timeline {} events, first: {}", events.size(),
+                    events.front().dump(-1, ' ', false, nlohmann::json::error_handler_t::replace).substr(0, 400));
+            }
             std::vector<nlohmann::json> list(events.begin(), events.end());
             std::stable_sort(list.begin(), list.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
                 return a.value("gameTime", 0.0) < b.value("gameTime", 0.0);
@@ -202,7 +227,7 @@ namespace StrategyDecision
                     continue;
                 }
                 const std::string type = e.value("type", std::string{});
-                const std::string text = Trim(e.value("text", std::string{}));
+                const std::string text = EventText(e);
                 const std::string who = e.value("originatingActorName", std::string{});
                 if (text.empty() || type == "spell" || type == "hit" || type == "combat" ||
                     type == "gamemaster_dialogue") {
@@ -237,6 +262,8 @@ namespace StrategyDecision
             ctx["orgasms"] = in.orgasms;
             ctx["expects_orgasm"] = in.expectsOrgasm;
             ctx["timeline"] = BuildTimeline(in);
+            // A punishment is about what the actor is doing now: only then is the current strategy shown.
+            ctx["current_key"] = trigger == "punished" ? in.currentOption : std::string{};
             auto partners = nlohmann::json::array();
             for (const auto& p : in.partners) {
                 const auto [label, rank] = Relationship(focus, RE::TESForm::LookupByID<RE::Actor>(p.id));

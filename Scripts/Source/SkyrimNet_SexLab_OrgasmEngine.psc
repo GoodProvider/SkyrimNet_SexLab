@@ -301,6 +301,15 @@ Function Effect_NarrateDirect(String msg, Actor source, Actor target) global
     endif
 EndFunction
 
+; Player HUD action (Aid / Ask / Order / Punish): purge the speech queue and DirectNarrate, ignoring the
+; mini-game narration level and the cooldown.
+Function Effect_NarratePlayer(String msg, Actor source, Actor target) global
+    if msg == ""
+        return
+    endif
+    SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target, purge_dialogue=true)
+EndFunction
+
 ; Ask / order / agree / refuse narration in a scene without the player: dropped-never (falls back to an event when the
 ; speech queue is busy), like a strategy change.
 Function Effect_NarrateOptional(String msg, Actor source, Actor target) global

@@ -5,6 +5,7 @@
 #include "WebUI_Log.h"
 #include "Papyrus_WebUI.h"
 #include "Config.h"
+#include "Decorators.h"
 
 #include "RE/Skyrim.h"
 #include "SKSE/SKSE.h"
@@ -457,6 +458,13 @@ namespace ActionCatalog
             if (EqualsIgnoreCase(decorator, "sexlab_npc_stop_allowed")) {
                 const bool allowed = SexLabNet::GetConfigBool("sexlab.actions.npc_stop_allowed", true);
                 return CompareValues(allowed ? 1.0 : 0.0, op, expected);
+            }
+
+            if (EqualsIgnoreCase(decorator, "sexlab_has_cum")) {
+                if (args.empty() || !ArgIsCurrentActor(args[0]))
+                    return false;
+                const bool has = Decorators::ActorHasCum(FocusActor());
+                return CompareValues(has ? 1.0 : 0.0, op, expected);
             }
 
             if (EqualsIgnoreCase(decorator, "webui_focus_kind")) {

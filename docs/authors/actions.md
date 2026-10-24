@@ -54,7 +54,7 @@ Prefer Papyrus slot names: `method`, `how` (outfit), `victim` when needed.
 | `StartScene_Nonconsensual_Two_SpeakerVictim` | Speaker is victim |
 | `StartScene_Refused_Two` | Refusal |
 | `Outfit_Dress` / `Outfit_Undress` | Speaker dresses/undresses Target; narration `silent` → RegisterEvent |
-| `CleanCum` | `sexlab_clean_cum`: speaker cleans `part` (`mouth\|pussy\|ass\|all`; unknown → first live part) on target via `Decorators.ClearCumPart`; RegisterEvent narration. Gate: `papyrus_util FormListCount player skyrimnet_sexlab_cum_actors != 0` (list kept by `RecordCum` / expiry) |
+| `CleanCum` | `sexlab_clean_cum`: speaker cleans `part` (`mouth\|pussy\|ass\|all`; unknown → first live part) on target via `Decorators.ClearCumPart`; RegisterEvent narration. Gate: C++ decorator `sexlab_cum_count [currentActor] != 0` (actors with cum, after expiry) |
 | `SceneChangeStyle` | `SexLab_Change_Style`: speaker's live scene → `forcefully\|normally\|gently`; animation speed follows style |
 
 No `speaking_victim`. No `sexlab_none_rape`. Outfit eligibility uses `OStimActorCountFaction`.
@@ -92,11 +92,11 @@ Copy patterns: `SexLab_Start_Fucking.yaml`, `SexLab_Punish_Spanking_Target.yaml`
 
 ## Eligibility
 
-Groups need `logicalOperator` (`AND`/`OR`) and `required: true`. Actor lock key: `skyrimnet_sexlab_scene_actor_lock` (not old `skyrimnet_sexlab_actor_lock`); C++ `ActorLocker` mirrors this StorageUtil int while a creator lock is held. Quote `comparisonOperator: ">"` — unquoted `>` is a YAML folded block and loads as blank (Stop never eligible). Do not use Papyrus decorators in action eligibility — `CallDecoratorDirect` returns empty on cache miss; use native `get_global_value` / factions (OStim gate: `skyrimnet_sexlab_ostim_player`).
+Groups need `logicalOperator` (`AND`/`OR`) and `required: true`. Actor lock key: `skyrimnet_sexlab_scene_actor_lock` (not old `skyrimnet_sexlab_actor_lock`); C++ `ActorLocker` mirrors this StorageUtil int while a creator lock is held. Quote `comparisonOperator: ">"` — unquoted `>` is a YAML folded block and loads as blank (Stop never eligible). Do not use Papyrus decorators in action eligibility — `CallDecoratorDirect` returns empty on cache miss; use C++ decorators (all of ours are C++), native `get_global_value` / factions (OStim gate: `skyrimnet_sexlab_ostim_player`).
 
 Rape actions: SkyrimNet dashboard **Add rape actions** (`sexlab.actions.rape_allowed`). Off unregisters LLM actions immediately; on needs save and reload, then Game Data Explorer Refresh.
 
-NPC Stop: **Allow NPCs to stop a scene** (`sexlab.actions.npc_stop_allowed`, default on). `SEXLAB_STOP` eligibility uses the C++ decorator `sexlab_npc_stop_allowed` (`"1"`/`"0"`, read live from config, registered at kDataLoaded via `PublicRegisterDecorator`). Off = Stop never eligible; no reload needed. The same mechanism registers `sexlab_verbose` (`sexlab.debug.verbose`), used by prompts for debug lines.
+NPC Stop: **Allow NPCs to stop a scene** (`sexlab.actions.npc_stop_allowed`, default on). `SEXLAB_STOP` eligibility uses the C++ decorator `sexlab_npc_stop_allowed` (`"1"`/`"0"`, read live from config, registered at kDataLoaded via `PublicRegisterDecorator`). Off = Stop never eligible; no reload needed. The same mechanism registers `sexlab_verbose` (`sexlab.debug.verbose`), used by prompts for debug lines, and every other decorator: `sexlab_get_threads`, `sexlab_activities`, `sexlab_cum`, `sexlab_has_cum`, `sexlab_cum_count`, `sexlab_has_stripped_items` (`outfit_dress` `== 1` / `outfit_undress` `== 0`) (`SKSE_Source/src/Decorators.cpp`). Every one takes one actor argument (`arguments: [currentActor]`). No decorator is registered from Papyrus.
 
 ## After changes
 

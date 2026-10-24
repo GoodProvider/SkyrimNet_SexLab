@@ -503,6 +503,34 @@ namespace PapyrusBindings_WebUI
         WebUI_Visibility_Show(false);
     }
 
+    // Solo choice list (e.g. SkyrimNet_DOM torture reasons): { title, options:[{type:papyrus,...}] }. Same Invoke
+    // rules as YesNo_Open: one Invoke per path, so a hide sent earlier can't land after the list.
+    void Choice_Open(RE::StaticFunctionTag*, RE::BSFixedString json)
+    {
+        const char* raw = json.c_str();
+        if (!raw || !raw[0])
+            return;
+        nlohmann::json cfg;
+        try {
+            cfg = nlohmann::json::parse(raw);
+        } catch (...) {
+            webui_log::warn("Choice_Open: bad JSON");
+            return;
+        }
+        if (!cfg.is_object())
+            return;
+        const bool wasOpen = !WebUI_IsHidden();
+        webui_log::info("Choice_Open options={} overlay_was_open={}",
+            cfg.contains("options") && cfg["options"].is_array() ? cfg["options"].size() : 0, wasOpen);
+        if (wasOpen) {
+            WebUI_Invoke("openChoiceOnTop(" + SafeDump(cfg) + ");");
+            return;
+        }
+        ActionCatalog::ClearMainPanelSelection();
+        WebUI_Invoke("openChoiceSolo(" + SafeDump(cfg) + ");");
+        WebUI_Visibility_Show(false);
+    }
+
     void SceneCreator_Open(RE::StaticFunctionTag*, RE::BSFixedString state_json)
     {
         webui_log::info("SceneCreator_Open");
@@ -1945,6 +1973,7 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("Target_Menu_Refresh", scriptName, Target_Menu_Refresh);
         a_vm->RegisterFunction("Sex_Menu_Open", scriptName, Sex_Menu_Open);
         a_vm->RegisterFunction("YesNo_Open", scriptName, YesNo_Open);
+        a_vm->RegisterFunction("Choice_Open", scriptName, Choice_Open);
         a_vm->RegisterFunction("SceneCreator_Open", scriptName, SceneCreator_Open);
         a_vm->RegisterFunction("SceneCreator_Configure", scriptName, SceneCreator_Configure);
         a_vm->RegisterFunction("Bondage_Configure", scriptName, Bondage_Configure);

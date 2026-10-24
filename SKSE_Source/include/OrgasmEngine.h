@@ -146,7 +146,8 @@ namespace OrgasmEngine
         std::string arousal;
         std::int32_t orgasms = 0;
         bool expectsOrgasm = true;
-        std::string currentKey;  // C++ only (kept / changed); never sent to the prompt
+        std::string currentKey;     // C++ only (kept / changed); never sent to the prompt
+        std::string currentOption;  // the options key of the current strategy ("deny_p2"); sent only when punished
         std::vector<DecisionPartner> partners;  // everyone else, SexLab position order
         std::vector<DecisionOption> options;    // only what the engine allows now
         std::vector<std::pair<std::string, RE::FormID>> slots;  // "p<slot>" -> actor (target suffixes)
@@ -207,8 +208,9 @@ namespace OrgasmEngine
     /// has the player or the player controls an actor of it, else DirectNarration_Optional), runs the target's
     /// strategy decision with that line as last_line, then narrates the answer on its own: "Nina agrees to|refuses
     /// Bob's request to <text>." A refusal is kept as a punishment reason. Any thread. False when refused.
+    /// fromPlayer (HUD panel): the line is NarratePlayer'd instead (speech queue purged, always direct).
     bool AskOrderNarrated(RE::Actor* by, RE::FormID target, bool order, const std::string& requestKey,
-        const std::string& customText);
+        const std::string& customText, bool fromPlayer = false);
     /// The punisher hurts target: "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to
     /// be passive." With Injury Engine (External_TortureText) the hit lands silently and its feeling text is
     /// appended to the narration; the narration is then sent and is last_line of the target's strategy decision
@@ -217,9 +219,9 @@ namespace OrgasmEngine
     /// Engine, its torture spells) or a free
     /// phrase ("biting"). location: body part ("" / "body": none named). reason: "" drops the "because ..." clause.
     /// amount: hits (Injury Engine damage_amount, clamped to 1..its max_strikes); above 1 the line says "N times".
-    /// Any thread. False when refused.
+    /// fromPlayer (HUD panel): Injury Engine never narrates and the line is NarratePlayer'd. Any thread. False when refused.
     bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
-        const std::string& reason, std::int32_t amount = 1);
+        const std::string& reason, std::int32_t amount = 1, bool fromPlayer = false);
     /// The actor is in a managed scene with someone else in it (SexLab_Scene_Punish eligibility).
     bool CanPunish(RE::Actor* actor);
     void EndScene(std::int32_t sid);
@@ -307,6 +309,9 @@ namespace OrgasmEngine
     void Narrate(const std::string& eventType, const std::string& msg, RE::Actor* source, RE::Actor* target);
     /// Always DirectNarration (player Force: the player's own deliberate act).
     void NarrateDirect(const std::string& msg, RE::Actor* source, RE::Actor* target);
+    /// Player HUD Aid / Ask / Order / Punish: purges SkyrimNet's speech queue, then DirectNarration (no narration
+    /// level or cooldown gate).
+    void NarratePlayer(const std::string& msg, RE::Actor* source, RE::Actor* target);
 
     // ---- Co-save ----
     void Save(SKSE::SerializationInterface* intfc);

@@ -20,8 +20,9 @@ parameterMapping:
     description: "roughly|normally|gently"
 eligibilityRules:
   - conditions:
-      - decoratorName: papyrus_util
-        arguments: ["FormListCount", "player", "skyrimnet_sexlab_cum_actors"]
+      - decoratorName: sexlab_cum_count
+        arguments:
+          - currentActor
         comparisonOperator: "!="
         expectedValue: 0
     logicalOperator: AND

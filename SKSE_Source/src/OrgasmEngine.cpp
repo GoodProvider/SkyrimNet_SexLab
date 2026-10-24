@@ -2781,6 +2781,9 @@ namespace OrgasmEngine
             }
             if (!NeedsTarget(s)) {
                 out.options.push_back({ kStrategyKeys[i], OptionText(*st, s, 0) });
+                if (s == st->strategy) {
+                    out.currentOption = kStrategyKeys[i];
+                }
                 continue;
             }
             // One option per valid target (SetStrategyLocked's rule).
@@ -2792,6 +2795,9 @@ namespace OrgasmEngine
                 }
                 out.options.push_back(
                     { std::string(kStrategyKeys[i]) + "_p" + std::to_string(j + 1), OptionText(*st, s, id) });
+                if (s == st->strategy && id == st->strategyTarget) {
+                    out.currentOption = out.options.back().key;
+                }
             }
         }
         return true;
@@ -3073,11 +3079,14 @@ namespace OrgasmEngine
         {
             std::string line;         // "Bob punishes Nina by pinching Nina's nipples, because ..."
             bool direct = false;      // PlayerScene
+            bool fromPlayer = false;  // HUD panel: NarratePlayer, Injury Engine never narrates
             // The refused request the reason came from (empty key: none).
             RE::FormID requestBy = 0;
             bool requestOrder = false;
             std::string requestKey;
             std::string requestText;
+            std::string reason;           // the reason as narrated ("" for none)
+            bool strategyReason = false;  // a SexLab reason (refused request / order, observed strategy), not external
         };
 
         // Caller holds g_lock. "<punisher> punishes <target> by pinching <target>'s nipples, because <reason>."
@@ -3123,14 +3132,25 @@ namespace OrgasmEngine
             plan.line = NameOf(punisherActor) + " punishes " + name + " by " + act +
                         (why.empty() ? "" : ", because " + why) + ".";
             plan.direct = PlayerScene(*sc);
+            plan.reason = why;
             if (const auto at = g_actors.find(target); at != g_actors.end() && !why.empty()) {
+                bool held = false;
                 for (const auto& r : at->second.reasons) {
+                    if (r.reason == why) {
+                        held = true;
+                        plan.strategyReason = r.type != "external";
+                    }
                     if (r.reason == why && !r.strategyKey.empty()) {
                         plan.requestBy = r.by;
                         plan.requestOrder = r.reason.find(" order to ") != std::string::npos;
                         plan.requestKey = r.strategyKey;
                         plan.requestText = r.request;
                     }
+                }
+                // GetPunishReasons' observed strategy line ("Nina appears to be focused on ...").
+                if (!held && g_settings.miniGame && AiDriven(at->second)) {
+                    const std::string seen = ObservedPhrase(at->second);
+                    plan.strategyReason = !seen.empty() && why == name + " " + seen;
                 }
             }
             webui_log::info("OrgasmEngine: {:#x} punishes {:#x} by '{}' on '{}' because '{}'",
@@ -3154,10 +3174,15 @@ namespace OrgasmEngine
             webui_log::info("OrgasmEngine: punishment of {:#x} narrated: {}", targetId, text);
             bool injuryEngineNarrates = false;
             if (!feelingFromInjuryEngine) {
-                // Older Injury Engine (no External_TortureText): the hit goes through External_Damage, which narrates.
-                injuryEngineNarrates = InjuryEngine::PunishHit(punisher, target, text, method, location, spell, amount);
+                // Older Injury Engine (no External_TortureText): the hit goes through External_Damage, which narrates
+                // unless the player punished from the HUD (silent hit, narrated here).
+                const bool landed = InjuryEngine::PunishHit(punisher, target, text, method, location, spell, amount,
+                    !plan.fromPlayer);
+                injuryEngineNarrates = landed && !plan.fromPlayer;
             }
-            if (!injuryEngineNarrates) {
+            if (plan.fromPlayer) {
+                NarratePlayer(text, punisher, target);
+            } else if (!injuryEngineNarrates) {
                 NarrateRequest(text, punisher, target, plan.direct);
             }
             if (spell) {
@@ -3271,7 +3296,7 @@ namespace OrgasmEngine
     }
 
     bool AskOrderNarrated(RE::Actor* by, RE::FormID target, bool order, const std::string& requestKey,
-        const std::string& customText)
+        const std::string& customText, bool fromPlayer)
     {
         if (!by) {
             return false;
@@ -3306,13 +3331,17 @@ namespace OrgasmEngine
         const std::string line = NameOf(by) + (order ? " orders " : " asks ") + NameOf(targetActor) + " to " + text + ".";
         const RE::FormID byId = by->GetFormID();
         // The decision and the narrations run on the game thread (Papyrus calls this from a VM thread).
-        SKSE::GetTaskInterface()->AddTask([byId, target, order, requestKey, text, line, direct]() {
+        SKSE::GetTaskInterface()->AddTask([byId, target, order, requestKey, text, line, direct, fromPlayer]() {
             RE::Actor* asker = ActorFor(byId);
             RE::Actor* asked = ActorFor(target);
             if (!asker || !asked) {
                 return;
             }
-            NarrateRequest(line, asker, asked, direct);
+            if (fromPlayer) {
+                NarratePlayer(line, asker, asked);
+            } else {
+                NarrateRequest(line, asker, asked, direct);
+            }
             StrategyDecision::RequestAnswer(target, order ? "ordered" : "asked", line,
                 [byId, target, order, requestKey, text, direct](DecisionResult result) {
                     FinishRequest(byId, target, order, requestKey, text, direct, result);
@@ -3321,8 +3350,29 @@ namespace OrgasmEngine
         return true;
     }
 
+    namespace
+    {
+        // SkyrimNet_DOM (soft): the Punish panel's reason, so a DOM slave's punishment keeps it
+        // (SkyrimNet_DOM_API.PanelPunished). Nothing when SkyrimNet_DOM is not installed.
+        void NotifyDomPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason, bool strategy)
+        {
+            constexpr const char* kDomScript = "SkyrimNet_DOM_API";
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            RE::BSTSmartPointer<RE::BSScript::ObjectTypeInfo> type;
+            if (!vm || !target || !vm->GetScriptObjectType(RE::BSFixedString(kDomScript), type) || !type) {
+                return;
+            }
+            auto* args = RE::MakeFunctionArguments(std::move(by), std::move(target),
+                RE::BSFixedString(reason.c_str()), std::move(strategy));
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+            if (!vm->DispatchStaticCall(kDomScript, "PanelPunished", args, callback)) {
+                webui_log::warn("OrgasmEngine: {}.PanelPunished dispatch failed", kDomScript);
+            }
+        }
+    }
+
     bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
-        const std::string& reason, std::int32_t amount)
+        const std::string& reason, std::int32_t amount, bool fromPlayer)
     {
         if (!punisher) {
             return false;
@@ -3339,6 +3389,7 @@ namespace OrgasmEngine
         if (plan.line.empty()) {
             return false;
         }
+        plan.fromPlayer = fromPlayer;
         const RE::FormID punisherId = punisher->GetFormID();
         const RE::FormID spellForm = spell ? spell->form : 0;
         const float spellDamage = spell ? spell->minDamage : 0.0f;
@@ -3349,6 +3400,8 @@ namespace OrgasmEngine
             if (!p || !t) {
                 return;
             }
+            // Before the hit: SkyrimNet_DOM's torture handler reads the reason when Injury Engine reports the hit.
+            NotifyDomPunishReason(p, t, plan.reason, plan.strategyReason);
             // Injury Engine lands the hit silently and returns the feeling text; narrate it with the line.
             const bool asked = InjuryEngine::PunishText(p, t, method, location, spellForm,
                 [punisherId, target, plan, method, location, spellForm, spellDamage, amount](std::string feeling) {
@@ -3893,6 +3946,15 @@ namespace OrgasmEngine
             return;
         }
         DispatchShell("Effect_NarrateDirect",
+            RE::MakeFunctionArguments(RE::BSFixedString(msg.c_str()), std::move(source), std::move(target)));
+    }
+
+    void NarratePlayer(const std::string& msg, RE::Actor* source, RE::Actor* target)
+    {
+        if (msg.empty()) {
+            return;
+        }
+        DispatchShell("Effect_NarratePlayer",
             RE::MakeFunctionArguments(RE::BSFixedString(msg.c_str()), std::move(source), std::move(target)));
     }
 

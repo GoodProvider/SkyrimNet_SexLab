@@ -28,12 +28,13 @@ Canonical source is the plugin tree. After editing, run `tools/sync_legacy_skyri
 | `user_final_instructions/0550_sexlab_narration.prompt` | Direct narration / orgasm gate |
 | `helpers/sexlab/action_orgy.prompt` | Orgy action helper |
 | `helpers/sexlab/none_stop.prompt` | Stop action helper |
-| `helpers/sexlab/afterglow.prompt` | Scene afterglow (`RenderSlPrompt`) |
+| `helpers/sexlab/afterglow.prompt` | Scene afterglow, actor orgasmed (`RenderSlPrompt`; `sl.name`, `sl.total_orgasms`) |
+| `helpers/sexlab/afterglow_failed.prompt` | Scene afterglow, expected orgasm missed (`RenderSlPrompt`; `sl.name`) |
 | `helpers/sexlab/cum.prompt` | Scene cum clause (`RenderSlPrompt`) |
 
 No `0520_sexlab_dressing_instructions.prompt`.
 
-`0416_sexlab_cum.prompt` has no plugin gate (it renders with `SkyrimNetUDNG.esp` too). `Scene.AddCum` stamps StorageUtil floats (game-time days) `skyrimnet_sexlab_cum_mouth` / `_pussy` / `_ass` plus the gate key `skyrimnet_sexlab_cum_time`. The prompt only calls the `sexlab_cum(actorUUID)` decorator when the gate key is set. It returns `{warm, drying, warm_mouth, drying_mouth}`: warm for the first game hour, drying until `sexlab.cum.duration_hours` (default 4, 0 = off), then cleared; swimming clears it too. A clothed actor seen from outside shows only the mouth.
+`0416_sexlab_cum.prompt` has no plugin gate (it renders with `SkyrimNetUDNG.esp` too). `Scene.AddCum` records the places (game-time days per place) in C++ (`Decorators::RecordCum`, co-saved). The prompt gates on the C++ decorator `sexlab_has_cum(actorUUID) == "1"`, then calls `sexlab_cum(actorUUID)`. It returns `{warm, drying, warm_mouth, drying_mouth}`: warm for the first game hour, drying until `sexlab.cum.duration_hours` (default 4, 0 = off), then cleared; swimming clears it too. A clothed actor seen from outside shows only the mouth.
 
 Scene afterglow and cum are Papyrus-rendered sentences (v0.34.0+), not LLM system prompts. Bind `{{sl.*}}` only. A single actor name is a string (`{{sl.name}}`), not a one-element array. Papyrus builds lowercase JSON via `ObjectToLowerCaseKeyJson`, then `RenderTemplate` + `ParseString`. Empty, error-looking, or leftover-`{{` renders fall back to the previous Papyrus sentence. The `" is orgasming."` gate is Papyrus (`GetIsOrgasming`) — see [../reference/orgasm-narration.md](../reference/orgasm-narration.md).
 
@@ -48,7 +49,7 @@ Keep literals character-for-character or matching breaks.
 
 ## Activity flow (`0050`)
 
-1. `sexlab_get_threads(npc.UUID)` or `threads.json` fallback (used whenever the decorator returns no threads, e.g. SkyrimNet's cache is still cold at scene start). Both list a thread while SexLab is animating, preparing, or mid stage change (`Advancing` / `Refresh`).
+1. `sexlab_get_threads(npc.UUID)` (C++, live: see [json-keys.md](../reference/json-keys.md)) or `threads.json` fallback (used whenever the decorator returns no threads). Both list a thread while SexLab is animating, preparing, or mid stage change (`Advancing` / `Refresh`).
 2. v0.34.1+: skip a thread unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating` (stale DOM masturbate rows after stop).
 3. Match speaker by `uuid`; read `speaking_modifiers`, `victim`, etc.
 4. Emit context + Speaking Rules when modifiers present.

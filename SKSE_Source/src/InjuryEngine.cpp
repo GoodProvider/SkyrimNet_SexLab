@@ -156,7 +156,7 @@ namespace InjuryEngine
     }
 
     bool Strike(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& part,
-        std::int32_t count)
+        std::int32_t count, bool narrate)
     {
         if (!victim || !Installed()) {
             return false;
@@ -166,12 +166,12 @@ namespace InjuryEngine
         // External_Damage(attacker, victim, cause, body_part, damage_type, damage_amount, narrate)
         Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
             RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString("whipping"),
-            static_cast<std::int32_t>(std::max(count, 1)), true);
+            static_cast<std::int32_t>(std::max(count, 1)), narrate);
         return true;
     }
 
     bool Torture(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const char* type,
-        const std::string& part, std::int32_t count = 1)
+        const std::string& part, std::int32_t count = 1, bool narrate = true)
     {
         if (!victim || !Installed() || !type || !type[0]) {
             return false;
@@ -180,12 +180,12 @@ namespace InjuryEngine
             PartName(part));
         Call("External_Damage", std::move(attacker), std::move(victim), RE::BSFixedString(line.c_str()),
             RE::BSFixedString(PartName(part).c_str()), RE::BSFixedString(type),
-            static_cast<std::int32_t>(std::max(count, 1)), true);
+            static_cast<std::int32_t>(std::max(count, 1)), narrate);
         return true;
     }
 
     bool PunishHit(RE::Actor* attacker, RE::Actor* victim, const std::string& line, const std::string& method,
-        const std::string& location, RE::FormID spell, std::int32_t count)
+        const std::string& location, RE::FormID spell, std::int32_t count, bool narrate)
     {
         if (!victim || !Installed()) {
             return false;
@@ -194,13 +194,13 @@ namespace InjuryEngine
         if (spell) {
             // A spell burns, freezes or shocks; it never whips. No element: the spell's own damage stands.
             const char* type = SpellTortureType(spell);
-            return type && Torture(attacker, victim, line, type, pulldown, count);
+            return type && Torture(attacker, victim, line, type, pulldown, count, narrate);
         }
         if (const TortureRoute* route = TortureRouteFor(method)) {
             const std::string part = pulldown.empty() ? route->defaultPart : pulldown;
-            return Torture(attacker, victim, line, route->type, part, count);
+            return Torture(attacker, victim, line, route->type, part, count, narrate);
         }
-        return Strike(attacker, victim, line, pulldown, count);
+        return Strike(attacker, victim, line, pulldown, count, narrate);
     }
 
     namespace

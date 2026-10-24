@@ -1,5 +1,23 @@
 # Knowledgebase
 
+## Punished slave never changed strategy; timeline always empty (2026-10-24, fixed, untested in game)
+
+- **Symptom:** Bob punished DOM slave Skadi twice "because Skadi appears to be resisting giving Bob pleasure …"; each `trigger=punished` decision kept `deny_p2` (p=0.80). Only an order changed it. SkyrimNet.log: `Set context var 'timeline' = []` in all 38 strategy decisions.
+- **Cause:** the devkit's `PublicGetRecentEvents` returns an event's content in `data` (`{"dialogue": "..."}` or a raw string), not `text`. `StrategyDecision.cpp` `BuildTimeline` read `text` and skipped every event, so each punishment looked like the first. The punishment line also never named the option being punished (the current strategy was never shown).
+- **Fix:** `EventText` reads `data` (object keys `dialogue` / `text` / `content` / `message` / `msg`, or the string), falling back to `text`; a debug line logs the first raw event. For `trigger=punished` only, `current_key` (`DecisionInput::currentOption`, e.g. `deny_p2`) goes to `minigame_strategy.prompt`, which frames the punishment as about that option.
+- **Also:** `strategies.json` used keys `resist` / `forbid` / `focus` (C++ ignores unknown keys), so `deny_self`, `deny_all`, `focused` options reached the LLM as bare keys. Renamed back.
+
+## Every decorator is C++ (2026-10-23, threads verified in game)
+
+- **Why:** SkyrimNet serves Papyrus decorators from an async per-entity cache: empty on a cold start, empty during an in-flight refresh, blocked while a menu pauses the game (entries below). `sexlab_get_threads` also ran a Papyrus loop over every thread on each call.
+- **Now:** `SKSE_Source/src/Decorators.cpp` holds the callbacks (registered in `Config.cpp` `RegisterDecorators`, the only file that may include `PublicAPI.h`): `sexlab_get_threads`, `sexlab_activities`, `sexlab_cum`, `sexlab_has_cum`, `sexlab_cum_count`, `sexlab_has_stripped_items`, plus `sexlab_npc_stop_allowed` / `sexlab_verbose`. Callbacks run on SkyrimNet worker threads: they read only mutex-guarded state, the JSON store and OrgasmEngine. LOS (`HasLineOfSight` raycasts) is a main-thread cache filled via `AddTask`.
+- **Threads:** Papyrus pushes `thread_obj` (`Scene.PushThread` → `Decorators.Threads_Set`); see [json-keys.md](docs/reference/json-keys.md). `Scene_Manager.SaveThreadsJson` stays as a shim because SkyrimNet_DOM's `SkyrimNet_DOM_Actions.SaveThreadsJson` calls it.
+- **Cum:** C++ owns the per-place game-time stamps (co-save record `SCUM`). The old StorageUtil keys `skyrimnet_sexlab_cum_*` are no longer read or written (not migrated: short-lived state).
+- **Arguments:** every `PublicRegisterDecorator` callback takes one actor. YAML gates must pass it (`arguments: [currentActor]`), or SkyrimNet logs `CallDecoratorDirect: Function decorator '…' expects 1 arguments, got 0` and the gate fails.
+- **YAML `papyrus_util`:** SkyrimNet's `papyrus_util` has no `FormListCount` (`Unknown function 'FormListCount'`). Stripped clothing is mirrored in C++ (`sexlab_has_stripped_items`, co-save `SSTR`); only the TargetMenu's own `EvalCondition` still accepts `FormListCount`.
+- **`RenderSlPrompt` templates:** `SkyrimNetApi.RenderTemplate` ignores its variable argument (logs `rendered with N missing variable(s)`). Unbound `{{ sl.x }}` survives as text for the `ParseInja` pass, but `{% if sl.x %}` evaluates on the first pass and renders empty. Keep these templates free of control flow and branch in Papyrus.
+- **Removed:** `sexlab_intent`, `sexlab_get_player_los_distance`, `sexlab_ostim_player` (no consumers). The OStim gate stays the global `skyrimnet_sexlab_ostim_player`.
+
 ## `key` is not a Papyrus parameter name (2026-10-22)
 
 - **Symptom:** pyro failed `SkyrimNet_SexLab_WebUI.psc(106,32): key is not a variable` on a global function that took `String key` and used it.
@@ -646,7 +664,7 @@ Category parents (`ShowComfort`, `ExpressPhysicallyNonsexually`, `Sexlab_Punish`
 
 **Symptom:** embedded eligible actions are only top-level native ones (`change_outfit`, DD lock/unlock, WAITHERE, DOM slave pack). Not Nina-specific.
 
-**Fix:** native `get_global_value` / `skyrimnet_sexlab_ostim_player` on those six parents. `MCM.ApplyPluginConfig` `SetValue`s that global from `sexlab.ostim.player`. Keep `Ostim_Player` for prompts; do not use it in action YAML. Refresh Actions in Game Data Explorer.
+**Fix:** native `get_global_value` / `skyrimnet_sexlab_ostim_player` on those six parents. `MCM.ApplyPluginConfig` `SetValue`s that global from `sexlab.ostim.player`. (The `sexlab_ostim_player` prompt decorator was removed on 2026-10-23.) Refresh Actions in Game Data Explorer.
 
 ## Hotkey SkyMessage: GetThreadByActor arity (2026-09-14)
 
@@ -674,7 +692,7 @@ Profiles can enable the packaged mod (`SkyrimNet SexLab`, space) while the git w
 
 DOM solo masturbation is behaviour `masturbate` (idles / `DOMActionMasturbating`), not a SexLab `ThreadSlots` scene. `0050_sexlab_activity.prompt` presents it via `handler_dom.GetThreads()` merged in `GetThreadsJson`. DOM bio `0055` skips `masturbating.` on purpose so 0050 owns description + `_pleasure_` speaking rules.
 
-SkyrimNet **blocks Papyrus decorators when any menu pauses the game** (`ExecuteDecorator: Blocking VM call … because game is paused`). That is not `isTimePaused`. `0050` then falls back to `threads.json`. `DOMOnBehaviourChange` is a queued ModEvent sent after `EnterWait()`, so the next paused prompt can still see the start dump. Skip a thread in `0050` / `0550` unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating`. Sibling start/stop actions dump `threads.json` synchronously; `Handler_DOM` still refreshes on behaviour change for wheel-menu / NPC stops.
+SkyrimNet **blocks Papyrus decorators when any menu pauses the game** (`ExecuteDecorator: Blocking VM call … because game is paused`). That is not `isTimePaused`. `0050` then falls back to `threads.json`. (Since 2026-10-23 our decorators are C++, so this no longer applies to them; see the top entry.) `DOMOnBehaviourChange` is a queued ModEvent sent after `EnterWait()`, so the next paused prompt can still see the start dump. Skip a thread in `0050` / `0550` unless an actor is in `SexLabAnimatingFaction`, `OStimActorCountFaction`, or `DOMActionMasturbating`. Sibling start/stop actions dump `threads.json` synchronously; `Handler_DOM` still refreshes on behaviour change for wheel-menu / NPC stops.
 
 Sibling `SkyrimNet_DOM_API.GetThreads` walks `DOM02.actorAliases` / `GetMaxActorCount` (same as capture scan). `GetActorCount` / `actorArray` lag until `UpdateActorArray`. Skip when `IsBusy` so a live SexLab scene is not double-listed.
 
@@ -716,7 +734,7 @@ Dashboard `sexlab.editor.hotkey_enabled` / `sexlab.editor.hotkey` used to apply 
 
 ## SkyrimNet Beta 25 content plugin (2026-09-12)
 
-Beta 25 does not read `prompts/`, `config/triggers/`, or `config/actions/`. Canonical LLM content is `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` (`manifest.json` `id` must equal the folder name). The same actions and prompts are also copied to `config/actions/` and `prompts/` so pre-0.25 SkyrimNet still loads them (`tools/sync_legacy_skyrimnet_content.py`; do not edit those copies by hand). Prompt paths inside the plugin are unchanged (`prompts/helpers/sexlab/…`, submodules). Action YAML filename (before `.yaml`) must equal the in-file `name` (case-insensitive); keep `name` casing. Settings schema stays at `config/plugins/SkyrimNet_SexLab/manifest.yaml` (`schema.fields` + `defaultValue`; `plugin.name` SkyrimNet_SexLab, `sexlab.*` keys) — that is not a content-plugin folder. Papyrus reads `Plugin_SkyrimNet_SexLab` via `GetConfig*` / `PatchConfig`. Ostim framework is `sexlab.ostim.player` (decorator `sexlab_ostim_player`); do not write `skyrimnet_sexlab_ostim_player`. Do not ship into `library/`. Upstream: SkyrimNet `docs/modding/MIGRATING_TO_BETA25.md`.
+Beta 25 does not read `prompts/`, `config/triggers/`, or `config/actions/`. Canonical LLM content is `SKSE/Plugins/SkyrimNet/external/goodprovider.sexlab/` (`manifest.json` `id` must equal the folder name). The same actions and prompts are also copied to `config/actions/` and `prompts/` so pre-0.25 SkyrimNet still loads them (`tools/sync_legacy_skyrimnet_content.py`; do not edit those copies by hand). Prompt paths inside the plugin are unchanged (`prompts/helpers/sexlab/…`, submodules). Action YAML filename (before `.yaml`) must equal the in-file `name` (case-insensitive); keep `name` casing. Settings schema stays at `config/plugins/SkyrimNet_SexLab/manifest.yaml` (`schema.fields` + `defaultValue`; `plugin.name` SkyrimNet_SexLab, `sexlab.*` keys) — that is not a content-plugin folder. Papyrus reads `Plugin_SkyrimNet_SexLab` via `GetConfig*` / `PatchConfig`. Ostim framework is `sexlab.ostim.player`; do not write `skyrimnet_sexlab_ostim_player`. Do not ship into `library/`. Upstream: SkyrimNet `docs/modding/MIGRATING_TO_BETA25.md`.
 
 ## SexLab P+ scene hop vs end (2026-09-10)
 
@@ -825,7 +843,7 @@ Always **ignore** files matching `z-*.*` (e.g. `z-plan.md`). Local scratch / not
 ## Active TargetMenu `type: papyrus` (2026-08-06, Actor/Scene split 2026-08-16)
 
 - Mid-scene TargetMenu options under `webui/TargetMenu/Scene/options/*.json` use **`type: papyrus`** (no `name`, no YAML / `actions_index`). JS `onAction({action:"papyrus",...})` → C++ `ExecutePapyrusOption` → `SkyrimNet_SexLab_Actions.TM_*`. Actor (not animating) options live in `webui/TargetMenu/Actor/options/`. Catalog pick is ControlPanel focus `SexLabAnimatingFaction` — no per-option faction eligibility on Scene JSON. Actor **`panel: outfit`**: sentence `position_1` / style (`forcefully|normally|gently|silently`) / undresses|dresses / `position_0`; Start → `TM_Outfit`; no Custom; silently skips SkyrimNet narration.
-- TargetMenu `eligibilityRules` are evaluated by C++ `ActionCatalog::EvalCondition`, not SkyrimNet: `papyrus_util` supports only `FormListCount` (`skyrimnet_sexlab_storage_items` only), `HasIntValue` and `GetFloatValue` on `currentActor`; anything else is false (option hidden). Add a branch there before using a new function in catalog JSON. YAML gates go through SkyrimNet and accept `"player"` as the actor argument.
+- TargetMenu `eligibilityRules` are evaluated by C++ `ActionCatalog::EvalCondition`, not SkyrimNet: `papyrus_util` supports only `FormListCount` (`skyrimnet_sexlab_storage_items` only), `HasIntValue` and `GetFloatValue` on `currentActor`; anything else is false (option hidden). Add a branch there before using a new function in catalog JSON. YAML gates go through SkyrimNet and accept `"player"` as the actor argument; SkyrimNet's `papyrus_util` there has no `FormListCount` (use `sexlab_has_stripped_items`).
 - SexLab cum overlays have no per-place clear: `ClearCum` wipes all, so `Decorators.ClearCumPart` re-applies the remaining places with `AddCum(vaginal, oral, anal)`.
 - Storage: Animation JSON durable; AnimDB cache; Scene overlay this-thread only. Save (`TM_SaveAnimationSettings` / AnimationPanel Save) → SQL + JSON (`orgasm_expected`, `speaking_modifiers`, `clothed`). Victim/deny never durable; deny saves as expected=`1`. Full speaking token CSV is persisted (not token `[0]` only).
 - Anim switch: `SeedOverlayFromAnimDb` — per-registry `user_anim_defaults` win, else AnimDB, else orgasm→speaking helper (`1`→`_pleasure_`, `0`→`""`).
@@ -1405,3 +1423,7 @@ Never commit the Windows username. Use `%USERPROFILE%` in paths. See AGENTS.md S
 **Symptom:** an NPC with a sandbox package walks away mid-scene.
 **Cause:** SexLab `sslActorAlias.LockActor` adds the `DoNothing` ActorUtil override at priority **100**, plus `SetRestrained` / `SetDontMove`. A SkyrimNet-registered package at the same priority (SeverActions `CampSandbox` is registered at 100) or one re-applied by `ReinforcePackages` can still win.
 **Rule:** `Scene_Manager.HoldScenePackages` calls `SkyrimNetApi.HoldPackages(actor, "SkyrimNet_SexLab")` at scene start. `ReleaseIdlePackageHolds` gives the packages back once the actor is no longer animating (scene end and `Setup` on load; holds survive saves). Do not unregister and re-register packages ourselves. A hold does **not** cover another mod's PapyrusUtil ActorUtil overrides; a `held:0` trace means the package was not a SkyrimNet one.
+
+## Punish panel → SkyrimNet_DOM reason (2026-10-23)
+
+The Punish panel lands Injury Engine hits through `External_TortureText`, which takes no cause, so Injury Engine's `Injury_Engine_Torture` event can't carry the reason. `OrgasmEngine::PunishNarrated` therefore dispatches `SkyrimNet_DOM_API.PanelPunished(by, target, reason, isStrategy)` in the game-thread task before `PunishText`, and only when `GetScriptObjectType("SkyrimNet_DOM_API")` succeeds (no warning spam without DOM). `isStrategy` is true for a held `PunishRecord` whose type is not `external`, or for the AI actor's observed strategy line. DOM-seeded reasons are `external` (`AddPunishReason`).

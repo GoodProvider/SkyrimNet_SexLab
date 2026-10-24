@@ -1,7 +1,7 @@
-{# Cum left on mouth / pussy / ass after an orgasm (SkyrimNet_SexLab_Decorators.Cum).
+{# Cum left on mouth / pussy / ass after an orgasm (C++ sexlab_cum, Decorators.cpp).
    Warm for 1 game hour, drying until sexlab.cum.duration_hours. No plugin gate: renders with UDNG too. #}
 {% if render_mode == "full" or render_mode == "thoughts" or render_mode == "transform" or render_mode == "dialogue_target" %}
-  {% if papyrus_util("GetFloatValue", actorUUID, "skyrimnet_sexlab_cum_time", 0) > 0 %}
+  {% if sexlab_has_cum(actorUUID) == "1" %}
     {% set cum = sexlab_cum(actorUUID) %}
     {% set cum_name = decnpc(actorUUID).name %}
     {% set cum_his = "her" %}

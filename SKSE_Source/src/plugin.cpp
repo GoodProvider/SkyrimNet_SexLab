@@ -22,6 +22,7 @@
 #include "Papyrus_OrgasmEngine.h"
 #include "ActorLocker.h"
 #include "Papyrus_ActorLocker.h"
+#include "Decorators.h"
 #include "StrategyDecision.h"
 #include "Profiler.h"
 
@@ -88,6 +89,8 @@ namespace {
         }
         OrgasmEngine::Save(intfc);
         ActorLocker::Save(intfc);
+        Decorators::Save(intfc);
+        Decorators::SaveStripped(intfc);
     }
 
     void CoSave_OnLoad(SKSE::SerializationInterface *intfc) {
@@ -102,6 +105,10 @@ namespace {
                 OrgasmEngine::Load(intfc, version, length);
             } else if (type == ActorLocker::kRecord) {
                 ActorLocker::Load(intfc, version, length);
+            } else if (type == Decorators::kRecord) {
+                Decorators::Load(intfc, version, length);
+            } else if (type == Decorators::kStrippedRecord) {
+                Decorators::LoadStripped(intfc, version, length);
             }
         }
     }
@@ -110,6 +117,7 @@ namespace {
         SexLabNet::Json::SetLoadedSaveSession(0);
         OrgasmEngine::Revert();
         ActorLocker::Revert();
+        Decorators::Revert();
     }
 }
 
@@ -153,6 +161,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             WebUI_SetGameReady();
             SexLabNet::Config::GetSingleton().ApplyFromConfig();
             SexLabNet::Json::OnNewSession();
+            Decorators::ClearOnGameLoad();
             StrategyDecision::Reset();
             StrategyDecision::Install();  // retry when registration failed at kDataLoaded
         }
@@ -194,6 +203,11 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             webui_log::error("Failed to register ActorLocker Papyrus functions");
         } else {
             webui_log::info("ActorLocker Papyrus functions registered");
+        }
+        if (!papyrus->Register(Decorators::Register_Papyrus)) {
+            webui_log::error("Failed to register Decorators Papyrus functions");
+        } else {
+            webui_log::info("Decorators Papyrus functions registered");
         }
     } else {
         webui_log::info("Failed to get Papyrus interface.");

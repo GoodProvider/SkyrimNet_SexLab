@@ -20,8 +20,8 @@ parameterMapping:
 enabled: true
 eligibilityRules:
   - conditions:
-      - decoratorName: "papyrus_util"
-        arguments: ["FormListCount", "currentActor", "skyrimnet_sexlab_storage_items"]
+      - decoratorName: sexlab_has_stripped_items
+        arguments: ["currentActor"]
         comparisonOperator: "=="
         expectedValue: 0
     logicalOperator: "AND"

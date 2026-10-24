@@ -42,6 +42,7 @@ namespace PapyrusBindings_WebUI {
 
     /// Yes/No confirm before scene creator (creator_sid = Scene_Creator.sid).
     void YesNo_Open(RE::StaticFunctionTag*, RE::BSFixedString question, std::int32_t creator_sid);
+    void Choice_Open(RE::StaticFunctionTag*, RE::BSFixedString json);
 
     /// Scene creator tag/animation editor (JSON state from Scene_Creator.BuildWebUIState).
     void SceneCreator_Open(RE::StaticFunctionTag*, RE::BSFixedString state_json);

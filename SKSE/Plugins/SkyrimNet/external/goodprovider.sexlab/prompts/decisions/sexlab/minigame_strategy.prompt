@@ -8,8 +8,9 @@
    focus_uuid, focus_name, last_line_text (the ask / order / punishment narration, or the spoken line),
    role, arousal, orgasms, expects_orgasm, timeline [lines, oldest first: speech, thoughts, narrations and other
    events of the focus actor, narration inside speech on its own line], partners [uuid, name, is_player, role,
-   arousal, orgasms, relationship, relationship_rank], options [key, text].
-   The current strategy is never shown. Keys are read back by the game: keep {{ o.key }} as given.
+   arousal, orgasms, relationship, relationship_rank], options [key, text], current_key (the options key in use,
+   set only when punished; "" otherwise).
+   The current strategy is shown only for a punishment. Keys are read back by the game: keep {{ o.key }} as given.
    A criterion is one line; profiles and other multi-line decorators belong in the state blocks. #}
 {% set _focus = decnpc(focus_uuid) %}
 [ state focus ]
@@ -49,7 +50,9 @@ Nothing has happened yet.
 [ end state ]
 
 [ state last_line ]
-{% if trigger == "asked" or trigger == "ordered" or trigger == "punished" %}{{ last_line_text }}{% else if trigger == "dialogue" and last_line_text != "" %}{{ focus_name }} just said: "{{ last_line_text }}"{% else %}The scene has just begun; {{ focus_name }} has not spoken during it yet.{% endif %}
+{% if trigger == "punished" %}{{ last_line_text }}
+{% if current_key != "" %}{{ focus_name }} is being punished for what they are doing now (`{{ current_key }}`). Keeping it invites more punishment; changing it may make it stop.{% else %}{{ focus_name }} is being punished for what they are doing now; changing it may make it stop.{% endif %}
+{% else if trigger == "asked" or trigger == "ordered" %}{{ last_line_text }}{% else if trigger == "dialogue" and last_line_text != "" %}{{ focus_name }} just said: "{{ last_line_text }}"{% else %}The scene has just begun; {{ focus_name }} has not spoken during it yet.{% endif %}
 [ end state ]
 
 [ question strategy choice ]
@@ -57,6 +60,9 @@ Decide which strategy {{ focus_name }} decides to start using right now.
 Base it on their relationship with each partner (`partners`), what is happening (`scene`), and what {{ focus_name }} has thought, said and experienced (`timeline`).
 In order of importance: `last_line`, {{ focus_name }}'s thoughts, and recent events over older events. {{ focus_name }}'s words are more about changing other people's behavior than describing {{ focus_name }}'s own desires.
 A victim who is resisting does not cooperate. A lover or friend who is lagging behind may be helped. A rival or enemy is unlikely to be generous.
+{% if trigger == "punished" %}
+After a punishment, decide whether {{ focus_name }} gives in and changes, or defies and keeps {% if current_key != "" %}`{{ current_key }}`{% else %}what they are doing{% endif %}. Defiance gets rarer with each punishment in `timeline`; someone who fears or serves the punisher usually gives in.
+{% endif %}
 [ criteria ]
 {% for o in options %}
 {{ o.key }}: {{ o.text }}

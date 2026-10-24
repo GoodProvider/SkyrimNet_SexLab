@@ -2,11 +2,31 @@
 
 ## Unreleased
 
-### WebUI
-- **Aid panel always opens on the most damaged body part** (Injury Engine), instead of the part used last. Potions still start on drink.
+### Prompts
+- **Scene data in prompts is now live**: every SkyrimNet_SexLab decorator runs in the SKSE plugin instead of Papyrus. Prompts no longer miss the scene at its start or while a menu has the game paused, and building them no longer costs Papyrus time.
+- **Cum on actors is kept by the SKSE plugin** (saved with the game). Cum recorded before this update is not carried over.
+- Removed unused decorators `sexlab_intent`, `sexlab_get_player_los_distance` and `sexlab_ostim_player`. New decorators `sexlab_has_cum`, `sexlab_cum_count` and `sexlab_has_stripped_items`.
+
+### Fixes
+- **Punished NPCs never learned from it**: in mini-game scenes, an NPC's strategy choice never saw what had happened in the scene, so every punishment looked like the first. It now sees recent speech and events, and is told which behaviour it is being punished for, so repeated punishment can wear it down.
+- **Three strategies had no description** for the AI ("deny self", "deny all", "focus"): fixed.
+- **Clean Cum, Dress and Undress were never offered to NPCs**: their gates called decorators SkyrimNet rejects. They now work. Undress state from before this update is picked up the next time the target menu opens on that actor.
+- **Afterglow template was never used**: scene endings always fell back to the built-in sentence. `helpers/sexlab/afterglow.prompt` (orgasmed) and the new `afterglow_failed.prompt` (failed to orgasm) now render.
+- **Animation descriptions with broken name tokens** (`{{sla.ctors.0}}` and similar) showed raw braces in prompts: fixed in FB_LoversDoggy, 4uDIK Reverse Cowgirl, B_B_FMast2, b_b_kneff, B_B_LayAnal, B_B_LFing1 and MNCleitoCaninencboundmfc.
+
+### Diary of Mine
+- **Punish panel lists DOM reasons**: at scene start `Handler_DOM.SeedPunishReasons` adds a DOM slave's open punishment reasons (through SkyrimNet_DOM). Before the hit, `PunishNarrated` passes the chosen reason to SkyrimNet_DOM (`SkyrimNet_DOM_API.PanelPunished`, only when SkyrimNet_DOM is installed), so the Injury Engine torture counts as that DOM punishment.
+- **New WebUI choice list** `SkyrimNet_SexLab_WebUI.Choice_Open(json)`: a solo, scrollable list of papyrus options (`{ title, options }`) with Close / Esc. SkyrimNet_DOM uses it for torture reasons.
 
 ### Target menu
 - **New target menu option "hug"**: a quick hug (the short hug animation, not a SexLab scene). Shown only when the target is not in a scene or locked by the Scene Creator.
+- **Removed the target menu option "platonic"**. Its scene setting `nonsexual_platonic` is still available in Scene Creator.
+
+### WebUI
+- **Animation table filter row** in Scene Creator and the Description Editor's animation filter tab. Right under the column headers are a ★ favorites-only toggle, the gender pulldown (moved from the Filter column) and a name filter. Description Editor rows can now be starred too.
+- **Scene Creator row above the table** now reads `Start by <initiator> <style>`, then the animation and selected counts and **All** / **None**. The "All / Selected only" pulldown is removed.
+- **Aid panel always opens on the most damaged body part** (Injury Engine), instead of the part used last. Potions still start on drink.
+- **Your HUD Aid, Ask, Order and Punish cut in**: the lines NPCs were about to say are dropped and your action is always narrated directly, whatever the Mini-game narration level or cooldown. NPC answers and NPC-chosen actions are unchanged.
 
 ## [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5) — since [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4)
 

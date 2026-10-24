@@ -880,8 +880,8 @@ struct AidOffer
 AidOffer g_aidOffer;
 std::uint64_t g_aidOfferNext = 0;
 
-/// Game thread. The receiver took (Aid::Apply, narrated unless Injury Engine does) or refused the potion: "Amy
-/// refused Bob's stamina potion." is narrated, kept as a punish reason and the potion stays with the giver.
+/// Game thread. The receiver took (Aid::Apply) or refused the potion: "Amy refused Bob's stamina potion." is kept as
+/// a punish reason and the potion stays with the giver. A HUD Aid result: either line is NarratePlayer'd.
 void AidFinishConsent(RE::FormID giverId, RE::FormID receiverId, RE::FormID form, const std::string& location,
     bool accepted)
 {
@@ -893,14 +893,12 @@ void AidFinishConsent(RE::FormID giverId, RE::FormID receiverId, RE::FormID form
         const std::string reason = Aid::RefusalReason(giver, receiver, form);
         if (reason.empty())
             return;
-        OrgasmEngine::NarrateDirect(reason + ".", receiver, giver);
+        OrgasmEngine::NarratePlayer(reason + ".", receiver, giver);
         OrgasmEngine::AddPunishReason(giver, receiver, reason);
         return;
     }
-    bool injuryEngine = false;
-    const std::string line = Aid::Apply(giver, receiver, form, location, &injuryEngine);
-    if (!line.empty() && !injuryEngine)
-        OrgasmEngine::NarrateDirect(line, giver, receiver);
+    const std::string line = Aid::Apply(giver, receiver, form, location, nullptr, true);
+    OrgasmEngine::NarratePlayer(line, giver, receiver);
 }
 
 /// Game thread. Drink / lips on someone else (Aid::NeedsConsent): the player answers a Yes / No dialogue (drink);
@@ -1041,10 +1039,11 @@ void InitWebUI()
                     SKSE::GetTaskInterface()->AddTask(
                         [verb, subject, object, request, text, method, location, reason, amount]() {
                             RE::Actor* by = RE::TESForm::LookupByID<RE::Actor>(subject);
+                            // The player's own act: speech queue purged, always a DirectNarration.
                             if (verb == "punish")
-                                OrgasmEngine::PunishNarrated(by, object, method, location, reason, amount);
+                                OrgasmEngine::PunishNarrated(by, object, method, location, reason, amount, true);
                             else
-                                OrgasmEngine::AskOrderNarrated(by, object, verb == "order", request, text);
+                                OrgasmEngine::AskOrderNarrated(by, object, verb == "order", request, text, true);
                         });
                 } catch (...) {
                     webui_log::warn("onPunishResult: bad JSON");
@@ -1085,10 +1084,9 @@ void InitWebUI()
                             AidAskConsent(caster, actor, option, location);
                             return;
                         }
-                        bool injuryEngine = false;
-                        const std::string line = Aid::StartChannel(caster, actor, option, location, points, &injuryEngine);
-                        if (!line.empty() && !injuryEngine)
-                            OrgasmEngine::NarrateDirect(line, caster, actor);
+                        // The player's own act: Injury Engine heals silently; speech queue purged, DirectNarration.
+                        const std::string line = Aid::StartChannel(caster, actor, option, location, points, nullptr, true);
+                        OrgasmEngine::NarratePlayer(line, caster, actor);
                     });
                 } catch (...) {
                     webui_log::warn("onAidResult: bad JSON");
