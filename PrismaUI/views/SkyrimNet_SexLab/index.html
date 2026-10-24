@@ -9237,13 +9237,13 @@
             const s = AID.actors[AID.subject];
             const a = AID.actors[AID.actor];
             const o = AID.options[AID.option];
-            AID_LAST = { subject: s ? s.id : 0, actor: a ? a.id : 0, option: o ? o.id : 0, part: AID.part,
+            AID_LAST = { subject: s ? s.id : 0, actor: a ? a.id : 0, option: o ? o.id : 0,
                 partText: document.getElementById('aid-part-text').value,
                 pointsTyped: !!AID.pointsTyped, points: aidPoints() };
         }
 
-        // Opens on the last values where still offered (actor in the scene, option carried and affordable, part
-        // in the list); otherwise the defaults.
+        // Opens on the last values where still offered (actor in the scene, option carried and affordable);
+        // otherwise the defaults. The part always starts on the default: drink for a potion, else the most damaged.
         function openAidPanel(cfg) {
             const last = AID_LAST || {};
             AID = { actors: (cfg && cfg.actors) || [], options: [], subject: 0, actor: 0, option: -1,
@@ -9276,10 +9276,7 @@
             }
             aidRenderOptions(last.option);
             aidRenderActor();
-            // A sexual part remembered from before Injury Engine's setting was turned off: the default part.
-            const lastOption = AID.options[AID.option];
-            const samePick = !!lastOption && lastOption.id === last.option;
-            aidRenderPart(samePick && last.part && !partDimmed(last.part) ? last.part : undefined);
+            aidRenderPart(undefined);
             document.body.classList.add('yesno-solo');
             hideControlPanel();
             hideTargetMenuRow();
