@@ -962,7 +962,8 @@ Function TM_ForceOrgasm(Actor speaker, Actor target, String formIdStr)
 EndFunction
 
 ;-------------------------------------------
-; Orgasm mini-game (LLM actions): same engine code as the HUD keys, stronger (llm_multiplier)
+; Orgasm mini-game: same engine code as the HUD keys, x3. No longer LLM actions (SexLab_Arouse /
+; SexLab_Calm removed: they fought the decision model's strategy); kept for other callers.
 ;-------------------------------------------
 
 Function MiniGame_Arouse(Actor speaker, Actor target)
@@ -1057,15 +1058,11 @@ Function LLM_AllowOrgasm(Actor speaker, Actor target)
     LLM_SetDenyOrgasm(speaker, target, false)
 EndFunction
 
-; Same scene, speaker not a victim, target a victim, target not the player (the player's own deny
-; stays with the player). Allow checks every actor and narrates the orgasm with the allow prefix.
+; Same scene, speaker not a victim, target a victim (the player included: an NPC aggressor may
+; deny the player). Allow checks every actor and narrates the orgasm with the allow prefix.
 Function LLM_SetDenyOrgasm(Actor speaker, Actor target, bool deny)
     if speaker == None || target == None || speaker == target
         Trace("LLM_SetDenyOrgasm", "needs a speaker and a different target")
-        return
-    endif
-    if target == Game.GetPlayer()
-        Trace("LLM_SetDenyOrgasm", GetDisplayName(speaker)+" cannot deny / allow the player")
         return
     endif
     SkyrimNet_SexLab_Scene sl = manager.GetSceneByActor(speaker)

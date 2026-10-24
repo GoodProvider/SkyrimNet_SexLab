@@ -152,8 +152,8 @@ namespace OrgasmEngine
         std::vector<DecisionOption> options;    // only what the engine allows now
         std::vector<std::pair<std::string, RE::FormID>> slots;  // "p<slot>" -> actor (target suffixes)
     };
-    /// False when the actor is unmanaged, not AI-driven (the player outside auto play, an NPC the player took
-    /// control of), or not in mini-game mode.
+    /// False when the actor is unmanaged, not AI-driven (the player outside auto play), or not in mini-game mode.
+    /// An NPC the player took control of still decides and plays.
     bool GetStrategyDecisionInput(RE::Actor* actor, DecisionInput& out);
     enum class DecisionResult
     {
@@ -194,8 +194,8 @@ namespace OrgasmEngine
         std::string text;  // strategies.json "order" phrase after "to", {target} filled: "be passive and let things happen"
     };
     /// The strategies `target` may take now (decision rule; one per other actor for deny / tease / focused), its
-    /// current one left out. Empty when unmanaged, not AI-driven (the player outside auto play, an NPC the player
-    /// controls) or not in mini-game mode.
+    /// current one left out. An NPC the player controls is listed too. Empty when unmanaged, the
+    /// player outside auto play, or not in mini-game mode.
     std::vector<RequestOption> GetRequestOptions(RE::FormID target);
     /// What `target` can be punished for this scene, newest last: "Nina refused Bob's order to be passive" (a
     /// refused ask / order) or a reason a mod supplied (AddPunishReason), then an AI actor's current strategy as
@@ -261,6 +261,8 @@ namespace OrgasmEngine
     /// Mini-game costs `who` can pay right now (HUD greys the key otherwise).
     bool CanArouse(RE::Actor* who);
     bool CanCalm(RE::Actor* who);
+    /// `who`'s magicka / stamina as 0..100 of max (HUD payer row while the player controls an NPC).
+    void GetResourcePct(RE::Actor* who, float& magicka, float& stamina);
 
     // ---- HUD support ----
     struct ActorView

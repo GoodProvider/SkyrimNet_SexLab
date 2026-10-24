@@ -177,7 +177,8 @@ namespace OrgasmEngine
             float pressAmount = 0.0f;  // size of each press of the current burst
             float regen = 100.0f;  // stamina regen, percent of the actor's default (staminaFatigue)
             // HUD take-control key. autoPlay (player): the engine plays the player's strategy like an NPC's.
-            // playerDriven (NPC): the player drives this NPC with the HUD; its strategy stops. Not saved.
+            // playerDriven (NPC): the player joins this NPC's scene through the HUD (acting as themselves); the
+            // NPC's strategy keeps playing. Not saved.
             bool autoPlay = false;
             bool playerDriven = false;
             std::vector<PunishRecord> reasons;  // punishment reasons held (last kPunishKept), oldest first
@@ -443,11 +444,11 @@ namespace OrgasmEngine
             return it != g_scenes.end() ? &it->second : nullptr;
         }
 
-        // The engine plays this actor's mini-game strategy: NPCs unless the player took control of them, the
-        // player only in auto play.
+        // The engine plays this actor's mini-game strategy: every NPC (also one the player took control of: the
+        // player only joins that scene through the HUD), the player only in auto play.
         bool AiDriven(const ActorState& st)
         {
-            return IsPlayerFormId(st.id) ? st.autoPlay : !st.playerDriven;
+            return IsPlayerFormId(st.id) ? st.autoPlay : true;
         }
 
         // Caller holds g_lock. Mini-game scene the engine plays alone: every non-DOM actor is AiDriven (no
@@ -877,6 +878,7 @@ namespace OrgasmEngine
             std::string option;    // decision option text (criteria line); also {self} / {his}
             std::string observed;  // how a decision-made change looks to others, after the name
             std::string order;     // infinitive phrase after "to": "Bob orders Nina to <order>."
+            std::string choice;    // infinitive, third person, after "to": "Nina chooses to <choice>."
         };
         using StrategyTable = std::array<StrategyInfo, kStrategyCount>;
 
@@ -885,7 +887,8 @@ namespace OrgasmEngine
         {
             StrategyTable t;
             for (std::size_t i = 0; i < kStrategyCount; ++i) {
-                t[i].key = t[i].label = t[i].text = t[i].option = t[i].observed = t[i].order = kStrategyKeys[i];
+                t[i].key = t[i].label = t[i].text = t[i].option = t[i].observed = t[i].order = t[i].choice =
+                    kStrategyKeys[i];
             }
             return t;
         }
@@ -926,7 +929,7 @@ namespace OrgasmEngine
                     StrategyInfo& t = next[i];
                     const std::pair<const char*, std::string*> required[] = {
                         { "label", &t.label }, { "text", &t.text }, { "option", &t.option },
-                        { "observed", &t.observed }, { "order", &t.order },
+                        { "observed", &t.observed }, { "order", &t.order }, { "choice", &t.choice },
                     };
                     for (const auto& [name, field] : required) {
                         if (const std::string v = str(item, name); !v.empty()) {
@@ -1073,6 +1076,14 @@ namespace OrgasmEngine
         std::string ObservedPhrase(const ActorState& st)
         {
             std::string text = InfoOf(st.strategy).observed;
+            FillStrategyText(text, st.id, st.strategyTarget);
+            return text;
+        }
+
+        // Caller holds g_lock. The strategy as the actor's choice ("focus on her own pleasure"), no leading name.
+        std::string ChoicePhrase(const ActorState& st)
+        {
+            std::string text = InfoOf(st.strategy).choice;
             FillStrategyText(text, st.id, st.strategyTarget);
             return text;
         }
@@ -2959,10 +2970,19 @@ namespace OrgasmEngine
             { "pull", "pulling {target}" },
         };
 
-        // Caller holds g_lock. The actor's managed scene (any role, any orgasm mode).
+        // Caller holds g_lock. The actor's managed scene (any role, any orgasm mode). The player outside every scene
+        // acts on the scene of the NPC they control (take control): HUD ask / order / punish are the player's own.
         const SceneState* PunisherScene(RE::Actor* punisher)
         {
             const auto* pst = Find(punisher);
+            if (!pst && punisher && IsPlayerFormId(punisher->GetFormID())) {
+                for (const auto& [id, st] : g_actors) {
+                    if (st.playerDriven) {
+                        pst = &st;
+                        break;
+                    }
+                }
+            }
             if (!pst) {
                 return nullptr;
             }
@@ -3220,10 +3240,80 @@ namespace OrgasmEngine
             return out + (plan.reason.empty() ? "" : ", because " + plan.reason) + ".";
         }
 
+        // Game thread. Above 80% Injury Engine torture the target gives in, no decision: "<target> can't take it any
+        // more and submits!" and the strategy becomes the punished request, else the newest refused order (then
+        // request), else selfless (2+ actors) / selfish (solo). The obeyed request's reasons are cleared.
+        void Submit(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan, double total, double max)
+        {
+            RE::Actor* punisher = ActorFor(punisherId);
+            RE::Actor* target = ActorFor(targetId);
+            if (!punisher || !target) {
+                return;
+            }
+            Effects fx;
+            std::string chosen;
+            {
+                std::lock_guard lock(g_lock);
+                const auto at = g_actors.find(targetId);
+                const SceneState* sc = at != g_actors.end() ? SceneOf(at->second) : nullptr;
+                if (sc) {
+                    ActorState& st = at->second;
+                    Strategy s = Strategy::kCount;
+                    RE::FormID t = 0;
+                    const auto accept = [&](const std::string& key) {
+                        if (chosen.empty() && !key.empty() && ParseRequest(*sc, st, key, s, t)) {
+                            chosen = key;
+                        }
+                    };
+                    accept(plan.requestKey);
+                    for (const bool orders : { true, false }) {
+                        for (auto r = st.reasons.rbegin(); r != st.reasons.rend(); ++r) {
+                            if ((r->reason.find(" order to ") != std::string::npos) == orders) {
+                                accept(r->strategyKey);
+                            }
+                        }
+                    }
+                    if (chosen.empty()) {
+                        s = sc->actors.size() > 1 ? Strategy::kSelfless : Strategy::kSelfish;
+                        t = 0;
+                        chosen = InfoOf(s).key;
+                    }
+                    if (SetStrategyLocked(*sc, st, s, t, false, fx)) {
+                        auto& list = st.reasons;
+                        list.erase(std::remove_if(list.begin(), list.end(),
+                                       [&](const PunishRecord& r) { return r.strategyKey == chosen; }),
+                            list.end());
+                    } else {
+                        chosen += " (not applied)";
+                    }
+                }
+            }
+            PostEffects(std::move(fx));
+            webui_log::info("OrgasmEngine: {:#x} submits (torture {}/{}) -> {}", targetId, total, max, chosen);
+            const std::string line = NameOf(target) + " can't take it any more and submits!";
+            if (plan.fromPlayer) {
+                NarratePlayer(line, punisher, target);
+            } else {
+                NarrateRequest(line, punisher, target, plan.direct);
+            }
+        }
+
+        // "Nina chooses to focus on her own pleasure." for the actor's current strategy ("" when none).
+        std::string ChoiceLine(RE::FormID id)
+        {
+            std::lock_guard lock(g_lock);
+            const auto at = g_actors.find(id);
+            if (at == g_actors.end() || !SceneOf(at->second)) {
+                return "";
+            }
+            const std::string choice = ChoicePhrase(at->second);
+            const std::string name = NameOf(ActorFor(id));
+            return choice.empty() || name.empty() ? "" : name + " chooses to " + choice + ".";
+        }
+
         // Game thread. The hit has landed (feeling: Injury Engine's text, "" when none): narrate the punishment, then
-        // ask the target's strategy decision (PunishDecisionLine as last_line, plus "It's too much, <target> can't
-        // resist anymore!" above 80% Injury Engine torture); a punishment for a refused request gets the agree /
-        // refuse answer.
+        // ask the target's strategy decision (PunishDecisionLine as last_line), or Submit above 80% Injury Engine
+        // torture; a punishment for a refused request gets the agree / refuse answer.
         void ContinuePunish(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan,
             const std::string& method, const std::string& location, RE::FormID spell, float spellDamage,
             const std::string& feeling, bool feelingFromInjuryEngine, std::int32_t amount)
@@ -3243,17 +3333,30 @@ namespace OrgasmEngine
                     !plan.fromPlayer);
                 injuryEngineNarrates = landed && !plan.fromPlayer;
             }
-            if (plan.fromPlayer) {
-                NarratePlayer(text, punisher, target);
-            } else if (!injuryEngineNarrates) {
-                NarrateRequest(text, punisher, target, plan.direct);
-            }
+            // Narrated once the decision is in, with the choice appended (Injury Engine narrating: already said).
+            const auto narrate = [plan, punisherId, targetId, text, injuryEngineNarrates](const std::string& choice) {
+                RE::Actor* p = ActorFor(punisherId);
+                RE::Actor* t = ActorFor(targetId);
+                if (!p || !t || injuryEngineNarrates) {
+                    return;
+                }
+                const std::string out = choice.empty() ? text : text + " " + choice;
+                if (plan.fromPlayer) {
+                    NarratePlayer(out, p, t);
+                } else {
+                    NarrateRequest(out, p, t, plan.direct);
+                }
+            };
             if (spell) {
                 Aid::QueueWeakSpellHit(punisher, target, spell,
                     feelingFromInjuryEngine || injuryEngineNarrates ? 0.0f : spellDamage);
             }
-            const auto ask = [plan, targetId](const std::string& line) {
-                StrategyDecision::RequestAnswer(targetId, "punished", line, [plan, targetId](DecisionResult result) {
+            const auto ask = [plan, targetId, narrate](const std::string& line) {
+                StrategyDecision::RequestAnswer(targetId, "punished", line,
+                    [plan, targetId, narrate](DecisionResult result) {
+                    narrate(result == DecisionResult::kDropped || result == DecisionResult::kUnknown
+                                ? std::string{}
+                                : ChoiceLine(targetId));
                     if (!plan.requestKey.empty()) {
                         FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
                             plan.direct, result);
@@ -3261,14 +3364,20 @@ namespace OrgasmEngine
                 });
             };
             const std::string line = PunishDecisionLine(plan, feeling);
-            const std::string name = NameOf(target);
-            // Torture share from Injury Engine (Papyrus VM thread), then back to the game thread to ask.
-            const bool points = InjuryEngine::PartPoints(target, [ask, line, name](std::string json) {
+            // Torture share from Injury Engine (Papyrus VM thread), then back to the game thread to ask or submit.
+            const bool points =
+                InjuryEngine::PartPoints(target, [ask, narrate, line, plan, punisherId, targetId](std::string json) {
                 const auto j = nlohmann::json::parse(json, nullptr, false);
-                const bool tooMuch = j.is_object() && j.value("max", 0.0) > 0.0 &&
-                                     j.value("total", 0.0) > 0.8 * j.value("max", 0.0);
-                const std::string full = tooMuch ? line + " It's too much, " + name + " can't resist anymore!" : line;
-                SKSE::GetTaskInterface()->AddTask([ask, full]() { ask(full); });
+                const double max = j.is_object() ? j.value("max", 0.0) : 0.0;
+                const double total = j.is_object() ? j.value("total", 0.0) : 0.0;
+                if (max > 0.0 && total > 0.8 * max) {
+                    SKSE::GetTaskInterface()->AddTask([narrate, plan, punisherId, targetId, total, max]() {
+                        narrate("");
+                        Submit(punisherId, targetId, plan, total, max);
+                    });
+                } else {
+                    SKSE::GetTaskInterface()->AddTask([ask, line]() { ask(line); });
+                }
             });
             if (!points) {
                 ask(line);
@@ -3825,6 +3934,16 @@ namespace OrgasmEngine
         return who && CurrentAv(who, RE::ActorValue::kStamina) >= ArouseCost(Find(who));
     }
 
+    void GetResourcePct(RE::Actor* who, float& magicka, float& stamina)
+    {
+        const auto pct = [who](RE::ActorValue av) {
+            const float max = MaxAv(who, av);
+            return max > 0.0f ? std::clamp(CurrentAv(who, av) / max * 100.0f, 0.0f, 100.0f) : 0.0f;
+        };
+        magicka = pct(RE::ActorValue::kMagicka);
+        stamina = pct(RE::ActorValue::kStamina);
+    }
+
     bool CanCalm(RE::Actor* who)
     {
         std::lock_guard lock(g_lock);
@@ -3986,12 +4105,6 @@ namespace OrgasmEngine
                 return true;
             }
             st->playerDriven = on;
-            if (!on && g_settings.miniGame && !StrategyAllowed(*sc, *st, st->strategy)) {
-                st->strategy = DefaultStrategy(*sc, *st);
-                st->strategyTarget = 0;
-            }
-            st->nextStepAt = Now();
-            st->pressesLeft = 0;
             webui_log::info("OrgasmEngine: {:#x} player-driven {} (scene {})", st->id, on, sc->sid);
         }
         PostEffects(std::move(fx));

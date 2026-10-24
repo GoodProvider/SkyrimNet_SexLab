@@ -18,6 +18,7 @@ namespace Aid
         RE::FormID form = 0;
         std::string name;
         bool potion = false;
+        bool food = false;       // food / drink or a raw ingredient (a potion otherwise)
         std::int32_t count = 0;  // potions in the inventory, 0 for a spell
         float cost = 0.0f;       // magicka, 0 for a potion
         bool affordable = true;  // potion, or a spell the caster has the magicka for

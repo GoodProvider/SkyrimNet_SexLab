@@ -296,6 +296,16 @@
                         '</tr>';
                 });
             }
+            // Controlling an NPC: the player pays arouse / calm; their magicka / stamina sit under the actors.
+            if (html && g.minigame && state.payer) {
+                const p = state.payer;
+                html += '<tr class="payer">' +
+                    '<td class="focus"></td>' +
+                    '<td class="name">' + esc(p.name) + '</td>' +
+                    resBar('magicka', p.magicka) + resBar('stamina', p.stamina) +
+                    '<td class="barcell"></td><td class="lock"></td>' +
+                    '</tr>';
+            }
             // Stage row on top, in the enjoyment bar column.
             const count = Number(state.stages) || 0, stage = Number(state.stage) || 0;
             if (html && count > 0) {

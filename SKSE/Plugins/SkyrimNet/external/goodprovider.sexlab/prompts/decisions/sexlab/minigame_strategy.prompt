@@ -6,7 +6,7 @@
 
    Context pushed by the game (C++ snapshot): trigger (scene_start | dialogue | asked | ordered | punished),
    focus_uuid, focus_name, last_line_text (the ask / order narration, the spoken line, or for a punishment
-   "<act>. <feeling>, because <reason>." plus "It's too much, <focus> can't resist anymore!" above 80% torture),
+   "<act>. <feeling>, because <reason>."; above 80% torture the game makes the focus submit without asking),
    role, arousal, orgasms, expects_orgasm, timeline [lines, oldest first: speech, thoughts, narrations and other
    events of the focus actor, narration inside speech on its own line], partners [uuid, name, is_player, role,
    arousal, orgasms, relationship, relationship_rank], options [key, text], current_key (the options key in use,

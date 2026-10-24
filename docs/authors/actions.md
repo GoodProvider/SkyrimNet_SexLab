@@ -116,19 +116,19 @@ NPC Stop: **Allow NPCs to stop a scene** (`sexlab.actions.npc_stop_allowed`, def
 
 ## Mini-game actions
 
-`SexLab_Arouse` / `SexLab_Calm` (`speaker` + dynamic `target`, eligible while the speaker is in `SexLabAnimatingFaction`) call `SkyrimNet_SexLab_Actions.MiniGame_Arouse` / `MiniGame_Calm`. Those call the same OrgasmEngine code as the HUD keys, with `mult = sexlab.minigame.llm_multiplier`. They work in NPC-only scenes, and `SkyrimNet_SexLab_MCM.ApplyMiniGameActions` unregisters them while the mini-game is off. See [../developers/orgasm-engine.md](../developers/orgasm-engine.md).
+There are no Arouse / Calm LLM actions. `SexLab_Arouse` / `SexLab_Calm` were removed because the dialogue LLM's moves fought the strategy the decision model had picked. An NPC's enjoyment moves only through its strategy presses. `SkyrimNet_SexLab_MCM.ApplyMiniGameActions` unregisters `SexLab_Aid` while the mini-game is off. See [../developers/orgasm-engine.md](../developers/orgasm-engine.md).
 
-**NPC strategies** are not actions. SkyrimNet's decision model picks them (`StrategyDecision.cpp`, template `prompts/decisions/sexlab/minigame_strategy.prompt`): every NPC at scene start, and the speaker after each line an NPC in the scene speaks. See [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions). Ask / Order (HUD panel, Papyrus `OrgasmEngine.AskOrder`) and Punish (HUD panel or `SexLab_Scene_Punish`) narrate first, then ask the target NPC's decision (triggers `asked` / `ordered` / `punished`, the narration is its `last_line`), then narrate its answer ("Nina agrees to|refuses Bob's request to …"). `SexLab_Arouse` / `SexLab_Calm` are unregistered in Together mode.
+**NPC strategies** are not actions. SkyrimNet's decision model picks them (`StrategyDecision.cpp`, template `prompts/decisions/sexlab/minigame_strategy.prompt`): every NPC at scene start, and the speaker after each line an NPC in the scene speaks. See [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions). Ask / Order (HUD panel, Papyrus `OrgasmEngine.AskOrder`) and Punish (HUD panel or `SexLab_Scene_Punish`) narrate first, then ask the target NPC's decision (triggers `asked` / `ordered` / `punished`, the narration is its `last_line`), then narrate its answer ("Nina agrees to|refuses Bob's request to …").
 
 ### Aid and Punish (mirror the HUD Aid / Punish keys)
 
 | Action | Papyrus | Parameters | Eligible when (StorageUtil int on the speaker) |
 |--------|---------|------------|------------------------------------------------|
-| `SexLab_Aid` | `Actions.LLM_Aid` | `speaker`, `target` (can be the speaker), `kind` (`heal` / `stamina`) | `skyrimnet_sexlab_can_aid`: an affordable healing / stamina spell or such a potion |
+| `SexLab_Aid` | `Actions.LLM_Aid` | `speaker`, `target` (can be the speaker), `kind` (`heal` / `stamina`) | `skyrimnet_sexlab_can_aid`: an affordable healing / stamina spell or such a potion, food, drink or ingredient |
 | `SexLab_Scene_Punish` | `Actions.LLM_Punish` | `speaker`, `target` (anyone else in the scene, the player included), `method`, `part`, `reason` | `skyrimnet_sexlab_can_punish`: in a managed scene with someone else in it |
 
 - `OrgasmEngine.ActionKeys_Refresh` sets both keys per position from `Scene.Engine_BeginScene` (natives `HasAidOptions` / `CanPunish`). `LLM_Aid` refreshes them after a use, because potions run out. `ActionKeys_Clear` runs at scene end.
-- **Aid:** native `OrgasmEngine.Aid` picks the speaker's strongest affordable spell for `kind`, otherwise its strongest potion (`Aid.cpp`). A spell costs its magicka; a potion is consumed.
+- **Aid:** native `OrgasmEngine.Aid` picks the speaker's strongest affordable spell for `kind`, otherwise its strongest potion, food or ingredient (`Aid.cpp`). A spell costs its magicka; a potion / food is consumed.
 - **Punish:** native `OrgasmEngine.Punish`, the same engine path as the HUD Punish key: "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to …" `method` is `slap` / `pinch` / `punch` / `pull`, a Novice / Apprentice Damage Health spell the speaker knows (a non-lethal hit of the spell's smallest magnitude, no real cast; "by hitting Nina's ass with Sparks"), or a free phrase ("biting"). `part` names where ("body": none); an empty `reason` drops ", because …". No strategy or forced state is set. The narration's source is the speaker and its target the punished actor, so SkyrimNet picks the target to answer, and that line runs the normal strategy decision.
 - The name is `SexLab_Scene_Punish` because `Sexlab_Punish` is already the out-of-scene spanking / whipping category action.
 - Papyrus still checks that speaker and target share the scene and differ.
@@ -143,8 +143,8 @@ NPC Stop: **Allow NPCs to stop a scene** (`sexlab.actions.npc_stop_allowed`, def
 - **Aggressor only.** YAML can only check the faction, so Papyrus enforces the rest. Nothing happens unless all of these hold:
   - speaker and target are in the same scene,
   - the speaker is not a victim,
-  - the target is a victim,
-  - the target is not the player.
+  - the target is a victim (the player included),
+  - the target is not the speaker.
 - **Deny:** `deny_orgasm` 1 and `deny_by` = the speaker. The narration is the event `"<speaker> forbids <target> from orgasming without permission."`, because the NPC's own line already says it.
 - **Allow:** every actor is checked at once (`OrgasmEngine.AllowOrgasm`).
   - If anyone orgasms, the one orgasm DN starts `"<speaker> allowed <target> to orgasm. "`.

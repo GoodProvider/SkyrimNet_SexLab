@@ -1,5 +1,16 @@
 # Knowledgebase
 
+## Dialogue LLM and decision model at cross purposes (2026-10-24, removed)
+
+- **Symptom:** Jev picked an NPC's strategy, and the dialogue LLM fired `SexLab_Arouse` / `SexLab_Calm` (×3) the other way.
+- **Fix / rule:** the decision model is the only AI that moves mini-game enjoyment. The two YAMLs and `llm_multiplier` were removed. Do not add LLM actions that move enjoyment or pick a strategy.
+
+## Take control muted the NPC's AI (2026-10-24, fixed, untested in game)
+
+- **Symptom:** after take control of Skadi (solo scene, `SetPlayerDriven 0xfe04c83c true`), Ask / Order listed no strategies. Her stamina never moved, even after she agreed to `selfish`. The Punish panel had no "Skadi appears to …" reason, and the Ask / Order / Punish cell looked disabled.
+- **Cause:** `AiDriven` was `!playerDriven` for NPCs, so every strategy gate (presses, decisions, request list, punish reason) skipped the controlled NPC. The HUD punish cell asked `GetPunishInfo(acting NPC)`, which has no target in a solo scene.
+- **Fix / rule:** the player joining a scene is not the player replacing the NPC. `AiDriven` is always true for NPCs, and `playerDriven` only marks the HUD anchor (`PunisherScene`, `PlayerScene`). The punish cell uses `GetPunishInfo(player)`. A first attempt (`Decides(st, request)`: answers stored, played after hand-back) was dropped because the user expects the NPC to keep playing.
+
 ## Punished slave never changed strategy; timeline always empty (2026-10-24, fixed, untested in game)
 
 - **Symptom:** Bob punished DOM slave Skadi twice "because Skadi appears to be resisting giving Bob pleasure …"; each `trigger=punished` decision kept `deny_p2` (p=0.80). Only an order changed it. SkyrimNet.log: `Set context var 'timeline' = []` in all 38 strategy decisions.
@@ -138,7 +149,7 @@
 
 - **Visual cast:** the amounts below stay direct, but `Aid::PlaySpellVisuals` (main thread, after the restore or hit) plays each effect's `castingArt` on the caster (`ApplyArtObject`; spells only), `effectShader` and `hitEffectArt` on the target, and its `kRelease` (caster) / `kHit` (target) `effectSounds` via `BSAudioManager::GetSoundHandle`. They last 3 s for a concentration spell and 2 s otherwise. Nothing is engine-cast, so a self-delivery heal (Healing) visibly lands on another actor, and an attack spell starts no combat. Log line: `Aid: visuals '<spell>' ... art N shaders N sounds N`.
 
-- **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so no engine cast plays (see Visual cast).
+- **Concentration spells:** `CastSpellImmediate` on a concentration spell (Healing, Healing Hands) applies roughly one tick. A self-delivery spell aimed at someone else is also unreliable. `Aid::Apply` therefore restores Health / Stamina directly (`RestoreActorValue`, magnitude × duration, a concentration spell counting as 3 s) and spends `CalculateMagickaCost` × the same seconds. Potions are removed from the caster and restored the same way, so no engine cast plays (see Visual cast). Food, drink and ingredients are Aid "potions" too (`Option::food`); an ingredient counts all its Restore Health / Stamina effects, not only the first as when eaten.
 - **Weak Force spells:** a real hostile cast would start combat or add a bounty, and could kill. Force applies the smallest Damage Health magnitude as `DamageActorValue`, capped at health − 1 (`Aid::QueueWeakSpellHit`).
 - **Eligibility keys go stale:** `skyrimnet_sexlab_can_aid` is set at `Engine_BeginScene`, so a potion used up mid-scene must refresh it (`LLM_Aid` waits 0.5 s for the game-thread removal, then `ActionKeys_Refresh`). The player's own Aid key (Num Enter) use does not refresh it, because actions never run for the player.
 
@@ -1379,6 +1390,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Papyrus dispatch arity:** C++ always passes all three `Hud_OnKey(control, focus, anchor)` arguments (`None` actors when unused) rather than relying on Papyrus default parameters through `DispatchMethodCall`.
 - **No TransformNarration in SkyrimNet:** the player's auto-play "speak" HUD key used `SkyrimNetApi.TransformDialogue("<player> replies")`; that call was removed, so the key is now a no-op in Papyrus (`Hud_OnKey`). `TriggerPlayerDialogue()` is the alternative if a spoken line is wanted again.
 - **Decision keys must be safe ids:** spell names have spaces, so Force methods go out as `spell_<n>` and map back to the name. Aid / Force / deny options are `aid_<n>`, `force_<n>`, `deny_p<slot>`.
+- **Player is the doer while controlling:** HUD arouse / calm / deny / ask / order / punish / aid act as the player and charge the player (stamina / magicka), never the driven NPC; the NPC is only the scene context. The untracked player reaches that scene through `PunisherScene`'s `playerDriven` fallback, and gets skill 0 / base cost in `ArouseLocked` / `CalmLocked`.
 - **Sticky auto play:** `g_autoPlaySticky` (co-save v8) re-enables the player's `autoPlay` in later scenes until Num * turns it off. Per-scene `autoPlay` / `playerDriven` are not saved; `playerDriven` ends with the scene. `Hud::Reset` clears the anchor.
 - Untested in game: the whole feature, `GetKeyNameTextA` giving "Num *" for DX 0x37, whether conditional `[ question ]` blocks (`{% if %}`) render in the decision template, and how often Jev answers `speak` yes or presses a key.
 
@@ -1430,4 +1442,4 @@ The Punish panel lands Injury Engine hits through `External_TortureText`, which 
 
 ## Punished decision line ≠ punishment narration (2026-10-24)
 
-The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feeling>, because <reason>."`, painful part first, reason last), not the narrated `plan.line` (`"<act>, because <reason>. <feeling>"`). `ContinuePunish` then calls `InjuryEngine::PartPoints`: above 80% of the target's total torture points it adds `"It's too much, <target> can't resist anymore!"`. On the older Injury Engine path (no `External_TortureText`, hit through `External_Damage`) the points may lag one hit behind. Without `External_PartPoints` there is no cue and the decision goes out right away.
+The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feeling>, because <reason>."`, painful part first, reason last), not the narrated `plan.line` (`"<act>, because <reason>. <feeling>"`). `ContinuePunish` then calls `InjuryEngine::PartPoints`: above 80% of the target's total torture points it sends no decision: `Submit` narrates `"<target> can't take it any more and submits!"` and sets the punished request's strategy, else the newest refused order (then request) in `reasons`, else selfless (2+ actors) / selfish (solo), and clears that request's reasons. A punished / ordered decision already in flight can still land after it (`generation` changes only with the roster). On the older Injury Engine path (no `External_TortureText`, hit through `External_Damage`) the points may lag one hit behind. Without `External_PartPoints` there is no cue and the decision goes out right away.

@@ -2,6 +2,11 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## Unreleased
+
+### Aid
+- Food, drink and ingredients that restore health or stamina can be used as Aid, like potions.
+
 ## 0.36.5
 
 ### WebUI

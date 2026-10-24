@@ -181,17 +181,16 @@ Function ApplyRapeActions()
     Trace("ApplyRapeActions", "unregistered rape LLM actions")
 EndFunction
 
-; Orgasm mini-game LLM actions (arouse / calm / aid / force) exist only in the Multi-Orgasm
+; Orgasm mini-game LLM actions (aid) exist only in the Multi-Orgasm
 ; Mini-game mode (sexlab.enjoyment.mode). Switching back to it needs a save + reload for the actions.
 bool minigame_actions_unregistered = False
 
 String[] Function MiniGameActionNames()
     ; NPC strategies come from the decision model (StrategyDecision), not LLM actions.
+    ; SexLab_Arouse / SexLab_Calm were removed: they fought the decision model's strategy.
     ; SexLab_Scene_Punish is not here: it needs no mini-game and works in any managed scene.
-    String[] names = new String[3]
-    names[0] = "SexLab_Arouse"
-    names[1] = "SexLab_Calm"
-    names[2] = "SexLab_Aid"
+    String[] names = new String[1]
+    names[0] = "SexLab_Aid"
     return names
 EndFunction
 

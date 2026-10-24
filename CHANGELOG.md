@@ -2,13 +2,27 @@
 
 ## Unreleased
 
+### Aid with food and drink
+- **Any food, drink or ingredient that restores health or stamina can be used as Aid**, the same as a potion (soups, stews, cheese, mead, Histcarp, Purple Mountain Flower…). "Nina consumes Bob's Vegetable Soup."
+
 ### Prompts
 - **Scene data in prompts is now live**: every SkyrimNet_SexLab decorator runs in the SKSE plugin instead of Papyrus. Prompts no longer miss the scene at its start or while a menu has the game paused, and building them no longer costs Papyrus time.
 - **Cum on actors is kept by the SKSE plugin** (saved with the game). Cum recorded before this update is not carried over.
 - Removed unused decorators `sexlab_intent`, `sexlab_get_player_los_distance` and `sexlab_ostim_player`. New decorators `sexlab_has_cum`, `sexlab_cum_count` and `sexlab_has_stripped_items`.
 
+### Controlling a scene you aren't in
+- **You act, not the NPC you control**: after taking control of an NPC (Num \*), Arouse, Calm, Deny, Ask, Order, Punish and Aid are your own actions, and the narration names you ("Bob arouses Nina…", "Bob punishes Nina by…"). Arouse costs your stamina and Calm your magicka; the HUD shows your bars under the scene's actors.
+- **Aid works while controlling**: Num Enter opens the Aid panel with you as caster, for any actor in that scene.
+- **The NPC you control keeps playing**: taking control no longer stops the NPC's own strategy. It keeps pressing (its stamina and magicka bars move), decides as usual, and answers Ask and Order, which now list its strategies. An agreed strategy starts right away. The Punish panel offers its current strategy as a reason ("Skadi appears to …").
+- **Ask / Order / Punish key enabled in a solo scene you control**: the key looked disabled because nobody else was in the scene. You are the punisher, so the NPC is a valid target.
+
 ### Fixes
+- **A punishment's strategy change sticks**: an NPC punished into a new strategy (e.g. passive → selfish) no longer switches back seconds later because of their own reaction dialogue. The new strategy holds for 30 s unless another punishment or order changes it.
+- **Punishment narration says what the punished actor chose**: "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to … Nina chooses to focus on her own pleasure." The line is narrated once SkyrimNet's decision model has answered. New `choice` wording per strategy in `strategies.json`.
+- **NPC aggressors can deny your orgasm**: an NPC's Deny Orgasm (and Allow Orgasm) was silently refused when the victim was you, so the 🔒 never appeared on the HUD. It now applies to you like any other victim.
+- **NPCs no longer argue with themselves in the mini-game**: the LLM actions Arouse and Calm are removed. NPCs used them in dialogue and pulled against the strategy SkyrimNet's decision model had picked (Selfish, Mutual, Passive …). Strategy presses now decide alone how an NPC arouses or calms. The setting **LLM mini-game strength** is removed.
 - **NPCs never ran out of stamina** in the mini-game: one move every 2 s cost less than Skyrim regenerates, so an NPC on Selfish (or any other strategy) stayed at full. NPCs now play like someone at the mouse. Every second they make a rapid burst of 5 to 10 presses, 0.1 s apart, each paid like yours (stamina to arouse, magicka to calm). When they can't pay, they catch their breath for 2 s and start again. Passive and Non-sexual still make no presses. The setting **NPC strategy step interval** is removed.
+- **Tortured past 80% (Injury Engine), the punished actor gives in**: no AI choice, "Skadi can't take it any more and submits!" is narrated and they take the strategy they were last ordered (or asked) to. With no order: Selfless, or Selfish when alone in the scene.
 - **Punished NPCs never learned from it**: in mini-game scenes, an NPC's strategy choice never saw what had happened in the scene, so every punishment looked like the first. It now sees recent speech and events, and is told which behaviour it is being punished for, so repeated punishment can wear it down.
 - **Three strategies had no description** for the AI ("deny self", "deny all", "focus"): fixed.
 - **Clean Cum, Dress and Undress were never offered to NPCs**: their gates called decorators SkyrimNet rejects. They now work. Undress state from before this update is picked up the next time the target menu opens on that actor.

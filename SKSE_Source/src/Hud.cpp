@@ -202,8 +202,8 @@ namespace Hud
             return g_sceneActors[next];
         }
 
-        // Arouse / calm the focus actor; with Shift held, the next actor instead (focus unchanged). The acting
-        // actor (the player, or the NPC the player took control of) pays.
+        // Arouse / calm the focus actor; with Shift held, the next actor instead (focus unchanged). The player does
+        // it and pays, also while controlling an NPC in a scene they aren't in.
         void OnArouseOrCalm(bool arouse)
         {
             RE::Actor* source = nullptr;
@@ -211,7 +211,7 @@ namespace Hud
             {
                 const bool shift = ShiftHeld();
                 std::lock_guard lock(g_lock);
-                source = ActingLocked();
+                source = RE::PlayerCharacter::GetSingleton();
                 target = ActorFor(shift ? ShiftTargetLocked() : g_focus);
             }
             if (!source || !target) {
@@ -354,9 +354,10 @@ namespace Hud
         // for (strategy order phrases), its punishment reasons (held ones, then an AI actor's current strategy) and
         // its first times this scene (firstTimes: "pussy" / "ass", Lover's Ledger).
         // The panel replies through WebUI onPunishResult.
+        // While controlling an NPC the player is the default subject and every actor of that scene is listed after.
         void OnPunish()
         {
-            RE::Actor* acting = Acting();
+            RE::Actor* acting = RE::PlayerCharacter::GetSingleton();
             std::vector<OrgasmEngine::PunishTarget> others;
             if (!acting || !OrgasmEngine::GetPunishInfo(acting, others) || others.empty()) {
                 webui_log::info("Hud: punish ignored (not in a managed scene / alone)");
@@ -391,18 +392,13 @@ namespace Hud
         // Aid key (mini-game): the Aid panel, solo in the WebUI. Every scene actor (player first) can be the subject
         // (default: the player) or the object; each brings its own healing / stamina spells and potions. The panel
         // replies through WebUI onAidResult.
-        // The player's own scene only (not while controlling an NPC).
+        // While controlling an NPC: the player (caster, not in the scene) and the actors of the controlled scene.
         void OnAid()
         {
-            {
-                std::lock_guard lock(g_lock);
-                if (g_anchor != 0) {
-                    return;
-                }
-            }
+            RE::Actor* acting = Acting();
             auto* player = RE::PlayerCharacter::GetSingleton();
             std::vector<OrgasmEngine::ActorView> actors;
-            if (!player || !OrgasmEngine::GetPlayerScene(actors)) {
+            if (!player || !acting || !OrgasmEngine::GetActorScene(acting, actors)) {
                 return;
             }
             const auto options = Aid::ListOptions(player);
@@ -485,7 +481,7 @@ namespace Hud
             return ref ? ref->As<RE::Actor>() : nullptr;
         }
 
-        // Stops driving the NPC the player took control of; the engine plays its strategy again.
+        // Lets go of the NPC the player took control of (its strategy played all along).
         void ReleaseControl()
         {
             RE::FormID anchor = 0;
@@ -917,19 +913,20 @@ namespace Hud
             keys["skyrimnet"] = DxLabel(kSkyrimNetDx);
             j["keys"] = std::move(keys);
         }
-        // Punish cell: always shown, greyed out when nobody else is in the scene.
+        // Punish cell: always shown, greyed out when nobody else is in the scene. The player punishes (as OnPunish),
+        // also while controlling an NPC: every actor of that scene is a target, so a solo scene is enabled too.
         {
             std::vector<OrgasmEngine::PunishTarget> targets;
-            const bool punishScene = OrgasmEngine::GetPunishInfo(acting, targets);
+            const bool punishScene = OrgasmEngine::GetPunishInfo(player, targets);
             j["punish"] = { { "show", true }, { "enabled", punishScene && !targets.empty() } };
         }
-        // Aid cell (mini-game, the player's own scene): greyed out without an affordable healing / stamina spell or
+        // Aid cell (mini-game; also while controlling an NPC, the player casts): greyed out without an affordable healing / stamina spell or
         // a potion.
         {
             bool miniGame = false;
             {
                 std::lock_guard lock(g_lock);
-                miniGame = g_miniGame && !controlling;
+                miniGame = g_miniGame;
             }
             if (miniGame && (g_aidCheckedAt < 0.0 || Now() - g_aidCheckedAt >= kAidCheckInterval)) {
                 g_aidEnabled = Aid::HasOptions(player);
@@ -960,7 +957,14 @@ namespace Hud
         j["faster"] = speedLevel >= 0 && speedLevel + 1 < OrgasmEngine::kSpeedLevelCount
                           ? OrgasmEngine::kSpeedLevelNames[speedLevel + 1]
                           : "";
-        j["blocked"] = { { "arouse", !OrgasmEngine::CanArouse(acting) }, { "calm", !OrgasmEngine::CanCalm(acting) } };
+        // The player pays arouse / calm, also while controlling an NPC (payer: the player's bars, not a scene row).
+        j["blocked"] = { { "arouse", !OrgasmEngine::CanArouse(player) }, { "calm", !OrgasmEngine::CanCalm(player) } };
+        if (controlling) {
+            float magicka = 0.0f, stamina = 0.0f;
+            OrgasmEngine::GetResourcePct(player, magicka, stamina);
+            j["payer"] = { { "name", NameOf(player) }, { "magicka", static_cast<int>(magicka + 0.5f) },
+                { "stamina", static_cast<int>(stamina + 0.5f) } };
+        }
 
         const std::string payload = j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         {

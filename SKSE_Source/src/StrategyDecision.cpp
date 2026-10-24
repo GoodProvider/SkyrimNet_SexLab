@@ -87,6 +87,18 @@ namespace StrategyDecision
         };
         std::unordered_map<RE::FormID, Pending> g_pending;
 
+        // Game thread. A strategy changed by a punished / ordered / asked decision holds against dialogue
+        // decisions until this time (Seconds()), so the NPC's own reaction line can't undo it at once.
+        constexpr double kHoldSeconds = 30.0;
+        std::unordered_map<RE::FormID, double> g_holdUntil;
+
+        double Seconds()
+        {
+            using namespace std::chrono;
+            static const auto start = steady_clock::now();
+            return duration<double>(steady_clock::now() - start).count();
+        }
+
         bool ApiReady()
         {
             return SexLabNet::CrossDllStdStringSafe() && PublicGetVersion && PublicGetVersion() >= kMinApiVersion &&
@@ -324,8 +336,8 @@ namespace StrategyDecision
         }
 
         // Game thread. The decision for `id` arrived (or failed).
-        void OnAnswer(RE::FormID id, std::shared_ptr<OrgasmEngine::DecisionInput> in, int success,
-            const std::string& answer, const std::string& json)
+        void OnAnswer(RE::FormID id, std::shared_ptr<OrgasmEngine::DecisionInput> in, const std::string& sentTrigger,
+            int success, const std::string& answer, const std::string& json)
         {
             using R = OrgasmEngine::DecisionResult;
             Pending& p = g_pending[id];
@@ -352,8 +364,21 @@ namespace StrategyDecision
                 confidence = a.value("confidence", -1.0);
             } catch (...) {
             }
-            const R result = ApplyStrategyAnswer(id, *in, key, confidence);
-            webui_log::info("StrategyDecision: {:#x} answer {} p={:.2f} ({})", id, key, confidence, ResultText(result));
+            const auto hold = g_holdUntil.find(id);
+            const double holdLeft = hold != g_holdUntil.end() ? hold->second - Seconds() : 0.0;
+            R result;
+            if (sentTrigger == "dialogue" && holdLeft > 0.0 && key != in->currentKey) {
+                result = R::kKept;
+                webui_log::info("StrategyDecision: {:#x} answer {} p={:.2f} (held after punished/ordered, {:.0f}s left)",
+                    id, key, confidence, holdLeft);
+            } else {
+                result = ApplyStrategyAnswer(id, *in, key, confidence);
+                if (result == R::kChanged && sentTrigger != "dialogue") {
+                    g_holdUntil[id] = Seconds() + kHoldSeconds;
+                }
+                webui_log::info("StrategyDecision: {:#x} answer {} p={:.2f} ({})", id, key, confidence,
+                    ResultText(result));
+            }
             if (p.dirty) {
                 p.dirty = false;
                 const std::string trigger = p.trigger;
@@ -412,13 +437,14 @@ namespace StrategyDecision
             p.inFlight = true;
             p.active = std::move(done);
             const bool queued = PublicSendCustomDecisionToLLM(kTemplate, ctx.c_str(), kMaxProbabilities,
-                [id, in](const char* answer, const char* resultJson, int success) {
+                [id, in, trigger](const char* answer, const char* resultJson, int success) {
                     // SkyrimNet ThreadPool: copy, then do the work on the game thread.
                     std::string a = answer ? answer : "";
                     std::string j = resultJson ? resultJson : "";
-                    SKSE::GetTaskInterface()->AddTask([id, in, success, a = std::move(a), j = std::move(j)]() {
-                        OnAnswer(id, in, success, a, j);
-                    });
+                    SKSE::GetTaskInterface()->AddTask(
+                        [id, in, trigger, success, a = std::move(a), j = std::move(j)]() {
+                            OnAnswer(id, in, trigger, success, a, j);
+                        });
                 });
             if (!queued) {
                 webui_log::warn("StrategyDecision: {:#x} request not queued", id);
@@ -434,13 +460,6 @@ namespace StrategyDecision
         }
 
         // ---- Auto play: the player's turn ----
-
-        double Seconds()
-        {
-            using namespace std::chrono;
-            static const auto start = steady_clock::now();
-            return duration<double>(steady_clock::now() - start).count();
-        }
 
         struct AidChoice
         {
@@ -848,6 +867,7 @@ namespace StrategyDecision
     void Reset()
     {
         g_pending.clear();
+        g_holdUntil.clear();
         g_turn = PlayerTurn{};
         g_noRoute = false;
         g_noRouteWarned = false;

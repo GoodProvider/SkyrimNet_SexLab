@@ -120,48 +120,6 @@
       "file": "SexLab_AllowOrgasm.yaml"
     },
     {
-      "name": "SexLab_Arouse",
-      "label": "Arouse",
-      "customCategory": "",
-      "questEditorId": "SkyrimNet_SexLab",
-      "scriptName": "SkyrimNet_SexLab_Actions",
-      "executionFunctionName": "MiniGame_Arouse",
-      "parameterMapping": [
-        {
-          "type": "speaker",
-          "name": "speaker",
-          "description": "Speaker Actor parameter (triggering entity)"
-        },
-        {
-          "type": "dynamic",
-          "name": "target",
-          "description": "Actor being aroused (can be speaker)"
-        }
-      ],
-      "file": "SexLab_Arouse.yaml"
-    },
-    {
-      "name": "SexLab_Calm",
-      "label": "Calm",
-      "customCategory": "",
-      "questEditorId": "SkyrimNet_SexLab",
-      "scriptName": "SkyrimNet_SexLab_Actions",
-      "executionFunctionName": "MiniGame_Calm",
-      "parameterMapping": [
-        {
-          "type": "speaker",
-          "name": "speaker",
-          "description": "Speaker Actor parameter (triggering entity)"
-        },
-        {
-          "type": "dynamic",
-          "name": "target",
-          "description": "Actor being calmed (can be speaker)"
-        }
-      ],
-      "file": "SexLab_Calm.yaml"
-    },
-    {
       "name": "SexLab_Change_Style",
       "label": "Change Style",
       "customCategory": "",

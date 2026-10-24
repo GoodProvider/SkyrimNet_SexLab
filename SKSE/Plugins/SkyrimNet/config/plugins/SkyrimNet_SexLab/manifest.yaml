@@ -860,15 +860,6 @@ schema:
       defaultValue: "Passive"
       category: "Mini-game"
 
-    - name: "LLM mini-game strength"
-      path: "sexlab.minigame.llm_multiplier"
-      type: "float"
-      description: "Multiplier for the SexLab_Arouse / SexLab_Calm LLM actions (stronger than one key press)."
-      min: 0.1
-      max: 10
-      defaultValue: 3
-      category: "Mini-game"
-
     - name: "Verbose logging"
       path: "sexlab.debug.verbose"
       type: "bool"

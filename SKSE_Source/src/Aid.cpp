@@ -235,6 +235,12 @@ namespace Aid
             return o.health > 0.0f ? "healing" : "stamina";
         }
 
+        // "stamina potion" / "Vegetable Soup" (food and ingredients go by their own name).
+        std::string ItemOf(const Option& o)
+        {
+            return o.food ? o.name : PotionKindOf(o) + " potion";
+        }
+
         // "Lydia's" / "his own" (owner is the giver).
         std::string Possessive(RE::Actor* owner, RE::Actor* giver)
         {
@@ -275,13 +281,13 @@ namespace Aid
             bool& split)
         {
             split = false;
-            const std::string kind = PotionKindOf(o);
+            const std::string verb = o.food ? " consumes " : " drinks ";
             if (part == "drink") {
-                return giver == receiver ? ActorName(giver) + " drinks a " + o.name + "."
-                                         : ActorName(receiver) + " drinks " + ActorName(giver) + "'s " + kind + " potion.";
+                return giver == receiver ? ActorName(giver) + verb + "a " + o.name + "."
+                                         : ActorName(receiver) + verb + ActorName(giver) + "'s " + ItemOf(o) + ".";
             }
             const std::string who = ActorName(giver) + " " + StyleWord(giver);
-            const std::string potion = "the " + kind + " potion";
+            const std::string potion = "the " + ItemOf(o);
             bool vaginal = false;
             bool anal = false;
             bool oral = false;
@@ -312,7 +318,7 @@ namespace Aid
                            Possessive(receiver, giver) + " " + (part == "lips" ? std::string("mouth") : part) + ".";
                 }
             }
-            return who + "pushes " + potion + "'s lip up " + Possessive(receiver, giver) + " " + part + ".";
+            return who + "pushes " + potion + (o.food ? " up " : "'s lip up ") + Possessive(receiver, giver) + " " + part + ".";
         }
 
         const Option* FindPotion(const std::vector<Option>& options, RE::FormID form)
@@ -514,10 +520,15 @@ namespace Aid
             o.affordable = o.cost <= magicka;
             spells.push_back(std::move(o));
         }
-        const auto inv = caster->GetInventory([](RE::TESBoundObject& o) { return o.Is(RE::FormType::AlchemyItem); });
+        // Potions, food / drink and raw ingredients (all MagicItems); poisons stay out.
+        const auto inv = caster->GetInventory([](RE::TESBoundObject& o) {
+            return o.Is(RE::FormType::AlchemyItem) || o.Is(RE::FormType::Ingredient);
+        });
         for (const auto& [obj, data] : inv) {
-            auto* potion = obj ? obj->As<RE::AlchemyItem>() : nullptr;
-            if (!potion || data.first <= 0 || potion->IsFood() || potion->IsPoison()) {
+            auto* alchemy = obj ? obj->As<RE::AlchemyItem>() : nullptr;
+            auto* ingredient = obj ? obj->As<RE::IngredientItem>() : nullptr;
+            const RE::MagicItem* potion = alchemy ? static_cast<RE::MagicItem*>(alchemy) : ingredient;
+            if (!potion || data.first <= 0 || (alchemy && alchemy->IsPoison())) {
                 continue;
             }
             Option o;
@@ -528,6 +539,7 @@ namespace Aid
             o.form = potion->GetFormID();
             o.name = NameOf(potion);
             o.potion = true;
+            o.food = ingredient || alchemy->IsFood();
             o.count = data.first;
             potions.push_back(std::move(o));
         }
@@ -607,7 +619,7 @@ namespace Aid
                 return;
             }
             if (o.potion) {
-                auto* potion = RE::TESForm::LookupByID<RE::AlchemyItem>(o.form);
+                auto* potion = RE::TESForm::LookupByID<RE::TESBoundObject>(o.form);
                 if (!potion) {
                     return;
                 }
@@ -660,7 +672,8 @@ namespace Aid
         if (!caster || !target || !PotionInfo(caster, form, name, kind)) {
             return "";
         }
-        return ActorName(target) + " refused " + ActorName(caster) + "'s " + kind + " potion";
+        const auto options = ListOptions(caster);
+        return ActorName(target) + " refused " + ActorName(caster) + "'s " + ItemOf(*FindPotion(options, form));
     }
 
     std::string StartChannel(RE::Actor* caster, RE::Actor* target, RE::FormID form, const std::string& location,
