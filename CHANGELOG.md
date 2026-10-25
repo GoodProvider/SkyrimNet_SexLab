@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5) — since [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4)
+## [0.36.6](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6) — since [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5)
 
 ### Aid
 - **Any food, drink or ingredient that restores health or stamina can be used as Aid**, the same as a potion (soups, stews, cheese, mead, Histcarp, Purple Mountain Flower…). "Nina consumes Bob's Vegetable Soup."
@@ -54,14 +54,16 @@
 - Fixed: **Clean Cum, Dress and Undress were never offered to NPCs**: their gates called decorators SkyrimNet rejects. They now work. Undress state from before this update is picked up the next time the target menu opens on that actor.
 - Fixed: **animation descriptions with broken name tokens** (`{{sla.ctors.0}}` and similar) showed raw braces in prompts: FB_LoversDoggy, 4uDIK Reverse Cowgirl, B_B_FMast2, b_b_kneff, B_B_LayAnal, B_B_LFing1 and MNCleitoCaninencboundmfc.
 
-### WebUI
-- Fixed: **lock-up when a scene request came in with the SkyrimNet dashboard open**: our dialogue took focus from the dashboard (both PrismaUI views at order 101). After Accept, no view had focus and the game stayed paused, with no cursor, Escape, console or menus. Now the dashboard and any other focused PrismaUI view are closed before the dialogue opens, and the dialogue never takes focus from another view. If a view will not let go, it shows "SexLab: request waiting - close the open menu" and opens once it does. Show / Hide log PrismaUI focus state.
-
 ### Profiling
 - **WebUI Profile main panel** (`webui/MainPanels/1100_profile.json`) drives a run: Start Calibration → Start Profiling → Stop Profiling. Backed by `SKSE_Source/src/Profiler.cpp` (span recorder, `SNSL_PROF` timers, `[Profiler] run:` markers) and `python_scripts/profile_report.py` (`ingest`, `report`, `compare`). See `docs/developers/webui.md`.
 
 ### Build
 - `KNOWLEDGEBASE.md` gains "JsonLowerCaseKeys cannot change case". The SKSE DLL and `.pex` files are rebuilt.
+
+## [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5) — since [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4)
+
+### WebUI
+- **Lock-up when a scene request came in with the SkyrimNet dashboard open**: our dialogue took focus from the dashboard (both PrismaUI views at order 101). After Accept, no view had focus and the game stayed paused, with no cursor, Escape, console or menus. Now the dashboard and any other focused PrismaUI view are closed before the dialogue opens, and the dialogue never takes focus from another view. If a view will not let go, it shows "SexLab: request waiting - close the open menu" and opens once it does. Show / Hide log PrismaUI focus state.
 
 ## [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4) — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
 

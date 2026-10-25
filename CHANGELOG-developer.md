@@ -1,8 +1,8 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## 0.36.5
+## 0.36.6
 
 ### Aid
 - Aid takes any food, drink or ingredient that restores health or stamina
@@ -32,11 +32,13 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 ### Bug Fixes
 - Fixed: NPCs could not deny your orgasm, Clean Cum / Dress / Undress were never offered, and the afterglow template was never used
 
-### WebUI
-- Fixed: lock-up when a scene request came in with the SkyrimNet dashboard open
-
 ### Profiling
 - New Profile panel and report script for timing Papyrus and SKSE work
+
+## 0.36.5
+
+### WebUI
+- `WebUI_Visibility_Show` closes foreign PrismaUI views first: `ForeignViews()` reads view ids from `PrismaUI.log`; `CloseForeignViews()` toggles the dashboard via `SkyrimNetApi.TriggerToggleDashboard` (only when `DashboardOpen()`) and `Unfocus` + `Hide`s other focused views. A 250 ms watcher then calls `WebUI_ShowNow` once no foreign view has focus (dashboard-hidden wait capped at 3 s; "SexLab: request waiting - close the open menu" if focus is held). Fixes the paused-game lock-up after Accept with the dashboard open.
 
 ## 0.36.4
 

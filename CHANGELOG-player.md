@@ -1,8 +1,8 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
-## 0.36.5
+## 0.36.6
 
 ### Aid
 - Food, drink and ingredients that restore health or stamina can be used as Aid, like potions
@@ -51,9 +51,13 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Fixed: raw `{{sla.ctors.0}}` braces in several animation descriptions
 
 ### WebUI
-- Fixed: lock-up (paused game, no cursor) when a request came in with the SkyrimNet dashboard open
-- The dashboard or any other open menu now closes before the SexLab dialogue
 - Scene Creator: new row above the table (Start by, counts, All / None)
+
+## 0.36.5
+
+### WebUI
+- Fixed a lock-up when a sex request arrived with the SkyrimNet dashboard open
+- The dashboard (or any other focused menu) now closes before the SexLab dialogue opens
 
 ## 0.36.4
 
