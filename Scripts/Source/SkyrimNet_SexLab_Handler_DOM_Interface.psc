@@ -32,8 +32,13 @@ EndFunction
 Function AddArousal(Actor akActor, float delta)
 EndFunction
 
-; 0-100 meter of how close DOM is to an orgasm (>= 50: DOM's values could produce one)
+; 0-100 bar: every non-random term of DOM's orgasm roll summed (the score the roll is compared against)
 float Function OrgasmMeter(Actor akActor)
+    return 0.0
+EndFunction
+
+; 0-1 probability that DOM's next orgasm roll succeeds (random terms averaged; 0 when it cannot)
+float Function OrgasmProbability(Actor akActor)
     return 0.0
 EndFunction
 

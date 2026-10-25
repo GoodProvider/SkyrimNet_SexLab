@@ -32,7 +32,7 @@ float Function FinalStageRemaining(int sid) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native
 Function SetOrgasmExpected(Actor akActor, bool expected) global native
 Function SetDomSlave(Actor akActor, bool dom) global native
-Function SetDomMeter(Actor akActor, float meter) global native
+Function SetDomMeter(Actor akActor, float meter, float chance) global native
 Function SetActorSkills(Actor akActor, int skill, int lewd) global native
 Function EndScene(int sid) global native
 Function ResetSpeedScale(Actor akActor) global native

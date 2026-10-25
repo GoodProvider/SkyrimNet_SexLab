@@ -51,6 +51,9 @@ namespace ActionCatalog
     /// Apply main-panel selection from JS (id or panel key). Closes previous, opens next.
     void SwitchMainPanel(const std::string& key);
 
+    /// Re-run the selected third-party MainPanel's openFunction (ControlPanel target changed).
+    void RefreshForeignMainPanel();
+
     /// Swap ControlPanel mode (built-in sexlab or ControlPanel/*.json). Returns false if unknown/omitted.
     bool SwitchControlMode(const std::string& modeId);
 

@@ -99,7 +99,7 @@ namespace OrgasmEngine
     /// DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync) and DOM decides the orgasm.
     void SetDomSlave(RE::Actor* actor, bool dom);
     /// DOM slave: the 0-100 meter Papyrus computed from DOM's orgasm values (HUD bar + SexLab mirror).
-    void SetDomMeter(RE::Actor* actor, float meter);
+    void SetDomMeter(RE::Actor* actor, float meter, float chance);
     void SetActorSkills(RE::Actor* actor, std::int32_t skill, std::int32_t lewd);
     /// SexLab's starting-enjoyment inputs (sslActorAlias StartAnimating): GetSkillLevels arrays of the actor
     /// and of the partner SexLab bases skills on (empty: unskilled, e.g. creatures), the lowest / highest
@@ -271,7 +271,8 @@ namespace OrgasmEngine
         std::string name;
         float enjoyment = 0.0f;
         bool flashing = false;
-        bool dom = false;  // DOM slave: bar is DOM's orgasm meter, DOM decides
+        bool dom = false;  // DOM slave: bar is DOM's non-random roll score, DOM decides
+        float domChance = 0.0f;  // DOM slave: 0..1 chance its next orgasm roll succeeds (text over the bar)
         bool denied = false;  // player's deny_orgasm (SetSceneBlocked)
         std::string strategy;  // mini-game NPC strategy label ("selfish", "forced"), "" when none
         float magicka = 0.0f;  // 0..100 % of max (calm cost)

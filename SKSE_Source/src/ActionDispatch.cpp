@@ -417,7 +417,7 @@ namespace ActionCatalog
             // TargetMenu scene start: same DD pipeline as JS onAnimDbResolveTags {_form_ids}.
             std::string startTags;
             const bool rewriteTags = tagsIndex >= 0 && tagsIndex < static_cast<int>(captured.size()) &&
-                                     functionName.rfind("StartScene", 0) == 0 && !captured[tagsIndex].str.empty();
+                                     (functionName.rfind("StartScene", 0) == 0 || functionName.rfind("WebUI_StartScene", 0) == 0) && !captured[tagsIndex].str.empty();
             if (rewriteTags) {
                 std::vector<RE::Actor*> cast;
                 for (const auto& c : captured) {

@@ -225,7 +225,7 @@ Goal: with no mini-game, arousal grows by the same total as in a vanilla DOM sce
   - Whatever cannot come off without going below 0 becomes a debt (StorageUtil `skyrimnet_sexlab_dom_debt` on the actor). Later steps pay it first.
   - One-time adds are not cancelled: virginity, first act, same-sex, kink.
   - The engine logs `dom step` lines, and Handler_DOM traces the prepay.
-- **Mini-game:** Arouse and Calm still push at once, as `IncreaseArousal(delta, MOD_SocialBoldness)` or a direct drop in `arousal_factor`.
+- **Mini-game:** Arouse and Calm still push at once. Arouse on an aroused slave (`is_aroused_for > 0`) first raises `is_aroused_for` toward its max (`PRISM_Sensuality × 0.5 + submission × 0.5`, 1 point per tick); the rest goes to `IncreaseArousal(delta, MOD_SocialBoldness)`. Calm is a direct drop in `arousal_factor`.
 - **Step roll after every rise** (`Handler_DOM.StepRoll(actor, hasPlayer, share)`):
   - It runs only when the actor is not blocked (`no_orgasm` / deny / plugin block), not edging and not cooling down.
   - It is a light roll, not `handleSexOrgasm`:
@@ -236,13 +236,11 @@ Goal: with no mini-game, arousal grows by the same total as in a vanilla DOM sce
   - Known bias: DOM's male `×2 + 0.1` and its additive bonuses apply to every step.
 - **DOM's own roll is kept:** DOM makes one full `handleSexOrgasm` from the `OrgasmStart` hook at the final stage, or at `AnimationEnd` if the hook never fired.
 - **Melt:** DOM's "brain melts" notification reaches `Handler_DOM.DOMSlave_Orgasmed`. It calls `NoteExternalOrgasm(slave, "dom")` (count, cooldown, HUD flash, `SkyrimNet_SexLab_Orgasm`), then narrates DOM's text through `OrgasmCustom`.
-- **Bar:** `Handler_DOM.OrgasmMeter` is pushed with `SetDomMeter` after every sync, and the HUD tags the actor "DOM".
-  - Below 50: not aroused yet. The value is `50 × min(arousal_factor, 100)/100`.
-  - 50–100: aroused. The value is `50 + 50 × min(1, chance/0.5)`.
-    - `chance` holds the fixed terms of `IsOrgasmingAfterArousal`, based on the best act modifier (1000 with DOM's separate orgasm on).
-    - The random terms (orgasm control, whipping, promise) are left out.
-  - Refractory: capped at 49.
-- A blocked DOM slave sends `OrgasmDenied` once the bar reaches 50.
+- **Bar:** `Effect_DomSync` pushes `SetDomMeter(actor, OrgasmMeter, OrgasmProbability)` after every sync, and the HUD tags the actor "DOM".
+  - **Fill:** `Handler_DOM.OrgasmMeter` = `100 × clamp(score, 0, 1)`. The score is every non-random term of `IsOrgasmingAfterArousal` (act modifier, orgasm modifier, speed, mood bonus, warnings, first-time bonuses, past orgasms, `arousal_factor` multiplier, submission, love desire), based on the best act modifier (1000 with DOM's separate orgasm on).
+  - **Text over the bar end:** `Handler_DOM.OrgasmProbability`, the chance DOM's roll (`RandomFloat() < chance`) succeeds. It averages the random terms (orgasm control, whipping submissive, rapture oath) over their outcomes. It is 0 when the slave is not aroused (`is_aroused_for <= 0`) or refractory.
+  - `block_orgasm` is a private variable in DOM_Mind, so it is not read.
+- A blocked DOM slave sends `OrgasmDenied` once its chance is above 0.
 - The safety net skips DOM slaves. A forced WebUI request still fires them directly.
 - The `dom` flag, progress, step remainder and prepaid flag are saved in the co-save.
 

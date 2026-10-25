@@ -888,7 +888,8 @@ namespace Hud
                 }
                 rows.push_back({ { "pos", i }, { "name", a.name },
                     { "enjoyment", static_cast<int>(a.enjoyment + 0.5f) }, { "flash", a.flashing },
-                    { "near", a.enjoyment >= 90.0f }, { "dom", a.dom }, { "denied", a.denied }, { "strategy", a.strategy },
+                    { "near", a.dom ? a.domChance >= 0.9f : a.enjoyment >= 90.0f }, { "dom", a.dom },
+                    { "chance", static_cast<int>(a.domChance * 100.0f + 0.5f) }, { "denied", a.denied }, { "strategy", a.strategy },
                     { "magicka", static_cast<int>(a.magicka + 0.5f) },
                     { "stamina", static_cast<int>(a.stamina + 0.5f) } });
             }

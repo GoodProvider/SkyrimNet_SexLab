@@ -39,7 +39,6 @@ namespace OrgasmEngine
         constexpr double kStaleSceneSeconds = 10.0;
         constexpr double kDomSyncInterval = 1.0;
         constexpr double kDomRefresh = 2.0;
-        constexpr float kDomMeterPossible = 50.0f;  // DOM meter >= this: DOM's values could produce an orgasm
         constexpr float kFallbackRate = 0.5f;       // per second, when the scene sent no stage timers
         constexpr float kFinalShare = 0.9f;         // target: stages 1..N-1 + this x the final stage
         constexpr float kLeadInStretch = 1.5f;      // LeadIn target: all stages x this (never reaches 100)
@@ -157,6 +156,7 @@ namespace OrgasmEngine
             // DOM slave: passive gain is progress pushed to DOM in steps; enjoyment is a meter computed
             // by DOM (SetDomMeter).
             bool dom = false;
+            float domChance = 0.0f;  // chance DOM's next roll succeeds (SetDomMeter); not saved
             float domDelta = 0.0f;  // mini-game arouse / calm, pushed as before
             float domShare = 0.0f;  // step-roll share from Arouse
             float domProgress = 0.0f;
@@ -1860,12 +1860,12 @@ namespace OrgasmEngine
                                 const bool cooling = st.lastOrgasm >= 0.0 && now - st.lastOrgasm < st.cooldown;
                                 const bool edging = now < st.edgeUntil;
                                 const bool blocked = AnyBlock(st);
-                                if (blocked && st.enjoyment >= kDomMeterPossible && !st.deniedSent) {
+                                if (blocked && st.domChance > 0.0f && !st.deniedSent) {
                                     st.deniedSent = true;
                                     fx.events.push_back({ SKYRIMNET_SEXLAB_API::EngineEventType::kOrgasmDenied, st.id,
                                         st.id, "dom", st.enjoyment, st.orgasmCount });
                                 }
-                                if (st.enjoyment < kDomMeterPossible) {
+                                if (st.domChance <= 0.0f) {
                                     st.deniedSent = false;
                                 }
                                 const double since = now - st.lastDomSyncAt;
@@ -2682,7 +2682,7 @@ namespace OrgasmEngine
         }
     }
 
-    void SetDomMeter(RE::Actor* actor, float meter)
+    void SetDomMeter(RE::Actor* actor, float meter, float chance)
     {
         std::lock_guard lock(g_lock);
         if (auto* st = Find(actor); st && st->dom) {
@@ -2691,6 +2691,7 @@ namespace OrgasmEngine
                 webui_log::info("OrgasmEngine: dom meter {:#x} -> {}", st->id, value);
             }
             st->enjoyment = value;
+            st->domChance = std::clamp(chance, 0.0f, 1.0f);
         }
     }
 
@@ -3987,6 +3988,7 @@ namespace OrgasmEngine
             v.enjoyment = at->second.enjoyment;
             v.flashing = now < at->second.flashUntil;
             v.dom = at->second.dom;
+            v.domChance = at->second.domChance;
             v.denied = at->second.sceneBlocked;
             if (g_settings.miniGame && AiDriven(at->second)) {
                 v.strategy = HudLabel(at->second);

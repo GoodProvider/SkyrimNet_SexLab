@@ -140,7 +140,10 @@ namespace PapyrusBindings_OrgasmEngine
             OrgasmEngine::SetOrgasmExpected(a, expected);
         }
         void SetDomSlave(RE::StaticFunctionTag*, RE::Actor* a, bool dom) { OrgasmEngine::SetDomSlave(a, dom); }
-        void SetDomMeter(RE::StaticFunctionTag*, RE::Actor* a, float meter) { OrgasmEngine::SetDomMeter(a, meter); }
+        void SetDomMeter(RE::StaticFunctionTag*, RE::Actor* a, float meter, float chance)
+        {
+            OrgasmEngine::SetDomMeter(a, meter, chance);
+        }
         void SetActorSkills(RE::StaticFunctionTag*, RE::Actor* a, std::int32_t skill, std::int32_t lewd)
         {
             OrgasmEngine::SetActorSkills(a, skill, lewd);

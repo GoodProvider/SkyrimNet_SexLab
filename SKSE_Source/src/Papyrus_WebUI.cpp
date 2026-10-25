@@ -1817,6 +1817,7 @@ namespace PapyrusBindings_WebUI
             static_cast<unsigned>(targetFormId)));
 
         Call_ControlActorFocus(actor);
+        ActionCatalog::RefreshForeignMainPanel();
         auto catalog = ActionCatalog::BuildUICatalog(false);
         WebUI_Invoke(ConfigureTargetMenuScript(catalog));
     }

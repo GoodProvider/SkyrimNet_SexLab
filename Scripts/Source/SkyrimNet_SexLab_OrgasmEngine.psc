@@ -71,8 +71,9 @@ Function SetSceneActs(Actor akAnchor, bool vaginal, bool anal, bool oral) global
 Function SetFirstTimes(Actor akActor, bool vaginal, bool anal) global native
 ; DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync); DOM decides the orgasm.
 Function SetDomSlave(Actor akActor, bool dom) global native
-; DOM slave: 0-100 meter computed from DOM's orgasm values (HUD bar + SexLab mirror).
-Function SetDomMeter(Actor akActor, float meter) global native
+; DOM slave: 0-100 bar (DOM's non-random roll score; HUD bar + SexLab mirror) and the 0-1 chance
+; that DOM's next roll succeeds (HUD text over the bar end).
+Function SetDomMeter(Actor akActor, float meter, float chance) global native
 Function SetActorSkills(Actor akActor, int skill, int lewd) global native
 ; SexLab's starting-enjoyment inputs: GetSkillLevels of the actor and of the partner SexLab bases skills on
 ; (empty arrays: unskilled), lowest / highest present relationship rank, act skill (0 foreplay 1 vaginal 2 anal
@@ -253,7 +254,7 @@ Function Effect_DomSync(Actor akActor, float miniDelta, float daring, float naiv
     if share > 0.0
         dom.StepRoll(akActor, hasPlayer, share)
     endif
-    SetDomMeter(akActor, dom.OrgasmMeter(akActor))
+    SetDomMeter(akActor, dom.OrgasmMeter(akActor), dom.OrgasmProbability(akActor))
 EndFunction
 
 ; Strategy change (no notification). narrate: optional narration of msg (LLM / API / forced

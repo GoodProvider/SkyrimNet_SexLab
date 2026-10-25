@@ -101,6 +101,9 @@
             border-radius: var(--radius);
             transition: width 0.25s linear, background-color 0.4s linear;
         }
+        /* DOM slave: the fill is the non-random roll score; the text over the end is the chance the roll succeeds. */
+        .bar.chancebar { height: 14px; }
+        .bar .chance { position: absolute; right: 4px; top: 0; line-height: 14px; font-size: 10px; font-weight: 600; color: var(--text-primary, #fff); text-shadow: 0 0 2px #000, 0 0 3px #000; pointer-events: none; }
         .bar.near .fill { animation: pulse 0.9s ease-in-out infinite; }
         .bar.flash .fill { animation: orgasm 0.45s linear infinite; width: 100% !important; }
         @keyframes pulse {
@@ -289,9 +292,10 @@
                         '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') +
                             (a.strategy ? ' <span class="dom" title="mini-game strategy">' + esc(a.strategy) + '</span>' : '') + '</td>' +
                         resBar('magicka', a.magicka, mgOff) + resBar('stamina', a.stamina, mgOff) +
-                        '<td class="barcell"><div class="bar' + cls + '"><div class="fill" style="width:' +
+                        '<td class="barcell"><div class="bar' + cls + (a.dom ? ' chancebar' : '') + '"><div class="fill" style="width:' +
                         Math.max(0, Math.min(100, a.enjoyment)) + '%;background-color:' + barColor(a.enjoyment) +
-                        '"></div></div></td>' +
+                        '"></div>' + (a.dom ? '<span class="chance" title="chance the next orgasm roll succeeds">' + a.chance + '%</span>' : '') +
+                        '</div></td>' +
                         '<td class="lock">' + (a.denied ? '<span title="orgasm denied">🔒</span>' : '') + '</td>' +
                         '</tr>';
                 });

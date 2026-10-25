@@ -649,6 +649,19 @@ namespace ActionCatalog
             return panel == "scene_panel" || panel == "scene_creator_panel" || panel == "description_editor_panel";
         }
 
+        // Third-party MainPanel types that paint into a generic JS host (Papyrus pushes the payload).
+        bool IsForeignHostType(const std::string& type)
+        {
+            return EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail") ||
+                   EqualsIgnoreCase(type, "actor_profile");
+        }
+
+        // Every third-party MainPanel type: keyed by `id`, opened / closed by zero-arg Papyrus.
+        bool IsForeignPanelType(const std::string& type)
+        {
+            return EqualsIgnoreCase(type, "papyrus") || IsForeignHostType(type);
+        }
+
         std::string MainPanelKey(const nlohmann::json& entry)
         {
             if (!entry.is_object())
@@ -658,8 +671,7 @@ namespace ActionCatalog
                 const std::string panel = entry.value("panel", "");
                 return IsScenePanelAlias(panel) ? std::string("scene_panel") : panel;
             }
-            if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
-                EqualsIgnoreCase(type, "actor_detail"))
+            if (IsForeignPanelType(type))
                 return entry.value("id", "");
             return {};
         }
@@ -783,9 +795,8 @@ namespace ActionCatalog
                 if (!panel.empty())
                     WebUI_Invoke("concealMainPanel('" + panel + "');");
                 DispatchEntryFunction(entry, "closeFunction");
-            } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
-                       EqualsIgnoreCase(type, "actor_detail")) {
-                if (EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail"))
+            } else if (IsForeignPanelType(type)) {
+                if (IsForeignHostType(type))
                     WebUI_Invoke("concealForeignMainPanel('" + type + "');");
                 DispatchEntryFunction(entry, "closeFunction");
             }
@@ -815,9 +826,8 @@ namespace ActionCatalog
                 }
                 // Optional on builtins: Papyrus fills the panel (e.g. Lover's Ledger pushes its data).
                 DispatchEntryFunction(entry, "openFunction");
-            } else if (EqualsIgnoreCase(type, "papyrus") || EqualsIgnoreCase(type, "data_table") ||
-                       EqualsIgnoreCase(type, "actor_detail")) {
-                if (EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail"))
+            } else if (IsForeignPanelType(type)) {
+                if (IsForeignHostType(type))
                     WebUI_Invoke("revealForeignMainPanel('" + type + "');");
                 DispatchEntryFunction(entry, "openFunction");
             }
@@ -1419,6 +1429,17 @@ namespace ActionCatalog
             // One-shot soft connection load when switching TO the Scene view.
             WebUI_Invoke("mainPanelDidOpen();");
         }
+    }
+
+    void RefreshForeignMainPanel()
+    {
+        if (g_currentMainPanelKey.empty())
+            return;
+        auto* cur = FindMainPanelByKey(g_currentMainPanelKey);
+        if (!cur || !IsForeignPanelType(cur->value("type", "")))
+            return;
+        webui_log::info("RefreshForeignMainPanel: '{}'", g_currentMainPanelKey);
+        DispatchEntryFunction(*cur, "openFunction");
     }
 
     bool IsSexLabControlMode()

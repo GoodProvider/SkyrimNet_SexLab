@@ -236,7 +236,24 @@ Function AddArousal(Actor akActor, float delta)
         return
     endif
     if delta > 0.0
-        mind.IncreaseArousal(delta, mind.MOD_SocialBoldness)
+        ; An aroused slave first tops up is_aroused_for (1 point = 1 tick) to DOM's plateau max; the rest raises arousal_factor.
+        int aroused = mind.is_aroused_for
+        if aroused > 0
+            int plateau_max = (mind.PRISM_Sensuality * 0.5 + mind.submission * 0.5) as int
+            if aroused < plateau_max
+                float room = (plateau_max - aroused) as float
+                float used = delta
+                if used > room
+                    used = room
+                endif
+                mind.is_aroused_for = aroused + (used as int)
+                Trace("AddArousal", GetDisplayName(akActor)+" aroused_for:"+aroused+"->"+mind.is_aroused_for+" max:"+plateau_max+" overflow:"+(delta - (used as int)))
+                delta -= (used as int)
+            endif
+        endif
+        if delta > 0.0
+            mind.IncreaseArousal(delta, mind.MOD_SocialBoldness)
+        endif
     else
         float af = mind.arousal_factor + delta
         if af < 0.0
@@ -246,8 +263,9 @@ Function AddArousal(Actor akActor, float delta)
     endif
 EndFunction
 
-; DOM_Mind.IsOrgasmingAfterArousal without its random terms, with handleSexOrgasm's act base.
-float Function EstimateChance(DOM_Mind mind, Actor akActor)
+; DOM_Mind.IsOrgasmingAfterArousal's additive terms before the arousal multiplier, without its random
+; ones, with handleSexOrgasm's act base.
+float Function ScoreBase(DOM_Mind mind, Actor akActor)
     float base = mind.MOD_Vaginal
     if mind.MOD_Anal > base
         base = mind.MOD_Anal
@@ -270,11 +288,158 @@ float Function EstimateChance(DOM_Mind mind, Actor akActor)
         chance = chance * 2.0 + 0.1
     endif
     chance += mind.getArousalBonus()
+    if mind.WasWarned(20) || mind.WasWarned(21)
+        chance += 0.1
+    endif
+    if mind.whipping_active && (mind.whipping_reason == 20 || mind.whipping_reason == 21)
+        chance += 0.1
+    endif
+    DOM_Actor slave_alias = mind.actor_alias
+    if slave_alias != None
+        ; DOM reads abuse_type == "sex" (a private variable); not sex_is_non_consensual stands in for it.
+        if !slave_alias.canAnimate && !mind.sex_is_non_consensual && slave_alias.has_sex_with_player
+            chance += 0.1
+            if mind.number_of_sex == 0
+                chance += 0.1
+            endif
+        endif
+        if mind.number_of_sex == 0 && slave_alias.has_sex_with_player
+            chance += 0.1
+        endif
+        if mind.number_of_sexformoney == 0 && slave_alias.has_sex_for_money
+            chance += 0.1
+        endif
+    endif
     chance += mind.number_of_orgasm * 0.01
-    chance *= 1.0 + mind.arousal_factor / 1000.0
+    return chance
+EndFunction
+
+; The roll's end terms, applied after the random additions.
+float Function ApplyArousalTerms(DOM_Mind mind, float additive)
+    float chance = additive * (1.0 + mind.arousal_factor / 1000.0)
     chance += mind.submission / 1000.0
     chance += mind.love_desire / 200.0
     return chance
+EndFunction
+
+float Function Clamp01(float value)
+    if value > 1.0
+        return 1.0
+    elseif value < 0.0
+        return 0.0
+    endif
+    return value
+EndFunction
+
+; Everything in DOM's roll that is not random, summed: the score the random roll is compared against.
+float Function EstimateChance(DOM_Mind mind, Actor akActor)
+    return ApplyArousalTerms(mind, ScoreBase(mind, akActor))
+EndFunction
+
+; Fills probs / adds (3 slots each) with DOM's should_be_noorgasm additions: probability of each outcome and its addition.
+Function ControlOutcomes(DOM_Mind mind, float[] probs, float[] adds)
+    probs[0] = 1.0
+    adds[0] = 0.0
+    if !mind.should_be_noorgasm
+        return
+    endif
+    float sub = mind.submission
+    float pSub = Clamp01(sub / 100.0)
+    float pLove = Clamp01(mind.love_desire / 100.0)
+    float p = pSub
+    float hit
+    float miss
+    if mind.IsDevoted()
+        if mind.was_allowed_toorgasm
+            if sub >= 100.0
+                p = pLove
+                hit = 0.35
+                miss = 0.25
+            else
+                hit = 0.2
+                miss = 0.15
+            endif
+        elseif sub >= 100.0
+            p = pLove
+            hit = -0.35
+            miss = -0.25
+        else
+            hit = -0.2
+            miss = -0.15
+        endif
+    elseif mind.was_allowed_toorgasm
+        hit = 0.15
+        miss = 0.1
+    else
+        hit = -0.15
+        miss = 0.2
+    endif
+    probs[0] = p
+    adds[0] = hit
+    probs[1] = 1.0 - p
+    adds[1] = miss
+EndFunction
+
+; Probability (0-1) that IsOrgasmingAfterArousal's next roll succeeds: its random additions (orgasm control,
+; whipping submissive, rapture oath) averaged over their outcomes; 0 when it cannot roll.
+float Function RollProbability(DOM_Mind mind, Actor akActor)
+    if mind.is_aroused_for <= 0 || IsRefractory(mind, akActor)
+        return 0.0
+    endif
+    float base = ScoreBase(mind, akActor)
+
+    float[] cP = Utility.CreateFloatArray(3, 0.0)
+    float[] cA = Utility.CreateFloatArray(3, 0.0)
+    ControlOutcomes(mind, cP, cA)
+
+    float[] wP = Utility.CreateFloatArray(2, 0.0)
+    float[] wA = Utility.CreateFloatArray(2, 0.0)
+    wP[0] = 1.0
+    if mind.whipping_active
+        wP[0] = 1.0 - Clamp01(mind.PRISM_Submissivity)
+        wP[1] = Clamp01(mind.PRISM_Submissivity)
+        wA[1] = 0.1
+    endif
+
+    float[] rP = Utility.CreateFloatArray(3, 0.0)
+    float[] rA = Utility.CreateFloatArray(3, 0.0)
+    rP[0] = 1.0
+    if mind.promiseOath == "rapture"
+        float pSub = Clamp01(mind.submission / 100.0)
+        float pSens = Clamp01(mind.PRISM_Sensuality / 100.0)
+        rP[0] = 1.0 - pSub - (1.0 - pSub) * pSens
+        rP[1] = pSub
+        rA[1] = 0.1
+        rP[2] = (1.0 - pSub) * pSens
+        rA[2] = 0.2
+    endif
+
+    float total = 0.0
+    int i = 0
+    while i < 3
+        int j = 0
+        while j < 2
+            int k = 0
+            while k < 3
+                float p = cP[i] * wP[j] * rP[k]
+                if p > 0.0
+                    total += p * Clamp01(ApplyArousalTerms(mind, base + cA[i] + wA[j] + rA[k]))
+                endif
+                k += 1
+            endwhile
+            j += 1
+        endwhile
+        i += 1
+    endwhile
+    return Clamp01(total)
+EndFunction
+
+float Function OrgasmProbability(Actor akActor)
+    DOM_Mind mind = GetMind(akActor, "OrgasmProbability")
+    if mind == None
+        return 0.0
+    endif
+    return RollProbability(mind, akActor)
 EndFunction
 
 bool Function IsMale(Actor akActor)
@@ -303,29 +468,7 @@ float Function OrgasmMeter(Actor akActor)
     if mind == None
         return 0.0
     endif
-    float af = mind.arousal_factor
-    if af > 100.0
-        af = 100.0
-    elseif af < 0.0
-        af = 0.0
-    endif
-    float arousing = 50.0 * af / 100.0
-    if IsRefractory(mind, akActor)
-        if arousing > 49.0
-            return 49.0
-        endif
-        return arousing
-    endif
-    if mind.is_aroused_for <= 0
-        return arousing
-    endif
-    float part = EstimateChance(mind, akActor) / 0.5
-    if part > 1.0
-        part = 1.0
-    elseif part < 0.0
-        part = 0.0
-    endif
-    return 50.0 + 50.0 * part
+    return 100.0 * Clamp01(EstimateChance(mind, akActor))
 EndFunction
 
 Bool Function CouldOrgasm(Actor akActor)

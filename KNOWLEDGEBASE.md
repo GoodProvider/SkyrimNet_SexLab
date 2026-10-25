@@ -735,7 +735,7 @@ Unquoted `comparisonOperator: >` is a YAML folded block scalar, so SkyrimNet sto
 **Fix:** DOM slaves are now DOM-driven (`SetDomSlave`) instead of blocked.
 - Engine gains (passive, Arouse, Calm) go to DOM's `arousal_factor` through `Effect_DomSync` → `Handler_DOM.AddArousal`.
 - After each rise, if `CouldOrgasm`, the engine calls `mind.handleSexOrgasm`. DOM decides.
-- The bar shows `Handler_DOM.OrgasmMeter`, built from DOM's orgasm values (50 means an orgasm is now possible).
+- The bar fill is `Handler_DOM.OrgasmMeter`: every non-random term of DOM's roll summed. The text over the bar end is `OrgasmProbability`, the chance the roll succeeds with the random terms averaged out. DOM's `block_orgasm` and `abuse_type` are private variables, so they cannot be read (`sex_is_non_consensual` stands in for `abuse_type`).
 - A melt calls `NoteExternalOrgasm(slave, "dom")`.
 - Do not bring back the block, and do not let the engine `Fire` DOM slaves except through a forced WebUI request.
 
@@ -1372,6 +1372,12 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Symptom:** in a 2-actor Scene Creator, clicking a third nearby actor (Nina) did nothing. After removing position 2 the click logged nothing at all. Log: `WebUI_OnResolveActorMeta` with no `HandleResolveDeviousTags`, then `HandleAnimDbQuery actor_count=2` about 190 ms later. The reply landed on `actorAnimMetaResult`'s generic branch, not the `'n'` branch that pushed the pending entry.
 - **Cause:** the add waited in `SC.pendingNearby` for a reply carrying its exact `'n<k>'` id. The id round-trips through a Papyrus `String` / BSFixedString, which is case-insensitive and pooled, so an exact echo is not guaranteed. The stale entry also failed the duplicate check (`pendingAdds.some(...)`), blocking that actor for the session. No Papyrus error is logged.
 - **Fix / rule:** push the position at once and enrich afterwards (`'m<k>'`), matching reply rows by form id, as `scEnsurePositionSeed` does. Do not make JS state depend on Papyrus echoing a string id verbatim. Untested in game: the exact form the id came back in.
+
+## JsonLowerCaseKeys cannot change case (2026-10-24)
+
+- **Symptom:** DOM's `actor_profile` payload reached JS with `Name`, `Label`, `Text`, `Lo`, `Hi` keys, while other keys (`panel`, `title`, `value`) were lowercase. Every lookup on the capitalized keys read `undefined`, so that text drew blank. No error is logged.
+- **Cause:** `ObjectToLowerCaseKeyJson` passes the raw JSON (a live Papyrus String) to `JsonLowerCaseKeys`, which returns `RE::BSFixedString(lowered)`. The string pool is case-insensitive, and the lowered text differs from the raw only by case, so the pool returns the raw entry with its original casing. JMap keys keep whatever casing the pool first saw (`Name` from some other script).
+- **Rule:** until the native returns a string that is not a case-only variant of its input (e.g. a trailing `\n`), consumers must not trust key casing. `renderActorProfile` runs `apLowerKeys`. The "stable casing" claim in `docs/reference/json-keys.md` holds only for keys whose pooled spelling is already lowercase. Untested: whether Inja (`RenderSlPrompt`) and `objectFromPrototype` consumers are affected the same way.
 
 ## DN bursts: one spoken reply; NPC-only orgasm DNs became events (2026-10-08)
 

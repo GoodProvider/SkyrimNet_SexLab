@@ -654,6 +654,16 @@
             pointer-events: none;
         }
 
+        /* Nearby eligible actors not in the scene: + adds one. */
+        #de-actors-table tr.de-nearby-row td {
+            opacity: 0.55;
+        }
+
+        #de-actors-table tr.de-nearby-row .cell-toggle {
+            opacity: 1;
+            cursor: pointer;
+        }
+
         .de-name-hint {
             font-size: var(--text-sm);
             opacity: 0.7;
@@ -1229,6 +1239,151 @@
         #ai-body .subsection-header {
             font-size: calc(var(--text-xs) * 2);
         }
+
+        /* actor_profile host (foreign MainPanel): pills, bar groups, radars, recs, events, lines. */
+        #actor-profile-panel {
+            --ap-red:    #d76a6a;
+            --ap-orange: #e8932a;
+            --ap-green:  #6cc64f;
+            --ap-gold:   #c9a227;
+            --ap-blue:   #6b8aab;
+            --ap-rose:   #c46a73;
+            --ap-violet: #9b6b9e;
+            --ap-steel:  #6b8aab;
+            --ap-ember:  #c8791f;
+            color: var(--text-primary);
+            flex-direction: column;
+        }
+
+        #ap-header {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: var(--space-md);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: var(--space-xs);
+            margin-bottom: var(--space-sm);
+            flex-shrink: 0;
+        }
+
+        #ap-name { font-size: var(--text-xl); color: var(--text-primary); }
+        #ap-subtitle {
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        #ap-body { overflow: auto; flex: 1; min-height: 0; }
+
+        #ap-pills { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-md); }
+        .ap-pill {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.15;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-solid);
+            border-left: 3px solid var(--ap-steel);
+            border-radius: var(--radius-lg);
+            padding: var(--space-xs) var(--space-lg) var(--space-xs) var(--space-md);
+        }
+        .ap-pill.mood { border-left-color: var(--ap-rose); }
+        .ap-pill.role { border-left-color: var(--ap-gold); }
+        .ap-pill-cap {
+            font-size: var(--text-xs);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .ap-pill-val { font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); }
+
+        #ap-sections {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: var(--space-md) var(--space-xl);
+        }
+        .ap-block { flex: 1 1 240px; min-width: 220px; max-width: 420px; }
+        .ap-block.wide { flex-basis: 100%; max-width: none; }
+        .ap-title {
+            display: flex;
+            align-items: center;
+            font-size: var(--text-xs);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-sm);
+        }
+        .ap-title::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            margin-right: var(--space-sm);
+            background: var(--ap-tone, var(--ap-steel));
+        }
+        .ap-bar { margin-bottom: 7px; }
+        .ap-bar-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 3px;
+            font-size: var(--text-sm);
+        }
+        .ap-bar-label { color: var(--text-primary); }
+        .ap-bar-val { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+        .ap-track {
+            position: relative;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+        .ap-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; }
+
+        .ap-radar { display: block; width: 100%; max-width: 260px; margin: 0 auto; overflow: visible; }
+        .ap-radar .ring, .ap-radar .spoke {
+            fill: none;
+            stroke: rgba(201, 168, 76, 0.18);
+            stroke-width: 1;
+            vector-effect: non-scaling-stroke;
+        }
+        .ap-radar .poly { stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+        .ap-radar .dot { fill: currentColor; }
+        .ap-radar .axis {
+            fill: var(--text-secondary);
+            font-family: var(--font-ui);
+            font-size: 9px;
+            font-weight: 500;
+            dominant-baseline: middle;
+        }
+        .ap-radar .axis.peak { fill: var(--text-primary); font-weight: 600; }
+
+        .ap-recs, .ap-events, .ap-list { margin: 0; padding: 0; list-style: none; }
+        .ap-recs li { font-size: var(--text-base); line-height: 1.5; color: var(--text-primary); }
+        .ap-recs li::before { content: '\203a'; color: var(--ap-ember); font-weight: 700; margin-right: 7px; }
+        .ap-recs li.top { color: var(--ap-green); }
+        .ap-events li {
+            display: flex;
+            align-items: baseline;
+            gap: 7px;
+            font-size: var(--text-sm);
+            line-height: 1.55;
+        }
+        .ap-events .dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; position: relative; top: -2px; }
+        .ap-events li.live { color: var(--text-primary); }
+        .ap-events li.live .dot { background: var(--ap-ember); }
+        .ap-events li.diary { color: var(--ap-gold); }
+        .ap-events li.diary .dot { background: var(--ap-gold); }
+        .ap-events li.latest { color: var(--text-primary); }
+        .ap-events li.latest .dot { background: var(--ap-ember); }
+        .ap-events .ap-ev-text { color: var(--text-secondary); }
+        .ap-events li.live .ap-ev-text, .ap-events li.latest .ap-ev-text { color: var(--text-primary); }
+        .ap-events li.diary .ap-ev-text { color: var(--ap-gold); }
+        .ap-events .when { display: inline-block; min-width: 80px; font-size: var(--text-xs); color: var(--ap-orange); }
+        .ap-line, .ap-list li { font-size: var(--text-sm); line-height: 1.5; color: var(--text-secondary); }
+        .ap-list { padding-left: 16px; list-style: disc; }
 
         .cell-toggle {
             cursor: pointer;
@@ -2505,6 +2660,18 @@
             </div>
         </div>
     </div>
+    <!-- actor_profile host: filled by a third-party openFunction -> setMainPanelData({panel:'actor_profile'}). -->
+    <div id="actor-profile-panel" class="panel" style="display:none">
+        <div id="ap-header">
+            <span id="ap-name"></span>
+            <span id="ap-subtitle"></span>
+        </div>
+        <div id="ap-empty" class="compact-row" style="opacity:0.75; display:none"></div>
+        <div id="ap-body">
+            <div id="ap-pills"></div>
+            <div id="ap-sections"></div>
+        </div>
+    </div>
     </div><!-- #main-panel-host -->
 
     <div id="overlay-panels">
@@ -2755,6 +2922,13 @@
             'scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel'
         ];
 
+        // Foreign MainPanel type -> its generic host element.
+        const FOREIGN_PANEL_HOSTS = {
+            data_table: 'data-table-panel',
+            actor_detail: 'actor-detail-panel',
+            actor_profile: 'actor-profile-panel'
+        };
+
         // Fallback when C++ configureControlPanel has not run / main_panels/*.json missing from Data.
         const MAIN_PANEL_NONE_LABEL = 'None';
         const DEFAULT_MAIN_PANELS = [
@@ -2785,7 +2959,7 @@
         function mainPanelKeyOf(entry) {
             if (!entry) return '';
             if (entry.type === 'builtin') return isScenePanelKey(entry.panel) ? 'scene_panel' : (entry.panel || '');
-            if (entry.type === 'papyrus' || entry.type === 'data_table' || entry.type === 'actor_detail')
+            if (entry.type === 'papyrus' || FOREIGN_PANEL_HOSTS[entry.type])
                 return entry.id || '';
             return '';
         }
@@ -2807,7 +2981,7 @@
 
         function clearMainPanelHost() {
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (el) el.style.display = 'none';
@@ -3069,7 +3243,7 @@
             mainPanelPulldownBusy = false;
             updateMainPanelClose();
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel'];
             const want = domIdForPanelKey(panelKey);
             const wantSrc = sourceOf(findMainPanelByKey(panelKey));
             for (const pid of builtins) {
@@ -3135,9 +3309,9 @@
 
         function revealForeignMainPanel(type) {
             showControlPanel();
-            const want = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
+            const want = FOREIGN_PANEL_HOSTS[type] || 'data-table-panel';
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'actor-info-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel'];
             const wantSrc = sourceOf(findMainPanelByKey(MAIN_SELECTED_KEY));
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -3153,7 +3327,7 @@
         }
 
         function concealForeignMainPanel(type) {
-            const pid = type === 'actor_detail' ? 'actor-detail-panel' : 'data-table-panel';
+            const pid = FOREIGN_PANEL_HOSTS[type] || 'data-table-panel';
             const el = document.getElementById(pid);
             if (el) el.style.display = 'none';
         }
@@ -3171,13 +3345,15 @@
             };
             if (payload.id)
                 MAIN_SELECTED_KEY = payload.id;
-            const panel = payload.panel || '';
+            const panel = apKey(payload.panel || payload.Panel);
             if (panel === 'data_table')
                 renderForeignDataTable(payload);
             else if (panel === 'actor_detail')
                 renderForeignActorDetail(payload);
             else if (panel === 'actor_info')
                 renderActorInfo(payload);
+            else if (panel === 'actor_profile')
+                renderActorProfile(payload);
         }
 
         // Actor Info days-ago cell: -1 = never.
@@ -3384,6 +3560,222 @@
             host.appendChild(panel);
         }
         window.setCascadeChoices = setCascadeChoices;
+
+        // ---- actor_profile host (look ported from PrismaUI-for-DOM's profile panel) ----
+        const AP_RGB = { red: [215, 106, 106], orange: [232, 147, 42], green: [108, 198, 79],
+            dark: [94, 90, 82], white: [236, 230, 212] };
+        const AP_TONES = { steel: 'var(--ap-steel)', rose: 'var(--ap-rose)', gold: 'var(--ap-gold)',
+            blue: 'var(--ap-blue)', violet: 'var(--ap-violet)', orange: 'var(--ap-orange)' };
+        const AP_TONE_FILL = { gold: 'rgba(201,162,39,0.22)', blue: 'rgba(107,138,171,0.22)',
+            violet: 'rgba(155,107,158,0.22)', orange: 'rgba(232,147,42,0.22)', steel: 'rgba(107,138,171,0.22)',
+            rose: 'rgba(196,106,115,0.22)' };
+        // Literal stroke colors for the radar (inline SVG attrs, no var()/currentColor).
+        const AP_TONE_HEX = { steel: '#6b8aab', rose: '#c46a73', gold: '#c9a227',
+            blue: '#6b8aab', violet: '#9b6b9e', orange: '#e8932a' };
+        const AP_AXIS_FILL = '#a8a5a0';
+        const AP_AXIS_PEAK = '#e8e6e1';
+
+        // Enum values from Papyrus may come back with any casing (shared string pool).
+        function apKey(v) {
+            return String(v || '').toLowerCase();
+        }
+        // JsonLowerCaseKeys returns a BSFixedString; the case-insensitive pool hands back the
+        // raw JSON's casing, so keys like "Name"/"Label"/"Text" arrive capitalized.
+        function apLowerKeys(v) {
+            if (Array.isArray(v)) return v.map(apLowerKeys);
+            if (!v || typeof v !== 'object') return v;
+            const out = {};
+            Object.keys(v).forEach(k => { out[k.toLowerCase()] = apLowerKeys(v[k]); });
+            return out;
+        }
+        function apClamp(v) {
+            const n = Number(v);
+            return isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+        }
+        function apMix(from, to, t) {
+            const c = from.map((x, i) => Math.round(x + (to[i] - x) * t));
+            return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+        }
+        // Bar fill: red (0) -> orange (50) -> green (100).
+        function apBarColor(v) {
+            return v <= 50 ? apMix(AP_RGB.red, AP_RGB.orange, v / 50) : apMix(AP_RGB.orange, AP_RGB.green, (v - 50) / 50);
+        }
+        // Bipolar axis label: grey at 50, white at 25/75, green/red toward the poles (by polarity).
+        function apBipolarColor(v, pol) {
+            const dev = Math.abs(v - 50);
+            const neg = apKey(pol) === 'neg';
+            const positive = (v >= 50) ? !neg : neg;
+            if (dev <= 25) return apMix(AP_RGB.dark, AP_RGB.white, dev / 25);
+            return apMix(AP_RGB.white, positive ? AP_RGB.green : AP_RGB.red, Math.pow((dev - 25) / 25, 0.6));
+        }
+        function apEl(tag, cls, text) {
+            const el = document.createElement(tag);
+            if (cls) el.className = cls;
+            if (text != null) el.textContent = String(text);
+            return el;
+        }
+        function apEsc(v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function apBlock(section, wide) {
+            const block = apEl('div', 'ap-block' + (wide ? ' wide' : ''));
+            const tone = AP_TONES[apKey(section.tone)];
+            if (tone) block.style.setProperty('--ap-tone', tone);
+            if (section.title) block.appendChild(apEl('div', 'ap-title', section.title));
+            return block;
+        }
+
+        function apRenderBars(section) {
+            const block = apBlock(section);
+            (section.items || []).forEach(it => {
+                const v = apClamp(it.value);
+                const row = apEl('div', 'ap-bar');
+                const head = apEl('div', 'ap-bar-head');
+                head.appendChild(apEl('span', 'ap-bar-label', it.label || ''));
+                const shown = (it.text != null && it.text !== '') ? it.text : Math.round(v);
+                head.appendChild(apEl('span', 'ap-bar-val', shown));
+                row.appendChild(head);
+                const track = apEl('div', 'ap-track');
+                const fill = apEl('span', 'ap-fill');
+                fill.style.width = v + '%';
+                fill.style.backgroundColor = apBarColor(v);
+                track.appendChild(fill);
+                row.appendChild(track);
+                block.appendChild(row);
+            });
+            return block;
+        }
+
+        // mode "bipolar": axes {lo, hi, pol, value}; vertex = |v-50|/50, label = dominant pole.
+        // mode "unipolar" (default): axes {label, value}; vertex = v/100.
+        function apRenderRadar(section) {
+            const block = apBlock(section);
+            const axes = section.axes || [];
+            const n = axes.length;
+            if (n < 3) return block;
+            const bipolar = apKey(section.mode) === 'bipolar';
+            const R = 62;
+            // Built as markup with inline fills, like PrismaUI-for-DOM's radar.
+            let h = '<svg class="ap-radar" viewBox="-80 -80 160 160" preserveAspectRatio="xMidYMid meet">';
+            const angle = i => -Math.PI / 2 + i * (Math.PI * 2 / n);
+            const pt = (r, a) => (r * Math.cos(a)).toFixed(2) + ',' + (r * Math.sin(a)).toFixed(2);
+            [0.25, 0.5, 0.75, 1].forEach(f => {
+                h += '<polygon class="ring" points="' + axes.map((_, i) => pt(R * f, angle(i))).join(' ') + '"/>';
+            });
+            axes.forEach((_, i) => {
+                const a = angle(i);
+                h += '<line class="spoke" x1="0" y1="0" x2="' + (R * Math.cos(a)).toFixed(2) + '" y2="' + (R * Math.sin(a)).toFixed(2) + '"/>';
+            });
+            const vals = axes.map(ax => apClamp(ax.value));
+            const strength = vals.map(v => bipolar ? Math.abs(v - 50) / 50 : v / 100);
+            let peak = 0;
+            strength.forEach((s, i) => { if (s > strength[peak]) peak = i; });
+            const toneKey = AP_TONES[apKey(section.tone)] ? apKey(section.tone) : (bipolar ? 'gold' : 'blue');
+            const stroke = AP_TONE_HEX[toneKey];
+            h += '<polygon class="poly" style="fill:' + AP_TONE_FILL[toneKey] + ';stroke:' + stroke + '" points="' +
+                strength.map((s, i) => pt(s * R, angle(i))).join(' ') + '"/>';
+            strength.forEach((s, i) => {
+                if (s < 0.04) return;
+                const a = angle(i);
+                h += '<circle class="dot" r="2.2" style="fill:' + stroke + '" cx="' + (s * R * Math.cos(a)).toFixed(2) +
+                    '" cy="' + (s * R * Math.sin(a)).toFixed(2) + '"/>';
+            });
+            axes.forEach((ax, i) => {
+                const a = angle(i);
+                const c = Math.cos(a);
+                const isPeak = i === peak && strength[peak] > 0;
+                const fill = bipolar ? apBipolarColor(vals[i], ax.pol) : (isPeak ? AP_AXIS_PEAK : AP_AXIS_FILL);
+                const text = bipolar ? (vals[i] >= 50 ? ax.hi : ax.lo) : ax.label;
+                h += '<text class="axis' + (isPeak ? ' peak' : '') + '" x="' + ((R + 11) * c).toFixed(2) +
+                    '" y="' + ((R + 11) * Math.sin(a)).toFixed(2) + '" text-anchor="' +
+                    (c > 0.25 ? 'start' : (c < -0.25 ? 'end' : 'middle')) + '" style="fill:' + fill + '">' +
+                    apEsc(text) + '</text>';
+            });
+            block.insertAdjacentHTML('beforeend', h + '</svg>');
+            return block;
+        }
+
+        function apRenderRecs(section) {
+            const block = apBlock(section, true);
+            const ul = apEl('ul', 'ap-recs');
+            (section.items || []).forEach((text, i) => ul.appendChild(apEl('li', i === 0 ? 'top' : '', text)));
+            block.appendChild(ul);
+            return block;
+        }
+
+        // items oldest -> newest; the newest line is emphasized.
+        function apRenderEvents(section) {
+            const block = apBlock(section, true);
+            const ul = apEl('ul', 'ap-events');
+            const items = section.items || [];
+            items.forEach((e, i) => {
+                const li = apEl('li', (apKey(e.tone) === 'diary' ? 'diary' : 'live') + (i === items.length - 1 ? ' latest' : ''));
+                if (e.tip) li.title = e.tip;
+                li.appendChild(apEl('span', 'dot'));
+                if (e.ago) li.appendChild(apEl('span', 'when', e.ago));
+                li.appendChild(apEl('span', 'ap-ev-text', e.text || ''));
+                ul.appendChild(li);
+            });
+            block.appendChild(ul);
+            return block;
+        }
+
+        function apRenderLines(section) {
+            const block = apBlock(section, true);
+            if (apKey(section.type) === 'list') {
+                const ul = apEl('ul', 'ap-list');
+                (section.items || []).forEach(text => ul.appendChild(apEl('li', '', text)));
+                block.appendChild(ul);
+            } else {
+                (section.items || []).forEach(text => block.appendChild(apEl('div', 'ap-line', text)));
+            }
+            return block;
+        }
+
+        const AP_SECTION_RENDERERS = { bars: apRenderBars, radar: apRenderRadar, recs: apRenderRecs,
+            events: apRenderEvents, lines: apRenderLines, list: apRenderLines };
+
+        // Payload: {panel:'actor_profile', id, name, subtitle, empty?, pills:[{label,value,tip,kind}], sections:[...]}.
+        // Game text goes through textContent only. Keys are lowercased here (see apLowerKeys).
+        function renderActorProfile(payload) {
+            payload = apLowerKeys(payload);
+            revealForeignMainPanel('actor_profile');
+            const nameEl = document.getElementById('ap-name');
+            const subEl = document.getElementById('ap-subtitle');
+            const empty = document.getElementById('ap-empty');
+            const body = document.getElementById('ap-body');
+            const pills = document.getElementById('ap-pills');
+            const sections = document.getElementById('ap-sections');
+            if (!nameEl || !subEl || !empty || !body || !pills || !sections) return;
+            nameEl.textContent = payload.name || payload.label || '';
+            subEl.textContent = payload.subtitle || '';
+            pills.innerHTML = '';
+            sections.innerHTML = '';
+            if (payload.empty) {
+                empty.textContent = payload.empty;
+                empty.style.display = '';
+                body.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            body.style.display = '';
+            (payload.pills || []).forEach(p => {
+                if (p.value == null || p.value === '') return;
+                const kind = apKey(p.kind).replace(/[^a-z_-]/g, '');
+                const pill = apEl('div', 'ap-pill' + (kind ? ' ' + kind : ''));
+                if (p.tip) pill.title = p.tip;
+                pill.appendChild(apEl('span', 'ap-pill-cap', p.label || ''));
+                pill.appendChild(apEl('span', 'ap-pill-val', p.value));
+                pills.appendChild(pill);
+            });
+            (payload.sections || []).forEach(s => {
+                const render = s && AP_SECTION_RENDERERS[apKey(s.type)];
+                if (!render) return;
+                const hasItems = (s.items && s.items.length) || (s.axes && s.axes.length);
+                if (hasItems) sections.appendChild(render(s));
+            });
+        }
 
         function renderForeignDataTable(payload) {
             revealForeignMainPanel('data_table');
@@ -8264,6 +8656,9 @@
                 if (typeof scRefreshAnims === 'function') scRefreshAnims();
             }
             if (typeof scRenderPositions === 'function') scRenderPositions();
+            // Description Editor lists the addable nearby actors under the cast.
+            const deEl = document.getElementById('description-editor-panel');
+            if (deEl && deEl.style.display !== 'none' && typeof deRenderActors === 'function') deRenderActors();
         }
 
         let controlActorSelectBusy = false;
@@ -9662,6 +10057,7 @@
                     _in_thread_registries: this.inThreadRegistries,
                     _active_registry: this.activeRegistry,
                     _next_registry: this.nextRegistry || this.activeRegistry,
+                    _reseed_defaults: this.reseedDefaults ? 1 : 0,
                     _stage: this.stage,
                     _stages: this.stages,
                     _selected_registries: this.selectedRegistries,
@@ -9801,6 +10197,7 @@
         function flushSceneInfos() {
             deDbg('flushSceneInfos'); // DEBUG-DELETE
             deSendPendingSwitch();
+            deFinalizeActorChanges();
             const scenes = [];
             sceneInfoByKey.forEach(info => {
                 if (info && (info.dirty || info.pendingCreate || info.pendingStop))
@@ -9819,6 +10216,9 @@
             info.pendingStop = false;
             info.pendingCreate = false;
             info.pendingReorder = false;
+            info.pendingActorChange = false;
+            info.reseedDefaults = false;
+            info.origActiveRegistry = null;
         }
 
         // The overlay pauses the game while focused (PrismaUI Focus pauseGame). Show/Hide reset it to paused.
@@ -9832,6 +10232,12 @@
 
         function deTogglePause() {
             deAutoSave();
+            // Added actors join only through the commit close (ChangeActors in ApplyWebUICommit).
+            if (deActorChangePending()) {
+                if (!dePendingActive()) return;
+                requestWebUIHide(true);
+                return;
+            }
             // Unpausing is when a Description Editor animation pick takes effect.
             if (gamePaused) deSendPendingSwitch();
             setGamePaused(!gamePaused);
@@ -9842,6 +10248,8 @@
         // Continue (stage / filter tabs): unpause (applying a pending animation pick) and close the WebUI.
         function deContinueAndClose() {
             deAutoSave();
+            // Added actors need an animation that fits the new cast first.
+            if (deActorChangePending() && !dePendingActive()) return;
             if (gamePaused) {
                 deSendPendingSwitch();
                 setGamePaused(false);
@@ -11938,6 +12346,9 @@
             } else {
                 DE.scene_sid = info.scene_sid;
                 copySceneInfoToSC(info);
+                // Nearby scan for the actor table's addable rows (Scene Creator does the same on open).
+                if (!(nearbyActors || []).length && typeof window.onNearbyRangeChange === 'function')
+                    window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 1600 }));
                 if (dePendingActive()) deLoadPendingPreview();
                 else deLoadFocusAnimFromScene();
             }
@@ -12046,8 +12457,8 @@
             const liveInfo = deStopLiveInfo();
             const live = !!liveInfo;
             const liveCount = live ? (liveInfo.positions || []).length : 0;
-            // Live values are editable only while no animation pick is pending.
-            const editable = live && !dePendingActive();
+            // Live values are editable only while no animation pick or added actor is pending.
+            const editable = live && !dePendingActive() && !liveInfo.pendingActorChange;
             const toggle = (fn, i) => editable ? `onclick="${fn}(${i})"` : '';
             const offCls = editable ? '' : ' de-disabled';
             DE.posDraft.forEach((p, i) => {
@@ -12083,7 +12494,12 @@
                 }
                 const tdName = document.createElement('td');
                 tdName.className = 'col-name';
-                tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml(names[i] || 'actor ' + i)}</div>`;
+                const livePos = live ? (liveInfo.positions[i] || {}) : {};
+                const added = !!livePos._added;
+                tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml((added && livePos._name) || names[i] || 'actor ' + i)}</div>`;
+                // Added, not yet in the thread: ✕ takes it back off.
+                if (added)
+                    tdName.innerHTML += `<span class="cell-toggle" title="remove from scene" onclick="deRemoveAddedActor(${i})">✕</span>`;
                 const tdDressed = document.createElement('td');
                 tdDressed.className = 'col-dressed';
                 tdDressed.innerHTML = `<span class="cell-toggle ${p._dressed ? 'on' : ''}${offCls}" title="${p._dressed ? 'clothed' : 'unclothed'}" ${toggle('deTogglePosDressed', i)}>${p._dressed ? '\u{1F455}' : '—'}</span>`;
@@ -12127,6 +12543,70 @@
                 tr.appendChild(tdMods);
                 tbody.appendChild(tr);
             });
+            // Nearby eligible actors not in the scene: dimmed rows, + adds one (SexLab allows 5).
+            if (!live || liveCount >= 5) return;
+            deAddableNearbyActors(liveInfo).forEach(a => {
+                const tr = document.createElement('tr');
+                tr.className = 'de-nearby-row';
+                tr.innerHTML = `<td class="col-orgasm"></td><td class="col-idx"></td>` +
+                    `<td class="col-move"><span class="cell-toggle" title="add to scene" onclick="deAddActor(${a.formId})">+</span></td>` +
+                    `<td class="col-name">${escapeHtml(a.name)}</td>` +
+                    `<td class="col-dressed"></td><td class="col-o"></td><td class="col-deny"></td><td class="col-v"></td><td class="col-mods"></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function deActorChangePending() {
+            const info = deStopLiveInfo();
+            return !!(info && info.pendingActorChange);
+        }
+
+        // scEligibleNearbyActors (status ok: not in a SexLab scene, not locked / dead / child) minus the cast.
+        function deAddableNearbyActors(info) {
+            const inScene = new Set((info.positions || []).map(p => formIdU32(p && (p._form_id != null ? p._form_id : p.formId))));
+            return scEligibleNearbyActors()
+                .filter(a => a.formId && !inScene.has(a.formId))
+                .sort((a, b) => (a.dist - b.dist) || a.name.localeCompare(b.name));
+        }
+
+        function deAddActor(formId) {
+            const info = deStopLiveInfo();
+            if (!info || !info.positions || info.positions.length >= 5) return;
+            const a = deAddableNearbyActors(info).find(x => x.formId === formIdU32(formId));
+            if (!a) return;
+            const entry = Object.assign(scPosFromPool(a), { _added: 1 });
+            info.positions.push(entry);
+            scRequestActorMeta([entry._form_id], 'm' + (++SC.metaQueryId));
+            deOnActorsChanged(info);
+        }
+
+        function deRemoveAddedActor(i) {
+            const info = deStopLiveInfo();
+            const p = info && (info.positions || [])[i];
+            if (!p || !p._added) return;
+            info.positions.splice(i, 1);
+            deOnActorsChanged(info);
+        }
+
+        // Cast size changed: the old animation and any earlier pick no longer fit. Re-filter for the new cast
+        // and open the animation table; Continue stays off until a fitting animation is picked.
+        function deOnActorsChanged(info) {
+            info.pendingActorChange = info.positions.some(p => p && p._added);
+            info.dirty = true;
+            if (DE.pendingSwitch && DE.pendingSwitch.key === info.key) {
+                DE.pendingSwitch = null;
+                info.nextRegistry = '';
+            }
+            if (info.reseedDefaults && info.origActiveRegistry != null) info.activeRegistry = info.origActiveRegistry;
+            info.origActiveRegistry = null;
+            info.reseedDefaults = false;
+            SC.positions = sceneInfoClone(info.positions);
+            if (selectedSceneInfo() === info) scRenderPositions();
+            deLoadFocusAnimFromScene();
+            // Not scOnActorCountChanged: it writes SC.positions to selectedSceneInfo(), maybe the creator draft.
+            SC.selectedRegistries = [];
+            if (info.pendingActorChange || DE.bottomTab === 'filter') deSetBottomTab('filter');
+            deUpdateStageNavButtons();
         }
 
         // Live edit target: the bound scene, never while a pick is pending (its values aren't live yet).
@@ -12260,14 +12740,17 @@
             };
             // A pending animation pick has no live stage yet: stage nav and continue wait for the switch.
             const pending = dePendingActive();
-            set('de-btn-prev', stage <= 1 || !!DE.stagePending || pending);
-            set('de-btn-next', stage >= deStageMax() || !!DE.stagePending || pending);
+            // Added actors: no stage nav, and Continue waits for an animation that fits the new cast.
+            const castChange = deActorChangePending();
+            set('de-btn-prev', stage <= 1 || !!DE.stagePending || pending || castChange);
+            set('de-btn-next', stage >= deStageMax() || !!DE.stagePending || pending || castChange);
             set('de-btn-copyprev', stage <= 1);
-            set('de-btn-continue', pending);
+            set('de-btn-continue', pending || castChange);
+            document.querySelectorAll('.de-btn-continue-close').forEach(b => b.classList.toggle('de-disabled', castChange && !pending));
             const stopBtn = document.getElementById('de-btn-stop');
             if (stopBtn) stopBtn.style.display = deStopLiveInfo() ? '' : 'none';
             const loadBtn = document.getElementById('de-btn-load');
-            if (loadBtn) loadBtn.style.display = deStopLiveInfo() && !pending ? '' : 'none';
+            if (loadBtn) loadBtn.style.display = deStopLiveInfo() && !pending && !castChange ? '' : 'none';
         }
 
         function deStageStep(dir) {
@@ -12383,7 +12866,7 @@
         function deContinueScene() {
             deAutoSave();
             const info = deSceneInfoForPick();
-            if (!info || info.mode !== 'active' || info.scene_sid < 0 || dePendingActive()) return;
+            if (!info || info.mode !== 'active' || info.scene_sid < 0 || dePendingActive() || info.pendingActorChange) return;
             const st = DE.stagesDraft.find(s => s._stage === deActiveStage());
             const text = st ? deSubstitute(st._template || '', dePreviewNamesFor(deFindAnim(DE.focusRegistry))).trim() : '';
             if (!text) return;
@@ -12817,8 +13300,10 @@
         function dePickSceneAnimation(reg, row) {
             const info = deSceneInfoForPick();
             if (!info || !reg) return;
+            // Added actors: only the filter tab's results fit the new cast (they are queried with its count).
+            if (info.pendingActorChange && !(DE.filterAnims || []).some(x => deRegEq(x._registry, reg))) return;
             deAutoSave();
-            if (deRegEq(reg, info.activeRegistry)) {
+            if (deRegEq(reg, info.activeRegistry) && !info.pendingActorChange) {
                 if (!DE.pendingSwitch) return;
                 DE.pendingSwitch = null;
                 info.nextRegistry = '';
@@ -12843,6 +13328,16 @@
             const info = sceneInfoByKey.get(pend.key);
             if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
             pend.sent = true;
+            // Added actors: the pick rides the SceneInfo commit with the new positions, so ChangeActors runs
+            // first and the switch after it (SexLab P+ replays it after the restart).
+            if (info.pendingActorChange) {
+                if (!info.reseedDefaults) info.origActiveRegistry = info.activeRegistry;
+                info.activeRegistry = pend.reg;
+                info.nextRegistry = pend.reg;
+                info.reseedDefaults = true;
+                info.dirty = true;
+                return;
+            }
             deDbg('deSendPendingSwitch sending'); // DEBUG-DELETE
             window.onSceneInfoCommit(JSON.stringify({ _scenes: [{
                 _key: info.key,
@@ -12851,6 +13346,16 @@
                 _active_registry: pend.reg,
                 _reseed_defaults: 1
             }] }));
+        }
+
+        // Commit close with added actors but no pick: send no registry, so SexLab's ChangeActors picks an
+        // animation that fits (the old one does not fit the new cast).
+        function deFinalizeActorChanges() {
+            sceneInfoByKey.forEach(info => {
+                if (!info || !info.pendingActorChange || info.reseedDefaults) return;
+                info.activeRegistry = '';
+                info.nextRegistry = '';
+            });
         }
 
         // Scene state pushed: a pending pick that is now playing is done; the live values replace the preview.
@@ -12884,7 +13389,9 @@
                 _stages: sceneInfoClone(DE.stagesDraft)
             };
             // A pending pick's table still shows the old animation's live values: never save them onto the pick.
-            const savePos = !!withPositions && !!deStopLiveInfo() && !dePendingActive() && DE.posDraft.length > 0;
+            // Added actors: the table no longer matches the animation's positions.
+            const savePos = !!withPositions && !!deStopLiveInfo() && !dePendingActive() && !deActorChangePending()
+                && DE.posDraft.length > 0;
             if (savePos)
                 payload._positions = DE.posDraft.map(p => ({ _no_orgasm: p._no_orgasm ? 1 : 0, _speaking: p._speaking || '', _dressed: p._dressed ? 1 : 0 }));
             if (typeof window.onAnimRegistrySave === 'function')

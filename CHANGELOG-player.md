@@ -2,16 +2,58 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
-## Unreleased
-
-### Aid
-- Food, drink and ingredients that restore health or stamina can be used as Aid, like potions.
-
 ## 0.36.5
 
+### Aid
+- Food, drink and ingredients that restore health or stamina can be used as Aid, like potions
+- The Aid panel opens on the most damaged body part
+- Aid and Punish can target the throat (Injury Engine: lungs)
+
+### NPC strategy
+- NPCs now press in quick bursts and tire out: stamina to arouse, magicka to calm
+- Fixed: NPCs no longer argue with their own strategy. The Arouse and Calm LLM actions are removed
+- Removed the settings NPC strategy step interval and LLM mini-game strength
+
+### Controlling a scene you aren't in
+- Controlling an NPC (Num *): Arouse, Calm, Deny, Ask, Order, Punish and Aid are your own actions
+- The NPC you control keeps playing its strategy and answers Ask and Order
+- Fixed: the Ask / Order / Punish key looked disabled in a solo scene you control
+- Your HUD Aid, Ask, Order and Punish are always narrated right away
+
+### Punish
+- A punished NPC's new strategy now holds for 30 seconds
+- The narration says what the punished actor chose
+- Tortured past 80% (Injury Engine), the punished actor gives in and submits
+- Punished NPCs now see what happened in the scene, so repeated punishment can work
+- DOM slaves' open punishment reasons show in the Punish panel
+
+### DOM slaves
+- Bar fill = the non-random orgasm score; the % over the bar end = chance the next roll works
+- Arouse on an aroused slave fills their aroused timer first
+
+### Target menu
+- New "hug" option: a quick hug, not a scene
+- Removed the "platonic" option (the scene setting is still in Scene Creator)
+
+### Description Editor
+- Nearby actors can be added to a running scene with **+** (up to 5) and taken off with **✕**
+- After adding, pick an animation that fits the new group, then Continue
+- The animation table has a filter row: favorites star, gender and name filters
+
+### Prompts
+- Scene data in prompts is live, even at scene start or with a menu open
+- Cum on actors is now kept by the SKSE plugin. Cum recorded before this update is lost
+
+### Bug Fixes
+- Fixed: an NPC's Deny Orgasm was refused when the victim was you
+- Fixed: Clean Cum, Dress and Undress were never offered to NPCs
+- Fixed: scene endings never used the afterglow template
+- Fixed: raw `{{sla.ctors.0}}` braces in several animation descriptions
+
 ### WebUI
-- Fixed a lock-up when a sex request arrived with the SkyrimNet dashboard open
-- The dashboard (or any other focused menu) now closes before the SexLab dialogue opens
+- Fixed: lock-up (paused game, no cursor) when a request came in with the SkyrimNet dashboard open
+- The dashboard or any other open menu now closes before the SexLab dialogue
+- Scene Creator: new row above the table (Start by, counts, All / None)
 
 ## 0.36.4
 

@@ -1,53 +1,67 @@
 # Changelog
 
-## Unreleased
+## [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5) — since [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4)
 
-### Aid with food and drink
+### Aid
 - **Any food, drink or ingredient that restores health or stamina can be used as Aid**, the same as a potion (soups, stews, cheese, mead, Histcarp, Purple Mountain Flower…). "Nina consumes Bob's Vegetable Soup."
+- **Aid panel always opens on the most damaged body part** (Injury Engine), instead of the part used last. Potions still start on drink.
+- **Aid and Punish can target the throat**. With Injury Engine installed, the throat is its lungs (drowning damage).
+- **New ModEvent `SkyrimNet_SexLab_AidStart`** (sender = target, strArg `"<spell|potion>|<caster FormID>"`, numArg = health) so SkyrimNet_DOM can react to Aid heals. See `docs/developers/orgasm-engine.md` ModEvents.
 
-### Prompts
-- **Scene data in prompts is now live**: every SkyrimNet_SexLab decorator runs in the SKSE plugin instead of Papyrus. Prompts no longer miss the scene at its start or while a menu has the game paused, and building them no longer costs Papyrus time.
-- **Cum on actors is kept by the SKSE plugin** (saved with the game). Cum recorded before this update is not carried over.
-- Removed unused decorators `sexlab_intent`, `sexlab_get_player_los_distance` and `sexlab_ostim_player`. New decorators `sexlab_has_cum`, `sexlab_cum_count` and `sexlab_has_stripped_items`.
+### NPC strategy
+- **NPCs never ran out of stamina** in the mini-game: one move every 2 s cost less than Skyrim regenerates, so an NPC on Selfish (or any other strategy) stayed at full. NPCs now play like someone at the mouse. Every second they make a rapid burst of 5 to 10 presses, 0.1 s apart, each paid like yours (stamina to arouse, magicka to calm). When they can't pay, they catch their breath for 2 s and start again. Passive and Non-sexual still make no presses. The setting **NPC strategy step interval** is removed.
+- **NPCs no longer argue with themselves in the mini-game**: the LLM actions Arouse and Calm are removed (`SexLab_Arouse.yaml`, `SexLab_Calm.yaml`). NPCs used them in dialogue and pulled against the strategy SkyrimNet's decision model had picked. Strategy presses now decide alone how an NPC arouses or calms. The setting **LLM mini-game strength** is removed.
+- **The decision model now sees the scene**: its timeline was always empty (`StrategyDecision.cpp` read the wrong event field). It now gets recent speech and events.
+- **Three strategies had no description** for the AI ("deny self", "deny all", "focus"): fixed (`strategies.json` keys now match the strategy keys).
 
 ### Controlling a scene you aren't in
 - **You act, not the NPC you control**: after taking control of an NPC (Num \*), Arouse, Calm, Deny, Ask, Order, Punish and Aid are your own actions, and the narration names you ("Bob arouses Nina…", "Bob punishes Nina by…"). Arouse costs your stamina and Calm your magicka; the HUD shows your bars under the scene's actors.
 - **Aid works while controlling**: Num Enter opens the Aid panel with you as caster, for any actor in that scene.
 - **The NPC you control keeps playing**: taking control no longer stops the NPC's own strategy. It keeps pressing (its stamina and magicka bars move), decides as usual, and answers Ask and Order, which now list its strategies. An agreed strategy starts right away. The Punish panel offers its current strategy as a reason ("Skadi appears to …").
 - **Ask / Order / Punish key enabled in a solo scene you control**: the key looked disabled because nobody else was in the scene. You are the punisher, so the NPC is a valid target.
+- **Your HUD Aid, Ask, Order and Punish cut in**: the lines NPCs were about to say are dropped and your action is always narrated directly (`OrgasmEngine::NarratePlayer`), whatever the Mini-game narration level or cooldown. NPC answers and NPC-chosen actions are unchanged.
 
-### Fixes
+### Punish
 - **A punishment's strategy change sticks**: an NPC punished into a new strategy (e.g. passive → selfish) no longer switches back seconds later because of their own reaction dialogue. The new strategy holds for 30 s unless another punishment or order changes it.
 - **Punishment narration says what the punished actor chose**: "Bob punishes Nina by pinching Nina's nipples, because Nina refused Bob's order to … Nina chooses to focus on her own pleasure." The line is narrated once SkyrimNet's decision model has answered. New `choice` wording per strategy in `strategies.json`.
-- **NPC aggressors can deny your orgasm**: an NPC's Deny Orgasm (and Allow Orgasm) was silently refused when the victim was you, so the 🔒 never appeared on the HUD. It now applies to you like any other victim.
-- **NPCs no longer argue with themselves in the mini-game**: the LLM actions Arouse and Calm are removed. NPCs used them in dialogue and pulled against the strategy SkyrimNet's decision model had picked (Selfish, Mutual, Passive …). Strategy presses now decide alone how an NPC arouses or calms. The setting **LLM mini-game strength** is removed.
-- **NPCs never ran out of stamina** in the mini-game: one move every 2 s cost less than Skyrim regenerates, so an NPC on Selfish (or any other strategy) stayed at full. NPCs now play like someone at the mouse. Every second they make a rapid burst of 5 to 10 presses, 0.1 s apart, each paid like yours (stamina to arouse, magicka to calm). When they can't pay, they catch their breath for 2 s and start again. Passive and Non-sexual still make no presses. The setting **NPC strategy step interval** is removed.
 - **Tortured past 80% (Injury Engine), the punished actor gives in**: no AI choice, "Skadi can't take it any more and submits!" is narrated and they take the strategy they were last ordered (or asked) to. With no order: Selfless, or Selfish when alone in the scene.
-- **Punished NPCs never learned from it**: in mini-game scenes, an NPC's strategy choice never saw what had happened in the scene, so every punishment looked like the first. It now sees recent speech and events, and is told which behaviour it is being punished for, so repeated punishment can wear it down.
-- **Three strategies had no description** for the AI ("deny self", "deny all", "focus"): fixed.
-- **Clean Cum, Dress and Undress were never offered to NPCs**: their gates called decorators SkyrimNet rejects. They now work. Undress state from before this update is picked up the next time the target menu opens on that actor.
-- **Afterglow template was never used**: scene endings always fell back to the built-in sentence. `helpers/sexlab/afterglow.prompt` (orgasmed) and the new `afterglow_failed.prompt` (failed to orgasm) now render.
-- **Animation descriptions with broken name tokens** (`{{sla.ctors.0}}` and similar) showed raw braces in prompts: fixed in FB_LoversDoggy, 4uDIK Reverse Cowgirl, B_B_FMast2, b_b_kneff, B_B_LayAnal, B_B_LFing1 and MNCleitoCaninencboundmfc.
-
-### Diary of Mine
+- **Punished NPCs never learned from it**: an NPC's strategy choice never saw what had happened in the scene, so every punishment looked like the first. It now sees recent speech and events, and is told which behaviour it is being punished for (`current_key`).
 - **Punish panel lists DOM reasons**: at scene start `Handler_DOM.SeedPunishReasons` adds a DOM slave's open punishment reasons (through SkyrimNet_DOM). Before the hit, `PunishNarrated` passes the chosen reason to SkyrimNet_DOM (`SkyrimNet_DOM_API.PanelPunished`, only when SkyrimNet_DOM is installed), so the Injury Engine torture counts as that DOM punishment.
+
+### DOM slaves
+- **Mini-game bar fill is the non-random roll score**: `Handler_DOM.OrgasmMeter` sums every non-random term of DOM's orgasm roll. The new text over the bar end, `Handler_DOM.OrgasmProbability`, is the chance the next roll succeeds (random terms averaged out; 0 when not aroused or refractory). The HUD shows it as a percentage.
+- **Arouse on an aroused slave fills `is_aroused_for` first** (up to DOM's plateau max); only the rest raises `arousal_factor`.
 - **New WebUI choice list** `SkyrimNet_SexLab_WebUI.Choice_Open(json)`: a solo, scrollable list of papyrus options (`{ title, options }`) with Close / Esc. SkyrimNet_DOM uses it for torture reasons.
+- **New generic `actor_profile` main panel** (charted profile host: pills, bar groups, radars, recommendations, events, lines). First user: DOM Info (`SkyrimNet_DOM`). A foreign main panel re-opens when the ControlPanel target changes. See `docs/developers/webui.md`.
 
 ### Target menu
 - **New target menu option "hug"**: a quick hug (the short hug animation, not a SexLab scene). Shown only when the target is not in a scene or locked by the Scene Creator.
 - **Removed the target menu option "platonic"**. Its scene setting `nonsexual_platonic` is still available in Scene Creator.
 
-### WebUI
+### Description Editor
+- **Add actors to a running scene**: the actor table lists nearby actors who can join (`deAddableNearbyActors`). **+** adds one (up to 5 actors), **✕** takes an added actor back off. After adding, Continue and the stage buttons are off and the animation tab opens; pick an animation that fits the new group, then Continue.
 - **Animation table filter row** in Scene Creator and the Description Editor's animation filter tab. Right under the column headers are a ★ favorites-only toggle, the gender pulldown (moved from the Filter column) and a name filter. Description Editor rows can now be starred too.
 - **Scene Creator row above the table** now reads `Start by <initiator> <style>`, then the animation and selected counts and **All** / **None**. The "All / Selected only" pulldown is removed.
-- **Aid panel always opens on the most damaged body part** (Injury Engine), instead of the part used last. Potions still start on drink.
-- **Aid and Punish can target the throat**. With Injury Engine installed, the throat is its lungs (drowning damage).
-- **Your HUD Aid, Ask, Order and Punish cut in**: the lines NPCs were about to say are dropped and your action is always narrated directly, whatever the Mini-game narration level or cooldown. NPC answers and NPC-chosen actions are unchanged.
 
-## [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5) — since [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4)
+### Prompts
+- **Scene data in prompts is now live**: every SkyrimNet_SexLab decorator runs in the SKSE plugin instead of Papyrus. Prompts no longer miss the scene at its start or while a menu has the game paused, and building them no longer costs Papyrus time.
+- **Cum on actors is kept by the SKSE plugin** (saved with the game). Cum recorded before this update is not carried over.
+- Removed unused decorators `sexlab_intent`, `sexlab_get_player_los_distance` and `sexlab_ostim_player`. New decorators `sexlab_has_cum`, `sexlab_cum_count` and `sexlab_has_stripped_items`.
+- Fixed: **afterglow template was never used**: scene endings always fell back to the built-in sentence. `helpers/sexlab/afterglow.prompt` (orgasmed) and the new `afterglow_failed.prompt` (failed to orgasm) now render.
+
+### Bug Fixes
+- Fixed: **NPC aggressors can deny your orgasm**: an NPC's Deny Orgasm (and Allow Orgasm) was silently refused when the victim was you, so the 🔒 never appeared on the HUD. It now applies to you like any other victim.
+- Fixed: **Clean Cum, Dress and Undress were never offered to NPCs**: their gates called decorators SkyrimNet rejects. They now work. Undress state from before this update is picked up the next time the target menu opens on that actor.
+- Fixed: **animation descriptions with broken name tokens** (`{{sla.ctors.0}}` and similar) showed raw braces in prompts: FB_LoversDoggy, 4uDIK Reverse Cowgirl, B_B_FMast2, b_b_kneff, B_B_LayAnal, B_B_LFing1 and MNCleitoCaninencboundmfc.
 
 ### WebUI
-- **Lock-up when a scene request came in with the SkyrimNet dashboard open**: our dialogue took focus from the dashboard (both PrismaUI views at order 101). After Accept, no view had focus and the game stayed paused, with no cursor, Escape, console or menus. Now the dashboard and any other focused PrismaUI view are closed before the dialogue opens, and the dialogue never takes focus from another view. If a view will not let go, it shows "SexLab: request waiting - close the open menu" and opens once it does. Show / Hide log PrismaUI focus state.
+- Fixed: **lock-up when a scene request came in with the SkyrimNet dashboard open**: our dialogue took focus from the dashboard (both PrismaUI views at order 101). After Accept, no view had focus and the game stayed paused, with no cursor, Escape, console or menus. Now the dashboard and any other focused PrismaUI view are closed before the dialogue opens, and the dialogue never takes focus from another view. If a view will not let go, it shows "SexLab: request waiting - close the open menu" and opens once it does. Show / Hide log PrismaUI focus state.
+
+### Profiling
+- **WebUI Profile main panel** (`webui/MainPanels/1100_profile.json`) drives a run: Start Calibration → Start Profiling → Stop Profiling. Backed by `SKSE_Source/src/Profiler.cpp` (span recorder, `SNSL_PROF` timers, `[Profiler] run:` markers) and `python_scripts/profile_report.py` (`ingest`, `report`, `compare`). See `docs/developers/webui.md`.
+
+### Build
+- `KNOWLEDGEBASE.md` gains "JsonLowerCaseKeys cannot change case". The SKSE DLL and `.pex` files are rebuilt.
 
 ## [0.36.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.4) — since [0.36.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.3)
 

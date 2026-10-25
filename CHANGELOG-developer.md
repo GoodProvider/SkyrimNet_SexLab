@@ -2,71 +2,41 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## Unreleased (branch `profile`)
-
-### Aid food / ingredients
-- `Aid::ListOptions` scans `AlchemyItem` and `IngredientItem`: food is no longer skipped (poisons still are). New `Option::food` (food or ingredient), still `potion = true`, so the consent, part lines and `PickBest` follow the potion path. `ItemOf` names the food ("Vegetable Soup") where a potion reads "stamina potion"; drink reads "consumes". Consumption looks up `TESBoundObject`. An ingredient counts every Restore effect, not only the first as when eaten.
-
-### Removed `SexLab_Arouse` / `SexLab_Calm` actions
-- Deleted `actions/SexLab_Arouse.yaml` / `SexLab_Calm.yaml` and their `webui/actions_index.json` entries. `MCM.MiniGameActionNames` now holds only `SexLab_Aid`. Removed the manifest's `sexlab.minigame.llm_multiplier`; `Actions.MiniGame_Arouse` / `MiniGame_Calm` stay (default mult 3.0). Cause: the dialogue LLM's arouse / calm worked against the decision model's strategy.
-
-### NPC strategy presses
-- `OrgasmEngine.cpp` `StrategyStep`: every `kPressTick` (1 s) a burst of `uniform_int(kPressMin = 5, kPressMax = 10)` presses, queued `kPressGap` (0.1 s) apart in `ActorState::pressesLeft` / `nextPressAt` / `pressAmount` and fired as they come due on the 250 ms tick, through `ArouseLocked` / `CalmLocked`. `ApplyStrategy`, auto play and take-control clear the queue. The first press the actor can't pay drops the rest of the burst and sets `nextStepAt = now + kRestSecs` (2 s), logged `OrgasmEngine: 0x… out of stamina|magicka (cur/cost), rests 2s`. Press size = per-second rate (`mgStepRate × spread / MeanNpcSkillFactor`, untimed `random(npc_step_min, npc_step_max) / 2`) × `kPressTick / mean(kPressMin, kPressMax)`, so the average enjoyment per second while not resting matches the old 2 s step. DenyAll: each calm is a paid press. Tease: stamina or magicka by the target's enjoyment.
-- Removed `sexlab.minigame.npc_interval` (manifest, `Settings::npcInterval`). The config log reads `npc press=3x/1s rest=2s`. BeginScene's `default strategy` line adds `stamina=cur/max magicka=cur/max`.
-- Cause: 7.27 stamina every 2 s (about 3.6/s) is below NPC out-of-combat regen, and the regen-cancelling fatigue ("Sex is hard work") has been off since 0.35.2.
-
-### Strategy decision: timeline and punishments
-- `StrategyDecision.cpp` `BuildTimeline` reads `PublicGetRecentEvents`' `data` field (new `EventText`; legacy `text` fallback). The timeline was always empty before. Debug log of the first raw event per request.
-- `DecisionInput::currentOption` (options key of the current strategy, `deny_p2`), filled in `GetStrategyDecisionInput`. `BuildContext` sends it as `current_key` for `trigger=punished` only (`""` otherwise); `minigame_strategy.prompt` uses it in `last_line` and the strategy question.
-- Punished `last_line_text` is its own line now, not the narration: `PunishDecisionLine` → `"<act>. <feeling>, because <reason>."` (`PunishPlan::act`). `ContinuePunish` asks `InjuryEngine::PartPoints` first and when `total > 0.8 × max` sends no decision: new `Submit` narrates `"<target> can't take it any more and submits!"` (`NarratePlayer` from the HUD, else `NarrateRequest`) and calls `SetStrategyLocked` with `plan.requestKey`, else the newest refused order then request in `ActorState::reasons` (`ParseRequest` must accept it), else `selfless` (2+ actors) / `selfish` (solo); the obeyed key's reasons are erased. Log `OrgasmEngine: <id> submits (torture t/m) -> <key>`. Without `External_PartPoints` the request goes out right away. The narration line is unchanged.
-- `strategies.json`: keys `resist` / `forbid` / `focus` → `deny_self` / `deny_all` / `focused` (matching `kStrategyKeys`; `LoadStrategies` ignored them).
-
-### Take control: the player is the doer
-- `Hud.cpp`: `OnArouseOrCalm` source, `blocked` flags and `OnPunish` use the player, not `ActingLocked()` (still the scene context: speed, stage, pause, rows). `OnAid` no longer returns while controlling; actors come from `GetActorScene(acting)`; the Aid cell shows with `g_miniGame` alone. New push `payer {name, magicka, stamina}` while controlling (`OrgasmEngine::GetResourcePct`), rendered by `hud.html` as a row under the actors.
-- `OrgasmEngine.cpp` `PunisherScene`: the player with no `ActorState` falls back to the `playerDriven` actor's scene, so `GetPunishInfo` / `CanPunish` / `AskOrderNarrated` / `PunishLocked` accept the player. `ArouseLocked` / `CalmLocked` with the untracked player: skill 0, base cost, the player's AVs.
-- The controlled NPC keeps its AI: `AiDriven(st)` is `autoPlay` for the player and always true for an NPC (it was `!playerDriven`). So for a `playerDriven` NPC the engine still runs `StrategyStep` presses, the scene-start / dialogue / request decisions, `GetRequestOptions` (the Ask / Order list was empty), `GetStrategyText`, the HUD `strategy` tag, the strategy punish reason (`GetPunishReasons`, `PunishLocked`) and `SceneAiDriven`'s ending gate. `SetPlayerDriven` no longer resets the strategy or presses. `playerDriven` now only marks the HUD anchor (`PunisherScene`, `PlayerScene`).
-- `Hud.cpp` punish cell: `enabled` comes from `GetPunishInfo(player)`, as `OnPunish` does. It was the acting NPC, so a solo controlled scene had no target and the cell looked disabled.
-- `Menu.psc` `Hud_OnKey` deny: denier is `Game.GetPlayer()`, not the anchor.
-
-### Player HUD narration
-- New `OrgasmEngine::NarratePlayer` → Papyrus `OrgasmEngine.Effect_NarratePlayer` → `Utilities.DirectNarration(…, purge_dialogue=true)` (not capped by `minigame_level`). Used by `WebUI.cpp` `onAidResult`, `AidFinishConsent` (accept and refusal lines) and `onPunishResult`.
-- `AskOrderNarrated` / `PunishNarrated` gain `fromPlayer = false` (`PunishPlan::fromPlayer`); `Aid::Apply` / `Aid::StartChannel` gain `callerNarrates = false` (`Channel::callerNarrates`). `InjuryEngine::Strike` / `Torture` / `PunishHit` gain `narrate = true` (`External_Damage`'s 7th arg). Papyrus natives, actions and StrategyDecision keep the old routes.
-
-### Aid mod event
-- New ModEvent `SkyrimNet_SexLab_AidStart`: sender = target, strArg `"<spell|potion>|<caster FormID signed decimal>"`, numArg = health. `Aid.cpp` `NotifyAidStart` runs on the game thread from `Aid::Apply` (the task, after the restore) and once per `Aid::StartChannel`. Skipped for self-aid and stamina-only Aid. SkyrimNet_DOM listens to it (Aid casts nothing, so Injury Engine's HealStart never fires). See `docs/developers/orgasm-engine.md` ModEvents.
-
-### Throat body part
-- `throat` added (non-sexual) to index.html `BODY_PARTS`, `StrategyDecision.cpp` `kBodyParts` and the `SexLab_Scene_Punish` location description. `InjuryEngine::PartName` maps `throat` → `lungs`, and `PartTerm` maps `lungs` → `throat` (part points).
-
-### Animation table filter row (WebUI)
-- `#sc-anims-list` / `#de-anims-list` now hold a static `<thead>` (label row plus `.anim-filter-row`), and the renderers write only `#sc-anims-tbody` / `#de-anims-tbody`. Filter row: `#*-fav-filter` star (`scRenderFavoritesToggle`, replaces the off/on pulldowns), `#*-gender-filter` (`scRenderFilterByPulldown`, moved from `*-filter-by-pulldown`), `#*-anim-name-filter` (`scOnNameFilterInput`).
-- The name filter is now shared state `SC.animNameFilter` (was `DE.animNameFilter`). `scBuildFilter` sends `_name_contains` for Scene Creator too.
-- New `deToggleFavorite`. Removed `scRenderAnimShowPulldown`, `SC.show_all_selected_unselected_pulldown` and `#sc-initiates-label`. Added `#sc-by-label`.
-
-### TargetMenu hug
-- New Actor option `0155_hug.json` → `Actions.TM_Hug(speaker, target)` (no panel). The lone-hug block of `StartScene_Event` moved into `Actions.PlayLoneHug(speaker, target)`, shared by both; `TM_Hug` guards both actors with `ActorUnavailable`.
-- Removed Actor option `0160_platonic.json`. `scenes/nonsexual_platonic.json` stays (Scene Creator, `exclude_settings` in consensual / punish_pleasure_pain_rape, the kissing-switch exception in `Scene_Creator.Setup`).
-
-### Decorators moved to C++
-- `SKSE_Source/src/Decorators.cpp/.h` (new): `sexlab_get_threads`, `sexlab_activities`, `sexlab_cum` and the new `sexlab_has_cum` / `sexlab_cum_count` are C++ `PublicRegisterDecorator` callbacks (registered in `Config.cpp RegisterDecorators` with `sexlab_npc_stop_allowed` / `sexlab_verbose`). `SkyrimNet_SexLab_Decorators.RegisterDecorators` and the `Main.Setup` call are gone.
-- Removed decorators with no consumers: `sexlab_intent`, `sexlab_get_player_los_distance`, `sexlab_ostim_player` (and `Intent`, `Player_LOS_Distance`, `Ostim_Player`, `Outfit_HasStrippedItems`, `Is_Nudity`).
-- Threads: `Scene.GetThreadObj(speaker)` → `RefreshThreadObj()` (no speaker fields, no OrgasmEngine overlay), called by the new `Scene.PushThread` → native `Decorators.Threads_Set(sid, thread_obj, positions)` / `Threads_Remove(sid)`. PushThread replaces `manager.SaveThreadsJson()` in AnimationStart / StageStart / AnimationEnd / SetDenyOrgasm and runs from `PollAnimationChange`; `Release` removes the thread. `Scene_Manager.GetThreadsJson`, `DebugTraceThread`, `Scene.GetThreadJson`, `ApplySpeakerFields`, `thread_counter`, `speaker_last` removed. DOM threads: `Scene_Manager.PushDomThreads` → `Threads_SetDom`; `SaveThreadsJson` kept as a shim for SkyrimNet_DOM. C++ adds live `enjoyment` / `strategy` / `stamina_regen`, the speaker fields (LOS from a main-thread `HasLineOfSight` cache) and writes `threads.json` when the threads change. New native `Threads_Get(speaker)` for debugging.
-- Cum: `RecordCum`, `CumParts` and new `CumClear` are natives over C++ state (co-save record `SCUM`); `ClearCumPart` stays in Papyrus for the SexLab overlay. StorageUtil `skyrimnet_sexlab_cum_*` keys dropped. Gates: `SexLab_Clean_Cum.yaml` → `sexlab_cum_count [currentActor] != 0` (every PublicAPI decorator takes one actor argument; without it SkyrimNet logs `expects 1 arguments, got 0` and the gate fails); TargetMenu `0510_clean_cum.json` → `sexlab_has_cum currentActor > 0` (`ActionCatalog EvalCondition`); `0416_sexlab_cum.prompt` → `sexlab_has_cum(actorUUID) == "1"`.
-- Stripped clothing: SkyrimNet `papyrus_util` has no `FormListCount`, so the `outfit_dress` / `outfit_undress` gates never passed. New decorator `sexlab_has_stripped_items` reads a C++ mirror of StorageUtil `skyrimnet_sexlab_storage_items` (co-save record `SSTR`), kept by `Main.StoreStrippedItems` / `UnStoreStrippedItems` / `HasStrippedItems` through the new native `Decorators.SetStrippedItems`. Gates: dress `== 1`, undress `== 0`. TargetMenu `0500/0501` stay on `papyrus_util FormListCount` (C++ `EvalCondition`).
-- Afterglow: `SkyrimNetApi.RenderTemplate` does not bind the `sl` variable, so `{% if %}` in a `RenderSlPrompt` template renders empty. `afterglow.prompt` is now plain (orgasmed) and `afterglow_failed.prompt` is new; `Scene.AnimationEnd` picks the template.
-
-### Profiling (first in-game runs: `checkpoints/profile/checkpoint-06.md`)
-- WebUI **Profile** main panel (`webui/MainPanels/1100_profile.json`, builtin `profile_panel`) drives a run: Start Calibration → Start Profiling → Stop Profiling. See `docs/developers/webui.md` (Profile panel) and `checkpoints/profile/checkpoint-04.md`.
-- `SKSE_Source/src/Profiler.h/.cpp`: raw event recorder (B/E/X/M, 112-byte events, two 200,000-event buffers, 80% swap, drop only at 100%), part writer thread with one retry, `[Profiler] run:<key>` markers, pending-note queue, `SNSL_PROF("key")` scope timer.
-- New `SkyrimNet_SexLab_WebUI` natives (tasklet-callable, record the VM stack id): `Prof_Begin`, `Prof_End`, `Prof_Mark`, `Prof_CalibMark`, `Prof_SetRecording`, `Prof_EnterProfiling`, `Prof_CalibrateCpp`; Papyrus globals `Prof_Calibrate(n)` and `Prof_Wait(secs, probe_key)` (no call sites). `TraceLog` now takes the VM stack id and adds one `X` event (source `trace`) while recording.
-- Probes: Scene_Manager (11 events), Scene (9 functions; `prof_tid` caches `thread.tid`, set in `SetThread`), `Scene_Creator.StartScene`, `Actions.StartScene_Event`, AnimDb (5). Marks `action.received`, `scene.action_start` (detail = intent), `scene.animation_start`, `narration.queue` (`queued`/`immediate`, from `QueueDirectNarration`), `narration.sent` (`immediate`/`flush`).
-- SKSE timers: AnimationDB `ResolveTags`, `QueryTopNAnims`, `QueryTopNTags`, `GetStageDescription`, `SubstituteActors`; `QueueDirectNarration`; the `sexlab_npc_stop_allowed` / `sexlab_verbose` decorators.
-- `python_scripts/profile_report.py` (stdlib, `uv run`): `ingest` copies a run into `checkpoints/<name>/profiles/<run key>/` and runs `report`, which writes `report.md` (and `events.csv` with `--csv`). `report` adds a per-phase **Player input and scenes** table (minigame input and OrgasmEngine actor counts from the log). `compare <profiles dir>` reports every run and writes `compare.md`; it excludes runs where the minigame was played only during profiling (`--keep-all` keeps them). Overhead gaps also start at `Scene_Manager.CreateCreator` (Scene Creator), the end match ignores case, and the cross-check is skipped when a phase has fewer than two gaps.
-
 ## 0.36.5
 
+### Aid
+- Aid takes any food, drink or ingredient that restores health or stamina
+- New mod event `SkyrimNet_SexLab_AidStart` tells SkyrimNet_DOM about Aid heals
+
+### NPC strategy
+- NPC strategies press in bursts and pay stamina or magicka; the LLM Arouse / Calm actions are removed
+
+### Controlling a scene you aren't in
+- When you take control of an NPC you are the one who acts; the NPC keeps its own strategy
+
+### Punish
+- Punishment narration names what the punished actor chose, and torture past 80% makes them submit
+
+### DOM slaves
+- The mini-game bar shows DOM's orgasm score and the chance the next roll succeeds; new generic `actor_profile` main panel and a choice-list panel (`Choice_Open`) for SkyrimNet_DOM
+
+### Target menu
+- New "hug" option; "platonic" removed
+
+### Description Editor
+- Nearby actors can be added to a running scene; the animation table gets a filter row
+
+### Prompts
+- All SkyrimNet_SexLab decorators now run in the SKSE plugin; cum is stored there (old cum is not carried over)
+
+### Bug Fixes
+- Fixed: NPCs could not deny your orgasm, Clean Cum / Dress / Undress were never offered, and the afterglow template was never used
+
 ### WebUI
-- `WebUI_Visibility_Show` closes foreign PrismaUI views first: `ForeignViews()` reads view ids from `PrismaUI.log`; `CloseForeignViews()` toggles the dashboard via `SkyrimNetApi.TriggerToggleDashboard` (only when `DashboardOpen()`) and `Unfocus` + `Hide`s other focused views. A 250 ms watcher then calls `WebUI_ShowNow` once no foreign view has focus (dashboard-hidden wait capped at 3 s; "SexLab: request waiting - close the open menu" if focus is held). Fixes the paused-game lock-up after Accept with the dashboard open.
+- Fixed: lock-up when a scene request came in with the SkyrimNet dashboard open
+
+### Profiling
+- New Profile panel and report script for timing Papyrus and SKSE work
 
 ## 0.36.4
 
