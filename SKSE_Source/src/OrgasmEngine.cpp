@@ -1,6 +1,7 @@
 #include "OrgasmEngine.h"
 
 #include "Aid.h"
+#include "AnimEngineOrgasm.h"
 #include "AnimSpeed.h"
 #include "Config.h"
 #include "Hud.h"
@@ -1551,6 +1552,12 @@ namespace OrgasmEngine
                 if (actors.empty()) {
                     continue;
                 }
+                // AnimEngine scenes: the native bridge plays the Scene's part (no SexLab thread).
+                if (AnimEngineOrgasm::OwnsActor(actors.front()->GetFormID())) {
+                    AnimEngineOrgasm::OnOrgasmGroup(actors, forced, g.individual, g.source, ActorFor(g.allower),
+                        ActorFor(g.allowed), g.extras);
+                    continue;
+                }
                 DispatchShell("Effect_OrgasmGroup",
                     RE::MakeFunctionArguments(std::move(actors), std::move(forced), static_cast<bool>(g.individual),
                         RE::BSFixedString(g.source.c_str()), ActorFor(g.allower), ActorFor(g.allowed),
@@ -1563,17 +1570,25 @@ namespace OrgasmEngine
                         actors.push_back(a);
                     }
                 }
-                if (!actors.empty()) {
+                if (!actors.empty() && AnimEngineOrgasm::OwnsActor(actors.front()->GetFormID())) {
+                    AnimEngineOrgasm::OnGatePassed(actors, p.holdStage);
+                } else if (!actors.empty()) {
                     DispatchShell("Effect_GatePassed",
                         RE::MakeFunctionArguments(std::move(actors), static_cast<bool>(p.holdStage)));
                 }
             }
             for (const auto id : fx.advances) {
-                if (auto* a = ActorFor(id)) {
+                if (auto* a = ActorFor(id); a && AnimEngineOrgasm::OwnsActor(id)) {
+                    AnimEngineOrgasm::OnAdvanceToFinal(a);
+                } else if (a) {
                     DispatchShell("Effect_AdvanceToFinal", RE::MakeFunctionArguments(std::move(a)));
                 }
             }
             for (const auto& m : fx.mirrors) {
+                // Mirror: SexLab's enjoyment; AnimEngine scenes have no SexLab thread.
+                if (AnimEngineOrgasm::OwnsActor(m.actor)) {
+                    continue;
+                }
                 if (auto* a = ActorFor(m.actor)) {
                     DispatchShell("Effect_Mirror",
                         RE::MakeFunctionArguments(std::move(a), static_cast<std::int32_t>(m.value)));
@@ -1610,7 +1625,9 @@ namespace OrgasmEngine
                         actors.push_back(a);
                     }
                 }
-                if (!actors.empty()) {
+                if (!actors.empty() && AnimEngineOrgasm::OwnsActor(actors.front()->GetFormID())) {
+                    AnimEngineOrgasm::OnExhausted(actors);
+                } else if (!actors.empty()) {
                     DispatchShell("Effect_Exhausted", RE::MakeFunctionArguments(std::move(actors)));
                 }
             }
@@ -1647,6 +1664,10 @@ namespace OrgasmEngine
 
         bool AnyAnimating(const SceneState& sc)
         {
+            // AnimEngine scenes: nobody joins SexLabAnimatingFaction; live while the bridge has the scene.
+            if (AnimEngineOrgasm::IsAnimEngineSid(sc.sid)) {
+                return AnimEngineOrgasm::IsLive(sc.sid);
+            }
             if (!g_animatingFaction) {
                 g_animatingFaction = RE::TESForm::LookupByEditorID<RE::TESFaction>("SexLabAnimatingFaction");
                 if (!g_animatingFaction) {
@@ -2133,6 +2154,7 @@ namespace OrgasmEngine
                 FlushNarrations(now, false, fx);
             }
             RunEffects(fx);
+            AnimEngineOrgasm::Tick(dt);
             Hud::Tick();
         }
 
@@ -4195,8 +4217,14 @@ namespace OrgasmEngine
             return;
         }
         const double now = Now();
-        intfc->WriteRecordData(static_cast<std::uint32_t>(g_scenes.size()));
+        // AnimEngine scenes never survive a load (AnimEngine releases their actors): not saved.
+        const auto saved = std::count_if(g_scenes.begin(), g_scenes.end(),
+            [](const auto& kv) { return !AnimEngineOrgasm::IsAnimEngineSid(kv.first); });
+        intfc->WriteRecordData(static_cast<std::uint32_t>(saved));
         for (const auto& [sid, sc] : g_scenes) {
+            if (AnimEngineOrgasm::IsAnimEngineSid(sid)) {
+                continue;
+            }
             intfc->WriteRecordData(sid);
             intfc->WriteRecordData(sc.hasPlayer);
             intfc->WriteRecordData(sc.stage);

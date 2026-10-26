@@ -297,6 +297,11 @@ namespace PapyrusBindings_AnimationDB
         return AnimationDB::SetAnimEnabled(registry.c_str() ? registry.c_str() : "", enabled);
     }
 
+    bool AnimDb_RecordPlay(RE::StaticFunctionTag*, RE::BSFixedString registry)
+    {
+        return AnimationDB::RecordPlay(registry.c_str() ? registry.c_str() : "");
+    }
+
     RE::BSFixedString AnimDb_QueryTopNAnims(RE::StaticFunctionTag*, RE::BSFixedString filter_json,
         std::int32_t n)
     {
@@ -462,6 +467,7 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_SlsbRegistryEnabled", scriptName, AnimDb_SlsbRegistryEnabled, true);
         a_vm->RegisterFunction("AnimDb_GetPlaybackJson", scriptName, AnimDb_GetPlaybackJson, true);
         a_vm->RegisterFunction("AnimDb_SetEnabled", scriptName, AnimDb_SetEnabled);
+        a_vm->RegisterFunction("AnimDb_RecordPlay", scriptName, AnimDb_RecordPlay);
         a_vm->RegisterFunction("AnimDb_QueryTopNAnims", scriptName, AnimDb_QueryTopNAnims, true);
         a_vm->RegisterFunction("AnimDb_QueryTopNTags", scriptName, AnimDb_QueryTopNTags, true);
         a_vm->RegisterFunction("AnimDb_TotalEnabled", scriptName, AnimDb_TotalEnabled, true);

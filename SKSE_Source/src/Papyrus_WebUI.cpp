@@ -303,6 +303,7 @@ namespace PapyrusBindings_WebUI
         j["_name"] = row.name;
         j["_enabled"] = row.enabled;
         j["_favorite"] = AnimationDB::IsFavorite(row.registry);
+        j["_play_count"] = AnimationDB::PlayCount(row.registry);
         j["_position_count"] = row.position_count;
         j["_stage_count"] = row.stage_count;
         j["_tags"] = row.tags;

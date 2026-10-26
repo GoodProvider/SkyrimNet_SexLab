@@ -304,7 +304,7 @@ if (auto* engine = SKYRIMNET_SEXLAB_API::RequestOrgasmEngine()) {
 - Versions 1 and 2 still load; their scenes use the fallback rate until the next stage. Before v5: bonus 0, Passive, curve rebased to the current progress.
 - A revert (load or new game) clears everything.
 - The faster/slower scale is not saved; style speeds are not restored on load either.
-- A scene with no actor in `SexLabAnimatingFaction` for 10 s is dropped. This is the safety net for a missed `AnimationEnd`.
+- A scene with no actor in `SexLabAnimatingFaction` for 10 s is dropped. This is the safety net for a missed `AnimationEnd`. AnimEngine scenes (sid > 100000) are never saved and use the bridge's `IsLive` instead ([AnimEngine scenes](#animengine-scenes)).
 
 ## Other plugins that use SexLab directly
 
@@ -359,6 +359,57 @@ The engine itself is unchanged; the Scene shell feeds it a linear view of P+'s s
 - **Finish:** after the dialogue hold the final stage stays paused and `Ending_Watch` calls `EndAnimation()` at the stage's remaining time, so P+'s enjoyment-wait (`ThreadWaitsForOrgasm` → restart) never runs. `Scene.PPlus_StageStart` ends a thread P+ restarted from an expired sink anyway, and `DURATION_CAP_SECONDS` counts from the first sink.
 - **Hooks:** no synthesized `OrgasmStart` / `OrgasmEnd`; P+ sends its own at climax stages.
 - **Skills:** act tags come from the registry (`Scene.AnimHasTag`), not the empty proxy.
+
+## AnimEngine scenes
+
+Built in checkpoint 12, untested in game. This is strangler step 2 in [scene-migration.md](scene-migration.md) §8. AnimEngine scenes ([anim-engine.md](anim-engine.md) §4) have no SexLab thread and no Papyrus Scene. `AnimEngineOrgasm` (`SKSE_Source/src/AnimEngineOrgasm.cpp`) is the native port of the Scene script's part: `Engine_*`, `Ending_*`, `Gate_*`, `Victim_*` and `Orgasm_ApplyGroup`. The engine itself is unchanged.
+
+**Setting:** `sexlab.anim_engine.orgasm_engine` (Debug, default on), read at the scene's first stage. With `sexlab.enjoyment.engine_disabled` on, the scene is not wired and a warning is logged, because SexLab is not there to own enjoyment.
+
+**sid:** `100000 + AnimEngine scene id` (`AnimEngineOrgasm::SidOf`). SexLab pool sids stay below it.
+
+**Notes from AnimEngine:**
+- AnimEngine posts every note as a task, never under its lock.
+- First stage, the `Engine_BeginScene` port:
+  - Roles come from `StartScene` (the debug panel's **Victim**: that position 2, the others 1); seeds are 0.
+  - Blocked and DOM are off. Skill and lewd are 0, and the bonus is unskilled with relationship ranks only.
+  - Acts come from the AnimDB row tags. `SetOrgasmExpected` comes from `pos_no_orgasm`.
+  - Lead: the first expected position. The target is rolled from `sexlab.ending.target_*`.
+- Each stage, the `Engine_SetStage` port:
+  - `SetEndingTarget`, then `SetStageTimers(secs, leadIn=false)`, then `SetStage(stage, count)`.
+  - Then the `Victim_StageStart` / `Ending_StageStart` ports.
+- Stage numbering is AnimEngine's `StageView`:
+  - A linear graph (all SLAL): node order.
+  - A branch: history + current + the first-edge chain to a sink (the P+ model above, but with the path auto-advance actually plays).
+  - Seconds are AnimEngine's own `StageSeconds`.
+- Pause: `SetScenePaused`. End (sink, request, actor gone, exhausted): `EndScene`. A load or revert clears the bridge, and an epoch drops queued notes.
+
+**Effects:** `RunEffects` routes an actor of a wired scene to the bridge instead of the Papyrus shell:
+
+| Effect | Bridge |
+|---|---|
+| `OrgasmGroup` | No SexLab `ForceOrgasm` / mirror / SLA relief. Counts and the `SkyrimNet_SexLab_Orgasm` event already ran. Narration seam, then `Ending_Check` (victim hold: an aggressor orgasm in the second-to-last stage jumps; lead at target from the second-to-last stage jumps) |
+| `GatePassed` | Narration seam. No voice (the step 2 stub): no hold, jump to the final stage. Sent: `GateNarrationSent`, plus a gate hold (or the victim hold handed over) until `AdvanceToFinal` or `gate_wait_max` |
+| `AdvanceToFinal` | Release the gate hold, then `AnimEngine::GoToFinal` (final-stage dialogue hold when narration exists) |
+| `Mirror` | dropped (SexLab enjoyment) |
+| `Exhausted` | `AnimEngine::EndScene` |
+| DomSync, StrategyChanged, narrations | unchanged (global Papyrus; DOM is off here) |
+
+**Holds:** these are `AnimEngine::SetHold` bits.
+- A held stage does not auto-advance, but its clock keeps running. A release therefore advances at the later of the timer and the hold, with no timer push-out.
+- Entering a stage clears the holds. The bridge re-applies them where the Scene would.
+- `AnimEngineOrgasm::Tick` runs at the end of each engine tick, on unpaused game time, and polls the `gate_wait_max`, `victim_hold_max` (then `VictimHoldExpired`, release 3 s later) and dialogue-hold timers.
+
+**HUD:** a player in an AnimEngine scene sees the HUD. The end / previous / next / pause keys drive AnimEngine, and deny toggles `SetSceneBlocked` / `AllowOrgasm` through the bridge.
+
+**Not saved:** `ORGE` skips AnimEngine sids. The stale drop asks `AnimEngineOrgasm::IsLive` instead of `SexLabAnimatingFaction`.
+
+**Gaps:**
+- Orgasm / gate / deny narration (step 5).
+- SLA relief and SexLab cum / sound.
+- DOM slaves, Lover's Ledger first times, SexLab skills.
+- `OrgasmStart` / `OrgasmEnd` thread hooks.
+- LLM actions on AnimEngine actors (the Actions.psc deny / orgasm paths still look for a SexLab scene).
 
 ## Sex is hard work (stamina regen)
 

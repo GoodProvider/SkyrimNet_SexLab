@@ -881,6 +881,13 @@ schema:
       defaultValue: false
       category: "Debug"
 
+    - name: "AnimEngine: enjoyment and endings"
+      path: "sexlab.anim_engine.orgasm_engine"
+      type: "bool"
+      description: "Developer test. In AnimEngine scenes only, enjoyment, orgasms, the ending gate, the victim hold and the jump to the final stage run in the plugin itself, without SexLab. Orgasm narration is not wired yet. Read when a scene's first stage starts. Turn off to play AnimEngine scenes without enjoyment."
+      defaultValue: true
+      category: "Debug"
+
     - name: "AnimEngine: walk into place"
       path: "sexlab.anim_engine.approach"
       type: "bool"

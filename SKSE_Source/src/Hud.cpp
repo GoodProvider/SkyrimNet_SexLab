@@ -2,6 +2,7 @@
 
 #include "Aid.h"
 #include "AnimEngine.h"
+#include "AnimEngineOrgasm.h"
 #include "Config.h"
 #include "OrgasmEngine.h"
 #include "StrategyDecision.h"
@@ -136,12 +137,25 @@ namespace Hud
             return ActingLocked();
         }
 
+        void OnAnimKey(const std::string& ctl, RE::Actor* anchor = nullptr);
+
         // end / previous / next / pause / deny / pos_up / pos_down / speak are SexLab thread operations (speak:
         // the player's auto-play line): Papyrus Menu.Hud_OnKey. focus: the HUD focus actor (deny), 0 for the
         // rest. The NPC the player took control of goes along as the anchor (None: the player's own scene).
+        // AnimEngine scenes have no SexLab thread: their stage keys go to AnimEngine, deny to AnimEngineOrgasm.
         void DispatchMenuKey(const char* control, RE::FormID focus = 0)
         {
             const std::string ctl = control;
+            RE::Actor* acting = Acting();
+            if (AnimEngine::SceneOf(acting) >= 0) {
+                if (ctl == "end" || ctl == "previous" || ctl == "next" || ctl == "pause") {
+                    OnAnimKey(ctl, acting);
+                    return;
+                }
+                RE::Actor* target = focus ? ActorFor(focus) : acting;
+                if (ctl == "deny" && AnimEngineOrgasm::ToggleDeny(target ? target : acting, acting))
+                    return;
+            }
             RE::FormID anchor = 0;
             {
                 std::lock_guard lock(g_lock);
@@ -538,10 +552,13 @@ namespace Hud
             webui_log::info("Hud: took control of {:#x} (scene {})", g_anchor, sid);
         }
 
-        // AnimEngine scene keys (no SexLab HUD): the player's scene, else the newest one (as the debug panel).
-        void OnAnimKey(const std::string& ctl)
+        // AnimEngine scene keys: the anchor's scene (the HUD's acting actor), else the player's, else the newest one
+        // (as the debug panel).
+        void OnAnimKey(const std::string& ctl, RE::Actor* anchor)
         {
-            int id = AnimEngine::SceneOf(RE::PlayerCharacter::GetSingleton());
+            int id = anchor ? AnimEngine::SceneOf(anchor) : -1;
+            if (id < 0)
+                id = AnimEngine::SceneOf(RE::PlayerCharacter::GetSingleton());
             if (id < 0) {
                 id = AnimEngine::LatestScene();
             }
@@ -860,14 +877,19 @@ namespace Hud
         const bool inScene = controlling || OrgasmEngine::GetPlayerScene(actors);
 
         bool anyGroup = false;
+        bool controlsShown = false;
         {
             std::lock_guard lock(g_lock);
             anyGroup = g_showEnjoyment || g_showControls || g_miniGame;
+            controlsShown = g_showControls;
         }
         const bool visible = inScene && anyGroup && WebUI_IsHidden() && !BlockingMenuOpen();
         KeyHandler::GetSingleton()->SetHudActive(visible);
-        KeyHandler::GetSingleton()->SetAnimActive(
-            !visible && WebUI_IsHidden() && !BlockingMenuOpen() && AnimEngine::LatestScene() >= 0);
+        // AnimEngine keys: without the HUD, or with it up for an AnimEngine scene that hides the HUD controls (with
+        // them shown, the HUD's own end / previous / next / pause route to AnimEngine in DispatchMenuKey).
+        const bool aeHud = visible && !controlsShown && AnimEngine::SceneOf(acting) >= 0;
+        KeyHandler::GetSingleton()->SetAnimActive((!visible || aeHud) && WebUI_IsHidden() && !BlockingMenuOpen() &&
+                                                  AnimEngine::LatestScene() >= 0);
         Show(visible);
 
         // Speed narration: one line per burst once the presses stop.

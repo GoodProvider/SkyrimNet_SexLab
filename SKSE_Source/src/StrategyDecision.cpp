@@ -953,4 +953,9 @@ namespace StrategyDecision
         webui_log::info("StrategyDecision: aid accept send {:#x} giver {:#x} how={} potion='{}'", receiver, giver, how,
             potionName);
     }
+
+    int RelationshipRank(RE::Actor* a, RE::Actor* b)
+    {
+        return Relationship(a, b).second;
+    }
 }

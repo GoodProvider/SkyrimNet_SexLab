@@ -31,6 +31,8 @@ namespace AnimationDB
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
         /// Favorited registries (lowercase). Own table so animation resyncs never wipe it. Guarded by g_mutex.
         std::unordered_set<std::string> g_favorites;
+        /// play_counts table (registry lowercase → plays). Own table like favorites. Guarded by g_mutex.
+        std::unordered_map<std::string, int> g_play_counts;
         /// anim_enabled table: user enable toggles for SLAL rows (registry → 0/1). Guarded by g_mutex.
         std::unordered_map<std::string, int> g_anim_enabled;
         /// GetPlayback parse cache; cleared by ReplaceRegistryRows / DropRowsExceptSource. Guarded by g_mutex.
@@ -232,6 +234,10 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 CREATE TABLE IF NOT EXISTS favorites (
   registry TEXT PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS play_counts (
+  registry TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
 CREATE TABLE IF NOT EXISTS anim_playback (
@@ -521,6 +527,18 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                         g_favorites.insert(reinterpret_cast<const char*>(t));
                 }
                 sqlite3_finalize(fstmt);
+            }
+
+            g_play_counts.clear();
+            sqlite3_stmt* pstmt = nullptr;
+            if (sqlite3_prepare_v2(g_db, "SELECT registry,count FROM play_counts", -1, &pstmt, nullptr) ==
+                SQLITE_OK) {
+                while (sqlite3_step(pstmt) == SQLITE_ROW) {
+                    const unsigned char* t = sqlite3_column_text(pstmt, 0);
+                    if (t)
+                        g_play_counts[reinterpret_cast<const char*>(t)] = sqlite3_column_int(pstmt, 1);
+                }
+                sqlite3_finalize(pstmt);
             }
 
             g_anim_enabled.clear();
@@ -2077,6 +2095,34 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             else
                 g_favorites.erase(reg);
         }
+        return ok;
+    }
+
+    int PlayCount(const std::string& registry)
+    {
+        std::lock_guard lock(g_mutex);
+        auto it = g_play_counts.find(ToLower(registry));
+        return it != g_play_counts.end() ? it->second : 0;
+    }
+
+    bool RecordPlay(const std::string& registry)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return false;
+        const std::string reg = ToLower(registry);
+        if (reg.empty())
+            return false;
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "INSERT INTO play_counts(registry,count) VALUES(?,1) "
+                          "ON CONFLICT(registry) DO UPDATE SET count=count+1";
+        if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+            return false;
+        sqlite3_bind_text(stmt, 1, reg.c_str(), -1, SQLITE_TRANSIENT);
+        const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+        sqlite3_finalize(stmt);
+        if (ok)
+            ++g_play_counts[reg];
         return ok;
     }
 

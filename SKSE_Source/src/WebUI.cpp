@@ -238,7 +238,8 @@ RE::Actor* NearestNpc(RE::PlayerCharacter* player)
     return best;
 }
 
-/// {"cmd":"start|next|back|pause|resume|end","registry":"..."}; start uses the player + nearest NPC.
+/// {"cmd":"start|next|back|pause|resume|end","registry":"...","victim":-1}; start uses the player + nearest NPC.
+/// victim: position (after OrderForRegistry) played as the victim, the others as aggressors; -1 none.
 void AnimEngineDebug(const std::string& payload)
 {
     nlohmann::json j = nlohmann::json::parse(payload, nullptr, false);
@@ -246,11 +247,12 @@ void AnimEngineDebug(const std::string& payload)
         return;
     const std::string cmd = j.value("cmd", "");
     const std::string reg = j.value("registry", "");
+    const int victim = j.contains("victim") && j["victim"].is_number_integer() ? j["victim"].get<int>() : -1;
     if (cmd == "start") {
         ActionCatalog::ClearMainPanelSelection();
         PapyrusBindings_WebUI::ClearTargetMenuSession();
         WebUI_Visibility_Hide();
-        SKSE::GetTaskInterface()->AddTask([reg]() {
+        SKSE::GetTaskInterface()->AddTask([reg, victim]() {
             auto* player = RE::PlayerCharacter::GetSingleton();
             std::vector<RE::Actor*> actors{ player };
             auto pb = AnimationDB::GetPlayback(reg);
@@ -263,8 +265,13 @@ void AnimEngineDebug(const std::string& payload)
                 }
                 actors.push_back(npc);
             }
-            const int id = AnimEngine::StartScene(AnimEngine::OrderForRegistry(actors, reg), reg, nullptr);
-            webui_log::info("AnimEngine debug: start '{}' -> scene {}", reg, id);
+            std::vector<std::int32_t> roles;
+            if (victim >= 0 && victim < static_cast<int>(actors.size())) {
+                roles.assign(actors.size(), 1);
+                roles[victim] = 2;
+            }
+            const int id = AnimEngine::StartScene(AnimEngine::OrderForRegistry(actors, reg), reg, nullptr, roles);
+            webui_log::info("AnimEngine debug: start '{}' victim {} -> scene {}", reg, victim, id);
             PapyrusBindings_WebUI::HandleNotify(id >= 0 ? R"({"msg":"AnimEngine: scene started"})"
                                                      : R"j({"msg":"AnimEngine: start failed (see log)"})j");
         });

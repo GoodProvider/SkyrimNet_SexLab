@@ -225,6 +225,10 @@ namespace AnimationDB
     bool IsFavorite(const std::string& registry);
     /// Persists to the favorites table (survives animation resync/rebuild).
     bool SetFavorite(const std::string& registry, bool favorite);
+    /// Times a scene has played this animation (play_counts table; survives resync/rebuild).
+    int PlayCount(const std::string& registry);
+    /// Adds one play for registry. Called once per new animation a scene plays.
+    bool RecordPlay(const std::string& registry);
     std::string GetStageDescription(const std::string& registry, int stage);
     /// Raw templates for stages 1..stage_count in one lock/lookup (empty string where a stage has none).
     std::vector<std::string> GetAllStageDescriptions(const std::string& registry, int stage_count);

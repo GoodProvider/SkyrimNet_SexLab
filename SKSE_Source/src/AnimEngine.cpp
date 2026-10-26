@@ -1,6 +1,7 @@
 #include "AnimEngine.h"
 
 #include "ActorLocker.h"
+#include "AnimEngineOrgasm.h"
 #include "AnimationDB.h"
 #include "Config.h"
 #include "JsonUtil.h"
@@ -77,12 +78,15 @@ namespace AnimEngine
             std::string registry;
             AnimationDB::PlaybackData pb;
             std::vector<RE::FormID> actors;
+            std::vector<std::int32_t> roles;              // OrgasmEngine roles per position (empty: all normal)
             float cx = 0.f, cy = 0.f, cz = 0.f, crz = 0.f; // center, rz in radians
             int node = -1;                                // index into pb.nodes
             std::vector<int> history;
             Clock::time_point stage_started;
             float duration = 0.f;
             bool paused = false;
+            Clock::time_point paused_at;                  // resume shifts stage_started by the paused time
+            std::uint32_t holds = 0;                      // Hold bits; cleared on entering a stage
             bool started = false;
             std::vector<PendingEvent> pending;
             Clock::time_point next_hold;
@@ -205,6 +209,93 @@ namespace AnimEngine
             if (n.dest.empty())
                 return kDefaultTimers[4];
             return kDefaultTimers[std::min(node, 3)];
+        }
+
+        /// Every node's first (only) edge leads to the next node in order, and the last is the sink.
+        bool IsLinear(const Scene& s)
+        {
+            const auto& nodes = s.pb.nodes;
+            for (std::size_t i = 0; i < nodes.size(); ++i) {
+                const bool last = i + 1 == nodes.size();
+                if (last ? !nodes[i].dest.empty() : nodes[i].dest.size() != 1 || nodes[i].dest[0] != nodes[i + 1].id)
+                    return false;
+            }
+            return true;
+        }
+
+        /// The node's first-edge chain to a sink (from excluded); stops at a revisit or a bad edge.
+        std::vector<int> ChainToSink(const Scene& s, int from)
+        {
+            std::vector<int> out;
+            std::vector<bool> seen(s.pb.nodes.size(), false);
+            int cur = from;
+            while (cur >= 0 && !seen[cur] && !s.pb.nodes[cur].dest.empty()) {
+                seen[cur] = true;
+                const int next = s.pb.NodeIndex(s.pb.nodes[cur].dest.front());
+                if (next < 0 || seen[next])
+                    break;
+                out.push_back(next);
+                cur = next;
+            }
+            return out;
+        }
+
+        StageView ViewOf(const Scene& s)
+        {
+            StageView v;
+            v.node = s.node;
+            if (s.node < 0 || s.pb.nodes.empty())
+                return v;
+            v.at_sink = s.pb.nodes[s.node].dest.empty();
+            v.linear = IsLinear(s);
+            std::vector<int> path;
+            if (v.linear) {
+                for (int i = 0; i < static_cast<int>(s.pb.nodes.size()); ++i)
+                    path.push_back(i);
+                v.stage = s.node + 1;
+            } else {
+                path = s.history;
+                path.push_back(s.node);
+                v.stage = static_cast<int>(path.size());
+                const auto chain = ChainToSink(s, s.node);
+                path.insert(path.end(), chain.begin(), chain.end());
+            }
+            v.count = static_cast<int>(path.size());
+            for (const int n : path)
+                v.secs.push_back(StageSeconds(s, n));
+            return v;
+        }
+
+        /// The projected final node: the last node of a linear graph, else the first-edge chain's end.
+        int FinalNode(const Scene& s)
+        {
+            if (IsLinear(s))
+                return static_cast<int>(s.pb.nodes.size()) - 1;
+            const auto chain = ChainToSink(s, s.node);
+            return chain.empty() ? s.node : chain.back();
+        }
+
+        /// AnimEngineOrgasm notes go out as tasks, never under g_mutex (lock order: the bridge calls back in).
+        void NotifyStage(const Scene& s, bool first)
+        {
+            AnimEngineOrgasm::StageNote note;
+            note.epoch = AnimEngineOrgasm::Epoch();
+            note.ae_id = s.id;
+            note.registry = s.registry;
+            note.actors = s.actors;
+            note.roles = s.roles;
+            note.first = first;
+            note.view = ViewOf(s);
+            note.node_id = s.pb.nodes[s.node].id;
+            SKSE::GetTaskInterface()->AddTask([note = std::move(note)]() { AnimEngineOrgasm::OnStage(note); });
+        }
+
+        void NotifyPause(const Scene& s)
+        {
+            const auto epoch = AnimEngineOrgasm::Epoch();
+            const int id = s.id;
+            const bool paused = s.paused;
+            SKSE::GetTaskInterface()->AddTask([epoch, id, paused]() { AnimEngineOrgasm::OnPause(epoch, id, paused); });
         }
 
         /// SexLab AE CalcCenterAdjuster (sslBaseAnimation.psc:928-941): −½ × the largest-magnitude forward offset
@@ -336,10 +427,16 @@ namespace AnimEngine
             }
             s.stage_started = start;
             s.duration = StageSeconds(s, node);
+            if (s.paused)
+                s.paused_at = start; // paused through the stage change: resume starts this stage's clock
+            if (s.holds)
+                webui_log::debug("AnimEngine: scene {} holds {:#x} cleared by the stage change", s.id, s.holds);
+            s.holds = 0;
             const auto& n = s.pb.nodes[node];
             webui_log::info("AnimEngine: scene {} '{}' stage {}/{} node '{}' ({}) {:.0f}s", s.id, s.registry, n.n,
                 s.pb.nodes.size(), n.id, how == Entry::First ? "first" : how == Entry::Next ? "next" : "jump", s.duration);
             SendModEvent("SNSL_AE_StageStart", n.id, static_cast<float>(n.n), ActorOf(s.actors[0]));
+            NotifyStage(s, how == Entry::First);
         }
 
         void EndLocked(std::map<int, Scene>::iterator it, const char* why)
@@ -356,6 +453,13 @@ namespace AnimEngine
             webui_log::info("AnimEngine: scene {} '{}' ended ({})", s.id, s.registry, why);
             SendModEvent("SNSL_AE_SceneEnd", s.registry, static_cast<float>(s.id), ActorOf(s.actors[0]));
             Scenes::Registry::Unregister(Scenes::Registry::Kind::AnimEngine, s.id);
+            {
+                const auto epoch = AnimEngineOrgasm::Epoch();
+                const int id = s.id;
+                std::string reason = why;
+                SKSE::GetTaskInterface()->AddTask(
+                    [epoch, id, reason = std::move(reason)]() { AnimEngineOrgasm::OnEnd(epoch, id, reason); });
+            }
             g_scenes.erase(it);
         }
 
@@ -549,6 +653,8 @@ namespace AnimEngine
                     for (auto& e : s.pending)
                         e.due += dt;
                     s.stage_started += dt;
+                    if (s.paused)
+                        s.paused_at += dt;
                     continue;
                 }
                 bool gone = false;
@@ -621,7 +727,7 @@ namespace AnimEngine
                             CallShellPlace("Hold", a, s.placed[p]);
                     }
                 }
-                if (!s.paused && s.pending.empty() && now >= s.stage_started &&
+                if (!s.paused && s.holds == 0 && s.pending.empty() && now >= s.stage_started &&
                     std::chrono::duration<float>(now - s.stage_started).count() >= s.duration)
                     AdvanceLocked(cur);
             }
@@ -659,7 +765,8 @@ namespace AnimEngine
         }
     }
 
-    int StartScene(const std::vector<RE::Actor*>& actors, const std::string& registry, RE::TESObjectREFR* center)
+    int StartScene(const std::vector<RE::Actor*>& actors, const std::string& registry, RE::TESObjectREFR* center,
+        const std::vector<std::int32_t>& roles)
     {
         if (!Enabled()) {
             webui_log::warn("AnimEngine: StartScene '{}' refused: sexlab.anim_engine.enabled is off", registry);
@@ -691,6 +798,8 @@ namespace AnimEngine
         s.pb = std::move(*pb);
         for (auto* a : actors)
             s.actors.push_back(a->GetFormID());
+        if (roles.size() == actors.size())
+            s.roles = roles;
         RE::TESObjectREFR* c = center ? center : actors.front();
         const auto pos = c->GetPosition();
         s.cx = pos.x;
@@ -770,32 +879,73 @@ namespace AnimEngine
         });
     }
 
+    bool GoToFinal(int scene_id)
+    {
+        return WithScene(scene_id, [](auto it) {
+            Scene& s = it->second;
+            const int idx = FinalNode(s);
+            if (idx == s.node) {
+                webui_log::debug("AnimEngine: scene {} GoToFinal: already at the final stage", s.id);
+                return;
+            }
+            webui_log::info("AnimEngine: scene {} final stage '{}' -> '{}'", s.id, s.pb.nodes[s.node].id,
+                s.pb.nodes[idx].id);
+            s.history.push_back(s.node);
+            EnterNode(s, idx, idx == s.node + 1 ? Entry::Next : Entry::Jump);
+        });
+    }
+
     bool EndScene(int scene_id)
     {
         return WithScene(scene_id, [](auto it) { EndLocked(it, "requested"); }, false);
     }
 
-    bool SetPaused(int scene_id, bool paused)
+    namespace
     {
-        return WithScene(scene_id, [paused](auto it) {
-            Scene& s = it->second;
+        /// Pause keeps the stage's elapsed time: resume shifts stage_started by the time paused.
+        void SetPausedLocked(Scene& s, bool paused)
+        {
             if (s.paused == paused)
                 return;
+            const auto now = Clock::now();
             s.paused = paused;
-            if (!paused)
-                s.stage_started = Clock::now(); // resume with the full stage time
-            webui_log::info("AnimEngine: scene {} {}", s.id, paused ? "paused" : "resumed");
-        });
+            if (paused)
+                s.paused_at = now;
+            else if (now > s.paused_at)
+                s.stage_started += now - s.paused_at;
+            webui_log::info("AnimEngine: scene {} {} (stage elapsed {:.1f}s of {:.0f}s)", s.id,
+                paused ? "paused" : "resumed",
+                std::chrono::duration<float>((paused ? now : Clock::now()) - s.stage_started).count(), s.duration);
+            NotifyPause(s);
+        }
+    }
+
+    bool SetPaused(int scene_id, bool paused)
+    {
+        return WithScene(scene_id, [paused](auto it) { SetPausedLocked(it->second, paused); });
     }
 
     bool TogglePaused(int scene_id)
     {
-        return WithScene(scene_id, [](auto it) {
+        return WithScene(scene_id, [](auto it) { SetPausedLocked(it->second, !it->second.paused); });
+    }
+
+    bool SetHold(int scene_id, Hold hold, bool on, int node)
+    {
+        return WithScene(scene_id, [hold, on, node](auto it) {
             Scene& s = it->second;
-            s.paused = !s.paused;
-            if (!s.paused)
-                s.stage_started = Clock::now();
-            webui_log::info("AnimEngine: scene {} {}", s.id, s.paused ? "paused" : "resumed");
+            if (node >= 0 && s.node != node) {
+                webui_log::debug("AnimEngine: scene {} hold {:#x} {} skipped: stage moved", s.id,
+                    static_cast<std::uint32_t>(hold), on ? "on" : "off");
+                return;
+            }
+            const auto bit = static_cast<std::uint32_t>(hold);
+            const auto before = s.holds;
+            s.holds = on ? (s.holds | bit) : (s.holds & ~bit);
+            if (s.holds != before)
+                webui_log::info("AnimEngine: scene {} hold {} {} (holds {:#x})", s.id,
+                    hold == Hold::kGate ? "gate" : hold == Hold::kVictim ? "victim" : "ending", on ? "on" : "off",
+                    s.holds);
         });
     }
 
@@ -839,8 +989,15 @@ namespace AnimEngine
                      : s.phase == Phase::Begin   ? "begin"
                                                  : "play";
         j["paused"] = s.paused;
+        j["holds"] = s.holds;
         j["duration"] = s.duration;
-        j["elapsed"] = std::chrono::duration<float>(Clock::now() - s.stage_started).count();
+        j["elapsed"] = std::chrono::duration<float>((s.paused ? s.paused_at : Clock::now()) - s.stage_started).count();
+        if (s.node >= 0) {
+            const auto v = ViewOf(s);
+            j["engine_stage"] = v.stage;
+            j["engine_count"] = v.count;
+            j["linear"] = v.linear;
+        }
         std::vector<std::string> hist;
         for (const int h : s.history)
             hist.push_back(s.pb.nodes[h].id);
@@ -850,6 +1007,7 @@ namespace AnimEngine
             acts.push_back(std::format("{:08X}", id));
         j["actors"] = acts;
         j["unplayable"] = std::vector<std::string>(s.unplayable.begin(), s.unplayable.end());
+        j["orgasm_engine"] = nlohmann::json::parse(AnimEngineOrgasm::DescribeJson(s.id), nullptr, false);
         return SafeDump(j);
     }
 
@@ -906,6 +1064,7 @@ namespace AnimEngine
             webui_log::info("AnimEngine: cleared {} scene(s)", g_scenes.size());
         Scenes::Registry::ClearKind(Scenes::Registry::Kind::AnimEngine);
         g_scenes.clear();
+        AnimEngineOrgasm::Clear(); // leaf lock; drops notes still queued for the old scenes (epoch)
     }
 
     void Save(SKSE::SerializationInterface* intfc)

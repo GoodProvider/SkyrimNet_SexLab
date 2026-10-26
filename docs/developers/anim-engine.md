@@ -21,6 +21,7 @@ No SexLab code goes into AnimDB or AnimEngine. SexLab P+ is supported in the C++
 | Papyrus natives (`AnimDb_SyncFromSlal` / `…Slsb`, `AnimDb_GetPlaybackJson`, `AnimDb_SetEnabled`, …) | `SKSE_Source/src/Papyrus_AnimationDB.cpp`, `Scripts/Source/SkyrimNet_SexLab_AnimDb.psc` |
 | AnimEngine (scenes, graph cursor, events, placement, co-save `ANME`) | `SKSE_Source/src/AnimEngine.cpp`, `include/AnimEngine.h`, `src/Papyrus_AnimEngine.cpp` |
 | AnimEngine Papyrus shell (lock, hold, unlock) + natives | `Scripts/Source/SkyrimNet_SexLab_AnimEngine.psc` |
+| OrgasmEngine bridge (enjoyment, gate, endings, victim hold for AnimEngine scenes) | `SKSE_Source/src/AnimEngineOrgasm.cpp`, `include/AnimEngineOrgasm.h` |
 | Debug start (WebUI Settings → AnimEngine) | `SKSE_Source/src/WebUI.cpp` `AnimEngineDebug`, `PrismaUI/views/SkyrimNet_SexLab/index.html` `settingsAnimEngine` |
 | SexLab built-ins as a SLAL pack (dev-time converter, output ships) | `tools/sexlab_defaults_to_slal.py` → `SKSE/Plugins/SkyrimNet_SexLab/slal/SexLab_Builtin.json` |
 | Offline mirror of both loaders (stats / dump / parity against an old DB) | `tools/slal_offline.py` (`--source slsb`) |
@@ -142,6 +143,13 @@ C++ reads it with `AnimationDB::GetPlayback(registry)` (cached, returns a `Playb
 - API (`AnimEngine.h`): `StartScene(actors by position, registry, center)`, `Advance` (first edge; at a sink the scene ends), `GoToNode`, `Back` (history), `SetPaused`, `EndScene`, `SceneOf`, `LatestScene`, `DescribeJson`, `OrderForRegistry` (debug: actors to positions by gender).
 - `StartScene` takes an `ActorLocker` lock per actor. An actor that is already locked, in a SexLab / OStim scene, or in an AnimEngine scene is refused.
 - ModEvents: `SNSL_AE_SceneStart` (str registry, num scene id), `SNSL_AE_StageStart` (str node id, num legacy stage), `SNSL_AE_SceneEnd`.
+- OrgasmEngine (checkpoint 12, untested in game): every stage entry, pause change and end posts a note to `AnimEngineOrgasm`, which wires the scene into the OrgasmEngine natively (see [orgasm-engine.md](orgasm-engine.md#animengine-scenes); setting `sexlab.anim_engine.orgasm_engine`, default on).
+  - `StartScene(…, roles)`: OrgasmEngine roles per position (the debug panel's **Victim** select).
+  - `SetHold(id, gate | victim | ending, on, node)`: a held stage does not auto-advance, and its clock keeps running. Entering a stage clears all holds.
+  - `GoToFinal(id)`: jump to the projected final node.
+  - `StageView`: the engine's stage / count / seconds. A linear graph uses node order; a branching graph uses history + current + the first-edge chain to a sink.
+  - Pause keeps the stage's elapsed time; resume continues it. Before checkpoint 12, resume restarted the stage.
+  - HUD: the SexLab HUD shows for a player in an AnimEngine scene. Its end / previous / next / pause keys act on the acting actor's AnimEngine scene. With the HUD controls hidden, the AnimEngine hotkeys stay on.
 - Papyrus: `SkyrimNet_SexLab_AnimEngine.AnimEngine_DebugStart(a, b, registry)` and `_Advance` / `_Back` / `_GoToNode` / `_SetPaused` / `_End` / `_SceneOf` / `_Describe` (scene id -1 = newest).
 - Debug start: WebUI Settings → AnimEngine (shown while the setting is on) starts the typed registry on the player and the nearest living NPC within 400 units.
 

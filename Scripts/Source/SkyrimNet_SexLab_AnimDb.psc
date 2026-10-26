@@ -38,6 +38,8 @@ String Function AnimDb_SlsbSummary() global native
 Bool Function AnimDb_SlsbRegistryEnabled() global native
 String Function AnimDb_GetPlaybackJson(String registry) global native
 Bool Function AnimDb_SetEnabled(String registry, Bool enabled) global native
+; Adds one play to registry's count (WebUI animation table "freq" column / sort).
+Bool Function AnimDb_RecordPlay(String registry) global native
 
 ; SexLab AE: AnimDB loads SLAL packs itself.
 Bool Function UsesSlalRegistry() global

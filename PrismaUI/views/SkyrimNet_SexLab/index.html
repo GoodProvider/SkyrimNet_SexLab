@@ -1692,12 +1692,14 @@
         .anim-table .col-genders,
         .anim-table .col-mods,
         .anim-table .col-name,
-        .anim-table .col-stages {
+        .anim-table .col-stages,
+        .anim-table .col-freq {
             width: 1%;
             white-space: nowrap;
         }
 
-        .anim-table .col-stages { text-align: center; }
+        .anim-table .col-stages,
+        .anim-table .col-freq { text-align: center; }
 
         .anim-table .col-desc {
             overflow: hidden;
@@ -2433,6 +2435,8 @@
                 <span id="sc-by-label">by</span>
                 <div id="sc-initiator-pulldown"></div>
                 <div id="sc-style-pulldown"></div>
+                <span>sort:</span>
+                <div id="sc-sort-pulldown"></div>
                 <span id="sc-anim-count"></span>
                 <span id="sc-selected-count"></span>
                 <div class="action-btn" id="sc-btn-all" onclick="scClearAnims()">All</div>
@@ -2442,13 +2446,13 @@
             <div id="sc-anims-list" class="scroll-list">
                 <table class="data-table anim-table"><thead><tr>
                     <th class="col-fav"></th><th class="col-an"></th><th class="col-genders">genders</th>
-                    <th class="col-mods">modifiers</th><th class="col-name">name</th><th class="col-stages">stages</th>
+                    <th class="col-mods">modifiers</th><th class="col-name">name</th><th class="col-stages">stages</th><th class="col-freq">freq</th>
                     <th class="col-desc">description</th>
                 </tr><tr class="anim-filter-row">
                     <th class="col-fav" id="sc-fav-filter"></th><th class="col-an"></th>
                     <th class="col-genders"><div id="sc-gender-filter"></div></th><th class="col-mods"></th>
                     <th class="col-name"><input id="sc-anim-name-filter" class="anim-name-filter" type="text" placeholder="filter name" oninput="scOnNameFilterInput(this.value)" /></th>
-                    <th class="col-stages"></th><th class="col-desc"></th>
+                    <th class="col-stages"></th><th class="col-freq"></th><th class="col-desc"></th>
                 </tr></thead><tbody id="sc-anims-tbody"></tbody></table>
             </div>
         </div>
@@ -2535,18 +2539,20 @@
             </div>
             <div class="compact-row">
                 <div class="action-btn disabled" id="de-btn-start" onmousedown="event.preventDefault()" onclick="deStartPick()">Start</div>
+                <span>sort:</span>
+                <div id="de-sort-pulldown"></div>
                 <span id="de-anim-count"></span>
             </div>
             <div id="de-anims-list" class="scroll-list">
                 <table class="data-table anim-table"><thead><tr>
                     <th class="col-fav"></th><th class="col-an"></th><th class="col-genders">genders</th>
-                    <th class="col-mods">modifiers</th><th class="col-name">name</th><th class="col-stages">stages</th>
+                    <th class="col-mods">modifiers</th><th class="col-name">name</th><th class="col-stages">stages</th><th class="col-freq">freq</th>
                     <th class="col-desc">description</th>
                 </tr><tr class="anim-filter-row">
                     <th class="col-fav" id="de-fav-filter"></th><th class="col-an"></th>
                     <th class="col-genders"><div id="de-gender-filter"></div></th><th class="col-mods"></th>
                     <th class="col-name"><input id="de-anim-name-filter" class="anim-name-filter" type="text" placeholder="filter name" oninput="scOnNameFilterInput(this.value)" /></th>
-                    <th class="col-stages"></th><th class="col-desc"></th>
+                    <th class="col-stages"></th><th class="col-freq"></th><th class="col-desc"></th>
                 </tr></thead><tbody id="de-anims-tbody"></tbody></table>
             </div>
         </div>
@@ -2579,6 +2585,12 @@
             <div class="compact-row" style="margin-bottom:8px">
                 <span>Registry:</span>
                 <input id="settings-ae-registry" type="text" value="B_B_SKiss1" style="flex:1; min-width:8em" />
+                <span>Victim:</span>
+                <select id="settings-ae-victim">
+                    <option value="-1" selected>none</option>
+                    <option value="0">position 0</option>
+                    <option value="1">position 1</option>
+                </select>
             </div>
             <div class="compact-row" style="margin-bottom:12px; gap:6px; flex-wrap:wrap">
                 <div class="action-btn" onclick="settingsAnimEngine('start')">Start (player + nearest NPC)</div>
@@ -4086,8 +4098,9 @@
         // AnimEngine debug (sexlab.anim_engine.enabled): start closes the WebUI; the others act on the newest scene.
         function settingsAnimEngine(cmd) {
             const reg = (document.getElementById('settings-ae-registry') || {}).value || '';
+            const victim = parseInt((document.getElementById('settings-ae-victim') || {}).value || '-1', 10);
             if (typeof window.onAnimEngineDebug === 'function')
-                window.onAnimEngineDebug(JSON.stringify({ cmd: cmd, registry: reg.trim() }));
+                window.onAnimEngineDebug(JSON.stringify({ cmd: cmd, registry: reg.trim(), victim: isNaN(victim) ? -1 : victim }));
         }
 
         function settingsRebuild() {
@@ -10492,6 +10505,7 @@
         const SC_FILTER_OPTIONS = ['gender', 'none', 'positions'];
         const SC_FILTER_LABELS = { none: 'any' };
         const SC_HAS_DESCRIPTION_OPTIONS = ['any', 'described', 'undescribed'];
+        const SC_SORT_OPTIONS = ['default', 'freq asc', 'freq desc', 'name asc', 'name desc'];
         // AnimDB tag synonym clusters (synonyms-broad.json / synonyms-strict.json); none = literal tags.
         const SC_SYNONYM_DEFAULT = 'broad';
         const SC_SYNONYM_OPTIONS = ['broad', 'strict', 'none'];
@@ -10532,6 +10546,8 @@
             filterAuto: true,
             filterByOnce: '',
             hasDescription: 'any',
+            // Animation table "sort:" pulldown (SC_SORT_OPTIONS), shared by the SC and DE tables.
+            animSort: 'default',
             favoritesOnly: false,
             // Animation table name filter (lowercase substring), shared by the SC and DE tables.
             animNameFilter: '',
@@ -10596,6 +10612,23 @@
                 if (!host) continue;
                 host.innerHTML = '';
                 host.appendChild(createPulldown(SC_HAS_DESCRIPTION_OPTIONS, SC.hasDescription, onPick));
+            }
+        }
+
+        // Client-side re-sort of the listed rows only; no re-query.
+        function scRenderSortPulldown() {
+            if (!SC.animSort) SC.animSort = 'default';
+            const onPick = v => {
+                if (v === SC.animSort) return;
+                SC.animSort = v;
+                scRenderAnimList();
+                deRenderAnimList();
+            };
+            for (const hostId of ['sc-sort-pulldown', 'de-sort-pulldown']) {
+                const host = document.getElementById(hostId);
+                if (!host) continue;
+                host.innerHTML = '';
+                host.appendChild(createPulldown(SC_SORT_OPTIONS, SC.animSort, onPick));
             }
         }
 
@@ -10741,6 +10774,7 @@
             SC.filterByOnce = '';
             scArmFilterDowngrade(forcedFilterBy);
             scRenderHasDescriptionPulldown();
+            scRenderSortPulldown();
             scRenderSynonymsPulldown();
             scRenderFavoritesToggle();
             scSyncNameFilterInputs();
@@ -11779,10 +11813,31 @@
             ).join('');
         }
 
+        function scAnimSortName(a) {
+            return a._name || a._registry || '';
+        }
+
+        // Animation table "sort:" pulldown order; 'default' (and opts.ignoreSort) falls through to the
+        // described / gender order below. Returns 0 on a tie.
+        function scCompareAnimSort(a, b) {
+            const mode = SC.animSort || 'default';
+            if (mode === 'name asc' || mode === 'name desc') {
+                const c = scAnimSortName(a).localeCompare(scAnimSortName(b), undefined, { sensitivity: 'base' });
+                return mode === 'name asc' ? c : -c;
+            }
+            if (mode === 'freq asc' || mode === 'freq desc') {
+                const c = (a._play_count | 0) - (b._play_count | 0);
+                if (c) return mode === 'freq asc' ? c : -c;
+                return scAnimSortName(a).localeCompare(scAnimSortName(b), undefined, { sensitivity: 'base' });
+            }
+            return 0;
+        }
+
         function sortAnimListRows(anims, opts) {
             const active = opts && opts.active;
             const inThread = new Set((opts && opts.inThread) || []);
             const activeReg = (opts && opts.activeRegistry) || '';
+            const userSort = !(opts && opts.ignoreSort);
             const indices = anims.map((_, i) => i);
             indices.sort((ia, ib) => {
                 const a = anims[ia];
@@ -11793,6 +11848,10 @@
                     const aa = ra === activeReg ? 2 : (inThread.has(ra) ? 1 : 0);
                     const ab = rb === activeReg ? 2 : (inThread.has(rb) ? 1 : 0);
                     if (ab !== aa) return ab - aa;
+                }
+                if (userSort) {
+                    const s = scCompareAnimSort(a, b);
+                    if (s) return s;
                 }
                 const da = scAnimHasDescription(a) ? 1 : 0;
                 const db = scAnimHasDescription(b) ? 1 : 0;
@@ -11848,6 +11907,7 @@
                     `<td class="col-mods">${escapeHtml(mods)}</td>` +
                     `<td class="col-name">${escapeHtml(name)}</td>` +
                     `<td class="col-stages">${escapeHtml(stages)}</td>` +
+                    `<td class="col-freq">${a._play_count | 0}</td>` +
                     `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>` +
                     `</tr>`;
             }).join('');
@@ -11921,7 +11981,7 @@
                     SC.selectedRegistries = (SC.selectedRegistries || [])
                         .filter(r => SC.lastAnimRegistries.includes(r));
                     if (!SC.selectedRegistries.length && anims.length) {
-                        const top = sortAnimListRows(anims, {})[0];
+                        const top = sortAnimListRows(anims, { ignoreSort: true })[0];
                         scAddAnimToSelection(top);
                         return;
                     }
@@ -13146,6 +13206,7 @@
             scSetTagMode(SC.tagMode || 'include');
             scRenderFilterByPulldown();
             scRenderHasDescriptionPulldown();
+            scRenderSortPulldown();
             scRenderSynonymsPulldown();
             scRenderFavoritesToggle();
             scSyncNameFilterInputs();
@@ -13200,13 +13261,14 @@
                 `<td class="col-mods">${escapeHtml(formatMods(a))}</td>` +
                 `<td class="col-name">${escapeHtml(a._name || a._registry || '(unnamed)')}</td>` +
                 `<td class="col-stages">${escapeHtml(stages)}</td>` +
+                `<td class="col-freq">${a._play_count | 0}</td>` +
                 `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>`;
         }
 
         function deAnimTableHead() {
             return `<table class="data-table anim-table"><thead><tr>` +
                 `<th class="col-an"></th><th class="col-genders">genders</th><th class="col-mods">modifiers</th>` +
-                `<th class="col-name">name</th><th class="col-stages">num stages</th><th class="col-desc">description</th>` +
+                `<th class="col-name">name</th><th class="col-stages">num stages</th><th class="col-freq">freq</th><th class="col-desc">description</th>` +
                 `</tr></thead><tbody>`;
         }
 

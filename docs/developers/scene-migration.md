@@ -136,7 +136,7 @@ Grouped by the prefix map in anim-engine.md §8.
 | Silence | `SilenceTick` 824, `SilenceNudge_IfQuiet` 838 | Narration | NarrationTiming |
 | Thread bridge | `SetThread` 1715, `GetThread` 1729, `GetThreadActive` 1782, `GetThreadInScene` 1809, `RefreshThreadObj` 4843, `PushThread` 4833, `BuildInThreadAnims` 5080, `SexLab_Thread_LOS` 5000, `PlayerSeesScene` 4996 | Drop | `GetThread` / `GetThreadInScene` are called by Actions.psc and Menu.psc. Those callers need a native "is active / in scene" replacement first. `PlayerSeesScene` → Scene (LOS stays useful) |
 | Animation info | `AnimTag` 5022 (global), `AnimHasTag` 5032, `AnimRawTags` 5039 (global), `AnimName` 5049 (global), `GetTagsString` 5059 (global), `GetDescription` 4817, `GetDescriptionFromTags` 5128, `GetLocation` 4898 | Scene | The `sslBaseAnimation` globals → Drop; AnimDB / AnimEngine registry give tags and names |
-| Engine (OrgasmEngine wiring) | `Engine_BeginScene` 1842, `Engine_SetSkills` 1904, `Engine_SetBonusInputs` 1965, `Engine_SetStage` 1993, `Engine_StageSeconds` 2023, `Engine_StageCount` 2054, `Engine_SetEndingTarget` 2240, `Engine_GatePassed` 2326, `Engine_AdvanceToFinal` 2601, `SetOrgasmDisabled` 1830 | Scene | **This is the OrgasmEngine stage wiring**: feed AnimEngine stage changes into these directly. `Engine_GatePassed` and `Engine_AdvanceToFinal` are called by OrgasmEngine.psc |
+| Engine (OrgasmEngine wiring) | `Engine_BeginScene` 1842, `Engine_SetSkills` 1904, `Engine_SetBonusInputs` 1965, `Engine_SetStage` 1993, `Engine_StageSeconds` 2023, `Engine_StageCount` 2054, `Engine_SetEndingTarget` 2240, `Engine_GatePassed` 2326, `Engine_AdvanceToFinal` 2601, `SetOrgasmDisabled` 1830 | Scene | **This is the OrgasmEngine stage wiring**: feed AnimEngine stage changes into these directly. `Engine_GatePassed` and `Engine_AdvanceToFinal` are called by OrgasmEngine.psc. Native for AnimEngine scenes (`AnimEngineOrgasm`, step 2); the Endings, Gates and Victim rows below are too |
 | Timers | `Timer_SyncHold` 2083, `IsFinalStage` 3012, `StageRemaining` 3018 | Scene | AnimEngine owns the stage timer |
 | Endings | `Ending_Reset` 2096, `Ending_HoldMax` 2157, `Ending_IsExpected` 2175, `Ending_PickLead` 2183, `Ending_RollTarget` 2201, `Ending_WillJump` 2272, `Ending_Check` 2292, `Ending_ToFinal` 2614, `Ending_StageStart` 2637, `Ending_Hold` 2674, `Ending_Poll` 2700, `Ending_TimerState` 2781, `Ending_Watch` 2792 | Scene | Hold / Poll pairs re-arm `OnUpdate`; in C++ they run on the AnimEngine tick |
 | Gates | `Gate_Hold` 2401, `Gate_Release` 2418, `Gate_Poll` 2439 | Scene | |
@@ -184,9 +184,15 @@ Grouped by the prefix map in anim-engine.md §8.
      - `GetSceneBySid` was already a plain pool index and is unchanged.
    - Co-save record `SREG` v1 holds a count, then per entry kind, id, actor count and actor FormIDs. Load reads it, logs `Registry: dropped N scene(s) from save` and keeps nothing. SexLab cancels its threads on load and AnimEngine releases its actors.
 2. **OrgasmEngine stage wiring.** AnimEngine stage events call the `Engine_*` logic natively, so AnimEngine scenes gain enjoyment, gates and endings. The SexLab path is unchanged.
+   **Built (checkpoint 12, untested in game):**
+   - `AnimEngineOrgasm` ports `Engine_*`, `Ending_*`, `Gate_*`, `Victim_*` and `Orgasm_ApplyGroup` for AnimEngine scenes. The setting is `sexlab.anim_engine.orgasm_engine` (Debug, default on).
+   - The OrgasmEngine sid is `100000 + id`. `RunEffects` routes these scenes' effects to the bridge.
+   - AnimEngine gained `SetHold`, `GoToFinal`, `StageView` and `StartScene` roles. Pause keeps the elapsed time.
+   - Narration has a seam (`AnimEngineOrgasm::Narration`) that only logs until step 5.
+   - Contract: [orgasm-engine.md](orgasm-engine.md#animengine-scenes).
 3. **Creator.** Cast, locks, tags and select in C++; start goes through `AnimEngine::Start`. Menu.psc's creator calls and the WebUI creator handlers move to C++.
 4. **Scene state + WebUI.** Replace the `TM_*` and `GetThread*` callers in Actions.psc / Menu.psc with native setters and queries. Move the `WebUI_*` handlers so `DispatchManagerMethod*` goes away.
-5. **Narration**, then **Endings / Victim / Gate** on the AnimEngine tick.
+5. **Narration**: orgasm / gate / deny narration fills the `AnimEngineOrgasm::Narration` seam. Endings, victim and gate already run natively for AnimEngine scenes (step 2).
 6. **Drop** the SexLab hooks, the poll, the mirror and the thread bridge once no AnimEngine scene needs them (row 05+ of the roadmap).
 
 ## 9. Open questions

@@ -4,6 +4,10 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### Animation table sort and play counts
+- Scene Creator and the Description Editor animation filter tab have a `sort:` pulldown: default, freq asc / desc, name asc / desc. A new `freq` column shows how many times each animation has played.
+- AnimDB `play_counts` table (survives resync), native `AnimDb_RecordPlay`, anim row key `_play_count`. Scene `SeedRegistry` records one play per new animation in a scene. Details: [docs/developers/webui.md](docs/developers/webui.md) "Animation play counts and sort".
+
 ### AnimDB is the animation registry (SexLab AE)
 - AnimDB loads SLAL packs from disk in C++ (`SlalLoader`): `Data/SLAnims/json`, our `slal/` packs and the FNIS lists. SexLab's registry walk is gone on AE (P+ keeps its walk), so packs beyond SexLab's slot limit are available. The rows get `source = 2`.
 - New `anim_playback` table: per-stage events, hkx paths, offsets, flags, timers, AnimObjects, animvars and PPA penetration targets, for the planned AnimEngine. Natives: `AnimDb_SyncFromSlal`, `AnimDb_GetPlaybackJson`, `AnimDb_SetEnabled`, `AnimDb_IsSlalSyncRunning`, `AnimDb_SlalSummary`.
@@ -29,6 +33,12 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - AnimEngine Back / GoToNode to S1 now matches SexLab RefreshActor: `SexLabSequenceExit1` + `AnimObjectUnequip` + `IdleForceDefaultState` together, then S1 after 0.2 s. The graph refuses S1 except from the default state, and SexLab snaps here too. The full re-entry fallback uses the same timing. Graph-refused control events are now logged at debug (`(control) refused`).
 - AnimEngine hotkeys: while an AnimEngine scene runs and the SexLab HUD is not up, the dashboard HUD keys `end` / `previous` / `pause` / `next` (default Num 2 / 4 / 5 / 6) end, step back, toggle pause and advance the player's scene (else the newest). New `AnimEngine::TogglePaused`.
 - Scene registry (strangler step 1, experimental, off by default): `Scenes::Registry` lists running SexLab scenes (fed by Decorators `Threads_Set` / `Threads_Remove`) and AnimEngine scenes. Co-save record `SREG` v1 is dropped on load. Natives `SkyrimNet_SexLab_Registry.Registry_SidOf` / `_IsBusy` / `_Describe`. Dashboard **Debug > Native scene registry (experimental)** (`sexlab.scene_registry.enabled`) makes `Manager.GetSceneByActor` answer from it (thread-scan fallback, and disagreements are traced) and `IsBusy` count AnimEngine actors.
+- OrgasmEngine in AnimEngine scenes (strangler step 2, built, untested in game): new `AnimEngineOrgasm` bridge, a native port of the Scene script's `Engine_*`, `Ending_*`, `Gate_*`, `Victim_*` and `Orgasm_ApplyGroup`. AnimEngine scenes get enjoyment, stage timers and spikes, the gate, the ending target and its jump to the final stage, the victim hold and exhausted-ends, with no SexLab calls. Engine sid = 100000 + AnimEngine id. AnimEngine scenes are not written to the `ORGE` co-save and are exempt from the SexLab-faction stale drop. `RunEffects` routes their effects to the bridge (the mirror is dropped). Orgasm and gate narration are stubs until step 5. Dashboard **Debug > AnimEngine: enjoyment and endings** (`sexlab.anim_engine.orgasm_engine`, default on). Details: [orgasm-engine.md](docs/developers/orgasm-engine.md#animengine-scenes).
+- AnimEngine changes for the bridge:
+  - `SetHold` (gate / victim / ending: no auto-advance, and the stage clock keeps running), `GoToFinal`, and `StartScene` roles. `StageView` gives the engine stage numbering: node order for linear graphs, otherwise a projected path.
+  - Pause now keeps the stage's elapsed time instead of restarting the stage. `AnimEngine_Describe` adds `holds`, `engine_stage` / `engine_count` and `orgasm_engine`.
+  - The HUD shows for a player in an AnimEngine scene. Its end / previous / next / pause keys drive AnimEngine, and deny / allow goes to the bridge.
+  - The WebUI AnimEngine debug panel has a **Victim** position select.
 - Strip with the scene registry on: verified in game (registry off, registry on, and after an AnimEngine scene). The temporary `Scene.WornSummary` traces were removed.
 - Scene-migration inventory: [docs/developers/scene-migration.md](docs/developers/scene-migration.md) maps all 362 functions in the Papyrus scene layer to a C++ owner, a Papyrus shell or removal, with their outside callers and the order of the strangler steps. Docs only.
 
