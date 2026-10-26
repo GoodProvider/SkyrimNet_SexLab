@@ -7,6 +7,7 @@
 #include "ActionDispatch.h"
 #include "Config.h"
 #include "AnimationDB.h"
+#include "AnimEngine.h"
 #include "Hud.h"
 #include "OrgasmEngine.h"
 #include "InjuryEngine.h"
@@ -214,6 +215,74 @@ void Call_RebuildAnimDb()
     });
 }
 
+// Settings → AnimEngine (debug): the nearest loaded, living NPC within 400 units of the player.
+RE::Actor* NearestNpc(RE::PlayerCharacter* player)
+{
+    RE::Actor* best = nullptr;
+    float best_d = 400.f * 400.f;
+    auto* lists = RE::ProcessLists::GetSingleton();
+    if (!lists || !player)
+        return nullptr;
+    const auto pp = player->GetPosition();
+    for (auto& h : lists->highActorHandles) {
+        auto ap = h.get();
+        RE::Actor* a = ap.get();
+        if (!a || a == player || a->IsDead() || !a->Is3DLoaded() || a->IsInCombat())
+            continue;
+        const float d = a->GetPosition().GetSquaredDistance(pp);
+        if (d < best_d) {
+            best_d = d;
+            best = a;
+        }
+    }
+    return best;
+}
+
+/// {"cmd":"start|next|back|pause|resume|end","registry":"..."}; start uses the player + nearest NPC.
+void AnimEngineDebug(const std::string& payload)
+{
+    nlohmann::json j = nlohmann::json::parse(payload, nullptr, false);
+    if (!j.is_object())
+        return;
+    const std::string cmd = j.value("cmd", "");
+    const std::string reg = j.value("registry", "");
+    if (cmd == "start") {
+        ActionCatalog::ClearMainPanelSelection();
+        PapyrusBindings_WebUI::ClearTargetMenuSession();
+        WebUI_Visibility_Hide();
+        SKSE::GetTaskInterface()->AddTask([reg]() {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            std::vector<RE::Actor*> actors{ player };
+            auto pb = AnimationDB::GetPlayback(reg);
+            if (pb && pb->positions.size() >= 2) {
+                RE::Actor* npc = NearestNpc(player);
+                if (!npc) {
+                    webui_log::warn("AnimEngine debug: no NPC within 400 units");
+                    PapyrusBindings_WebUI::HandleNotify(R"({"msg":"AnimEngine: no NPC nearby"})");
+                    return;
+                }
+                actors.push_back(npc);
+            }
+            const int id = AnimEngine::StartScene(AnimEngine::OrderForRegistry(actors, reg), reg, nullptr);
+            webui_log::info("AnimEngine debug: start '{}' -> scene {}", reg, id);
+            PapyrusBindings_WebUI::HandleNotify(id >= 0 ? R"({"msg":"AnimEngine: scene started"})"
+                                                     : R"j({"msg":"AnimEngine: start failed (see log)"})j");
+        });
+        return;
+    }
+    const int id = AnimEngine::LatestScene();
+    bool ok = false;
+    if (cmd == "next")
+        ok = AnimEngine::Advance(id);
+    else if (cmd == "back")
+        ok = AnimEngine::Back(id);
+    else if (cmd == "pause" || cmd == "resume")
+        ok = AnimEngine::SetPaused(id, cmd == "pause");
+    else if (cmd == "end")
+        ok = AnimEngine::EndScene(id);
+    webui_log::info("AnimEngine debug: {} scene {} -> {} {}", cmd, id, ok, AnimEngine::DescribeJson(id));
+}
+
 void Call_OpenSkyrimNetDashboard()
 {
     ActionCatalog::ClearMainPanelSelection();
@@ -293,6 +362,7 @@ void InvokeConfigureSettingsPanel()
         j["dbEmpty"] = dbCount == 0;
         j["countMismatch"] = dbCount == 0 || (g_sexlabAnimCount >= 0 && dbCount != g_sexlabAnimCount);
     }
+    j["animEngineEnabled"] = GetConfigBool("sexlab.anim_engine.enabled", false);
     WebUI_Invoke("configureSettingsPanel(" + SafeDump(j) + ");");
 }
 
@@ -395,6 +465,17 @@ void KeyHandler::SetHudActive(bool active)
     _hudActive.store(active);
 }
 
+void KeyHandler::SetAnimKeys(std::map<uint32_t, KeyCallback> keys)
+{
+    std::unique_lock lock(_mutex);
+    _animKeys = std::move(keys);
+}
+
+void KeyHandler::SetAnimActive(bool active)
+{
+    _animActive.store(active);
+}
+
 namespace {
 
 /// DX code of a button event: keyboard scancode, or 256 + button for the mouse (SKSE convention).
@@ -478,14 +559,16 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
         return RE::BSEventNotifyControl::kContinue;
 
     std::vector<KeyCallback> toRun;
-    // Scene HUD keys: only while the HUD is up and the overlay is closed.
-    const bool hud = _hudActive.load() && WebUI_IsHidden();
+    // Scene HUD keys: only while the HUD is up and the overlay is closed. Otherwise the AnimEngine scene keys.
+    const bool overlayHidden = WebUI_IsHidden();
+    const bool hudUp = _hudActive.load() && overlayHidden;
+    const bool hud = hudUp || (_animActive.load() && overlayHidden);
     std::map<uint32_t, KeyCallback> hudKeys;
 
     {
         std::shared_lock lock(_mutex);
         if (hud)
-            hudKeys = _hudKeys;
+            hudKeys = hudUp ? _hudKeys : _animKeys;
         for (auto event = *a_eventList; event; event = event->next) {
             if (event->eventType != RE::INPUT_EVENT_TYPE::kButton)
                 continue;
@@ -1634,6 +1717,13 @@ void InitWebUI()
                 PapyrusBindings_WebUI::ClearTargetMenuSession();
                 WebUI_Visibility_Hide();
                 Call_RebuildAnimDb();
+            });
+        });
+
+        PrismaUI->RegisterJSListener(g_view, "onAnimEngineDebug", [](const char* value) {
+            RunGuarded("onAnimEngineDebug", [&] {
+                if (value)
+                    AnimEngineDebug(value);
             });
         });
 

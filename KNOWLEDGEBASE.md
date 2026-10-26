@@ -1,5 +1,46 @@
 # Knowledgebase
 
+## SexLab P+ scene packs loaded by AnimDB; AnimEngine core (2026-10-25, built, untested in game)
+
+- **What:** `SlsbLoader.cpp` reads `SKSE/SexLab/Registry/Source/*.slsb.json` (behind `sexlab.anim_engine.slsb_registry`, default off), and `AnimEngine.cpp` plays AnimDB playback graphs (behind `sexlab.anim_engine.enabled`). See [anim-engine.md](docs/developers/anim-engine.md).
+- **P+ reads binary `.slr`, built from the `.slsb.json` project files.** Match the two by the `.slr` header `pack_name` (u8 at byte 8 = length), not by filename: `FunnyBizAmp.slr` ↔ `FunnyBiznessAmputee.slsb.json`. The `.slr` stores scene ids and events bare.
+- **SLSB FNIS events carry the pack's `prefix_hash`:** the json says `Can_B_BoobJ_A1_S1`, the FNIS list says `xujsCan_B_BoobJ_A1_S1`. Without the prefix every lookup misses (13 659 / 13 659 offline).
+- **SLSB `race` is a display name** (`Canine`, `Chaurus Hunter`), while P+ race keys are plural legacy keys (`Dogs`, `Draugrs`). Rows store the display name until in-game parity settles the mapping.
+- **Stage tags differ per stage** (acts such as `vaginal`, `blowjob`; 1095 of 1212 scenes), so the row tags are the union over stages.
+- **The 1212 SLSB conversion scenes have no branches.** Graph code is exercised by real P+ content only.
+- **`SexLab_Builtin.json` is needed on AE:** the AE registry drops every non-SLAL row, so it is the only source of SexLab's 161 built-ins. It ships in `core` (`make release` copies `SKSE/`) and does nothing on P+.
+- **`SheatheWeapon` is asynchronous.** It only starts the sheathe animation. `IsWeaponDrawn()` stays true through `kWantToSheathe` / `kSheathing`, and a placement or `IdleForceDefaultState` sent meanwhile cuts the sheathe off. Poll `ActorState::GetWeaponState() == kSheathed` before placing; AnimEngine's Sheathe phase does this, and so does P+ (`BeginPlayerSheatheWait`).
+- **A global Papyrus script gets no `OnTranslationComplete`:** SexLab's Snap loop lives in its actor alias. AnimEngine re-sends the shell's `Hold` every second instead.
+- **AnimEngine's DoNothing package has no condition.** SexLab's `SexLabDoNothing` only runs for actors in `SexLabAnimatingFaction`, which AnimEngine actors are not in, so our copy (`00081D`) drops the condition. The package override is saved by PapyrusUtil, so every exit path, including the load release, must go through the shell's `Unlock`.
+- **A bare XMarker is a bad `SetVehicle` anchor.** `Skyrim.esm` 0x3B has no 3D. The player, placed in front of the NPC, kept sliding back to where they started (first AnimEngine test). SexLab anchors to a Furniture marker (`SexLabBaseMarker`, `WallLeanMarker.nif`) and waits for `Is3DLoaded`; AnimEngine now uses a copy of it (`00081E`).
+- **Separate `DispatchStaticCall`s run on separate stacks and can interleave.** Lock and Place, dispatched one after the other, ran out of order with the stage events. Steps that must happen in order go in one shell function (`Begin`), and C++ waits for its return with an `IStackCallbackFunctor`.
+- **TranslateTo pin cancels a turn (B_B_SKiss1 test: actors at the right distance, player turned the wrong way):** a new `TranslateTo` replaces the one still running. The first placement glided the player 47 units (0.24 s at 200 u/s) and about 180° (0.5 s at 360°/s). After 0.29 s the root-node `Place` found them within 2 units and started SexLab's hold pin (0.0001°/s), so they stayed turned part way. SexLab's Snap checks distance only, but SexLab hard-sets the angle at the start. Fix: `Begin` hard-sets (`Snap`), and `Place` / `Hold` check the angle (> 3°) before pinning.
+- **Re-entering an FNIS sequence needs a sequence exit first. Fixed; verified in game (checkpoint 07: Back 2→1 and 3→2 land, after one retry).**
+  - **Symptom (B_B_SKiss1 Previous test, checkpoint 06):** after Back from stage 2 to stage 1, both actors fell to the standing pose, overlapping. `NotifyAnimationGraph` refused S1 for both positions. Every later stage event was refused too, the Next sends and the timed stages alike. End still worked.
+  - **Cause:** SLAL stages are an FNIS `s` line (S1) plus `+` lines (S2..Sn). Jump sent `IdleForceDefaultState` and then S1 0.2 s later, while the graph was still in, or leaving, that same sequence. Once the actor was in the default state outside the sequence, every `+` event was refused.
+  - **Fix:** a Jump now sends `SexLabSequenceExit1` first. That is SexLab's dummy `s` sequence (`FNIS_SexLab_List.txt:8`), used the same way in `sslActorAlias.psc:855-862` RefreshActor. Then it sends the default state, S1, and Sn. When a stage event is refused, that position is entered again this way, up to 2 times, before the stage is marked unplayable.
+  - **Follow-up (checkpoint 07):** the full re-entry snapped both actors into the standing idle, overlapping and facing forward, on every Back. Inside a sequence, a `+` event can be sent directly, backward too; SexLab's `sslActorAlias.psc:739-763` SendAnimation does this. Only S1 needs the exit, and the exit is enough on its own: `SexLabSequenceExit1` → 1 tick → S1, with no default state. Untested in game: whether S1 is accepted right after the exit. If it is refused, the full re-entry is the fallback.
+  - **Follow-up (checkpoint 08):** in game, S1 after the exit was still refused, and the full re-entry snapped the actors as before. Each refusal came while the WebUI debug panel was focused and the game was paused; S1 was accepted only after Escape. A `+` event is accepted while paused, but S1 needs the graph to have entered the exit sequence first, and a paused graph does not update. AnimEngine now freezes its queue and stage timer while `UI::GameIsPaused()` (debug line `game paused; event queue frozen`). Untested in game.
+  - **Follow-up (checkpoint 09):** the pause was not the cause. With the freeze working, S1 was still refused 0.1 s after the exit, outside any menu. The graph accepts an `s` S1 only from the default state. SexLab cannot blend back to stage 1 either: SendAnimation sends the default state, waits 0.1 s, then sends S1 (`sslActorAlias.psc:742-745`). A return to S1 now uses RefreshActor's timing: `SexLabSequenceExit1` + `AnimObjectUnequip` + `IdleForceDefaultState`, then S1 after 0.2 s. That is one short snap with no refused attempt. A seamless return would need our own FNIS behavior. `+` targets still blend. The pause freeze is kept for honest timers.
+- **Walking into place needs no package:** `Actor.PathToReference` is latent and returns on arrival or failure. It must run before the DoNothing override is applied. SexLab instead walks to within 100 units of the center with a faction-rank travel package, then snaps the actor into place.
+
+## SexLab's strip log is cumulative (2026-10-25, verified in game)
+
+- **What:** `sslActorAlias.Strip` logs `Equipment: [...]` after `Equipment = MergeFormArray(Equipment, Stripped)`. A later strip lists every item stripped earlier in the scene, so a second line does not mean the items were still worn. Check `GetWornForm` instead.
+- **Cost:** a 32-slot `GetWornForm` sweep in Papyrus took about 1.1 s per actor under scene-start load. Keep sweeps like that out of start paths.
+- **Case:** `B_B_CStandA` looked unstripped with the scene registry on. An A/B in game (registry off, registry on, after an AnimEngine scene) showed `body:None` after the start strip each time.
+
+## SLAL packs loaded by AnimDB, not SexLab (2026-10-25, verified in game)
+
+- **What:** on SexLab AE, AnimDB reads `Data/SLAnims/json` and the FNIS lists itself (`SlalLoader.cpp`); the SexLab registry walk is gone. See [anim-engine.md](docs/developers/anim-engine.md).
+- **SLAL json has no hkx paths.** The stage `id` is the FNIS event; the hkx comes from the pack's `FNIS_<pack>_List.txt`. Billyy events are `B_B_X_A1_S1` while the file is `B_X_A1_S1.hkx`, so never derive the file name from the event.
+- **`strap_on`:** a missing key is false under SLAL (`JMap.getInt`), but SexLab's own `AddPositionStage` default is true, so the built-ins export writes every value.
+- **FNIS `s` / `+` lines are one sequence:** a later stage event only plays after S1 was sent (SexLab's `SendAnimation` / `RefreshActor`).
+- **The SexLab registry keeps stale anims in the save:** 43 Billyy furniture registrations had no json on disk anymore. The SLAL registry drops them.
+- **Shared DB across MO2 profiles:** `animationdb.sql` lives in `overwrite`, so AE (SLAL loader, `source 2`) and P+ (Papyrus walk, or SLSB loader `source 3`) each take over the whole table when they sync.
+- **In game (AE profile):** 31 packs, 1246 anims, 13 957 stages, 0 missing FNIS events, equal to the offline mirror; 43 stale rows dropped; reload skips the reparse; a legacy SexLab scene still runs on SLAL-sourced rows.
+- **Penetration Physics only sees SexLab-thread scenes:** it scrapes `sslThreadModel`, and its API V1 is listener-only. Its tag files are keyed by animation **name**.
+
 ## Dialogue LLM and decision model at cross purposes (2026-10-24, removed)
 
 - **Symptom:** Jev picked an NPC's strategy, and the dialogue LLM fired `SexLab_Arouse` / `SexLab_Calm` (×3) the other way.

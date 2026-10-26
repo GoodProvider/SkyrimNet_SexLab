@@ -340,6 +340,15 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
   - **Release** (`Ending_Poll`, shares `OnUpdate` with the orgasm window, 1 s; held ≥ 2 s, window closed): `ResponseDoneSince(mark)` (log `(response played)`). While one of the scene's actors is speaking after the mark, wait. With no paired response yet (the DN went out as an event, TTS off): `GetSpeechQueueSize() == 0` and audio ended at least 1 s after the first poll, min 3 s (`(speech queue empty)`). Always at `dialogue_hold_max` (30 s, capped at `ENDING_HOLD_CAP` 30; halved when `!thread.HasPlayer`; 0 = no hold; `(max)`).
   - Release takes the hold back off (`UpdateTimer(-PAUSE_HOLD_SECONDS)`) without adding the held time: the final stage ends at the later of its own timer and the response. While the pause key holds the stage the timer is left to the pause.
 
+## Contact mode (planned)
+
+With AnimEngine (see [anim-engine.md](anim-engine.md) §7), passive gain is driven by detected contact instead of animation tags:
+
+- `SetStimulation(actor, level 0..1, sites)` comes from `AnimContacts` each tick. A partner's hand, penis or strap-on, vagina or mouth (or the actor's own hand) at the actor's penis, vagina or anus counts. Passive gain = the passive rate × `level`. In contact mode, an actor with no contact gains nothing passively; the mini-game and strategies are unchanged.
+- First contact calls `SetOrgasmExpected(actor, true)`, sticky for the rest of the scene.
+- The detected sites feed `SetSceneActs`.
+- Config: `sexlab.enjoyment.contact_mode`. Not implemented yet.
+
 ## SexLab P+
 
 The engine itself is unchanged; the Scene shell feeds it a linear view of P+'s scene graph ([sexlab-pplus.md](sexlab-pplus.md)):

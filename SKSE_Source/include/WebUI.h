@@ -25,6 +25,9 @@ public:
     /// SexLab hotkeys, favorites and attacks never see them.
     void SetHudKeys(std::map<uint32_t, KeyCallback> keys);
     void SetHudActive(bool active);
+    /// AnimEngine scene keys: same handling as the HUD keys, live while SetAnimActive(true) and the HUD is not.
+    void SetAnimKeys(std::map<uint32_t, KeyCallback> keys);
+    void SetAnimActive(bool active);
 
 private:
     KeyHandler() = default;
@@ -40,6 +43,8 @@ private:
     std::map<uint32_t, KeyCallback> _callbacks;
     std::map<uint32_t, KeyCallback> _hudKeys;
     std::atomic<bool> _hudActive{ false };
+    std::map<uint32_t, KeyCallback> _animKeys;
+    std::atomic<bool> _animActive{ false };
     std::shared_mutex _mutex;
 };
 

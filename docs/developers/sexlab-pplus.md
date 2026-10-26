@@ -45,3 +45,5 @@ For SLSB-converted SLAL packs the legacy number matches the original stage, so t
 ## AnimDB
 
 The walk does not use slots (a proxy array, empty until `SyncBackEnd`, capped by the quest's aliases). It enumerates `sslAnimationSlots.CreateProxyArray(0, creature)` and builds rows from `SexlabRegistry` (`AnimDb.BuildAnimJson_PPlus`). Rows carry `"_case":1`: the C++ AnimationDB keeps that registry's case as the key and returns it as `_registry` (1.6x registrars stay lowercased). Lookups try the exact key, then lowercase. Anidata matches `<nanoid>.json`, else `<scene name>.json`. AniDescriber is compiled out (`SKYRIMNET_ANIDESCRIBER_HKX=0`) and was not re-checked against P+ event names.
+
+**C++ registry (experimental):** with dashboard `sexlab.anim_engine.slsb_registry` on, `SlsbLoader` builds the same rows from `SKSE/SexLab/Registry/Source/*.slsb.json` in C++ (`source = 3`) and the walk is skipped (`AnimDb.UsesSlsbRegistry`). The loader also stores each scene's stage graph for AnimEngine. It stays off until its rows match the walk's in game (race keys and scene tags are the open points). See [anim-engine.md](anim-engine.md) §2.

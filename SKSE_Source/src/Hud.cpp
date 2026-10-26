@@ -1,6 +1,7 @@
 #include "Hud.h"
 
 #include "Aid.h"
+#include "AnimEngine.h"
 #include "Config.h"
 #include "OrgasmEngine.h"
 #include "StrategyDecision.h"
@@ -537,6 +538,26 @@ namespace Hud
             webui_log::info("Hud: took control of {:#x} (scene {})", g_anchor, sid);
         }
 
+        // AnimEngine scene keys (no SexLab HUD): the player's scene, else the newest one (as the debug panel).
+        void OnAnimKey(const std::string& ctl)
+        {
+            int id = AnimEngine::SceneOf(RE::PlayerCharacter::GetSingleton());
+            if (id < 0) {
+                id = AnimEngine::LatestScene();
+            }
+            bool ok = false;
+            if (ctl == "next") {
+                ok = AnimEngine::Advance(id);
+            } else if (ctl == "previous") {
+                ok = AnimEngine::Back(id);
+            } else if (ctl == "pause") {
+                ok = AnimEngine::TogglePaused(id);
+            } else if (ctl == "end") {
+                ok = AnimEngine::EndScene(id);
+            }
+            webui_log::info("Hud: AnimEngine key {} scene {} -> {}", ctl, id, ok);
+        }
+
         void RebindKeys()
         {
             std::map<std::uint32_t, KeyCallback> keys;
@@ -602,6 +623,17 @@ namespace Hud
                 }
             }
             KeyHandler::GetSingleton()->SetHudKeys(std::move(keys));
+
+            // AnimEngine scenes: end / previous / next / pause on the same dashboard keys, whatever
+            // sexlab.hud.controls says.
+            std::map<std::uint32_t, KeyCallback> animKeys;
+            for (const char* ctl : { "end", "previous", "next", "pause" }) {
+                const auto it = dx.find(ctl);
+                if (it != dx.end() && it->second != 0) {
+                    animKeys[it->second] = [c = std::string(ctl)]() { OnAnimKey(c); };
+                }
+            }
+            KeyHandler::GetSingleton()->SetAnimKeys(std::move(animKeys));
 
             // Take control outside the HUD (the player in no scene): a global binding, not consumed. While the HUD
             // is up its own binding runs instead.
@@ -834,6 +866,8 @@ namespace Hud
         }
         const bool visible = inScene && anyGroup && WebUI_IsHidden() && !BlockingMenuOpen();
         KeyHandler::GetSingleton()->SetHudActive(visible);
+        KeyHandler::GetSingleton()->SetAnimActive(
+            !visible && WebUI_IsHidden() && !BlockingMenuOpen() && AnimEngine::LatestScene() >= 0);
         Show(visible);
 
         // Speed narration: one line per burst once the presses stop.

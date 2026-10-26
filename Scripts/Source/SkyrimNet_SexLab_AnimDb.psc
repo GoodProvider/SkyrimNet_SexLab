@@ -25,6 +25,49 @@ String Function AnimDb_ResolveTags(String tags_csv, int actor_count, String syno
 Bool Function AnimDb_CsvHasTag(String tags_csv, String tag) global native
 ; Per position 1 when most registries default it to clothed (tie -> 0). See Scene_Creator.ApplyMajorityClothed.
 int[] Function AnimDb_ClothedMajority(String[] registries, int position_count) global native
+; AnimDB is the registry (SexLab AE): SLAL packs load from disk in C++ on a worker thread (also at game start).
+; drop_legacy deletes rows the old SexLab registry walk pushed. False: a load is running (this one queues).
+Bool Function AnimDb_SyncFromSlal(Bool force_rebuild, Bool drop_legacy) global native
+Bool Function AnimDb_IsSlalSyncRunning() global native
+String Function AnimDb_SlalSummary() global native
+; SexLab P+: AnimDB loads SLSB scene packs (SKSE/SexLab/Registry/Source/*.slsb.json) in C++, same contract.
+Bool Function AnimDb_SyncFromSlsb(Bool force_rebuild, Bool drop_legacy) global native
+Bool Function AnimDb_IsSlsbSyncRunning() global native
+String Function AnimDb_SlsbSummary() global native
+; Dashboard sexlab.anim_engine.slsb_registry (default off until parity with the P+ walk is confirmed in game).
+Bool Function AnimDb_SlsbRegistryEnabled() global native
+String Function AnimDb_GetPlaybackJson(String registry) global native
+Bool Function AnimDb_SetEnabled(String registry, Bool enabled) global native
+
+; SexLab AE: AnimDB loads SLAL packs itself.
+Bool Function UsesSlalRegistry() global
+    return !SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+EndFunction
+
+; SexLab P+ with sexlab.anim_engine.slsb_registry on: AnimDB loads SLSB packs itself. Off: the SexlabRegistry walk below.
+Bool Function UsesSlsbRegistry() global
+    return SkyrimNet_SexLab_Utilities.IsSexLabPPlus() && AnimDb_SlsbRegistryEnabled()
+EndFunction
+
+; A C++ loader owns AnimDB (no Papyrus walk, no SexLab count to compare against).
+Bool Function UsesCppRegistry() global
+    return UsesSlalRegistry() || UsesSlsbRegistry()
+EndFunction
+
+; Starts the profile's C++ loader; drop_legacy is always on (the loader then owns the whole table).
+Bool Function SyncCppRegistry(Bool force_rebuild) global
+    if UsesSlsbRegistry()
+        return AnimDb_SyncFromSlsb(force_rebuild, True)
+    endif
+    return AnimDb_SyncFromSlal(force_rebuild, True)
+EndFunction
+
+String Function CppRegistrySummary() global
+    if UsesSlsbRegistry()
+        return "SLSB registry: " + AnimDb_SlsbSummary()
+    endif
+    return "SLAL registry: " + AnimDb_SlalSummary()
+EndFunction
 
 int BATCH_SIZE = 48
 int walk_index = 0
@@ -69,6 +112,11 @@ EndFunction
 
 ; Compare AnimDB vs SexLab after load. Never auto-rebuilds; prompts if counts differ.
 Function CheckAlignmentOnLoad()
+    if UsesCppRegistry()
+        SyncCppRegistry(False)
+        Trace("CheckAlignmentOnLoad", CppRegistrySummary())
+        return
+    endif
     if walk_active || sync_phase != 0 || align_mbox_id != 0
         Trace("CheckAlignmentOnLoad", "skip pending walk_active="+walk_active+" phase="+sync_phase+" mbox="+align_mbox_id)
         return
@@ -94,14 +142,6 @@ int Function RefreshSlotCounts()
         ; P+ slots are a proxy array (empty until SyncBackEnd, capped by the quest's aliases): count the registry.
         walk_slots_human = SkyrimNet_SexLab_PPlus.AllSceneIds(0).length
         walk_slots_creature = SkyrimNet_SexLab_PPlus.AllSceneIds(1).length
-    elseif sexlab
-        if sexlab.AnimSlots
-            walk_slots_human = sexlab.AnimSlots.Slotted
-        endif
-        sslAnimationSlots creature_slots = sexlab.CreatureSlots as sslAnimationSlots
-        if creature_slots
-            walk_slots_creature = creature_slots.Slotted
-        endif
     endif
     walk_slots_total = walk_slots_human + walk_slots_creature
     return walk_slots_total
@@ -110,6 +150,12 @@ EndFunction
 ; Pushes the SexLab slot count to the WebUI (Settings counts / warning, ControlPanel Rebuild DB button).
 ; No Enabled gate: Slotted reads 0 until SexLab registers animations.
 int Function PushSexLabCount()
+    if UsesCppRegistry()
+        ; No SexLab registry to compare against: report the DB count so Settings shows no mismatch.
+        int db_rows = AnimDb_TotalCount()
+        SkyrimNet_SexLab_WebUI.WebUI_SetSexLabAnimCount(db_rows)
+        return db_rows
+    endif
     int sl_count = RefreshSlotCounts()
     SkyrimNet_SexLab_WebUI.WebUI_SetSexLabAnimCount(sl_count)
     return sl_count
@@ -117,6 +163,10 @@ EndFunction
 
 ; Strict: True only when the DB row count equals SexLab's slot count.
 Bool Function IsAligned()
+    if UsesCppRegistry()
+        PushSexLabCount()
+        return True
+    endif
     int sl_count = PushSexLabCount()
     int db_count = AnimDb_TotalCount()
     Trace("IsAligned", "db_count="+db_count+" registered="+sl_count)
@@ -198,6 +248,21 @@ Function StartSync(Bool force_rebuild=False)
     if align_mbox_id != 0
         SkyMessage.Delete(align_mbox_id)
         align_mbox_id = 0
+    endif
+    if UsesCppRegistry()
+        Bool started = SyncCppRegistry(force_rebuild)
+        String which = "SLAL"
+        if UsesSlsbRegistry()
+            which = "SLSB"
+        endif
+        Trace("StartSync", which+" registry load force="+force_rebuild+" started="+started, True)
+        if force_rebuild
+            last_rebuild_timestamp = "game day " + Utility.GetCurrentGameTime()
+            SkyrimNet_SexLab_WebUI.WebUI_SetLastRebuildTimestamp(last_rebuild_timestamp)
+        endif
+        walk_force = False
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
     endif
     if sync_phase != 0
         Trace("StartSync", "already walking, requesting restart force="+force_rebuild)
@@ -305,74 +370,8 @@ Event OnUpdate()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
-    sslAnimationSlots slots = None
-    if walk_source == 0
-        slots = sexlab.AnimSlots
-    else
-        slots = sexlab.CreatureSlots as sslAnimationSlots
-    endif
-    if !slots
-        FinishSourceOrDone()
-        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
-        return
-    endif
-    int slotted = slots.Slotted
-    int batch_count = 0
-    String json = "["
-    Bool first = True
-
-    while walk_index < slotted && batch_count < BATCH_SIZE
-        sslBaseAnimation anim = slots.GetBySlot(walk_index)
-        walk_index += 1
-        if !anim
-            walk_skip_null += 1
-        elseif !anim.Registered
-            walk_skip_unreg += 1
-            LogWalkSkip("unregistered", anim)
-        else
-            String piece = BuildAnimJson(anim, walk_source)
-            if piece != ""
-                if !first
-                    json += ","
-                endif
-                json += piece
-                first = False
-                batch_count += 1
-                walk_total += 1
-            else
-                walk_skip_empty += 1
-                LogWalkSkip("empty registry", anim)
-            endif
-        endif
-    endwhile
-    json += "]"
-
-    if batch_count > 0
-        AnimDb_PushAnimBatch(json)
-    endif
-
-    float now = Utility.GetCurrentRealTime()
-    if now - progress_last_time >= 5.0
-        progress_last_time = now
-        int done = walk_index
-        if walk_source == 1
-            done += walk_slots_human
-        endif
-        int pct = 0
-        if walk_slots_total > 0
-            pct = done * 100 / walk_slots_total
-        endif
-        if pct > 99
-            pct = 99
-        endif
-        Trace("OnUpdate", "SkyrimNet_SexLab is "+pct+"% finished", True)
-    endif
-
-    if walk_index >= slotted
-        FinishSourceOrDone()
-    else
-        RegisterForSingleUpdate(0.01)
-    endif
+    ; SexLab AE never walks: AnimDB loads SLAL packs in C++ (UsesSlalRegistry / AnimDb_SyncFromSlal).
+    FinishSourceOrDone()
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndEvent
 
@@ -435,7 +434,7 @@ Function WalkPPlusBatch()
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
-; P+ row from SexlabRegistry (the proxy's Name / Enabled / tags stay empty). Same keys as BuildAnimJson;
+; P+ row from SexlabRegistry (the proxy's Name / Enabled / tags stay empty). Same keys as SlalLoader's rows;
 ; "_case":1 keeps the NanoID's case as the AnimDB key (NanoIDs are case-sensitive).
 String Function BuildAnimJson_PPlus(String id, int source)
     String name = SkyrimNet_SexLab_PPlus.SceneName(id)
@@ -519,14 +518,6 @@ String Function BuildAnimJson_PPlus(String id, int source)
         +",\"_tags\":"+tags_json+"}"
 EndFunction
 
-Function LogWalkSkip(String reason, sslBaseAnimation anim)
-    if walk_skip_logged >= 10
-        return
-    endif
-    walk_skip_logged += 1
-    Trace("OnUpdate", "skipped ("+reason+") source="+walk_source+" name="+anim.Name+" registry="+anim.Registry)
-EndFunction
-
 Function FinishSourceOrDone()
     if walk_source == 0
         walk_source = 1
@@ -553,102 +544,6 @@ Function FinishSourceOrDone()
         Bool again = walk_force
         walk_force = False
     endif
-EndFunction
-
-String Function BuildAnimJson(sslBaseAnimation anim, int source)
-    if !anim
-        return ""
-    endif
-    String registry = anim.Registry
-    if registry == ""
-        return ""
-    endif
-    String name = anim.Name
-    int enabled = 0
-    if anim.Enabled
-        enabled = 1
-    endif
-    int pos_count = anim.PositionCount
-    int stage_count = anim.StageCount
-    int[] genders = anim.Genders
-    int males = 0
-    int females = 0
-    int male_creatures = 0
-    int female_creatures = 0
-    if genders
-        if genders.length > 0
-            males = genders[0]
-        endif
-        if genders.length > 1
-            females = genders[1]
-        endif
-        if genders.length > 2
-            male_creatures = genders[2]
-        endif
-        if genders.length > 3
-            female_creatures = genders[3]
-        endif
-    endif
-    int has_creature = 0
-    if anim.IsCreature
-        has_creature = 1
-    endif
-    String race_type = anim.RaceType
-    if !race_type
-        race_type = ""
-    endif
-
-    String pos_genders = "["
-    String pos_race = "["
-    int i = 0
-    while i < pos_count
-        if i > 0
-            pos_genders += ","
-            pos_race += ","
-        endif
-        pos_genders += anim.GetGender(i)
-        String rk = ""
-        String[] rts = anim.GetRaceTypes()
-        if rts && i < rts.length && rts[i]
-            rk = rts[i]
-        endif
-        pos_race += "\""+EscapeJson(rk)+"\""
-        i += 1
-    endwhile
-    pos_genders += "]"
-    pos_race += "]"
-
-    String[] tags = anim.GetRawTags()
-    String tags_json = "["
-    i = 0
-    int ntags = 0
-    if tags
-        ntags = tags.length
-    endif
-    while i < ntags
-        if i > 0
-            tags_json += ","
-        endif
-        tags_json += "\""+EscapeJson(tags[i])+"\""
-        i += 1
-    endwhile
-    tags_json += "]"
-
-    return "{\"_registry\":\""+EscapeJson(registry)+"\""\
-        +",\"_name\":\""+EscapeJson(name)+"\""\
-        +",\"_enabled\":"+enabled\
-        +",\"_source\":"+source\
-        +",\"_position_count\":"+pos_count\
-        +",\"_stage_count\":"+stage_count\
-        +",\"_males\":"+males\
-        +",\"_females\":"+females\
-        +",\"_male_creatures\":"+male_creatures\
-        +",\"_female_creatures\":"+female_creatures\
-        +",\"_has_creature\":"+has_creature\
-        +",\"_race_type\":\""+EscapeJson(race_type)+"\""\
-        +",\"_pos_genders\":"+pos_genders\
-        +",\"_pos_race_keys\":"+pos_race\
-        +",\"_tags\":"+tags_json+"}"
 EndFunction
 
 String Function EscapeJson(String s) global

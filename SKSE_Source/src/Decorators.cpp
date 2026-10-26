@@ -5,6 +5,7 @@
 #include "JsonUtil.h"
 #include "OrgasmEngine.h"
 #include "Profiler.h"
+#include "SceneRegistry.h"
 #include "WebUI_Log.h"
 
 #include <algorithm>
@@ -391,6 +392,7 @@ namespace Decorators
                     e.actors.push_back(a->GetFormID());
             }
             RE::Actor* anchor = positions.empty() ? nullptr : positions[0];
+            Scenes::Registry::Register(Scenes::Registry::Kind::SexLab, sid, e.actors);
             {
                 std::lock_guard lock(g_threadsMutex);
                 g_threads[sid] = std::move(e);
@@ -401,6 +403,7 @@ namespace Decorators
 
         void Threads_Remove(RE::StaticFunctionTag*, std::int32_t sid)
         {
+            Scenes::Registry::Unregister(Scenes::Registry::Kind::SexLab, sid);
             {
                 std::lock_guard lock(g_threadsMutex);
                 if (!g_threads.erase(sid))

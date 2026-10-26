@@ -47,6 +47,86 @@ namespace AnimationDB
         std::int64_t sync_gen = 0;
     };
 
+    /// AnimRow::source for rows the C++ registry loaders store (0/1 = Papyrus-pushed rows).
+    /// One owner per profile: SexLab AE → SlalLoader (kSourceSlal); SexLab P+ → SlsbLoader (kSourceSlsb) when
+    /// sexlab.anim_engine.slsb_registry is on, else the Papyrus walk (BeginSync/EndSync wipe and prune every row).
+    /// The loader's ReplaceRegistryRows + DropRowsExceptSource then make the table that source's only.
+    constexpr int kSourceSlal = 2;
+    constexpr int kSourceSlsb = 3;
+
+    /// anim_playback JSON version the loaders write. Part of the source stamps, so a format change reparses once.
+    constexpr int kPlaybackFormat = 2;
+    constexpr const char* kPlaybackFormatStampKey = "@playback_format";
+
+    /// One actor's part of one stage node (AnimEngine playback). See docs/developers/anim-engine.md §3.
+    struct PlayStage
+    {
+        std::string event;                  // FNIS animation event (SLAL stage id; SLSB <prefix_hash><event>)
+        std::string hkx;                    // Data-relative path from the FNIS list ("" when not listed)
+        std::string kind;                   // FNIS line type: b / s / + / ...
+        std::vector<std::string> objects;   // AnimObject EditorIDs (FNIS -o)
+        std::vector<std::string> animvars;  // FNIS -AV<var>
+        bool acyclic = false;               // FNIS -a
+        float fwd = 0.f, side = 0.f, up = 0.f, rot = 0.f;
+        bool silent = false, open_mouth = false, strap_on = false;
+        int sos = 0;
+        bool fnis = false;                  // event found in an FNIS list
+        std::string interact_site = "auto"; // V A M H LH RH none auto
+        int interact_target = -1;           // 0-based position, -1 = any
+        std::string interact_src;           // ppa / anidata / ""
+        std::string anim_obj;               // SLSB position anim_obj (AnimObject EditorID), "" for SLAL
+        bool climax = false;                // SLSB position extra.climax
+        int schlong = 0;                    // SLSB schlong angle
+        float scale = 1.f;                  // SLSB position scale
+    };
+
+    struct PlayPosition
+    {
+        std::string type;   // SLAL actor type (Male, Female, Creature, CreatureMale, CreatureFemale); "" for SLSB
+        int gender = 0;     // 0 M (or futa), 1 F, 2 creature (male), 3 creature female
+        bool futa = false;  // SLSB sex.futa
+        std::string race;   // creature race key ("" for humans)
+        int add_cum = -1;
+        std::vector<PlayStage> stages; // parallel to PlaybackData::nodes
+    };
+
+    /// One stage of the scene graph. SLAL animations are a linear graph ("1" → "2" → … → sink).
+    struct PlayNode
+    {
+        std::string id;                 // SLAL "1".."N"; SLSB stage id
+        int n = 0;                      // legacy stage number (1-based file order = P+ GetLegacyStageNum)
+        std::vector<std::string> dest;  // next node ids; empty = sink (last stage)
+        std::vector<std::string> tags;  // SLSB stage tags (lowercase); empty for SLAL
+        float fixed_len = 0.f;          // SLSB extra.fixed_len seconds (0 = none)
+        float timer = 0.f;              // SLAL stages[n].timer seconds (0 = config default)
+        std::string sound;              // SLAL stages[n].sound
+    };
+
+    struct PlaybackData
+    {
+        std::string format;             // "slal" / "slsb"
+        std::string registry, slal_id, pack, name, sound, creature_race;
+        int stage_count = 0;
+        std::string root;
+        std::vector<PlayNode> nodes;
+        std::vector<PlayPosition> positions;
+        float furniture_offset[4] = { 0.f, 0.f, 0.f, 0.f }; // SLSB scene furniture offset fwd, side, up, rot
+        int missing_fnis = 0;
+        int missing_hkx = 0;
+
+        /// Index into nodes, -1 when unknown.
+        int NodeIndex(const std::string& id) const;
+    };
+
+    /// Prepared by the registry loaders for ReplaceRegistryRows.
+    struct PlaybackRow
+    {
+        std::string registry, slal_id /* SLAL id or SLSB scene id */, pack, src_json;
+        std::string json; // PlaybackData as the stored JSON blob
+        int missing_fnis = 0;
+        int missing_hkx = 0;
+    };
+
     /// Which synonyms-*.json cluster set expands must/suppress tags. None = literal tags only.
     enum class SynonymMode { None, Strict, Broad };
 
@@ -116,6 +196,25 @@ namespace AnimationDB
     /// Papyrus binding: a batch could not be parsed even after unescaping \"; its rows are lost.
     void NoteBatchDropped();
     bool EndSync();
+
+    /// Registry loaders: replaces every row of `source` (registry rows go through PushAnim, so anidata, orgasm and
+    /// speaking inference apply) plus their anim_playback rows. Rows of other sources are untouched. force:
+    /// rebuild rows even when unchanged. Returns the number of registry rows stored.
+    int ReplaceRegistryRows(int source, const std::vector<nlohmann::json>& rows, const std::vector<PlaybackRow>& playback,
+        bool force);
+    /// Deletes every row (and playback row) not of `source`, e.g. rows the old SexLab registry walk pushed.
+    /// Returns the count.
+    int DropRowsExceptSource(int source);
+    /// playback_sources: path → "mtime:size" stamps of the files the last load of `source` read.
+    std::unordered_map<std::string, std::string> GetSourceStamps(int source);
+    void SetSourceStamps(int source, const std::unordered_map<std::string, std::string>& stamps);
+    /// anim_playback rows whose registry row is of `source`.
+    int PlaybackRowCount(int source);
+    /// Stored playback JSON for a registry ("" when none).
+    std::string GetPlaybackJson(const std::string& registry);
+    std::optional<PlaybackData> GetPlayback(const std::string& registry);
+    /// User enable toggle for registry-loader rows (anim_enabled table; survives rebuilds). Default enabled.
+    bool SetAnimEnabled(const std::string& registry, bool enabled);
 
     std::vector<AnimRow> QueryTopNAnims(const FilterSpec& spec, int n);
     std::vector<TagCount> QueryTopNTags(const FilterSpec& spec, int n);

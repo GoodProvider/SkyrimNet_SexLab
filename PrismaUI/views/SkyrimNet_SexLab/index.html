@@ -2574,6 +2574,21 @@
         <div class="compact-row" style="margin-bottom:12px">
             <div class="action-btn" id="settings-btn-rebuild" onclick="settingsRebuild()">Rebuild Animation Database</div>
         </div>
+        <div id="settings-anim-engine" style="display:none">
+            <div class="section-header">AnimEngine (debug)</div>
+            <div class="compact-row" style="margin-bottom:8px">
+                <span>Registry:</span>
+                <input id="settings-ae-registry" type="text" value="B_B_SKiss1" style="flex:1; min-width:8em" />
+            </div>
+            <div class="compact-row" style="margin-bottom:12px; gap:6px; flex-wrap:wrap">
+                <div class="action-btn" onclick="settingsAnimEngine('start')">Start (player + nearest NPC)</div>
+                <div class="action-btn" onclick="settingsAnimEngine('next')">Next stage</div>
+                <div class="action-btn" onclick="settingsAnimEngine('back')">Previous</div>
+                <div class="action-btn" onclick="settingsAnimEngine('pause')">Pause</div>
+                <div class="action-btn" onclick="settingsAnimEngine('resume')">Resume</div>
+                <div class="action-btn" onclick="settingsAnimEngine('end')">End</div>
+            </div>
+        </div>
         <div class="section-header">SkyrimNet plugin settings</div>
         <div class="compact-row" style="margin-bottom:8px">
             <div class="action-btn" id="settings-btn-skyrimnet" onclick="settingsOpenSkyrimNet()">Open SkyrimNet dashboard</div>
@@ -4062,7 +4077,17 @@
             }
             if (urlEl)
                 urlEl.textContent = (cfg && cfg.docsUrl) ? cfg.docsUrl : 'https://github.com/GoodProvider/SkyrimNet_SexLab';
+            const aeEl = document.getElementById('settings-anim-engine');
+            if (aeEl)
+                aeEl.style.display = (cfg && cfg.animEngineEnabled) ? 'block' : 'none';
             loadDashboardUiScale();
+        }
+
+        // AnimEngine debug (sexlab.anim_engine.enabled): start closes the WebUI; the others act on the newest scene.
+        function settingsAnimEngine(cmd) {
+            const reg = (document.getElementById('settings-ae-registry') || {}).value || '';
+            if (typeof window.onAnimEngineDebug === 'function')
+                window.onAnimEngineDebug(JSON.stringify({ cmd: cmd, registry: reg.trim() }));
         }
 
         function settingsRebuild() {

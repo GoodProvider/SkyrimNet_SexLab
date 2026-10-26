@@ -22,6 +22,10 @@
 #include "Papyrus_OrgasmEngine.h"
 #include "ActorLocker.h"
 #include "Papyrus_ActorLocker.h"
+#include "AnimEngine.h"
+#include "Papyrus_AnimEngine.h"
+#include "SceneRegistry.h"
+#include "Papyrus_SceneRegistry.h"
 #include "Decorators.h"
 #include "StrategyDecision.h"
 #include "Profiler.h"
@@ -89,6 +93,8 @@ namespace {
         }
         OrgasmEngine::Save(intfc);
         ActorLocker::Save(intfc);
+        AnimEngine::Save(intfc);
+        Scenes::Registry::Save(intfc);
         Decorators::Save(intfc);
         Decorators::SaveStripped(intfc);
     }
@@ -105,6 +111,10 @@ namespace {
                 OrgasmEngine::Load(intfc, version, length);
             } else if (type == ActorLocker::kRecord) {
                 ActorLocker::Load(intfc, version, length);
+            } else if (type == AnimEngine::kRecord) {
+                AnimEngine::Load(intfc, version, length);
+            } else if (type == Scenes::Registry::kRecord) {
+                Scenes::Registry::Load(intfc, version, length);
             } else if (type == Decorators::kRecord) {
                 Decorators::Load(intfc, version, length);
             } else if (type == Decorators::kStrippedRecord) {
@@ -117,6 +127,8 @@ namespace {
         SexLabNet::Json::SetLoadedSaveSession(0);
         OrgasmEngine::Revert();
         ActorLocker::Revert();
+        AnimEngine::Revert();
+        Scenes::Registry::Revert();
         Decorators::Revert();
     }
 }
@@ -145,6 +157,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             OrgasmEngine::Install();
             StrategyDecision::Install();
             NarrationTiming::Install();
+            AnimEngine::Install();
             JsonStore_SelfTest();
         } else if (message->type == SKSE::MessagingInterface::kPostLoadGame ||
                    message->type == SKSE::MessagingInterface::kNewGame) {
@@ -203,6 +216,16 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
             webui_log::error("Failed to register ActorLocker Papyrus functions");
         } else {
             webui_log::info("ActorLocker Papyrus functions registered");
+        }
+        if (!papyrus->Register(PapyrusBindings_AnimEngine::Register_AnimEngine_Functions)) {
+            webui_log::error("Failed to register AnimEngine Papyrus functions");
+        } else {
+            webui_log::info("AnimEngine Papyrus functions registered");
+        }
+        if (!papyrus->Register(PapyrusBindings_SceneRegistry::Register_SceneRegistry_Functions)) {
+            webui_log::error("Failed to register Registry Papyrus functions");
+        } else {
+            webui_log::info("Registry Papyrus functions registered");
         }
         if (!papyrus->Register(Decorators::Register_Papyrus)) {
             webui_log::error("Failed to register Decorators Papyrus functions");

@@ -155,6 +155,11 @@ emit canonical `stage N`.
 Bare string stage value ≡ object with only `description`. Descriptions use
 `{{sl.actors.N}}` and must not assert clothing (use `clothed`).
 
+**Planned (AnimEngine, not read yet):** `stages[N].actors[i].interact`
+(`{"site": "V"|"A"|"M"|"H"|"LH"|"RH"|"none"|"auto", "target": <0-based position or -1>}`) overrides the
+playback penetration target, and `stages[N].actors[i].contacts` overrides the learned hand/head contacts.
+Both are optional and unknown to current consumers. See [anim-engine.md](anim-engine.md) §3 and §6.
+
 ## 7. `speaking_modifiers`
 
 Per-actor arrays of tokens; animation and/or stage level; resolve per §5.

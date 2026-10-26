@@ -38,3 +38,4 @@ review-logs/
 bug-logs
 extern 
 checkpoints
+__pycache__/

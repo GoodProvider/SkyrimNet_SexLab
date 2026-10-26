@@ -2,6 +2,9 @@
 #include "JsonUtil.h"
 #include "AnimationDB.h"
 #include "BondageCatalog.h"
+#include "Config.h"
+#include "SlalLoader.h"
+#include "SlsbLoader.h"
 #include "WebUI_Log.h"
 
 #include <nlohmann/json.hpp>
@@ -244,6 +247,56 @@ namespace PapyrusBindings_AnimationDB
         return AnimationDB::EndSync();
     }
 
+    // AnimDB as the registry: load SLAL packs from disk on a worker thread (SlalLoader). False: one is running
+    // (this request queues behind it).
+    bool AnimDb_SyncFromSlal(RE::StaticFunctionTag*, bool force_rebuild, bool drop_legacy)
+    {
+        return SlalLoader::StartAsync(force_rebuild, drop_legacy);
+    }
+
+    bool AnimDb_IsSlalSyncRunning(RE::StaticFunctionTag*)
+    {
+        return SlalLoader::IsRunning();
+    }
+
+    RE::BSFixedString AnimDb_SlalSummary(RE::StaticFunctionTag*)
+    {
+        return RE::BSFixedString(SlalLoader::LastSummary());
+    }
+
+    // SexLab P+: load SLSB scene packs from disk (SlsbLoader), same contract as AnimDb_SyncFromSlal.
+    bool AnimDb_SyncFromSlsb(RE::StaticFunctionTag*, bool force_rebuild, bool drop_legacy)
+    {
+        return SlsbLoader::StartAsync(force_rebuild, drop_legacy);
+    }
+
+    bool AnimDb_IsSlsbSyncRunning(RE::StaticFunctionTag*)
+    {
+        return SlsbLoader::IsRunning();
+    }
+
+    RE::BSFixedString AnimDb_SlsbSummary(RE::StaticFunctionTag*)
+    {
+        return RE::BSFixedString(SlsbLoader::LastSummary());
+    }
+
+    // sexlab.anim_engine.slsb_registry: on P+, SlsbLoader owns AnimDB instead of the Papyrus walk (default off
+    // until in-game parity with the walk).
+    bool AnimDb_SlsbRegistryEnabled(RE::StaticFunctionTag*)
+    {
+        return SexLabNet::GetConfigBool("sexlab.anim_engine.slsb_registry", false);
+    }
+
+    RE::BSFixedString AnimDb_GetPlaybackJson(RE::StaticFunctionTag*, RE::BSFixedString registry)
+    {
+        return RE::BSFixedString(AnimationDB::GetPlaybackJson(registry.c_str() ? registry.c_str() : ""));
+    }
+
+    bool AnimDb_SetEnabled(RE::StaticFunctionTag*, RE::BSFixedString registry, bool enabled)
+    {
+        return AnimationDB::SetAnimEnabled(registry.c_str() ? registry.c_str() : "", enabled);
+    }
+
     RE::BSFixedString AnimDb_QueryTopNAnims(RE::StaticFunctionTag*, RE::BSFixedString filter_json,
         std::int32_t n)
     {
@@ -400,6 +453,15 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_BeginSync", scriptName, AnimDb_BeginSync);
         a_vm->RegisterFunction("AnimDb_PushAnimBatch", scriptName, AnimDb_PushAnimBatch);
         a_vm->RegisterFunction("AnimDb_EndSync", scriptName, AnimDb_EndSync);
+        a_vm->RegisterFunction("AnimDb_SyncFromSlal", scriptName, AnimDb_SyncFromSlal);
+        a_vm->RegisterFunction("AnimDb_IsSlalSyncRunning", scriptName, AnimDb_IsSlalSyncRunning, true);
+        a_vm->RegisterFunction("AnimDb_SlalSummary", scriptName, AnimDb_SlalSummary, true);
+        a_vm->RegisterFunction("AnimDb_SyncFromSlsb", scriptName, AnimDb_SyncFromSlsb);
+        a_vm->RegisterFunction("AnimDb_IsSlsbSyncRunning", scriptName, AnimDb_IsSlsbSyncRunning, true);
+        a_vm->RegisterFunction("AnimDb_SlsbSummary", scriptName, AnimDb_SlsbSummary, true);
+        a_vm->RegisterFunction("AnimDb_SlsbRegistryEnabled", scriptName, AnimDb_SlsbRegistryEnabled, true);
+        a_vm->RegisterFunction("AnimDb_GetPlaybackJson", scriptName, AnimDb_GetPlaybackJson, true);
+        a_vm->RegisterFunction("AnimDb_SetEnabled", scriptName, AnimDb_SetEnabled);
         a_vm->RegisterFunction("AnimDb_QueryTopNAnims", scriptName, AnimDb_QueryTopNAnims, true);
         a_vm->RegisterFunction("AnimDb_QueryTopNTags", scriptName, AnimDb_QueryTopNTags, true);
         a_vm->RegisterFunction("AnimDb_TotalEnabled", scriptName, AnimDb_TotalEnabled, true);

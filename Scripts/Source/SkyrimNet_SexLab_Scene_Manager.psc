@@ -462,11 +462,43 @@ SkyrimNet_SexLab_Scene Function GetSceneInactive(sslThreadController thread)
     return sl_scene_generic
 EndFunction 
 
+; sexlab.scene_registry.enabled: the native registry (Scenes::Registry) answers first; a miss or a stale sid falls
+; back to the thread scan. Every hit is also checked against the thread scan and a disagreement is traced, the evidence
+; for dropping the fallback later (scene-migration.md §8 step 1).
 SkyrimNet_SexLab_Scene Function GetSceneByActor(Actor akActor) 
     if akActor == None 
         Trace("GetSceneByActor","akActor is None, aborting")
         return None 
     endif 
+    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.scene_registry.enabled", false)
+        return GetSceneByActor_Scan(akActor)
+    endif
+    int sid = SkyrimNet_SexLab_Registry.Registry_SidOf(akActor)
+    SkyrimNet_SexLab_Scene hit = None
+    if sid >= 0 && sid < sl_scenes.length && sl_scenes[sid] && sl_scenes[sid].GetThreadInScene()
+        if sl_scenes[sid].GetThread().Positions.Find(akActor) >= 0
+            hit = sl_scenes[sid]
+        endif
+    endif
+    SkyrimNet_SexLab_Scene scan = GetSceneByActor_Scan(akActor)
+    if hit == None
+        if scan != None
+            Trace("GetSceneByActor", "registry miss: "+GetDisplayName(akActor)+" sid:"+sid+" scan sid:"+scan.sid)
+        endif
+        return scan
+    endif
+    if scan != hit
+        String scan_sid = "none"
+        if scan
+            scan_sid = scan.sid
+        endif
+        Trace("GetSceneByActor", "registry disagrees: "+GetDisplayName(akActor)+" registry sid:"+sid+" scan sid:"+scan_sid)
+    endif
+    return hit
+EndFunction
+
+; The Papyrus pool path: SexLab thread scan (may adopt a foreign thread), then the thread_scene / pool scan.
+SkyrimNet_SexLab_Scene Function GetSceneByActor_Scan(Actor akActor)
     sslThreadController thread = GetThreadByActor(akActor) 
     if thread != None
         return GetSceneByThread(thread)
@@ -2030,6 +2062,11 @@ bool Function IsBusy(Actor akActor)
 
     if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
         return true 
+    endif
+
+    ; AnimEngine scenes are not SexLab threads: only the registry knows them.
+    if SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.scene_registry.enabled", false) && SkyrimNet_SexLab_Registry.Registry_IsBusy(akActor)
+        return true
     endif
 
     return false

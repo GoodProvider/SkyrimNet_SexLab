@@ -31,6 +31,10 @@ namespace AnimationDB
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
         /// Favorited registries (lowercase). Own table so animation resyncs never wipe it. Guarded by g_mutex.
         std::unordered_set<std::string> g_favorites;
+        /// anim_enabled table: user enable toggles for SLAL rows (registry → 0/1). Guarded by g_mutex.
+        std::unordered_map<std::string, int> g_anim_enabled;
+        /// GetPlayback parse cache; cleared by ReplaceRegistryRows / DropRowsExceptSource. Guarded by g_mutex.
+        std::unordered_map<std::string, PlaybackData> g_playback_cache;
 
         /// tag → its cluster's members (incl. itself). [0] = strict, [1] = broad. Guarded by g_mutex.
         using SynonymMap = std::unordered_map<std::string, std::shared_ptr<const std::vector<std::string>>>;
@@ -230,6 +234,23 @@ CREATE TABLE IF NOT EXISTS favorites (
   registry TEXT PRIMARY KEY
 );
 CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
+CREATE TABLE IF NOT EXISTS anim_playback (
+  registry TEXT PRIMARY KEY,
+  slal_id TEXT,
+  pack TEXT,
+  src_json TEXT,
+  playback TEXT,
+  missing_fnis INTEGER,
+  missing_hkx INTEGER
+);
+CREATE TABLE IF NOT EXISTS playback_sources (
+  path TEXT PRIMARY KEY,
+  stamp TEXT
+);
+CREATE TABLE IF NOT EXISTS anim_enabled (
+  registry TEXT PRIMARY KEY,
+  enabled INTEGER
+);
 )SQL";
             if (!Exec(ddl))
                 return false;
@@ -500,6 +521,18 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                         g_favorites.insert(reinterpret_cast<const char*>(t));
                 }
                 sqlite3_finalize(fstmt);
+            }
+
+            g_anim_enabled.clear();
+            sqlite3_stmt* estmt = nullptr;
+            if (sqlite3_prepare_v2(g_db, "SELECT registry,enabled FROM anim_enabled", -1, &estmt, nullptr) ==
+                SQLITE_OK) {
+                while (sqlite3_step(estmt) == SQLITE_ROW) {
+                    const unsigned char* t = sqlite3_column_text(estmt, 0);
+                    if (t)
+                        g_anim_enabled[reinterpret_cast<const char*>(t)] = sqlite3_column_int(estmt, 1);
+                }
+                sqlite3_finalize(estmt);
             }
         }
 
@@ -1712,8 +1745,12 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         g_sync_batch_parse_errors = 0;
         g_sync_batches_dropped = 0;
         if (g_force_rebuild) {
+            // Only the SexLab P+ registry walk calls this now (the C++ loaders use ReplaceRegistryRows), so the
+            // walk owns the whole table, loader rows from another profile sharing this DB included.
             Exec("DELETE FROM animations");
             Exec("DELETE FROM animation_tags");
+            Exec("DELETE FROM anim_playback");
+            g_playback_cache.clear();
             g_rows.clear();
             g_tag_to_regs.clear();
         }
@@ -1808,7 +1845,8 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
             auto it = g_rows.find(row.registry);
             if (it != g_rows.end()) {
                 // still touch sync_gen
-                bool same = it->second.name == row.name && it->second.tags == row.tags &&
+                bool same = it->second.source == row.source && it->second.name == row.name &&
+                            it->second.tags == row.tags &&
                             it->second.pos_genders == row.pos_genders &&
                             it->second.position_count == row.position_count &&
                             it->second.enabled == row.enabled;
@@ -1908,6 +1946,7 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
         if (!g_db)
             return false;
         sqlite3_stmt* stmt = nullptr;
+        // P+ walk owns the table (see BeginSync): rows it did not push this sync go, SLAL rows included.
         if (sqlite3_prepare_v2(g_db, "DELETE FROM animations WHERE sync_gen != ?", -1, &stmt, nullptr) ==
             SQLITE_OK) {
             sqlite3_bind_int64(stmt, 1, g_sync_gen);
@@ -2039,6 +2078,403 @@ CREATE INDEX IF NOT EXISTS idx_anim_tags_tag ON animation_tags(tag);
                 g_favorites.erase(reg);
         }
         return ok;
+    }
+
+    bool SetAnimEnabled(const std::string& registry, bool enabled)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return false;
+        const std::string reg = ToLower(registry);
+        if (reg.empty())
+            return false;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(g_db, "INSERT OR REPLACE INTO anim_enabled(registry,enabled) VALUES(?,?)", -1, &stmt,
+                nullptr) != SQLITE_OK)
+            return false;
+        sqlite3_bind_text(stmt, 1, reg.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, enabled ? 1 : 0);
+        const bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+        sqlite3_finalize(stmt);
+        if (!ok)
+            return false;
+        g_anim_enabled[reg] = enabled ? 1 : 0;
+        auto it = FindRowLocked(registry);
+        if (it != g_rows.end() && (it->second.source == kSourceSlal || it->second.source == kSourceSlsb)) {
+            it->second.enabled = enabled ? 1 : 0;
+            UpsertRowLocked(it->second);
+        }
+        return true;
+    }
+
+    namespace
+    {
+        /// AnimDB key of a loader row: P+ scene ids ("_case":1) keep their case, like PushAnim.
+        std::string LoaderRowKey(const nlohmann::json& r)
+        {
+            if (!r.contains("_registry") || !r["_registry"].is_string())
+                return {};
+            const std::string raw = r["_registry"].get<std::string>();
+            return r.contains("_case") && r["_case"].is_number_integer() && r["_case"].get<int>() == 1 ? raw
+                                                                                                         : ToLower(raw);
+        }
+
+        /// playback_sources keys are "<source>|<path>" (one stamp set per loader).
+        std::string StampPrefix(int source)
+        {
+            return std::to_string(source) + "|";
+        }
+
+        void DeleteRegistryLocked(const std::string& reg)
+        {
+            for (const char* sql : { "DELETE FROM animations WHERE registry=?", "DELETE FROM animation_tags WHERE registry=?",
+                     "DELETE FROM anim_playback WHERE registry=?" }) {
+                sqlite3_stmt* stmt = nullptr;
+                if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                    sqlite3_bind_text(stmt, 1, reg.c_str(), -1, SQLITE_TRANSIENT);
+                    sqlite3_step(stmt);
+                    sqlite3_finalize(stmt);
+                }
+            }
+        }
+    }
+
+    int PlaybackData::NodeIndex(const std::string& id) const
+    {
+        for (std::size_t i = 0; i < nodes.size(); ++i) {
+            if (nodes[i].id == id)
+                return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    int ReplaceRegistryRows(int source, const std::vector<nlohmann::json>& rows, const std::vector<PlaybackRow>& playback,
+        bool force)
+    {
+        SNSL_PROF("animdb.replace_registry_rows");
+        {
+            std::lock_guard lock(g_mutex);
+            if (!g_db)
+                return 0;
+            Exec("BEGIN");
+        }
+        std::unordered_set<std::string> keep;
+        int stored = 0;
+        // Chunked so Papyrus / WebUI readers wait for at most one chunk, not the whole load.
+        constexpr std::size_t kChunk = 64;
+        for (std::size_t i = 0; i < rows.size(); i += kChunk) {
+            std::lock_guard lock(g_mutex);
+            const bool saved_force = g_force_rebuild;
+            g_force_rebuild = force;
+            const std::size_t end = std::min(rows.size(), i + kChunk);
+            for (std::size_t k = i; k < end; ++k) {
+                nlohmann::json r = rows[k];
+                const std::string reg = LoaderRowKey(r);
+                if (reg.empty())
+                    continue;
+                auto en = g_anim_enabled.find(ToLower(reg));
+                r["_enabled"] = en == g_anim_enabled.end() ? 1 : en->second;
+                r["_source"] = source;
+                if (PushAnim(r)) {
+                    keep.insert(reg);
+                    ++stored;
+                }
+            }
+            g_force_rebuild = saved_force;
+        }
+
+        std::lock_guard lock(g_mutex);
+        // Rows of this source whose pack is gone.
+        std::vector<std::string> gone;
+        for (const auto& [reg, row] : g_rows) {
+            if (row.source == source && !keep.contains(reg))
+                gone.push_back(reg);
+        }
+        for (const auto& reg : gone)
+            DeleteRegistryLocked(reg);
+
+        // This source's playback rows (and orphans); other sources keep theirs.
+        sqlite3_stmt* dstmt = nullptr;
+        if (sqlite3_prepare_v2(g_db,
+                "DELETE FROM anim_playback WHERE registry NOT IN (SELECT registry FROM animations WHERE source != ?)",
+                -1, &dstmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(dstmt, 1, source);
+            sqlite3_step(dstmt);
+            sqlite3_finalize(dstmt);
+        }
+        sqlite3_stmt* pstmt = nullptr;
+        if (sqlite3_prepare_v2(g_db,
+                "INSERT OR REPLACE INTO anim_playback(registry,slal_id,pack,src_json,playback,missing_fnis,missing_hkx) "
+                "VALUES(?,?,?,?,?,?,?)",
+                -1, &pstmt, nullptr) == SQLITE_OK) {
+            for (const auto& p : playback) {
+                const std::string& reg = p.registry;
+                if (!keep.contains(reg))
+                    continue;
+                sqlite3_reset(pstmt);
+                sqlite3_bind_text(pstmt, 1, reg.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(pstmt, 2, p.slal_id.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(pstmt, 3, p.pack.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(pstmt, 4, p.src_json.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(pstmt, 5, p.json.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(pstmt, 6, p.missing_fnis);
+                sqlite3_bind_int(pstmt, 7, p.missing_hkx);
+                if (sqlite3_step(pstmt) != SQLITE_DONE)
+                    webui_log::warn("AnimationDB: playback upsert failed for '{}': {}", reg, sqlite3_errmsg(g_db));
+            }
+            sqlite3_finalize(pstmt);
+        }
+        Exec("COMMIT");
+        g_playback_cache.clear();
+        LoadAllRowsLocked();
+        webui_log::info("AnimationDB: {} rows stored={} removed={} playback={} total_rows={}",
+            source == kSourceSlsb ? "SLSB" : "SLAL", stored, gone.size(), playback.size(), g_rows.size());
+        LoadSynonyms();
+        return stored;
+    }
+
+    int DropRowsExceptSource(int source)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return 0;
+        int n = 0;
+        for (const auto& [reg, row] : g_rows) {
+            if (row.source != source)
+                ++n;
+        }
+        if (n == 0)
+            return 0;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(g_db, "DELETE FROM animations WHERE source IS NULL OR source != ?", -1, &stmt, nullptr) ==
+            SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, source);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        }
+        Exec("DELETE FROM animation_tags WHERE registry NOT IN (SELECT registry FROM animations)");
+        Exec("DELETE FROM anim_playback WHERE registry NOT IN (SELECT registry FROM animations)");
+        g_playback_cache.clear();
+        LoadAllRowsLocked();
+        webui_log::info("AnimationDB: dropped {} rows of other sources (kept source {}); rows={}", n, source, g_rows.size());
+        return n;
+    }
+
+    std::unordered_map<std::string, std::string> GetSourceStamps(int source)
+    {
+        std::lock_guard lock(g_mutex);
+        std::unordered_map<std::string, std::string> out;
+        if (!g_db)
+            return out;
+        const std::string prefix = StampPrefix(source);
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(g_db, "SELECT path,stamp FROM playback_sources", -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const unsigned char* p = sqlite3_column_text(stmt, 0);
+                const unsigned char* s = sqlite3_column_text(stmt, 1);
+                if (!p)
+                    continue;
+                std::string path = reinterpret_cast<const char*>(p);
+                if (path.starts_with(prefix))
+                    out[path.substr(prefix.size())] = s ? reinterpret_cast<const char*>(s) : "";
+            }
+            sqlite3_finalize(stmt);
+        }
+        return out;
+    }
+
+    void SetSourceStamps(int source, const std::unordered_map<std::string, std::string>& stamps)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return;
+        const std::string prefix = StampPrefix(source);
+        Exec("BEGIN");
+        sqlite3_stmt* stmt = nullptr;
+        // This source's stamps, plus rows written before the "<source>|" prefix.
+        if (sqlite3_prepare_v2(g_db, "DELETE FROM playback_sources WHERE substr(path,1,?)=? OR instr(path,'|')=0", -1,
+                &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, static_cast<int>(prefix.size()));
+            sqlite3_bind_text(stmt, 2, prefix.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        }
+        stmt = nullptr;
+        if (sqlite3_prepare_v2(g_db, "INSERT OR REPLACE INTO playback_sources(path,stamp) VALUES(?,?)", -1, &stmt,
+                nullptr) == SQLITE_OK) {
+            for (const auto& [path, stamp] : stamps) {
+                const std::string key = prefix + path;
+                sqlite3_reset(stmt);
+                sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(stmt, 2, stamp.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(stmt);
+            }
+            sqlite3_finalize(stmt);
+        }
+        Exec("COMMIT");
+    }
+
+    int PlaybackRowCount(int source)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return 0;
+        int n = 0;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(g_db,
+                "SELECT COUNT(*) FROM anim_playback p JOIN animations a ON a.registry = p.registry WHERE a.source = ?", -1,
+                &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, source);
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+                n = sqlite3_column_int(stmt, 0);
+            sqlite3_finalize(stmt);
+        }
+        return n;
+    }
+
+    std::string GetPlaybackJson(const std::string& registry)
+    {
+        std::lock_guard lock(g_mutex);
+        if (!g_db)
+            return {};
+        std::string out;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(g_db, "SELECT playback FROM anim_playback WHERE registry=?", -1, &stmt, nullptr) ==
+            SQLITE_OK) {
+            // Exact key first (P+ scene ids keep their case), then lowercase (SLAL registrars).
+            for (const std::string& reg : { registry, ToLower(registry) }) {
+                sqlite3_reset(stmt);
+                sqlite3_bind_text(stmt, 1, reg.c_str(), -1, SQLITE_TRANSIENT);
+                if (sqlite3_step(stmt) == SQLITE_ROW) {
+                    const unsigned char* t = sqlite3_column_text(stmt, 0);
+                    if (t)
+                        out = reinterpret_cast<const char*>(t);
+                    break;
+                }
+            }
+            sqlite3_finalize(stmt);
+        }
+        return out;
+    }
+
+    namespace
+    {
+        PlayStage ParsePlayStage(const nlohmann::json& js)
+        {
+            PlayStage s;
+            s.event = js.value("event", "");
+            s.hkx = js.value("hkx", "");
+            s.kind = js.value("kind", "");
+            s.objects = js.value("objects", std::vector<std::string>{});
+            s.animvars = js.value("animvars", std::vector<std::string>{});
+            s.acyclic = js.value("acyclic", false);
+            s.fwd = js.value("fwd", 0.f);
+            s.side = js.value("side", 0.f);
+            s.up = js.value("up", 0.f);
+            s.rot = js.value("rot", 0.f);
+            s.silent = js.value("silent", false);
+            s.open_mouth = js.value("open_mouth", false);
+            s.strap_on = js.value("strap_on", false);
+            s.sos = js.value("sos", 0);
+            s.fnis = js.value("fnis", false);
+            if (js.contains("interact") && js["interact"].is_object()) {
+                const auto& ji = js["interact"];
+                s.interact_site = ji.value("site", "auto");
+                s.interact_target = ji.value("target", -1);
+                s.interact_src = ji.value("src", "");
+            }
+            s.anim_obj = js.value("anim_obj", "");
+            s.climax = js.value("climax", false);
+            s.schlong = js.value("schlong", 0);
+            s.scale = js.value("scale", 1.f);
+            return s;
+        }
+    }
+
+    std::optional<PlaybackData> GetPlayback(const std::string& registry)
+    {
+        {
+            std::lock_guard lock(g_mutex);
+            auto it = g_playback_cache.find(registry);
+            if (it != g_playback_cache.end())
+                return it->second;
+        }
+        const std::string text = GetPlaybackJson(registry);
+        if (text.empty())
+            return std::nullopt;
+        PlaybackData d;
+        try {
+            const auto j = nlohmann::json::parse(text);
+            const int v = j.value("v", 1);
+            d.registry = registry;
+            d.format = j.value("format", "slal");
+            d.slal_id = j.contains("scene_id") ? j.value("scene_id", "") : j.value("slal_id", "");
+            d.pack = j.value("pack", "");
+            d.name = j.value("name", "");
+            d.sound = j.value("sound", "");
+            d.creature_race = j.value("creature_race", "");
+            d.stage_count = j.value("stage_count", 0);
+            d.missing_fnis = j.value("missing_fnis", 0);
+            d.missing_hkx = j.value("missing_hkx", 0);
+            if (v >= 2) {
+                d.root = j.value("root", "");
+                for (const auto& jn : j.value("nodes", nlohmann::json::array())) {
+                    PlayNode n;
+                    n.id = jn.value("id", "");
+                    n.n = jn.value("n", 0);
+                    n.dest = jn.value("dest", std::vector<std::string>{});
+                    n.tags = jn.value("tags", std::vector<std::string>{});
+                    n.fixed_len = jn.value("fixed_len", 0.f);
+                    n.timer = jn.value("timer", 0.f);
+                    n.sound = jn.value("sound", "");
+                    d.nodes.push_back(std::move(n));
+                }
+                if (j.contains("furniture") && j["furniture"].is_object()) {
+                    const auto off = j["furniture"].value("offset", std::vector<float>{});
+                    for (std::size_t i = 0; i < 4 && i < off.size(); ++i)
+                        d.furniture_offset[i] = off[i];
+                }
+            } else {
+                // v1 (checkpoint 01 blobs): stages{"n":{timer,sound}} → linear graph.
+                std::unordered_map<int, nlohmann::json> extra;
+                if (j.contains("stages") && j["stages"].is_object()) {
+                    for (const auto& [k, val] : j["stages"].items())
+                        extra[std::atoi(k.c_str())] = val;
+                }
+                for (int n = 1; n <= d.stage_count; ++n) {
+                    PlayNode node;
+                    node.id = std::to_string(n);
+                    node.n = n;
+                    if (n < d.stage_count)
+                        node.dest.push_back(std::to_string(n + 1));
+                    if (auto it = extra.find(n); it != extra.end()) {
+                        node.timer = it->second.value("timer", 0.f);
+                        node.sound = it->second.value("sound", "");
+                    }
+                    d.nodes.push_back(std::move(node));
+                }
+                d.root = d.stage_count > 0 ? "1" : "";
+            }
+            if (d.stage_count == 0)
+                d.stage_count = static_cast<int>(d.nodes.size());
+            for (const auto& jp : j.value("positions", nlohmann::json::array())) {
+                PlayPosition p;
+                p.type = jp.value("type", "");
+                p.gender = jp.value("gender", 0);
+                p.futa = jp.value("futa", false);
+                p.race = jp.value("race", "");
+                p.add_cum = jp.value("add_cum", -1);
+                for (const auto& js : jp.value("stages", nlohmann::json::array()))
+                    p.stages.push_back(ParsePlayStage(js));
+                d.positions.push_back(std::move(p));
+            }
+        } catch (const std::exception& e) {
+            webui_log::warn("AnimationDB: bad playback json for '{}': {}", registry, e.what());
+            return std::nullopt;
+        }
+        std::lock_guard lock(g_mutex);
+        g_playback_cache[registry] = d;
+        return d;
     }
 
     std::optional<AnimRow> GetByRegistry(const std::string& registry)

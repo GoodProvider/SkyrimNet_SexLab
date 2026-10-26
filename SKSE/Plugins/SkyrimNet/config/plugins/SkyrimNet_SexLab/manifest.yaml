@@ -866,3 +866,31 @@ schema:
       description: "Writes extra debug lines to SkyrimNet_SexLab.log (thread JSON per actor, faction checks, decisions) and adds [SNSL DEBUG] lines to the SexLab prompt sections so you can see what the template saw. For bug reports only: logs get large and the debug lines are sent to the LLM."
       defaultValue: false
       category: "Debug"
+
+    - name: "AnimEngine (experimental)"
+      path: "sexlab.anim_engine.enabled"
+      type: "bool"
+      description: "Developer test of the C++ animation engine that plays SLAL / SexLab P+ animations without SexLab's scene thread. Shows an AnimEngine section in WebUI Settings (start the typed animation on you and the nearest NPC, step stages, end). Normal scenes still use SexLab. Leave off unless you are testing it."
+      defaultValue: false
+      category: "Debug"
+
+    - name: "Native scene registry (experimental)"
+      path: "sexlab.scene_registry.enabled"
+      type: "bool"
+      description: "Developer test. Looks up which scene an actor is in from the plugin's own scene list instead of scanning SexLab's threads, and counts AnimEngine actors as busy. Each lookup is still checked against the old scan, and any difference is written to the Papyrus log. Leave off unless you are testing it."
+      defaultValue: false
+      category: "Debug"
+
+    - name: "AnimEngine: walk into place"
+      path: "sexlab.anim_engine.approach"
+      type: "bool"
+      description: "AnimEngine only. Actors more than half a meter from their starting spot walk there (up to 30 s) before the animation starts, then glide the last bit and turn. Off: they are moved into place at once."
+      defaultValue: true
+      category: "Debug"
+
+    - name: "P+ animation registry in C++ (experimental)"
+      path: "sexlab.anim_engine.slsb_registry"
+      type: "bool"
+      description: "SexLab P+ only. Builds the animation database from the SLSB scene files (SKSE/SexLab/Registry/Source/*.slsb.json) in C++ instead of walking SexLab P+'s registry in Papyrus. Faster; still being checked against the Papyrus walk. Rebuild the animation database after changing it."
+      defaultValue: false
+      category: "Debug"
