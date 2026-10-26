@@ -25,11 +25,11 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - The narration says what the punished actor chose
 - Tortured past 80% (Injury Engine), the punished actor gives in and submits
 - Punished NPCs now see what happened in the scene, so repeated punishment can work
-- DOM slaves' open punishment reasons show in the Punish panel
 
-### DOM slaves
+### DOM slaves (SkyrimNet_DOM 0.2.0)
 - Bar fill = the non-random orgasm score; the % over the bar end = chance the next roll works
 - Arouse on an aroused slave fills their aroused timer first
+- DOM slaves' open punishment reasons show in the Punish panel
 
 ### Target menu
 - New "hug" option: a quick hug, not a scene
@@ -45,6 +45,7 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - Cum on actors is now kept by the SKSE plugin. Cum recorded before this update is lost
 
 ### Bug Fixes
+- Fixed: a crash when punishing from the Punish panel without SkyrimNet_DOM (or with an older DOM)
 - Fixed: an NPC's Deny Orgasm was refused when the victim was you
 - Fixed: Clean Cum, Dress and Undress were never offered to NPCs
 - Fixed: scene endings never used the afterglow template

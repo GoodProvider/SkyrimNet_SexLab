@@ -235,6 +235,11 @@ void RegisterDecorators()
         webui_log::warn("RegisterDecorators: PublicRegisterDecorator is null (SkyrimNet API v5+ required)");
         return;
     }
+    // Decorators return std::string to SkyrimNet (/MD); a Debug (/MTd) string corrupts its heap (0xc0000374).
+    if (!CrossDllStdStringSafe()) {
+        webui_log::warn("RegisterDecorators: Debug build, SkyrimNet decorators skipped (std::string ABI)");
+        return;
+    }
     auto reg = [](const char* name, const char* description, std::function<std::string(RE::Actor*)> fn) {
         if (PublicRegisterDecorator(name, description, std::move(fn)))
             webui_log::info("RegisterDecorators: registered {}", name);

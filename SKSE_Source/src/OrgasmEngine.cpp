@@ -3541,12 +3541,47 @@ namespace OrgasmEngine
     {
         // SkyrimNet_DOM (soft): the Punish panel's reason, so a DOM slave's punishment keeps it
         // (SkyrimNet_DOM_API.PanelPunished). Nothing when SkyrimNet_DOM is not installed.
+        constexpr const char* kDomScript = "SkyrimNet_DOM_API";
+
+        // SkyrimNet_DOM is optional: its plugin must be loaded and expose PanelPunished. A player without DOM
+        // crashed inside DispatchStaticCall (null deref) past the old type-only check, so the function is checked.
+        bool DomPanelPunishedAvailable()
+        {
+            static int cached = -1;
+            if (cached >= 0) {
+                return cached == 1;
+            }
+            auto* dh = RE::TESDataHandler::GetSingleton();
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!dh || !vm) {
+                return false;
+            }
+            const bool plugin = dh->LookupModByName("SkyrimNet_DOM.esp") != nullptr;
+            bool api = false;
+            if (plugin) {
+                RE::BSTSmartPointer<RE::BSScript::ObjectTypeInfo> type;
+                if (vm->GetScriptObjectType(RE::BSFixedString(kDomScript), type) && type) {
+                    const auto* funcs = type->GetGlobalFuncIter();
+                    for (std::uint32_t i = 0; funcs && i < type->GetNumGlobalFuncs(); ++i) {
+                        if (funcs[i].func && std::string_view(funcs[i].func->GetName().c_str()) == "PanelPunished") {
+                            api = true;
+                            break;
+                        }
+                    }
+                }
+                if (!api) {
+                    webui_log::warn("OrgasmEngine: SkyrimNet_DOM.esp is loaded but has no {}.PanelPunished (update SkyrimNet_DOM)", kDomScript);
+                }
+            }
+            cached = api ? 1 : 0;
+            webui_log::info("OrgasmEngine: DOM PanelPunished available={}", api);
+            return api;
+        }
+
         void NotifyDomPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason, bool strategy)
         {
-            constexpr const char* kDomScript = "SkyrimNet_DOM_API";
             auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-            RE::BSTSmartPointer<RE::BSScript::ObjectTypeInfo> type;
-            if (!vm || !target || !vm->GetScriptObjectType(RE::BSFixedString(kDomScript), type) || !type) {
+            if (!vm || !target || !DomPanelPunishedAvailable()) {
                 return;
             }
             auto* args = RE::MakeFunctionArguments(std::move(by), std::move(target),
