@@ -155,6 +155,12 @@ namespace AnimationDB
         bool favorites_only = false; // only registries in the favorites table
         SynonymMode synonyms = SynonymMode::Broad;
         bool shuffle = false; // QueryTopNAnims: random order before truncating to n
+        /// QueryTopNAnims: described → cast-gender tier → least played → random, before truncating to n.
+        /// Wins over shuffle.
+        bool rank = false;
+        /// rank: the cast's SexLab genders (0 m, 1 f, 2 m creature, 3 f creature) in cast order.
+        /// Ranks rows (position match, then gender counts, then the rest); never filters them.
+        std::vector<int> rank_pos_genders;
         /// Scene-setting `tags_any`: row must match ≥1 (each widened to its cluster).
         std::vector<std::string> any_tags;
         /// Scene-setting `tags_prefer`: QueryTopNAnims returns only rows matching ≥1 when any do.

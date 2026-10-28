@@ -1099,6 +1099,29 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return true;
         }
 
+        // FilterSpec::rank gender tier: 0 = row positions match the cast in cast order or in SexLab's
+        // females-first seating, 1 = same gender counts in any position, 2 = anything else.
+        int RankGenderTier(const AnimRow& row, const std::vector<int>& cast)
+        {
+            if (cast.empty())
+                return 0;
+            if (row.pos_genders == cast)
+                return 0;
+            std::vector<int> femalesFirst = cast;
+            std::stable_partition(femalesFirst.begin(), femalesFirst.end(), [](int g) { return g == 1; });
+            if (row.pos_genders == femalesFirst)
+                return 0;
+            int counts[4] = { 0, 0, 0, 0 };
+            for (int g : cast) {
+                if (g >= 0 && g < 4)
+                    ++counts[g];
+            }
+            if (row.males == counts[0] && row.females == counts[1] && row.male_creatures == counts[2] &&
+                row.female_creatures == counts[3])
+                return 1;
+            return 2;
+        }
+
         nlohmann::json GetJsonField(const nlohmann::json& j, const char* key)
         {
             if (j.contains(key))
@@ -2006,8 +2029,37 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         // tags_prefer is soft: narrow to the preferred rows only when there are some.
         if (!preferred.empty())
             out = std::move(preferred);
-        if (spec.shuffle) {
-            static std::mt19937 rng{ std::random_device{}() };
+        static std::mt19937 rng{ std::random_device{}() };
+        if (spec.rank) {
+            // Shuffle first so the stable sort leaves rows equal on every key in random order.
+            std::shuffle(out.begin(), out.end(), rng);
+            struct Key
+            {
+                int described;
+                int tier;
+                int plays;
+            };
+            std::vector<std::pair<Key, size_t>> keys;
+            keys.reserve(out.size());
+            for (size_t i = 0; i < out.size(); ++i) {
+                const auto pc = g_play_counts.find(ToLower(out[i].registry));
+                keys.push_back({ { RowHasAnyDescription(out[i]) ? 1 : 0, RankGenderTier(out[i], spec.rank_pos_genders),
+                                     pc != g_play_counts.end() ? pc->second : 0 },
+                    i });
+            }
+            std::stable_sort(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
+                if (a.first.described != b.first.described)
+                    return a.first.described > b.first.described;
+                if (a.first.tier != b.first.tier)
+                    return a.first.tier < b.first.tier;
+                return a.first.plays < b.first.plays;
+            });
+            std::vector<AnimRow> ranked;
+            ranked.reserve(out.size());
+            for (const auto& [_, i] : keys)
+                ranked.push_back(std::move(out[i]));
+            out = std::move(ranked);
+        } else if (spec.shuffle) {
             std::shuffle(out.begin(), out.end(), rng);
         } else {
             std::sort(out.begin(), out.end(),

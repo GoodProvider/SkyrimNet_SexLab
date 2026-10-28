@@ -95,6 +95,15 @@ namespace PapyrusBindings_AnimationDB
                 if (j.contains("_shuffle"))
                     spec.shuffle = j["_shuffle"].is_boolean() ? j["_shuffle"].get<bool>()
                                    : j["_shuffle"].is_number() && j["_shuffle"].get<double>() != 0;
+                if (j.contains("_rank"))
+                    spec.rank = j["_rank"].is_boolean() ? j["_rank"].get<bool>()
+                                : j["_rank"].is_number() && j["_rank"].get<double>() != 0;
+                if (j.contains("_rank_pos_genders") && j["_rank_pos_genders"].is_array()) {
+                    for (const auto& el : j["_rank_pos_genders"]) {
+                        if (el.is_number_integer())
+                            spec.rank_pos_genders.push_back(el.get<int>());
+                    }
+                }
                 // Scene-setting keys. Papyrus natives run on the main thread, so `_form_ids` (the cast)
                 // can be scanned for worn DD here to decide tags_suppress_unless_bound.
                 std::optional<bool> bound;

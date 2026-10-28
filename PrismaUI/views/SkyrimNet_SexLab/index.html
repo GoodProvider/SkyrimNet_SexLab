@@ -11818,7 +11818,7 @@
         }
 
         // Animation table "sort:" pulldown order; 'default' (and opts.ignoreSort) falls through to the
-        // described / gender order below. Returns 0 on a tie.
+        // described / gender / freq asc / random order below. Returns 0 on a tie.
         function scCompareAnimSort(a, b) {
             const mode = SC.animSort || 'default';
             if (mode === 'name asc' || mode === 'name desc') {
@@ -11859,9 +11859,24 @@
                 const ga = scGenderPosKey(a);
                 const gb = scGenderPosKey(b);
                 if (ga !== gb) return ga < gb ? -1 : 1;
-                return 0;
+                const fa = a._play_count | 0;
+                const fb = b._play_count | 0;
+                if (fa !== fb) return fa - fb;
+                return scAnimRandKey(a) - scAnimRandKey(b);
             });
             return indices;
+        }
+
+        // Random tie-break key per registry, fixed for the view's lifetime so re-renders don't reshuffle.
+        const scAnimRandKeys = new Map();
+        function scAnimRandKey(a) {
+            const reg = a._registry || '';
+            let k = scAnimRandKeys.get(reg);
+            if (k === undefined) {
+                k = Math.random();
+                scAnimRandKeys.set(reg, k);
+            }
+            return k;
         }
 
         function scAnimAnLetter(reg) {

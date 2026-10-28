@@ -93,6 +93,78 @@ namespace AnimEngineOrgasm
             return out;
         }
 
+        constexpr const char* kShell = "SkyrimNet_SexLab_AnimEngine";
+
+        void DispatchShell(const char* fn, RE::BSScript::IFunctionArguments* args)
+        {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
+            if (!vm || !vm->DispatchStaticCall(RE::BSFixedString(kShell), RE::BSFixedString(fn), args, cb))
+                webui_log::warn("AnimEngineOrgasm: {}.{} dispatch failed", kShell, fn);
+        }
+
+        /// SexLab's orgasm effect (sound, shake, cum) through the shell's OrgasmEffect.
+        void OrgasmEffect(RE::Actor* a)
+        {
+            if (!a)
+                return;
+            const auto fx = AnimEngine::OrgasmFxOf(a);
+            std::vector<RE::Actor*> to;
+            std::vector<std::int32_t> ids;
+            for (const auto& [id, cum] : fx.cum) {
+                if (auto* t = ActorFor(id)) {
+                    to.push_back(t);
+                    ids.push_back(cum);
+                }
+            }
+            webui_log::info("AnimEngineOrgasm: orgasm effect {} silent={} cum [{}]", NameOf(a->GetFormID()), fx.silent,
+                Names(to));
+            DispatchShell("OrgasmEffect", RE::MakeFunctionArguments(static_cast<RE::Actor*>(a), std::move(to),
+                                              std::move(ids), static_cast<bool>(fx.silent)));
+        }
+
+        // Scene.psc JoinNames / NamesClause / EnjoymentBand / BandLeadIn / PossessivePronoun (orgasm-narration.md).
+        std::string JoinNames(const std::vector<std::string>& names)
+        {
+            const auto n = names.size();
+            if (n == 0)
+                return "";
+            if (n == 1)
+                return names[0];
+            if (n == 2)
+                return names[0] + " and " + names[1];
+            std::string s;
+            for (std::size_t i = 0; i + 1 < n; ++i)
+                s += names[i] + ", ";
+            return s + "and " + names.back();
+        }
+
+        std::string NamesClause(const std::vector<std::string>& names, const std::string& single, const std::string& plural)
+        {
+            if (names.empty())
+                return "";
+            return JoinNames(names) + " " + (names.size() == 1 ? single : plural) + " ";
+        }
+
+        int EnjoymentBand(float e)
+        {
+            const int v = static_cast<int>(e);
+            return v <= 30 ? 0 : v <= 60 ? 1 : v < 90 ? 2 : 3;
+        }
+
+        const char* BandLeadIn(int band)
+        {
+            return band == 1 ? "Though aroused, " : band == 2 ? "Although close, " : band == 3 ? "Although on the edge, " : "";
+        }
+
+        const char* PossessivePronoun(RE::Actor* a)
+        {
+            auto* base = a ? a->GetActorBase() : nullptr;
+            if (!base)
+                return "their";
+            return base->GetSex() == RE::SEX::kFemale ? "her" : base->GetSex() == RE::SEX::kMale ? "his" : "their";
+        }
+
         bool EndingEnabled()
         {
             return SexLabNet::GetConfigBool("sexlab.ending.enabled", true);
@@ -542,6 +614,9 @@ namespace AnimEngineOrgasm
         // engine. No SexLab ForceOrgasm / mirror / SLA relief here. A gate rush was narrated at the pass.
         if (source != "gate")
             Narration::OrgasmGroup(ae_id, actors, forced, individual, allower, allowed, extras);
+        // The body's orgasm (a gate group too: its narration went out at the pass).
+        for (auto* a : actors)
+            OrgasmEffect(a);
         GroupFacts f;
         f.victim_hold_scene = OrgasmEngine::IsVictimHoldScene(sid);
         f.lead_count = lead ? OrgasmEngine::GetOrgasmCount(ActorFor(lead)) : 0;
@@ -796,11 +871,107 @@ namespace AnimEngineOrgasm
 
     namespace Narration
     {
-        // Step 2 stubs: orgasm / gate / deny narration lands with step 5 (orgasm-narration.md).
-        void OrgasmGroup(int ae_id, const std::vector<RE::Actor*>& actors, const std::vector<std::int32_t>&, bool,
-            RE::Actor*, RE::Actor*, const std::string&)
+        // Step 5, orgasm part: Scene.OrgasmMessagesToNarration + NarrateOrgasmStash (orgasm-narration.md), one DN
+        // per group. Not yet: the orgasm window / stage fold, DOM melts, the ending hold's response mark.
+        // Gate / deny / allow narration stay stubs.
+        void OrgasmGroup(int ae_id, const std::vector<RE::Actor*>& actors, const std::vector<std::int32_t>& forced, bool,
+            RE::Actor* allower, RE::Actor* allowed, const std::string& extras)
         {
-            webui_log::info("AnimEngineOrgasm: scene {} orgasm narration deferred (step 5) [{}]", ae_id, Names(actors));
+            std::vector<RE::FormID> scene_actors;
+            std::unordered_set<RE::FormID> denied;
+            bool has_player = false;
+            {
+                std::lock_guard lock(g_mutex);
+                const auto* w = FindLocked(ae_id);
+                if (!w)
+                    return;
+                scene_actors = w->actors;
+                denied = w->denied;
+                has_player = w->has_player;
+            }
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            const std::string player_name = NameOf(player ? player->GetFormID() : 0);
+
+            std::vector<std::string> forced_n, orgasm_n, again_n, recovering_n;
+            RE::Actor* recovering_one = nullptr;
+            std::map<int, std::vector<std::string>> denied_n, idle_n; // by band
+            for (std::size_t i = 0; i < actors.size(); ++i) {
+                if (!actors[i])
+                    continue;
+                const auto name = NameOf(actors[i]->GetFormID());
+                if (i < forced.size() && forced[i] == 1)
+                    forced_n.push_back(name);
+                else if (OrgasmEngine::GetOrgasmCount(actors[i]) > 1)
+                    again_n.push_back(name);
+                else
+                    orgasm_n.push_back(name);
+            }
+            for (const auto id : scene_actors) {
+                auto* a = ActorFor(id);
+                if (!a || std::find(actors.begin(), actors.end(), a) != actors.end())
+                    continue;
+                const auto name = NameOf(id);
+                const int band = EnjoymentBand(OrgasmEngine::GetEnjoyment(a));
+                if (denied.contains(id))
+                    denied_n[band].push_back(name);
+                else if (OrgasmEngine::GetOrgasmCount(a) > 0) {
+                    recovering_n.push_back(name);
+                    recovering_one = a;
+                } else
+                    idle_n[band].push_back(name);
+            }
+
+            std::string must;
+            if (allower && allowed)
+                must += NameOf(allower->GetFormID()) + " allowed " + NameOf(allowed->GetFormID()) + " to orgasm. ";
+            must += NamesClause(forced_n, "is forced to orgasm by " + player_name + ".",
+                "are forced to orgasm by " + player_name + ".");
+            must += NamesClause(orgasm_n, "is orgasming.", "are orgasming.");
+            must += NamesClause(again_n, "is orgasming. again.", "are orgasming again.");
+            for (const auto& [band, names] : denied_n)
+                must += BandLeadIn(band) + NamesClause(names, "was denied an orgasm by " + player_name + ".",
+                                               "were denied an orgasm by " + player_name + ".");
+
+            std::vector<std::string> parts;
+            if (recovering_n.size() == 1)
+                parts.push_back(recovering_n[0] + " is recovering from " + PossessivePronoun(recovering_one) + " orgasm. ");
+            else if (!recovering_n.empty())
+                parts.push_back(NamesClause(recovering_n, "", "are recovering from their orgasms."));
+            for (const auto& [band, names] : idle_n)
+                parts.push_back(BandLeadIn(band) +
+                                NamesClause(names, "is not orgasming right now.", "are not orgasming right now."));
+            if (!extras.empty())
+                parts.push_back(extras + " ");
+
+            // Budget (sexlab.narration.max_chars): lower-priority parts that do not fit go to the overflow event.
+            int budget = SexLabNet::GetConfigInt("sexlab.narration.max_chars", 350);
+            if (budget <= 0)
+                budget = 350;
+            std::string msg = must, overflow;
+            for (const auto& p : parts) {
+                if (msg.size() + p.size() <= static_cast<std::size_t>(budget))
+                    msg += p;
+                else
+                    overflow += p;
+            }
+            while (!msg.empty() && msg.back() == ' ')
+                msg.pop_back();
+            while (!overflow.empty() && overflow.back() == ' ')
+                overflow.pop_back();
+
+            RE::Actor* source = actors.front();
+            RE::Actor* target = nullptr;
+            for (const auto id : scene_actors) {
+                if (auto* a = ActorFor(id); a && a != source) {
+                    target = a;
+                    break;
+                }
+            }
+            webui_log::info("AnimEngineOrgasm: scene {} orgasm narration '{}' overflow {} chars", ae_id, msg,
+                overflow.size());
+            DispatchShell("NarrateOrgasm",
+                RE::MakeFunctionArguments(RE::BSFixedString(msg.c_str()), RE::BSFixedString(overflow.c_str()),
+                    static_cast<RE::Actor*>(source), static_cast<RE::Actor*>(target), static_cast<bool>(has_player)));
         }
 
         GateResult GatePassed(int ae_id, const std::vector<RE::Actor*>& actors, std::int64_t& mark)

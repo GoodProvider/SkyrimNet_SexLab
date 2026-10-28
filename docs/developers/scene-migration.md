@@ -191,8 +191,9 @@ Grouped by the prefix map in anim-engine.md §8.
    - Narration has a seam (`AnimEngineOrgasm::Narration`) that only logs until step 5.
    - Contract: [orgasm-engine.md](orgasm-engine.md#animengine-scenes).
 3. **Creator.** Cast, locks, tags and select in C++; start goes through `AnimEngine::Start`. Menu.psc's creator calls and the WebUI creator handlers move to C++.
+   **Pulled forward (checkpoint 13, untested in game):** only the start has moved. With `sexlab.anim_engine.enabled` on, `FinishStartScene` hands the Papyrus-chosen animations to the native `AnimEngine_StartFromCreator`; see [anim-engine.md §4](anim-engine.md). Cast, tags and select are still in Papyrus. The no-strip mask is passed (checkpoint 14); the no-orgasm mask is not yet. SexLab and AnimEngine scenes do not coexist: SkyrimNet_SexLab replaces SexLab, and several AnimEngine scenes run at once.
 4. **Scene state + WebUI.** Replace the `TM_*` and `GetThread*` callers in Actions.psc / Menu.psc with native setters and queries. Move the `WebUI_*` handlers so `DispatchManagerMethod*` goes away.
-5. **Narration**: orgasm / gate / deny narration fills the `AnimEngineOrgasm::Narration` seam. Endings, victim and gate already run natively for AnimEngine scenes (step 2).
+5. **Narration**: orgasm / gate / deny narration fills the `AnimEngineOrgasm::Narration` seam. Started in checkpoint 15: `OrgasmGroup` narrates (no window / fold yet); gate / deny / allow are still stubs. Endings, victim and gate already run natively for AnimEngine scenes (step 2).
 6. **Drop** the SexLab hooks, the poll, the mirror and the thread bridge once no AnimEngine scene needs them (row 05+ of the roadmap).
 
 ## 9. Open questions

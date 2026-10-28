@@ -388,7 +388,7 @@ Built in checkpoint 12, untested in game. This is strangler step 2 in [scene-mig
 
 | Effect | Bridge |
 |---|---|
-| `OrgasmGroup` | No SexLab `ForceOrgasm` / mirror / SLA relief. Counts and the `SkyrimNet_SexLab_Orgasm` event already ran. Narration seam, then `Ending_Check` (victim hold: an aggressor orgasm in the second-to-last stage jumps; lead at target from the second-to-last stage jumps) |
+| `OrgasmGroup` | No SexLab `ForceOrgasm` / mirror / SLA relief. Counts and the `SkyrimNet_SexLab_Orgasm` event already ran. Narration (checkpoint 15): one orgasm DN per group, built in C++ with the [orgasm-narration.md](../reference/orgasm-narration.md) sentences and budget, sent through the shell's `NarrateOrgasm` (`orgasm_level`; DirectNarration with the player, else Nearby). There is no orgasm window, stage fold or ending-hold mark yet. Then the shell's `OrgasmEffect` per actor (gate groups too), then `Ending_Check` (victim hold: an aggressor orgasm in the second-to-last stage jumps; lead at target from the second-to-last stage jumps) |
 | `GatePassed` | Narration seam. No voice (the step 2 stub): no hold, jump to the final stage. Sent: `GateNarrationSent`, plus a gate hold (or the victim hold handed over) until `AdvanceToFinal` or `gate_wait_max` |
 | `AdvanceToFinal` | Release the gate hold, then `AnimEngine::GoToFinal` (final-stage dialogue hold when narration exists) |
 | `Mirror` | dropped (SexLab enjoyment) |

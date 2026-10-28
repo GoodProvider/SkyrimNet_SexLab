@@ -8,6 +8,13 @@ Scriptname SkyrimNet_SexLab_AnimEngine Hidden
 
 ; Debug start: player + NPC (or one actor), ordered by the registry's positions. Returns the scene id, -1 on failure.
 int Function AnimEngine_DebugStart(Actor a, Actor b, String registry) global native
+; sexlab.anim_engine.enabled.
+Bool Function AnimEngine_Enabled() global native
+; Scene creator start: plays the first registry with a matching position count. Victims play role 2, the others role 1.
+; no_strip actors keep their clothes; the others strip at Begin and re-dress at Unlock.
+; The creator's actor locks pass to AnimEngine on success, and stay with the creator on failure.
+; Returns the scene id, -1 when no registry fits or the start fails.
+int Function AnimEngine_StartFromCreator(Actor[] actors, String[] registries, Actor[] victims, Actor[] no_strip) global native
 ; scene_id -1 = the newest scene.
 Bool Function AnimEngine_Advance(int scene_id = -1) global native
 Bool Function AnimEngine_Back(int scene_id = -1) global native
@@ -107,11 +114,79 @@ Function Approach(Actor akActor, Actor akFace, float x, float y, float z, float 
     Trace("Approach", akActor.GetDisplayName() + " path " + ok + " d=" + DistanceTo(akActor, x, y, z))
 EndFunction
 
-; Lock then Snap on one stack, so the vehicle marker exists before the first placement. C++ waits for every actor's
-; Begin before it sends the first stage events.
-Function Begin(Actor akActor, float x, float y, float z, float az) global
+; Lock, Strip, then Snap on one stack, so the vehicle marker exists before the first placement and the clothes are off
+; before stage 1. C++ waits for every actor's Begin before it sends the first stage events.
+Function Begin(Actor akActor, float x, float y, float z, float az, Bool strip, Bool victim) global
     Lock(akActor)
+    if strip
+        Strip(akActor, victim)
+    endif
     Snap(akActor, x, y, z, az)
+EndFunction
+
+String Function StrippedKey() global
+    return "SkyrimNet_SexLab_AE_Stripped"
+EndFunction
+
+; Scene.psc's in-scene strip flag, read by the WebUI dress / undress eligibility rules.
+String Function UndressedKey() global
+    return "skyrimnet_sexlab_scene_undressed"
+EndFunction
+
+; SexLab's MCM strip set (victim set when victim), no animation; Unlock re-dresses from the stored list.
+Function Strip(Actor akActor, Bool victim) global
+    if akActor == None
+        return
+    endif
+    SexLabFramework sexlab = SexLabUtil.GetAPI()
+    if sexlab == None
+        Trace("Strip", "SexLab API missing; " + akActor.GetDisplayName() + " stays dressed")
+        return
+    endif
+    Actor victim_ref = None
+    if victim
+        victim_ref = akActor
+    endif
+    Form[] forms = sexlab.StripActor(akActor, victim_ref, false, false)
+    int count = 0
+    if forms
+        count = forms.Length
+    endif
+    int i = 0
+    while i < count
+        if forms[i]
+            StorageUtil.FormListAdd(akActor, StrippedKey(), forms[i], false)
+        endif
+        i += 1
+    endwhile
+    StorageUtil.SetIntValue(akActor, UndressedKey(), 1)
+    Trace("Strip", akActor.GetDisplayName() + " victim:" + victim + " items:" + count)
+EndFunction
+
+Function Redress(Actor akActor) global
+    if StorageUtil.FormListCount(akActor, StrippedKey()) > 0
+        Form[] forms = StorageUtil.FormListToArray(akActor, StrippedKey())
+        StorageUtil.FormListClear(akActor, StrippedKey())
+        SexLabFramework sexlab = SexLabUtil.GetAPI()
+        if sexlab
+            sexlab.UnstripActor(akActor, forms, false)
+        endif
+        Trace("Redress", akActor.GetDisplayName() + " items:" + forms.Length)
+    endif
+    StorageUtil.UnsetIntValue(akActor, UndressedKey())
+EndFunction
+
+; Settle phase (C++): stops the game Scene (e.g. a vanilla argument) the actor is in, once its voice line ended.
+Function StopScene(Actor akActor) global
+    if akActor == None
+        return
+    endif
+    Scene sc = akActor.GetCurrentScene()
+    if sc && sc.IsPlaying()
+        sc.Stop()
+        akActor.EvaluatePackage()
+        Trace("StopScene", akActor.GetDisplayName() + " stopped " + sc)
+    endif
 EndFunction
 
 ; Approach, for an actor that does not walk: Lock, then a visible turn in place to az (toward the partner). One stack,
@@ -256,6 +331,100 @@ Function Unlock(Actor akActor) global
         akActor.SetRestrained(false)
         akActor.SetDontMove(false)
     endif
+    ; sslActorAlias.psc:1429: remove the SOS erection.
+    Debug.SendAnimationEvent(akActor, "SOSFlaccid")
+    SetMouth(akActor, false)
+    Redress(akActor)
     akActor.EvaluatePackage()
     Trace("Unlock", akActor.GetDisplayName())
+EndFunction
+
+String Function MouthKey() global
+    return "SkyrimNet_SexLab_AE_MouthOpen"
+EndFunction
+
+; Stage open_mouth flag (SexLab RefreshExpression, sslActorAlias.psc:1825). C++ calls it when the flag changes;
+; Unlock closes a mouth this opened.
+Function SetMouth(Actor akActor, Bool open) global
+    if akActor == None
+        return
+    endif
+    if open
+        sslBaseExpression.OpenMouth(akActor)
+        StorageUtil.SetIntValue(akActor, MouthKey(), 1)
+    elseif StorageUtil.GetIntValue(akActor, MouthKey(), 0) == 1
+        sslBaseExpression.CloseMouth(akActor)
+        StorageUtil.UnsetIntValue(akActor, MouthKey())
+    endif
+EndFunction
+
+; SexLab's orgasm effect without a thread (sslActorAlias.DoOrgasm, sslActorAlias.psc:987-1007): camera shake for the
+; player, the voice's orgasm sound, OrgasmFX, and cum on cum_to (C++ picks the targets and cum ids). No SexLabOrgasm
+; ModEvent: Scene_Manager.OrgasmIndividual listens to it and would narrate the orgasm a second time.
+Function OrgasmEffect(Actor akActor, Actor[] cum_to, int[] cum_ids, Bool silent) global
+    if akActor == None
+        return
+    endif
+    SexLabFramework sexlab = SexLabUtil.GetAPI()
+    if sexlab == None
+        Trace("OrgasmEffect", "SexLab API missing; " + akActor.GetDisplayName())
+        return
+    endif
+    sslSystemConfig config = sexlab.Config
+    if config && config.OrgasmEffects
+        if akActor == Game.GetPlayer() && config.ShakeStrength > 0.0 && Game.GetCameraState() >= 8
+            Game.ShakeCamera(None, config.ShakeStrength, config.ShakeStrength + 1.0)
+        endif
+        if !silent
+            sslBaseVoice voice = sexlab.GetVoice(akActor)
+            if voice == None
+                voice = sexlab.PickVoice(akActor)
+            endif
+            if voice
+                PlaySound(voice.GetSound(100, false), akActor, config.VoiceVolume)
+            endif
+        endif
+        PlaySound(config.OrgasmFX, akActor, config.SFXVolume)
+    endif
+    int cum = 0
+    if (config == None || config.UseCum) && cum_to
+        int i = 0
+        while i < cum_to.Length
+            if cum_to[i] && cum_ids && i < cum_ids.Length && cum_ids[i] > 0
+                sexlab.ApplyCum(cum_to[i], cum_ids[i])
+                cum += 1
+            endif
+            i += 1
+        endwhile
+    endif
+    Trace("OrgasmEffect", akActor.GetDisplayName() + " silent:" + silent + " cum:" + cum)
+EndFunction
+
+Function PlaySound(Sound sfx, Actor akActor, float volume) global
+    if sfx == None
+        return
+    endif
+    int id = sfx.Play(akActor)
+    if id != 0 && volume > 0.0
+        Sound.SetInstanceVolume(id, volume)
+    endif
+EndFunction
+
+; AnimEngineOrgasm::Narration::OrgasmGroup's DN, routed like Scene.NarrateOrgasmStash (orgasm-narration.md): the
+; orgasm_level cap, DirectNarration with the player in the scene, else Nearby; overflow goes out as an update event.
+Function NarrateOrgasm(String msg, String overflow, Actor source, Actor target, Bool has_player) global
+    int level = SkyrimNet_SexLab_Utilities.NarrationLevel("sexlab.narration.orgasm_level")
+    if msg != ""
+        if level < 3
+            SkyrimNet_SexLab_Utilities.NarrateBelowDirect(level, "orgasm", msg, source, target)
+        elseif has_player
+            SkyrimNet_SexLab_Utilities.DirectNarration(msg, source, target, purge_dialogue=true)
+        else
+            SkyrimNet_SexLab_Utilities.DirectNarration_Nearby("orgasm", msg, source, target)
+        endif
+    endif
+    if overflow != ""
+        SkyrimNet_SexLab_Utilities.NarrateBelowDirect(level, "sexlab update", overflow, source, target)
+    endif
+    Trace("NarrateOrgasm", "level:" + level + " " + msg + " | overflow: " + overflow)
 EndFunction

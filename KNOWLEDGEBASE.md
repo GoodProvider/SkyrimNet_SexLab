@@ -1,5 +1,18 @@
 # Knowledgebase
 
+## AnimEngine scene: no erection, closed mouth, silent orgasm (2026-10-26, fixed, untested in game)
+
+- **Symptom:** Skadi + Bob (`B_B_KneelBJ4`, AnimEngine). Bob's penis never got erect and missed Skadi's mouth. Bob's orgasm fired in the engine (`orgasm 0x14 source=engine`), but nothing showed or was narrated.
+- **Cause:** SexLab's actor alias sends `SOSFastErect` once prepared, `SOSBend<sos>` on every stage sync, and `SOSFlaccid` at release (sslActorAlias.psc:611, 835, 1429). It also opens the mouth for `open_mouth` stages (L1825). AnimEngine replaced that alias and sent none of it. `AnimEngineOrgasm::Narration::OrgasmGroup` was a step-5 stub, and there was no SexLab `DoOrgasm` effect (sound, shake, cum).
+- **Fix:** `EnterNode` queues `SOSFastErect` (first stage) and `SOSBend<n>` (SLAL `sos`, SLSB `schlong`) after each stage event, and calls the shell's `SetMouth` when `open_mouth` changes. `Unlock` sends `SOSFlaccid` and closes the mouth. On an orgasm, the shell's `OrgasmEffect` plays the sound and shake and applies cum. `OrgasmGroup` builds the orgasm DN (the orgasm-narration.md sentences and budget) and sends it via the shell's `NarrateOrgasm`.
+- **Do not** send the `SexLabOrgasm` ModEvent from `OrgasmEffect`: `Scene_Manager.OrgasmIndividual` listens to it and would narrate the orgasm a second time.
+
+## AnimEngine start overlapped a vanilla Scene and did not strip (2026-10-26, fixed, untested in game)
+
+- **Symptom:** a creator start on Camilla + Lucan (`APFisting`, AnimEngine scene 1) began while they were mid-argument (their vanilla Scene). The walk started during their dialogue, and nobody undressed.
+- **Cause:** AnimEngine's start went straight to Approach. It never checked `GetCurrentScene()` or a voice line still playing. SexLab doesn't stop game Scenes either. AnimEngine had no strip step at all; SexLab strips in its own thread (`sslActorAlias.Strip`), which AnimEngine replaces.
+- **Fix:** a `Settle` phase waits for `HighProcessData::voiceTimer` to reach 0 (10 s cap), then `Scene.Stop()`s each actor's game Scene. `Begin` strips with `SexLab.StripActor`, and `Unlock` re-dresses with `UnstripActor`. See [anim-engine.md §4](docs/developers/anim-engine.md).
+
 ## SexLab P+ scene packs loaded by AnimDB; AnimEngine core (2026-10-25, built, untested in game)
 
 - **What:** `SlsbLoader.cpp` reads `SKSE/SexLab/Registry/Source/*.slsb.json` (behind `sexlab.anim_engine.slsb_registry`, default off), and `AnimEngine.cpp` plays AnimDB playback graphs (behind `sexlab.anim_engine.enabled`). See [anim-engine.md](docs/developers/anim-engine.md).
@@ -1291,7 +1304,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Row tags are not sanitized:** `AnimRow::tags` are only `ToLower`'d. `SanitizeTag`'s aliases (`pussy` → `vaginal`, `ass` → `anal`) apply only to query input. Synonym members must be loaded with lowercase and trim **only**. Running them through `SanitizeTag` would turn the cluster's `pussy` into `vaginal`, and the 17 `pussy`-tagged rows would stop matching.
 - **Never cluster DD restraint tags together** (`yoke`, `armbinder`, `hogtied`), not even in broad. `AppendMatchingTags` adds worn-device tags to keep only animations playable in that device; a yoke = armbinder cluster would hand an armbinder wearer yoke animations. Also keep `hug` apart from `cuddling`: `resolved == "hug"` plays the hug idle (`Actions.psc`).
 - **Papyrus default args are compiled into the caller:** adding `String synonyms = "broad"` to the `AnimDb_ResolveTags` native means every **caller's** `.pex` must be recompiled (`Actions.psc`). Otherwise the old pex passes 2 args to a 3-arg native and fails at runtime. Pyro's incremental build only recompiles changed sources, so touch the callers.
-- **SexLab literal lookup removed:** `GetAnimationsByTags` ignores synonyms, and with `require=false` and no tags it returns every N-actor animation (the P+ enjoyment-wait loop). All Scene_Creator tag selection is `SelectAnimationsFromAnimDb` (full query, then peel), with `_shuffle` so the cap of 32 is random rather than alphabetical.
+- **SexLab literal lookup removed:** `GetAnimationsByTags` ignores synonyms, and with `require=false` and no tags it returns every N-actor animation (the P+ enjoyment-wait loop). All Scene_Creator tag selection is `SelectAnimationsFromAnimDb` (full query, then peel), with `_rank` (+ `_rank_pos_genders`) so the cap of 32 keeps the best matches (described → cast-gender fit → least played → random) rather than the alphabetical first 32.
 
 ## Scene settings filter TargetMenu starts (2026-10-02)
 

@@ -369,6 +369,60 @@ SkyrimNet_SexLab_Scene Function StartScene()
     return prof_ret
 EndFunction
 
+; True when AnimEngine (sexlab.anim_engine.enabled) started the scene; the creator is then released, AnimEngine owns
+; the actors. No-orgasm / no-strip masks are not passed yet (scene-migration.md §8 step 3).
+bool Function StartAnimEngine(sslBaseAnimation[] animations)
+    if !SkyrimNet_SexLab_AnimEngine.AnimEngine_Enabled()
+        return False
+    endif
+    if animations == manager.empty || !animations || animations.length == 0
+        Trace("StartAnimEngine", "no animation list, SexLab picks")
+        return False
+    endif
+    String[] regs = Utility.CreateStringArray(animations.length)
+    int i = 0
+    while i < animations.length
+        if animations[i]
+            regs[i] = animations[i].Registry
+        endif
+        i += 1
+    endwhile
+    Actor[] acts = PapyrusUtil.ActorArray(num_actors)
+    i = 0
+    while i < num_actors
+        acts[i] = actors[i]
+        i += 1
+    endwhile
+    Actor[] vics = PapyrusUtil.ActorArray(num_victims)
+    i = 0
+    while i < num_victims
+        vics[i] = victims[i]
+        i += 1
+    endwhile
+    ; Same clothed choice as the SexLab path: the creator mask with override on, else the candidates' AnimDB majority.
+    int[] majority
+    if !position_override
+        majority = SkyrimNet_SexLab_AnimDb.AnimDb_ClothedMajority(regs, num_actors)
+    endif
+    Actor[] nostrip = PapyrusUtil.ActorArray(0)
+    i = 0
+    while i < num_actors
+        bool clothed = False
+        if position_override
+            clothed = no_stripping_mask[i] == 1
+        elseif majority && i < majority.length
+            clothed = majority[i] == 1
+        endif
+        if clothed
+            nostrip = PapyrusUtil.PushActor(nostrip, actors[i])
+        endif
+        i += 1
+    endwhile
+    int ae_id = SkyrimNet_SexLab_AnimEngine.AnimEngine_StartFromCreator(acts, regs, vics, nostrip)
+    Trace("StartAnimEngine", "AnimEngine scene:"+ae_id, ae_id < 0)
+    return ae_id >= 0
+EndFunction
+
 SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     DbgEnter("FinishStartScene")
     ; Tags/suppress drive anim type — empty list must not SexLab-random into something else.
@@ -376,6 +430,16 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
         Trace("FinishStartScene", "no animations with tags/suppress active — aborting (no SexLab random)", True)
         Release()
         DbgReturn("FinishStartScene", "None")
+        return None
+    endif
+
+    ; AnimEngine replaces SexLab here: the chosen animations' registries play without a SexLab thread.
+    ; No AnimDB match (or SexLab-random with no list) falls through to SexLab.
+    if StartAnimEngine(animations)
+        ; AnimEngine now holds the actor locks: Release must not unlock them.
+        num_actors = 0
+        Release()
+        DbgReturn("FinishStartScene", "AnimEngine")
         return None
     endif
 
@@ -1997,8 +2061,8 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     JMap.setInt(filter, "_actor_count", num_actors)
     JMap.setStr(filter, "_creature", "exclude")
     JMap.setStr(filter, "_synonyms", synonyms_mode)
-    ; Random 32 of the matches (not the alphabetically first 32).
-    JMap.setInt(filter, "_shuffle", 1)
+    ; Top 32 of the matches: described, then cast-gender fit (_rank_pos_genders), then least played, then random.
+    JMap.setInt(filter, "_rank", 1)
     ; Scene setting: C++ adds its tags_any / tags_prefer / exclude_settings, and its
     ; tags_suppress_unless_bound unless the cast (_form_ids) wears heavy-bondage DD.
     String setting_for_query = scene_setting_name
@@ -2007,14 +2071,17 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     endif
     JMap.setStr(filter, "_setting", setting_for_query)
     int cast_arr = JArray.object()
+    int gender_arr = JArray.object()
     int ci = 0
     while ci < num_actors
         if actors[ci]
             JArray.addInt(cast_arr, actors[ci].GetFormID())
+            JArray.addInt(gender_arr, SexLabGender(sexlab, actors[ci]))
         endif
         ci += 1
     endwhile
     JMap.setObj(filter, "_form_ids", cast_arr)
+    JMap.setObj(filter, "_rank_pos_genders", gender_arr)
 
     int must_arr = JArray.object()
     int mi = 0

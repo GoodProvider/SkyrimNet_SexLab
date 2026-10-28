@@ -45,11 +45,14 @@ namespace AnimEngine
         // weapon state to reach kSheathed; re-request for actors still kDrawn; start anyway after the timeout.
         constexpr auto kSheatheRetry = std::chrono::milliseconds(1000);
         constexpr auto kSheatheTimeout = std::chrono::seconds(5);
+        // Settle (before Approach): wait for a voice line to finish, then stop any game Scene the actors are in
+        // (e.g. a vanilla argument scene), so the walk does not start mid-dialogue (checkpoint 13, decision 11).
+        constexpr auto kSettleTimeout = std::chrono::seconds(10);
         // Center heading faces pos 0 toward the others when they are farther than this (else pos 0's own facing).
         constexpr float kFaceMinDist = 10.f;
 
         enum class Entry { First, Next, Jump };
-        enum class Phase { Approach, Sheathe, Begin, Play };
+        enum class Phase { Settle, Approach, Sheathe, Begin, Play };
 
         /// Counts down when a dispatched shell call returns. Atomic, no g_mutex: the VM thread runs it.
         class DoneCallback : public RE::BSScript::IStackCallbackFunctor
@@ -79,6 +82,7 @@ namespace AnimEngine
             AnimationDB::PlaybackData pb;
             std::vector<RE::FormID> actors;
             std::vector<std::int32_t> roles;              // OrgasmEngine roles per position (empty: all normal)
+            std::vector<bool> strip;                      // per position: strip at Begin (empty: everyone)
             float cx = 0.f, cy = 0.f, cz = 0.f, crz = 0.f; // center, rz in radians
             int node = -1;                                // index into pb.nodes
             std::vector<int> history;
@@ -92,7 +96,7 @@ namespace AnimEngine
             Clock::time_point next_hold;
             std::vector<std::array<float, 4>> placed; // per position x, y, z, az (radians)
             std::unordered_set<std::string> unplayable;
-            Phase phase = Phase::Approach;
+            Phase phase = Phase::Settle;
             int root = 0;
             Clock::time_point phase_started;
             Clock::time_point next_check;
@@ -101,6 +105,7 @@ namespace AnimEngine
             std::vector<float> last_dist;
             std::vector<int> stuck;
             std::shared_ptr<std::atomic<int>> begin_left; // Begin calls not returned yet
+            std::vector<bool> mouth_open;                 // per position: the shell's SetMouth state
         };
 
         std::mutex g_mutex;
@@ -127,6 +132,17 @@ namespace AnimEngine
                 return;
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
             auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor));
+            if (!vm->DispatchStaticCall(RE::BSFixedString(kShell), RE::BSFixedString(fn), args, cb))
+                webui_log::warn("AnimEngine: {}.{} dispatch failed", kShell, fn);
+        }
+
+        void CallShellBool(const char* fn, RE::Actor* actor, bool value)
+        {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm || !actor)
+                return;
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb;
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor), static_cast<bool>(value));
             if (!vm->DispatchStaticCall(RE::BSFixedString(kShell), RE::BSFixedString(fn), args, cb))
                 webui_log::warn("AnimEngine: {}.{} dispatch failed", kShell, fn);
         }
@@ -170,6 +186,31 @@ namespace AnimEngine
                 return false;
             }
             return true;
+        }
+
+        /// Begin (actor, x, y, z, az degrees, strip, victim); `left` counts down when the call returns.
+        bool CallShellBegin(RE::Actor* actor, const std::array<float, 4>& at, bool strip, bool victim,
+            std::shared_ptr<std::atomic<int>> left)
+        {
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm || !actor)
+                return false;
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> cb{ new DoneCallback(std::move(left)) };
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor), static_cast<float>(at[0]),
+                static_cast<float>(at[1]), static_cast<float>(at[2]), Degrees(at[3]), static_cast<bool>(strip),
+                static_cast<bool>(victim));
+            if (!vm->DispatchStaticCall(RE::BSFixedString(kShell), RE::BSFixedString("Begin"), args, cb)) {
+                webui_log::warn("AnimEngine: {}.Begin dispatch failed", kShell);
+                return false;
+            }
+            return true;
+        }
+
+        /// A voice line still playing (HighProcessData::voiceTimer).
+        bool Talking(RE::Actor* a)
+        {
+            auto* proc = a ? a->GetActorRuntimeData().currentProcess : nullptr;
+            return proc && proc->high && proc->high->voiceTimer > 0.f;
         }
 
         float DistanceTo(RE::Actor* a, const std::array<float, 4>& at)
@@ -352,6 +393,15 @@ namespace AnimEngine
                 s.pending.push_back({ due, pos, std::move(event), stage, tries });
         }
 
+        /// SOS bend after the stage event, as SexLab's SyncThread follows SendAnimation (sslActorAlias.psc:835). SLAL
+        /// "sos" (missing = 0, still sent), SLSB "schlong".
+        void QueueSosBend(Scene& s, int p, const AnimationDB::PlayStage* st, Clock::time_point stage_due)
+        {
+            if (st)
+                Queue(s, stage_due + kEventGap, p, std::format("SOSBend{}", s.pb.format == "slal" ? st->sos : st->schlong),
+                    false);
+        }
+
         /// Jump entry for one position: leave the playing FNIS sequence, back to the default state, then the stage
         /// event, with SexLab RefreshActor's timing (sslActorAlias.psc:855-862: exit + default, 0.2 s, S1). The graph
         /// accepts an "s" S1 only from the default state (checkpoints 06-09). FNIS "+" lines are inside an "s"
@@ -403,22 +453,33 @@ namespace AnimEngine
             s.pending.clear();
             PlaceAll(s, node);
             auto start = now;
+            if (s.mouth_open.size() != s.actors.size())
+                s.mouth_open.assign(s.actors.size(), false);
             for (int p = 0; p < static_cast<int>(s.actors.size()); ++p) {
                 const auto* st = StageAt(s, p, node);
                 const std::string ev = st ? st->event : std::string();
+                // Open mouth per stage (SexLab RefreshExpression); the shell only on a change.
+                if (const bool open = st && st->open_mouth; open != s.mouth_open[p]) {
+                    s.mouth_open[p] = open;
+                    CallShellBool("SetMouth", ActorOf(s.actors[p]), open);
+                }
+                auto due = now;
                 if (how == Entry::Next) {
                     Queue(s, now, p, ev, true);
-                    continue;
+                } else if (how == Entry::Jump) {
+                    due = QueueJump(s, p, from, node, now);
+                    start = std::max(start, due);
+                } else {
+                    // First: back to the default state, then the stage event, then the SOS erection
+                    // (sslActorAlias.psc:611, sent once the actor is prepared).
+                    due = now + kEventGap;
+                    Queue(s, now, p, "AnimObjectUnequip", false);
+                    Queue(s, now, p, "IdleForceDefaultState", false);
+                    Queue(s, due, p, ev, true);
+                    Queue(s, due, p, "SOSFastErect", false);
+                    start = std::max(start, due);
                 }
-                if (how == Entry::Jump) {
-                    start = std::max(start, QueueJump(s, p, from, node, now));
-                    continue;
-                }
-                // First: back to the default state, then the stage event.
-                Queue(s, now, p, "AnimObjectUnequip", false);
-                Queue(s, now, p, "IdleForceDefaultState", false);
-                Queue(s, now + kEventGap, p, ev, true);
-                start = std::max(start, now + kEventGap);
+                QueueSosBend(s, p, st, due);
             }
             for (int p = 0; p < static_cast<int>(s.actors.size()); ++p) {
                 if (const auto* st = StageAt(s, p, node); st && (!st->objects.empty() || !st->anim_obj.empty()))
@@ -433,8 +494,15 @@ namespace AnimEngine
                 webui_log::debug("AnimEngine: scene {} holds {:#x} cleared by the stage change", s.id, s.holds);
             s.holds = 0;
             const auto& n = s.pb.nodes[node];
-            webui_log::info("AnimEngine: scene {} '{}' stage {}/{} node '{}' ({}) {:.0f}s", s.id, s.registry, n.n,
-                s.pb.nodes.size(), n.id, how == Entry::First ? "first" : how == Entry::Next ? "next" : "jump", s.duration);
+            std::string sos, mouth;
+            for (int p = 0; p < static_cast<int>(s.actors.size()); ++p) {
+                const auto* st = StageAt(s, p, node);
+                sos += std::format("{}{}", p ? "," : "", st ? (s.pb.format == "slal" ? st->sos : st->schlong) : 0);
+                mouth += s.mouth_open[p] ? '1' : '0';
+            }
+            webui_log::info("AnimEngine: scene {} '{}' stage {}/{} node '{}' ({}) {:.0f}s sos [{}] mouth {}", s.id,
+                s.registry, n.n, s.pb.nodes.size(), n.id, how == Entry::First ? "first" : how == Entry::Next ? "next" : "jump",
+                s.duration, sos, mouth);
             SendModEvent("SNSL_AE_StageStart", n.id, static_cast<float>(n.n), ActorOf(s.actors[0]));
             NotifyStage(s, how == Entry::First);
         }
@@ -501,7 +569,9 @@ namespace AnimEngine
             s.begin_left = std::make_shared<std::atomic<int>>(static_cast<int>(s.actors.size()));
             for (int p = 0; p < static_cast<int>(s.actors.size()); ++p) {
                 auto* a = ActorOf(s.actors[p]);
-                if (!a || !CallShellPlace("Begin", a, s.placed[p], s.begin_left))
+                const bool strip = s.strip.empty() || (p < static_cast<int>(s.strip.size()) && s.strip[p]);
+                const bool victim = p < static_cast<int>(s.roles.size()) && s.roles[p] == 2;
+                if (!a || !CallShellBegin(a, s.placed[p], strip, victim, s.begin_left))
                     --*s.begin_left;
             }
         }
@@ -593,6 +663,41 @@ namespace AnimEngine
                 SheatheLocked(s, "no walk");
         }
 
+        /// Settle: Tick waits for every voice line to end (or kSettleTimeout), then runs SettleDoneLocked.
+        void SettleLocked(Scene& s)
+        {
+            s.started = true;
+            s.phase = Phase::Settle;
+            s.phase_started = Clock::now();
+        }
+
+        /// Stops the game Scene each actor is in (the shell's StopScene), then starts the approach.
+        void SettleDoneLocked(Scene& s, const char* why)
+        {
+            for (const auto id : s.actors) {
+                auto* a = ActorOf(id);
+                auto* scene = a ? a->GetCurrentScene() : nullptr;
+                if (!scene)
+                    continue;
+                const char* edid = scene->GetFormEditorID();
+                webui_log::info("AnimEngine: scene {} stopping game scene {} ({:08X}) for {:08X}", s.id,
+                    edid && *edid ? edid : "?", scene->GetFormID(), id);
+                CallShell("StopScene", a);
+            }
+            webui_log::info("AnimEngine: scene {} settled ({}) after {} ms", s.id, why,
+                std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - s.phase_started).count());
+            StartLocked(s);
+        }
+
+        void SettleTickLocked(Scene& s, Clock::time_point now)
+        {
+            const bool talking = std::any_of(s.actors.begin(), s.actors.end(), [](auto id) { return Talking(ActorOf(id)); });
+            if (!talking)
+                SettleDoneLocked(s, "quiet");
+            else if (now - s.phase_started >= kSettleTimeout)
+                SettleDoneLocked(s, "timeout");
+        }
+
         /// Approach tick: per walker, done when PathToReference returned, within kWalkDist, or stuck.
         void ApproachLocked(Scene& s, Clock::time_point now)
         {
@@ -669,6 +774,10 @@ namespace AnimEngine
                     EndLocked(cur, "actor unloaded or dead");
                     continue;
                 }
+                if (s.phase == Phase::Settle) {
+                    SettleTickLocked(s, now);
+                    continue;
+                }
                 if (s.phase == Phase::Approach) {
                     ApproachLocked(s, now);
                     continue;
@@ -718,7 +827,9 @@ namespace AnimEngine
                 }
                 for (const auto& [pos, tries] : reenter) {
                     std::erase_if(s.pending, [pos](const PendingEvent& e) { return e.pos == pos; });
-                    s.stage_started = std::max(s.stage_started, QueueReentry(s, pos, s.node, now + kEventGap, tries));
+                    const auto due = QueueReentry(s, pos, s.node, now + kEventGap, tries);
+                    QueueSosBend(s, pos, StageAt(s, pos, s.node), due);
+                    s.stage_started = std::max(s.stage_started, due);
                 }
                 if (now >= s.next_hold) {
                     s.next_hold = now + kHoldInterval;
@@ -766,7 +877,7 @@ namespace AnimEngine
     }
 
     int StartScene(const std::vector<RE::Actor*>& actors, const std::string& registry, RE::TESObjectREFR* center,
-        const std::vector<std::int32_t>& roles)
+        const std::vector<std::int32_t>& roles, const std::vector<bool>& strip)
     {
         if (!Enabled()) {
             webui_log::warn("AnimEngine: StartScene '{}' refused: sexlab.anim_engine.enabled is off", registry);
@@ -800,6 +911,8 @@ namespace AnimEngine
             s.actors.push_back(a->GetFormID());
         if (roles.size() == actors.size())
             s.roles = roles;
+        if (strip.size() == actors.size())
+            s.strip = strip;
         RE::TESObjectREFR* c = center ? center : actors.front();
         const auto pos = c->GetPosition();
         s.cx = pos.x;
@@ -843,7 +956,7 @@ namespace AnimEngine
             std::lock_guard lock(g_mutex);
             auto it = g_scenes.find(id);
             if (it != g_scenes.end())
-                StartLocked(it->second);
+                SettleLocked(it->second);
         });
         return id;
     }
@@ -961,6 +1074,64 @@ namespace AnimEngine
         return -1;
     }
 
+    OrgasmFx OrgasmFxOf(RE::Actor* actor)
+    {
+        OrgasmFx fx;
+        if (!actor)
+            return fx;
+        std::string registry;
+        std::vector<std::pair<RE::FormID, int>> targets; // FormID, the position's add_cum
+        {
+            std::lock_guard lock(g_mutex);
+            const Scene* s = nullptr;
+            int me = -1;
+            for (const auto& [id, sc] : g_scenes) {
+                const auto it = std::find(sc.actors.begin(), sc.actors.end(), actor->GetFormID());
+                if (it != sc.actors.end()) {
+                    s = &sc;
+                    me = static_cast<int>(it - sc.actors.begin());
+                    break;
+                }
+            }
+            if (!s || me >= static_cast<int>(s->pb.positions.size()))
+                return fx;
+            const auto* st = StageAt(*s, me, s->node);
+            fx.silent = st && st->silent;
+            // sslActorAlias.psc:1000: cum from a male / creature position, by a male or creature actor.
+            const int g = s->pb.positions[me].gender;
+            if ((g != 0 && g != 2) || (!IsCreature(actor) && GenderClass(actor) != 0))
+                return fx;
+            registry = s->registry;
+            const int n = static_cast<int>(s->actors.size());
+            for (int p = 0; p < n && p < static_cast<int>(s->pb.positions.size()); ++p) {
+                if (p == me)
+                    continue;
+                // Two actors: the other one. More: the female / creature-female positions.
+                const int pg = s->pb.positions[p].gender;
+                if (n == 2 || pg == 1 || pg == 3)
+                    targets.emplace_back(s->actors[p], s->pb.positions[p].add_cum);
+            }
+        }
+        // No add_cum: SexLab cum id from the registry's tags (1 V, 2 O, 3 A, 4 VO, 5 VA, 6 OA, 7 VOA).
+        int tag_id = 0;
+        if (const auto row = AnimationDB::GetByRegistry(registry)) {
+            auto has = [&](std::initializer_list<const char*> want) {
+                return std::any_of(row->tags.begin(), row->tags.end(), [&](const std::string& t) {
+                    return std::any_of(want.begin(), want.end(), [&](const char* w) { return _stricmp(t.c_str(), w) == 0; });
+                });
+            };
+            const bool v = has({ "Vaginal" }), o = has({ "Oral", "Blowjob" }), a = has({ "Anal" });
+            static constexpr int kIds[8] = { 0, 1, 2, 4, 3, 5, 6, 7 }; // index v | o << 1 | a << 2
+            tag_id = kIds[(v ? 1 : 0) | (o ? 2 : 0) | (a ? 4 : 0)];
+        }
+        for (const auto& [id, add_cum] : targets) {
+            const int cum = add_cum > 0 ? add_cum : tag_id;
+            if (cum > 0)
+                fx.cum.emplace_back(id, cum);
+        }
+        return fx;
+    }
+
     int LatestScene()
     {
         std::lock_guard lock(g_mutex);
@@ -984,7 +1155,8 @@ namespace AnimEngine
             j["stage"] = s.pb.nodes[s.node].n;
             j["sink"] = s.pb.nodes[s.node].dest.empty();
         }
-        j["phase"] = s.phase == Phase::Approach ? "approach"
+        j["phase"] = s.phase == Phase::Settle     ? "settle"
+                     : s.phase == Phase::Approach ? "approach"
                      : s.phase == Phase::Sheathe ? "sheathe"
                      : s.phase == Phase::Begin   ? "begin"
                                                  : "play";

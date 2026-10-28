@@ -14,10 +14,12 @@ namespace AnimEngine
 {
     /// Starts a scene; actors are in position order. center: placement reference (nullptr = first actor).
     /// roles: OrgasmEngine roles per position (0 normal, 1 aggressor, 2 victim); empty = all normal.
+    /// strip: per position, strip at Begin (SexLab StripActor; Unlock re-dresses); empty = everyone.
+    /// The scene first settles (waits for voice lines, stops game Scenes), then approaches.
     /// Returns the scene id, or -1 (disabled, unknown registry, wrong actor count, actor busy). Any thread: the game
     /// work runs as a task.
     int StartScene(const std::vector<RE::Actor*>& actors, const std::string& registry, RE::TESObjectREFR* center,
-        const std::vector<std::int32_t>& roles = {});
+        const std::vector<std::int32_t>& roles = {}, const std::vector<bool>& strip = {});
     /// Follows the node's first edge; at a sink, ends the scene.
     bool Advance(int scene_id);
     /// Jumps to a node id (SLSB stage id, SLAL "1".."N").
@@ -56,6 +58,14 @@ namespace AnimEngine
     };
     /// Scene id the actor is in, -1 when none.
     int SceneOf(RE::Actor* actor);
+    /// An orgasming actor's SexLab effect inputs (sslActorAlias.DoOrgasm): cum targets with SexLab cum ids (empty
+    /// unless a male / creature actor in a male / creature position) and whether the current stage is silent.
+    struct OrgasmFx
+    {
+        std::vector<std::pair<RE::FormID, int>> cum;
+        bool silent = false;
+    };
+    OrgasmFx OrgasmFxOf(RE::Actor* actor);
     /// Newest running scene id, -1 when none.
     int LatestScene();
     /// Debug state of a scene as JSON ("" when unknown).
