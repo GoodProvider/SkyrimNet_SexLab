@@ -1,10 +1,11 @@
 # AnimEngine and the SLAL registry
 
-AnimEngine is the planned C++ replacement for SexLab's scene thread (`sslThreadModel` / `sslThreadController` / `sslActorAlias`). It drives actors through SLAL animations itself: actor lock, center, offsets, stage events, timers, teardown, plus bone IK for alignment. AnimDB is the animation registry. It loads SLAL packs from disk; SexLab's registry is not used.
+AnimEngine is the planned C++ replacement for SexLab's scene thread (`sslThreadModel` / `sslThreadController` / `sslActorAlias`). It drives actors through SLAL animations itself: actor lock, center, offsets, stage events, timers, teardown, plus bone IK for alignment. With AnimEngine on, AnimDB is the animation registry: it loads SLAL packs from disk and SexLab's registry is not used. With it off (the default, and always on a release install), the Papyrus walk fills AnimDB from SexLab's slots as before.
 
 **Status (checkpoint 02, 2026-10-25):**
 - **Verified in game (AE):** the AnimDB SLAL registry (§1–§2).
-- **Built, untested in game:** the SLSB (SexLab P+) registry, playback v2 stage graphs (§3) and the AnimEngine core with a debug start (§4). Both are off by default (`sexlab.anim_engine.slsb_registry`, `sexlab.anim_engine.enabled`).
+- **Built, untested in game:** the SLSB (SexLab P+) registry, playback v2 stage graphs (§3) and the AnimEngine core with a debug start (§4). Both are off by default (`anim_engine.slsb_registry`, `anim_engine.enabled`).
+- **Settings live in `SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json`** (C++ `SexGraph`), edited from the WebUI **Sex Graph** main panel, which is listed only while the file exists (see [webui.md](webui.md)). The file is developer-only: gitignored and removed from `core` by `make release`. No file = AnimEngine off. Development continues on the `graph` branch; `main` ships with SexLab.
 - **Design only:** IK, contacts and the C++ Scene layer (§5–§9).
 - Progress is tracked in `checkpoints/anim-engine/`.
 
@@ -22,22 +23,24 @@ No SexLab code goes into AnimDB or AnimEngine. SexLab P+ is supported in the C++
 | AnimEngine (scenes, graph cursor, events, placement, co-save `ANME`) | `SKSE_Source/src/AnimEngine.cpp`, `include/AnimEngine.h`, `src/Papyrus_AnimEngine.cpp` |
 | AnimEngine Papyrus shell (lock, hold, unlock) + natives | `Scripts/Source/SkyrimNet_SexLab_AnimEngine.psc` |
 | OrgasmEngine bridge (enjoyment, gate, endings, victim hold for AnimEngine scenes) | `SKSE_Source/src/AnimEngineOrgasm.cpp`, `include/AnimEngineOrgasm.h` |
-| Debug start (WebUI Settings → AnimEngine) | `SKSE_Source/src/WebUI.cpp` `AnimEngineDebug`, `PrismaUI/views/SkyrimNet_SexLab/index.html` `settingsAnimEngine` |
+| Settings file + Sex Graph panel | `SKSE_Source/src/SexGraph.cpp`, `include/SexGraph.h`, `webui/MainPanels/1050_sex_graph.json`, WebUI.cpp `SexGraphSet` |
+| Debug start (WebUI Sex Graph → AnimEngine) | `SKSE_Source/src/WebUI.cpp` `AnimEngineDebug`, `PrismaUI/views/SkyrimNet_SexLab/index.html` `sexGraphAnimEngine` |
 | SexLab built-ins as a SLAL pack (dev-time converter, output ships) | `tools/sexlab_defaults_to_slal.py` → `SKSE/Plugins/SkyrimNet_SexLab/slal/SexLab_Builtin.json` |
 | Offline mirror of both loaders (stats / dump / parity against an old DB) | `tools/slal_offline.py` (`--source slsb`) |
 | Planned: IK, contacts, Scene layer | `src/AnimIK.cpp`, `src/AnimContacts.cpp`, `src/SceneDirector.cpp` (+ split files) |
 
-**`SexLab_Builtin.json` ships, AE only in effect.** The AE registry drops every non-SLAL row, so this pack is the only source of SexLab's 161 built-in animations (their hkx and FNIS list come with SexLab AE, a hard dependency). `make release` copies all of `SKSE/` into `core`, so no FOMOD option is needed; on P+ the SLAL loader never runs.
+**`SexLab_Builtin.json` ships, AE with AnimEngine on only in effect.** The AE SLAL registry drops every non-SLAL row, so this pack is the only source of SexLab's 161 built-in animations (their hkx and FNIS list come with SexLab AE, a hard dependency). `make release` copies all of `SKSE/` into `core`, so no FOMOD option is needed; on P+ the SLAL loader never runs.
 
 ## 1. Who owns the AnimDB table
 
 | Profile | Owner | How |
 |---------|-------|-----|
-| SexLab AE | `SlalLoader` | `AnimDb.psc` `UsesSlalRegistry()` is true. `StartSync` and `CheckAlignmentOnLoad` call `AnimDb_SyncFromSlal(force, drop_legacy=True)`. Rows get `source = 2` (`AnimationDB::kSourceSlal`). Afterwards `DropNonSlalRows` removes rows that the old SexLab registry walk pushed. |
-| SexLab P+, `sexlab.anim_engine.slsb_registry` on | `SlsbLoader` | `UsesSlsbRegistry()`; `AnimDb_SyncFromSlsb(force, drop_legacy=True)`. Rows get `source = 3` (`kSourceSlsb`) and keep the scene id's case (`_case`). |
+| SexLab AE, `anim_engine.enabled` off (default) | Papyrus walk (`OnUpdate` / `BuildAnimJson`) | SexLab's `AnimSlots` + `CreatureSlots`; `BeginSync` / `EndSync` as below. The load-time count check against SexLab's slots applies. |
+| SexLab AE, `anim_engine.enabled` on | `SlalLoader` | `AnimDb.psc` `UsesSlalRegistry()` is true. `StartSync` and `CheckAlignmentOnLoad` call `AnimDb_SyncFromSlal(force, drop_legacy=True)`. Rows get `source = 2` (`AnimationDB::kSourceSlal`). Afterwards `DropNonSlalRows` removes rows that the old SexLab registry walk pushed. |
+| SexLab P+, `anim_engine.slsb_registry` on | `SlsbLoader` | `UsesSlsbRegistry()`; `AnimDb_SyncFromSlsb(force, drop_legacy=True)`. Rows get `source = 3` (`kSourceSlsb`) and keep the scene id's case (`_case`). |
 | SexLab P+, setting off (default) | Papyrus walk (`WalkPPlusBatch`) | `BeginSync` / `EndSync` wipe and prune **every** row (and the playback table), loader rows included. MO2's `overwrite` (where `animationdb.sql` lives) is shared between profiles. |
 
-- The SexLab AE registry walk (`BuildAnimJson`) was removed.
+- **Owner change:** `AnimDb.RegistryOwner()` (0 walk, 1 SLAL, 2 SLSB) is stored in `last_registry_owner` at every `StartSync`. `CheckAlignmentOnLoad` runs `StartSync(True)` when it differs (a toggle in `sex-graph.json`, or the file removed); `-1` on older saves rebuilds once. The Sex Graph panel also rebuilds right away when `enabled` / `slsb_registry` changes.
 - The load runs on a worker thread. `ReplaceSlalRows` takes the DB lock in chunks of 64 rows, so Papyrus and WebUI readers wait for at most one chunk.
 - If no source file changed (mtime:size stamps in `playback_sources`, keyed `<source>|<path>`), the load logs `unchanged (…), skipped reparse` and stops. The stamps include `@playback_format` = `kPlaybackFormat`, so a playback format change reparses once.
 - The P+ switch to `SlsbLoader` waits for in-game parity with the walk (checkpoint 02 Next). `AnimDb.psc` `UsesCppRegistry()` covers both loaders.
@@ -136,7 +139,7 @@ C++ reads it with `AnimationDB::GetPlayback(registry)` (cached, returns a `Playb
 **Wiring:**
 - Co-save record `'ANME'`: the actors of running scenes. Scenes do not survive a load; `Load` releases those actors (`IdleForceDefaultState` + shell `Unlock`). `Revert` drops every scene.
 - A tick thread posts `Tick` with `AddTask` every 100 ms while a scene runs (the `OrgasmEngine` pattern). All scene state is behind one mutex; game calls run on the main thread.
-- Gated by dashboard `sexlab.anim_engine.enabled` (Debug category, default off).
+- Gated by `sex-graph.json` `anim_engine.enabled` (default off; no file = off). The cache is re-read on game load.
 - **Scene creator start (checkpoint 13, untested in game):**
   - While the setting is on, every creator start runs on AnimEngine instead of SexLab. That covers the WebUI creator, TargetMenu, LLM actions and the Menu.
   - The seam is `Scene_Creator.FinishStartScene` → `StartAnimEngine`, which calls the native `AnimEngine_StartFromCreator(actors, registries, victims, no_strip)`.
@@ -153,7 +156,7 @@ C++ reads it with `AnimationDB::GetPlayback(registry)` (cached, returns a `Playb
 - API (`AnimEngine.h`): `StartScene(actors by position, registry, center)`, `Advance` (first edge; at a sink the scene ends), `GoToNode`, `Back` (history), `SetPaused`, `EndScene`, `SceneOf`, `LatestScene`, `DescribeJson`, `OrderForRegistry` (debug: actors to positions by gender).
 - `StartScene` takes an `ActorLocker` lock per actor. An actor that is already locked, in a SexLab / OStim scene, or in an AnimEngine scene is refused.
 - ModEvents: `SNSL_AE_SceneStart` (str registry, num scene id), `SNSL_AE_StageStart` (str node id, num legacy stage), `SNSL_AE_SceneEnd`.
-- OrgasmEngine (checkpoint 12, untested in game): every stage entry, pause change and end posts a note to `AnimEngineOrgasm`, which wires the scene into the OrgasmEngine natively (see [orgasm-engine.md](orgasm-engine.md#animengine-scenes); setting `sexlab.anim_engine.orgasm_engine`, default on).
+- OrgasmEngine (checkpoint 12, untested in game): every stage entry, pause change and end posts a note to `AnimEngineOrgasm`, which wires the scene into the OrgasmEngine natively (see [orgasm-engine.md](orgasm-engine.md#animengine-scenes); setting `sex-graph.json` `anim_engine.orgasm_engine`, default on).
   - `StartScene(…, roles)`: OrgasmEngine roles per position (the debug panel's **Victim** select).
   - `SetHold(id, gate | victim | ending, on, node)`: a held stage does not auto-advance, and its clock keeps running. Entering a stage clears all holds.
   - `GoToFinal(id)`: jump to the projected final node.
@@ -161,7 +164,7 @@ C++ reads it with `AnimationDB::GetPlayback(registry)` (cached, returns a `Playb
   - Pause keeps the stage's elapsed time; resume continues it. Before checkpoint 12, resume restarted the stage.
   - HUD: the SexLab HUD shows for a player in an AnimEngine scene. Its end / previous / next / pause keys act on the acting actor's AnimEngine scene. With the HUD controls hidden, the AnimEngine hotkeys stay on.
 - Papyrus: `SkyrimNet_SexLab_AnimEngine.AnimEngine_DebugStart(a, b, registry)` and `_Advance` / `_Back` / `_GoToNode` / `_SetPaused` / `_End` / `_SceneOf` / `_Describe` (scene id -1 = newest).
-- Debug start: WebUI Settings → AnimEngine (shown while the setting is on) starts the typed registry on the player and the nearest living NPC within 400 units.
+- Debug start: WebUI Sex Graph → AnimEngine (debug) (shown while AnimEngine is on) starts the typed registry on the player and the nearest living NPC within 400 units.
 
 **Center:** the explicit ref, else the first actor. Without an explicit ref and with 2+ actors, the heading is the direction from pos 0 toward the others' average position (more than 10 units away), not pos 0's own facing. So the actors face each other and turn less. SexLab keeps the center's own facing. The SLSB scene furniture offset moves the center with the same math. Planned for the Scene layer: the victim, else the player (`sslThreadModel.psc:512-545`).
 
@@ -180,7 +183,7 @@ CenterAdjust = −0.5 × the forward offset with the largest absolute value acro
 
 **Start phases (checkpoint 04):** `Settle` → `Approach` → `Sheathe` → `Begin` → `Play`. Stage commands (Advance, Back, GoToNode, Pause) wait for `Play`. End works in any phase. `DescribeJson` has `phase`.
 - **Settle** (checkpoint 14, untested in game): the tick waits until no actor has a voice line playing (`HighProcessData::voiceTimer > 0`), for up to 10 s. Then each actor still in a game Scene (`GetCurrentScene()`, e.g. Camilla and Lucan's argument) gets the shell's `StopScene` (`Scene.Stop()` + `EvaluatePackage`). Log: `stopping game scene <edid> (<formid>) for <actor>`, then `settled (quiet|timeout) after N ms`. Before this, the walk started mid-dialogue and the Scene kept running under the animation. An ambient Scene restarts by itself; a quest Scene could be cut short (decision 11).
-- **Approach** (dashboard `sexlab.anim_engine.approach`, default on): placements are computed for the root node.
+- **Approach** (`sex-graph.json` `anim_engine.approach`, default on): placements are computed for the root node.
   - An actor farther than 50 units from its spot gets the shell call `Approach(actor, partner, x, y, z, az)`. It runs `SetLookAt(partner)` and `PathToReference(marker, 0.5)`, which needs no package. For the player it first calls `DisablePlayerControls` and `SetPlayerAIDriven`.
   - Actors already close get `LockFace(actor, x, y, z, az)` and wait: `Lock`, then a visible turn in place to az (toward the partner), on one stack.
   - The tick checks once per second. A walker is done when `PathToReference` returns (counted with an `IStackCallbackFunctor`), when it is within 50 units, or after 4 checks with less than 1 unit of progress (stuck). After 30 s every walker is treated as done.

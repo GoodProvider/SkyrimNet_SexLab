@@ -3,6 +3,7 @@
 #include "AnimationDB.h"
 #include "BondageCatalog.h"
 #include "Config.h"
+#include "SexGraph.h"
 #include "SlalLoader.h"
 #include "SlsbLoader.h"
 #include "WebUI_Log.h"
@@ -289,11 +290,11 @@ namespace PapyrusBindings_AnimationDB
         return RE::BSFixedString(SlsbLoader::LastSummary());
     }
 
-    // sexlab.anim_engine.slsb_registry: on P+, SlsbLoader owns AnimDB instead of the Papyrus walk (default off
+    // sex-graph.json anim_engine.slsb_registry: on P+, SlsbLoader owns AnimDB instead of the Papyrus walk (default off
     // until in-game parity with the walk).
     bool AnimDb_SlsbRegistryEnabled(RE::StaticFunctionTag*)
     {
-        return SexLabNet::GetConfigBool("sexlab.anim_engine.slsb_registry", false);
+        return SexGraph::GetBool("slsb_registry", false);
     }
 
     RE::BSFixedString AnimDb_GetPlaybackJson(RE::StaticFunctionTag*, RE::BSFixedString registry)

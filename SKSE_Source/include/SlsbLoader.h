@@ -3,7 +3,7 @@
 #include <string>
 
 /// Loads SexLab P+ scene packs straight from disk into AnimationDB (registry rows + AnimEngine playback graph),
-/// replacing the Papyrus SexlabRegistry walk when sexlab.anim_engine.slsb_registry is on.
+/// replacing the Papyrus SexlabRegistry walk when sex-graph.json anim_engine.slsb_registry is on.
 /// Sources: Data/SKSE/SexLab/Registry/Source/*.slsb.json (SLSB's project files, which P+'s binary .slr files are
 /// built from) and the FNIS lists (events are <prefix_hash><event>). A .slr without a .slsb.json of the same
 /// pack_name is counted and logged, not parsed. No SexLab code. See docs/developers/anim-engine.md §2.

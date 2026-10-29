@@ -25,6 +25,7 @@
 #include "AnimEngine.h"
 #include "Papyrus_AnimEngine.h"
 #include "SceneRegistry.h"
+#include "SexGraph.h"
 #include "Papyrus_SceneRegistry.h"
 #include "Decorators.h"
 #include "StrategyDecision.h"
@@ -166,6 +167,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
                 Profiler::OnNewGame();
             TargetMenuRegistry::Clear();
             AnimationDB::LoadSynonyms();
+            SexGraph::Reload();
             PapyrusBindings_WebUI::ClearOnGameLoad();
             AnimSpeed::ClearAll();
             NarrationQueue::Clear();

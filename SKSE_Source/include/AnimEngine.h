@@ -8,7 +8,7 @@
 
 /// AnimEngine: drives actors through AnimDB playback data (SLAL or SLSB stage graphs) without SexLab's thread.
 /// Playback is NotifyAnimationGraph(stage event); FNIS/Pandora generate the behaviors. Actor lock / placement hold
-/// run through the thin Papyrus shell SkyrimNet_SexLab_AnimEngine.psc. Gated by sexlab.anim_engine.enabled.
+/// run through the thin Papyrus shell SkyrimNet_SexLab_AnimEngine.psc. Gated by sex-graph.json anim_engine.enabled (SexGraph.h).
 /// Scenes do not survive a save load. See docs/developers/anim-engine.md §4.
 namespace AnimEngine
 {

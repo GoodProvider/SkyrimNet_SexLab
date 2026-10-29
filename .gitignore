@@ -39,3 +39,6 @@ bug-logs
 extern 
 checkpoints
 __pycache__/
+
+# Developer-only AnimEngine settings (Sex Graph panel); never committed or shipped.
+SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json

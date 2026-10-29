@@ -127,7 +127,7 @@ Run `make check-pex`. If it fails, stop and report; rebuilding with `compile: pa
 
 ### 11. make release
 
-Run `make release`. Confirm `versions/SkyrimNet_SexLab <VERSION>.7z` exists with a fresh timestamp and that `info.json` / FOMOD now say `VERSION`. Commit the files it changed (`<VERSION>: make release version files`).
+Run `make release`. Confirm `versions/SkyrimNet_SexLab <VERSION>.7z` exists with a fresh timestamp and that `info.json` / FOMOD now say `VERSION`. Confirm the archive has no `sex-graph.json` (`7z l "versions/SkyrimNet_SexLab <VERSION>.7z" | findstr sex-graph` prints nothing). Commit the files it changed (`<VERSION>: make release version files`).
 
 ### 12. Hand-off
 

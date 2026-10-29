@@ -369,7 +369,7 @@ SkyrimNet_SexLab_Scene Function StartScene()
     return prof_ret
 EndFunction
 
-; True when AnimEngine (sexlab.anim_engine.enabled) started the scene; the creator is then released, AnimEngine owns
+; True when AnimEngine (sex-graph.json anim_engine.enabled) started the scene; the creator is then released, AnimEngine owns
 ; the actors. No-orgasm / no-strip masks are not passed yet (scene-migration.md §8 step 3).
 bool Function StartAnimEngine(sslBaseAnimation[] animations)
     if !SkyrimNet_SexLab_AnimEngine.AnimEngine_Enabled()

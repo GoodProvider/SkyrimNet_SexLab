@@ -6,6 +6,7 @@
 #include "Config.h"
 #include "JsonUtil.h"
 #include "SceneRegistry.h"
+#include "SexGraph.h"
 #include "WebUI_Log.h"
 
 #include <array>
@@ -117,7 +118,7 @@ namespace AnimEngine
 
         bool Enabled()
         {
-            return SexLabNet::GetConfigBool("sexlab.anim_engine.enabled", false);
+            return SexGraph::GetBool("enabled", false);
         }
 
         RE::Actor* ActorOf(RE::FormID id)
@@ -637,7 +638,7 @@ namespace AnimEngine
             s.walking.assign(n, nullptr);
             s.last_dist.assign(n, 0.f);
             s.stuck.assign(n, 0);
-            const bool walk = SexLabNet::GetConfigBool("sexlab.anim_engine.approach", true);
+            const bool walk = SexGraph::GetBool("approach", true);
             int walkers = 0;
             for (std::size_t p = 0; p < n; ++p) {
                 auto* a = ActorOf(s.actors[p]);
@@ -880,7 +881,7 @@ namespace AnimEngine
         const std::vector<std::int32_t>& roles, const std::vector<bool>& strip)
     {
         if (!Enabled()) {
-            webui_log::warn("AnimEngine: StartScene '{}' refused: sexlab.anim_engine.enabled is off", registry);
+            webui_log::warn("AnimEngine: StartScene '{}' refused: sex-graph.json anim_engine.enabled is off", registry);
             return -1;
         }
         auto pb = AnimationDB::GetPlayback(registry);

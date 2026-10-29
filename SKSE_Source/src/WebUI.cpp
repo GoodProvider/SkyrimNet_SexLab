@@ -13,6 +13,7 @@
 #include "InjuryEngine.h"
 #include "StrategyDecision.h"
 #include "Profiler.h"
+#include "SexGraph.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -215,7 +216,26 @@ void Call_RebuildAnimDb()
     });
 }
 
-// Settings → AnimEngine (debug): the nearest loaded, living NPC within 400 units of the player.
+// Sex Graph panel: writes one sex-graph.json key and re-pushes the panel. enabled / slsb_registry change who owns
+// AnimDB (SexLab walk vs the SLAL / SLSB loader), so they also rebuild it.
+void SexGraphSet(const std::string& payload)
+{
+    nlohmann::json j = nlohmann::json::parse(payload, nullptr, false);
+    if (!j.is_object() || !j.contains("key") || !j["key"].is_string() || !j.contains("value"))
+        return;
+    const std::string key = j["key"].get<std::string>();
+    if (key != "enabled" && key != "orgasm_engine" && key != "approach" && key != "slsb_registry")
+        return;
+    const bool value = j["value"].is_boolean() ? j["value"].get<bool>() : j["value"].is_number() && j["value"].get<double>() != 0;
+    const bool before = SexGraph::GetBool(key, false);
+    if (!SexGraph::SetBool(key, value))
+        PapyrusBindings_WebUI::HandleNotify(R"({"msg":"Sex Graph: cannot write sex-graph.json"})");
+    WebUI_Invoke("configureSexGraphPanel(" + SafeDump(SexGraph::PanelJson()) + ");");
+    if ((key == "enabled" || key == "slsb_registry") && before != SexGraph::GetBool(key, false))
+        Call_RebuildAnimDb();
+}
+
+// Sex Graph → AnimEngine (debug): the nearest loaded, living NPC within 400 units of the player.
 RE::Actor* NearestNpc(RE::PlayerCharacter* player)
 {
     RE::Actor* best = nullptr;
@@ -369,7 +389,6 @@ void InvokeConfigureSettingsPanel()
         j["dbEmpty"] = dbCount == 0;
         j["countMismatch"] = dbCount == 0 || (g_sexlabAnimCount >= 0 && dbCount != g_sexlabAnimCount);
     }
-    j["animEngineEnabled"] = GetConfigBool("sexlab.anim_engine.enabled", false);
     WebUI_Invoke("configureSettingsPanel(" + SafeDump(j) + ");");
 }
 
@@ -1731,6 +1750,14 @@ void InitWebUI()
             RunGuarded("onAnimEngineDebug", [&] {
                 if (value)
                     AnimEngineDebug(value);
+            });
+        });
+
+        // Sex Graph panel checkbox: {"key":"enabled|orgasm_engine|approach|slsb_registry","value":bool}.
+        PrismaUI->RegisterJSListener(g_view, "onSexGraphSet", [](const char* value) {
+            RunGuarded("onSexGraphSet", [&] {
+                if (value)
+                    SexGraphSet(value);
             });
         });
 

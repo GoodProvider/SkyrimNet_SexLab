@@ -5,6 +5,7 @@
 #include "JsonUtil.h"
 #include "NarrationTiming.h"
 #include "OrgasmEngine.h"
+#include "SexGraph.h"
 #include "StrategyDecision.h"
 #include "WebUI_Log.h"
 
@@ -480,8 +481,8 @@ namespace AnimEngineOrgasm
             return;
         std::int32_t sid = 0;
         if (note.first) {
-            if (!SexLabNet::GetConfigBool("sexlab.anim_engine.orgasm_engine", true)) {
-                webui_log::info("AnimEngineOrgasm: scene {} not wired (sexlab.anim_engine.orgasm_engine off)",
+            if (!SexGraph::GetBool("orgasm_engine", true)) {
+                webui_log::info("AnimEngineOrgasm: scene {} not wired (sex-graph.json anim_engine.orgasm_engine off)",
                     note.ae_id);
                 return;
             }

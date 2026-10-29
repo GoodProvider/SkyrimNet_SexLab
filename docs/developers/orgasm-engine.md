@@ -364,7 +364,7 @@ The engine itself is unchanged; the Scene shell feeds it a linear view of P+'s s
 
 Built in checkpoint 12, untested in game. This is strangler step 2 in [scene-migration.md](scene-migration.md) §8. AnimEngine scenes ([anim-engine.md](anim-engine.md) §4) have no SexLab thread and no Papyrus Scene. `AnimEngineOrgasm` (`SKSE_Source/src/AnimEngineOrgasm.cpp`) is the native port of the Scene script's part: `Engine_*`, `Ending_*`, `Gate_*`, `Victim_*` and `Orgasm_ApplyGroup`. The engine itself is unchanged.
 
-**Setting:** `sexlab.anim_engine.orgasm_engine` (Debug, default on), read at the scene's first stage. With `sexlab.enjoyment.engine_disabled` on, the scene is not wired and a warning is logged, because SexLab is not there to own enjoyment.
+**Setting:** `sex-graph.json` `anim_engine.orgasm_engine` (Sex Graph panel, default on), read at the scene's first stage. With `sexlab.enjoyment.engine_disabled` on, the scene is not wired and a warning is logged, because SexLab is not there to own enjoyment.
 
 **sid:** `100000 + AnimEngine scene id` (`AnimEngineOrgasm::SidOf`). SexLab pool sids stay below it.
 

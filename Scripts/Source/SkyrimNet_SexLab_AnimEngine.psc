@@ -1,6 +1,6 @@
 Scriptname SkyrimNet_SexLab_AnimEngine Hidden
 
-; AnimEngine (C++) drives actors through AnimDB playback data without SexLab's thread (sexlab.anim_engine.enabled).
+; AnimEngine (C++) drives actors through AnimDB playback data without SexLab's thread (sex-graph.json anim_engine.enabled).
 ; This script is its thin Papyrus shell for what the plugin has no C++ path for yet: restraint, player controls, the
 ; vehicle marker, the walk into place and the TranslateTo hold. C++ calls Lock / Approach / Sheathe / Begin / Place /
 ; Hold / Unlock (DispatchStaticCall); Hold is re-sent every second because a global script gets no OnTranslationComplete.
@@ -8,7 +8,7 @@ Scriptname SkyrimNet_SexLab_AnimEngine Hidden
 
 ; Debug start: player + NPC (or one actor), ordered by the registry's positions. Returns the scene id, -1 on failure.
 int Function AnimEngine_DebugStart(Actor a, Actor b, String registry) global native
-; sexlab.anim_engine.enabled.
+; sex-graph.json anim_engine.enabled (Sex Graph WebUI panel; no file = off).
 Bool Function AnimEngine_Enabled() global native
 ; Scene creator start: plays the first registry with a matching position count. Victims play role 2, the others role 1.
 ; no_strip actors keep their clothes; the others strip at Begin and re-dress at Unlock.

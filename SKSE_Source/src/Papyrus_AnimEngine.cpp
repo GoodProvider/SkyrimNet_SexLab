@@ -4,6 +4,7 @@
 #include "AnimEngine.h"
 #include "AnimationDB.h"
 #include "Config.h"
+#include "SexGraph.h"
 #include "WebUI_Log.h"
 
 #include <algorithm>
@@ -32,7 +33,7 @@ namespace PapyrusBindings_AnimEngine
 
         bool AnimEngine_Enabled(RE::StaticFunctionTag*)
         {
-            return SexLabNet::GetConfigBool("sexlab.anim_engine.enabled", false);
+            return SexGraph::GetBool("enabled", false);
         }
 
         // Scene creator start: the first registry AnimDB can play with this many actors. Victims play role 2, the

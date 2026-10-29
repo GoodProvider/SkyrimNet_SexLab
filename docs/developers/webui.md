@@ -147,13 +147,15 @@ Start merge order: YAML statics → `defaultsParameters` → matching action-nod
 
 ### `webui/MainPanels/`
 
-One JSON object per file; **order = lexicographic filename**. Optional `requiresPlugin` skips the entry when the mod is missing.
+One JSON object per file; **order = lexicographic filename**. Optional `requiresPlugin` skips the entry when the mod is missing. Optional `requiresFile` (a path under `SKSE/Plugins/SkyrimNet_SexLab/`) skips it while that file does not exist; checked on every catalog build, so the pulldown follows the file without a restart.
 
 | type | Fields | Role |
 |------|--------|------|
-| `builtin` | `label`, `panel` | Panel already in PrismaUI (`log_panel`, `settings_panel`, `scene_panel` = Scene view) |
+| `builtin` | `label`, `panel` | Panel already in PrismaUI (`log_panel`, `settings_panel`, `profile_panel`, `sex_graph_panel`, `scene_panel` = Scene view) |
 
 **Settings / AnimDB mismatch:** `configureSettingsPanel(cfg)` (sent on every overlay show and Settings reveal) carries `animdbCount`, `sexlabCount` (-1 until Papyrus reports it; `Menu.ProcessHotkey` pushes it on every open via `AnimDb.PushSexLabCount`), `dbEmpty` and `countMismatch` (true when the DB is empty, or when `sexlabCount >= 0` and the counts differ). Empty DB labels the button **Build DB** and the warning "Animation database is empty". Mismatch shows a 200% warning in Settings and replaces the ControlPanel mode pulldown (`#control-mode-pulldown`) with a **Rebuild DB** button. Both rebuild buttons call `settingsRebuild()` → `onSettingsRebuild`, which closes the WebUI and dispatches `RebuildDatabase`.
+
+**Sex Graph (developer only):** `1050_sex_graph.json` (`panel: sex_graph_panel`, `requiresFile: sex-graph.json`) lists "Sex Graph" in the view pulldown only while `SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json` exists. That file holds the AnimEngine settings (`anim_engine.enabled` / `orgasm_engine` / `approach` / `slsb_registry`; C++ `SexGraph`), is gitignored and is removed from `core` by `make release`. No file (or one that does not parse) = every key false, so AnimEngine is off. Open: one `openSexGraphPanel(SexGraph::PanelJson())`. On / Off buttons post `onSexGraphSet({key, value})`; C++ writes the file, re-pushes `configureSexGraphPanel`, and on an `enabled` / `slsb_registry` change runs `Call_RebuildAnimDb` (the AnimDB owner changed). The AnimEngine debug block (`sexGraphAnimEngine` → `onAnimEngineDebug`) shows while AnimEngine is on. See [anim-engine.md](anim-engine.md#4-animengine-runtime-built-in-checkpoint-02-untested-in-game).
 | `papyrus` | `label`, `id`, `plugin`, `questFormId`, `scriptName`, `openFunction`, `closeFunction` | Zero-arg Papyrus open/close on that quest script |
 | `data_table` | same quest fields as `papyrus`, plus `columns` (`id`/`label`) | Generic table host (`#data-table-panel`). Open still calls `openFunction`; rows arrive via `WebUI_PushMainPanelData`. |
 | `actor_detail` | same quest fields as `papyrus` | Generic key/value + control host (`#actor-detail-panel`). Payload `fields` + `controls`. |

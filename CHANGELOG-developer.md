@@ -4,6 +4,12 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### SexLab runs scenes unless AnimEngine is on; AnimEngine settings move to the Sex Graph panel
+- AnimEngine development continues on the `graph` branch. On `main`, AnimEngine is off by default and SexLab runs every scene.
+- SexLab AE fills AnimDB from SexLab's slots again (the Papyrus walk, `BuildAnimJson`), with the load-time count check. `SlalLoader` owns AnimDB only while AnimEngine is on (`AnimDb.UsesSlalRegistry`). When the owner changes (walk / SLAL / SLSB), the next load rebuilds the DB once (`last_registry_owner`; `-1` on older saves, so saves from the SLAL-only build rebuild from SexLab once).
+- The four `sexlab.anim_engine.*` dashboard settings are gone. AnimEngine on, enjoyment and endings, walk into place and the P+ C++ registry now live in `SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json` (C++ `SexGraph`). No file = AnimEngine off. The file is gitignored and removed from `core` by `make release`.
+- New WebUI main panel **Sex Graph** (`MainPanels/1050_sex_graph.json`), listed in the ControlPanel view pulldown only while `sex-graph.json` exists (new main-panel key `requiresFile`). It has On / Off buttons for the four settings (`onSexGraphSet`; changing AnimEngine or the P+ registry rebuilds AnimDB) and the AnimEngine debug block, which moved out of Settings.
+
 ### Animation table sort and play counts
 - Scene Creator and the Description Editor animation filter tab have a `sort:` pulldown: default, freq asc / desc, name asc / desc. A new `freq` column shows how many times each animation has played.
 - AnimDB `play_counts` table (survives resync), native `AnimDb_RecordPlay`, anim row key `_play_count`. Scene `SeedRegistry` records one play per new animation in a scene. Details: [docs/developers/webui.md](docs/developers/webui.md) "Animation play counts and sort".

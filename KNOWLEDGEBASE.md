@@ -15,7 +15,7 @@
 
 ## SexLab P+ scene packs loaded by AnimDB; AnimEngine core (2026-10-25, built, untested in game)
 
-- **What:** `SlsbLoader.cpp` reads `SKSE/SexLab/Registry/Source/*.slsb.json` (behind `sexlab.anim_engine.slsb_registry`, default off), and `AnimEngine.cpp` plays AnimDB playback graphs (behind `sexlab.anim_engine.enabled`). See [anim-engine.md](docs/developers/anim-engine.md).
+- **What:** `SlsbLoader.cpp` reads `SKSE/SexLab/Registry/Source/*.slsb.json` (behind `anim_engine.slsb_registry`, default off), and `AnimEngine.cpp` plays AnimDB playback graphs (behind `anim_engine.enabled`). Both live in the developer-only `SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json` (Sex Graph WebUI panel), never in the dashboard; `make release` strips the file, so releases always run on SexLab (AE: the Papyrus slot walk fills AnimDB). See [anim-engine.md](docs/developers/anim-engine.md).
 - **P+ reads binary `.slr`, built from the `.slsb.json` project files.** Match the two by the `.slr` header `pack_name` (u8 at byte 8 = length), not by filename: `FunnyBizAmp.slr` ↔ `FunnyBiznessAmputee.slsb.json`. The `.slr` stores scene ids and events bare.
 - **SLSB FNIS events carry the pack's `prefix_hash`:** the json says `Can_B_BoobJ_A1_S1`, the FNIS list says `xujsCan_B_BoobJ_A1_S1`. Without the prefix every lookup misses (13 659 / 13 659 offline).
 - **SLSB `race` is a display name** (`Canine`, `Chaurus Hunter`), while P+ race keys are plural legacy keys (`Dogs`, `Draugrs`). Rows store the display name until in-game parity settles the mapping.

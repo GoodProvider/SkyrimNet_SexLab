@@ -11,7 +11,7 @@
 /// AnimEngine scenes in the OrgasmEngine without SexLab: the native port of the Scene script's Engine_* / Ending_* /
 /// Gate_* / Victim_* block and Orgasm_ApplyGroup (strangler step 2, docs/developers/scene-migration.md §8).
 /// AnimEngine posts stage / pause / end notes (game thread, no AnimEngine lock held); the OrgasmEngine routes its
-/// effects for these scenes' actors here instead of to the Papyrus shell. Gated by sexlab.anim_engine.orgasm_engine
+/// effects for these scenes' actors here instead of to the Papyrus shell. Gated by sex-graph.json anim_engine.orgasm_engine
 /// (read at a scene's first stage). Narration is step 5: the seam below only logs.
 /// Locking: one leaf mutex; no OrgasmEngine / AnimEngine call is made while it is held.
 namespace AnimEngineOrgasm

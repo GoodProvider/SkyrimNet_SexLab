@@ -1786,8 +1786,9 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         g_sync_batch_parse_errors = 0;
         g_sync_batches_dropped = 0;
         if (g_force_rebuild) {
-            // Only the SexLab P+ registry walk calls this now (the C++ loaders use ReplaceRegistryRows), so the
-            // walk owns the whole table, loader rows from another profile sharing this DB included.
+            // Only the Papyrus registry walks call this (SexLab AE with AnimEngine off, P+ with the SLSB registry off;
+            // the C++ loaders use ReplaceRegistryRows), so the walk owns the whole table, loader rows from another
+            // profile sharing this DB included.
             Exec("DELETE FROM animations");
             Exec("DELETE FROM animation_tags");
             Exec("DELETE FROM anim_playback");
@@ -1987,7 +1988,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         if (!g_db)
             return false;
         sqlite3_stmt* stmt = nullptr;
-        // P+ walk owns the table (see BeginSync): rows it did not push this sync go, SLAL rows included.
+        // The Papyrus walk owns the table (see BeginSync): rows it did not push this sync go, SLAL rows included.
         if (sqlite3_prepare_v2(g_db, "DELETE FROM animations WHERE sync_gen != ?", -1, &stmt, nullptr) ==
             SQLITE_OK) {
             sqlite3_bind_int64(stmt, 1, g_sync_gen);

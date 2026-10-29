@@ -125,6 +125,6 @@ Ignore the [llms.txt](llms.txt) denylist unless the maintainer says those paths 
 
 Prereqs: `Scripts/*.pex` current (`compile: papyrus`; `make check-pex` passes, and `make release` runs it); SKSE DLL if WebUI ships; `Spriggit/` JSON is ESP source of truth (not hand-edited binaries); animations merged if required.
 
-`make release` writes `info.json` and FOMOD from `VERSION`/`NAME`, deserializes `SkyrimNet_SexLab.esp` from `Spriggit/`, stages core + handlers, packs `versions/SkyrimNet_SexLab ${VERSION}.7z`.
+`make release` writes `info.json` and FOMOD from `VERSION`/`NAME`, deserializes `SkyrimNet_SexLab.esp` from `Spriggit/`, stages core + handlers, packs `versions/SkyrimNet_SexLab ${VERSION}.7z`. It removes `SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json` (developer-only AnimEngine settings) from core; check with `7z l "versions/SkyrimNet_SexLab ${VERSION}.7z" | findstr sex-graph` (no output).
 
 Ship order: commit → `compile: papyrus` if needed → `make check-pex` → `make release` → commit version files (agent stops here) → git tag → push → GitHub Release (maintainer).

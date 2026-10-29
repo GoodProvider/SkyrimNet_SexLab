@@ -48,8 +48,9 @@ namespace AnimationDB
     };
 
     /// AnimRow::source for rows the C++ registry loaders store (0/1 = Papyrus-pushed rows).
-    /// One owner per profile: SexLab AE → SlalLoader (kSourceSlal); SexLab P+ → SlsbLoader (kSourceSlsb) when
-    /// sexlab.anim_engine.slsb_registry is on, else the Papyrus walk (BeginSync/EndSync wipe and prune every row).
+    /// One owner per profile: SexLab AE → SlalLoader (kSourceSlal) when sex-graph.json anim_engine.enabled is on,
+    /// else the Papyrus SexLab slot walk; SexLab P+ → SlsbLoader (kSourceSlsb) when
+    /// sex-graph.json anim_engine.slsb_registry is on, else the Papyrus walk (BeginSync/EndSync wipe and prune every row).
     /// The loader's ReplaceRegistryRows + DropRowsExceptSource then make the table that source's only.
     constexpr int kSourceSlal = 2;
     constexpr int kSourceSlsb = 3;
