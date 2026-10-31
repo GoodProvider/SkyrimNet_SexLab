@@ -31,7 +31,7 @@
         "CMAKE_CXX_EXTENSIONS": "OFF"
       },
       "environment": {
-        "VCPKG_ROOT": "c:/dev/vcpkg"
+        "VCPKG_ROOT": "$env{USERPROFILE}/vcpkg"
       }
     },
     {
