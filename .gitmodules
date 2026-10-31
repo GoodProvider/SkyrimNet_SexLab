@@ -1,0 +1,3 @@
+[submodule "SKSE_Source/lib/SkyrimNet-ExamplePlugin"]
+	path = SKSE_Source/lib/SkyrimNet-ExamplePlugin
+	url = https://github.com/MinLL/SkyrimNet-ExamplePlugin

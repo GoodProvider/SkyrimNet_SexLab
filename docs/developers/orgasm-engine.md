@@ -18,7 +18,7 @@ The C++ OrgasmEngine owns enjoyment and orgasms for **every** SexLab scene, incl
 | Layer | Role |
 |-------|------|
 | `SKSE_Source/src/OrgasmEngine.cpp` | Holds the state: enjoyment (0–100), passive gain, mini-game, gates, when an orgasm fires, co-save record `'ORGE'`. Runs a 250 ms tick on the game thread; the tick is skipped while the game or WebUI is paused. All engine timers (gain, cooldown, edging, narration windows) use `Now()`, an unpaused clock advanced only by the tick `dt` (clamped to 0.5 s); `GameNow()` is the wall clock that feeds `dt`. |
-| `SKSE_Source/src/Hud.cpp` + `PrismaUI/views/SkyrimNet_SexLab/hud.html` | Scene HUD: a second PrismaUI view that is shown but never focused, so the game keeps running. HUD key handling. |
+| `SKSE_Source/src/Hud.cpp` + `PrismaUI/views/SkyrimNet_SexLab/hud.html` | Scene HUD: a second UI-engine view (shared views folder — both Magelight and PrismaUI read it) that is shown but never focused, so the game keeps running. HUD key handling. |
 | `Scripts/Source/SkyrimNet_SexLab_OrgasmEngine.psc` | **Shell only.** Native API declarations, plus the `Effect_*` globals the engine dispatches for SexLab side effects. |
 | `SkyrimNet_SexLab_Scene.psc` | Adapter. Sends scene facts into the engine (`Engine_BeginScene`, `Engine_SetStage`, `Engine_SetSkills`, `SetOrgasmDisabled`, `EndScene`). Performs `Orgasm_ApplyGroup` (ForceOrgasm per actor + one narration), `SetDenyOrgasm` (deny / allow) and `Mirror_Apply` (AdjustEnjoyment). |
 

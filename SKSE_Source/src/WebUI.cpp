@@ -1,4 +1,5 @@
 #include "WebUI.h"
+#include "UiEngine.h"
 #include "JsonUtil.h"
 #include "Papyrus_WebUI.h"
 #include "WebUI_Log.h"
@@ -29,8 +30,9 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-static PRISMA_UI_API::IVPrismaUI1* PrismaUI = nullptr;
-static PrismaView g_view = 0;
+// Non-null only when UiEngine picked Prisma (Data/PrismaUI); used by the foreign-view bookkeeping
+// below, which parses PrismaUI.log and has no Magelight equivalent.
+static PRISMA_UI_API::IVPrismaUI1* g_prisma = nullptr;
 static std::atomic<bool> g_gameReady{false};
 static std::atomic<bool> g_domReady{false};
 static std::atomic<bool> g_webuiGamePaused{true};
@@ -42,7 +44,7 @@ static std::string g_lastRebuildTimestamp;
 static int g_sexlabAnimCount = -1;  // -1 = not yet reported by Papyrus
 static std::mutex g_logFileMutex;
 static std::uintmax_t g_logFileOffset = 0;
-// Show held while another PrismaUI view (e.g. the SkyrimNet dashboard) has focus. The generation
+// Show held while another UI-engine view (e.g. the SkyrimNet dashboard) has focus. The generation
 // changes on each save load, so a held Show from the previous game is dropped.
 static std::atomic<bool> g_showPending{false};
 static std::atomic<bool> g_showPendingControlPanel{true};
@@ -60,7 +62,7 @@ public:
     }
 };
 
-/// Runs a PrismaUI listener body. An exception escaping a listener ends the game, so any throw
+/// Runs a UI-engine listener body. An exception escaping a listener ends the game, so any throw
 /// (bad payload type, json::value() mismatch, ...) is logged and the call is dropped.
 template <class Body>
 void RunGuarded(const char* listener, Body&& body) noexcept
@@ -514,7 +516,7 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
         cb();
 
     // Overlay visible: strip keyboard/char from the SKSE list (block mod hotkeys) but always kContinue
-    // so mouse-move and mouse clicks still reach PrismaUI. PrismaUI text fields use Win32 directly.
+    // so mouse-move and mouse clicks still reach the UI engine's view. Engine text fields use Win32 directly.
     if (!WebUI_IsHidden())
         StripSwallowedInputEvents(a_eventList);
 
@@ -553,18 +555,18 @@ void WebUI_InvokeFrameworkToggle()
     WebUI_Invoke(std::string("setFrameworkToggle(") + (ostimnet ? "true" : "false") + ", '" + fw + "');");
 }
 
-/// True when the PrismaUI view exists and DomReady has fired (safe to Show/Focus).
+/// True when the UI-engine view exists and DomReady has fired (safe to Show/Focus).
 bool WebUI_IsReady()
 {
-    if (!PrismaUI || !g_domReady.load())
+    if (!g_domReady.load())
         return false;
-    return PrismaUI->IsValid(g_view);
+    return UiEngine::IsValid();
 }
 
-/// True when some other PrismaUI view (SkyrimNet dashboard / chat, another mod) holds focus.
+/// True when some other UI-engine view (SkyrimNet dashboard / chat, another mod) holds focus.
 static bool WebUI_ForeignFocus()
 {
-    return PrismaUI && PrismaUI->HasAnyActiveFocus() && !PrismaUI->HasFocus(g_view);
+    return UiEngine::AnyActiveFocus() && !UiEngine::HasFocus();
 }
 
 namespace {
@@ -580,10 +582,13 @@ struct ForeignView
 
 /// Other mods' PrismaUI views. PrismaUI has no view list and its ids change each session, but
 /// PrismaUI.log records "View [<id>] creation requested for path: file:///views/<path> ...".
-/// The last id per path wins; our own views are skipped. Empty when the log is missing.
+/// The last id per path wins; our own views are skipped. Empty when the log is missing, or when
+/// the engine is Magelight (its views aren't enumerable through PrismaUI.log).
 std::vector<ForeignView> ForeignViews()
 {
     std::vector<ForeignView> out;
+    if (!g_prisma)  // Magelight: no foreign-view bookkeeping to do
+        return out;
     auto dir = SKSE::log::log_directory();
     std::ifstream f;
     if (dir)
@@ -611,7 +616,8 @@ std::vector<ForeignView> ForeignViews()
         const auto ps = p + kPath.size();
         const auto pe = line.find(' ', ps);
         std::string path = line.substr(ps, pe == std::string::npos ? std::string::npos : pe - ps);
-        if (id == g_view || path.starts_with("SkyrimNet_SexLab/"))
+        // Our own views always carry the SkyrimNet_SexLab/ prefix, so they're skipped here.
+        if (path.starts_with("SkyrimNet_SexLab/"))
             continue;
         auto it = std::find_if(out.begin(), out.end(), [&](const ForeignView& v) { return v.path == path; });
         if (it != out.end())
@@ -626,7 +632,7 @@ bool DashboardOpen(const std::vector<ForeignView>& views)
 {
     for (const auto& v : views)
         if (v.path == kDashboardPath)
-            return PrismaUI->IsValid(v.id) && (!PrismaUI->IsHidden(v.id) || PrismaUI->HasFocus(v.id));
+            return g_prisma->IsValid(v.id) && (!g_prisma->IsHidden(v.id) || g_prisma->HasFocus(v.id));
     return false;
 }
 
@@ -646,10 +652,10 @@ void ToggleSkyrimNetDashboard()
 void CloseForeignViews(const std::vector<ForeignView>& views)
 {
     for (const auto& v : views) {
-        if (!PrismaUI->IsValid(v.id))
+        if (!g_prisma || !g_prisma->IsValid(v.id))
             continue;
-        const bool hidden = PrismaUI->IsHidden(v.id);
-        const bool focus = PrismaUI->HasFocus(v.id);
+        const bool hidden = g_prisma->IsHidden(v.id);
+        const bool focus = g_prisma->HasFocus(v.id);
         const char* action = "none";
         if (v.path == kDashboardPath) {
             if (!hidden || focus) {
@@ -657,8 +663,8 @@ void CloseForeignViews(const std::vector<ForeignView>& views)
                 action = "TriggerToggleDashboard";
             }
         } else if (focus) {
-            PrismaUI->Unfocus(v.id);
-            PrismaUI->Hide(v.id);
+            g_prisma->Unfocus(v.id);
+            g_prisma->Hide(v.id);
             action = "Unfocus+Hide";
         }
         webui_log::info("CloseForeignViews: {} [{}] hidden={} focus={} -> {}", v.path, v.id, hidden, focus, action);
@@ -698,20 +704,20 @@ static void WebUI_StartDeferredShowWatcher()
     }).detach();
 }
 
-/// Shows and focuses the PrismaUI overlay after refreshing nearby actors for the menu.
-/// No-ops if PrismaUI is missing, no game is loaded, DomReady has not fired, or the view is invalid.
-/// Other PrismaUI views are closed first and the Show waits for them: focusing over the SkyrimNet
+/// Shows and focuses the UI-engine overlay after refreshing nearby actors for the menu.
+/// No-ops when the engine has no host, no game is loaded, DomReady has not fired, or the view is invalid.
+/// Other same-engine views are closed first and the Show waits for them: focusing over the SkyrimNet
 /// dashboard (same order 101) left the game paused with no cursor once we hid.
 void WebUI_Visibility_Show(bool showControlPanel)
 {
-    if (!PrismaUI) return;
+    if (!UiEngine::Available()) return;
     if (!g_gameReady) {
         webui_log::info("WebUI blocked — no game loaded.");
         return;
     }
     if (!WebUI_IsReady()) {
         webui_log::critical(
-            "WebUI_Visibility_Show: DomReady not reached (missing PrismaUI/views/SkyrimNet_SexLab/index.html?).");
+            "WebUI_Visibility_Show: DomReady not reached (missing Data/PrismaUI/views/SkyrimNet_SexLab/index.html?).");
         return;
     }
 
@@ -720,7 +726,7 @@ void WebUI_Visibility_Show(bool showControlPanel)
         return;
     }
     if (const auto views = ForeignViews(); WebUI_ForeignFocus() || DashboardOpen(views)) {
-        webui_log::info("WebUI_Visibility_Show deferred: closing other PrismaUI views first");
+        webui_log::info("WebUI_Visibility_Show deferred: closing other same-engine views first");
         g_showPendingControlPanel = showControlPanel;
         g_showPending = true;
         CloseForeignViews(views);
@@ -736,10 +742,9 @@ static void WebUI_ShowNow(bool showControlPanel)
     WebUI_InvokeFrameworkToggle();
     SexLabNet::InvokeConfigureSettingsPanel();  // AnimDB mismatch → ControlPanel Rebuild DB button
 
-    webui_log::info("WebUI Show + Focus. anyFocus={} ourFocus={}", PrismaUI->HasAnyActiveFocus(),
-                    PrismaUI->HasFocus(g_view));
-    PrismaUI->Show(g_view);
-    PrismaUI->Focus(g_view, true);
+    webui_log::info("WebUI Show + Focus. anyFocus={} ourFocus={}", UiEngine::AnyActiveFocus(),
+                    UiEngine::HasFocus());
+    UiEngine::Show();
     KeyHandler::PromoteSink();
     g_webuiGamePaused = true;
     WebUI_Invoke("setGamePaused(true);");
@@ -760,15 +765,14 @@ static void WebUI_Visibility_HideImpl(bool commit)
     WebUI_Invoke("bondageReleaseAll();");
     WebUI_Invoke("clearYesNoSolo();");
     DispatchHandlerBondageClosed();
-    if (!PrismaUI) return;
-    PrismaUI->Unfocus(g_view);
-    PrismaUI->Hide(g_view);
-    webui_log::info("WebUI Unfocus + Hide. anyFocus={}", PrismaUI->HasAnyActiveFocus());
+    if (!UiEngine::Available()) return;
+    UiEngine::Hide();
+    webui_log::info("WebUI Unfocus + Hide. anyFocus={}", UiEngine::AnyActiveFocus());
     g_webuiGamePaused = true;
     WebUI_Invoke("setGamePaused(true);");
 }
 
-/// Unfocuses and hides the PrismaUI overlay without clearing the focus actor.
+/// Unfocuses and hides the UI-engine overlay without clearing the focus actor.
 /// Commits confirmed SceneInfos, restores uncommitted ActorBondage on the handler, then drops the JS map.
 void WebUI_Visibility_Hide()
 {
@@ -781,12 +785,12 @@ void WebUI_Visibility_HideWithoutCommit()
     WebUI_Visibility_HideImpl(false);
 }
 
-/// True when PrismaUI is missing, the view is invalid, or the overlay is hidden.
+/// True when the engine has no host, the view is invalid, or the overlay is hidden.
 bool WebUI_IsHidden()
 {
-    if (!PrismaUI || !PrismaUI->IsValid(g_view))
+    if (!UiEngine::IsValid())
         return true;
-    return PrismaUI->IsHidden(g_view);
+    return UiEngine::IsHidden();
 }
 
 bool WebUI_IsGamePaused()
@@ -809,7 +813,7 @@ void WebUI_Visibility_Toggle()
 /// Early invokes before the HTML loads are flushed by FlushPendingInvokes.
 void WebUI_Invoke(const std::string& script)
 {
-    if (!PrismaUI) return;
+    if (!UiEngine::Available()) return;
 
     // Queue until DomReady — CreateView callbacks may not have run yet.
     if (!g_domReady.load()) {
@@ -818,7 +822,7 @@ void WebUI_Invoke(const std::string& script)
         return;
     }
 
-    PrismaUI->Invoke(g_view, script.c_str());
+    UiEngine::InvokeJS(script.c_str());
 }
 
 void WebUI_InteropCall(const char* functionName, const std::string& jsonArgument)
@@ -837,9 +841,9 @@ static void FlushPendingInvokes()
         std::scoped_lock lock(g_invokeMutex);
         pending.swap(g_pendingInvokes);
     }
-    if (!PrismaUI) return;
+    if (!UiEngine::Available()) return;
     for (const auto& script : pending) {
-        PrismaUI->Invoke(g_view, script.c_str());
+        UiEngine::InvokeJS(script.c_str());
     }
     if (!pending.empty()) {
         webui_log::info("Flushed {} queued WebUI Invoke(s) after DomReady.", pending.size());
@@ -935,29 +939,29 @@ void AidAskConsent(RE::Actor* giver, RE::Actor* receiver, RE::FormID form, const
 
 }  // namespace
 
-/// One-shot WebUI bootstrap: PrismaUI API, action catalog, view, JS listeners, hotkeys.
-/// View path must exist under Data/PrismaUI/views/SkyrimNet_SexLab/index.html.
+/// One-shot WebUI bootstrap: UI engine (Magelight else PrismaUI), action catalog, view, JS listeners, hotkeys.
+/// View path must exist under Data/PrismaUI/views/SkyrimNet_SexLab/index.html (both engines share it).
 /// Escape hides UI; menu hotkey toggles ControlPanel (hide if visible, else ProcessHotkey).
 void InitWebUI()
 {
     static std::once_flag s_initFlag;
     std::call_once(s_initFlag, []() {
 
-        PrismaUI = static_cast<PRISMA_UI_API::IVPrismaUI1*>(
-            PRISMA_UI_API::RequestPluginAPI(PRISMA_UI_API::InterfaceVersion::V1));
+        UiEngine::Init();
+        g_prisma = UiEngine::GetRawPrisma();  // non-null only for the Prisma fallback path
 
-        if (!PrismaUI) {
-            webui_log::critical("Failed to acquire PrismaUI API.");
+        if (!UiEngine::Available()) {
+            webui_log::critical("Failed to acquire a UI engine (Magelight or PrismaUI).");
             return;
         }
-        webui_log::info("PrismaUI API acquired successfully.");
+        webui_log::info("UI engine selected: {}",
+                        UiEngine::GetKind() == UiEngine::Kind::Magelight ? "Magelight" : "PrismaUI");
 
         ActionCatalog::Load();
 
         g_domReady = false;
-        // Resolves under Data/PrismaUI/views/, not SKSE/Plugins/.
-        g_view = PrismaUI->CreateView("SkyrimNet_SexLab/index.html", [](PrismaView view) {
-            g_view = view;
+        // Both engines read the same folder: Data/PrismaUI/views/SkyrimNet_SexLab/ (not SKSE/Plugins/).
+        const bool viewOk = UiEngine::CreateWebUIView([]() {
             g_domReady = true;
             webui_log::info("WebUI DomReady.");
             FlushPendingInvokes();
@@ -969,14 +973,14 @@ void InitWebUI()
             });
         });
 
-        if (!PrismaUI->IsValid(g_view)) {
+        if (!viewOk) {
             webui_log::critical(
                 "CreateView returned invalid view — ensure Data/PrismaUI/views/SkyrimNet_SexLab/index.html exists.");
         }
 
-        PrismaUI->Hide(g_view);
+        UiEngine::Hide();
 
-        PrismaUI->RegisterJSListener(g_view, "onCancel", [](const char*) {
+        UiEngine::RegisterListener("onCancel", [](const char*) {
             RunGuarded("onCancel", [&] {
                 WebUI_Invoke("hidePanel('target_menu_panel');");
                 PapyrusBindings_WebUI::ClearTargetMenuSession();
@@ -984,7 +988,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onYesNoResult", [](const char* value) {
+        UiEngine::RegisterListener("onYesNoResult", [](const char* value) {
             RunGuarded("onYesNoResult", [&] {
                 if (!value)
                     return;
@@ -1014,7 +1018,7 @@ void InitWebUI()
         // Ask / Order / Punish panel (HUD punish key): {cancel} or {verb, subject, object, ...}. verb "ask" | "order":
         // request (a request key) or text (free phrase). verb "punish": method, location, reason. The engine narrates
         // (source the subject, target the object; SkyrimNet picks who answers).
-        PrismaUI->RegisterJSListener(g_view, "onPunishResult", [](const char* value) {
+        UiEngine::RegisterListener("onPunishResult", [](const char* value) {
             RunGuarded("onPunishResult", [&] {
                 WebUI_Invoke("hidePunishPanel();");
                 WebUI_Visibility_HideWithoutCommit();
@@ -1052,13 +1056,13 @@ void InitWebUI()
         });
 
         // Punish / Aid part pulldown: the player agreed to turn on Injury Engine's sexual body parts.
-        PrismaUI->RegisterJSListener(g_view, "onInjuryEngineSexualParts", [](const char*) {
+        UiEngine::RegisterListener("onInjuryEngineSexualParts", [](const char*) {
             RunGuarded("onInjuryEngineSexualParts", [&] {
                 SKSE::GetTaskInterface()->AddTask([]() { InjuryEngine::EnableSexualParts(); });
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAidResult", [](const char* value) {
+        UiEngine::RegisterListener("onAidResult", [](const char* value) {
             RunGuarded("onAidResult", [&] {
                 WebUI_Invoke("hideAidPanel();");
                 WebUI_Visibility_HideWithoutCommit();
@@ -1095,7 +1099,7 @@ void InitWebUI()
         });
 
         // Aid offer dialogue (openAidOffer): the player answered an NPC's potion offer.
-        PrismaUI->RegisterJSListener(g_view, "onAidOfferResult", [](const char* value) {
+        UiEngine::RegisterListener("onAidOfferResult", [](const char* value) {
             RunGuarded("onAidOfferResult", [&] {
                 WebUI_Invoke("hideAidOffer();");
                 WebUI_Visibility_HideWithoutCommit();
@@ -1120,7 +1124,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneCreatorResult", [](const char* value) {
+        UiEngine::RegisterListener("onSceneCreatorResult", [](const char* value) {
             RunGuarded("onSceneCreatorResult", [&] {
                 if (!value)
                     return;
@@ -1168,18 +1172,18 @@ void InitWebUI()
         // Main-panel Close on the Description Editor side of the Scene view: stop the Scene view from
         // auto-opening. JS then selects ControlPanel None (onMainPanelChange ''); the overlay stays open.
         // DEBUG-DELETE: temporary JS -> SkyrimNet_SexLab.log bridge (deDbg in index.html).
-        PrismaUI->RegisterJSListener(g_view, "onDebugLog", [](const char* value) {
+        UiEngine::RegisterListener("onDebugLog", [](const char* value) {
             webui_log::info("[JS DEBUG] {}", value ? value : "");
         });
         // DEBUG-DELETE end
 
-        PrismaUI->RegisterJSListener(g_view, "onScenePanelClose", [](const char*) {
+        UiEngine::RegisterListener("onScenePanelClose", [](const char*) {
             RunGuarded("onScenePanelClose", [&] {
                 ActionCatalog::SetShowScenePanel(false);
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneCreatorLoad", [](const char* value) {
+        UiEngine::RegisterListener("onSceneCreatorLoad", [](const char* value) {
             RunGuarded("onSceneCreatorLoad", [&] {
                 if (!value)
                     return;
@@ -1195,7 +1199,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneCreatorSave", [](const char* value) {
+        UiEngine::RegisterListener("onSceneCreatorSave", [](const char* value) {
             RunGuarded("onSceneCreatorSave", [&] {
                 if (!value)
                     return;
@@ -1210,7 +1214,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimationMenuClose", [](const char* value) {
+        UiEngine::RegisterListener("onAnimationMenuClose", [](const char* value) {
             RunGuarded("onAnimationMenuClose", [&] {
                 if (!value)
                     return;
@@ -1227,7 +1231,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimationMenuLiveUpdate", [](const char* value) {
+        UiEngine::RegisterListener("onAnimationMenuLiveUpdate", [](const char* value) {
             RunGuarded("onAnimationMenuLiveUpdate", [&] {
                 if (!value)
                     return;
@@ -1241,7 +1245,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimationMenuPrevNext", [](const char* value) {
+        UiEngine::RegisterListener("onAnimationMenuPrevNext", [](const char* value) {
             RunGuarded("onAnimationMenuPrevNext", [&] {
                 if (!value)
                     return;
@@ -1258,7 +1262,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimationMenuStop", [](const char* value) {
+        UiEngine::RegisterListener("onAnimationMenuStop", [](const char* value) {
             RunGuarded("onAnimationMenuStop", [&] {
                 if (!value)
                     return;
@@ -1275,7 +1279,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneConnectionChange", [](const char* value) {
+        UiEngine::RegisterListener("onSceneConnectionChange", [](const char* value) {
             RunGuarded("onSceneConnectionChange", [&] {
                 if (!value)
                     return;
@@ -1289,14 +1293,14 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneConnectionsRefresh", [](const char* value) {
+        UiEngine::RegisterListener("onSceneConnectionsRefresh", [](const char* value) {
             RunGuarded("onSceneConnectionsRefresh", [&] {
                 PapyrusBindings_WebUI::DispatchManagerMethodStrOnly("WebUI_OnSceneConnectionsRefresh",
                     value ? value : "{}");
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneAnimUpdate", [](const char* value) {
+        UiEngine::RegisterListener("onSceneAnimUpdate", [](const char* value) {
             RunGuarded("onSceneAnimUpdate", [&] {
                 if (!value)
                     return;
@@ -1311,7 +1315,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimRegistrySave", [](const char* value) {
+        UiEngine::RegisterListener("onAnimRegistrySave", [](const char* value) {
             RunGuarded("onAnimRegistrySave", [&] {
                 if (!value)
                     return;
@@ -1325,13 +1329,13 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimDbQuery", [](const char* value) {
+        UiEngine::RegisterListener("onAnimDbQuery", [](const char* value) {
             RunGuarded("onAnimDbQuery", [&] {
                 PapyrusBindings_WebUI::HandleAnimDbQuery(value);
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimFavoriteSet", [](const char* value) {
+        UiEngine::RegisterListener("onAnimFavoriteSet", [](const char* value) {
             RunGuarded("onAnimFavoriteSet", [&] {
                 if (!value)
                     return;
@@ -1346,29 +1350,29 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onAnimDbResolveTags", [](const char* value) {
+        UiEngine::RegisterListener("onAnimDbResolveTags", [](const char* value) {
             RunGuarded("onAnimDbResolveTags", [&] {
                 PapyrusBindings_WebUI::HandleAnimDbResolveTags(value);
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onResolveDeviousTags", [](const char* value) {
+        UiEngine::RegisterListener("onResolveDeviousTags", [](const char* value) {
             RunGuarded("onResolveDeviousTags", [&] {
                 PapyrusBindings_WebUI::HandleResolveDeviousTags(value);
             });
         });
-        PrismaUI->RegisterJSListener(g_view, "onNotify", [](const char* value) {
+        UiEngine::RegisterListener("onNotify", [](const char* value) {
             RunGuarded("onNotify", [&] {
                 PapyrusBindings_WebUI::HandleNotify(value);
             });
         });
-        PrismaUI->RegisterJSListener(g_view, "onPapyrusQuery", [](const char* value) {
+        UiEngine::RegisterListener("onPapyrusQuery", [](const char* value) {
             RunGuarded("onPapyrusQuery", [&] {
                 PapyrusBindings_WebUI::HandlePapyrusQuery(value);
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onNearbyRangeChange", [](const char* value) {
+        UiEngine::RegisterListener("onNearbyRangeChange", [](const char* value) {
             RunGuarded("onNearbyRangeChange", [&] {
                 if (!value)
                     return;
@@ -1396,7 +1400,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onResolveActorMeta", [](const char* value) {
+        UiEngine::RegisterListener("onResolveActorMeta", [](const char* value) {
             RunGuarded("onResolveActorMeta", [&] {
                 if (!value)
                     return;
@@ -1410,7 +1414,7 @@ void InitWebUI()
         });
 
         // JS "start" → Scene Creator (Tag Edit) or ActionCatalog::ExecuteAction.
-        PrismaUI->RegisterJSListener(g_view, "onAction", [](const char* value) {
+        UiEngine::RegisterListener("onAction", [](const char* value) {
             RunGuarded("onAction", [&] {
                 if (!value) return;
 
@@ -1489,7 +1493,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneInfoCommit", [](const char* value) {
+        UiEngine::RegisterListener("onSceneInfoCommit", [](const char* value) {
             RunGuarded("onSceneInfoCommit", [&] {
                 if (!value)
                     return;
@@ -1498,7 +1502,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onWebUIHide", [](const char* value) {
+        UiEngine::RegisterListener("onWebUIHide", [](const char* value) {
             RunGuarded("onWebUIHide", [&] {
                 bool commit = true;
                 // endSession (Escape): also end the TargetMenu session, like Cancel, but still commit.
@@ -1523,23 +1527,20 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onGamePauseSet", [](const char* value) {
+        UiEngine::RegisterListener("onGamePauseSet", [](const char* value) {
             RunGuarded("onGamePauseSet", [&] {
                 const bool paused = !value || value[0] != '0';
                 webui_log::info("onGamePauseSet paused={}", paused);
                 g_webuiGamePaused = paused;
-                if (PrismaUI && PrismaUI->IsValid(g_view) && !PrismaUI->IsHidden(g_view)) {
-                    // A repeat Focus while already focused does not change the pause state; re-focus from scratch.
-                    PrismaUI->Unfocus(g_view);
-                    const bool ok = PrismaUI->Focus(g_view, paused);
+                if (UiEngine::IsValid() && !UiEngine::IsHidden()) {
+                    // The adapter re-pauses in place (Prisma: re-focus from scratch; Magelight: retarget UI mode).
+                    UiEngine::SetPaused(paused);
                     KeyHandler::PromoteSink();
-                    webui_log::info("onGamePauseSet Focus(pause={}) ok={} hasFocus={}", paused, ok,
-                                    PrismaUI->HasFocus(g_view));
                 }
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSceneNarrate", [](const char* value) {
+        UiEngine::RegisterListener("onSceneNarrate", [](const char* value) {
             RunGuarded("onSceneNarrate", [&] {
                 if (!value)
                     return;
@@ -1554,7 +1555,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onControlActorChange", [](const char* value) {
+        UiEngine::RegisterListener("onControlActorChange", [](const char* value) {
             RunGuarded("onControlActorChange", [&] {
                 if (!value)
                     return;
@@ -1563,7 +1564,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onControlModeChange", [](const char* value) {
+        UiEngine::RegisterListener("onControlModeChange", [](const char* value) {
             RunGuarded("onControlModeChange", [&] {
                 if (!value)
                     return;
@@ -1579,7 +1580,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onMainPanelRow", [](const char* value) {
+        UiEngine::RegisterListener("onMainPanelRow", [](const char* value) {
             RunGuarded("onMainPanelRow", [&] {
                 if (!value)
                     return;
@@ -1588,7 +1589,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onMainPanelChange", [](const char* value) {
+        UiEngine::RegisterListener("onMainPanelChange", [](const char* value) {
             RunGuarded("onMainPanelChange", [&] {
                 if (!value)
                     return;
@@ -1605,7 +1606,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onFrameworkChange", [](const char* value) {
+        UiEngine::RegisterListener("onFrameworkChange", [](const char* value) {
             RunGuarded("onFrameworkChange", [&] {
                 if (!value) return;
                 auto* global = RE::TESForm::LookupByEditorID<RE::TESGlobal>("skyrimnet_sexlab_ostim_player");
@@ -1623,7 +1624,7 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSettingsRebuild", [](const char*) {
+        UiEngine::RegisterListener("onSettingsRebuild", [](const char*) {
             RunGuarded("onSettingsRebuild", [&] {
                 webui_log::info("onSettingsRebuild");
                 // Close the WebUI so the game unpauses and the cooperative walk runs.
@@ -1637,47 +1638,47 @@ void InitWebUI()
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSettingsOpenSkyrimNet", [](const char*) {
+        UiEngine::RegisterListener("onSettingsOpenSkyrimNet", [](const char*) {
             RunGuarded("onSettingsOpenSkyrimNet", [&] {
                 webui_log::info("onSettingsOpenSkyrimNet");
                 Call_OpenSkyrimNetDashboard();
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onSettingsRefresh", [](const char*) {
+        UiEngine::RegisterListener("onSettingsRefresh", [](const char*) {
             RunGuarded("onSettingsRefresh", [&] {
                 SexLabNet::InvokeConfigureSettingsPanel();
             });
         });
 
         // Profile panel (Profiler state machine is the only writer; wrong-state presses are no-ops).
-        PrismaUI->RegisterJSListener(g_view, "onProfileStartCalibration", [](const char*) {
+        UiEngine::RegisterListener("onProfileStartCalibration", [](const char*) {
             RunGuarded("onProfileStartCalibration", [&] { Profiler::StartCalibration(); });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onProfileStartProfiling", [](const char*) {
+        UiEngine::RegisterListener("onProfileStartProfiling", [](const char*) {
             RunGuarded("onProfileStartProfiling", [&] { Profiler::StartProfiling(); });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onProfileCancel", [](const char*) {
+        UiEngine::RegisterListener("onProfileCancel", [](const char*) {
             RunGuarded("onProfileCancel", [&] { Profiler::Cancel(); });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onProfileStop", [](const char*) {
+        UiEngine::RegisterListener("onProfileStop", [](const char*) {
             RunGuarded("onProfileStop", [&] { Profiler::Stop(); });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onProfileNote", [](const char* value) {
+        UiEngine::RegisterListener("onProfileNote", [](const char* value) {
             RunGuarded("onProfileNote", [&] { Profiler::Note(value ? value : ""); });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onLogPanelOpen", [](const char*) {
+        UiEngine::RegisterListener("onLogPanelOpen", [](const char*) {
             RunGuarded("onLogPanelOpen", [&] {
                 SexLabNet::InvokeLogPanelOpen();
             });
         });
 
-        PrismaUI->RegisterJSListener(g_view, "onLogPoll", [](const char*) {
+        UiEngine::RegisterListener("onLogPoll", [](const char*) {
             RunGuarded("onLogPoll", [&] {
                 SexLabNet::PushLogPanelPoll();
             });
@@ -1724,7 +1725,7 @@ void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled)
         }
         if (!WebUI_IsReady()) {
             webui_log::critical(
-                "WebUI hotkey: overlay not ready (missing PrismaUI/views/SkyrimNet_SexLab/index.html?).");
+                "WebUI hotkey: overlay not ready (missing Data/PrismaUI/views/SkyrimNet_SexLab/index.html?).");
             WebUI_Visibility_Hide();
             return;
         }

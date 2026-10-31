@@ -1,5 +1,6 @@
 #include "Hud.h"
 
+#include "UiEngine.h"
 #include "Aid.h"
 #include "Config.h"
 #include "OrgasmEngine.h"
@@ -59,8 +60,7 @@ namespace Hud
         constexpr std::uint32_t kMouseCalmDx = 256;    // LMB (sexlab.minigame.mouse)
         constexpr std::uint32_t kMouseArouseDx = 257;  // RMB
 
-        PRISMA_UI_API::IVPrismaUI1* g_prisma = nullptr;
-        PrismaView g_view = 0;
+        // View state lives in UiEngine (Magelight v4 preferred, PrismaUI V1 fallback).
         std::atomic<bool> g_domReady{ false };
         bool g_shown = false;
 
@@ -457,7 +457,7 @@ namespace Hud
 
         void Show(bool show)
         {
-            if (!g_prisma || !g_domReady.load() || !g_prisma->IsValid(g_view)) {
+            if (!g_domReady.load() || !UiEngine::HudIsValid()) {
                 return;
             }
             if (show == g_shown) {
@@ -465,9 +465,9 @@ namespace Hud
             }
             g_shown = show;
             if (show) {
-                g_prisma->Show(g_view);
+                UiEngine::HudShow();
             } else {
-                g_prisma->Hide(g_view);
+                UiEngine::HudHide();
             }
         }
 
@@ -679,24 +679,21 @@ namespace Hud
     {
         static std::once_flag once;
         std::call_once(once, []() {
-            g_prisma = static_cast<PRISMA_UI_API::IVPrismaUI1*>(
-                PRISMA_UI_API::RequestPluginAPI(PRISMA_UI_API::InterfaceVersion::V1));
-            if (!g_prisma) {
-                webui_log::critical("Hud: PrismaUI API missing");
+            UiEngine::Init();
+            if (!UiEngine::Available()) {
+                webui_log::critical("Hud: no UI engine (Magelight or PrismaUI) available");
                 return;
             }
             g_domReady = false;
-            // Resolves under Data/PrismaUI/views/.
-            g_view = g_prisma->CreateView("SkyrimNet_SexLab/hud.html", [](PrismaView view) {
-                g_view = view;
+            // Both engines read the same folder: Data/PrismaUI/views/SkyrimNet_SexLab/.
+            UiEngine::CreateHudView([]() {
                 g_domReady = true;
                 webui_log::info("Hud: DomReady");
             });
-            if (!g_prisma->IsValid(g_view)) {
-                webui_log::critical("Hud: CreateView failed (missing PrismaUI/views/SkyrimNet_SexLab/hud.html?)");
+            if (!UiEngine::HudIsValid()) {
+                webui_log::critical("Hud: CreateView failed (missing Data/PrismaUI/views/SkyrimNet_SexLab/hud.html?)");
                 return;
             }
-            g_prisma->Hide(g_view);
             g_shown = false;
             webui_log::info("Hud: view created");
         });
@@ -975,6 +972,6 @@ namespace Hud
             }
             g_lastPush = payload;
         }
-        g_prisma->Invoke(g_view, ("hudUpdate(" + payload + ");").c_str());
+        UiEngine::HudInvokeJS(("hudUpdate(" + payload + ");").c_str());
     }
 }

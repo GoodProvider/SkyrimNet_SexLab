@@ -1,24 +1,26 @@
-#include "RE/Skyrim.h"
-#include "JsonUtil.h"
-#include "SKSE/SKSE.h"
-#include "WebUI_Log.h"
-#include "WebUI.h"
-#include "ActionCatalog.h"
-#include "CorpsePatch.h"
-#include "ActorLocker.h"
-#include "AnimationDB.h"
-#include "BondageCatalog.h"
-#include "Config.h"
-#include "Profiler.h"
-#include "RE/V/VirtualMachine.h"
-#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_set>
 #include <vector>
+
+#include "ActionCatalog.h"
+#include "ActorLocker.h"
+#include "AnimationDB.h"
+#include "BondageCatalog.h"
+#include "Config.h"
+#include "CorpsePatch.h"
+#include "JsonUtil.h"
+#include "Profiler.h"
+#include "RE/Skyrim.h"
+#include "RE/V/VirtualMachine.h"
+#include "SKSE/SKSE.h"
+#include "WebUI.h"
+#include "WebUI_Log.h"
+
 
 // Defined in PublicAPI.h (included once from Config.cpp).
 extern "C" {
@@ -473,7 +475,7 @@ namespace PapyrusBindings_WebUI
     }
 
     /// Resets the overlay and shows the sex_menu_panel for an active sex thread.
-    void Sex_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, bool has_player)
+    void Sex_Menu_Open(RE::StaticFunctionTag*, [[maybe_unused]] RE::TESForm* thread, bool has_player)
     {
         webui_log::info("Sex_Menu_Open triggered. has_player={}", has_player);
         Reset_To_Default();
