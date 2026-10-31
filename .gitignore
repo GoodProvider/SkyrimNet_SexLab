@@ -18,6 +18,7 @@ handler_dom
 handler_ostimnet
 z-*
 *.dll
+!SKSE_Source/lib/**/.dll
 *.zip
 *.7z
 *.pex
