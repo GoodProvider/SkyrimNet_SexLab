@@ -49,14 +49,23 @@ find_package(unofficial-sqlite3 CONFIG REQUIRED)
 # Collect all source files
 file(GLOB SOURCES
     "src/*.cpp"
-    "include/*.h"
 )
 
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
 # add_library(${PROJECT_NAME} SHARED ${SOURCES})
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${SOURCES})
+add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
+    ${SOURCES}
+    NAME ${PROJECT_NAME}
+    AUTHOR "GoodProvider"
+    EMAIL ""
+    USE_ADDRESS_LIBRARY
+    MINIMUM_SKSE_VERSION "2.0.1.04"
+)
+
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h) # <--- PCH.h is required!
-target_link_libraries(${PROJECT_NAME} PRIVATE 
+target_precompile_headers(${PROJECT_NAME} PRIVATE include/PCH.h) # <--- PCH.h is required!
+target_link_libraries(${PROJECT_NAME} PRIVATE
     unofficial::sqlite3::sqlite3
     CommonLibSSE::CommonLibSSE
 )

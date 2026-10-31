@@ -11,6 +11,9 @@
         "value": "x64",
         "strategy": "external"
       },
+      "warnings": {
+        "dev": false
+      },
       "cacheVariables": {
         "VCPKG_HOST_TRIPLET": "x64-windows-static",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
@@ -18,8 +21,8 @@
         "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed",
         "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
         "VCPKG_VERBOSE": "OFF",
-        
-        "CMAKE_CXX_FLAGS": "/permissive- /Zc:preprocessor /EHsc /MP /W4 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DUNICODE -D_UNICODE",
+
+        "CMAKE_CXX_FLAGS": "/permissive- /Zc:preprocessor /EHsc /MP /W4 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DUNICODE -D_UNICODE ",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -44,7 +47,8 @@
       "inherits": ["base"],
       "displayName": "Release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"      }
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
