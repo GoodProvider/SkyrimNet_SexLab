@@ -1,5 +1,7 @@
 #include "ActionCatalog.h"
+#include "AnimationDB.h"
 #include "Profiler.h"
+#include "SexGraph.h"
 #include "JsonUtil.h"
 #include "TargetMenuRegistry.h"
 #include "WebUI_Log.h"
@@ -229,6 +231,13 @@ namespace ActionCatalog
             const std::string dll = node.value("requiresDll", "");
             if (!dll.empty() && !DllPresent(dll))
                 return false;
+            // Path relative to SKSE/Plugins/SkyrimNet_SexLab (e.g. the developer-only sex-graph.json).
+            const std::string file = node.value("requiresFile", "");
+            if (!file.empty()) {
+                std::error_code ec;
+                if (!std::filesystem::exists(AnimationDB::PluginDataDir() / file, ec))
+                    return false;
+            }
             return true;
         }
 
@@ -817,6 +826,8 @@ namespace ActionCatalog
                 } else if (panel == "profile_panel") {
                     // One Invoke: reveal + configure (separate Invokes are not applied in order).
                     WebUI_Invoke("openProfilePanel(" + Profiler::PanelJson() + ");");
+                } else if (panel == "sex_graph_panel") {
+                    WebUI_Invoke("openSexGraphPanel(" + SafeDump(SexGraph::PanelJson()) + ");");
                 } else if (!panel.empty()) {
                     WebUI_Invoke("revealMainPanel('" + panel + "');");
                     if (panel == "settings_panel")

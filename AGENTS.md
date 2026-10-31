@@ -76,6 +76,7 @@ Papyrus (general code): %USERPROFILE%\OneDrive\Documents\my games\Skyrim Special
 
 - Papyrus: VS Code/Cursor task **`compile: pyro`** only (main + P+ bridge; unless maintainer asks otherwise), then `make check-pex`. Never ship `compile: papyrus` pex files: they keep `\"` literally and break Papyrus-built JSON (AnimDB empty in 0.36.0).
 - SKSE / WebUI: [docs/developers/webui.md](docs/developers/webui.md).
+- SKSE C++: the agent builds **Release** (`cmake --build --preset build-release` from `SKSE_Source`, then copy `build/release/Release/SkyrimNet_SexLab.dll` to `SKSE/Plugins/`; same as the `CMake: Build SKSE (Release)` task) and reports warnings/errors. The user tests in game. Never deploy a Debug DLL for in-game tests: it crashes against Release SkyrimNet (KNOWLEDGEBASE "Debug SKSE DLL").
 
 Tools under `tools/`: Pyro, Champollion, XEditLib, Spriggit.
 

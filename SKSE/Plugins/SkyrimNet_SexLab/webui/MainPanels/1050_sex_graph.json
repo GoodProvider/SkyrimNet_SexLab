@@ -1,0 +1,6 @@
+{
+  "type": "builtin",
+  "label": "Sex Graph",
+  "panel": "sex_graph_panel",
+  "requiresFile": "sex-graph.json"
+}

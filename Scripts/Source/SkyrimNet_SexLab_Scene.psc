@@ -427,7 +427,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
         ; thread is still preparing, and SexLab's own stripping would undo ApplyDressedToActor.
         seed_first_animation = true
     elseif thread.animation
-        seeded_registry = thread.animation.Registry
+        SeedRegistry(thread.animation.Registry)
     endif
     DbgEnd("Setup")
     return True
@@ -880,6 +880,14 @@ Function QueueAnimationChangeStage(String from_desc)
     endif
 EndFunction
 
+; Records reg as the seeded animation; a new one adds a play to its AnimDB count (WebUI "freq").
+Function SeedRegistry(String reg)
+    if reg != "" && reg != seeded_registry
+        SkyrimNet_SexLab_AnimDb.AnimDb_RecordPlay(reg)
+    endif
+    seeded_registry = reg
+EndFunction
+
 ; Reloads the new animation's defaults if thread.animation changed since the last call. Returns
 ; True on a change. The first registry of a scene is only recorded, so Setup's (Scene Creator)
 ; choices stand for the starting animation.
@@ -892,7 +900,7 @@ bool Function SyncAnimationDefaults()
         return false
     endif
     bool first = seeded_registry == ""
-    seeded_registry = reg
+    SeedRegistry(reg)
     if first && !seed_first_animation
         return false
     endif
@@ -980,7 +988,7 @@ EndFunction
 ; commit): record it without reseeding, but still narrate the change like a stage start.
 Function NoteSeededRegistry(String reg)
     bool changed = seeded_registry != "" && reg != seeded_registry
-    seeded_registry = reg
+    SeedRegistry(reg)
     if changed
         if !ApplyRestartStageOnAnimationChange(description_last)
             QueueAnimationChangeStage(description_last)
@@ -6285,7 +6293,7 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
             endif
         else
             changed = seeded_registry != "" && reg != seeded_registry
-            seeded_registry = reg
+            SeedRegistry(reg)
         endif
         if changed
             pending_animation_change = true

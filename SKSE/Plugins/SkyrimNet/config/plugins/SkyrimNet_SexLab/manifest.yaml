@@ -866,3 +866,10 @@ schema:
       description: "Writes extra debug lines to SkyrimNet_SexLab.log (thread JSON per actor, faction checks, decisions) and adds [SNSL DEBUG] lines to the SexLab prompt sections so you can see what the template saw. For bug reports only: logs get large and the debug lines are sent to the LLM."
       defaultValue: false
       category: "Debug"
+
+    - name: "Native scene registry (experimental)"
+      path: "sexlab.scene_registry.enabled"
+      type: "bool"
+      description: "Developer test. Looks up which scene an actor is in from the plugin's own scene list instead of scanning SexLab's threads, and counts AnimEngine actors as busy. Each lookup is still checked against the old scan, and any difference is written to the Papyrus log. Leave off unless you are testing it."
+      defaultValue: false
+      category: "Debug"

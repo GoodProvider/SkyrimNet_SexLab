@@ -36,4 +36,6 @@ namespace StrategyDecision
     /// done(accepted) on the game thread, exactly once. No decisions provider or a failed request: accepted.
     void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,
         const std::string& potionName, std::function<void(bool)> done);
+    /// Skyrim relationship rank between two actors (Papyrus GetRelationshipRank: 4 lover .. -4 archnemesis; 0 none).
+    int RelationshipRank(RE::Actor* a, RE::Actor* b);
 }

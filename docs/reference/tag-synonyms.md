@@ -61,7 +61,9 @@ The **synonyms** pulldown in the Scene Creator and the Description Editor animat
 
 ## Related filter key
 
-`_shuffle` (bool, or int from JContainers): `QueryTopNAnims` returns matches in random order before truncating to `n`. `Scene_Creator.QuerySexLabAnimsFromAnimDb` sets it so scene starts pick a random 32 of the matches, not the alphabetically first 32.
+`_shuffle` (bool, or int from JContainers): `QueryTopNAnims` returns matches in random order before truncating to `n`.
+
+`_rank` (bool, or int from JContainers; wins over `_shuffle`): `QueryTopNAnims` orders matches before truncating to `n`: described first, then cast-gender tier, then play count ascending (least played first), then random. `_rank_pos_genders` (int array, SexLab genders 0 m / 1 f / 2 m creature / 3 f creature, in cast order) sets the tier: 0 = the row's positions match the cast in cast order or females-first (SexLab's seating), 1 = same gender counts in any position, 2 = the rest. It only ranks; it never filters. `Scene_Creator.QuerySexLabAnimsFromAnimDb` sets both, so scene starts (TargetMenu / action YAMLs) get the top 32 by that order. The animation table's `default` sort uses the same order with its gender key in place of the tier.
 
 ## Animation selection
 

@@ -29,6 +29,8 @@ SkyrimNet ↔ SexLab bridge.
 | JSON keys | [docs/reference/json-keys.md](docs/reference/json-keys.md) |
 | Orgasm narration | [docs/reference/orgasm-narration.md](docs/reference/orgasm-narration.md) |
 | SexLab P+ | [docs/developers/sexlab-pplus.md](docs/developers/sexlab-pplus.md) |
+| AnimEngine / SLAL registry | [docs/developers/anim-engine.md](docs/developers/anim-engine.md) |
+| Scene migration (Papyrus → C++) | [docs/developers/scene-migration.md](docs/developers/scene-migration.md) |
 | Scene settings | [docs/reference/scene-settings.md](docs/reference/scene-settings.md) |
 | Extension panels | [docs/reference/extension-panels.md](docs/reference/extension-panels.md) |
 | Tag synonyms | [docs/reference/tag-synonyms.md](docs/reference/tag-synonyms.md) |

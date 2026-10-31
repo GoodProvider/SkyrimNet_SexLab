@@ -290,6 +290,15 @@ namespace PapyrusBindings_WebUI
             if (j.contains("_shuffle"))
                 spec.shuffle = j["_shuffle"].is_boolean() ? j["_shuffle"].get<bool>()
                                : j["_shuffle"].is_number() && j["_shuffle"].get<double>() != 0;
+            if (j.contains("_rank"))
+                spec.rank = j["_rank"].is_boolean() ? j["_rank"].get<bool>()
+                            : j["_rank"].is_number() && j["_rank"].get<double>() != 0;
+            if (j.contains("_rank_pos_genders") && j["_rank_pos_genders"].is_array()) {
+                for (const auto& el : j["_rank_pos_genders"]) {
+                    if (el.is_number_integer())
+                        spec.rank_pos_genders.push_back(el.get<int>());
+                }
+            }
             // Scene-setting keys; JS sends `_bound` (from its DD probe), never scanned here (UI thread).
             AnimationDB::ParseSceneFilterKeys(j, spec);
         } catch (...) {
@@ -305,6 +314,7 @@ namespace PapyrusBindings_WebUI
         j["_name"] = row.name;
         j["_enabled"] = row.enabled;
         j["_favorite"] = AnimationDB::IsFavorite(row.registry);
+        j["_play_count"] = AnimationDB::PlayCount(row.registry);
         j["_position_count"] = row.position_count;
         j["_stage_count"] = row.stage_count;
         j["_tags"] = row.tags;

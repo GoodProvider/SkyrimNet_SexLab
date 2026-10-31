@@ -8,11 +8,13 @@
 #include "ActionDispatch.h"
 #include "Config.h"
 #include "AnimationDB.h"
+#include "AnimEngine.h"
 #include "Hud.h"
 #include "OrgasmEngine.h"
 #include "InjuryEngine.h"
 #include "StrategyDecision.h"
 #include "Profiler.h"
+#include "SexGraph.h"
 #include "RE/Skyrim.h"
 
 #include <Windows.h>
@@ -216,6 +218,100 @@ void Call_RebuildAnimDb()
     });
 }
 
+// Sex Graph panel: writes one sex-graph.json key and re-pushes the panel. enabled / slsb_registry change who owns
+// AnimDB (SexLab walk vs the SLAL / SLSB loader), so they also rebuild it.
+void SexGraphSet(const std::string& payload)
+{
+    nlohmann::json j = nlohmann::json::parse(payload, nullptr, false);
+    if (!j.is_object() || !j.contains("key") || !j["key"].is_string() || !j.contains("value"))
+        return;
+    const std::string key = j["key"].get<std::string>();
+    if (key != "enabled" && key != "orgasm_engine" && key != "approach" && key != "slsb_registry")
+        return;
+    const bool value = j["value"].is_boolean() ? j["value"].get<bool>() : j["value"].is_number() && j["value"].get<double>() != 0;
+    const bool before = SexGraph::GetBool(key, false);
+    if (!SexGraph::SetBool(key, value))
+        PapyrusBindings_WebUI::HandleNotify(R"({"msg":"Sex Graph: cannot write sex-graph.json"})");
+    WebUI_Invoke("configureSexGraphPanel(" + SafeDump(SexGraph::PanelJson()) + ");");
+    if ((key == "enabled" || key == "slsb_registry") && before != SexGraph::GetBool(key, false))
+        Call_RebuildAnimDb();
+}
+
+// Sex Graph → AnimEngine (debug): the nearest loaded, living NPC within 400 units of the player.
+RE::Actor* NearestNpc(RE::PlayerCharacter* player)
+{
+    RE::Actor* best = nullptr;
+    float best_d = 400.f * 400.f;
+    auto* lists = RE::ProcessLists::GetSingleton();
+    if (!lists || !player)
+        return nullptr;
+    const auto pp = player->GetPosition();
+    for (auto& h : lists->highActorHandles) {
+        auto ap = h.get();
+        RE::Actor* a = ap.get();
+        if (!a || a == player || a->IsDead() || !a->Is3DLoaded() || a->IsInCombat())
+            continue;
+        const float d = a->GetPosition().GetSquaredDistance(pp);
+        if (d < best_d) {
+            best_d = d;
+            best = a;
+        }
+    }
+    return best;
+}
+
+/// {"cmd":"start|next|back|pause|resume|end","registry":"...","victim":-1}; start uses the player + nearest NPC.
+/// victim: position (after OrderForRegistry) played as the victim, the others as aggressors; -1 none.
+void AnimEngineDebug(const std::string& payload)
+{
+    nlohmann::json j = nlohmann::json::parse(payload, nullptr, false);
+    if (!j.is_object())
+        return;
+    const std::string cmd = j.value("cmd", "");
+    const std::string reg = j.value("registry", "");
+    const int victim = j.contains("victim") && j["victim"].is_number_integer() ? j["victim"].get<int>() : -1;
+    if (cmd == "start") {
+        ActionCatalog::ClearMainPanelSelection();
+        PapyrusBindings_WebUI::ClearTargetMenuSession();
+        WebUI_Visibility_Hide();
+        SKSE::GetTaskInterface()->AddTask([reg, victim]() {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            std::vector<RE::Actor*> actors{ player };
+            auto pb = AnimationDB::GetPlayback(reg);
+            if (pb && pb->positions.size() >= 2) {
+                RE::Actor* npc = NearestNpc(player);
+                if (!npc) {
+                    webui_log::warn("AnimEngine debug: no NPC within 400 units");
+                    PapyrusBindings_WebUI::HandleNotify(R"({"msg":"AnimEngine: no NPC nearby"})");
+                    return;
+                }
+                actors.push_back(npc);
+            }
+            std::vector<std::int32_t> roles;
+            if (victim >= 0 && victim < static_cast<int>(actors.size())) {
+                roles.assign(actors.size(), 1);
+                roles[victim] = 2;
+            }
+            const int id = AnimEngine::StartScene(AnimEngine::OrderForRegistry(actors, reg), reg, nullptr, roles);
+            webui_log::info("AnimEngine debug: start '{}' victim {} -> scene {}", reg, victim, id);
+            PapyrusBindings_WebUI::HandleNotify(id >= 0 ? R"({"msg":"AnimEngine: scene started"})"
+                                                     : R"j({"msg":"AnimEngine: start failed (see log)"})j");
+        });
+        return;
+    }
+    const int id = AnimEngine::LatestScene();
+    bool ok = false;
+    if (cmd == "next")
+        ok = AnimEngine::Advance(id);
+    else if (cmd == "back")
+        ok = AnimEngine::Back(id);
+    else if (cmd == "pause" || cmd == "resume")
+        ok = AnimEngine::SetPaused(id, cmd == "pause");
+    else if (cmd == "end")
+        ok = AnimEngine::EndScene(id);
+    webui_log::info("AnimEngine debug: {} scene {} -> {} {}", cmd, id, ok, AnimEngine::DescribeJson(id));
+}
+
 void Call_OpenSkyrimNetDashboard()
 {
     ActionCatalog::ClearMainPanelSelection();
@@ -397,6 +493,17 @@ void KeyHandler::SetHudActive(bool active)
     _hudActive.store(active);
 }
 
+void KeyHandler::SetAnimKeys(std::map<uint32_t, KeyCallback> keys)
+{
+    std::unique_lock lock(_mutex);
+    _animKeys = std::move(keys);
+}
+
+void KeyHandler::SetAnimActive(bool active)
+{
+    _animActive.store(active);
+}
+
 namespace {
 
 /// DX code of a button event: keyboard scancode, or 256 + button for the mouse (SKSE convention).
@@ -480,14 +587,16 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
         return RE::BSEventNotifyControl::kContinue;
 
     std::vector<KeyCallback> toRun;
-    // Scene HUD keys: only while the HUD is up and the overlay is closed.
-    const bool hud = _hudActive.load() && WebUI_IsHidden();
+    // Scene HUD keys: only while the HUD is up and the overlay is closed. Otherwise the AnimEngine scene keys.
+    const bool overlayHidden = WebUI_IsHidden();
+    const bool hudUp = _hudActive.load() && overlayHidden;
+    const bool hud = hudUp || (_animActive.load() && overlayHidden);
     std::map<uint32_t, KeyCallback> hudKeys;
 
     {
         std::shared_lock lock(_mutex);
         if (hud)
-            hudKeys = _hudKeys;
+            hudKeys = hudUp ? _hudKeys : _animKeys;
         for (auto event = *a_eventList; event; event = event->next) {
             if (event->eventType != RE::INPUT_EVENT_TYPE::kButton)
                 continue;
@@ -1635,6 +1744,21 @@ void InitWebUI()
                 PapyrusBindings_WebUI::ClearTargetMenuSession();
                 WebUI_Visibility_Hide();
                 Call_RebuildAnimDb();
+            });
+        });
+
+        UiEngine::RegisterListener("onAnimEngineDebug", [](const char* value) {
+            RunGuarded("onAnimEngineDebug", [&] {
+                if (value)
+                    AnimEngineDebug(value);
+            });
+        });
+
+        // Sex Graph panel checkbox: {"key":"enabled|orgasm_engine|approach|slsb_registry","value":bool}.
+        UiEngine::RegisterListener("onSexGraphSet", [](const char* value) {
+            RunGuarded("onSexGraphSet", [&] {
+                if (value)
+                    SexGraphSet(value);
             });
         });
 

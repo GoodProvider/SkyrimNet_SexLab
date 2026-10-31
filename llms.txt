@@ -16,6 +16,8 @@
 | Develop WebUI / SKSE | docs/developers/webui.md (ControlPanel modes, target sentinels, foreign `data_table` / `actor_detail` hosts), docs/reference/extension-panels.md |
 | Orgasm / enjoyment / mini-game / Scene HUD / plugin API | docs/developers/orgasm-engine.md |
 | SexLab P+ (bridge script, stage numbering, holds, AnimDB keys) | docs/developers/sexlab-pplus.md |
+| AnimDB SLAL registry, playback data, AnimEngine / IK / C++ Scene plan | docs/developers/anim-engine.md |
+| Scene-migration inventory (Papyrus scene layer → C++ owner / shell / drop) | docs/developers/scene-migration.md |
 | Agent policy | AGENTS.md (safety, confidence, commits) |
 | Quirks | KNOWLEDGEBASE.md |
 | Portable doc-system template (copy to other repos) | documentation-guide.xml |

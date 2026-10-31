@@ -25,6 +25,62 @@ String Function AnimDb_ResolveTags(String tags_csv, int actor_count, String syno
 Bool Function AnimDb_CsvHasTag(String tags_csv, String tag) global native
 ; Per position 1 when most registries default it to clothed (tie -> 0). See Scene_Creator.ApplyMajorityClothed.
 int[] Function AnimDb_ClothedMajority(String[] registries, int position_count) global native
+; AnimDB is the registry (SexLab AE with AnimEngine on): SLAL packs load from disk in C++ on a worker thread.
+; drop_legacy deletes rows the old SexLab registry walk pushed. False: a load is running (this one queues).
+Bool Function AnimDb_SyncFromSlal(Bool force_rebuild, Bool drop_legacy) global native
+Bool Function AnimDb_IsSlalSyncRunning() global native
+String Function AnimDb_SlalSummary() global native
+; SexLab P+: AnimDB loads SLSB scene packs (SKSE/SexLab/Registry/Source/*.slsb.json) in C++, same contract.
+Bool Function AnimDb_SyncFromSlsb(Bool force_rebuild, Bool drop_legacy) global native
+Bool Function AnimDb_IsSlsbSyncRunning() global native
+String Function AnimDb_SlsbSummary() global native
+; sex-graph.json anim_engine.slsb_registry (default off until parity with the P+ walk is confirmed in game).
+Bool Function AnimDb_SlsbRegistryEnabled() global native
+String Function AnimDb_GetPlaybackJson(String registry) global native
+Bool Function AnimDb_SetEnabled(String registry, Bool enabled) global native
+; Adds one play to registry's count (WebUI animation table "freq" column / sort).
+Bool Function AnimDb_RecordPlay(String registry) global native
+
+; SexLab AE with AnimEngine on (sex-graph.json anim_engine.enabled): AnimDB loads SLAL packs itself. Off: the
+; SexLab slot walk below (OnUpdate / BuildAnimJson).
+Bool Function UsesSlalRegistry() global
+    return !SkyrimNet_SexLab_Utilities.IsSexLabPPlus() && SkyrimNet_SexLab_AnimEngine.AnimEngine_Enabled()
+EndFunction
+
+; SexLab P+ with sex-graph.json anim_engine.slsb_registry on: AnimDB loads SLSB packs itself. Off: the SexlabRegistry walk below.
+Bool Function UsesSlsbRegistry() global
+    return SkyrimNet_SexLab_Utilities.IsSexLabPPlus() && AnimDb_SlsbRegistryEnabled()
+EndFunction
+
+; A C++ loader owns AnimDB (no Papyrus walk, no SexLab count to compare against).
+Bool Function UsesCppRegistry() global
+    return UsesSlalRegistry() || UsesSlsbRegistry()
+EndFunction
+
+; Starts the profile's C++ loader; drop_legacy is always on (the loader then owns the whole table).
+Bool Function SyncCppRegistry(Bool force_rebuild) global
+    if UsesSlsbRegistry()
+        return AnimDb_SyncFromSlsb(force_rebuild, True)
+    endif
+    return AnimDb_SyncFromSlal(force_rebuild, True)
+EndFunction
+
+String Function CppRegistrySummary() global
+    if UsesSlsbRegistry()
+        return "SLSB registry: " + AnimDb_SlsbSummary()
+    endif
+    return "SLAL registry: " + AnimDb_SlalSummary()
+EndFunction
+
+; Who fills AnimDB: 0 the Papyrus walk (SexLab slots, or P+ SexlabRegistry), 1 SlalLoader, 2 SlsbLoader.
+int Function RegistryOwner() global
+    if UsesSlsbRegistry()
+        return 2
+    elseif UsesSlalRegistry()
+        return 1
+    endif
+    return 0
+EndFunction
 
 int BATCH_SIZE = 48
 int walk_index = 0
@@ -67,8 +123,20 @@ Function Setup()
     AnimDb_Open()
 EndFunction
 
-; Compare AnimDB vs SexLab after load. Never auto-rebuilds; prompts if counts differ.
+; Compare AnimDB vs SexLab after load. Prompts if counts differ; auto-rebuilds only when the owner changed
+; (AnimEngine / P+ registry toggled in sex-graph.json, or the file removed), since the old rows came from elsewhere.
 Function CheckAlignmentOnLoad()
+    int owner = RegistryOwner()
+    if owner != last_registry_owner
+        Trace("CheckAlignmentOnLoad", "AnimDB owner changed "+last_registry_owner+" -> "+owner+", rebuilding")
+        StartSync(True)
+        return
+    endif
+    if UsesCppRegistry()
+        SyncCppRegistry(False)
+        Trace("CheckAlignmentOnLoad", CppRegistrySummary())
+        return
+    endif
     if walk_active || sync_phase != 0 || align_mbox_id != 0
         Trace("CheckAlignmentOnLoad", "skip pending walk_active="+walk_active+" phase="+sync_phase+" mbox="+align_mbox_id)
         return
@@ -110,6 +178,12 @@ EndFunction
 ; Pushes the SexLab slot count to the WebUI (Settings counts / warning, ControlPanel Rebuild DB button).
 ; No Enabled gate: Slotted reads 0 until SexLab registers animations.
 int Function PushSexLabCount()
+    if UsesCppRegistry()
+        ; No SexLab registry to compare against: report the DB count so Settings shows no mismatch.
+        int db_rows = AnimDb_TotalCount()
+        SkyrimNet_SexLab_WebUI.WebUI_SetSexLabAnimCount(db_rows)
+        return db_rows
+    endif
     int sl_count = RefreshSlotCounts()
     SkyrimNet_SexLab_WebUI.WebUI_SetSexLabAnimCount(sl_count)
     return sl_count
@@ -117,6 +191,10 @@ EndFunction
 
 ; Strict: True only when the DB row count equals SexLab's slot count.
 Bool Function IsAligned()
+    if UsesCppRegistry()
+        PushSexLabCount()
+        return True
+    endif
     int sl_count = PushSexLabCount()
     int db_count = AnimDb_TotalCount()
     Trace("IsAligned", "db_count="+db_count+" registered="+sl_count)
@@ -198,6 +276,22 @@ Function StartSync(Bool force_rebuild=False)
     if align_mbox_id != 0
         SkyMessage.Delete(align_mbox_id)
         align_mbox_id = 0
+    endif
+    last_registry_owner = RegistryOwner()
+    if UsesCppRegistry()
+        Bool started = SyncCppRegistry(force_rebuild)
+        String which = "SLAL"
+        if UsesSlsbRegistry()
+            which = "SLSB"
+        endif
+        Trace("StartSync", which+" registry load force="+force_rebuild+" started="+started, True)
+        if force_rebuild
+            last_rebuild_timestamp = "game day " + Utility.GetCurrentGameTime()
+            SkyrimNet_SexLab_WebUI.WebUI_SetLastRebuildTimestamp(last_rebuild_timestamp)
+        endif
+        walk_force = False
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
     endif
     if sync_phase != 0
         Trace("StartSync", "already walking, requesting restart force="+force_rebuild)
@@ -305,6 +399,7 @@ Event OnUpdate()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
+    ; SexLab AE with AnimEngine off: walk SexLab's slots (with AnimEngine on, StartSync loads SLAL in C++ instead).
     sslAnimationSlots slots = None
     if walk_source == 0
         slots = sexlab.AnimSlots
@@ -724,6 +819,8 @@ Bool Property hotkey_db_checked = false Auto
 ; Slot/DB counts recorded after a completed sync; an unchanged pair means the gap is explained (skips/duplicates)
 int Property last_sync_slots_total = 0 Auto
 int Property last_sync_db_count = 0 Auto
+; RegistryOwner() at the last StartSync; -1 (older saves) rebuilds once on the next load.
+int Property last_registry_owner = -1 Auto
 int walk_skip_null = 0
 int walk_skip_unreg = 0
 int walk_skip_empty = 0
