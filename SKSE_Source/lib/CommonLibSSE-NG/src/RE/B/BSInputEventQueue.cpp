@@ -1,0 +1,138 @@
+#include "RE/B/BSInputEventQueue.h"
+
+namespace RE
+{
+	BSInputEventQueue* BSInputEventQueue::GetSingleton()
+	{
+		static REL::Relocation<BSInputEventQueue**> singleton{ RELOCATION_ID(520856, 407374) };
+		return *singleton;
+	}
+
+	template <>
+	ButtonEvent* BSInputEventQueue::GetCachedEvent<ButtonEvent>()
+	{
+		if (buttonEventCount < MAX_BUTTON_EVENTS) {
+			return &GetRuntimeData().buttonEvents[buttonEventCount];
+		}
+
+		return nullptr;
+	}
+
+	template <>
+	CharEvent* BSInputEventQueue::GetCachedEvent<CharEvent>()
+	{
+		if (charEventCount < MAX_CHAR_EVENTS) {
+			return &GetRuntimeData().charEvents[charEventCount];
+		}
+
+		return nullptr;
+	}
+
+	template <>
+	MouseMoveEvent* BSInputEventQueue::GetCachedEvent<MouseMoveEvent>()
+	{
+		if (mouseEventCount < MAX_MOUSE_EVENTS) {
+			return &GetRuntimeData().mouseEvents[mouseEventCount];
+		}
+
+		return nullptr;
+	}
+
+	template <>
+	ThumbstickEvent* BSInputEventQueue::GetCachedEvent<ThumbstickEvent>()
+	{
+		if (thumbstickEventCount < MAX_THUMBSTICK_EVENTS) {
+			return &GetRuntimeData().thumbstickEvents[thumbstickEventCount];
+		}
+
+		return nullptr;
+	}
+
+	template <>
+	DeviceConnectEvent* BSInputEventQueue::GetCachedEvent<DeviceConnectEvent>()
+	{
+		if (connectEventCount < MAX_CONNECT_EVENTS) {
+			return &GetRuntimeData().connectEvents[connectEventCount];
+		}
+
+		return nullptr;
+	}
+
+	template <>
+	void BSInputEventQueue::AdvanceCount<ButtonEvent>()
+	{
+		++buttonEventCount;
+	}
+
+	template <>
+	void BSInputEventQueue::AdvanceCount<CharEvent>()
+	{
+		++charEventCount;
+	}
+
+	template <>
+	void BSInputEventQueue::AdvanceCount<MouseMoveEvent>()
+	{
+		++mouseEventCount;
+	}
+
+	template <>
+	void BSInputEventQueue::AdvanceCount<ThumbstickEvent>()
+	{
+		++thumbstickEventCount;
+	}
+
+	template <>
+	void BSInputEventQueue::AdvanceCount<DeviceConnectEvent>()
+	{
+		++connectEventCount;
+	}
+
+	template <>
+	void BSInputEventQueue::AdvanceCount<KinectEvent>()
+	{
+		++kinectEventCount;
+	}
+
+#ifdef ENABLE_SKYRIM_VR
+	void BSInputEventQueue::AddButtonEvent(INPUT_DEVICE a_device, std::int32_t a_arg2, std::int32_t a_id, float a_value, float a_duration, const BSFixedString& a_userEvent)
+	{
+		if SKYRIM_REL_CONSTEXPR (REL::Module::IsVR()) {
+			AddEvent<ButtonEvent>(a_device, a_arg2, a_id, a_value, a_duration, a_userEvent);
+		}
+	}
+
+	void BSInputEventQueue::AddThumbstickEvent(ThumbstickEvent::InputType a_id, INPUT_DEVICE a_device, float a_xValue, float a_yValue)
+	{
+		if SKYRIM_REL_CONSTEXPR (REL::Module::IsVR()) {
+			AddEvent<ThumbstickEvent>(a_id, a_device, a_xValue, a_yValue);
+		}
+	}
+#endif
+
+	void BSInputEventQueue::PushOntoInputQueue(InputEvent* a_event)
+	{
+		if (!GetRuntimeData().queueHead) {
+			GetRuntimeData().queueHead = a_event;
+		}
+
+		if (GetRuntimeData().queueTail) {
+			GetRuntimeData().queueTail->next = a_event;
+		}
+
+		GetRuntimeData().queueTail = a_event;
+		GetRuntimeData().queueTail->next = nullptr;
+	}
+
+	void BSInputEventQueue::ClearInputQueue()
+	{
+		kinectEventCount = 0;
+		connectEventCount = 0;
+		thumbstickEventCount = 0;
+		mouseEventCount = 0;
+		charEventCount = 0;
+		buttonEventCount = 0;
+		GetRuntimeData().queueTail = nullptr;
+		GetRuntimeData().queueHead = nullptr;
+	}
+}
