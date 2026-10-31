@@ -473,7 +473,7 @@ namespace PapyrusBindings_WebUI
     }
 
     /// Resets the overlay and shows the sex_menu_panel for an active sex thread.
-    void Sex_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, bool has_player)
+    void Sex_Menu_Open(RE::StaticFunctionTag*, [[maybe_unused]] RE::TESForm* thread, bool has_player)
     {
         webui_log::info("Sex_Menu_Open triggered. has_player={}", has_player);
         Reset_To_Default();

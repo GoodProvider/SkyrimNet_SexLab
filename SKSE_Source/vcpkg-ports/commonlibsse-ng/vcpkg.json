@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "commonlibsse-ng",
+  "version": "4.39.5",
+  "port-version": 0,
+  "description": "This is an experimental reverse engineered library for Skyrim VR (ported from CommonLibSSE). There are two main branches (vr) which is based on po3's using ifdefs, and (ng) which is an updated NG build. NG is the default branch.",
+  "homepage": "https://github.com/MinLL/CommonLibVR",
+  "license": "MIT",
+  "supports": "windows & x64",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    "directxmath",
+    "directxtk",
+    "fmt",
+    "rapidcsv",
+    "spdlog"
+  ]
+}

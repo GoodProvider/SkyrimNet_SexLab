@@ -1,4 +1,0 @@
-# CI stages the prebuilt bundle here at runtime (the ~1.2 GB lib must never be committed).
-/lib/
-/build/
-/.xmake/

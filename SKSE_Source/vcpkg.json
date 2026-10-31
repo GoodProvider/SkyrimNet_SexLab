@@ -1,13 +1,10 @@
 {
-    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-    "name": "skyrimnet-sexlab-plugin",
-    "version-string": "1.0.0",
-    "builtin-baseline": "cc288af760054fa489574bd8e22d05aa8fa01e5c",
-    "dependencies": [
-        "nlohmann-json",
-        "spdlog",
-        "directxtk",
-        "rapidcsv",
-        "sqlite3"
-    ]
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "dependencies": [
+    "commonlibsse-ng",
+    "nlohmann-json",
+    "spdlog",
+    "directxtk",
+    "sqlite3"
+  ]
 }
