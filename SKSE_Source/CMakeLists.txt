@@ -37,6 +37,8 @@ endif()
 # Otherwise, you can set OUTPUT_FOLDER to any place you'd like :)
 # set(OUTPUT_FOLDER "C:/path/to/any/folder")
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+include(CompilerFlags)
 # Setup your SKSE plugin as an SKSE plugin!
 
 # place directxtk here for commonlib
@@ -58,6 +60,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     unofficial::sqlite3::sqlite3
     CommonLibSSE::CommonLibSSE
 )
+enable_release_pdb_for_target(${PROJECT_NAME})
+enable_lto_for_target(${PROJECT_NAME})
 
 # include/ for public headers, src/ for PCH, lib/PrismaUI for PrismaUI_API.h
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -66,7 +70,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/PrismaUI
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/Magelight/api
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../SkyrimNet devkit/CppAPI"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lib/SkyrimNet-ExamplePlugin/sdk/cpp"
 )
 
 # Silence Microsoft STL deprecation warnings
@@ -92,23 +96,6 @@ if(MSVC)
     set_target_properties(${PROJECT_NAME} PROPERTIES VS_USER_PROPS "${PROJECT_NAME}.props")
 endif()
 
-# Force static linking of runtime library to reduce dependencies
-if(MSVC)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-    # Also ensure CommonLibSSE uses static runtime
-    if(TARGET ${CommonLibName})
-        set_property(TARGET ${CommonLibName} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    endif()
-
-    # Additional linker flags to embed dependencies
-    target_link_options(${PROJECT_NAME} PRIVATE
-        /INCREMENTAL:NO
-        /OPT:REF
-        /OPT:ICF
-    )
-endif()
-
 # When your SKSE .dll is compiled, this will automatically copy the .dll into your mods folder.
 # Only works if you configure DEPLOY_ROOT above (or set the SKYRIM_MODS_FOLDER environment variable)
 if(DEFINED OUTPUT_FOLDER)
@@ -125,16 +112,7 @@ if(DEFINED OUTPUT_FOLDER)
         POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>"
         VERBATIM
     )
-
-    # If you perform a "Debug" build, also copy .pdb file (for debug symbols)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_custom_command(
-            TARGET "${PROJECT_NAME}"
-            POST_BUILD
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>"
-            VERBATIM
-        )
-    endif()
 endif()

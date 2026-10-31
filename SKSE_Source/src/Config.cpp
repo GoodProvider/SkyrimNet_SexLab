@@ -1,16 +1,8 @@
 #include "Config.h"
-#include "CorpsePatch.h"
-#include "Decorators.h"
-#include "Hud.h"
-#include "JsonUtil.h"
-#include "OrgasmEngine.h"
-#include "PublicAPI.h"
-#include "WebUI.h"
-#include "WebUI_Log.h"
-#include "Profiler.h"
 
 #include <Windows.h>
 #include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -18,6 +10,17 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+
+#include "CorpsePatch.h"
+#include "Decorators.h"
+#include "Hud.h"
+#include "JsonUtil.h"
+#include "OrgasmEngine.h"
+#include "Profiler.h"
+#include "PublicAPI.h"
+#include "WebUI.h"
+#include "WebUI_Log.h"
+
 
 namespace SexLabNet {
 namespace {

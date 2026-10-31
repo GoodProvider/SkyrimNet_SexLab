@@ -1,8 +1,8 @@
-# WebUI (SKSE + PrismaUI)
+# WebUI (SKSE + Magelight UI / PrismaUI)
 
-In-game overlay: C++ SKSE plugin, PrismaUI HTML, target/sex menu config.
+In-game overlay: C++ SKSE plugin, HTML views (Magelight UI preferred, PrismaUI fallback), target/sex menu config.
 
-Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (PrismaUI view path, action catalog).
+Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (UI view path, action catalog).
 
 ## Paths
 
@@ -10,7 +10,7 @@ Quirks: [../../KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md) (PrismaUI view path, ac
 |------|------|
 | `SKSE_Source/` | C++ → `SkyrimNet_SexLab.dll` |
 | `SKSE/Plugins/SkyrimNet_SexLab.dll` | Built plugin |
-| `PrismaUI/views/SkyrimNet_SexLab/index.html` | Overlay HTML under `Data/PrismaUI/views/` |
+| `PrismaUI/views/SkyrimNet_SexLab/{index,hud}.html` | Overlay + HUD HTML — the **single shared views folder** both engines read at runtime (`Data/PrismaUI/views/SkyrimNet_SexLab/`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/webui/` | `actions_index.json`, `TargetMenu/Actor/`, `TargetMenu/Scene/`, `MainPanels/`, `ControlPanel/` (drop-in mode JSON only; third-party catalogs stay under their own `catalogRoot`) |
 | `SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/{Actor,Scene}/options/0600_sexlab_bondage.json` | Bondage TargetMenu option, identical in both catalogs so it is listed in and out of a scene (live catalog; `make release` moves it into FOMOD `handler_udng/`) |
 | (shipped by SkyrimNet_Leashed) `SKSE/Plugins/SkyrimNet_SexLab/webui/TargetMenu/Actor/options/0700_leashed_panel.json` | Leash TargetMenu option (`panel: leash` + `panelScript`; omitted unless `SkyrimNet_Leashed.esp` is loaded) |
@@ -301,11 +301,11 @@ Papyrus C++ bindings declare SkyrimNet PublicAPI symbols as `extern` function po
 | `CMake: Configure (Debug\|Release)` | submodule init + cmake preset |
 | `CMake: Build SKSE (Debug\|Release)` | build + copy DLL → `SKSE/Plugins/` |
 
-## PrismaUI
+## UI engine (Magelight / PrismaUI)
 
-Hard dependency ([Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/148718)); the PrismaUI **plugin** is not shipped here.
+Engine selection lives in `SKSE_Source/src/UiEngine.cpp`: **Magelight UI v4** (`RequestApi4()`, host ≥ 0.30.1) is preferred; falls back to the **PrismaUI V1** plugin ([Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/148718)) when Magelight is absent. Neither engine is shipped here — both are hard dependencies (one of them must be installed).
 
-**View path:** `CreateView("SkyrimNet_SexLab/index.html")` resolves under **`Data/PrismaUI/views/`**, not `SKSE/Plugins/`. This mod’s overlay HTML **is** shipped: `make release` copies `PrismaUI/` into FOMOD `core`. Missing file → open path looks fine; do not `Focus` until DomReady or the game pauses with a blank overlay (Escape is JS-only unless C++ Hide runs).
+**View path:** both engines read the **same folder — `Data/PrismaUI/views/SkyrimNet_SexLab/index.html`** (and `hud.html`) — never `SKSE/Plugins/`. Prisma resolves it relative to its runtime dir; Magelight is created with an absolute path into that same folder, so one shipped tree serves both. This mod’s HTML **is** shipped: `make release` copies `PrismaUI/` into FOMOD `core`. Missing file → open path looks fine; do not `Focus` until DomReady or the game pauses with a blank overlay (Escape is JS-only unless C++ Hide runs).
 
 **Display scale:** Overlay matches SkyrimNet’s system — px design tokens (~15px base), `body.style.zoom` × Dashboard `ui_scale` × up-only 1080p baseline, scrollable left-column / panel shells. See [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 

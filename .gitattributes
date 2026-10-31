@@ -1,0 +1,61 @@
+# Auto detect text files and perform LF normalization
+* text eol=crlf
+
+*.prompt text eol=crlf
+*.csv text eol=crlf
+# Papyrus Scripts - ensure LF line endings in repository
+*.psc text eol=crlf
+*.pex binary
+
+# Source code files
+*.cpp text eol=crlf
+*.h text eol=crlf
+*.py text eol=crlf
+
+# Configuration files
+*.json text eol=crlf
+*.yaml text eol=crlf
+
+# Documentation
+*.md text eol=crlf
+*.txt text eol=crlf
+
+# Git files
+.gitignore text eol=crlf
+.gitattributes text eol=crlf
+
+# vcpkg port patches must stay LF in the worktree: git apply rejects CR in context
+vcpkg-ports/**/*.diff text eol=lf
+
+# SQL files
+*.sql text eol=crlf
+
+# Skyrim/Creation Kit specific files
+*.esp binary
+*.esm binary
+*.esl binary
+*.bsa binary
+*.ba2 binary
+*.nif binary
+
+# SKSE plugin files
+*.dll binary
+*.pdb binary
+
+# Audio files
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.xwm binary
+*.fuz binary
+
+# Images
+*.dds binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.tga binary
+*.hdr binary
+

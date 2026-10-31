@@ -1,3 +1,5 @@
+/.vscode
+__pycache__
 ./animations
 versions
 npcs
@@ -5,16 +7,24 @@ fomod/info.xml
 ignored
 dist
 SpriggitCLI
-SpriggitCLI.zip
 SKSE/Plugins/SkyrimNet/prompts/submodules/user_final_instructions/0049_sexlab_activites.prompt
 main.py 
 /Sexlab/
 PapyrusSourcesDD
 Headers
+Headers_orig
+Headers_Backup
 handler_udng
 handler_dom
 handler_ostimnet
 z-*
+*.dll
+*.zip
+*.7z
+*.pex
+*.esp
+*.esm
+*.esl
 
 # SKSE plugin CMake / MSBuild artifacts
 SKSE_Source/build/
@@ -28,12 +38,22 @@ SSEEdit Cache/
 Papyrus.0.log
 crash-*.log
 *.refcache
+/review-*
+/release-*
+/*-plan.md
+/y*.md
 
 # Local secrets (username etc.)
 .secrets.md
+.env
 
 # Log review snapshots (.claude/skills/review-logs)
 review-logs/
 bug-logs
 extern 
-checkpoints
+/checkpoints
+/logs
+/output
+/reviews
+/*_Backup
+/*_orig
