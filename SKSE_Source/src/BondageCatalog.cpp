@@ -408,17 +408,10 @@ namespace BondageCatalog
         }
     }
 
-    bool DllPresent()
-    {
-        return DeviousDevicesAPI::DllLoaded();
-    }
-
     bool EnsureAPI()
     {
         if (DeviousDevicesAPI::g_API)
             return true;
-        if (!DllPresent())
-            return false;
         const bool ok = DeviousDevicesAPI::LoadAPI();
         if (!ok)
             webui_log::warn("BondageCatalog LoadAPI failed (GetAPI null or version != {})", DD_APIVERSION);

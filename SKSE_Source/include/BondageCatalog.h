@@ -6,10 +6,7 @@
 
 namespace BondageCatalog
 {
-    /// True when SKSE has already loaded DeviousDevices.dll (BondagePanel only).
-    bool DllPresent();
-
-    /// Delay-load GetAPI. Never call from core plugin init as a hard fail.
+    /// Delay-load GetAPI (LoadLibrary + version check). Never call from core plugin init as a hard fail.
     bool EnsureAPI();
 
     /// Cached group-devices.json. Does not call LoadAPI.
