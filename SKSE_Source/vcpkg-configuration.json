@@ -4,5 +4,5 @@
         "repository": "https://github.com/microsoft/vcpkg.git",
         "baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d"
     },
-      "overlay-ports": [ "./vcpkg-ports" ]
+      "overlay-ports": [ "./vcpkg-ports", "lib/SkyrimNet-ExamplePlugin/vcpkg-ports" ]
 }
