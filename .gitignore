@@ -18,7 +18,7 @@ handler_dom
 handler_ostimnet
 z-*
 *.dll
-!SKSE_Source/lib/**/.dll
+!/SKSE_Source/lib/
 *.zip
 *.7z
 *.pex
@@ -50,7 +50,6 @@ crash-*.log
 # Log review snapshots (.claude/skills/review-logs)
 review-logs/
 bug-logs
-extern 
 /checkpoints
 /logs
 /output
