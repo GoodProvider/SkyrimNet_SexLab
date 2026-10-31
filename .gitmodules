@@ -1,3 +1,9 @@
 [submodule "SKSE_Source/lib/SkyrimNet-ExamplePlugin"]
 	path = SKSE_Source/lib/SkyrimNet-ExamplePlugin
 	url = https://github.com/MinLL/SkyrimNet-ExamplePlugin
+[submodule "OStimNet"]
+	path = OStimNet
+	url = https://github.com/tetherball88/OStimNet.git
+[submodule "extern/example-skse-plugin"]
+	path = extern/example-skse-plugin
+	url = https://github.com/PrismaUI-SKSE/example-skse-plugin.git
