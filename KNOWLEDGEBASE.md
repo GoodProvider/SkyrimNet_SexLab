@@ -1,5 +1,12 @@
 # Knowledgebase
 
+## Magelight ignored the Dashboard UI scale (2026-11-01, fixed, untested in game)
+
+- **Symptom:** Changing `ui_scale` in the SkyrimNet dashboard has no effect on the overlay or HUD under Magelight. No visible error: the `catch` in `loadDashboardUiScale` keeps the current scale. `Magelight.log` has `Refused to connect to http://localhost:8080/config?api=get&name=Dashboard` for views 3 and 4.
+- **Cause:** Magelight pages are file-only by default (host 0.30.0+), and this mod never opted in.
+- **Fix:** `UiEngine::Init` calls `SetNetworkPolicy(g_mod, NetworkPolicy::LoopbackOnly)` right after `RegisterMod`. It must be the C++ call: this mod is plugin-owned, so Papyrus `SetNetworkPolicy` returns false. A policy change applies on a page's next load, so set it before creating views.
+- **Unconfirmed:** Magelight's docs also say a page cannot `fetch()` its own files. `loadTagData` and `ssLoadSetting` in index.html do that. See the DOM repo's `checkpoints/magelight/checkpoint-02.md`.
+
 ## Magelight closed the WebUI on Escape; Aid panel shown beside Ask (2026-10-31, fixed, tested in game)
 
 - **Symptom:** Open the Aid panel, press Esc, then open the Ask panel: the Aid panel is still on screen next to it.

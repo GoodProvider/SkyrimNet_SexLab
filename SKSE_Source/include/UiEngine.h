@@ -9,7 +9,7 @@
 /// UI engine adapter: prefers Magelight (Data\Magelight, host v4 API >= 0.30.1), falls back to
 /// PrismaUI (Data\PrismaUI). Both hosts are optional; with neither present every call is a no-op.
 /// Views created here own their bridge pages (window.onXxx globals) which are engine-identical,
-/// so the same HTML ships under both Data trees (repo root PrismaUI/ and Magelight/).
+/// so both engines read one shipped folder (Data\PrismaUI\views\SkyrimNet_SexLab\).
 namespace UiEngine {
 
 enum class Kind : std::uint8_t { None = 0, Prisma = 1, Magelight = 2 };

@@ -8,8 +8,8 @@
 - [SkyUI SE](https://www.nexusmods.com/skyrimspecialedition/mods/12604)
 - [UIExtensions](https://www.nexusmods.com/skyrimspecialedition/mods/17561)
   - [UIExtensions_UITextEntryMenu_with_VR_support](https://github.com/mrowrpurr/UIExtensions_UITextEntryMenu_with_VR_support) (VR)
-- [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
-  - [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
+- One UI host: Magelight UI 0.30.1+ (recommended; used when both are installed) or [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
+  - With Prisma UI: [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - [Dragonborn voice over 2](https://www.nexusmods.com/skyrimspecialedition/mods/84329)
 - SkyrimNet 0.25+ (narration enabled). LLM content ships only as plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/` (since 0.36.0 the old `prompts/` and `config/actions/` copies are gone).
 - SkyrimNet_SexLab (this mod)

@@ -150,6 +150,14 @@ void Init()
                 g_ml = api;
                 g_kind = Kind::Magelight;
                 webui_log::info("UiEngine: Magelight host v{} selected.", api->hostVersionNumber);
+                // Pages are file-only by default, but both fetch the Dashboard ui_scale from SkyrimNet's
+                // local server. Applies on a page's next load, so set it before any view exists.
+                const auto policy = api->SetNetworkPolicy(g_mod, NetworkPolicy::LoopbackOnly);
+                if (policy != Result::Ok) {
+                    std::string msg = api->GetLastErrorMessage(g_mod);
+                    webui_log::warn("UiEngine: SetNetworkPolicy -> {} ({}), Dashboard ui_scale will not load.",
+                                    static_cast<int>(policy), msg.c_str());
+                }
                 return;
             }
             std::string msg = api->GetLastErrorMessage(0);
