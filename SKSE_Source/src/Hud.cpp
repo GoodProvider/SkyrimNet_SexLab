@@ -572,6 +572,10 @@ namespace Hud
             } else if (ctl == "end") {
                 ok = AnimEngine::EndScene(id);
             }
+            // Scene.StageManual_TakeOver: moved by hand, so timers for the rest of the scene.
+            if (ok && (ctl == "next" || ctl == "previous")) {
+                OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(AnimEngineOrgasm::SidOf(id));
+            }
             webui_log::info("Hud: AnimEngine key {} scene {} -> {}", ctl, id, ok);
         }
 
@@ -1005,6 +1009,8 @@ namespace Hud
         OrgasmEngine::GetSceneStage(acting, stage, stageCount);
         j["stage"] = stage;
         j["stages"] = stageCount;
+        // Stages follow the primary's enjoyment: prev / next are greyed (a press still works and turns this off).
+        j["stageAuto"] = OrgasmEngine::IsStageAuto(acting);
         const int speedLevel = OrgasmEngine::GetSceneSpeedLevel(acting);
         // Slower / faster labels name the level a press steps to; "" at either end.
         j["slower"] = speedLevel > 0 ? OrgasmEngine::kSpeedLevelNames[speedLevel - 1] : "";

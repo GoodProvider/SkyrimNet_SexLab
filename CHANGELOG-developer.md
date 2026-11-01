@@ -4,6 +4,18 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### Stages follow the primary actor's enjoyment
+- With the engine on, stages follow one actor's enjoyment instead of their timers, in both directions: N stages give N−1 equal bands, and the primary's orgasm goes to the final stage. Details: [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#stage-by-enjoyment).
+- Primary (`PrimaryOf`): expected to orgasm and not a DOM slave; female over male with the `femdom` tag, otherwise male over female; positions 1, 2, ..., then 0.
+- New settings: `sexlab.enjoyment.stage_advance_primary_enjoyment` (on), `stage_punish_after` (30 s), `stage_hold_max` (60 s, or the stage's own timer if longer).
+- HUD: `prev` / `next` greyed while active (`stageAuto`). A manual stage move (HUD, WebUI menu, editor) turns the mode off for the rest of the scene. Auto play isn't offered those keys.
+- **Behavior changes in these scenes:** `sexlab.ending.target_*` no longer applies. Victim scenes follow the same rules with no aggressor preference; the victim hold's wait is replaced, an aggressor's orgasm no longer jumps stages, and the cap drops from `victim_hold_max` (120 s) to `stage_hold_max`. Moves ignore SexLab's `AutoAdvance` off.
+- New natives: `SetStageInputs`, `StageInputsKnown`, `IsStageAdvancePrimaryEnjoyment`, `GetStagePrimary`, `StageHoldCap`, `DisableStageAdvancePrimaryEnjoyment`. New effect `Effect_MoveStage`; new Scene functions `Engine_MoveStage`, `Stage_Forward`, `StageManual_TakeOver`, `Engine_SetStageInputs`, `Stage_PrimaryFinished`. New log lines: `stage primary`, `stage follows`, `not moved by enjoyment: floor`, `stuck for`, `stage moved by hand`.
+
+### NPC strategy: enjoyment budget
+- Strategy presses spend stamina and magicka in proportion to the actor's own enjoyment: a press must leave `max × (1 − enjoyment / 100)` (`OverBudget`, called from `StrategyStep`). This covers NPCs and the player on auto play. DOM slaves, HUD keys, `MiniGame_Arouse` / `MiniGame_Calm` and the plugin API are not limited.
+- New setting `sexlab.minigame.enjoyment_budget` (default on). New log line `holds stamina|magicka (current/max) at enjoyment …`, once per hold. Details: [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#npc-strategies-multi-orgasm-mini-game).
+
 ### SexLab runs scenes unless AnimEngine is on; AnimEngine settings move to the Sex Graph panel
 - AnimEngine development continues on the `graph` branch. On `main`, AnimEngine is off by default and SexLab runs every scene.
 - SexLab AE fills AnimDB from SexLab's slots again (the Papyrus walk, `BuildAnimJson`), with the load-time count check. `SlalLoader` owns AnimDB only while AnimEngine is on (`AnimDb.UsesSlalRegistry`). When the owner changes (walk / SLAL / SLSB), the next load rebuilds the DB once (`last_registry_owner`; `-1` on older saves, so saves from the SLAL-only build rebuild from SexLab once).

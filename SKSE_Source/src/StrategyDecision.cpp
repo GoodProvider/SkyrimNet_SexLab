@@ -512,10 +512,12 @@ namespace StrategyDecision
             keys.push_back({ "none", "press nothing; let the scene go on as it is" });
             int stage = 0, count = 0;
             OrgasmEngine::GetSceneStage(player, stage, count);
-            if (stage > 1) {
+            // Stages follow the primary's enjoyment: a press would turn that off for the rest of the scene.
+            const bool stageAuto = OrgasmEngine::IsStageAuto(player);
+            if (stage > 1 && !stageAuto) {
                 keys.push_back({ "previous", "go back to the previous stage of the act" });
             }
-            if (stage < count) {
+            if (stage < count && !stageAuto) {
                 keys.push_back({ "next", "move on to the next stage of the act" });
             }
             if (actors.size() > 1) {

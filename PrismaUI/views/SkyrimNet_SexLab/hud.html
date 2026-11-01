@@ -355,9 +355,9 @@
             c += ctl(keys, 'arouse', 'arouse', 3, { blocked: blocked.arouse, off: mgcOff });
             c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower, off: cOff });
             c += ctl(keys, 'pos_down', 'PosDn', 0, { off: cOff });
-            c += ctl(keys, 'previous', 'prev', 1, { off: cOff });
+            c += ctl(keys, 'previous', 'prev', 1, { dim: state.stageAuto, off: cOff });
             c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 2, { off: cOff });
-            c += ctl(keys, 'next', 'next', 3, { off: cOff });
+            c += ctl(keys, 'next', 'next', 3, { dim: state.stageAuto, off: cOff });
             c += ctl(keys, 'faster', faster || NO_STEP, 4, { dim: !faster, off: cOff });
             c += ctl(keys, '', '', 0, { off: true });
             c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 1, { off: cOff });

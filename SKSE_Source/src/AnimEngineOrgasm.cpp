@@ -64,6 +64,7 @@ namespace AnimEngineOrgasm
             int victim_hold_node = -1;
             double victim_held = 0.0;
             bool victim_expired = false;
+            bool victim_hold_enjoyment = false;  // this hold is stage by enjoyment's (any stage below the final)
             std::unordered_set<RE::FormID> denied;
         };
 
@@ -291,12 +292,24 @@ namespace AnimEngineOrgasm
         {
             bool victim_hold_scene = false;
             std::int32_t lead_count = 0;
+            bool stage_mode = false;     // IsStageAdvancePrimaryEnjoyment
+            RE::FormID stage_primary = 0;
         };
 
-        /// Victim_AggressorFinished + Ending_Check, after an orgasm group.
+        /// Stage_PrimaryFinished + Victim_AggressorFinished + Ending_Check, after an orgasm group.
         void EndingCheckLocked(Wired& w, const std::vector<RE::FormID>& group, const GroupFacts& f, Work& work,
             bool enabled, float cfg_hold_max)
         {
+            if (f.stage_mode) {
+                // Stage by enjoyment: the primary's first orgasm goes to the final stage; the lead's target is off.
+                if (!w.ending_done && std::find(group.begin(), group.end(), f.stage_primary) != group.end()) {
+                    webui_log::info("AnimEngineOrgasm: scene {} primary {} orgasmed at stage {}/{}, final stage", w.ae_id,
+                        NameOf(f.stage_primary), w.stage, w.count);
+                    VictimReleaseLocked(w, work);
+                    ToFinalLocked(w, work, cfg_hold_max);
+                }
+                return;
+            }
             const bool second_to_last = w.count >= 2 && w.stage == w.count - 1;
             if (!w.ending_done && enabled && second_to_last && f.victim_hold_scene) {
                 for (const auto id : group) {
@@ -334,7 +347,9 @@ namespace AnimEngineOrgasm
         }
 
         /// Victim_StageStart + Ending_StageStart, after the engine has the new stage.
-        void StageStartLocked(Wired& w, bool victim_hold_scene, Work& work, bool enabled, float cfg_hold_max)
+        /// stage_mode (IsStageAdvancePrimaryEnjoyment): every stage below the final holds, a fresh clock on each entry.
+        void StageStartLocked(Wired& w, bool victim_hold_scene, bool stage_mode, Work& work, bool enabled,
+            float cfg_hold_max)
         {
             // AnimEngine cleared every hold on entering the stage.
             if (w.victim_holding && w.node != w.victim_hold_node) {
@@ -350,7 +365,19 @@ namespace AnimEngineOrgasm
                 }
                 webui_log::info("AnimEngineOrgasm: scene {} stage changed, dropping the gate hold", w.ae_id);
             }
-            if (w.stage < w.count - 1) {
+            if (stage_mode) {
+                if (!w.victim_holding && !w.gate_holding && !w.ending_done && w.count >= 2 && w.stage < w.count &&
+                    w.victim_hold_node != w.node) {
+                    w.victim_holding = true;
+                    w.victim_expired = false;
+                    w.victim_held = 0.0;
+                    w.victim_hold_node = w.node;
+                    w.victim_hold_enjoyment = true;
+                    SetHold(work, w, Hold::kVictim, true, w.node);
+                    webui_log::info("AnimEngineOrgasm: scene {} holding stage {}/{} for the primary's enjoyment", w.ae_id,
+                        w.stage, w.count);
+                }
+            } else if (w.stage < w.count - 1) {
                 w.victim_hold_node = -1;  // stepping back re-arms the hold, as the engine re-arms its gate
             } else if (!w.victim_holding && !w.gate_holding && !w.ending_done && w.count >= 2 &&
                        w.stage == w.count - 1 && w.victim_hold_node != w.node && enabled && victim_hold_scene) {
@@ -358,6 +385,7 @@ namespace AnimEngineOrgasm
                 w.victim_expired = false;
                 w.victim_held = 0.0;
                 w.victim_hold_node = w.node;
+                w.victim_hold_enjoyment = false;
                 SetHold(work, w, Hold::kVictim, true, w.node);
                 webui_log::info("AnimEngineOrgasm: scene {} holding stage {}/{} for an aggressor's orgasm", w.ae_id,
                     w.stage, w.count);
@@ -517,6 +545,20 @@ namespace AnimEngineOrgasm
             lead = w->lead;
             target = w->ending_done ? 0 : w->target;
         }
+        // Engine_SetStageInputs: base sex (no SexLab gender here), femdom from the AnimDB row.
+        {
+            std::vector<RE::Actor*> positions;
+            std::vector<std::int32_t> genders;
+            for (const auto id : note.actors) {
+                auto* a = ActorFor(id);
+                const auto* base = a ? a->GetActorBase() : nullptr;
+                const int female = base && base->GetSex() == RE::SEX::kFemale ? 1 : 0;
+                positions.push_back(a);
+                genders.push_back(IsCreature(a) ? 2 + female : female);
+            }
+            const auto row = AnimationDB::GetByRegistry(note.registry);
+            OrgasmEngine::SetStageInputs(sid, positions, genders, HasTag(row ? &*row : nullptr, "Femdom"), note.registry);
+        }
         // Engine_SetEndingTarget + Engine_SetStage (no LeadIn on AnimEngine).
         const bool enabled = EndingEnabled();
         OrgasmEngine::SetEndingTarget(sid, ActorFor(lead), enabled ? target : 0);
@@ -525,12 +567,13 @@ namespace AnimEngineOrgasm
         webui_log::info("AnimEngineOrgasm: scene {} stage {}/{} node '{}'{}{}", note.ae_id, note.view.stage,
             note.view.count, note.node_id, note.view.at_sink ? " (final)" : "", note.view.linear ? "" : " (projected)");
         const bool vhs = OrgasmEngine::IsVictimHoldScene(sid);
+        const bool stage_mode = OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid);
         const float hold_max = HoldMaxConfig();
         Work work;
         {
             std::lock_guard lock(g_mutex);
             if (auto* w = FindLocked(note.ae_id))
-                StageStartLocked(*w, vhs, work, enabled, hold_max);
+                StageStartLocked(*w, vhs, stage_mode, work, enabled, hold_max);
         }
         Run(work);
     }
@@ -621,6 +664,8 @@ namespace AnimEngineOrgasm
         GroupFacts f;
         f.victim_hold_scene = OrgasmEngine::IsVictimHoldScene(sid);
         f.lead_count = lead ? OrgasmEngine::GetOrgasmCount(ActorFor(lead)) : 0;
+        f.stage_mode = OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid);
+        f.stage_primary = OrgasmEngine::GetStagePrimary(sid);
         const bool enabled = EndingEnabled();
         const float hold_max = HoldMaxConfig();
         std::vector<RE::FormID> group;
@@ -710,6 +755,29 @@ namespace AnimEngineOrgasm
         Run(work);
     }
 
+    void OnMoveStage(RE::Actor* actor, std::int32_t stage)
+    {
+        if (!actor)
+            return;
+        int ae_id = -1;
+        bool forward = false;
+        {
+            std::lock_guard lock(g_mutex);
+            auto* w = FindByActorLocked(actor->GetFormID());
+            if (!w || w->ending_done || w->gate_holding || stage == w->stage)
+                return;
+            ae_id = w->ae_id;
+            forward = stage > w->stage;
+            webui_log::info("AnimEngineOrgasm: scene {} stage follows enjoyment {} -> {}/{}", w->ae_id, w->stage, stage,
+                w->count);
+        }
+        // One step per call: the engine sends again until the stage arrives. Entering a stage clears AnimEngine's holds.
+        if (forward)
+            AnimEngine::Advance(ae_id);
+        else
+            AnimEngine::Back(ae_id);
+    }
+
     void OnExhausted(const std::vector<RE::Actor*>& actors)
     {
         if (actors.empty())
@@ -738,22 +806,29 @@ namespace AnimEngineOrgasm
             bool ending;
             std::int64_t mark;
             std::vector<RE::FormID> actors;
+            bool stage_hold;  // the victim hold is stage by enjoyment's
         };
         std::vector<Probe> probes;
         {
             std::lock_guard lock(g_mutex);
             for (const auto& [id, w] : g_wired) {
                 if (!w.paused && (w.gate_holding || w.victim_holding || w.ending_holding))
-                    probes.push_back({ id, w.sid, w.victim_holding, w.ending_holding, w.ending_mark, w.actors });
+                    probes.push_back({ id, w.sid, w.victim_holding, w.ending_holding, w.ending_mark, w.actors,
+                        w.victim_holding && w.victim_hold_enjoyment });
             }
         }
         if (probes.empty())
             return;
         // Facts first, outside the lock.
-        std::map<int, bool> gate_scene, response_done;
+        std::map<int, bool> gate_scene, response_done, stage_mode;
+        std::map<int, float> stage_cap;
         for (const auto& p : probes) {
             if (p.victim)
                 gate_scene[p.ae_id] = OrgasmEngine::IsGateScene(p.sid);
+            if (p.stage_hold) {
+                stage_mode[p.ae_id] = OrgasmEngine::IsStageAdvancePrimaryEnjoyment(p.sid);
+                stage_cap[p.ae_id] = OrgasmEngine::StageHoldCap(p.sid);
+            }
             if (p.ending)
                 response_done[p.ae_id] =
                     p.mark >= 0 && NarrationTiming::DoneSinceMostRecentStarted(static_cast<std::uint64_t>(p.mark), p.actors);
@@ -777,12 +852,27 @@ namespace AnimEngineOrgasm
                     }
                 }
                 // Victim_Poll: cap sexlab.ending.victim_hold_max (0 = none); a gate scene asks the engine's gate first.
+                // Stage by enjoyment: cap StageHoldCap, the gate from the second-to-last stage only, and past the
+                // cap the stage advances outright. The mode going off releases the hold.
                 if (w->victim_holding) {
                     w->victim_held += dt;
-                    if (cap > 0.f && w->victim_held >= cap) {
+                    const bool by_enjoyment = w->victim_hold_enjoyment;
+                    if (by_enjoyment && !p.stage_hold) {
+                        continue;  // started after the facts were read: next tick
+                    }
+                    if (by_enjoyment && !stage_mode[w->ae_id]) {
+                        webui_log::info("AnimEngineOrgasm: scene {} stages no longer follow enjoyment, releasing stage {}/{}",
+                            w->ae_id, w->stage, w->count);
+                        w->victim_hold_enjoyment = false;
+                        VictimReleaseLocked(*w, work);
+                        continue;
+                    }
+                    const float use_cap = by_enjoyment ? stage_cap[w->ae_id] : cap;
+                    if (use_cap > 0.f && w->victim_held >= use_cap) {
                         const auto gs = gate_scene.find(w->ae_id);
-                        const bool is_gate = gs != gate_scene.end() && gs->second;
-                        if (is_gate && (!w->victim_expired || w->victim_held < cap + kVictimGateGrace)) {
+                        const bool is_gate = gs != gate_scene.end() && gs->second &&
+                                             (!by_enjoyment || w->stage == w->count - 1);
+                        if (is_gate && (!w->victim_expired || w->victim_held < use_cap + kVictimGateGrace)) {
                             if (!w->victim_expired) {
                                 w->victim_expired = true;
                                 const auto sid = w->sid;
@@ -791,6 +881,11 @@ namespace AnimEngineOrgasm
                                     w->ae_id, w->victim_held);
                                 work.push_back([sid]() { OrgasmEngine::VictimHoldExpired(sid); });
                             }
+                        } else if (by_enjoyment) {
+                            webui_log::info("AnimEngineOrgasm: scene {} no orgasm after {:.0f}s, advancing stage {}/{}",
+                                w->ae_id, w->victim_held, w->stage, w->count);
+                            VictimReleaseLocked(*w, work);
+                            work.push_back([id = w->ae_id]() { AnimEngine::Advance(id); });
                         } else {
                             webui_log::info("AnimEngineOrgasm: scene {} no aggressor orgasm after {:.0f}s, releasing "
                                             "stage {}/{}",

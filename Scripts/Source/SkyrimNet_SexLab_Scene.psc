@@ -65,6 +65,12 @@ bool victim_hold_expired = false
 float victim_hold_started = 0.0
 int victim_hold_stage = 0
 sslBaseAnimation victim_hold_anim = None
+; Stage by enjoyment (OrgasmEngine.IsStageAdvancePrimaryEnjoyment) reuses the victim hold on every stage below the
+; final: the engine moves the stage (Engine_MoveStage) and the cap is OrgasmEngine.StageHoldCap.
+; stage_manual: the player moved the stage by hand, so timers for the rest of the scene. Kept here because the engine
+; saves none of this: Engine_SetStageInputs re-sends it.
+bool victim_hold_enjoyment = false
+bool stage_manual = false
 ; NarrationMark() taken just before the last orgasm DN went out: the final-stage hold ends once its response
 ; has played (ResponseDoneSince). -1: none yet.
 int ending_response_mark = -1
@@ -1965,6 +1971,26 @@ Function Engine_SetSkills()
         endif
         i += 1
     endwhile
+    Engine_SetStageInputs()
+EndFunction
+
+; Stage by enjoyment: what the engine's primary pick needs. Engine_BeginScene runs on every StageStart, so position
+; swaps and animation changes arrive here; Victim_Poll sends it again after a load.
+Function Engine_SetStageInputs()
+    if thread == None || thread.Animation == None || sexlab == None
+        return
+    endif
+    Actor[] positions = thread.Positions
+    int[] genders = Utility.CreateIntArray(positions.length)
+    int i = 0
+    while i < positions.length
+        genders[i] = SkyrimNet_SexLab_Utilities.SexLabGender(sexlab, positions[i])
+        i += 1
+    endwhile
+    SkyrimNet_SexLab_OrgasmEngine.SetStageInputs(sid, positions, genders, AnimHasTag("Femdom"), thread.Animation.Registry)
+    if stage_manual
+        SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
+    endif
 EndFunction
 
 ; SexLab's starting-enjoyment inputs per actor (sslActorAlias StartAnimating): skills of the actor and of
@@ -2122,6 +2148,8 @@ Function Ending_Reset()
     victim_hold_started = 0.0
     victim_hold_stage = 0
     victim_hold_anim = None
+    victim_hold_enjoyment = false
+    stage_manual = false
     gate_holding = false
     gate_hold_timer = false
     gate_hold_started = 0.0
@@ -2275,9 +2303,25 @@ bool Function Victim_AggressorFinished(Actor[] actors)
     return false
 EndFunction
 
+; Stage by enjoyment: the primary is in this orgasm group, and the ending has not run yet.
+bool Function Stage_PrimaryFinished(Actor[] actors)
+    if ending_done || thread == None || thread.Animation == None || thread.LeadIn || !actors
+        return false
+    endif
+    Actor primary = SkyrimNet_SexLab_OrgasmEngine.GetStagePrimary(sid)
+    return primary != None && actors.Find(primary) >= 0
+EndFunction
+
 ; Ending_Check will jump to the final stage for this group (an aggressor finished the victim hold, or the
-; lead at target in the second-to-last stage or later, not yet in the final stage). No side effects.
+; lead at target in the second-to-last stage or later, not yet in the final stage; stage by enjoyment: only the
+; primary, from any stage). No side effects.
 bool Function Ending_WillJump(Actor[] actors)
+    if Stage_PrimaryFinished(actors)
+        return thread.Stage < Engine_StageCount()
+    endif
+    if SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+        return false
+    endif
     if Victim_AggressorFinished(actors)
         return true
     endif
@@ -2296,8 +2340,18 @@ EndFunction
 
 ; After an orgasm group (the engine's group roll already ran, so a lead who joined counts). Victim hold:
 ; an aggressor in the group in the second-to-last stage jumps to the final stage. Otherwise the lead
-; reached the target: final stage + dialogue hold, from the second-to-last stage only.
+; reached the target: final stage + dialogue hold, from the second-to-last stage only. Stage by enjoyment: the
+; primary's first orgasm goes to the final stage from any stage, and the lead's target no longer applies.
 Function Ending_Check(Actor[] actors)
+    if Stage_PrimaryFinished(actors)
+        Trace("Ending_Check", "stage by enjoyment: primary orgasmed at stage "+thread.Stage+"/"+Engine_StageCount()+", final stage")
+        Victim_Release()
+        Ending_ToFinal()
+        return
+    endif
+    if SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+        return
+    endif
     if Victim_AggressorFinished(actors)
         Trace("Ending_Check", "victim hold: aggressor orgasmed at stage "+thread.Stage+"/"+Engine_StageCount()+", final stage")
         Victim_Release()
@@ -2494,7 +2548,7 @@ Function Victim_Hold()
     elseif victim_hold_timer
         thread.UpdateTimer(PAUSE_HOLD_SECONDS)
     endif
-    Trace("Victim_Hold", "holding stage:"+thread.Stage+"/"+Engine_StageCount()+" for an aggressor's orgasm gate:"+SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid))
+    Trace("Victim_Hold", "holding stage:"+thread.Stage+"/"+Engine_StageCount()+" by_enjoyment:"+victim_hold_enjoyment+" gate:"+SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid))
     ; An open orgasm window keeps its own update; its flush re-registers the poll (FlushOrgasmWindow).
     if !orgasm_window_open
         RegisterForSingleUpdate(1.0)
@@ -2529,6 +2583,8 @@ EndFunction
 
 ; StageStart: drop a hold the stage moved out from under, and hold the second-to-last stage of a victim
 ; scene once per (animation, stage). Stepping back before it re-arms the hold, as the engine re-arms its gate.
+; Stage by enjoyment: every stage below the final holds, with a fresh clock on each entry. No timers needed, so the
+; first stage holds too (SexLab has set its timer before this StageStart, so the hold is not lost).
 Function Victim_StageStart()
     if thread == None || thread.Animation == None
         return
@@ -2537,6 +2593,13 @@ Function Victim_StageStart()
         Victim_Drop("stage changed")
     endif
     int count = Engine_StageCount()
+    if SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+        if !victim_holding && !gate_holding && !ending_done && !thread.LeadIn && count >= 2 && thread.Stage < count
+            victim_hold_enjoyment = true
+            Victim_Hold()
+        endif
+        return
+    endif
     if thread.Stage < count - 1
         victim_hold_stage = 0
         victim_hold_anim = None
@@ -2554,11 +2617,55 @@ Function Victim_StageStart()
     if !SkyrimNet_SexLab_OrgasmEngine.IsVictimHoldScene(sid)
         return
     endif
+    victim_hold_enjoyment = false
     Victim_Hold()
+EndFunction
+
+; Stage by enjoyment: the engine moves the stage to the primary's band (one edge per call on P+; it sends again until
+; the stage arrives). Forward on P+ follows the projected path, so a fork opens no branch menu for the player. The new
+; stage's StageStart holds it again.
+Function Engine_MoveStage(int stage)
+    if thread == None || thread.Animation == None || thread.LeadIn || ending_done || gate_holding
+        return
+    endif
+    if stage == thread.Stage || !SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+        return
+    endif
+    String state_ = (thread as sslThreadModel).GetState()
+    if state_ != "animating"
+        Trace("Engine_MoveStage", "ignored, thread state '"+state_+"' stage:"+thread.Stage+" want:"+stage)
+        return
+    endif
+    Trace("Engine_MoveStage", "stage "+thread.Stage+" -> "+stage+"/"+Engine_StageCount())
+    Victim_Drop("stage follows enjoyment")
+    if !IsSexLabPPlus()
+        thread.GoToStage(stage)
+    elseif stage < thread.Stage
+        pplus_expected_reset = true
+        thread.GoToStage(thread.Stage - 1)
+    else
+        Stage_Forward()
+    endif
+EndFunction
+
+; One stage forward along the engine's stage count. False at the end of it.
+bool Function Stage_Forward()
+    int stage = thread.Stage
+    if stage >= Engine_StageCount()
+        return false
+    endif
+    if IsSexLabPPlus()
+        SkyrimNet_SexLab_PPlus.SkipTo(thread as Quest, pplus_path[stage])
+    else
+        thread.GoToStage(stage + 1)
+    endif
+    return true
 EndFunction
 
 ; Cap: sexlab.ending.victim_hold_max (0 = none). Gate scene: ask the engine for its gate and keep holding
 ; for the handover (Engine_GatePassed); nobody passing releases a few seconds later.
+; Stage by enjoyment: cap StageHoldCap, the gate from the second-to-last stage only, and past the cap the stage
+; advances outright (a released timer would wait for the key on an untimed stage with AutoAdvance off).
 Function Victim_Poll()
     if prof_tid < 0 && thread != None
         prof_tid = thread.tid
@@ -2574,6 +2681,19 @@ Function Victim_Poll()
         return
     endif
     Timer_SyncHold()
+    if victim_hold_enjoyment
+        ; After a load the engine has none of its stage inputs.
+        if !SkyrimNet_SexLab_OrgasmEngine.StageInputsKnown(sid)
+            Engine_SetStageInputs()
+        endif
+        if !SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+            Trace("Victim_Poll", "stages no longer follow enjoyment, releasing stage:"+thread.Stage)
+            victim_hold_enjoyment = false
+            Victim_Release()
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+            return
+        endif
+    endif
     if scene_paused
         ; Freeze the countdown while paused (the hotkey pause, not a save/load); re-check next tick.
         victim_hold_started += 1.0
@@ -2582,20 +2702,41 @@ Function Victim_Poll()
         return
     endif
     float cap = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.victim_hold_max", 120.0)
+    if victim_hold_enjoyment
+        cap = SkyrimNet_SexLab_OrgasmEngine.StageHoldCap(sid)
+    endif
     float held = Utility.GetCurrentRealTime() - victim_hold_started
+    if held < 0.0 && victim_hold_enjoyment
+        ; A save/load reset the real-time clock mid-hold. SexLab's held timer survives it: start the clock over.
+        victim_hold_started = Utility.GetCurrentRealTime()
+        held = 0.0
+    endif
     ; held < 0: a save/load reset the real-time clock mid-hold; treat the cap as reached.
     if held >= 0.0 && (cap <= 0.0 || held < cap)
         RegisterForSingleUpdate(1.0)
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
-    if SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid) && (!victim_hold_expired || (held >= 0.0 && held < cap + 3.0))
+    bool ask_gate = !victim_hold_enjoyment || thread.Stage == Engine_StageCount() - 1
+    if ask_gate && SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid) && (!victim_hold_expired || (held >= 0.0 && held < cap + 3.0))
         if !victim_hold_expired
             victim_hold_expired = true
-            Trace("Victim_Poll", "no aggressor orgasm after "+held+"s, asking the gate")
+            Trace("Victim_Poll", "no orgasm after "+held+"s, asking the gate")
             SkyrimNet_SexLab_OrgasmEngine.VictimHoldExpired(sid)
         endif
         RegisterForSingleUpdate(1.0)
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
+    endif
+    if victim_hold_enjoyment
+        String state_ = (thread as sslThreadModel).GetState()
+        if state_ != "animating"
+            RegisterForSingleUpdate(1.0)
+        else
+            Trace("Victim_Poll", "no orgasm after "+held+"s, advancing stage:"+thread.Stage)
+            Victim_Drop("stage hold cap")
+            Stage_Forward()
+        endif
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
@@ -5652,6 +5793,17 @@ Function WebUI_OnMenuPrevNext(int direction)
     SkyrimNet_SexLab_WebUI.Animation_Menu_Show(BuildWebUIAnimationMenuState())
 EndFunction
 
+; The player moved the stage by hand (HUD keys, WebUI menu, editor): stages stop following enjoyment and timers take
+; over for the rest of this scene. After the move: GoToStage already reset the stage's timer, so the hold just drops.
+Function StageManual_TakeOver()
+    stage_manual = true
+    SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
+    if victim_hold_enjoyment
+        victim_hold_enjoyment = false
+        Victim_Drop("stage moved by hand")
+    endif
+EndFunction
+
 ; ---- Stage moves (SexLab 1.6x or P+). Callers check the thread is Animating. ----
 ; One stage back (direction < 0) or forward. 1.6x: GoToStage(stage +- 1) within the animation. P+: forward
 ; follows one edge (P+ opens its own branch menu for the player at a fork) and does nothing at a sink; back
@@ -5675,6 +5827,7 @@ bool Function StageStep(int direction)
             thread.GoToStage(stage + 1)
         endif
         Trace("StageStep", "P+ direction:"+direction+" history "+stage+" -> "+thread.Stage)
+        StageManual_TakeOver()
         return true
     endif
     if direction < 0
@@ -5688,6 +5841,7 @@ bool Function StageStep(int direction)
         endif
         thread.GoToStage(stage + 1)
     endif
+    StageManual_TakeOver()
     return true
 EndFunction
 
@@ -5701,9 +5855,14 @@ bool Function StageGoTo(int n)
         return false
     endif
     if IsSexLabPPlus()
-        return SkyrimNet_SexLab_PPlus.SkipToLegacy(thread as Quest, n)
+        bool moved = SkyrimNet_SexLab_PPlus.SkipToLegacy(thread as Quest, n)
+        if moved
+            StageManual_TakeOver()
+        endif
+        return moved
     endif
     thread.GoToStage(n)
+    StageManual_TakeOver()
     return true
 EndFunction
 
@@ -6686,6 +6845,7 @@ Function ApplyWebUICommit(int obj)
         Trace("ApplyWebUICommit", "stage thread:"+thread.stage+" want:"+want_stage+" step:"+stage_step+" max:"+maxStage)
         if want_stage <= maxStage && want_stage != thread.stage
             thread.GoToStage(want_stage)
+            StageManual_TakeOver()
             cancel_dirty = true
             Trace("ApplyWebUICommit", "stage now:"+thread.stage)
         endif

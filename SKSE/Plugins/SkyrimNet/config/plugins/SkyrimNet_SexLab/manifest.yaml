@@ -549,6 +549,31 @@ schema:
       defaultValue: 5
       category: "Enjoyment"
 
+    - name: "Stages follow enjoyment"
+      path: "sexlab.enjoyment.stage_advance_primary_enjoyment"
+      type: "bool"
+      description: "With the orgasm engine on, stages follow one actor's enjoyment instead of their timers, in both directions, and that actor's orgasm goes to the last stage. The actor is whoever is expected to orgasm: a male, or a female if the animation is tagged femdom; among several, position 1, 2, ... then 0. Pressing the stage keys returns the scene to timers until it ends. Orgasm targets don't apply to these scenes."
+      defaultValue: true
+      category: "Enjoyment"
+
+    - name: "Stuck stage: punish after"
+      path: "sexlab.enjoyment.stage_punish_after"
+      type: "float"
+      description: "When stages follow enjoyment: seconds on one stage before that actor punishes someone in the scene, once per stage. 0 = never. Your own character only does this on auto play."
+      min: 0
+      max: 600
+      defaultValue: 30
+      category: "Enjoyment"
+
+    - name: "Stuck stage: advance after"
+      path: "sexlab.enjoyment.stage_hold_max"
+      type: "float"
+      description: "When stages follow enjoyment: seconds on one stage before it advances anyway, or the stage's own timer if that is longer. 0 = no limit."
+      min: 0
+      max: 600
+      defaultValue: 60
+      category: "Enjoyment"
+
     - name: "Orgasm roll random bonus"
       path: "sexlab.minigame.random_bonus"
       type: "float"
@@ -806,6 +831,13 @@ schema:
       min: 0
       max: 50
       defaultValue: 8
+      category: "Mini-game"
+
+    - name: "Enjoyment budget for strategy play"
+      path: "sexlab.minigame.enjoyment_budget"
+      type: "bool"
+      description: "NPCs (and you on auto play) spend stamina and magicka in proportion to their own enjoyment: at 10% enjoyment they may spend 10% of their maximum, at 90% they may spend 90%. They start out holding back and finish close to exhausted. DOM slaves are exempt, and your own key presses are never limited. Off: they play until they can't pay."
+      defaultValue: true
       category: "Mini-game"
 
     - name: "Decision model picks NPC strategies"

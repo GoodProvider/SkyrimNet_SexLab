@@ -627,6 +627,24 @@
             min-width: 0;
         }
 
+        /* max-height set by deLimitActorRows. */
+        #de-actors-scroll {
+            margin: var(--space-sm) 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #de-actors-table {
+            margin: 0;
+        }
+
+        #de-actors-table thead th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-base);
+            z-index: 1;
+        }
+
         #de-side-panel {
             flex: 0 0 40%;
             min-width: 0;
@@ -2487,10 +2505,10 @@
                     </div>
                 </div>
                 <div id="de-actors-table-wrap" style="display:none">
-                    <table class="data-table" id="de-actors-table"><thead><tr>
+                    <div id="de-actors-scroll"><table class="data-table" id="de-actors-table"><thead><tr>
                         <th class="col-orgasm"></th><th class="col-idx">#</th><th class="col-move"></th><th class="col-name">name</th>
                         <th class="col-dressed">dressed</th><th class="col-o">O</th><th class="col-deny" title="orgasm denied (live scene)">deny</th><th class="col-v">V</th><th class="col-mods">modifiers</th>
-                    </tr></thead><tbody></tbody></table>
+                    </tr></thead><tbody></tbody></table></div>
                     <div class="de-name-hint">Clicking a name adds it to the description</div>
                 </div>
             </div>
@@ -12637,6 +12655,8 @@
             }
         }
 
+        const DE_ACTORS_MAX_ROWS = 8;
+
         function deRenderActors() {
             const wrap = document.getElementById('de-actors-table-wrap');
             const tbody = document.querySelector('#de-actors-table tbody');
@@ -12734,16 +12754,32 @@
                 tbody.appendChild(tr);
             });
             // Nearby eligible actors not in the scene: dimmed rows, + adds one (SexLab allows 5).
-            if (!live || liveCount >= 5) return;
-            deAddableNearbyActors(liveInfo).forEach(a => {
-                const tr = document.createElement('tr');
-                tr.className = 'de-nearby-row';
-                tr.innerHTML = `<td class="col-orgasm"></td><td class="col-idx"></td>` +
-                    `<td class="col-move"><span class="cell-toggle" title="add to scene" onclick="deAddActor(${a.formId})">+</span></td>` +
-                    `<td class="col-name">${escapeHtml(a.name)}</td>` +
-                    `<td class="col-dressed"></td><td class="col-o"></td><td class="col-deny"></td><td class="col-v"></td><td class="col-mods"></td>`;
-                tbody.appendChild(tr);
-            });
+            if (live && liveCount < 5) {
+                deAddableNearbyActors(liveInfo).forEach(a => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'de-nearby-row';
+                    tr.innerHTML = `<td class="col-orgasm"></td><td class="col-idx"></td>` +
+                        `<td class="col-move"><span class="cell-toggle" title="add to scene" onclick="deAddActor(${a.formId})">+</span></td>` +
+                        `<td class="col-name">${escapeHtml(a.name)}</td>` +
+                        `<td class="col-dressed"></td><td class="col-o"></td><td class="col-deny"></td><td class="col-v"></td><td class="col-mods"></td>`;
+                    tbody.appendChild(tr);
+                });
+            }
+            deLimitActorRows(tbody);
+        }
+
+        // Header plus DE_ACTORS_MAX_ROWS rows, measured because row heights vary (chips wrap, nearby rows are short).
+        // Offsets, not getBoundingClientRect: the result goes back into CSS px, and rects need dividing by body.zoom.
+        function deLimitActorRows(tbody) {
+            const scroll = document.getElementById('de-actors-scroll');
+            if (!scroll) return;
+            const last = tbody.rows.length > DE_ACTORS_MAX_ROWS ? tbody.rows[DE_ACTORS_MAX_ROWS - 1] : null;
+            if (!last) {
+                scroll.style.maxHeight = '';
+                return;
+            }
+            // Zero while the panel is hidden: opening the panel renders again.
+            if (last.offsetHeight > 0) scroll.style.maxHeight = (last.offsetTop + last.offsetHeight) + 'px';
         }
 
         function deActorChangePending() {

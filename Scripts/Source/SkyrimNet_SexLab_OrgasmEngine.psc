@@ -53,6 +53,18 @@ bool Function IsGateScene(int sid) global native
 bool Function IsVictimHoldScene(int sid) global native
 ; The victim hold cap ran out: a gate scene runs its gate on the next tick.
 Function VictimHoldExpired(int sid) global native
+; Stage by enjoyment: per position SexLab gender, the animation's femdom tag and registry. Every StageStart.
+Function SetStageInputs(int sid, Actor[] positions, int[] genders, bool femdom, String registry) global native
+; False until SetStageInputs (scene start, and after a load: none of it is saved).
+bool Function StageInputsKnown(int sid) global native
+; Stages follow the primary's enjoyment instead of their timers; replaces the victim hold's wait.
+bool Function IsStageAdvancePrimaryEnjoyment(int sid) global native
+; The actor whose enjoyment drives the stage; None when the mode is off.
+Actor Function GetStagePrimary(int sid) global native
+; Seconds a stage may hold: the later of sexlab.enjoyment.stage_hold_max and its own timer; 0 = no limit.
+float Function StageHoldCap(int sid) global native
+; The player moved the stage by hand: timers for the rest of this scene.
+Function DisableStageAdvancePrimaryEnjoyment(int sid) global native
 ; Final-stage hold: take a mark just before sending the orgasm narration. Only the scene's own actors count:
 ; ResponseStartedSince(sid, mark) once one of them speaks, ResponseDoneSince(sid, mark) once that reply has
 ; finished playing (SkyrimNet_SpeechComplete).
@@ -227,6 +239,18 @@ Function Effect_AdvanceToFinal(Actor akActor) global
     SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(akActor)
     if sl_scene != None
         sl_scene.Engine_AdvanceToFinal()
+    endif
+EndFunction
+
+; Stage by enjoyment: the primary's enjoyment moved to another band.
+Function Effect_MoveStage(Actor akActor, int stage) global
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager == None || akActor == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(akActor)
+    if sl_scene != None
+        sl_scene.Engine_MoveStage(stage)
     endif
 EndFunction
 

@@ -1,5 +1,16 @@
 # Knowledgebase
 
+## Stage by enjoyment: traps when stages wait for enjoyment (2026-11-01, built, untested in game)
+
+**Design:** [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#stage-by-enjoyment).
+
+- **Together would deadlock.** `SceneProgress` stops at each stage boundary, so enjoyment can't cross into the next band while the stage waits for it. This mode uses an animation-wide clock.
+- **Orgasm resets enjoyment to 0.** Without `primaryFinished`, the back rule sends the stage to 1 in the moment before the Scene jumps to the final stage.
+- **Never `Victim_Release` after a `GoToStage`.** The move already reset the timer, so the release subtracts `PAUSE_HOLD_SECONDS` from the new stage's fresh timer and it advances at once. Use `Victim_Drop` (`StageManual_TakeOver`).
+- **A hold applied in `StageStart` survives on 1.6x, stage 1 included.** `sslThreadController` runs `Action("Animating")` (`FireAction` → `PlayStageAnimations` sets `StageTimer`) before `SendThreadEvent("StageStart")`. `thread.Timers` is empty only at the `AnimationStart` `Engine_BeginScene`.
+- **`Engine_BeginScene` runs on every `StageStart`,** so per-position data sent from it follows position swaps.
+- **On P+, `thread.GoToStage(stage + 1)` can open the player's branch menu at a fork.** Automatic moves use `SkipTo(pplus_path[thread.Stage])`.
+
 ## Magelight ignored the Dashboard UI scale (2026-11-01, fixed, untested in game)
 
 - **Symptom:** Changing `ui_scale` in the SkyrimNet dashboard has no effect on the overlay or HUD under Magelight. No visible error: the `catch` in `loadDashboardUiScale` keeps the current scale. `Magelight.log` has `Refused to connect to http://localhost:8080/config?api=get&name=Dashboard` for views 3 and 4.

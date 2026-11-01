@@ -39,6 +39,8 @@ The C++ OrgasmEngine owns enjoyment and orgasms for **every** SexLab scene, incl
 
 SkyrimNet's decision model (e.g. Jev) picks a strategy per NPC; see [Strategy decisions](#strategy-decisions). Every `kPressTick` (1 s) each NPC starts a burst (`StrategyStep`): `random(kPressMin = 5, kPressMax = 10)` presses queued `kPressGap` (0.1 s) apart, fired by the 250 ms tick as they come due (2–3 per tick), through the same cost / edge code as a key press (`ArouseLocked` / `CalmLocked`), not narrated. The first press the NPC can't pay (stamina to arouse, magicka to calm) drops the rest of the burst, and the NPC rests `kRestSecs` (2 s; log `out of stamina|magicka … rests 2s`). That is how an NPC runs its stamina down: about 7.5 × the arouse cost per second, far more than NPC regen. A strategy change, take-control toggle or auto-play toggle clears the queued presses. DenyAll pays for every calm; Tease pays stamina or magicka by the target's enjoyment. Passive and Non-sexual make no presses. No step runs before the scene's first non-empty `SetStageTimers` (SexLab's `thread.Timers` is empty at the first `Engine_SetStage`), or `kUntimedGrace` (10 s) after `BeginScene` for a scene that never sends timers. Only AI-driven actors step (`AiDriven`: NPCs the player does not control, the player only in auto play); see [Take control and auto play](#take-control-and-auto-play).
 
+**Enjoyment budget** (`sexlab.minigame.enjoyment_budget`, default on; `OverBudget`, strategy presses only): the share of max stamina or magicka an AI-driven actor may spend equals its **own** enjoyment, whoever the press targets. A press must leave at least `max × (1 − enjoyment / 100)`, read live on every press. A held press takes the same path as one it can't pay: it drops the burst and rests `kRestSecs`, but logs `holds stamina|magicka (current/max) at enjoyment …` once per hold instead of the `out of` line. At enjoyment 0 an actor can't press at all, including right after an orgasm. DOM slaves are exempt, because presses and passive progress don't move their enjoyment. HUD keys, `MiniGame_Arouse` / `MiniGame_Calm` and the plugin API aren't limited: the check is in `StrategyStep`, not in `ArouseLocked` / `CalmLocked`.
+
 - **Press size, timed scenes:** `mgStepRate × random(npc_step_min, npc_step_max) / mean(min, max)` (4–8: 0.67–1.33×, rolled once per burst), divided by the scene's mean NPC skill factor `mean(1 + 0.1 × skill)`, × `kPressTick / mean(kPressMin, kPressMax)`, rolled once per burst, so the mean presses per second keep the rate while the NPC isn't resting (rests make it slower). Arouse then applies the actor's own skill factor, so skill matters between actors while Mutual stays on budget. See [Mini-game calibration](#mini-game-calibration).
 - **Press size, scenes without timers:** `random(npc_step_min, npc_step_max) / 2` per second, split the same way (arouse × skill factor).
 
@@ -339,6 +341,50 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
   - **Response:** every orgasm DN (`NarrateOrgasmStash`, the `StageStart` fold) first takes `ending_response_mark = OrgasmEngine.NarrationMark()` (`NarrationTiming::SpeakerMark()`). `NarrationTiming` tracks each non-player speaker's response (first `SpeechStarted` to its `SkyrimNet_SpeechComplete`). `ResponseStartedSince(sid, mark)` / `ResponseDoneSince(sid, mark)` only count the scene's own actors (`OrgasmEngine::SceneActors`), so two scenes narrating together don't release each other's holds (2026-10-08).
   - **Release** (`Ending_Poll`, shares `OnUpdate` with the orgasm window, 1 s; held ≥ 2 s, window closed): `ResponseDoneSince(mark)` (log `(response played)`). While one of the scene's actors is speaking after the mark, wait. With no paired response yet (the DN went out as an event, TTS off): `GetSpeechQueueSize() == 0` and audio ended at least 1 s after the first poll, min 3 s (`(speech queue empty)`). Always at `dialogue_hold_max` (30 s, capped at `ENDING_HOLD_CAP` 30; halved when `!thread.HasPlayer`; 0 = no hold; `(max)`).
   - Release takes the hold back off (`UpdateTimer(-PAUSE_HOLD_SECONDS)`) without adding the held time: the final stage ends at the later of its own timer and the response. While the pause key holds the stage the timer is left to the pause.
+
+## Stage by enjoyment
+
+With the engine on, stages follow one actor's enjoyment instead of SexLab's stage timers, so the animation's progress matches how close that actor is to orgasm (`StageAdvancePrimaryEnjoyment`). It works in both modes and on all three backends (SexLab 1.6x, P+, AnimEngine).
+
+**Active when all of these hold**, otherwise timers run as usual: engine enabled, `sexlab.enjoyment.stage_advance_primary_enjoyment` on (default), no LeadIn, 2+ stages, an eligible primary, the Scene's inputs received (`SetStageInputs`), and no manual stage move in this scene.
+
+**Primary** (`PrimaryOf`, computed each tick; log `stage primary`):
+
+1. Must expect an orgasm and not be a DOM slave, whose enjoyment doesn't move.
+2. Female over male with the `femdom` tag, otherwise male over female. Creatures count by sex (`gender % 2`).
+3. Positions 1, 2, 3, ..., then 0.
+
+| `femdom` tag | Expected | Positions | Primary |
+|---|---|---|---|
+| yes | [1,1] | [F,M] | 0 |
+| no | [1,0] | [F,M] | 0 |
+| no | [1,1,1] | [F,M,F] | 1 |
+| no | [1,1,0] | [F,F,M] | 1 |
+
+**Stage from enjoyment** (`StageFollowPrimary`; log `stage follows`): N stages give N−1 equal bands, and the last stage is the orgasm's. Stage `k` (2..N−1) needs `enjoyment > 100 × (k−1) / (N−1)`. With 5 stages: above 25 → 2, above 50 → 3, above 75 → 4, and stage 4 holds until the primary orgasms.
+
+- **Both directions.** A move back needs `kStageBackMinSecs` (3 s) on the stage, so enjoyment hovering at a threshold can't flip it every tick. `stage_spike` applies only on a stage's first entry (`spikedThrough`).
+- **No moves** while paused, in the final stage, once the primary has orgasmed (`primaryFinished`, set in `Fire` and `NoteExternalOrgasm`), or while a gate is passing. Without this guard, the orgasm's reset to 0 would send the stage back to 1 just before the jump.
+- **Delivery.** `Effect_MoveStage` → `Scene.Engine_MoveStage`, which ignores the move unless the thread is Animating. The engine re-sends after `kStageMoveResend` (3 s) if `SetStage` hasn't confirmed it. 1.6x jumps straight to the stage. P+ and AnimEngine take one step per call, and the engine sends the next as soon as `SetStage` confirms. P+ forward uses `SkipTo(pplus_path[stage])`, so a fork opens no branch menu.
+- **Floor.** A forward stage change the engine didn't ask for (the cap, SexLab's own key) sets `stageFloor`, so the back rule doesn't undo it. A new animation (new registry in `SetStageInputs`) resets the floor, `spikedThrough` and the Together clock, and the next tick jumps to the stage for the carried-over enjoyment.
+
+**Holds.** The victim hold is generalized rather than duplicated: `Victim_StageStart` holds every stage below the final on each entry (`victim_hold_enjoyment`), without needing `sexlab.ending.enabled`. SexLab sets `StageTimer` in `FireAction`, before it sends `StageStart`, so a hold applied there survives, including on stage 1. While the mode is active, `VictimHoldScene` returns false.
+
+**Stuck stage** (per-stage clock, animating and unpaused):
+
+- `sexlab.enjoyment.stage_punish_after` (30 s, 0 = never), once per stage entry: the primary punishes (`StagePunish` → `PunishNarrated`, so the hit, narration and target decision run as usual). The target is an actor on Deny all, or on Deny / Tease against the primary, otherwise the next position. A random method from `kPunishMethods`. Skipped if the primary is alone, or is the player without auto play.
+- `StageHoldCap` = the later of `sexlab.enjoyment.stage_hold_max` (60 s, 0 = no limit) and the stage's own timer: the stage advances outright (`Stage_Forward`), because a released timer would wait for the key on an untimed stage with `AutoAdvance` off. In a gate scene the second-to-last stage asks for the gate first (`VictimHoldExpired`), and advances 3 s later if nobody passed.
+
+**Ending.** The primary's orgasm goes to the final stage from any stage (`Stage_PrimaryFinished` in `Ending_Check` / `Ending_WillJump`). `sexlab.ending.target_*` no longer applies, and other actors can orgasm several times before that. The early final roll in `JoinGroup` runs when the primary is in the group.
+
+- **Gate scene:** due when the primary reaches 100 and `CanOrgasmNow`, not on the stage timer. The primary passes outright and is exempt from the 98 cap (`gateHeld`). Aggressors still pass outright, but an aggressor's orgasm no longer jumps the stage.
+- **Together:** `SceneProgress` uses an animation-wide clock over stages 1..N−1, because a stage-by-stage clock would deadlock: stages would wait for enjoyment and enjoyment for stages. The gate is due at `kRushHover`. With the gate off, the primary at `kRushHover` goes to the final stage directly (`fx.advances`) and the safety net finishes it.
+
+**Manual takeover.** While the mode drives the scene, the HUD's `prev` and `next` are greyed (`stageAuto`, `IsStageAuto`) but still work. `StageStep`, `StageGoTo` and the editor's direct `GoToStage` call `StageManual_TakeOver` after a move that happened: `DisableStageAdvancePrimaryEnjoyment` and `Victim_Drop` (GoToStage already reset the timer, and `Victim_Release` would subtract the hold from the new stage's timer). Timers run for the rest of the scene. On AnimEngine, `Hud::OnAnimKey` does the same. Auto play isn't offered `previous` / `next` while the mode is active (`BuildTurn`), so the AI can't turn it off by accident. The AnimEngine debug panel's next / back don't take over.
+
+**Not saved.** Nothing new goes in the co-save. After a load the mode stays off until `SetStageInputs` arrives (`stageInputsKnown`): `Victim_Poll` re-sends it within 1 s, and `Engine_SetStageInputs` re-sends the Scene's `stage_manual`. A hold whose real-time clock reset on load starts its clock over instead of expiring.
+
+Natives: `SetStageInputs`, `StageInputsKnown`, `IsStageAdvancePrimaryEnjoyment`, `GetStagePrimary`, `StageHoldCap`, `DisableStageAdvancePrimaryEnjoyment`. AnimEngine: `OnMoveStage`, with `StageStartLocked` / `EndingCheckLocked` / `Tick` as the ports; genders come from base sex, `femdom` from the AnimDB row.
 
 ## Contact mode (planned)
 

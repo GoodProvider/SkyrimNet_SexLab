@@ -53,6 +53,8 @@ namespace AnimEngineOrgasm
         const std::string& source, RE::Actor* allower, RE::Actor* allowed, const std::string& extras);
     void OnGatePassed(const std::vector<RE::Actor*>& actors, bool hold_stage);
     void OnAdvanceToFinal(RE::Actor* actor);
+    /// Stage by enjoyment: one step toward this stage (Scene.Engine_MoveStage).
+    void OnMoveStage(RE::Actor* actor, std::int32_t stage);
     void OnExhausted(const std::vector<RE::Actor*>& actors);
     /// End of each OrgasmEngine tick (game thread). dt: unpaused game seconds. Gate wait, victim cap, ending hold.
     void Tick(double dt);

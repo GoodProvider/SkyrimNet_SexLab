@@ -72,6 +72,23 @@ namespace OrgasmEngine
     bool IsVictimHoldScene(std::int32_t sid);
     /// The Scene's victim hold cap ran out: a gate scene runs its gate on the next tick.
     void VictimHoldExpired(std::int32_t sid);
+    /// Stage by enjoyment: per position SexLab gender (0 male, 1 female, 2 male creature, 3 female creature), the
+    /// animation's femdom tag and registry. Sent on every StageStart; a new registry resets the animation's state.
+    void SetStageInputs(std::int32_t sid, const std::vector<RE::Actor*>& positions,
+        const std::vector<std::int32_t>& genders, bool femdom, const std::string& registry);
+    /// False until SetStageInputs (scene start, and after a load: none of it is saved).
+    bool StageInputsKnown(std::int32_t sid);
+    /// Stages follow the primary's enjoyment instead of their timers (sexlab.enjoyment.stage_advance_primary_enjoyment).
+    /// Replaces the victim hold's wait.
+    bool IsStageAdvancePrimaryEnjoyment(std::int32_t sid);
+    /// That mode is driving the anchor's scene right now (HUD: stage keys greyed; auto play is not offered them).
+    bool IsStageAuto(RE::Actor* anchor);
+    /// The actor whose enjoyment drives the stage; 0 when the mode is off.
+    RE::FormID GetStagePrimary(std::int32_t sid);
+    /// Seconds a stage may hold: the later of sexlab.enjoyment.stage_hold_max and its own timer; 0: no limit.
+    float StageHoldCap(std::int32_t sid);
+    /// The player moved the stage by hand: timers for the rest of this scene.
+    void DisableStageAdvancePrimaryEnjoyment(std::int32_t sid);
     /// Scene ending lead and orgasm target (0 = off). The lead reaching it in the second-to-last stage
     /// triggers the early final roll in the group join (the Scene jumps to the final stage).
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target);

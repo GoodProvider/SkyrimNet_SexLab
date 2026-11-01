@@ -103,6 +103,26 @@ namespace PapyrusBindings_OrgasmEngine
         bool IsGateScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsGateScene(sid); }
         bool IsVictimHoldScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsVictimHoldScene(sid); }
         void VictimHoldExpired(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::VictimHoldExpired(sid); }
+        void SetStageInputs(RE::StaticFunctionTag*, std::int32_t sid, std::vector<RE::Actor*> positions,
+            std::vector<std::int32_t> genders, bool femdom, RE::BSFixedString registry)
+        {
+            OrgasmEngine::SetStageInputs(sid, positions, genders, femdom, registry.c_str());
+        }
+        bool StageInputsKnown(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::StageInputsKnown(sid); }
+        bool IsStageAdvancePrimaryEnjoyment(RE::StaticFunctionTag*, std::int32_t sid)
+        {
+            return OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid);
+        }
+        RE::Actor* GetStagePrimary(RE::StaticFunctionTag*, std::int32_t sid)
+        {
+            const RE::FormID id = OrgasmEngine::GetStagePrimary(sid);
+            return id ? RE::TESForm::LookupByID<RE::Actor>(id) : nullptr;
+        }
+        float StageHoldCap(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::StageHoldCap(sid); }
+        void DisableStageAdvancePrimaryEnjoyment(RE::StaticFunctionTag*, std::int32_t sid)
+        {
+            OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(sid);
+        }
         // Response tracking for the final-stage hold, scoped to the scene's actors: mark before sending a
         // narration, then ResponseStartedSince (one of them is speaking) / ResponseDoneSince (that reply ended).
         std::int32_t NarrationMark(RE::StaticFunctionTag*)
@@ -286,6 +306,12 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("IsGateScene", s, IsGateScene);
         a_vm->RegisterFunction("IsVictimHoldScene", s, IsVictimHoldScene);
         a_vm->RegisterFunction("VictimHoldExpired", s, VictimHoldExpired);
+        a_vm->RegisterFunction("SetStageInputs", s, SetStageInputs);
+        a_vm->RegisterFunction("StageInputsKnown", s, StageInputsKnown);
+        a_vm->RegisterFunction("IsStageAdvancePrimaryEnjoyment", s, IsStageAdvancePrimaryEnjoyment);
+        a_vm->RegisterFunction("GetStagePrimary", s, GetStagePrimary);
+        a_vm->RegisterFunction("StageHoldCap", s, StageHoldCap);
+        a_vm->RegisterFunction("DisableStageAdvancePrimaryEnjoyment", s, DisableStageAdvancePrimaryEnjoyment);
         a_vm->RegisterFunction("NarrationMark", s, NarrationMark);
         a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince);
         a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince);
