@@ -1815,6 +1815,9 @@ void InitWebUI()
                 WebUI_Visibility_HideWithoutCommit();
                 return;
             }
+            // Magelight: the page captures Escape while we hold UI mode (index.html keydown → handleGlobalEscape).
+            if (UiEngine::GetKind() == UiEngine::Kind::Magelight && UiEngine::HasFocus())
+                return;
             webui_log::info("Escape key pressed.");
             WebUI_Invoke("handleGlobalEscape();");
         });

@@ -1,5 +1,12 @@
 # Knowledgebase
 
+## Magelight closed the WebUI on Escape; Aid panel shown beside Ask (2026-10-31, fixed, tested in game)
+
+- **Symptom:** Open the Aid panel, press Esc, then open the Ask panel: the Aid panel is still on screen next to it.
+- **Cause:** Under Magelight, Escape belongs to the host while the view holds UI mode. Magelight leaves UI mode and hides the view itself (`Magelight.log`: `Escape … -> to the page` then `SetUIMode(false) … 'index' of SkyrimNet_SexLab`), unless the page captured Escape. Game input is suspended in UI mode, so the C++ `KeyHandler` Escape hook (WebUI.cpp) never fires. `handleGlobalEscape()` never runs, and `#aid-panel` stays `display:block` in the hidden view. The next `openPunishPanel` shows both.
+- **Fix:** index.html sends `magelight.send('__escapecapture', '1')` when `window.magelight` exists and routes a `keydown` Escape to `handleGlobalEscape()`. The C++ hook skips Escape while Magelight's UI mode is ours. `openPunishPanel` / `openAidPanel` also hide the other solo panels. PrismaUI (no `window.magelight`) keeps the C++ hook.
+- **Do not** listen for Escape in the page under PrismaUI: the C++ hook already calls `handleGlobalEscape()`. If PrismaUI also passes the key to the page, it would run twice and close a pulldown and its panel in one press.
+
 ## AnimEngine scene: no erection, closed mouth, silent orgasm (2026-10-26, fixed, untested in game)
 
 - **Symptom:** Skadi + Bob (`B_B_KneelBJ4`, AnimEngine). Bob's penis never got erect and missed Skadi's mouth. Bob's orgasm fired in the engine (`orgasm 0x14 source=engine`), but nothing showed or was narrated.

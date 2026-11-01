@@ -4407,6 +4407,19 @@
             }
         }
 
+        // Magelight: the host leaves UI mode on Escape (closing the view) unless the page captures it, and the
+        // game-side Escape hook never sees the key while we hold UI mode. Capture it so every Escape takes the
+        // layered close above (a solo Aid / Ask panel left open in the hidden view showed beside the next one).
+        // PrismaUI has no window.magelight and keeps the C++ hook.
+        if (window.magelight && typeof window.magelight.send === 'function') {
+            window.magelight.send('__escapecapture', '1');
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape' || e.repeat) return;
+                e.preventDefault();
+                handleGlobalEscape();
+            });
+        }
+
         // ── Target menu (JSON/YAML catalog) ───────────────────────
         let TARGET_CATALOG = { defaultsParameters: {}, options: [], actions: {} };
         let SCENE_SETTINGS = {};
@@ -9618,6 +9631,9 @@
             hideTargetMenuRow();
             const host = document.getElementById('main-panel-host');
             if (host) host.style.display = 'none';
+            // One solo panel at a time, whatever closed the view last.
+            document.getElementById('aid-panel').style.display = 'none';
+            document.getElementById('aid-offer-panel').style.display = 'none';
             document.getElementById('punish-panel').style.display = 'block';
             punishUpdate();
         }
@@ -9846,6 +9862,8 @@
             hideTargetMenuRow();
             const host = document.getElementById('main-panel-host');
             if (host) host.style.display = 'none';
+            document.getElementById('punish-panel').style.display = 'none';
+            document.getElementById('aid-offer-panel').style.display = 'none';
             document.getElementById('aid-panel').style.display = 'block';
             aidUpdate();
         }
