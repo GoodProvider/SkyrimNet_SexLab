@@ -260,8 +260,8 @@ namespace OrgasmEngine
             bool stageInputsKnown = false;     // SetStageInputs seen; the mode waits for it
             bool stageFemdom = false;          // the animation has the femdom tag
             std::string stageRegistry;         // animation of the last SetStageInputs: a change resets the fields below
-            bool stageEnjoymentOff = false;    // the player moved the stage by hand: timers for the rest of the scene
-            bool primaryFinished = false;      // the primary orgasmed: no more moves for the rest of the scene
+            bool stageEnjoymentOff = false;    // moved by hand or Num 5: timers until Num 5 or a new animation
+            bool primaryFinished = false;      // the primary orgasmed: no more moves in this animation
             RE::FormID stagePrimaryLast = 0;   // for the log
             std::int32_t stageFloor = 0;       // stage's own timer moved past the primary's band: no move back below it
             std::int32_t spikedThrough = 0;    // stage_spike paid up to this stage, so a re-advance pays nothing
@@ -538,12 +538,24 @@ namespace OrgasmEngine
             return best;
         }
 
+        // Caller holds g_lock. The scene can follow the primary's enjoyment, whether or not the player turned it off.
+        bool StageAdvanceEligible(const SceneState& sc)
+        {
+            return g_settings.stageAdvancePrimaryEnjoyment && !g_settings.engineOff && sc.stageInputsKnown &&
+                   !sc.leadIn && sc.stageCount >= 2 && PrimaryOf(sc) != 0;
+        }
+
         // Caller holds g_lock. Stages follow the primary's enjoyment instead of their timers. Timers are not
         // required: SexLab's are empty until the first StageStart, and that stage must hold too.
         bool StageAdvancePrimaryEnjoyment(const SceneState& sc)
         {
-            return g_settings.stageAdvancePrimaryEnjoyment && !g_settings.engineOff && sc.stageInputsKnown &&
-                   !sc.stageEnjoymentOff && !sc.leadIn && sc.stageCount >= 2 && PrimaryOf(sc) != 0;
+            return !sc.stageEnjoymentOff && StageAdvanceEligible(sc);
+        }
+
+        // Caller holds g_lock. Num 5 can offer enjoyment: a stage is left for it to move.
+        bool CanStageAdvance(const SceneState& sc)
+        {
+            return StageAdvanceEligible(sc) && !sc.primaryFinished && sc.stage < sc.stageCount;
         }
 
         // Caller holds g_lock. Mini-game scene with a victim and an aggressor expected to orgasm (timed, no
@@ -2866,6 +2878,11 @@ namespace OrgasmEngine
             sc.stagePunished = false;
             sc.stageFinalSent = false;
             sc.animElapsed = 0.0;
+            if (sc.stageEnjoymentOff || sc.primaryFinished) {
+                webui_log::info("OrgasmEngine: scene {} new animation: stages follow enjoyment again", sid);
+            }
+            sc.stageEnjoymentOff = false;
+            sc.primaryFinished = false;
         }
         if (!sc.stageInputsKnown || sc.stageFemdom != femdom || sc.stageRegistry != registry) {
             webui_log::info("OrgasmEngine: scene {} stage inputs animation '{}' femdom={}", sid, registry, femdom);
@@ -2924,7 +2941,46 @@ namespace OrgasmEngine
             return;
         }
         it->second.stageEnjoymentOff = true;
-        webui_log::info("OrgasmEngine: scene {} stage moved by hand: timers for the rest of the scene", sid);
+        webui_log::info("OrgasmEngine: scene {} stages on timers until Num 5 or a new animation", sid);
+    }
+
+    void EnableStageAdvancePrimaryEnjoyment(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it == g_scenes.end() || !it->second.stageEnjoymentOff) {
+            return;
+        }
+        SceneState& sc = it->second;
+        sc.stageEnjoymentOff = false;
+        // The floor keeps the current stage: it moves up when the band passes it, not back after kStageBackMinSecs.
+        sc.stageFloor = sc.stage;
+        sc.stageMoveTarget = 0;
+        sc.stageMoveAt = 0.0;
+        webui_log::info("OrgasmEngine: scene {} stages follow enjoyment again from stage {}/{}", sid, sc.stage,
+            sc.stageCount);
+    }
+
+    bool CanStageAdvancePrimaryEnjoyment(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        return it != g_scenes.end() && CanStageAdvance(it->second);
+    }
+
+    bool CanStageAdvancePrimaryEnjoyment(RE::Actor* anchor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(anchor);
+        const SceneState* sc = st ? SceneOf(*st) : nullptr;
+        return sc && CanStageAdvance(*sc);
+    }
+
+    bool IsSceneIdPaused(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        return it != g_scenes.end() && it->second.paused;
     }
 
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target)

@@ -594,6 +594,30 @@ namespace AnimEngineOrgasm
         OrgasmEngine::SetScenePaused(sid, paused);
     }
 
+    void OnStageModeEnjoy(int ae_id)
+    {
+        std::int32_t sid = 0;
+        {
+            std::lock_guard lock(g_mutex);
+            auto* w = FindLocked(ae_id);
+            if (!w)
+                return;
+            w->victim_hold_node = -1;  // this stage may have held already
+            sid = w->sid;
+        }
+        const bool enabled = EndingEnabled();
+        const bool vhs = OrgasmEngine::IsVictimHoldScene(sid);
+        const bool stage_mode = OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid);
+        const float hold_max = HoldMaxConfig();
+        Work work;
+        {
+            std::lock_guard lock(g_mutex);
+            if (auto* w = FindLocked(ae_id))
+                StageStartLocked(*w, vhs, stage_mode, work, enabled, hold_max);
+        }
+        Run(work);
+    }
+
     void OnEnd(std::uint64_t epoch, int ae_id, const std::string& why)
     {
         if (epoch != Epoch())

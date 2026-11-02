@@ -14,10 +14,12 @@
 #include "Config.h"
 #include "CorpsePatch.h"
 #include "JsonUtil.h"
+#include "Hud.h"
 #include "Profiler.h"
 #include "RE/Skyrim.h"
 #include "RE/V/VirtualMachine.h"
 #include "SKSE/SKSE.h"
+#include "StrategyDecision.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
 
@@ -173,6 +175,7 @@ namespace PapyrusBindings_WebUI
     bool SceneCreatorOpenedForPending = false;
     bool TargetMenuSessionActive = false;
     bool SkipSceneCreatorOnce = false;
+    bool OpenSceneCreatorOnce = false;
 
     void ClearSceneCreatorPending()
     {
@@ -202,6 +205,7 @@ namespace PapyrusBindings_WebUI
         ClearTargetMenuSession();
         SceneCreatorOpenedForPending = false;
         SkipSceneCreatorOnce = false;
+        OpenSceneCreatorOnce = false;
         YesNo_Creator_Sid = -1;
         YesNo_OverlayWasOpen = false;
     }
@@ -211,6 +215,45 @@ namespace PapyrusBindings_WebUI
         const bool skip = SkipSceneCreatorOnce;
         SkipSceneCreatorOnce = false;
         return skip;
+    }
+
+    bool ConsumeOpenSceneCreator(RE::StaticFunctionTag*)
+    {
+        const bool open = OpenSceneCreatorOnce;
+        OpenSceneCreatorOnce = false;
+        return open;
+    }
+
+    void LastStage_Show(RE::StaticFunctionTag*, std::int32_t index, std::int32_t advanceKey)
+    {
+        Hud::LastStageShow(static_cast<int>(index), advanceKey > 0 ? static_cast<std::uint32_t>(advanceKey) : 0);
+    }
+
+    void LastStage_Hide(RE::StaticFunctionTag*)
+    {
+        Hud::LastStageHide();
+    }
+
+    std::int32_t LastStage_Index(RE::StaticFunctionTag*)
+    {
+        return Hud::LastStageIndex();
+    }
+
+    RE::Actor* LastStage_DrivenActor(RE::StaticFunctionTag*)
+    {
+        return Hud::LastStageDrivenActor();
+    }
+
+    void DispatchManagerMethodIntInt(const char* method, std::int32_t a, std::int32_t b);
+
+    void LastStage_Request(RE::StaticFunctionTag*, std::int32_t sid, RE::Actor* caller, RE::BSFixedString castNames,
+        bool playerInScene)
+    {
+        const RE::FormID id = caller ? caller->GetFormID() : 0;
+        const char* names = castNames.c_str();
+        StrategyDecision::RequestLastStage(sid, id, playerInScene, names ? names : "", [sid](int line) {
+            DispatchManagerMethodIntInt("LastStage_OnDecision", sid, line);
+        });
     }
 
     static AnimationDB::FilterSpec ParseFilterJson(const char* json)
@@ -661,7 +704,7 @@ namespace PapyrusBindings_WebUI
         SexLabNet::InvokeConfigureSettingsPanel();
     }
 
-    void Animation_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, RE::TESForm* sl_scene)
+    void Animation_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, RE::TESForm* sl_scene, RE::Actor* focus)
     {
         if (!thread || !sl_scene) {
             webui_log::warn("Animation_Menu_Open: null thread or scene");
@@ -669,6 +712,8 @@ namespace PapyrusBindings_WebUI
         }
         webui_log::info("Animation_Menu_Open");
         ClearTargetMenuSession();
+        // The Scene view resolves from the target: with none, it opens the Scene Creator.
+        SetTargetCurrent(focus);
         WebUI_HideAllPanels(nullptr);
         DispatchAnimationMenuExportState(thread, sl_scene);
     }
@@ -1268,7 +1313,7 @@ namespace PapyrusBindings_WebUI
             return;
         }
 
-        SKSE::GetTaskInterface()->AddTask([thread, sl_scene]() {
+        SKSE::GetTaskInterface()->AddTask([sl_scene]() {
             auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
             if (!vm) {
                 webui_log::error("DispatchAnimationMenuExportState: no VM");
@@ -1290,7 +1335,8 @@ namespace PapyrusBindings_WebUI
                 return;
             }
 
-            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(thread));
+            // No thread argument: a TESForm* does not bind to the script's sslThreadController parameter.
+            auto* args = RE::MakeFunctionArguments();
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             vm->DispatchMethodCall(scriptObject, RE::BSFixedString("WebUI_ExportAnimationMenuState"), args,
                 callback);
@@ -2008,6 +2054,12 @@ namespace PapyrusBindings_WebUI
         a_vm->RegisterFunction("WebUI_SetSexLabAnimCount", scriptName, WebUI_SetSexLabAnimCount);
         a_vm->RegisterFunction("ActorAnimMeta_Result", scriptName, ActorAnimMeta_Result);
         a_vm->RegisterFunction("ConsumeSkipSceneCreator", scriptName, ConsumeSkipSceneCreator);
+        a_vm->RegisterFunction("ConsumeOpenSceneCreator", scriptName, ConsumeOpenSceneCreator);
+        a_vm->RegisterFunction("LastStage_Show", scriptName, LastStage_Show);
+        a_vm->RegisterFunction("LastStage_Hide", scriptName, LastStage_Hide);
+        a_vm->RegisterFunction("LastStage_Index", scriptName, LastStage_Index);
+        a_vm->RegisterFunction("LastStage_DrivenActor", scriptName, LastStage_DrivenActor);
+        a_vm->RegisterFunction("LastStage_Request", scriptName, LastStage_Request);
         a_vm->RegisterFunction("TraceLog", scriptName, TraceLog, true);
         a_vm->RegisterFunction("Prof_Begin", scriptName, Prof_Begin, true);
         a_vm->RegisterFunction("Prof_End", scriptName, Prof_End, true);

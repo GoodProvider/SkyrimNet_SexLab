@@ -22,8 +22,9 @@ namespace ActionCatalog
     /// True when executionFunctionName is StartScene_* (not StartScene_Refused_*).
     bool IsSceneStartExecution(const std::string& executionFunctionName);
 
-    /// True when action resolves as a scene-start (used to gate Custom / SkipSceneCreatorOnce).
-    /// editTags* args still apply when callers want MCM gating; TargetMenu Start passes true/true.
+    /// True when action resolves as a scene-start and the matching Animation Selector toggle is on.
+    /// editTagsPlayer / editTagsNonPlayer are sexlab.tags.player / sexlab.tags.nonplayer.
+    /// A true,true probe is "does this resolve as a scene start?" (both toggles treated as on).
     bool ShouldOpenSceneCreatorFromTargetMenu(
         const std::string& actionName,
         const nlohmann::json& uiParameters,

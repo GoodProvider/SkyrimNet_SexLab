@@ -956,6 +956,68 @@ namespace StrategyDecision
             potionName);
     }
 
+    int LastStageLine(const std::string& key)
+    {
+        if (key == "cuddle")
+            return 1;
+        if (key == "vaginal")
+            return 2;
+        if (key == "oral")
+            return 3;
+        if (key == "anal")
+            return 4;
+        return 0;
+    }
+
+    void RequestLastStage(std::int32_t sid, RE::FormID caller, bool playerInScene, const std::string& castNames,
+        std::function<void(int)> done)
+    {
+        constexpr const char* kLastStageTemplate = "sexlab/last_stage";
+        RE::Actor* who = RE::TESForm::LookupByID<RE::Actor>(caller);
+        if (g_noRoute || !g_installed || !ApiReady() || !who) {
+            webui_log::info("StrategyDecision: last stage sid {} caller {:#x} skipped: stop", sid, caller);
+            done(0);
+            return;
+        }
+        OrgasmEngine::DecisionInput in;
+        in.id = caller;
+        in.name = who->GetDisplayFullName() ? who->GetDisplayFullName() : "";
+        nlohmann::json ctx;
+        ctx["focus_uuid"] = UuidOf(caller);
+        ctx["focus_name"] = in.name;
+        ctx["player_in_scene"] = playerInScene;
+        ctx["cast_names"] = castNames;
+        ctx["timeline"] = BuildTimeline(in);
+        auto shared = std::make_shared<std::function<void(int)>>(std::move(done));
+        const bool queued = PublicSendCustomDecisionToLLM(kLastStageTemplate, ctx.dump().c_str(), kMaxProbabilities,
+            [sid, caller, shared](const char* answer, const char* resultJson, int success) {
+                std::string a = answer ? answer : "";
+                std::string j = resultJson ? resultJson : "";
+                SKSE::GetTaskInterface()->AddTask([sid, caller, shared, success, a = std::move(a), j = std::move(j)]() {
+                    if (!success) {
+                        NoteFailure(caller, j);
+                        webui_log::info("StrategyDecision: last stage sid {} failed: stop", sid);
+                        (*shared)(0);
+                        return;
+                    }
+                    std::string key = a;
+                    try {
+                        key = nlohmann::json::parse(j).at("answers").at("next").value("choice", key);
+                    } catch (...) {
+                    }
+                    const int line = LastStageLine(key);
+                    webui_log::info("StrategyDecision: last stage sid {} answer '{}' -> {}", sid, key, line);
+                    (*shared)(line);
+                });
+            });
+        if (!queued) {
+            webui_log::warn("StrategyDecision: last stage sid {} not queued: stop", sid);
+            (*shared)(0);
+            return;
+        }
+        webui_log::info("StrategyDecision: last stage send sid {} caller {:#x} ({})", sid, caller, in.name);
+    }
+
     int RelationshipRank(RE::Actor* a, RE::Actor* b)
     {
         return Relationship(a, b).second;

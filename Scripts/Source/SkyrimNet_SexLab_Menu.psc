@@ -159,6 +159,11 @@ Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None)
         if sl_scene != None
             sl_scene.TogglePause()
         endif
+    elseif control == "stage_mode"
+        SkyrimNet_SexLab_Scene mode_scene = manager.GetSceneByActor(anchor)
+        if mode_scene != None
+            mode_scene.StageMode_Cycle()
+        endif
     elseif control == "deny"
         SkyrimNet_SexLab_Scene deny_scene = manager.GetSceneByActor(anchor)
         if deny_scene != None && focus != None

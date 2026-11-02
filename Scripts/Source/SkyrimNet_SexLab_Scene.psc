@@ -67,10 +67,12 @@ int victim_hold_stage = 0
 sslBaseAnimation victim_hold_anim = None
 ; Stage by enjoyment (OrgasmEngine.IsStageAdvancePrimaryEnjoyment) reuses the victim hold on every stage below the
 ; final: the engine moves the stage (Engine_MoveStage) and the cap is OrgasmEngine.StageHoldCap.
-; stage_manual: the player moved the stage by hand, so timers for the rest of the scene. Kept here because the engine
-; saves none of this: Engine_SetStageInputs re-sends it.
+; stage_manual: the player moved the stage by hand or pressed the stage-mode key, so timers until that key or a new
+; animation. Kept here because the engine saves none of this: Engine_SetStageInputs re-sends it.
+; stage_inputs_registry: the animation of the last send; a change returns the scene to enjoyment.
 bool victim_hold_enjoyment = false
 bool stage_manual = false
+String stage_inputs_registry = ""
 ; NarrationMark() taken just before the last orgasm DN went out: the final-stage hold ends once its response
 ; has played (ResponseDoneSince). -1: none yet.
 int ending_response_mark = -1
@@ -89,6 +91,26 @@ float ending_watch_released = 0.0
 int ending_watch_stage = 0
 sslBaseAnimation ending_watch_anim = None
 float Property ENDING_WATCH_GRACE = 15.0 AutoReadOnly
+; Last-stage choice. phase: 0 idle, 1 waiting on the NPC decision, 2 choosing (list, or an NPC-only deadline).
+; The HUD view does not survive a save; these do, and OnPlayerLoadGame reopens the list.
+int list_phase = 0
+int list_index = 0
+bool list_ui = false
+bool list_npc_only = false
+bool list_counted = false
+bool list_timed = false
+bool list_running = false
+float list_left = -1.0
+float list_deadline = 0.0
+String list_anim = ""
+bool list_holding = false
+bool list_held_timer = false
+bool list_switching = false
+bool list_prepared = false
+String list_preset_json = ""
+bool list_saved_done = false
+int list_saved_target = 0
+bool list_saved_valid = false
 ; The next StageStart takes the orgasm stash and sends its scene change and the orgasm as one DN: the
 ; lead's orgasm jumps to the final stage, StageStart was building its narration, or the stage was about
 ; to end (the window flushes the stash if that StageStart never comes).
@@ -424,6 +446,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     seeded_registry = ""
     pending_animation_change = false
     animation_change_from = ""
+    animation_change_by = ""
     pending_stage_restart = false
     ; Once per scene, not per stage: relief pending from earlier stages waits for OrgasmEnd / AnimationEnd.
     SLA_ReliefBegin()
@@ -592,6 +615,7 @@ Function Release()
     seed_first_animation = false
     pending_animation_change = false
     animation_change_from = ""
+    animation_change_by = ""
     pending_stage_restart = false
     SLA_ReliefBegin()
     orgasm_window_open = false
@@ -772,6 +796,9 @@ bool seed_first_animation = false
 ; sends optional DirectNarration "Scene changes to '<new stage description>'".
 bool pending_animation_change = false
 String animation_change_from = ""
+; Description Editor switch: the subject pulldown's name. The narration becomes
+; "<name> <style> changes to <new stage description>".
+String animation_change_by = ""
 ; 1.6x animation switch while SexLab is Advancing (SetAnimation clamped the stage): restart at the next StageStart.
 bool pending_stage_restart = false
 
@@ -1987,7 +2014,12 @@ Function Engine_SetStageInputs()
         genders[i] = SkyrimNet_SexLab_Utilities.SexLabGender(sexlab, positions[i])
         i += 1
     endwhile
-    SkyrimNet_SexLab_OrgasmEngine.SetStageInputs(sid, positions, genders, AnimHasTag("Femdom"), thread.Animation.Registry)
+    String registry = thread.Animation.Registry
+    if stage_inputs_registry != "" && stage_inputs_registry != registry
+        StageMode_NewAnimation()
+    endif
+    stage_inputs_registry = registry
+    SkyrimNet_SexLab_OrgasmEngine.SetStageInputs(sid, positions, genders, AnimHasTag("Femdom"), registry)
     if stage_manual
         SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
     endif
@@ -2118,7 +2150,7 @@ Function Timer_SyncHold()
     if thread == None || !IsSexLabPPlus()
         return
     endif
-    SkyrimNet_SexLab_PPlus.PauseTimer(thread as Quest, scene_paused || gate_holding || victim_holding || ending_holding || ending_watching)
+    SkyrimNet_SexLab_PPlus.PauseTimer(thread as Quest, scene_paused || gate_holding || victim_holding || ending_holding || ending_watching || list_holding)
 EndFunction
 
 ; --------------------------------------------
@@ -2129,7 +2161,8 @@ EndFunction
 ; --------------------------------------------
 Function Ending_Reset()
     bool pplus = IsSexLabPPlus()
-    bool was_holding = ending_holding || gate_holding || victim_holding || ending_watching
+    bool was_holding = ending_holding || gate_holding || victim_holding || ending_watching || list_holding
+    LastStage_Close()
     if !pplus && ending_holding && thread != None && !scene_paused
         thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
         thread.ResolveTimers()
@@ -2150,6 +2183,7 @@ Function Ending_Reset()
     victim_hold_anim = None
     victim_hold_enjoyment = false
     stage_manual = false
+    stage_inputs_registry = ""
     gate_holding = false
     gate_hold_timer = false
     gate_hold_started = 0.0
@@ -2908,10 +2942,15 @@ Function Ending_Poll()
     ; Back to the stage's own timer, without the held time: the final stage ends at the later of its timer
     ; and the response.
     if !scene_paused
-        thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
-        thread.ResolveTimers()
+        if list_holding
+            ; The list owns the ending: it keeps this hold and drops it on close.
+            list_held_timer = true
+        else
+            thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
+            thread.ResolveTimers()
+        endif
     endif
-    Trace("Ending_Poll", "released final stage after "+held+"s ("+why+") "+Ending_TimerState())
+    Trace("Ending_Poll", "released final stage after "+held+"s ("+why+") list:"+list_holding+" "+Ending_TimerState())
     float remaining = SkyrimNet_SexLab_OrgasmEngine.FinalStageRemaining(sid)
     if remaining < 0.0
         remaining = 0.0
@@ -2944,6 +2983,13 @@ Function Ending_Watch()
     endif
     Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "Scene.Ending_Watch", prof_tid)
     if !ending_watching
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
+    endif
+    ; The list or the JEV wait owns the ending. Do not EndAnimation while it is active.
+    if list_phase != 0
+        Timer_SyncHold()
+        RegisterForSingleUpdate(1.0)
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
@@ -3009,6 +3055,60 @@ Function TogglePause()
         Trace("TogglePause", "resumed stage:"+thread.Stage+" held:"+held)
     endif
     SkyrimNet_SexLab_OrgasmEngine.SetScenePaused(sid, scene_paused)
+EndFunction
+
+; The player's stage-mode key. Stages follow enjoyment -> timers -> paused -> enjoyment. Where enjoyment isn't available
+; (final stage, the primary has orgasmed, no primary) it is plain pause / play. Auto play's pause key stays TogglePause.
+Function StageMode_Cycle()
+    if thread == None || thread.Animation == None
+        return
+    endif
+    bool can_enjoy = !ending_done && SkyrimNet_SexLab_OrgasmEngine.CanStageAdvancePrimaryEnjoyment(sid)
+    if scene_paused
+        TogglePause()
+        if can_enjoy
+            StageMode_Enjoy()
+        endif
+    elseif can_enjoy && SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+        StageMode_Timers()
+    else
+        TogglePause()
+    endif
+EndFunction
+
+; To timers with no stage move, so the hold's timer is pulled back. Victim_Drop (StageManual_TakeOver) would leave it
+; pushed out: it relies on GoToStage having reset it.
+Function StageMode_Timers()
+    stage_manual = true
+    SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
+    if victim_hold_enjoyment
+        victim_hold_enjoyment = false
+        Victim_Release()
+    endif
+    Trace("StageMode_Timers", "stage:"+thread.Stage+"/"+Engine_StageCount())
+EndFunction
+
+Function StageMode_Enjoy()
+    stage_manual = false
+    SkyrimNet_SexLab_OrgasmEngine.EnableStageAdvancePrimaryEnjoyment(sid)
+    Victim_StageStart()
+    Trace("StageMode_Enjoy", "stage:"+thread.Stage+"/"+Engine_StageCount())
+EndFunction
+
+; A new animation returns to enjoyment and drops a pause. No TogglePause: a new animation resets SexLab's stage timer
+; (see Pause_Hold), so its pull-back could land on the fresh timer and end the stage early.
+Function StageMode_NewAnimation()
+    Trace("StageMode_NewAnimation", "manual:"+stage_manual+" paused:"+scene_paused+" "+stage_inputs_registry+" -> "+thread.Animation.Registry)
+    stage_manual = false
+    if scene_paused
+        scene_paused = false
+        paused_stage = 0
+        paused_anim = None
+        if IsSexLabPPlus()
+            Timer_SyncHold()
+        endif
+        SkyrimNet_SexLab_OrgasmEngine.SetScenePaused(sid, false)
+    endif
 EndFunction
 
 ; Holds the current stage. Once per (animation, stage): a new stage resets SexLab's timer, a
@@ -3162,13 +3262,604 @@ bool Function IsFinalStage()
     return thread != None && thread.Animation != None && !thread.LeadIn && thread.Stage >= Engine_StageCount()
 EndFunction
 
+; --------------------------------------------
+; Last-stage choice (beside the HUD). Stop, cuddle, vaginal, oral, anal.
+; The stage is held from the moment it becomes final. The list opens after the NPC decision, on the
+; returned line. NPC-only scenes (no player, nobody driving) keep the hold and apply the line on the
+; deadline; after three of those, later ones end with no decision.
+; --------------------------------------------
+Actor Function LastStage_Caller()
+    if thread == None
+        return None
+    endif
+    Actor[] positions = thread.Positions
+    Actor player = Game.GetPlayer()
+    Actor best = None
+    int best_i = -1
+    bool best_victim = false
+    int i = 0
+    while i < positions.length
+        Actor a = positions[i]
+        if a != None && a != player
+            bool victim = thread.IsVictim(a)
+            if best == None || (best_victim && !victim) || (best_victim == victim && i > best_i)
+                best = a
+                best_i = i
+                best_victim = victim
+            endif
+        endif
+        i += 1
+    endwhile
+    return best
+EndFunction
+
+String Function LastStage_CastNames()
+    if thread == None
+        return ""
+    endif
+    Actor[] positions = thread.Positions
+    String names = ""
+    int i = 0
+    while i < positions.length
+        if positions[i] != None
+            if names != ""
+                names += ", "
+            endif
+            names += GetDisplayName(positions[i])
+        endif
+        i += 1
+    endwhile
+    return names
+EndFunction
+
+bool Function LastStage_Driving()
+    if thread == None
+        return false
+    endif
+    Actor driven = SkyrimNet_SexLab_WebUI.LastStage_DrivenActor()
+    return driven != None && thread.Positions.Find(driven) >= 0
+EndFunction
+
+bool Function LastStage_SeesList()
+    return thread != None && (thread.HasPlayer || LastStage_Driving())
+EndFunction
+
+; The Description Editor opens on whoever sees the list: the player, else the NPC they drive.
+Actor Function LastStage_EditorActor()
+    if thread != None && thread.HasPlayer
+        return Game.GetPlayer()
+    endif
+    return SkyrimNet_SexLab_WebUI.LastStage_DrivenActor()
+EndFunction
+
+bool Function LastStage_SelectorOn()
+    if thread != None && (thread.HasPlayer || LastStage_Driving())
+        return SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true)
+    endif
+    return SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false)
+EndFunction
+
+bool Function LastStage_Frozen()
+    return list_phase == 1 || ending_holding || scene_paused || Utility.IsInMenuMode() || SkyrimNet_SexLab_WebUI.WebUI_IsOverlayVisible()
+EndFunction
+
+int Function LastStage_CountNpcOnly()
+    Actor player = Game.GetPlayer()
+    int n = StorageUtil.GetIntValue(player, "skyrimnet_sexlab_npc_only_laststage", 0) + 1
+    StorageUtil.SetIntValue(player, "skyrimnet_sexlab_npc_only_laststage", n)
+    return n
+EndFunction
+
+int Function LastStage_NpcOnlyCount()
+    return StorageUtil.GetIntValue(Game.GetPlayer(), "skyrimnet_sexlab_npc_only_laststage", 0)
+EndFunction
+
+Function LastStage_Hold()
+    list_holding = true
+    if thread == None
+        return
+    endif
+    if IsSexLabPPlus()
+        Timer_SyncHold()
+    elseif !scene_paused && !list_held_timer && !ending_holding && !gate_holding && !victim_holding
+        thread.UpdateTimer(PAUSE_HOLD_SECONDS)
+        list_held_timer = true
+    endif
+    RegisterForSingleUpdate(1.0)
+EndFunction
+
+Function LastStage_DropListHold()
+    list_holding = false
+    if IsSexLabPPlus()
+        Timer_SyncHold()
+    elseif list_held_timer && thread != None && !scene_paused && !ending_holding && !gate_holding && !victim_holding
+        thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+    endif
+    list_held_timer = false
+EndFunction
+
+; Switch: drop the list hold and the ending hold together, one pull unless pause / gate / victim owns the timer.
+Function LastStage_ReleaseTimer()
+    bool pull = list_held_timer || (ending_holding && !scene_paused && !list_held_timer)
+    list_holding = false
+    list_held_timer = false
+    ending_holding = false
+    if IsSexLabPPlus()
+        Timer_SyncHold()
+    elseif pull && thread != None && !scene_paused && !gate_holding && !victim_holding
+        thread.UpdateTimer(-PAUSE_HOLD_SECONDS)
+        thread.ResolveTimers()
+    endif
+EndFunction
+
+Function LastStage_Snapshot()
+    float left = SkyrimNet_SexLab_OrgasmEngine.FinalStageRemaining(sid)
+    if left >= 0.0 && thread != None && thread.AutoAdvance
+        list_timed = true
+        list_left = left
+    else
+        list_timed = false
+        list_left = -1.0
+    endif
+    list_running = false
+    list_deadline = 0.0
+EndFunction
+
+; SexLab's Advance key (Space) selects while the list is up: on the final stage it would end the scene.
+Function LastStage_ShowList(int index)
+    SkyrimNet_SexLab_WebUI.LastStage_Show(index, ((SexLab as Quest) as sslSystemConfig).AdvanceAnimation)
+EndFunction
+
+Function LastStage_Begin()
+    if thread == None || thread.Animation == None
+        return
+    endif
+    if list_phase != 0
+        LastStage_Close()
+    endif
+    list_anim = thread.Animation.Registry
+    LastStage_Hold()
+    list_ui = LastStage_SeesList()
+    list_npc_only = !list_ui
+    if list_npc_only
+        int n = 0
+        if !list_counted
+            list_counted = true
+            n = LastStage_CountNpcOnly()
+        else
+            n = LastStage_NpcOnlyCount()
+        endif
+        if n > 3
+            list_phase = 2
+            list_index = 0
+            LastStage_Snapshot()
+            Trace("LastStage_Begin", "npc-only cap "+n+": end")
+            return
+        endif
+    endif
+    Actor caller = LastStage_Caller()
+    if caller == None
+        list_phase = 2
+        list_index = 0
+        LastStage_Snapshot()
+        if list_ui
+            LastStage_ShowList(0)
+        endif
+        Trace("LastStage_Begin", "no npc caller, stop")
+        return
+    endif
+    list_phase = 1
+    SkyrimNet_SexLab_WebUI.LastStage_Request(sid, caller, LastStage_CastNames(), thread.HasPlayer)
+    Trace("LastStage_Begin", "asking "+GetDisplayName(caller)+" ui:"+list_ui)
+EndFunction
+
+Function LastStage_Close()
+    list_phase = 0
+    list_ui = false
+    list_npc_only = false
+    list_running = false
+    list_deadline = 0.0
+    list_preset_json = ""
+    list_prepared = false
+    list_switching = false
+    list_saved_valid = false
+    if list_holding || list_held_timer
+        LastStage_DropListHold()
+    endif
+    SkyrimNet_SexLab_WebUI.LastStage_Hide()
+EndFunction
+
+Function LastStage_Poll()
+    if list_phase == 0
+        return
+    endif
+    if list_npc_only && list_phase == 2 && !list_ui && LastStage_SeesList() && LastStage_NpcOnlyCount() <= 3
+        list_ui = true
+        list_npc_only = false
+        LastStage_ShowList(list_index)
+    elseif list_ui && !LastStage_SeesList()
+        SkyrimNet_SexLab_WebUI.LastStage_Hide()
+        list_ui = false
+        list_npc_only = true
+    endif
+    if list_ui && list_phase == 2
+        int live = SkyrimNet_SexLab_WebUI.LastStage_Index()
+        if live >= 0
+            list_index = live
+        endif
+    endif
+    if LastStage_Frozen()
+        if list_running
+            float remain = list_deadline - Utility.GetCurrentRealTime()
+            if remain < 0.0
+                remain = 0.0
+            endif
+            list_left = remain
+            list_running = false
+            list_deadline = 0.0
+        endif
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    if list_phase != 2
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    if !list_timed
+        if list_npc_only && !list_ui
+            LastStage_Commit(true)
+            return
+        endif
+        RegisterForSingleUpdate(1.0)
+        return
+    endif
+    float now = Utility.GetCurrentRealTime()
+    if !list_running
+        list_running = true
+        list_deadline = now + list_left
+    endif
+    list_left = list_deadline - now
+    if now >= list_deadline
+        LastStage_Commit(true)
+        return
+    endif
+    RegisterForSingleUpdate(1.0)
+EndFunction
+
+Function LastStage_Commit(bool from_deadline)
+    ; list_switching: the choice is made and the switch can take seconds. The deadline must not end the new animation.
+    if list_phase != 2 || list_switching
+        return
+    endif
+    if list_ui
+        int live = SkyrimNet_SexLab_WebUI.LastStage_Index()
+        if live >= 0
+            list_index = live
+        endif
+    endif
+    if list_index <= 0
+        Trace("LastStage_Commit", "line:"+list_index+" deadline:"+from_deadline+" stop")
+        LastStage_Stop()
+        return
+    endif
+    ; NPC-only (list_ui false) always random-picks, even when sexlab.tags.nonplayer is on:
+    ; nobody is there to operate the Description Editor. The deadline random-picks too: the editor
+    ; only opens on a key press, and a commit that leaves the list up would repeat every poll.
+    if !from_deadline && list_ui && LastStage_SelectorOn()
+        Trace("LastStage_Commit", "line:"+list_index+" deadline:"+from_deadline+" editor")
+        LastStage_OpenEditor()
+        return
+    endif
+    Trace("LastStage_Commit", "line:"+list_index+" deadline:"+from_deadline+" switch")
+    if !LastStage_TrySwitch()
+        Trace("LastStage_Commit", "line:"+list_index+" no match")
+        Debug.Notification("No matching animation.")
+        if from_deadline
+            LastStage_Stop()
+        endif
+    endif
+EndFunction
+
+Function LastStage_Stop()
+    LastStage_Close()
+    if thread != None
+        thread.EndAnimation()
+    endif
+EndFunction
+
+Function LastStage_AddStr(int arr, String tag)
+    if tag != ""
+        JArray.addStr(arr, tag)
+    endif
+EndFunction
+
+String Function LastStage_PickRegistry()
+    if thread == None || sexlab == None || list_index < 1 || list_index > 4
+        return ""
+    endif
+    Actor[] positions = thread.Positions
+    int filter = JMap.object()
+    JMap.setInt(filter, "_actor_count", positions.length)
+    JMap.setStr(filter, "_creature", "exclude")
+    JMap.setStr(filter, "_synonyms", "broad")
+    JMap.setInt(filter, "_rank", 1)
+    int cast_arr = JArray.object()
+    int gender_arr = JArray.object()
+    int i = 0
+    while i < positions.length
+        if positions[i]
+            JArray.addInt(cast_arr, positions[i].GetFormID())
+            JArray.addInt(gender_arr, SexLabGender(sexlab, positions[i]))
+        endif
+        i += 1
+    endwhile
+    JMap.setObj(filter, "_form_ids", cast_arr)
+    JMap.setObj(filter, "_rank_pos_genders", gender_arr)
+    int suppress = JArray.object()
+    if list_index == 1
+        JMap.setStr(filter, "_setting", "nonsexual")
+        LastStage_AddStr(suppress, "sexual")
+        LastStage_AddStr(suppress, "spanking")
+        LastStage_AddStr(suppress, "aggressive")
+        LastStage_AddStr(suppress, "foreplay")
+        LastStage_AddStr(suppress, "leadin")
+    elseif list_index == 2
+        int must = JArray.object()
+        LastStage_AddStr(must, "vaginal")
+        JMap.setObj(filter, "_must_tags", must)
+    elseif list_index == 3
+        int any = JArray.object()
+        LastStage_AddStr(any, "oral")
+        LastStage_AddStr(any, "blowjob")
+        LastStage_AddStr(any, "cunnilingus")
+        JMap.setObj(filter, "_any_tags", any)
+    else
+        int must_anal = JArray.object()
+        LastStage_AddStr(must_anal, "anal")
+        JMap.setObj(filter, "_must_tags", must_anal)
+    endif
+    JMap.setObj(filter, "_suppress_tags", suppress)
+    String filter_json = ObjectToLowerCaseKeyJson(filter)
+    JValue.release(filter)
+    String result = SkyrimNet_SexLab_AnimDb.AnimDb_QueryTopNAnims(filter_json, 32)
+    if result == "" || result == "[]"
+        Trace("LastStage_PickRegistry", "line:"+list_index+" results:0")
+        return ""
+    endif
+    int arr = JValue.objectFromPrototype(result)
+    if arr == 0
+        Trace("LastStage_PickRegistry", "line:"+list_index+" bad result")
+        return ""
+    endif
+    int count = JArray.count(arr)
+    if count <= 0
+        Trace("LastStage_PickRegistry", "line:"+list_index+" results:0")
+        JValue.release(arr)
+        return ""
+    endif
+    String cur = ""
+    if thread.Animation
+        cur = thread.Animation.Registry
+    endif
+    int start = Utility.RandomInt(0, count - 1)
+    String picked = ""
+    int n = 0
+    while n < count && picked == ""
+        int row = JArray.getObj(arr, (start + n) % count)
+        String reg = JMap.getStr(row, "_registry", "")
+        if reg != "" && reg != cur && ResolveAnimation(sexlab, reg) != None
+            picked = reg
+        endif
+        n += 1
+    endwhile
+    JValue.release(arr)
+    if picked == ""
+        Trace("LastStage_PickRegistry", "line:"+list_index+" results:"+count+" none playable")
+    endif
+    return picked
+EndFunction
+
+bool Function LastStage_TrySwitch()
+    String reg = LastStage_PickRegistry()
+    if reg == ""
+        return false
+    endif
+    list_switching = true
+    if !WebUI_SwitchToRegistry(reg, true)
+        LastStage_SwitchFailed()
+        return false
+    endif
+    return true
+EndFunction
+
+String Function LastStage_PresetJson()
+    int obj = JMap.object()
+    int any = JArray.object()
+    int suppress = JArray.object()
+    int require_all = 0
+    if list_index == 1
+        LastStage_AddStr(any, "cuddling")
+        LastStage_AddStr(any, "hug")
+        LastStage_AddStr(any, "spooning")
+        LastStage_AddStr(any, "kissing")
+        LastStage_AddStr(any, "headpat")
+        LastStage_AddStr(any, "handholding")
+        LastStage_AddStr(any, "lappillow")
+        LastStage_AddStr(suppress, "sexual")
+        LastStage_AddStr(suppress, "spanking")
+        LastStage_AddStr(suppress, "aggressive")
+        LastStage_AddStr(suppress, "foreplay")
+        LastStage_AddStr(suppress, "leadin")
+    elseif list_index == 2
+        LastStage_AddStr(any, "vaginal")
+        require_all = 1
+    elseif list_index == 3
+        LastStage_AddStr(any, "oral")
+        LastStage_AddStr(any, "blowjob")
+        LastStage_AddStr(any, "cunnilingus")
+    elseif list_index == 4
+        LastStage_AddStr(any, "anal")
+        require_all = 1
+    endif
+    JMap.setObj(obj, "any", any)
+    JMap.setObj(obj, "suppress", suppress)
+    JMap.setInt(obj, "require_all", require_all)
+    String json = ObjectToLowerCaseKeyJson(obj)
+    JValue.release(obj)
+    return json
+EndFunction
+
+Function LastStage_OpenEditor()
+    list_preset_json = LastStage_PresetJson()
+    WebUI_TakeCancelSnapshot()
+    SkyrimNet_SexLab_WebUI.Animation_Menu_Open(thread, self, LastStage_EditorActor())
+    Trace("LastStage_OpenEditor", "line:"+list_index)
+EndFunction
+
+Function LastStage_NoteIntent()
+    if list_index == 1
+        intent = "cuddling"
+    elseif list_index == 2
+        intent = "vaginal sex"
+    elseif list_index == 3
+        intent = "oral sex"
+    elseif list_index == 4
+        intent = "anal sex"
+    endif
+EndFunction
+
+Function LastStage_ArmSwitch()
+    if list_phase == 0
+        return
+    endif
+    list_switching = true
+    if list_prepared
+        return
+    endif
+    list_saved_done = ending_done
+    list_saved_target = ending_target
+    list_saved_valid = true
+    list_prepared = true
+    ending_done = false
+    if ending_actor != None && ending_target > 0 && SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) >= ending_target
+        ending_target = SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) + 1
+    endif
+    ending_hold_pending = false
+    ending_watching = false
+    ending_watch_anim = None
+    LastStage_ReleaseTimer()
+EndFunction
+
+Function LastStage_OnSwitched()
+    if list_phase == 0
+        return
+    endif
+    LastStage_NoteIntent()
+    LastStage_Close()
+    Engine_SetStageInputs()
+    if IsFinalStage()
+        LastStage_Begin()
+    endif
+EndFunction
+
+Function LastStage_SwitchFailed()
+    if list_saved_valid
+        ending_done = list_saved_done
+        ending_target = list_saved_target
+        list_saved_valid = false
+    endif
+    list_prepared = false
+    list_switching = false
+    if list_phase != 0
+        LastStage_Hold()
+    endif
+EndFunction
+
+Function LastStage_Consider()
+    if list_switching
+        return
+    endif
+    if !IsFinalStage()
+        if list_phase != 0
+            LastStage_Close()
+        endif
+        return
+    endif
+    String reg = ""
+    if thread.Animation
+        reg = thread.Animation.Registry
+    endif
+    if list_phase != 0 && list_anim == reg
+        return
+    endif
+    LastStage_Begin()
+EndFunction
+
+Function LastStage_OnDecision(int choice)
+    if list_phase != 1
+        return
+    endif
+    if choice < 0 || choice > 4
+        choice = 0
+    endif
+    list_index = choice
+    list_phase = 2
+    LastStage_Snapshot()
+    if list_ui
+        LastStage_ShowList(list_index)
+    endif
+    Trace("LastStage_OnDecision", "line:"+list_index+" ui:"+list_ui)
+EndFunction
+
+Function LastStage_OnMove(int choice)
+    if list_phase == 2 && list_ui && choice >= 0 && choice <= 4
+        list_index = choice
+    endif
+EndFunction
+
+Function LastStage_OnSelect(int choice)
+    if list_phase != 2 || !list_ui
+        return
+    endif
+    if choice >= 0 && choice <= 4
+        list_index = choice
+    endif
+    LastStage_Commit(false)
+EndFunction
+
+Event OnPlayerLoadGame()
+    if list_phase == 0
+        return
+    endif
+    list_running = false
+    list_deadline = 0.0
+    list_switching = false
+    list_prepared = false
+    if list_phase == 1
+        Actor caller = LastStage_Caller()
+        if caller == None
+            list_phase = 2
+            list_index = 0
+            LastStage_Snapshot()
+        else
+            SkyrimNet_SexLab_WebUI.LastStage_Request(sid, caller, LastStage_CastNames(), thread != None && thread.HasPlayer)
+        endif
+    endif
+    LastStage_Hold()
+    if list_ui && list_phase == 2
+        LastStage_ShowList(list_index)
+    endif
+    RegisterForSingleUpdate(1.0)
+EndEvent
+
 ; Seconds left in the current (non-final) stage from its timer; -1 when unknown, final, LeadIn, paused
 ; or held (gate / ending hold, pause key).
 float Function StageRemaining()
     if thread == None || thread.Animation == None || thread.LeadIn || stage_started_at <= 0.0
         return -1.0
     endif
-    if scene_paused || gate_holding || victim_holding || ending_holding
+    if scene_paused || gate_holding || victim_holding || ending_holding || list_holding
         return -1.0
     endif
     int stage = thread.Stage
@@ -3672,6 +4363,7 @@ Function AnimationStart()
     stage_last = 0
     pending_animation_change = false
     animation_change_from = ""
+    animation_change_by = ""
     pending_stage_restart = false
     ; Re-entrant mid-scene AnimationStart must not force STATUS_SETUP (would re-run
     ; first-start/initiator path) or clear orgasm_messages_set while leaving non-empty
@@ -3942,7 +4634,11 @@ Function StageStart()
         if pending_animation_change && desc != ""
             ; Animation switched (any route): narrate old animation's stage -> new animation's stage.
             ; No anidata transition lookup: those are per-animation stage pairs.
-            narration = "Scene changes to '"+desc+"'"
+            if animation_change_by != ""
+                narration = animation_change_by+" "+style+" changes to "+desc
+            else
+                narration = "Scene changes to '"+desc+"'"
+            endif
             change_scene = true
         elseif desc != "" && description_last != ""
             if desc != description_last
@@ -4052,6 +4748,7 @@ Function StageStart()
     endif
     pending_animation_change = false
     animation_change_from = ""
+    animation_change_by = ""
 
     ; If this thread is being tracked print the thread's status
     if tracking
@@ -4069,6 +4766,7 @@ Function StageStart()
         Debug.Notification("stage "+cur_stage+" of "+SkyrimNet_SexLab_AnimDb.ThreadStageCount(thread)+" "+msg)
     endif  
     WebUI_ConfigureIfOverlayVisible()
+    LastStage_Consider()
     DbgEnd("StageStart")
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
@@ -4111,6 +4809,8 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
     endwhile
     ending_watching = false
     ending_watch_anim = None
+    list_counted = false
+    LastStage_Close()
     AlignActors()
     PushThread()
 
@@ -4841,6 +5541,7 @@ Event OnUpdate()
     if Utility.IsInMenuMode()
         RegisterForSingleUpdate(0.5)
         Trace("OnUpdate", "--- orgasm window waiting on menu")
+        LastStage_Poll()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
@@ -4872,6 +5573,7 @@ Event OnUpdate()
     elseif ending_watching
         Ending_Watch()
     endif
+    LastStage_Poll()
     if actor_change_ended
         ActorChange_Poll()
     endif
@@ -5496,11 +6198,11 @@ Function SetStyleDialog()
     DbgReturn("SetStyleDialog")
 endFunction
 
-Function WebUI_ExportAnimationMenuState(sslThreadController _thread)
-    if _thread != None
-        thread = _thread
-    endif
+; No thread argument: a Form from C++ does not bind to an sslThreadController parameter ("incompatible arguments").
+Function WebUI_ExportAnimationMenuState()
     SkyrimNet_SexLab_WebUI.Animation_Menu_Show(BuildWebUIAnimationMenuState())
+    ; Same order as ProcessHotkey: the pulldown keeps its last actor until this selects the editor's.
+    SkyrimNet_SexLab_WebUI.WebUI_AfterTargetOpen(LastStage_EditorActor(), true)
 EndFunction
 
 ; Same object as the Scene Menu push (BuildWebUISceneMenuObject carries the Description
@@ -5794,7 +6496,7 @@ Function WebUI_OnMenuPrevNext(int direction)
 EndFunction
 
 ; The player moved the stage by hand (HUD keys, WebUI menu, editor): stages stop following enjoyment and timers take
-; over for the rest of this scene. After the move: GoToStage already reset the stage's timer, so the hold just drops.
+; over until the stage-mode key or a new animation (Engine_SetStageInputs). After the move: GoToStage already reset the stage's timer, so the hold just drops.
 Function StageManual_TakeOver()
     stage_manual = true
     SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
@@ -6064,6 +6766,12 @@ int Function BuildWebUISceneMenuObject()
         endif
     endif
     Trace("BuildWebUISceneMenuState", "--- sid:"+sid+" positions:"+n+" names:["+pos_names_dbg+"] active:"+active_reg+" stage:"+SNSL_JMap.getInt(obj, "_stage", 0)+"/"+SNSL_JMap.getInt(obj, "_stage_count", 0))
+    if list_preset_json != ""
+        int preset = SNSL_JValue.objectFromPrototype(list_preset_json)
+        if preset != 0
+            SNSL_JMap.setObj(obj, "_list_preset", preset)
+        endif
+    endif
     return obj
 EndFunction
 
@@ -6315,11 +7023,14 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
         ; P+: play the scene with ResetScene; the playing set (thread.Animations) stays the one start scene,
         ; since P+'s enjoyment-wait hops between its entries.
         if thread.animation == None || thread.animation.Registry != reg
+            LastStage_ArmSwitch()
             if !PPlus_SwitchScene(reg)
+                LastStage_SwitchFailed()
                 Trace("WebUI_SwitchToRegistry", "P+ cannot play "+reg+" with these actors", true)
                 return false
             endif
         endif
+        LastStage_OnSwitched()
         NotePlayedRegistry(reg)
         cancel_dirty = true
         if reseed
@@ -6416,6 +7127,8 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
         Trace("WebUI_SwitchToRegistry", "add failed:"+reg, true)
         return false
     endif
+    ; Before the stage>1 restart: Arm clears ending_done, so a stage>1 animation restarts at 1.
+    LastStage_ArmSwitch()
     int anim_count = 0
     if thread.Animations
         anim_count = thread.Animations.length
@@ -6461,6 +7174,7 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
     endif
     Trace("WebUI_SwitchToRegistry", reg+" idx:"+idx+" anims:"+anim_count+" reseed:"+reseed)
     WebUI_ConfigureIfOverlayVisible()
+    LastStage_OnSwitched()
     return true
 EndFunction
 
@@ -6612,6 +7326,7 @@ Function WebUI_RestoreCancelSnapshot()
     ; Record without reseeding or narrating: the values below are the ones to keep.
     seeded_registry = snap_seeded
     pending_animation_change = false
+    animation_change_by = ""
     pending_stage_restart = false
     if snap_style != "" && snap_style != style
         SetStyle(snap_style)
@@ -6860,7 +7575,12 @@ Function ApplyWebUICommit(int obj)
         ; _reseed_defaults (Description Editor switch): the new animation's defaults replace the actors'
         ; orgasm/speaking, dressing only toward undressed. Without it (Scene Menu Update) the user's
         ; values above stand.
+        animation_change_by = JMap.getStr(obj, "_change_by", "")
         WebUI_SwitchToRegistry(active_reg, JMap.getInt(obj, "_reseed_defaults", 0) == 1)
+        ; No narration queued (switch failed or nothing changed): a later switch must not use this name.
+        if !pending_animation_change
+            animation_change_by = ""
+        endif
     endif
 EndFunction
 

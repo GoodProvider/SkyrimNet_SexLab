@@ -346,7 +346,13 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
 
 With the engine on, stages follow one actor's enjoyment instead of SexLab's stage timers, so the animation's progress matches how close that actor is to orgasm (`StageAdvancePrimaryEnjoyment`). It works in both modes and on all three backends (SexLab 1.6x, P+, AnimEngine).
 
-**Active when all of these hold**, otherwise timers run as usual: engine enabled, `sexlab.enjoyment.stage_advance_primary_enjoyment` on (default), no LeadIn, 2+ stages, an eligible primary, the Scene's inputs received (`SetStageInputs`), and no manual stage move in this scene.
+**Active when all of these hold**, otherwise timers run as usual: engine enabled, `sexlab.enjoyment.stage_advance_primary_enjoyment` on (default), no LeadIn, 2+ stages, an eligible primary, the Scene's inputs received (`SetStageInputs`), and not turned off by the player (`stageEnjoymentOff`).
+
+**Turning it off and on** (`Scene.StageMode_Cycle`, HUD control `stage_mode`; AnimEngine: `Hud.cpp` `OnAnimKey`): the player's pause key cycles enjoyment → timers → paused → enjoyment, and `pauseLabel` names what a press does next (*play*, *pause*, *enjoy*). A manual stage move also switches to timers (`StageManual_TakeOver`). Where `CanStageAdvancePrimaryEnjoyment` is false (final stage, `primaryFinished`, no primary), the key is plain pause / play. Auto play's `pause` key stays `TogglePause`, so its resume returns to the earlier mode.
+
+- **To timers:** `StageMode_Timers` calls `Victim_Release`, not `Victim_Drop`: no stage move reset the timer, so the hold's push has to be pulled back.
+- **To enjoyment:** `EnableStageAdvancePrimaryEnjoyment` sets `stageFloor` to the current stage, and `StageMode_Enjoy` runs `Victim_StageStart` to hold it.
+- **New animation** (registry change, also seen by `Engine_SetStageInputs`): clears `stage_manual`, `stageEnjoymentOff`, `primaryFinished` and a pause. The pause is cleared without `TogglePause`, because the new animation resets SexLab's stage timer and the pull-back could end the stage early.
 
 **Primary** (`PrimaryOf`, computed each tick; log `stage primary`):
 
@@ -364,9 +370,9 @@ With the engine on, stages follow one actor's enjoyment instead of SexLab's stag
 **Stage from enjoyment** (`StageFollowPrimary`; log `stage follows`): N stages give N−1 equal bands, and the last stage is the orgasm's. Stage `k` (2..N−1) needs `enjoyment > 100 × (k−1) / (N−1)`. With 5 stages: above 25 → 2, above 50 → 3, above 75 → 4, and stage 4 holds until the primary orgasms.
 
 - **Both directions.** A move back needs `kStageBackMinSecs` (3 s) on the stage, so enjoyment hovering at a threshold can't flip it every tick. `stage_spike` applies only on a stage's first entry (`spikedThrough`).
-- **No moves** while paused, in the final stage, once the primary has orgasmed (`primaryFinished`, set in `Fire` and `NoteExternalOrgasm`), or while a gate is passing. Without this guard, the orgasm's reset to 0 would send the stage back to 1 just before the jump.
+- **No moves** while paused, in the final stage, once the primary has orgasmed in this animation (`primaryFinished`, set in `Fire` and `NoteExternalOrgasm`), or while a gate is passing. Without this guard, the orgasm's reset to 0 would send the stage back to 1 just before the jump.
 - **Delivery.** `Effect_MoveStage` → `Scene.Engine_MoveStage`, which ignores the move unless the thread is Animating. The engine re-sends after `kStageMoveResend` (3 s) if `SetStage` hasn't confirmed it. 1.6x jumps straight to the stage. P+ and AnimEngine take one step per call, and the engine sends the next as soon as `SetStage` confirms. P+ forward uses `SkipTo(pplus_path[stage])`, so a fork opens no branch menu.
-- **Floor.** A forward stage change the engine didn't ask for (the cap, SexLab's own key) sets `stageFloor`, so the back rule doesn't undo it. A new animation (new registry in `SetStageInputs`) resets the floor, `spikedThrough` and the Together clock, and the next tick jumps to the stage for the carried-over enjoyment.
+- **Floor.** A forward stage change the engine didn't ask for (the cap, SexLab's own key) sets `stageFloor`, so the back rule doesn't undo it. A new animation (new registry in `SetStageInputs`) resets the floor, `spikedThrough`, `stageEnjoymentOff`, `primaryFinished` and the Together clock, and the next tick jumps to the stage for the carried-over enjoyment.
 
 **Holds.** The victim hold is generalized rather than duplicated: `Victim_StageStart` holds every stage below the final on each entry (`victim_hold_enjoyment`), without needing `sexlab.ending.enabled`. SexLab sets `StageTimer` in `FireAction`, before it sends `StageStart`, so a hold applied there survives, including on stage 1. While the mode is active, `VictimHoldScene` returns false.
 

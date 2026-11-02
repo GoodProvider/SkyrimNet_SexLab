@@ -48,6 +48,8 @@ Use `punish_*` (not obsolete `punishing_*`).
 
 `nonsexual_male_position_0`–`2` (LLM cuddle / comfort / affection actions, MCM affection) filter like `nonsexual` (strict, affection `tags_any`, suppress `sexual,spanking,aggressive,forplay,whip`) and add `male_position`. The cuddle actions pass a posture (`sitting` / `laying`) as the method tag, so without `tags_any` + `strict` the posture alone matched sex animations.
 
+The last-stage **Cuddle after sex** line queries AnimDB with the `nonsexual` setting plus suppress tags `sexual`, `spanking`, `aggressive`, `foreplay`, and `leadin`. The Description Editor's active-mode filter skips `_setting`, so that open is given those tags explicitly (`any` / `must` / `suppress`) instead of the setting name.
+
 TargetMenu scene-start options and their settings:
 
 | Option | Setting | Filter |
@@ -60,7 +62,7 @@ TargetMenu scene-start options and their settings:
 
 `nonsexual_platonic` (strict; any of cuddling/hug/spooning/headpat/handholding; no kissing or submission) is no longer a TargetMenu option. Scene Creator and `exclude_settings` still use it.
 
-`default.json` sets `synonyms: broad` and `tags_suppress_unless_bound: armbinder,yoke,cuffs,bound` (every `deviousdevice` animation has one of these).
+`default.json` sets `synonyms: broad` and `tags_suppress_unless_bound: armbinder,yoke,cuffs,bound` (every `deviousdevice` animation has one of these). The Scene Creator's **bound** word, when white, counts as bound for this filter.
 
 ## Examples
 

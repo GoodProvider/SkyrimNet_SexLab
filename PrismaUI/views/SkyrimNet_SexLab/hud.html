@@ -7,9 +7,10 @@
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
         C++ pushes hudUpdate({groups, focus, shiftTarget (row arouse / calm hit while Shift is held, -1 otherwise), actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
-        blocked, paused, freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
+        blocked, paused, pauseLabel (what the pause key does next: play / pause / enjoy), freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys; ask (Num .) sits under Num 3, aid (Num Enter) to its right.
+        A last column holds up / down (keys.list_up / list_down), shown only while lastStage.open, also with every HUD group off. The next cell stays lit while it is open, and a press applies the current line.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -47,10 +48,16 @@
             color: var(--text-primary);
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
         }
-        #hud {
+        #hud-row {
             position: absolute;
             top: 10%;
             left: 10%;
+            display: flex;
+            flex-direction: row;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        #hud {
             display: none;
             flex-direction: column;
             gap: var(--space-sm);
@@ -58,6 +65,11 @@
             width: calc(1.4em + 12em + 60px + 60px + 180px + 1.2em + 6 * var(--space-sm));
         }
         #hud.visible { display: flex; }
+        /* Last-stage list. Not a HUD group: it stays up when #hud is hidden. */
+        #last-stage { display: none; white-space: nowrap; }
+        #last-stage.visible { display: flex; flex-direction: column; }
+        .last-line { opacity: 0.3; }
+        .last-line.on { opacity: 1; }
         /* Hidden parts keep their space so nothing else moves. */
         .off { visibility: hidden; }
 
@@ -118,17 +130,19 @@
             100% { background-color: #ff4fa3; }
         }
 
-        /* Controls: 5 x 5 grid laid out like the numpad (* / 7 8 9 - / 4 5 6 + / 1 2 3 / . Enter); each cell is one box, key over label.
+        /* Controls: 6 x 5 grid laid out like the numpad (* / 7 8 9 - / 4 5 6 + / 1 2 3 / . Enter), then the list's up / down column; each cell is one box, key over label.
            Equal 1fr columns in a max-content grid: every box is as wide as the widest cell. */
         #controls {
             display: grid;
             visibility: hidden;
             width: max-content;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: var(--space-sm);
             font-size: var(--text-sm);
         }
         #controls.visible { visibility: visible; }
+        /* Last-stage up / down: not a HUD group, shown even when #controls is hidden. */
+        .ctl.list-key { visibility: visible; }
         .ctl {
             display: flex;
             flex-direction: column;
@@ -167,9 +181,12 @@
     </style>
 </head>
 <body>
-    <div id="hud">
-        <table id="enjoyment"><tbody id="rows"></tbody></table>
-        <div id="controls"></div>
+    <div id="hud-row">
+        <div id="hud">
+            <table id="enjoyment"><tbody id="rows"></tbody></table>
+            <div id="controls"></div>
+        </div>
+        <div id="last-stage"></div>
     </div>
 
     <script>
@@ -238,9 +255,10 @@
         const COLUMN_LABELS = [
             ['', 'PosUp', 'PosDn'],
             ['', 'prev', 'deny', 'allow'],
-            ['calm', 'pause', 'play', 'end'],
+            ['calm', 'pause', 'play', 'enjoy', 'end'],
             ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM, 'ask'],
             SPEED_NAMES.concat([NO_STEP, 'auto', 'control', 'release', 'aid']),
+            ['up', 'down'],
         ];
 
         // Label text; a trailing camera emoji is drawn smaller.
@@ -253,7 +271,7 @@
         }
 
         // One grid cell, key over label. col: 0-based grid column (sizer set).
-        // off: render invisibly so the slot keeps its size; blocked: dim + strike; dim: dim only; title: tooltip.
+        // off: render invisibly so the slot keeps its size; blocked: dim + strike; dim: dim only; title: tooltip; cls: extra class.
         function ctl(keys, control, label, col, opts) {
             opts = opts || {};
             const k = keyLabel(keys, control);
@@ -262,14 +280,49 @@
             COLUMN_LABELS[col].forEach(function (s) { lab += '<span class="sizer">' + labelHtml(s) + '</span>'; });
             lab += '<span class="text">' + labelHtml(label) + '</span></span>';
             const cls = (opts.blocked ? ' blocked' : '') + (opts.dim ? ' dim' : '') +
-                (opts.off || !k ? ' off' : '');
+                (opts.off || !k ? ' off' : '') + (opts.cls ? ' ' + opts.cls : '');
             const title = opts.title ? ' title="' + esc(opts.title) + '"' : '';
             return '<span class="ctl' + cls + '"' + title + '>' + key + lab + '</span>';
         }
 
+        function renderLastStage(state) {
+            const el = document.getElementById('last-stage');
+            if (!el) return;
+            const ls = state && state.lastStage;
+            if (!ls || !ls.open) {
+                el.classList.remove('visible');
+                el.innerHTML = '';
+                return;
+            }
+            const lines = ls.lines || [];
+            const index = Number(ls.index) || 0;
+            let html = '';
+            for (let i = 0; i < lines.length; i++)
+                html += '<div class="last-line' + (i === index ? ' on' : '') + '">' + esc(lines[i]) + '</div>';
+            el.innerHTML = html;
+            el.classList.add('visible');
+        }
+
+        window.lastStageHide = function () {
+            renderLastStage(null);
+        };
+
+        window.lastStageSelect = function (index) {
+            const el = document.getElementById('last-stage');
+            if (!el) return;
+            const n = Number(index) || 0;
+            const lines = el.querySelectorAll('.last-line');
+            for (let i = 0; i < lines.length; i++)
+                lines[i].classList.toggle('on', i === n);
+        };
+
         function hudUpdate(state) {
             const hud = document.getElementById('hud');
-            if (!state || !state.groups) { hud.classList.remove('visible'); return; }
+            if (!state || !state.groups) {
+                hud.classList.remove('visible');
+                renderLastStage(state);
+                return;
+            }
             const g = state.groups;
             const actors = state.actors || [];
             const keys = state.keys || {};
@@ -329,14 +382,16 @@
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
             // Controls part, PgUp/PgDn column + numpad grid. Each label names what a press does.
-            //   <as npc>                         auto|control   (Num *: take control)
-            //   PosUp   (Num 7)  calm   arouse   <slower step>
+            //   <as npc>                         auto|control   up     (Num *: take control; up / down: list open)
+            //   PosUp   (Num 7)  calm   arouse   <slower step>  down
             //   PosDn   prev     pause  next     <faster step>
             //           deny     end    free 📷
-            //                           ask      aid            (Num .: ask, always; Num Enter: aid, mini-game)
+            //                           ask      aid                 (Num .: ask, always; Num Enter: aid, mini-game)
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
             const cOff = !g.controls;
             const mgcOff = cOff || !g.minigame;
+            const listOpen = !!(state.lastStage && state.lastStage.open);
+            const listKey = listOpen ? { cls: 'list-key' } : { off: true };
             const fa = actors[state.focus];
             const slower = state.slower || '', faster = state.faster || '';
             let c = '';
@@ -349,21 +404,25 @@
             }
             const tcLabel = state.takeControlLabel || 'auto';
             c += ctl(keys, 'take_control', tcLabel, 4, { off: cOff });
+            c += ctl(keys, 'list_up', 'up', 5, listKey);
             c += ctl(keys, 'pos_up', 'PosUp', 0, { off: cOff });
             c += ctl(keys, 'skyrimnet', '', 1, { dim: true, off: cOff });
             c += ctl(keys, 'calm', 'calm', 2, { blocked: blocked.calm, off: mgcOff });
             c += ctl(keys, 'arouse', 'arouse', 3, { blocked: blocked.arouse, off: mgcOff });
             c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower, off: cOff });
+            c += ctl(keys, 'list_down', 'down', 5, listKey);
             c += ctl(keys, 'pos_down', 'PosDn', 0, { off: cOff });
             c += ctl(keys, 'previous', 'prev', 1, { dim: state.stageAuto, off: cOff });
-            c += ctl(keys, 'pause', state.paused ? 'play' : 'pause', 2, { off: cOff });
-            c += ctl(keys, 'next', 'next', 3, { dim: state.stageAuto, off: cOff });
+            c += ctl(keys, 'pause', state.pauseLabel || 'pause', 2, { off: cOff });
+            c += ctl(keys, 'next', 'next', 3, listOpen ? listKey : { dim: state.stageAuto, off: cOff });
             c += ctl(keys, 'faster', faster || NO_STEP, 4, { dim: !faster, off: cOff });
+            c += ctl(keys, '', '', 5, { off: true });
             c += ctl(keys, '', '', 0, { off: true });
             c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 1, { off: cOff });
             c += ctl(keys, 'end', 'end', 2, { off: cOff });
             c += ctl(keys, 'free', (state.freeCam ? 'lock ' : 'free ') + CAM, 3, { off: cOff });
             c += ctl(keys, '', '', 4, { off: true });
+            c += ctl(keys, '', '', 5, { off: true });
             // Bottom row: ask / order / punish under free camera (always shows ask), greyed out when nobody else is in
             // the scene; aid (mini-game) to its right, greyed out without a healing / stamina spell or potion.
             const punish = state.punish || {};
@@ -375,12 +434,14 @@
                 { dim: true, title: 'nobody else is in the scene' });
             c += ctl(keys, 'aid', 'aid', 4, !aidOn ? { off: true } : aid.enabled ? {} :
                 { dim: true, title: 'no healing or stamina spell or potion' });
+            c += ctl(keys, '', '', 5, { off: true });
             const controlsOn = !!g.controls;
             const controls = document.getElementById('controls');
             controls.innerHTML = c;
             controls.classList.toggle('visible', controlsOn);
 
-            hud.classList.toggle('visible', enjoyOn || controlsOn);
+            hud.classList.toggle('visible', enjoyOn || controlsOn || listOpen);
+            renderLastStage(state);
         }
         window.hudUpdate = hudUpdate;
     </script>

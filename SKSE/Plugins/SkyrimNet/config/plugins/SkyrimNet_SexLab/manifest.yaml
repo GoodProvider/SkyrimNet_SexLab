@@ -125,26 +125,26 @@ schema:
       defaultValue: false
       category: "Actions"
 
-    - name: "Tag dialogs for player actions"
+    - name: "Open Animation Selector for new player animations"
       path: "sexlab.tags.player"
       type: "bool"
-      description: "Opens tag-edit dialogs for events that include the player."
+      description: "When a new animation is selected which includes the player, open the Animation Selector"
       defaultValue: true
-      category: "Tags"
+      category: "Animation Selection"
 
-    - name: "Tag dialogs for non-player actions"
+    - name: "Open Animation Selector for new non-player animations"
       path: "sexlab.tags.nonplayer"
       type: "bool"
-      description: "Opens tag-edit dialogs for events that do not include the player."
+      description: "When a new animation is selected which doesn't include the player, open the Animation Selector"
       defaultValue: false
-      category: "Tags"
+      category: "Animation Selection"
 
     - name: "Devious devices are added to tags"
       path: "sexlab.tags.filter_by_devious_devices"
       type: "bool"
       description: "When an actor wears Devious Devices heavy bondage (armbinder, yoke, front cuffs, other bound devices), scenes started from the TargetMenu prefer animations with the matching tag, and the Scene Creator and Description Editor animation filters start with it. A tag with no matching animation is dropped. You can always remove the tags in the Scene Creator. Actors not wearing devices are unaffected."
       defaultValue: true
-      category: "Tags"
+      category: "Animation Selection"
 
     - name: "Enable Start Sex / Edit Stage hotkey"
       path: "sexlab.editor.hotkey_enabled"

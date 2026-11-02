@@ -87,8 +87,16 @@ namespace OrgasmEngine
     RE::FormID GetStagePrimary(std::int32_t sid);
     /// Seconds a stage may hold: the later of sexlab.enjoyment.stage_hold_max and its own timer; 0: no limit.
     float StageHoldCap(std::int32_t sid);
-    /// The player moved the stage by hand: timers for the rest of this scene.
+    /// The player moved the stage by hand or pressed Num 5: timers until Num 5 or a new animation.
     void DisableStageAdvancePrimaryEnjoyment(std::int32_t sid);
+    /// Num 5: stages follow enjoyment again, from the current stage up.
+    void EnableStageAdvancePrimaryEnjoyment(std::int32_t sid);
+    /// Num 5 can offer enjoyment: the scene qualifies (even if turned off), the primary has not orgasmed in this
+    /// animation, and this is not the final stage.
+    bool CanStageAdvancePrimaryEnjoyment(std::int32_t sid);
+    bool CanStageAdvancePrimaryEnjoyment(RE::Actor* anchor);
+    /// IsScenePaused by scene id (AnimEngine keys have no anchor).
+    bool IsSceneIdPaused(std::int32_t sid);
     /// Scene ending lead and orgasm target (0 = off). The lead reaching it in the second-to-last stage
     /// triggers the early final roll in the group join (the Scene jumps to the final stage).
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target);

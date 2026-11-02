@@ -6,6 +6,7 @@
 #include "AnimEngineOrgasm.h"
 #include "Config.h"
 #include "OrgasmEngine.h"
+#include "Papyrus_WebUI.h"
 #include "StrategyDecision.h"
 #include "WebUI.h"
 #include "WebUI_Log.h"
@@ -84,6 +85,13 @@ namespace Hud
         RE::FormID g_anchor = 0;
         std::uint32_t g_takeControlDx = 0;  // the take_control key's global (outside the HUD) binding
 
+        // Last-stage list. The scene script owns the deadline; this is the highlighted line and whether the view is up.
+        bool g_listOpen = false;
+        int g_listIndex = 0;
+        std::uint32_t g_listForward = 0x11;  // W, replaced by the Forward binding when it is mapped
+        std::uint32_t g_listBack = 0x1F;     // S
+        std::uint32_t g_listAdvance = 0;     // SexLab's Advance key, from Papyrus
+
         // Aid cell: whether the player has an affordable healing / stamina spell or a potion (inventory scan,
         // refreshed at most every kAidCheckInterval seconds).
         constexpr double kAidCheckInterval = 1.0;
@@ -139,8 +147,9 @@ namespace Hud
 
         void OnAnimKey(const std::string& ctl, RE::Actor* anchor = nullptr);
 
-        // end / previous / next / pause / deny / pos_up / pos_down / speak are SexLab thread operations (speak:
-        // the player's auto-play line): Papyrus Menu.Hud_OnKey. focus: the HUD focus actor (deny), 0 for the
+        // end / previous / next / pause / stage_mode / deny / pos_up / pos_down / speak are SexLab thread operations
+        // (speak: the player's auto-play line; pause: auto play's toggle; stage_mode: the player's pause key, which
+        // cycles): Papyrus Menu.Hud_OnKey. focus: the HUD focus actor (deny), 0 for the
         // rest. The NPC the player took control of goes along as the anchor (None: the player's own scene).
         // AnimEngine scenes have no SexLab thread: their stage keys go to AnimEngine, deny to AnimEngineOrgasm.
         void DispatchMenuKey(const char* control, RE::FormID focus = 0)
@@ -148,7 +157,7 @@ namespace Hud
             const std::string ctl = control;
             RE::Actor* acting = Acting();
             if (AnimEngine::SceneOf(acting) >= 0) {
-                if (ctl == "end" || ctl == "previous" || ctl == "next" || ctl == "pause") {
+                if (ctl == "end" || ctl == "previous" || ctl == "next" || ctl == "pause" || ctl == "stage_mode") {
                     OnAnimKey(ctl, acting);
                     return;
                 }
@@ -569,14 +578,111 @@ namespace Hud
                 ok = AnimEngine::Back(id);
             } else if (ctl == "pause") {
                 ok = AnimEngine::TogglePaused(id);
+            } else if (ctl == "stage_mode") {
+                // Scene.StageMode_Cycle: enjoyment -> timers -> paused -> enjoyment. The tick releases the hold when
+                // the mode goes off.
+                const std::int32_t sid = AnimEngineOrgasm::SidOf(id);
+                const bool can_enjoy = OrgasmEngine::CanStageAdvancePrimaryEnjoyment(sid);
+                if (OrgasmEngine::IsSceneIdPaused(sid)) {
+                    ok = AnimEngine::SetPaused(id, false);
+                    if (ok && can_enjoy) {
+                        OrgasmEngine::EnableStageAdvancePrimaryEnjoyment(sid);
+                        AnimEngineOrgasm::OnStageModeEnjoy(id);
+                    }
+                } else if (can_enjoy && OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid)) {
+                    OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(sid);
+                    ok = true;
+                } else {
+                    ok = AnimEngine::TogglePaused(id);
+                }
             } else if (ctl == "end") {
                 ok = AnimEngine::EndScene(id);
             }
-            // Scene.StageManual_TakeOver: moved by hand, so timers for the rest of the scene.
+            // Scene.StageManual_TakeOver: moved by hand, so timers until the stage-mode key.
             if (ok && (ctl == "next" || ctl == "previous")) {
                 OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(AnimEngineOrgasm::SidOf(id));
             }
             webui_log::info("Hud: AnimEngine key {} scene {} -> {}", ctl, id, ok);
+        }
+
+        std::uint32_t MappedKey(const RE::BSFixedString& eventId, std::uint32_t fallback)
+        {
+            auto* map = RE::ControlMap::GetSingleton();
+            if (!map)
+                return fallback;
+            const auto dx = map->GetMappedKey(eventId.c_str(), RE::INPUT_DEVICE::kKeyboard);
+            if (dx == RE::ControlMap::kInvalid || dx == 0)
+                return fallback;
+            return dx;
+        }
+
+        void NotifyList(int index, bool select)
+        {
+            RE::Actor* acting = Acting();
+            std::int32_t sid = 0;
+            if (!acting || !OrgasmEngine::SceneIdOf(acting, sid))
+                return;
+            PapyrusBindings_WebUI::DispatchManagerMethodIntInt(select ? "LastStage_OnSelect" : "LastStage_OnMove", sid,
+                index);
+        }
+
+        void MoveList(int delta)
+        {
+            int index = 0;
+            {
+                std::lock_guard lock(g_lock);
+                if (!g_listOpen)
+                    return;
+                g_listIndex = std::clamp(g_listIndex + delta, 0, 4);
+                index = g_listIndex;
+                g_lastPush.clear();
+            }
+            UiEngine::HudInvokeJS(("lastStageSelect(" + std::to_string(index) + ");").c_str());
+            NotifyList(index, false);
+        }
+
+        void BindListKeys()
+        {
+            auto* events = RE::UserEvents::GetSingleton();
+            std::uint32_t forward = 0x11;
+            std::uint32_t back = 0x1F;
+            if (events) {
+                forward = MappedKey(events->forward, 0x11);
+                back = MappedKey(events->back, 0x1F);
+            }
+            std::uint32_t next = 0;
+            std::uint32_t advance = 0;
+            {
+                std::lock_guard lock(g_lock);
+                g_listForward = forward;
+                g_listBack = back;
+                const auto it = g_keyDx.find("next");
+                next = it != g_keyDx.end() ? it->second : 0;
+                advance = g_listAdvance;
+            }
+            constexpr std::uint32_t kEnter = 0x1C;  // main Enter, not the numpad Enter the Aid cell uses
+            const KeyCallback select = []() {
+                int index = 0;
+                {
+                    std::lock_guard lock(g_lock);
+                    if (!g_listOpen)
+                        return;
+                    index = g_listIndex;
+                }
+                NotifyList(index, true);
+            };
+            std::map<std::uint32_t, KeyCallback> keys;
+            // HUD next and SexLab's Advance select too: on the final stage next does nothing and Advance ends the
+            // scene. Stripped with the other list keys, so SexLab does not see them. Forward / back win a clash.
+            keys[kEnter] = select;
+            if (next != 0)
+                keys[next] = select;
+            if (advance != 0)
+                keys[advance] = select;
+            keys[forward] = []() { MoveList(-1); };
+            if (back != forward)
+                keys[back] = []() { MoveList(1); };
+            KeyHandler::GetSingleton()->SetListKeys(std::move(keys), forward, back);
         }
 
         void RebindKeys()
@@ -627,6 +733,8 @@ namespace Hud
                         }
                         DispatchMenuKey("deny", focus);
                     };
+                } else if (ctl == "pause") {
+                    cb = []() { DispatchMenuKey("stage_mode"); };
                 } else {
                     cb = [ctl]() { DispatchMenuKey(ctl.c_str()); };
                 }
@@ -651,7 +759,8 @@ namespace Hud
             for (const char* ctl : { "end", "previous", "next", "pause" }) {
                 const auto it = dx.find(ctl);
                 if (it != dx.end() && it->second != 0) {
-                    animKeys[it->second] = [c = std::string(ctl)]() { OnAnimKey(c); };
+                    const std::string c = std::string(ctl) == "pause" ? "stage_mode" : ctl;
+                    animKeys[it->second] = [c]() { OnAnimKey(c); };
                 }
             }
             KeyHandler::GetSingleton()->SetAnimKeys(std::move(animKeys));
@@ -672,6 +781,7 @@ namespace Hud
                 });
             }
             g_takeControlDx = takeDx;
+            BindListKeys();
         }
     }
 
@@ -825,6 +935,12 @@ namespace Hud
     void Reset()
     {
         ReleaseControl();
+        {
+            std::lock_guard lock(g_lock);
+            g_listOpen = false;
+            g_listIndex = 0;
+        }
+        KeyHandler::GetSingleton()->SetListActive(false);
         std::lock_guard lock(g_lock);
         g_focus = 0;
         g_sceneActors.clear();
@@ -879,17 +995,27 @@ namespace Hud
 
         bool anyGroup = false;
         bool controlsShown = false;
+        bool listOpen = false;
+        int listIndex = 0;
         {
             std::lock_guard lock(g_lock);
             anyGroup = g_showEnjoyment || g_showControls || g_miniGame;
             controlsShown = g_showControls;
+            listOpen = g_listOpen;
+            listIndex = g_listIndex;
         }
-        const bool visible = inScene && anyGroup && WebUI_IsHidden() && !BlockingMenuOpen();
-        KeyHandler::GetSingleton()->SetHudActive(visible);
+        const bool menu = BlockingMenuOpen();
+        const bool overlayHidden = WebUI_IsHidden();
+        // The choice list is not a HUD group: it stays up when enjoyment, controls, and the mini-game are all off.
+        const bool hudVisible = inScene && anyGroup && overlayHidden && !menu;
+        const bool listVisible = listOpen && inScene && overlayHidden && !menu;
+        const bool visible = hudVisible || listVisible;
+        KeyHandler::GetSingleton()->SetHudActive(hudVisible);
+        KeyHandler::GetSingleton()->SetListActive(listVisible);
         // AnimEngine keys: without the HUD, or with it up for an AnimEngine scene that hides the HUD controls (with
         // them shown, the HUD's own end / previous / next / pause route to AnimEngine in DispatchMenuKey).
-        const bool aeHud = visible && !controlsShown && AnimEngine::SceneOf(acting) >= 0;
-        KeyHandler::GetSingleton()->SetAnimActive((!visible || aeHud) && WebUI_IsHidden() && !BlockingMenuOpen() &&
+        const bool aeHud = hudVisible && !controlsShown && AnimEngine::SceneOf(acting) >= 0;
+        KeyHandler::GetSingleton()->SetAnimActive((!hudVisible || aeHud) && overlayHidden && !menu &&
                                                   AnimEngine::LatestScene() >= 0);
         Show(visible);
 
@@ -969,6 +1095,8 @@ namespace Hud
             }
             keys["free"] = DxLabel(kFreeCameraDx);
             keys["skyrimnet"] = DxLabel(kSkyrimNetDx);
+            keys["list_up"] = DxLabel(g_listForward);
+            keys["list_down"] = DxLabel(g_listBack);
             j["keys"] = std::move(keys);
         }
         // Punish cell: always shown, greyed out when nobody else is in the scene. The player punishes (as OnPunish),
@@ -1001,7 +1129,14 @@ namespace Hud
             j["takeControlLabel"] = "auto";
         }
         j["acting"] = controlling ? NameOf(acting) : "";
-        j["paused"] = OrgasmEngine::IsScenePaused(acting);
+        const bool scenePaused = OrgasmEngine::IsScenePaused(acting);
+        j["paused"] = scenePaused;
+        // Pause cell: what a press does. Enjoyment -> play (timers) -> pause -> enjoy; plain pause / play without enjoyment.
+        if (scenePaused) {
+            j["pauseLabel"] = OrgasmEngine::CanStageAdvancePrimaryEnjoyment(acting) ? "enjoy" : "play";
+        } else {
+            j["pauseLabel"] = OrgasmEngine::IsStageAuto(acting) ? "play" : "pause";
+        }
         // SexLab's free camera on: Num 3 reads "lock" (a press returns to the normal camera).
         const auto* camera = RE::PlayerCamera::GetSingleton();
         j["freeCam"] = camera && camera->IsInFreeCameraMode();
@@ -1025,6 +1160,9 @@ namespace Hud
             j["payer"] = { { "name", NameOf(player) }, { "magicka", static_cast<int>(magicka + 0.5f) },
                 { "stamina", static_cast<int>(stamina + 0.5f) } };
         }
+        j["lastStage"] = { { "open", listVisible }, { "index", listIndex },
+            { "lines", nlohmann::json::array({ "Stop having sex", "Cuddle after sex", "Start vaginal sex",
+                           "Start oral sex", "Start anal sex" }) } };
 
         const std::string payload = j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         {
@@ -1035,5 +1173,48 @@ namespace Hud
             g_lastPush = payload;
         }
         UiEngine::HudInvokeJS(("hudUpdate(" + payload + ");").c_str());
+    }
+
+    void LastStageShow(int index, std::uint32_t advanceKey)
+    {
+        index = std::clamp(index, 0, 4);
+        {
+            std::lock_guard lock(g_lock);
+            g_listOpen = true;
+            g_listIndex = index;
+            g_listAdvance = advanceKey;
+            g_lastPush.clear();
+        }
+        BindListKeys();
+        UiEngine::HudInvokeJS(("lastStageSelect(" + std::to_string(index) + ");").c_str());
+    }
+
+    void LastStageHide()
+    {
+        {
+            std::lock_guard lock(g_lock);
+            g_listOpen = false;
+            g_lastPush.clear();
+        }
+        KeyHandler::GetSingleton()->SetListActive(false);
+        if (UiEngine::HudIsValid()) {
+            UiEngine::HudInvokeJS("lastStageHide();");
+        }
+    }
+
+    int LastStageIndex()
+    {
+        std::lock_guard lock(g_lock);
+        return g_listOpen ? g_listIndex : -1;
+    }
+
+    RE::Actor* LastStageDrivenActor()
+    {
+        RE::FormID id = 0;
+        {
+            std::lock_guard lock(g_lock);
+            id = g_anchor;
+        }
+        return id != 0 ? ActorFor(id) : nullptr;
     }
 }

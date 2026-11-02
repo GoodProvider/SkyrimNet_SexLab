@@ -4,6 +4,32 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### Animation panel
+- Scene Creator and Description Editor share one animation row: Start, subject, style, *sexual*, *bound*, sort, description, synonyms, All, None. Description and synonyms moved out of the tag panel. The Description Editor has no All / None, and its style pulldown moved here from the header, so it only shows on the animation filter tab.
+- *sexual* and *bound* cycle on click: white = must have the tag, red = must not have it, grey = no filter. Each word is a view over the `SC.tags` / `SC.suppress` chips. *bound* white also sends `_bound`, so a setting's `tags_suppress_unless_bound` cannot empty the list.
+- A Description Editor animation change now narrates "`<subject> <style> changes to <description>`" (`_change_by`, `Scene.animation_change_by`). Other switch routes keep "Scene changes to".
+
+### Last-stage choice list
+- On the final stage, a list beside the HUD offers Stop, Cuddle after sex, Start vaginal sex, Start oral sex, and Start anal sex. W/S move the line, Enter selects it, and the stage deadline selects the current line. The current line is opacity 1; the others are 0.3. The list is not a HUD group.
+- A non-player is asked first (JEV, `sexlab/last_stage`). A failed answer selects Stop. NPC-only scenes apply the choice with no list; after three of them, later ones stop with no question. Player scenes do not count.
+- Cuddle, vaginal, oral, and anal switch to a matching animation at the primary's enjoyment stage. `ending_done` is cleared, and the orgasm target is raised when the lead already met it, so the new animation is not jumped to its final stage. The mode is not turned off.
+- Dashboard **Animation Selection**: `sexlab.tags.player` (default on) and `sexlab.tags.nonplayer` (default off) open the Animation Selector for a new animation, and for a switch from this list when the player can see it. Off picks at random. NPC-only switches stay random. The Devious Devices tag toggle moved into the same category. The NPC stop-allow prompt stays on `sexlab.tagEdit.playerDialogs`.
+- Cuddle matches the `nonsexual` setting plus suppress `sexual`, `spanking`, `aggressive`, `foreplay`, `leadin`. The Description Editor gets those tags explicitly, because its active-mode filter skips `_setting`.
+- AnimEngine has no list. The HUD end key still stops the scene.
+- While the list is up, *up* and *down* cells (the Forward / Back keys, W and S by default) show at the top right of the HUD hotkeys, even with every HUD group off.
+- Fixed: W, S, and Enter did nothing, because `KeyHandler` never read the list keys.
+- Fixed (legacy SexLab): when the final-stage hold released, SexLab's stage timer could end the scene before the list's deadline applied the current line. The list now keeps the hold.
+- While the list is up, the HUD next key (the cell reads *select*) and SexLab's Advance key (Space by default) select the current line, like Enter. Space used to end the scene and Num 6 did nothing. `LastStage_Show` gained an `advance_key` argument.
+- When the deadline hits a switch line, it picks a random match, or stops if none matches. The Description Editor only opens on a key press.
+- Fixed: the Description Editor never opened from the list, because `WebUI_ExportAnimationMenuState` rejected its dispatched argument. It now takes none.
+- Fixed: a deadline on a switch line retried every second and the scene never moved on.
+- Fixed: selecting a switch line opened the Scene Creator on the pulldown's last actor. It now opens the Description Editor on the player, or on the driven NPC when the player is not in the scene. `Animation_Menu_Open` gained a `focus` argument.
+- Fixed: after Apply in the editor, the list's deadline could end the scene while the switch was still running. `LastStage_Commit` now ignores the deadline and select keys during a switch.
+- Fixed: a second animation stayed on timers. Apply's stage move set `stage_manual`, and neither it nor `primaryFinished` was cleared on an animation change. A new animation now returns to following enjoyment and clears a pause.
+- The HUD pause key (Num 5) now cycles enjoyment → timers → paused → enjoyment, and reads *play*, *pause* or *enjoy* for what a press does next. It stays plain pause / play where enjoyment can't apply. Auto play's pause key is unchanged.
+- The next cell reads *next* instead of *select* while the list is up. It still applies the current line.
+- Untested in game.
+
 ### Stages follow the primary actor's enjoyment
 - With the engine on, stages follow one actor's enjoyment instead of their timers, in both directions: N stages give N−1 equal bands, and the primary's orgasm goes to the final stage. Details: [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#stage-by-enjoyment).
 - Primary (`PrimaryOf`): expected to orgasm and not a DOM slave; female over male with the `femdom` tag, otherwise male over female; positions 1, 2, ..., then 0.

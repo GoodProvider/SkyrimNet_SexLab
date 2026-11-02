@@ -2149,6 +2149,21 @@
             color: var(--accent);
         }
 
+        /* Animation row sexual / bound words: white = must have, red = must not have, grey = no filter. */
+        .tag-toggle {
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .tag-toggle.include {
+            color: #fff;
+        }
+
+        .tag-toggle.suppress {
+            color: var(--danger);
+        }
+
         .tag-mode-btn:hover {
             color: var(--accent);
         }
@@ -2436,12 +2451,6 @@
                     <div class="compact-row">
                         <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />                    </div>
                     <div id="sc-available-tags" class="scroll-list"></div>
-                    <div class="compact-row">
-                        <span>description:</span>
-                        <div id="sc-filter-has-description"></div>
-                        <span>synonyms:</span>
-                        <div id="sc-filter-synonyms"></div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -2450,16 +2459,21 @@
             <div class="compact-row">
                 <div class="action-btn" id="sc-btn-start" onclick="scStart()">Start</div>
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
-                <span id="sc-by-label">by</span>
                 <div id="sc-initiator-pulldown"></div>
                 <div id="sc-style-pulldown"></div>
+                <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
+                <span class="tag-toggle" data-tag="bound" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('bound')">bound</span>
                 <span>sort:</span>
                 <div id="sc-sort-pulldown"></div>
-                <span id="sc-anim-count"></span>
-                <span id="sc-selected-count"></span>
+                <span>description:</span>
+                <div id="sc-filter-has-description"></div>
+                <span>synonyms:</span>
+                <div id="sc-filter-synonyms"></div>
                 <div class="action-btn" id="sc-btn-all" onclick="scClearAnims()">All</div>
                 <div class="action-btn" id="sc-btn-none" onclick="scNoneAnims()">None</div>
                 <div class="action-btn" id="sc-btn-update" onclick="scAnimUpdate()" style="display:none">Update</div>
+                <span id="sc-anim-count"></span>
+                <span id="sc-selected-count"></span>
             </div>
             <div id="sc-anims-list" class="scroll-list">
                 <table class="data-table anim-table"><thead><tr>
@@ -2485,7 +2499,6 @@
         <div id="de-header-row">
             <div class="target-row">Description Editor</div>
             <div id="de-action-bar">
-                <div id="de-style-pulldown"></div>
                 <div class="action-btn" id="de-btn-save" onclick="deSave()">Save</div>
                 <div class="action-btn" id="de-btn-load" style="display:none" onmousedown="event.preventDefault()" onclick="deLoadDefaults()">Load</div>
                 <div class="action-btn" id="de-btn-stop" style="display:none" onmousedown="event.preventDefault()" onclick="deStopScene()">Stop</div>
@@ -2540,12 +2553,6 @@
                         <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
                     </div>
                     <div id="de-available-tags" class="scroll-list"></div>
-                    <div class="compact-row">
-                        <span>description:</span>
-                        <div id="de-filter-has-description"></div>
-                        <span>synonyms:</span>
-                        <div id="de-filter-synonyms"></div>
-                    </div>
                 </div>
             </div>
             <div class="de-loaded-col">
@@ -2557,8 +2564,16 @@
             </div>
             <div class="compact-row">
                 <div class="action-btn disabled" id="de-btn-start" onmousedown="event.preventDefault()" onclick="deStartPick()">Start</div>
+                <div id="de-initiator-pulldown"></div>
+                <div id="de-style-pulldown"></div>
+                <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
+                <span class="tag-toggle" data-tag="bound" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('bound')">bound</span>
                 <span>sort:</span>
                 <div id="de-sort-pulldown"></div>
+                <span>description:</span>
+                <div id="de-filter-has-description"></div>
+                <span>synonyms:</span>
+                <div id="de-filter-synonyms"></div>
                 <span id="de-anim-count"></span>
             </div>
             <div id="de-anims-list" class="scroll-list">
@@ -10204,6 +10219,7 @@
                     _active_registry: this.activeRegistry,
                     _next_registry: this.nextRegistry || this.activeRegistry,
                     _reseed_defaults: this.reseedDefaults ? 1 : 0,
+                    _change_by: this.changeBy || '',
                     _stage: this.stage,
                     _stages: this.stages,
                     _selected_registries: this.selectedRegistries,
@@ -10915,7 +10931,6 @@
             };
             setDisp('sc-btn-start', !active);
             setDisp('sc-initiator-pulldown', !active);
-            setDisp('sc-by-label', !active);
             setDisp('sc-btn-stop', active);
             setDisp('sc-btn-save-anim', !active);
             setDisp('sc-btn-all', !active);
@@ -11459,10 +11474,8 @@
             return SC.initiatorFormId;
         }
 
+        // Subject pulldown, shared by SC (scene initiator) and DE (who the animation-change narration names).
         function scRenderInitiatorPulldown() {
-            const host = document.getElementById('sc-initiator-pulldown');
-            if (!host) return;
-            host.innerHTML = '';
             const cur = scResolveInitiator();
             const labels = [];
             const idByLabel = new Map();
@@ -11476,10 +11489,19 @@
                 idByLabel.set(label, fid);
                 if (fid === cur) curLabel = label;
             });
-            if (!labels.length) return;
-            host.appendChild(createPulldown(labels, curLabel, v => {
+            const onPick = v => {
                 SC.initiatorFormId = idByLabel.get(v) || 0;
-            }));
+                // DE: keep the pick across copySceneInfoToSC rebinds.
+                const info = deSceneInfoForPick();
+                if (info) info.initiatorFormId = SC.initiatorFormId;
+                scRenderInitiatorPulldown(); // keep the SC and DE copies in sync
+            };
+            for (const hostId of ['sc-initiator-pulldown', 'de-initiator-pulldown']) {
+                const host = document.getElementById(hostId);
+                if (!host) continue;
+                host.innerHTML = '';
+                if (labels.length) host.appendChild(createPulldown(labels, curLabel, onPick));
+            }
         }
 
         function scRenderPositions() {
@@ -11674,6 +11696,37 @@
                 if (incEl) incEl.innerHTML = incHtml;
                 if (excEl) excEl.innerHTML = excHtml;
             }
+            scRenderTagToggles();
+        }
+
+        // Animation row sexual / bound words: a view over SC.tags / SC.suppress, so chips and words stay in sync.
+        function scRenderTagToggles() {
+            for (const el of document.querySelectorAll('.tag-toggle')) {
+                const tag = el.dataset.tag;
+                const include = SC.tags.includes(tag);
+                el.classList.toggle('include', include);
+                el.classList.toggle('suppress', !include && SC.suppress.includes(tag));
+            }
+        }
+
+        // Click: white (must have) -> red (must not have) -> grey (no filter) -> white.
+        function scCycleTagToggle(tag) {
+            if (SC.tags.includes(tag)) {
+                SC.tags = SC.tags.filter(t => t !== tag);
+                if (SC.ddAuto.includes(tag)) {
+                    SC.ddAuto = SC.ddAuto.filter(t => t !== tag);
+                    SC.ddDismissed.add(tag);
+                }
+                if (!SC.suppress.includes(tag)) SC.suppress.push(tag);
+            } else if (SC.suppress.includes(tag)) {
+                SC.suppress = SC.suppress.filter(t => t !== tag);
+            } else {
+                SC.tags.push(tag);
+                SC.ddDismissed.delete(tag);
+            }
+            scRenderTagChips();
+            scRefreshTags();
+            scRefreshAnims();
         }
 
         function scRemoveTag(list, tag) {
@@ -11730,10 +11783,24 @@
             if (SC.favoritesOnly) filter._favorites_only = true;
             filter._synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
             // Scene start draft: the TargetMenu scene setting's tags_any / tags_prefer / exclude_settings
-            // (C++ reads them by name). Bound = the cast wears DD (auto DD tags, kept or dismissed).
-            if (SC.mode !== 'active' && SC.sceneSetting) {
+            // (C++ reads them by name). Bound = the cast wears DD (auto DD tags, kept or dismissed), or the
+            // player asked for bound animations (else tags_suppress_unless_bound empties the list).
+            // Active mode, and a last-stage list preset, skip _setting: the preset tags are explicit.
+            if (!window._snslListPreset && SC.mode !== 'active' && SC.sceneSetting) {
                 filter._setting = SC.sceneSetting;
-                filter._bound = (SC.ddAuto || []).length > 0 || (SC.ddDismissed && SC.ddDismissed.size > 0);
+                filter._bound = (SC.ddAuto || []).length > 0 || (SC.ddDismissed && SC.ddDismissed.size > 0)
+                    || SC.tags.includes('bound');
+            }
+            if (window._snslListPreset) {
+                if (SC.listRequireAll) {
+                    filter._must_tags = (SC.tags || []).slice();
+                    filter._require_all = true;
+                } else {
+                    filter._any_tags = (SC.tags || []).slice();
+                    filter._must_tags = [];
+                    filter._require_all = false;
+                }
+                filter._suppress_tags = (SC.suppress || []).slice();
             }
             return filter;
         }
@@ -12535,6 +12602,16 @@
             deRenderAnimTags();
         }
 
+        // Last-stage list: preset tags overwrite the live scene tags that copySceneInfoToSC just copied.
+        function deApplyListPreset() {
+            const p = window._snslListPreset;
+            if (!p) return;
+            SC.tags = Array.isArray(p.any) ? p.any.slice() : [];
+            SC.suppress = Array.isArray(p.suppress) ? p.suppress.slice() : [];
+            SC.listRequireAll = !!p.require_all;
+            DE.bottomTab = 'filter';
+        }
+
         // Bind the editor to the ControlPanel target's live scene (no scene pulldown). A pending pick for the
         // same scene survives the rebind and stays previewed.
         function deBindTargetScene() {
@@ -12554,6 +12631,7 @@
             } else {
                 DE.scene_sid = info.scene_sid;
                 copySceneInfoToSC(info);
+                deApplyListPreset();
                 // Nearby scan for the actor table's addable rows (Scene Creator does the same on open).
                 if (!(nearbyActors || []).length && typeof window.onNearbyRangeChange === 'function')
                     window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 1600 }));
@@ -13349,6 +13427,7 @@
             scRenderHasDescriptionPulldown();
             scRenderSortPulldown();
             scRenderSynonymsPulldown();
+            scRenderInitiatorPulldown();
             scRenderFavoritesToggle();
             scSyncNameFilterInputs();
             deRenderLoadedList();
@@ -13556,12 +13635,17 @@
             const info = sceneInfoByKey.get(pend.key);
             if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
             pend.sent = true;
+            // Subject pulldown: Papyrus narrates "<name> <style> changes to <description>".
+            const fid = scResolveInitiator();
+            const subject = (info.positions || []).find(p => formIdU32(p && (p._form_id != null ? p._form_id : p.formId)) === fid);
+            const changeBy = subject ? (subject._name || subject.name || '') : '';
             // Added actors: the pick rides the SceneInfo commit with the new positions, so ChangeActors runs
             // first and the switch after it (SexLab P+ replays it after the restart).
             if (info.pendingActorChange) {
                 if (!info.reseedDefaults) info.origActiveRegistry = info.activeRegistry;
                 info.activeRegistry = pend.reg;
                 info.nextRegistry = pend.reg;
+                info.changeBy = changeBy;
                 info.reseedDefaults = true;
                 info.dirty = true;
                 return;
@@ -13572,6 +13656,7 @@
                 _mode: 'active',
                 _scene_sid: info.scene_sid,
                 _active_registry: pend.reg,
+                _change_by: changeBy,
                 _reseed_defaults: 1
             }] }));
         }
@@ -13648,6 +13733,7 @@
         // Cancel: drop unsaved edits and any pending animation pick, then close the WebUI without committing --
         // discardSceneInfos has every live scene restore the state it had when the overlay opened.
         function deCancel() {
+            window._snslListPreset = null;
             DE.stagesDraft = sceneInfoClone(DE.loadedStages);
             DE.dirty = false;
             DE.pendingSwitch = null;
@@ -13671,6 +13757,8 @@
                 }
                 return;
             }
+            if (state._list_preset)
+                window._snslListPreset = state._list_preset;
             const hadInfo = !!info;
             const prevReg = info ? info.activeRegistry : '';
             const prevStage = info ? (info.stage | 0) : 0;
@@ -13704,6 +13792,8 @@
             sceneInfosSessionActive = true;
             // A pending pick the scene now plays is done: the live values replace the preview.
             const switched = deOnSceneAnimationPushed(info);
+            if (switched)
+                window._snslListPreset = null;
             const deEl = document.getElementById('description-editor-panel');
             const deVisible = deEl && deEl.style.display !== 'none';
             if (!deVisible) return;

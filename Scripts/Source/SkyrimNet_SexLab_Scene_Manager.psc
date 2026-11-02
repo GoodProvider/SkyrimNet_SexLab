@@ -674,6 +674,28 @@ SkyrimNet_SexLab_Scene Function GetSceneBySid(int scene_sid)
     return None
 EndFunction
 
+; C++ last-stage list: JEV answer, W/S, Enter.
+Function LastStage_OnDecision(int scene_sid, int choice)
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
+    if sl_scene
+        sl_scene.LastStage_OnDecision(choice)
+    endif
+EndFunction
+
+Function LastStage_OnMove(int scene_sid, int choice)
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
+    if sl_scene
+        sl_scene.LastStage_OnMove(choice)
+    endif
+EndFunction
+
+Function LastStage_OnSelect(int scene_sid, int choice)
+    SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
+    if sl_scene
+        sl_scene.LastStage_OnSelect(choice)
+    endif
+EndFunction
+
 Function WebUI_OnYesNoResult(int creator_sid, int button)
     SkyrimNet_SexLab_Scene_Creator creator = GetCreatorBySid(creator_sid)
     if creator
@@ -1440,17 +1462,21 @@ Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, 
     endif 
 
     SkyrimNet_SexLab_Scene_Creator creator = CreateCreator(intent, actors, speaker, target, tags, setting_name)
-    ; TargetMenu Start: consume one-shot even if CreateCreator fails (avoid leak to next scene).
+    ; TargetMenu Start: consume both one-shots even if CreateCreator fails (avoid leak to next scene).
     Bool skipSceneCreator = SkyrimNet_SexLab_WebUI.ConsumeSkipSceneCreator()
+    Bool openSceneCreator = SkyrimNet_SexLab_WebUI.ConsumeOpenSceneCreator()
     if creator == None 
         Trace("Action_Start", "CreateCreator returned None, aborting")
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return 
     endif 
-    ; User chose Start (not Custom) — do not open Scene Creator for this scene.
+    ; Toggle off: random, no Yes/No. Toggle on: open the selector, no second Yes/No.
     if skipSceneCreator
         creator.scene_creator_menu_called = true
         Trace("Action_Start", "SkipSceneCreatorOnce consumed for sid:"+creator.sid)
+    elseif openSceneCreator
+        creator.force_open_selector = true
+        Trace("Action_Start", "OpenSceneCreatorOnce consumed for sid:"+creator.sid)
     endif 
     if creator.LockAllActorLock()
         ; Can't be set by setting

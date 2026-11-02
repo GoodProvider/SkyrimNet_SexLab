@@ -1,0 +1,51 @@
+{# Decision template: what a SexLab scene should do when its last stage is reached. Sent by
+   SkyrimNet_SexLab.dll (StrategyDecision.cpp RequestLastStage) through PublicSendCustomDecisionToLLM.
+   The player sees the chosen line already selected and can change it. An NPC-only scene applies the
+   line when the stage time runs out. A failed or invalid answer is Stop.
+   Rendered into a decisions request, never into chat messages.
+
+   Context pushed by the game: focus_uuid, focus_name (the NPC deciding), player_in_scene, cast_names,
+   timeline [lines, oldest first].
+   Keys are read back by the game: keep stop / cuddle / vaginal / oral / anal as given. #}
+{% set _focus = decnpc(focus_uuid) %}
+[ state focus ]
+{{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}.
+{{ render_character_profile("short_inline", focus_uuid) }}
+[ end state ]
+
+[ state scene ]
+{% set _sexlab = sexlab_get_threads(focus_uuid) %}
+{% if existsIn(_sexlab, "threads") %}
+{% for thread in _sexlab.threads %}
+{% for actor_record in thread.actors %}
+{% if to_number(actor_record.uuid) == focus_uuid %}
+{% if existsIn(thread, "location") and thread.location != "" %}On {{ thread.location }}, {% endif %}{{ thread.description }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+With {{ cast_names }}.{% if player_in_scene %} The player is in the scene.{% else %} The player is not in the scene.{% endif %}
+[ end state ]
+
+[ state timeline ]
+{% if length(timeline) > 0 %}
+{% for line in timeline %}
+{{ line }}
+{% endfor %}
+{% else %}
+Nothing has happened yet.
+{% endif %}
+[ end state ]
+
+[ question next choice ]
+The scene has reached its last stage. Decide what {{ focus_name }} wants to happen next.
+Base it on what is happening (`scene`) and what {{ focus_name }} has thought, said and experienced (`timeline`), recent events over older ones.
+Stop when they are done, uncomfortable, or the scene should end. Cuddle when they want to stay close without sex. Vaginal, oral or anal when they want to keep going that way.
+[ criteria ]
+stop: the scene ends
+cuddle: stay together and cuddle, no sex
+vaginal: start vaginal sex
+oral: start oral sex
+anal: start anal sex
+[ end criteria ]
+[ end question ]

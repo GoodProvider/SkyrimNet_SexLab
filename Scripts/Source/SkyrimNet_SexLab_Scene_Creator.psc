@@ -46,6 +46,8 @@ bool start_scene_pending = false
 ; True after Scene Creator was opened for this creator; blocks a second open.
 ; Copied onto SkyrimNet_SexLab_Scene when FinishStartScene binds the SexLab thread.
 bool Property scene_creator_menu_called = false Auto
+; TargetMenu Start with the Animation Selector toggle on: open the selector and skip Yes/No.
+bool Property force_open_selector = false Auto
 ; WebUI "override animation settings". Off: no_orgasm/no_stripping/speaking masks are ignored and
 ; the scene uses each animation's own defaults (Scene.Setup / SyncAnimationDefaults).
 bool Property position_override = false Auto
@@ -226,6 +228,7 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
     setting_has_filter = false
     style = STYLE_NORMALLY
     scene_creator_menu_called = false
+    force_open_selector = false
     position_override = false
     start_scene_pending = false
 
@@ -302,6 +305,7 @@ Function Release()
     no_orgasm_names = ""
     no_stripping_names = ""
     scene_creator_menu_called = false
+    force_open_selector = false
     position_override = false
     start_scene_pending = false
     parent.Release() 
@@ -1462,17 +1466,22 @@ Function ContinueAfterYesNo(int button)
         DbgEnd("ContinueAfterYesNo")
         return
     endif
-    ; Yes → always open SceneCreatorMenu; Yes (Random) skips editor.
+    ; Yes opens the selector when sexlab.tags.player is on. Off resolves from tags.
     if button == BUTTON_YES
-        if !TryOpenSceneCreatorMenu()
+        bool open_selector = SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true)
+        if open_selector && TryOpenSceneCreatorMenu()
+            DbgEnd("ContinueAfterYesNo")
+            return
+        endif
+        if open_selector
             Trace("ContinueAfterYesNo", "SceneCreator already opened, resolving from tags")
-            ; No SceneCreator_Open follows on this path: drop the "Opening Scene Creator..." placeholder.
-            SkyrimNet_SexLab_WebUI.WebUI_CloseYesNoIfSolo()
-            sslBaseAnimation[] animationsFallback = ResolveAnimationsFromTags()
-            SkyrimNet_SexLab_Scene sl_scene_fb = FinishStartScene(animationsFallback)
-            if sl_scene_fb == None
-                Trace("ContinueAfterYesNo", "FinishStartScene returned None after gated open")
-            endif
+        endif
+        ; No SceneCreator_Open follows on this path: drop the "Opening Scene Creator..." placeholder.
+        SkyrimNet_SexLab_WebUI.WebUI_CloseYesNoIfSolo()
+        sslBaseAnimation[] animationsFallback = ResolveAnimationsFromTags()
+        SkyrimNet_SexLab_Scene sl_scene_fb = FinishStartScene(animationsFallback)
+        if sl_scene_fb == None
+            Trace("ContinueAfterYesNo", "FinishStartScene returned None after gated open")
         endif
         DbgEnd("ContinueAfterYesNo")
         return
@@ -1897,9 +1906,14 @@ sslBaseAnimation[] Function SelectAnimations()
     endif 
     int button = BUTTON_YES_RANDOM
     if has_player
-        ; TargetMenu Start already confirmed (SkipSceneCreatorOnce → scene_creator_menu_called).
+        ; TargetMenu Start, selector off: SkipSceneCreatorOnce → scene_creator_menu_called (random).
         if scene_creator_menu_called
             Trace("SelectAnimations", "SkipSceneCreator: skipping YesNo, treating as Yes/Random")
+        elseif force_open_selector
+            force_open_selector = false
+            TryOpenSceneCreatorMenu()
+            DbgReturn("SelectAnimations", "ui_pending")
+            return manager.ui_pending
         else
             button = YesNoDialog()
             if button == -1
@@ -1911,7 +1925,7 @@ sslBaseAnimation[] Function SelectAnimations()
                 return manager.cancel 
             endif 
         endif
-    elseif SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.nonPlayerDialogs", false)
+    elseif SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false)
         if TryOpenSceneCreatorMenu()
             DbgReturn("SelectAnimations", "ui_pending")
             return manager.ui_pending
@@ -1921,7 +1935,7 @@ sslBaseAnimation[] Function SelectAnimations()
 
     sslBaseAnimation[] animations = manager.empty
     if button != BUTTON_YES_RANDOM
-        if (SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.playerDialogs", true) && has_player) || (SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.nonPlayerDialogs", false) && !has_player)
+        if (SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true) && has_player) || (SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false) && !has_player)
             animations = SelectAnimationsDialog()
             if animations == manager.cancel
                 DbgReturn("SelectAnimations", "cancel")
@@ -2171,8 +2185,8 @@ sslBaseAnimation[] Function SelectAnimationsDialog()
         Trace("SelectAnimationsDialog"," actors:"+actor_names)
     endif 
 
-    if (has_player && !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.playerDialogs", true)) || (!has_player && !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.nonPlayerDialogs", false))
-        Trace("SelectAnimationsDialog", "Returning empty | sex_edit_tags_player:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.playerDialogs", true)+" sex_edit_tags_nonplayer:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tagEdit.nonPlayerDialogs", false))
+    if (has_player && !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true)) || (!has_player && !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false))
+        Trace("SelectAnimationsDialog", "Returning empty | tags.player:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.player", true)+" tags.nonplayer:"+SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.tags.nonplayer", false))
         DbgReturn("SelectAnimationsDialog", "empty")
         return manager.empty 
     endif 

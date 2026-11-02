@@ -504,6 +504,19 @@ void KeyHandler::SetAnimActive(bool active)
     _animActive.store(active);
 }
 
+void KeyHandler::SetListKeys(std::map<uint32_t, KeyCallback> keys, std::uint32_t passUpA, std::uint32_t passUpB)
+{
+    std::unique_lock lock(_mutex);
+    _listKeys = std::move(keys);
+    _listPassUpA = passUpA;
+    _listPassUpB = passUpB;
+}
+
+void KeyHandler::SetListActive(bool active)
+{
+    _listActive.store(active);
+}
+
 namespace {
 
 /// DX code of a button event: keyboard scancode, or 256 + button for the mouse (SKSE convention).
@@ -521,13 +534,19 @@ uint32_t HudCode(const RE::ButtonEvent* btn)
 }
 
 /// Unlink every button event whose code is a live HUD key (down, held and up alike).
-void StripHudInputEvents(RE::InputEvent* const* a_eventList, const std::map<uint32_t, KeyCallback>& keys)
+/// passUpA / passUpB: those codes keep their key-up, so a move key held when the keys went live does not stick.
+void StripHudInputEvents(RE::InputEvent* const* a_eventList, const std::map<uint32_t, KeyCallback>& keys,
+                         uint32_t passUpA = 0, uint32_t passUpB = 0)
 {
     auto*& head = const_cast<RE::InputEvent*&>(*a_eventList);
     RE::InputEvent* prev = nullptr;
     for (auto* cur = head; cur;) {
-        const bool match = cur->eventType == RE::INPUT_EVENT_TYPE::kButton &&
-                           keys.contains(HudCode(cur->AsButtonEvent()));
+        bool match = false;
+        if (cur->eventType == RE::INPUT_EVENT_TYPE::kButton) {
+            const auto* btn = cur->AsButtonEvent();
+            const uint32_t code = HudCode(btn);
+            match = keys.contains(code) && !(btn->IsUp() && (code == passUpA || code == passUpB));
+        }
         auto* next = cur->next;
         if (!match) {
             prev = cur;
@@ -591,18 +610,35 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
     const bool overlayHidden = WebUI_IsHidden();
     const bool hudUp = _hudActive.load() && overlayHidden;
     const bool hud = hudUp || (_animActive.load() && overlayHidden);
+    // Last-stage list keys: also with every HUD group off, and ahead of the HUD keys.
+    const bool list = _listActive.load() && overlayHidden;
     std::map<uint32_t, KeyCallback> hudKeys;
+    std::map<uint32_t, KeyCallback> listKeys;
+    uint32_t listPassUpA = 0;
+    uint32_t listPassUpB = 0;
 
     {
         std::shared_lock lock(_mutex);
         if (hud)
             hudKeys = hudUp ? _hudKeys : _animKeys;
+        if (list) {
+            listKeys = _listKeys;
+            listPassUpA = _listPassUpA;
+            listPassUpB = _listPassUpB;
+        }
         for (auto event = *a_eventList; event; event = event->next) {
             if (event->eventType != RE::INPUT_EVENT_TYPE::kButton)
                 continue;
             const auto btn = event->AsButtonEvent();
             if (!btn || !btn->IsDown())
                 continue;
+            if (list) {
+                const auto hit = listKeys.find(HudCode(btn));
+                if (hit != listKeys.end()) {
+                    toRun.push_back(hit->second);
+                    continue;
+                }
+            }
             if (hud) {
                 const auto hit = hudKeys.find(HudCode(btn));
                 if (hit != hudKeys.end()) {
@@ -620,6 +656,8 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
 
     if (hud && !hudKeys.empty())
         StripHudInputEvents(a_eventList, hudKeys);
+    if (list && !listKeys.empty())
+        StripHudInputEvents(a_eventList, listKeys, listPassUpA, listPassUpB);
 
     for (const auto& cb : toRun)
         cb();
@@ -1044,6 +1082,51 @@ void AidAskConsent(RE::Actor* giver, RE::Actor* receiver, RE::FormID form, const
         [giverId, receiverId, form, location](bool accepted) {
             AidFinishConsent(giverId, receiverId, form, location, accepted);
         });
+}
+
+}  // namespace
+
+namespace {
+
+// Papyrus scene-start params carry Actor dicts ({formId} or source "player" / "playerActor").
+bool ParamsHavePlayer(const nlohmann::json& params, RE::Actor* player)
+{
+    if (!player || !params.is_object())
+        return false;
+    const auto playerId = player->GetFormID();
+    for (auto it = params.begin(); it != params.end(); ++it) {
+        const auto& v = it.value();
+        if (!v.is_object())
+            continue;
+        const std::string source = v.value("source", "");
+        if (_stricmp(source.c_str(), "player") == 0 || _stricmp(source.c_str(), "playerActor") == 0)
+            return true;
+        if (!v.contains("formId") || !v["formId"].is_number())
+            continue;
+        try {
+            const auto id = static_cast<std::uint32_t>(v["formId"].get<std::int64_t>());
+            if (id != 0 && id == playerId)
+                return true;
+        } catch (...) {
+        }
+    }
+    return false;
+}
+
+// Scene start: the matching Animation Selection toggle on opens the selector (no second Yes/No).
+// Off skips it (random). Not a scene start: clear both one-shots.
+void ArmSceneSelector(bool sceneStart, bool hasPlayer)
+{
+    PapyrusBindings_WebUI::SkipSceneCreatorOnce = false;
+    PapyrusBindings_WebUI::OpenSceneCreatorOnce = false;
+    if (!sceneStart)
+        return;
+    const bool open = hasPlayer ? SexLabNet::GetConfigBool("sexlab.tags.player", true)
+                                : SexLabNet::GetConfigBool("sexlab.tags.nonplayer", false);
+    if (open)
+        PapyrusBindings_WebUI::OpenSceneCreatorOnce = true;
+    else
+        PapyrusBindings_WebUI::SkipSceneCreatorOnce = true;
 }
 
 }  // namespace
@@ -1556,16 +1639,18 @@ void InitWebUI()
                     nlohmann::json opt = payload;
                     if (!opt.contains("parameters"))
                         opt["parameters"] = params;
-                    // SceneStartPanel Start: player already clicked Start — skip YesNo / Scene Creator.
+                    // SceneStartPanel Start: player already clicked Start. Toggle on opens the
+                    // selector; toggle off is a random pick. Neither shows a second Yes/No.
                     const std::string papyrusFn = payload.value("executionFunctionName", "");
-                    const bool skipSceneCreator = payload.value("closeWebUI", false)
+                    const bool sceneStart = payload.value("closeWebUI", false)
                         && ActionCatalog::IsSceneStartExecution(papyrusFn);
-                    if (skipSceneCreator)
-                        PapyrusBindings_WebUI::SkipSceneCreatorOnce = true;
+                    if (sceneStart)
+                        ArmSceneSelector(true, ParamsHavePlayer(params, player));
                     bool ok = ActionCatalog::ExecutePapyrusOption(opt, player, target);
                     if (!ok) {
                         webui_log::error("onAction: ExecutePapyrusOption failed");
                         PapyrusBindings_WebUI::SkipSceneCreatorOnce = false;
+                        PapyrusBindings_WebUI::OpenSceneCreatorOnce = false;
                     }
                     // Stay open for live panels unless payload requests close.
                     if (payload.value("closeWebUI", false)) {
@@ -1584,11 +1669,13 @@ void InitWebUI()
 
                 webui_log::info("onAction start name={}", name);
 
-                // TargetMenu Start always ExecuteAction; skip Scene Creator only for scene-start actions.
-                if (ActionCatalog::ShouldOpenSceneCreatorFromTargetMenu(
-                        name, params, player, target, true, true)) {
-                    PapyrusBindings_WebUI::SkipSceneCreatorOnce = true;
-                }
+                // true,true: does this resolve as a scene start? true,false: is the player in it?
+                // Toggle on opens the selector; toggle off is a random pick. No second Yes/No.
+                const bool sceneStart = ActionCatalog::ShouldOpenSceneCreatorFromTargetMenu(
+                    name, params, player, target, true, true);
+                const bool startHasPlayer = sceneStart && ActionCatalog::ShouldOpenSceneCreatorFromTargetMenu(
+                    name, params, player, target, true, false);
+                ArmSceneSelector(sceneStart, startHasPlayer);
 
                 // Commit SceneInfos first (queued), then close overlay so StartThread runs unpaused.
                 WebUI_Invoke("hidePanel('target_menu_panel');");
@@ -1598,6 +1685,7 @@ void InitWebUI()
                 if (!ok) {
                     webui_log::error("onAction: ExecuteAction failed for {}", name);
                     PapyrusBindings_WebUI::SkipSceneCreatorOnce = false;
+                    PapyrusBindings_WebUI::OpenSceneCreatorOnce = false;
                 }
             });
         });

@@ -36,6 +36,11 @@ namespace StrategyDecision
     /// done(accepted) on the game thread, exactly once. No decisions provider or a failed request: accepted.
     void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,
         const std::string& potionName, std::function<void(bool)> done);
+    /// Game thread. Last stage of a scene: the caller NPC picks the next line (prompts/decisions/sexlab/last_stage.prompt).
+    /// done(line) on the game thread, exactly once. 0 stop, 1 cuddle, 2 vaginal, 3 oral, 4 anal.
+    /// No provider, a failed request, or an unknown answer: 0. Not gated by sexlab.minigame.decision_strategy.
+    void RequestLastStage(std::int32_t sid, RE::FormID caller, bool playerInScene, const std::string& castNames,
+        std::function<void(int)> done);
     /// Skyrim relationship rank between two actors (Papyrus GetRelationshipRank: 4 lover .. -4 archnemesis; 0 none).
     int RelationshipRank(RE::Actor* a, RE::Actor* b);
 }

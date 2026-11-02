@@ -64,7 +64,7 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
    PgUp     Num 7    Num 8    Num 9    Num -
    PosUp             calm     arouse   gentle
    PgDn     Num 4    Num 5    Num 6    Num +
-   PosDn    prev     pause    next     forceful
+   PosDn    prev     play     next     forceful
             Num 1    Num 2    Num 3
             deny     end      free 📷
                               Num .    Num Enter
@@ -88,12 +88,18 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
 
     The narration makes the target answer, and the AI decides from there how they behave: they might give in, resist or turn the tables. Lines the NPCs were about to say are dropped and the ask, order or punishment is always narrated directly, whatever the Mini-game narration level. The cell is greyed out when nobody else is in the scene.
   - NPCs can punish too (**SexLab_Scene_Punish**): anyone in the scene, the player included.
-  - **Num 5** pauses the current stage; the cell then reads *play*. Press again to resume with the rest of the stage's time.
-  - **Num 4 / Num 6** go to the previous / next stage.
+  - **Num 5** cycles how stages move. The cell names what a press does next:
+    - *play*: stages are following enjoyment. Press to let them run on their timers.
+    - *pause*: stages are on their timers. Press to pause the current stage.
+    - *enjoy*: the stage is paused. Press to go back to following enjoyment. The stage stays where it is until enjoyment passes it.
+
+    On the final stage, or once the main actor has orgasmed, there is nothing left for enjoyment to move, so the cell only switches between *pause* and *play*.
+  - **Num 4 / Num 6** go to the previous / next stage, and stages then run on their timers. A new animation always goes back to following enjoyment and clears a pause.
   - **PgUp / PgDn** (*PosUp* / *PosDn*) swap the actors' roles forward / back (SexLab's swap positions; nothing happens in solo or creature scenes). The current stage description is narrated with the actors in their new roles, at the **Position change narration** level (Narration settings; default Direct).
   - **Num 1** denies or allows the focus actor's orgasm. The cell reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm. The change is sent as an event: "<you> forbids <them> from orgasming without permission." / "<you> permits <them> to orgasm." Allowing tests them for orgasm; if they orgasm, the normal orgasm narration starts "You allowed them to orgasm."
   - **Num 3** is SexLab's free camera. While it is on, the cell reads *lock*; press Num 3 again to go back to the normal third-person camera with mouse look. When the scene ends, the camera returns to first or third person, whichever it was when the scene began.
   - **Num - / Num +** step the scene one speed level slower / faster: *gentle* (75%), *normal* (100%), *forceful* (125%). Each cell shows the level a press switches to (at *normal*: *gentle* / *forceful*); at the slowest or fastest level it shows a dimmed *—*. The scene style sets the starting level (gently / normally / forcefully), and a style change resets it. A burst of speed presses gives one narration, and scene start / status messages use the level ("Bob and Alice are forcefully …").
+- **Last stage:** a list sits to the right of the HUD: Stop having sex, Cuddle after sex, Start vaginal sex, Start oral sex, Start anal sex. **W** and **S** (forward and back) move the line; **Enter**, **Num 6** (the *next* cell), or SexLab's advance key (**Space** by default) selects it. While the list is up, *up* and *down* cells at the top right of the hotkeys show W and S. The current line is fully opaque (opacity 1); the others are at opacity 0.3. It is not one of the HUD groups, so it stays up when enjoyment, controls, and the mini-game are off. If the stage runs out, the current line is selected: a line that starts a new animation picks one at random, without opening a menu, and the scene stops if nothing matches. AnimEngine scenes have no list; the HUD end key still stops them.
 - **How long it takes:** without the mini-game, a scene ends much like plain SexLab. Each actor normally orgasms once near the end, and some a little earlier. A victim usually doesn't. Faster raises the pace and can bring a second orgasm; slower can leave someone short. Pausing or repeating a stage adds time, so it adds enjoyment too.
 - **Mini-game** (on by default; **Orgasm mode** = Multi-Orgasm Mini-game):
   - Each actor's row shows a blue **magicka** bar and a green **stamina** bar in front of the enjoyment bar. These are the resources the game spends.

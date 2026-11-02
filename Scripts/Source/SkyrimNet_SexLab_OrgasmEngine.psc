@@ -63,8 +63,13 @@ bool Function IsStageAdvancePrimaryEnjoyment(int sid) global native
 Actor Function GetStagePrimary(int sid) global native
 ; Seconds a stage may hold: the later of sexlab.enjoyment.stage_hold_max and its own timer; 0 = no limit.
 float Function StageHoldCap(int sid) global native
-; The player moved the stage by hand: timers for the rest of this scene.
+; The player moved the stage by hand or pressed Num 5: timers until Num 5 or a new animation.
 Function DisableStageAdvancePrimaryEnjoyment(int sid) global native
+; Num 5: stages follow enjoyment again, from the current stage up.
+Function EnableStageAdvancePrimaryEnjoyment(int sid) global native
+; Num 5 can offer enjoyment: the scene qualifies (even if turned off), the primary has not orgasmed in this animation,
+; and this is not the final stage.
+bool Function CanStageAdvancePrimaryEnjoyment(int sid) global native
 ; Final-stage hold: take a mark just before sending the orgasm narration. Only the scene's own actors count:
 ; ResponseStartedSince(sid, mark) once one of them speaks, ResponseDoneSince(sid, mark) once that reply has
 ; finished playing (SkyrimNet_SpeechComplete).

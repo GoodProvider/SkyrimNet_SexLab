@@ -15,7 +15,7 @@ Function SceneCreator_Open(String state_json) global native
 Function SceneCreator_Configure(String state_json) global native
 ; Soft push BondagePanel group/device wearing state (Handler_UDNG).
 Function Bondage_Configure(String state_json) global native
-Function Animation_Menu_Open(Form thread, Form sl_scene) global native
+Function Animation_Menu_Open(Form thread, Form sl_scene, Actor focus) global native
 Function Animation_Menu_Show(String state_json) global native
 ; Soft refresh Animation panel without showPanel.
 Function Animation_Menu_Configure(String state_json) global native
@@ -46,6 +46,12 @@ Function WebUI_SetSexLabAnimCount(int sexlabCount) global native
 Function ActorAnimMeta_Result(String json) global native
 ; TargetMenu Start: consume one-shot skip so this scene does not open Scene Creator.
 Bool Function ConsumeSkipSceneCreator() global native
+Bool Function ConsumeOpenSceneCreator() global native
+Function LastStage_Show(int index, int advance_key) global native
+Function LastStage_Hide() global native
+int Function LastStage_Index() global native
+Actor Function LastStage_DrivenActor() global native
+Function LastStage_Request(int sid, Actor caller, String castNames, bool playerInScene) global native
 String Function TraceLog(String script_name, String func, String msg) global native
 
 ; --- Profiler (WebUI Profile panel; checkpoints/profile/checkpoint-04.md) ---

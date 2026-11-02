@@ -123,6 +123,14 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(sid);
         }
+        void EnableStageAdvancePrimaryEnjoyment(RE::StaticFunctionTag*, std::int32_t sid)
+        {
+            OrgasmEngine::EnableStageAdvancePrimaryEnjoyment(sid);
+        }
+        bool CanStageAdvancePrimaryEnjoyment(RE::StaticFunctionTag*, std::int32_t sid)
+        {
+            return OrgasmEngine::CanStageAdvancePrimaryEnjoyment(sid);
+        }
         // Response tracking for the final-stage hold, scoped to the scene's actors: mark before sending a
         // narration, then ResponseStartedSince (one of them is speaking) / ResponseDoneSince (that reply ended).
         std::int32_t NarrationMark(RE::StaticFunctionTag*)
@@ -312,6 +320,8 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GetStagePrimary", s, GetStagePrimary);
         a_vm->RegisterFunction("StageHoldCap", s, StageHoldCap);
         a_vm->RegisterFunction("DisableStageAdvancePrimaryEnjoyment", s, DisableStageAdvancePrimaryEnjoyment);
+        a_vm->RegisterFunction("EnableStageAdvancePrimaryEnjoyment", s, EnableStageAdvancePrimaryEnjoyment);
+        a_vm->RegisterFunction("CanStageAdvancePrimaryEnjoyment", s, CanStageAdvancePrimaryEnjoyment);
         a_vm->RegisterFunction("NarrationMark", s, NarrationMark);
         a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince);
         a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince);

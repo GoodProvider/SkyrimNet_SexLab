@@ -36,4 +36,12 @@ namespace Hud
     /// Game thread. Presses a HUD key as the acting actor (auto play): slower / faster, or a Papyrus
     /// Menu.Hud_OnKey control (previous, next, pause, end, pos_up, pos_down, deny with focus, speak).
     void PressKey(const std::string& control, RE::FormID focus = 0);
+
+    /// Last-stage choice list, drawn beside the HUD. The scene script owns the deadline; this view owns the
+    /// highlighted line and the W / S / Enter keys while it is open.
+    void LastStageShow(int index, std::uint32_t advanceKey);
+    void LastStageHide();
+    int LastStageIndex();
+    /// The NPC the player is driving (take control), or nullptr.
+    RE::Actor* LastStageDrivenActor();
 }

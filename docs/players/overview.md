@@ -67,6 +67,8 @@ Scene files via `setting_name`: [../reference/scene-settings.md](../reference/sc
 
 Animations made for Devious Devices bondage are only picked when someone in the scene wears it. If an option finds nothing (for example punish + kissing), you get "No matching animations" instead of a looser pick.
 
+**Animation filter words:** the Scene Creator and Description Editor animation rows have the words **sexual** and **bound**. Click one to cycle it: white shows only animations with that tag, red hides them, and grey doesn't filter. In the Description Editor, the subject and style pulldowns set how an animation change is narrated, such as "Bob forcefully changes to ...".
+
 **Tag synonyms:** an animation tag search also matches that tag's synonyms. For example, `doggy` finds animations tagged `doggystyle`, and `titjob` finds `boobjob`. The Scene Creator and Description Editor animation filters have a **synonyms** pulldown: **broad** (default) matches wider families such as every gallows variant, **strict** only true equivalents, and **none** literal tags. The lists are `SKSE/Plugins/SkyrimNet_SexLab/synonyms-broad.json` and `synonyms-strict.json`. You can edit them, and the edits load when you load a save.
 
 ## Settings (SkyrimNet dashboard)

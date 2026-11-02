@@ -28,6 +28,8 @@ namespace PapyrusBindings_WebUI {
     extern bool TargetMenuSessionActive;
     /// One-shot: TargetMenu Start should skip Scene Creator for the next Action_Start creator.
     extern bool SkipSceneCreatorOnce;
+    /// One-shot: TargetMenu Start should open Scene Creator (skip the Yes/No gate) for the next Action_Start.
+    extern bool OpenSceneCreatorOnce;
 
     void ClearSceneCreatorPending();
     void ClearTargetMenuSession();
@@ -35,6 +37,8 @@ namespace PapyrusBindings_WebUI {
     void ClearOnGameLoad();
     /// Reads and clears SkipSceneCreatorOnce (Papyrus native).
     bool ConsumeSkipSceneCreator(RE::StaticFunctionTag*);
+    /// Reads and clears OpenSceneCreatorOnce (Papyrus native).
+    bool ConsumeOpenSceneCreator(RE::StaticFunctionTag*);
     void DispatchManagerMethodStrOnly(const char* method, const std::string& b);
 
     /// Papyrus native: open the in-scene sex menu panel overlay.
@@ -57,7 +61,7 @@ namespace PapyrusBindings_WebUI {
     void ActorAnimMeta_Result(RE::StaticFunctionTag*, RE::BSFixedString json);
 
     /// Active-animation menu hotkey entry; dispatches Papyrus to build payload then show.
-    void Animation_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, RE::TESForm* sl_scene);
+    void Animation_Menu_Open(RE::StaticFunctionTag*, RE::TESForm* thread, RE::TESForm* sl_scene, RE::Actor* focus);
 
     /// Show animation menu panel after Papyrus built state JSON.
     void Animation_Menu_Show(RE::StaticFunctionTag*, RE::BSFixedString state_json);
