@@ -11706,6 +11706,10 @@
                 const include = SC.tags.includes(tag);
                 el.classList.toggle('include', include);
                 el.classList.toggle('suppress', !include && SC.suppress.includes(tag));
+                // DEBUG-DELETE: last-stage preset, why "sexual" may not show red.
+                if (window._snslListPreset && tag === 'sexual' && typeof window.onDebugLog === 'function')
+                    window.onDebugLog('tagToggle tags=[' + SC.tags.join(',') + '] suppress=[' + SC.suppress.join(',') + ']' +
+                        ' class=' + el.className + ' color=' + getComputedStyle(el).color + ' visible=' + !!el.offsetParent);
             }
         }
 
@@ -11912,11 +11916,13 @@
             if (n <= 0) return [];
             const names = [];
             const used = new Set();
+            // The pending pick's own text reads in its slot order (the Actor table's rows).
+            const order = a && dePendingActive() && deRegEq(a._registry, DE.pendingSwitch.reg) ? dePendingActorOrder() : [];
             for (let i = 0; i < n; i++) {
                 let name = '';
                 const scPos = (SC.positions || [])[i];
                 if (sceneInfo) {
-                    const p = (sceneInfo.positions || [])[i];
+                    const p = (sceneInfo.positions || [])[i < order.length ? order[i] : i];
                     name = (p && (p._name || p.name)) || '';
                 } else if (scPos && (scPos._name || scPos.name)) {
                     // Scene Creator's own live position array -- not gated on the Description
@@ -12268,31 +12274,36 @@
         // Reorders SC.positions so each actor's gender matches the animation's slot gender.
         // Exact gender first, then same sex (creature ↔ humanoid). Returns true if order changed.
         function scReorderPositionsForAnim(a) {
-            const want = (a && a._pos_genders) || [];
             const pos = SC.positions || [];
-            if (!pos.length || want.length !== pos.length) return false;
-            if (pos.some(p => scPosGender(p) == null)) return false;
+            const order = scOrderForAnim(pos, a);
+            if (!order || order.every((j, i) => j === i)) return false;
+            SC.positions = order.map(j => pos[j]);
+            return true;
+        }
+
+        // For each of a's slots, the index in pos of the actor who fits it; null without a full match.
+        function scOrderForAnim(pos, a) {
+            const want = (a && a._pos_genders) || [];
+            if (!pos.length || want.length !== pos.length) return null;
+            if (pos.some(p => scPosGender(p) == null)) return null;
             const sex = g => ((g | 0) === 0 || (g | 0) === 2) ? 0 : 1;
-            const out = new Array(pos.length).fill(null);
+            const order = new Array(pos.length).fill(-1);
             const used = new Set();
             const fill = (match) => {
                 for (let i = 0; i < want.length; i++) {
-                    if (out[i]) continue;
+                    if (order[i] >= 0) continue;
                     const w = Number(want[i]);
                     // Prefer the actor already in this slot so a matching order stays put.
                     let j = (!used.has(i) && match(scPosGender(pos[i]), w)) ? i : -1;
                     if (j < 0) j = pos.findIndex((p, k) => !used.has(k) && match(scPosGender(p), w));
                     if (j < 0) continue;
-                    out[i] = pos[j];
+                    order[i] = j;
                     used.add(j);
                 }
             };
             fill((g, w) => g === w);
             fill((g, w) => sex(g) === sex(w));
-            if (out.some(p => !p)) return false;
-            if (out.every((p, i) => p === pos[i])) return false;
-            SC.positions = out;
-            return true;
+            return order.some(j => j < 0) ? null : order;
         }
 
         function scClearAnims() {
@@ -12660,9 +12671,8 @@
             else deLoadFocusAnimFromScene();
         }
 
-        // Preview of the pending pick: its authored stages and, per live actor, its orgasm/speaking defaults
-        // with dressed = live && default (an animation switch only ever undresses). Replaced by the live
-        // values once the scene reports the switch.
+        // Preview of the pending pick: its authored stages and Actor table rows (deLoadPosDraft). Replaced by
+        // the live values once the scene reports the switch.
         function deLoadPendingPreview() {
             const pend = DE.pendingSwitch;
             if (!pend) return;
@@ -12695,11 +12705,40 @@
             return v == null ? '' : String(v).split(',').map(s => s.trim()).filter(Boolean).join(',');
         }
 
-        // Actor table rows = the live scene's per-actor values (SceneInfo positions). No AnimDB read: a
-        // pending pick shows the live values read-only until the scene reseeds the new animation.
+        // Slots of the pending pick, as indexes into the bound scene's positions; the current order without a
+        // full gender match (a stub row, until deOnAnimRowResult brings the full one). The preview only: the
+        // SceneInfo keeps its order, because the commit sends it and a change there would run ChangeActors.
+        function dePendingActorOrder() {
+            const info = deSceneInfoForPick();
+            const pos = (info && info.positions) || [];
+            const order = dePendingActive() ? scOrderForAnim(pos, DE.pendingSwitch.row) : null;
+            return order || pos.map((p, i) => i);
+        }
+
+        // Actor table rows = the live scene's per-actor values (SceneInfo positions). A pending pick shows what
+        // the scene will reseed, read-only: its slot order, its orgasm/speaking defaults, and
+        // dressed = live && default (an animation switch only ever undresses). _src = the row's live index.
         function deLoadPosDraft() {
             DE.posDraft = [];
             if (!deIsSceneBound()) return;
+            if (dePendingActive()) {
+                const a = DE.pendingSwitch.row || {};
+                const no = a._pos_no_orgasm || [];
+                const sp = a._pos_speaking_modifiers || [];
+                const cl = a._clothed || a._pos_clothed || [];
+                const pos = (deSceneInfoForPick() || {}).positions || [];
+                dePendingActorOrder().forEach((src, i) => {
+                    const p = pos[src] || {};
+                    DE.posDraft.push({
+                        _src: src,
+                        _no_orgasm: (i < no.length ? no[i] : p._no_orgasm) ? 1 : 0,
+                        _speaking: deNormSpeaking(i < sp.length ? sp[i] : p._speaking),
+                        _dressed: (p._dressed && (i >= cl.length || cl[i])) ? 1 : 0,
+                        _victim: p._victim ? 1 : 0
+                    });
+                });
+                return;
+            }
             (SC.positions || []).forEach(p => {
                 p = p || {};
                 DE.posDraft.push({
@@ -12749,21 +12788,25 @@
             const editable = live && !dePendingActive() && !liveInfo.pendingActorChange;
             const toggle = (fn, i) => editable ? `onclick="${fn}(${i})"` : '';
             const offCls = editable ? '' : ' de-disabled';
+            // Added actors: the victim role goes out with the commit; the other columns depend on the animation.
+            const victimPending = live && !!liveInfo.pendingActorChange;
+            const pendingPick = dePendingActive();
             DE.posDraft.forEach((p, i) => {
+                const src = p._src != null ? p._src : i;
                 const mods = scParseMods(p);
                 const tr = document.createElement('tr');
                 // Orgasm button only for a live scene; the unbound template view has no actors.
                 const tdOrg = document.createElement('td');
                 tdOrg.className = 'col-orgasm';
                 if (live)
-                    tdOrg.innerHTML = `<div class="action-btn orgasm_button" title="orgasm" onmousedown="event.preventDefault()" onclick="deOrgasm(${i})">orgasm</div>`;
+                    tdOrg.innerHTML = `<div class="action-btn orgasm_button" title="orgasm" onmousedown="event.preventDefault()" onclick="deOrgasm(${src})">orgasm</div>`;
                 const tdIdx = document.createElement('td');
                 tdIdx.className = 'col-idx';
                 tdIdx.textContent = String(i);
                 // Live scene only: reorders the scene's actors; applied by ApplyWebUICommit when the WebUI closes.
                 const tdMove = document.createElement('td');
                 tdMove.className = 'col-move';
-                if (live && i < liveCount) {
+                if (live && !pendingPick && i < liveCount) {
                     const move = document.createElement('div');
                     move.className = 'pos-move';
                     if (i > 0) {
@@ -12782,12 +12825,12 @@
                 }
                 const tdName = document.createElement('td');
                 tdName.className = 'col-name';
-                const livePos = live ? (liveInfo.positions[i] || {}) : {};
+                const livePos = live ? (liveInfo.positions[src] || {}) : {};
                 const added = !!livePos._added;
                 tdName.innerHTML = `<div class="action-btn" onmousedown="event.preventDefault()" onclick="deInsertActor(${i})">${escapeHtml((added && livePos._name) || names[i] || 'actor ' + i)}</div>`;
                 // Added, not yet in the thread: ✕ takes it back off.
                 if (added)
-                    tdName.innerHTML += `<span class="cell-toggle" title="remove from scene" onclick="deRemoveAddedActor(${i})">✕</span>`;
+                    tdName.innerHTML += `<span class="cell-toggle" title="remove from scene" onclick="deRemoveAddedActor(${src})">✕</span>`;
                 const tdDressed = document.createElement('td');
                 tdDressed.className = 'col-dressed';
                 tdDressed.innerHTML = `<span class="cell-toggle ${p._dressed ? 'on' : ''}${offCls}" title="${p._dressed ? 'clothed' : 'unclothed'}" ${toggle('deTogglePosDressed', i)}>${p._dressed ? '\u{1F455}' : '—'}</span>`;
@@ -12798,13 +12841,14 @@
                 // Deny: live scene state (not animation metadata), sent at once; not part of posDraft.
                 const tdDeny = document.createElement('td');
                 tdDeny.className = 'col-deny';
-                if (live && i < liveCount) {
-                    const denied = Number((liveInfo.positions[i] || {})._deny_orgasm) === 1;
-                    tdDeny.innerHTML = `<span class="cell-toggle ${denied ? 'on' : ''}" title="${denied ? 'orgasm denied' : 'orgasm allowed'}" onclick="deToggleDeny(${i})">${denied ? '\u{1F512}' : '\u{1F513}'}</span>`;
+                if (live && src < liveCount) {
+                    const denied = Number((liveInfo.positions[src] || {})._deny_orgasm) === 1;
+                    tdDeny.innerHTML = `<span class="cell-toggle ${denied ? 'on' : ''}" title="${denied ? 'orgasm denied' : 'orgasm allowed'}" onclick="deToggleDeny(${src})">${denied ? '\u{1F512}' : '\u{1F513}'}</span>`;
                 }
                 const tdVictim = document.createElement('td');
                 tdVictim.className = 'col-v';
-                tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}${offCls}" title="${p._victim ? 'victim' : 'not victim'}" ${toggle('deTogglePosVictim', i)}>${p._victim ? 'V' : '—'}</span>`;
+                const victimClick = victimPending ? `onclick="deTogglePendingVictim(${src})"` : toggle('deTogglePosVictim', i);
+                tdVictim.innerHTML = `<span class="cell-toggle ${p._victim ? 'on' : ''}${victimPending ? '' : offCls}" title="${p._victim ? 'victim' : 'not victim'}" ${victimClick}>${p._victim ? 'V' : '—'}</span>`;
                 const tdMods = document.createElement('td');
                 tdMods.className = 'col-mods';
                 const list = document.createElement('div');
@@ -12979,6 +13023,25 @@
             if (!p) return;
             p._victim = p._victim ? 0 : 1;
             dePosEdited();
+        }
+
+        // Added actors: the thread doesn't have them yet, so nothing goes live. The commit close sends the
+        // role in _positions and Cancel drops it. src = index in the SceneInfo's positions.
+        function deTogglePendingVictim(src) {
+            const info = deStopLiveInfo();
+            const entry = info && (info.positions || [])[src];
+            if (!entry || !info.pendingActorChange) return;
+            const fid = formIdU32(entry._form_id != null ? entry._form_id : entry.formId);
+            const on = entry._victim ? 0 : 1;
+            entry._victim = on;
+            // SC.positions mirrors the SceneInfo here (deOnActorsChanged).
+            const mirror = (SC.positions || [])[src];
+            if (mirror && formIdU32(mirror._form_id != null ? mirror._form_id : mirror.formId) === fid) mirror._victim = on;
+            const row = DE.posDraft.find((p, i) => (p._src != null ? p._src : i) === src);
+            if (row) row._victim = on;
+            info.dirty = true;
+            if (selectedSceneInfo() === info) scRenderPositions();
+            deRenderActors();
         }
 
         function deRemovePosMod(i, token) {

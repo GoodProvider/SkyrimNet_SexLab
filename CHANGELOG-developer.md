@@ -9,13 +9,17 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - *sexual* and *bound* cycle on click: white = must have the tag, red = must not have it, grey = no filter. Each word is a view over the `SC.tags` / `SC.suppress` chips. *bound* white also sends `_bound`, so a setting's `tags_suppress_unless_bound` cannot empty the list.
 - A Description Editor animation change now narrates "`<subject> <style> changes to <description>`" (`_change_by`, `Scene.animation_change_by`). Other switch routes keep "Scene changes to".
 - Fixed: the Description Editor's animation filter tab could open with its gender filter on `any`, left over from an earlier zero-result fallback or an affection start. It now opens on `gender` unless the player picked a mode this session. It still falls back to `any` when nothing matches by gender.
+- Fixed: adding an actor in the Description Editor and picking an animation could leave the actors in the pose of SexLab's random pick while the description named yours. `ApplyWebUICommit` now waits for SexLab's post-`ChangeActors` refresh before switching (`WaitForActorChangeRefresh`), so SexLab's pick can show for a moment first. SexLab 1.6x only.
+- The Description Editor's Actor table now previews a pending pick: rows follow the animation's slots and show its orgasm, speaking and dressed defaults. Stage text previews use the same order.
+- Fixed: an added actor could not be marked as victim in the Description Editor's Actor table. Commits now match rows to actors by form id (`WebUI_PositionRowFor`), so a SexLab re-sort cannot put victim or position values on the wrong actor.
 
 ### Last-stage choice list
 - On the final stage, a list beside the HUD offers Stop, Cuddle after sex, Start vaginal sex, Start oral sex, and Start anal sex. W/S move the line, Enter selects it, and the stage deadline selects the current line. The current line is opacity 1; the others are 0.3. The list is not a HUD group.
 - A non-player is asked first (JEV, `sexlab/last_stage`). A failed answer selects Stop. NPC-only scenes apply the choice with no list; after three of them, later ones stop with no question. Player scenes do not count.
 - Cuddle, vaginal, oral, and anal switch to a matching animation at the primary's enjoyment stage. `ending_done` is cleared, and the orgasm target is raised when the lead already met it, so the new animation is not jumped to its final stage. The mode is not turned off.
 - Dashboard **Animation Selection**: `sexlab.tags.player` (default on) and `sexlab.tags.nonplayer` (default off) open the Animation Selector for a new animation, and for a switch from this list when the player can see it. Off picks at random. NPC-only switches stay random. The Devious Devices tag toggle moved into the same category. The NPC stop-allow prompt stays on `sexlab.tagEdit.playerDialogs`.
-- Cuddle matches the `nonsexual` setting plus suppress `sexual`, `spanking`, `aggressive`, `foreplay`, `leadin`. The Description Editor gets those tags explicitly, because its active-mode filter skips `_setting`.
+- Cuddle matches the `nonsexual` setting plus suppress `sexual`, `spanking`, `aggressive`. The Description Editor gets those tags explicitly, because its active-mode filter skips `_setting`.
+- Fixed: Cuddle found no animations, so the editor opened empty, because it also suppressed `foreplay` and `leadin`, which non-sexual affection animations are tagged with.
 - AnimEngine has no list. The HUD end key still stops the scene.
 - While the list is up, *up* and *down* cells (the Forward / Back keys, W and S by default) show at the top right of the HUD hotkeys, even with every HUD group off.
 - Fixed: W, S, and Enter did nothing, because `KeyHandler` never read the list keys.

@@ -3603,8 +3603,6 @@ String Function LastStage_PickRegistry()
         LastStage_AddStr(suppress, "sexual")
         LastStage_AddStr(suppress, "spanking")
         LastStage_AddStr(suppress, "aggressive")
-        LastStage_AddStr(suppress, "foreplay")
-        LastStage_AddStr(suppress, "leadin")
     elseif list_index == 2
         int must = JArray.object()
         LastStage_AddStr(must, "vaginal")
@@ -3690,8 +3688,6 @@ String Function LastStage_PresetJson()
         LastStage_AddStr(suppress, "sexual")
         LastStage_AddStr(suppress, "spanking")
         LastStage_AddStr(suppress, "aggressive")
-        LastStage_AddStr(suppress, "foreplay")
-        LastStage_AddStr(suppress, "leadin")
     elseif list_index == 2
         LastStage_AddStr(any, "vaginal")
         require_all = 1
@@ -6268,6 +6264,24 @@ Function WebUI_OnMenuLiveUpdate(String json)
     JValue.release(obj)
 EndFunction
 
+; A thread actor's row. Commit rows carry _form_id, since SexLab may have re-sorted the actors after the WebUI
+; built them. Live-update rows have none and follow thread order.
+int Function WebUI_PositionRowFor(int pos_arr, Actor a, int index)
+    int first = JArray.getObj(pos_arr, 0)
+    if a && first > 0 && JMap.hasKey(first, "_form_id")
+        int fid = a.GetFormID()
+        int i = JArray.count(pos_arr)
+        while i > 0
+            i -= 1
+            int po = JArray.getObj(pos_arr, i)
+            if po > 0 && JMap.getInt(po, "_form_id", 0) == fid
+                return po
+            endif
+        endwhile
+    endif
+    return JArray.getObj(pos_arr, index)
+EndFunction
+
 ; apply_values False (Scene Creator override off): only victim changes are applied; the per-actor
 ; dressed/orgasm/speaking values stay whatever the animation defaults set.
 Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
@@ -6290,7 +6304,7 @@ Function WebUI_ApplyLivePositions(int obj, bool apply_values = true)
     Bool any_victim_change = false
     int i = 0
     while i < n
-        int po = JArray.getObj(pos_arr, i)
+        int po = WebUI_PositionRowFor(pos_arr, positions[i], i)
         if po > 0 && apply_values
             int no_org = JMap.getInt(po, "_no_orgasm", 0)
             int dressed = JMap.getInt(po, "_dressed", 0)
@@ -7513,6 +7527,7 @@ Function ApplyWebUICommit(int obj)
             elseif !same
                 Trace("ApplyWebUICommit", "ChangeActors (SexLab restarts at stage 1) stage:"+thread.Stage)
                 thread.ChangeActors(next)
+                WaitForActorChangeRefresh()
             endif
         endif
     endif
@@ -7612,6 +7627,22 @@ Function ApplyWebUICommit(int obj)
         if !pending_animation_change
             animation_change_by = ""
         endif
+    endif
+EndFunction
+
+; SexLab 1.6x ChangeActors with a new actor count picks a random animation and returns in state Refresh, with
+; its aliases still loading that animation. SetAnimation in Refresh sends no refresh, so the actors would keep
+; those poses while thread.animation names the new one. Wait for Animating before anything changes the animation.
+Function WaitForActorChangeRefresh()
+    float waited = 0.0
+    while thread && (thread as sslThreadModel).GetState() == "Refresh" && waited < 20.0
+        Utility.WaitMenuMode(0.25)
+        waited += 0.25
+    endwhile
+    ; Let FireAction's RegisterForSingleUpdate land first: ResetPositions' UnregisterForUpdate must cancel it.
+    Utility.WaitMenuMode(0.6)
+    if thread
+        Trace("WaitForActorChangeRefresh", "waited:"+waited+" state:"+(thread as sslThreadModel).GetState())
     endif
 EndFunction
 

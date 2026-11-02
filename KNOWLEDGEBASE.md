@@ -16,7 +16,8 @@
 - **Switch lines** open at the primary's enjoyment stage. `LastStage_ArmSwitch` clears `ending_done` and, when the lead is already at the orgasm target, raises `ending_target` to that count + 1, so `Ending_Check` does not jump the new animation to its final stage. It does not call `StageManual_TakeOver`. `list_switching` makes `LastStage_Consider` a no-op for the nested `StageStart`.
 - **Animation Selector toggles** are `sexlab.tags.player` (default on) and `sexlab.tags.nonplayer` (default off), dashboard category **Animation Selection**. Scene start and this list both read them. The old `sexlab.tagEdit.playerDialogs` / `nonPlayerDialogs` names are not these toggles. `Action_Stop`'s "will you allow it?" prompt still reads `sexlab.tagEdit.playerDialogs`. Toggle on opens the Description Editor with explicit tags on a key press (the active-mode filter skips `_setting`). Toggle off, or the deadline, is a random AnimDB match. **NPC-only switches are always random**, even when `sexlab.tags.nonplayer` is on: nobody can operate the editor.
 - **AnimEngine** has no list. Stop only. The HUD end key still stops the scene.
-- **Cuddle query:** `_setting` `nonsexual` plus suppress `sexual`, `spanking`, `aggressive`, `foreplay`, `leadin`. Vaginal and anal are must-tags. Oral is any of `oral` / `blowjob` / `cunnilingus` (`_any_tags`, not `_require_all`: Papyrus ints break that parser).
+- **Never suppress `foreplay` or `leadin` in an affection filter:** the two are one synonym cluster, and every non-sexual affection animation in this install has `foreplay`. With them suppressed, Cuddle matched 0 of 572 two-actor human animations: the editor opened empty, and the deadline's random pick had nothing to play. Without them, 16 match (15 for a male + female cast).
+- **Cuddle query:** `_setting` `nonsexual` plus suppress `sexual`, `spanking`, `aggressive`. Vaginal and anal are must-tags. Oral is any of `oral` / `blowjob` / `cunnilingus` (`_any_tags`, not `_require_all`: Papyrus ints break that parser).
 - **`showPanel` does not force a panel:** `showPanel('description_editor_panel')` only asks for the Scene view, and C++ picks Description Editor or Scene Creator from `Target_Current`. With no target (`ClearTargetMenuSession`), you get the Scene Creator. Set the target first, then call `WebUI_AfterTargetOpen` to sync the pulldown, which otherwise keeps its last actor.
 - **Editor Apply counts as a manual stage move:** `ApplyWebUICommit` calls `StageManual_TakeOver` when the editor's stage differs from the thread's, which it does in the same commit as an animation switch. Anything cleared per animation has to be cleared after that, so it happens on the registry change in `Engine_SetStageInputs`, and in `OrgasmEngine::SetStageInputs` for `stageEnjoymentOff` and `primaryFinished`.
 - **Don't use `Victim_Drop` or `TogglePause` for a mode change without checking the timer:** `Victim_Drop` assumes `GoToStage` reset the timer, so with no stage move use `Victim_Release`, or the stage hangs. `TogglePause`'s resume pulls the timer back, so after an animation change clear the flags instead, or the pull-back can land on the fresh timer.
@@ -356,6 +357,16 @@
 **Also fixed in the same pass:** the YesNo gate dialogue's "Opening Scene Creator…" placeholder could stay stuck when no `SceneCreator_Open` followed Yes (no active creator for the sid, or it was already opened once) — see `WebUI_CloseYesNoIfSolo`. `SceneCreator_Open` had the same PrismaUI Invoke-ordering race `openYesNoSolo` fixed earlier (separate hide/configure/show Invokes aren't guaranteed to land in issue order) — folded into one `openSceneCreatorPanel` JS entry point. `Scene_Creator.LoadSetting` didn't clear `scene_setting_name`/`setting_strict`/`setting_has_filter` when loading "default" after a filtered preset.
 
 **Status:** compiles clean (pyro + the SKSE Debug build); not yet verified in game.
+
+## SexLab 1.6x `SetAnimation` right after `ChangeActors` keeps the old poses (2026-11-02)
+
+**Symptom:** add an actor in the Description Editor and pick `Ace_StandingSpank`: description and narration match the pick, but the actors play SexLab's random `B_B_SpoonA`. `Papyrus.0.log` has `PositionOffsets` lines only for the random animation.
+
+**Cause:** when the actor count changes, `ChangeActors` picks a random animation and calls `SetAnimation`, which enters state `Refresh` and sends `kRefreshActor`. It returns before the aliases finish. In `Refresh`, a second `SetAnimation` changes `thread.Animation`, but `Refresh.ResetPositions` only re-registers an update, so no new refresh goes out. On stage 1 each alias plays its own stale `Animation`, so the poses stay until the next stage's sync.
+
+**Rule:** after `ChangeActors`, wait for the thread to leave `Refresh` before `SetAnimation` (`Scene.WaitForActorChangeRefresh`). SexLab may also re-sort `Positions` by animation, so match per-actor data by form id, not by index (`Scene.WebUI_PositionRowFor`).
+
+**Status:** verified in game by the user.
 
 ## SexLab `AddAnimation` overwrites index 0 (2026-09-29)
 
