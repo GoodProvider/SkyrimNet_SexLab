@@ -618,6 +618,38 @@ namespace AnimEngineOrgasm
         Run(work);
     }
 
+    void OnStageBackFromFinal(int ae_id)
+    {
+        if (!SexLabNet::GetConfigBool("sexlab.enjoyment.stage_advance_primary_enjoyment", true))
+            return;
+        RE::FormID lead = 0;
+        {
+            std::lock_guard lock(g_mutex);
+            const auto* w = FindLocked(ae_id);
+            if (!w || w->count < 2 || w->stage < w->count)
+                return;
+            lead = w->lead;
+        }
+        const std::int32_t orgasms = lead ? OrgasmEngine::GetOrgasmCount(ActorFor(lead)) : 0;
+        Work work;
+        {
+            std::lock_guard lock(g_mutex);
+            auto* w = FindLocked(ae_id);
+            if (!w)
+                return;
+            w->ending_done = false;
+            w->ending_hold_pending = false;
+            if (w->ending_holding) {
+                w->ending_holding = false;
+                SetHold(work, *w, Hold::kEnding, false, -1);
+            }
+            if (lead && w->target > 0 && orgasms >= w->target)
+                w->target = orgasms + 1;
+            webui_log::info("AnimEngineOrgasm: scene {} stepping back off the final stage: ending re-armed", ae_id);
+        }
+        Run(work);
+    }
+
     void OnEnd(std::uint64_t epoch, int ae_id, const std::string& why)
     {
         if (epoch != Epoch())

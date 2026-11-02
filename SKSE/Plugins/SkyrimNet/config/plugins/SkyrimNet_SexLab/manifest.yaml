@@ -321,7 +321,7 @@ schema:
     - name: "Pause on current stage key"
       path: "sexlab.hud.key_pause"
       type: "hotkey"
-      description: "Holds the current stage (it stops advancing); press again to resume with the stage's remaining time. Enjoyment holds while paused. Default Num 5."
+      description: "Cycles how stages move; the HUD names what a press does next. pause: holds the current stage and takes manual control (enjoyment holds while paused). play: stages run on their timers. enjoy: stages follow enjoyment again, moving to the stage that matches it. On the final stage it only pauses and plays. Default Num 5."
       min: 1
       max: 255
       required: false

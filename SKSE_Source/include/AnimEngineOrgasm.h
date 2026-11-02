@@ -41,6 +41,8 @@ namespace AnimEngineOrgasm
     void OnPause(std::uint64_t epoch, int ae_id, bool paused);
     /// HUD stage-mode key: stages follow enjoyment again, so hold the current stage.
     void OnStageModeEnjoy(int ae_id);
+    /// HUD previous key, before AnimEngine::Back: leaving the final stage re-arms the ending (stage by enjoyment on).
+    void OnStageBackFromFinal(int ae_id);
     void OnEnd(std::uint64_t epoch, int ae_id, const std::string& why);
     /// AnimEngine::ClearAll: forget every scene (the OrgasmEngine drops its own on load / revert).
     void Clear();

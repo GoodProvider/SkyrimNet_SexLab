@@ -89,11 +89,11 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
     The narration makes the target answer, and the AI decides from there how they behave: they might give in, resist or turn the tables. Lines the NPCs were about to say are dropped and the ask, order or punishment is always narrated directly, whatever the Mini-game narration level. The cell is greyed out when nobody else is in the scene.
   - NPCs can punish too (**SexLab_Scene_Punish**): anyone in the scene, the player included.
   - **Num 5** cycles how stages move. The cell names what a press does next:
-    - *play*: stages are following enjoyment. Press to let them run on their timers.
-    - *pause*: stages are on their timers. Press to pause the current stage.
-    - *enjoy*: the stage is paused. Press to go back to following enjoyment. The stage stays where it is until enjoyment passes it.
+    - *pause*: stages are following enjoyment. Press to pause the current stage and take manual control.
+    - *play*: the stage is paused. Press to let stages run on their timers.
+    - *enjoy*: stages are on their timers. Press to go back to following enjoyment. The stage moves straight to the one that matches the main actor's enjoyment, which can be an earlier stage.
 
-    On the final stage, or once the main actor has orgasmed, there is nothing left for enjoyment to move, so the cell only switches between *pause* and *play*.
+    On the final stage the cell only switches between *pause* and *play*, so you can pick from the last-stage list or step back with **Num 4**. Stepping back makes the normal labels apply again, even if the main actor has already orgasmed, and they can orgasm again to return to the final stage.
   - **Num 4 / Num 6** go to the previous / next stage, and stages then run on their timers. A new animation always goes back to following enjoyment and clears a pause.
   - **PgUp / PgDn** (*PosUp* / *PosDn*) swap the actors' roles forward / back (SexLab's swap positions; nothing happens in solo or creature scenes). The current stage description is narrated with the actors in their new roles, at the **Position change narration** level (Narration settings; default Direct).
   - **Num 1** denies or allows the focus actor's orgasm. The cell reads *deny* or *allow*. A denied actor shows 🔒 after their bar, keeps gaining enjoyment, and cannot orgasm. The change is sent as an event: "<you> forbids <them> from orgasming without permission." / "<you> permits <them> to orgasm." Allowing tests them for orgasm; if they orgasm, the normal orgasm narration starts "You allowed them to orgasm."

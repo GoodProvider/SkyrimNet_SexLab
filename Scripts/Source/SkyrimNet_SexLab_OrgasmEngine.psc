@@ -65,10 +65,10 @@ Actor Function GetStagePrimary(int sid) global native
 float Function StageHoldCap(int sid) global native
 ; The player moved the stage by hand or pressed Num 5: timers until Num 5 or a new animation.
 Function DisableStageAdvancePrimaryEnjoyment(int sid) global native
-; Num 5: stages follow enjoyment again, from the current stage up.
+; Num 5: stages follow enjoyment again; the next tick goes to the primary's band, either way.
 Function EnableStageAdvancePrimaryEnjoyment(int sid) global native
-; Num 5 can offer enjoyment: the scene qualifies (even if turned off), the primary has not orgasmed in this animation,
-; and this is not the final stage.
+; Num 5 can offer enjoyment: the scene qualifies (even if turned off), the primary has not orgasmed since the last step
+; back off the final stage, and this is not the final stage.
 bool Function CanStageAdvancePrimaryEnjoyment(int sid) global native
 ; Final-stage hold: take a mark just before sending the orgasm narration. Only the scene's own actors count:
 ; ResponseStartedSince(sid, mark) once one of them speaks, ResponseDoneSince(sid, mark) once that reply has

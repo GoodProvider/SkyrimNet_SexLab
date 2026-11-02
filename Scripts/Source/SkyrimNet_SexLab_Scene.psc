@@ -3057,8 +3057,9 @@ Function TogglePause()
     SkyrimNet_SexLab_OrgasmEngine.SetScenePaused(sid, scene_paused)
 EndFunction
 
-; The player's stage-mode key. Stages follow enjoyment -> timers -> paused -> enjoyment. Where enjoyment isn't available
+; The player's stage-mode key. Stages follow enjoyment -> paused -> timers -> enjoyment. Where enjoyment isn't available
 ; (final stage, the primary has orgasmed, no primary) it is plain pause / play. Auto play's pause key stays TogglePause.
+; Pause before StageMode_Timers: its pull-back could otherwise expose an expired timer and move the stage as the pause lands.
 Function StageMode_Cycle()
     if thread == None || thread.Animation == None
         return
@@ -3066,11 +3067,11 @@ Function StageMode_Cycle()
     bool can_enjoy = !ending_done && SkyrimNet_SexLab_OrgasmEngine.CanStageAdvancePrimaryEnjoyment(sid)
     if scene_paused
         TogglePause()
-        if can_enjoy
-            StageMode_Enjoy()
-        endif
     elseif can_enjoy && SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
+        TogglePause()
         StageMode_Timers()
+    elseif can_enjoy
+        StageMode_Enjoy()
     else
         TogglePause()
     endif
@@ -3741,6 +3742,11 @@ Function LastStage_ArmSwitch()
     list_saved_target = ending_target
     list_saved_valid = true
     list_prepared = true
+    Ending_Rearm()
+EndFunction
+
+; The scene can reach its ending again. Before the stage moves: the timer pull-back must not land on a fresh timer.
+Function Ending_Rearm()
     ending_done = false
     if ending_actor != None && ending_target > 0 && SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) >= ending_target
         ending_target = SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) + 1
@@ -3749,6 +3755,18 @@ Function LastStage_ArmSwitch()
     ending_watching = false
     ending_watch_anim = None
     LastStage_ReleaseTimer()
+EndFunction
+
+; Stage by enjoyment: the player can step back off the final stage and the normal modes apply again. A list switch has
+; re-armed already, and its stage move must not close the list under it.
+bool Function Ending_CanLeaveFinal()
+    return !list_switching && IsFinalStage() && SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.enjoyment.stage_advance_primary_enjoyment", true)
+EndFunction
+
+Function Ending_LeaveFinal()
+    Trace("Ending_LeaveFinal", "stage:"+thread.Stage+"/"+Engine_StageCount()+" done:"+ending_done)
+    LastStage_Close()
+    Ending_Rearm()
 EndFunction
 
 Function LastStage_OnSwitched()
@@ -6520,6 +6538,9 @@ bool Function StageStep(int direction)
             if stage <= 1
                 return false
             endif
+            if Ending_CanLeaveFinal()
+                Ending_LeaveFinal()
+            endif
             pplus_expected_reset = true
             thread.GoToStage(stage - 1)
         else
@@ -6535,6 +6556,9 @@ bool Function StageStep(int direction)
     if direction < 0
         if stage <= 1
             return false
+        endif
+        if Ending_CanLeaveFinal()
+            Ending_LeaveFinal()
         endif
         thread.GoToStage(stage - 1)
     else
@@ -6556,12 +6580,19 @@ bool Function StageGoTo(int n)
     if n < 1 || n > SkyrimNet_SexLab_AnimDb.ThreadStageCount(thread) || n == SkyrimNet_SexLab_AnimDb.ThreadStageNum(thread)
         return false
     endif
+    bool leave_final = n < SkyrimNet_SexLab_AnimDb.ThreadStageCount(thread) && Ending_CanLeaveFinal()
     if IsSexLabPPlus()
         bool moved = SkyrimNet_SexLab_PPlus.SkipToLegacy(thread as Quest, n)
         if moved
+            if leave_final
+                Ending_LeaveFinal()
+            endif
             StageManual_TakeOver()
         endif
         return moved
+    endif
+    if leave_final
+        Ending_LeaveFinal()
     endif
     thread.GoToStage(n)
     StageManual_TakeOver()

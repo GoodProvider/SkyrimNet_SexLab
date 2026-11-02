@@ -261,9 +261,10 @@ namespace OrgasmEngine
             bool stageFemdom = false;          // the animation has the femdom tag
             std::string stageRegistry;         // animation of the last SetStageInputs: a change resets the fields below
             bool stageEnjoymentOff = false;    // moved by hand or Num 5: timers until Num 5 or a new animation
-            bool primaryFinished = false;      // the primary orgasmed: no more moves in this animation
+            bool primaryFinished = false;      // the primary orgasmed: no moves until a step back off the final stage
             RE::FormID stagePrimaryLast = 0;   // for the log
             std::int32_t stageFloor = 0;       // stage's own timer moved past the primary's band: no move back below it
+            bool stageSnap = false;            // Num 5 back to enjoyment: go to the primary's band with no back wait
             std::int32_t spikedThrough = 0;    // stage_spike paid up to this stage, so a re-advance pays nothing
             std::int32_t stageMoveTarget = 0;  // move sent, SetStage has not confirmed it yet
             double stageMoveAt = 0.0;          // when it was sent
@@ -1923,7 +1924,10 @@ namespace OrgasmEngine
             const std::int32_t last = sc.stageCount - 1;
             const auto band = static_cast<std::int32_t>(std::ceil(st.enjoyment * static_cast<float>(last) / kMaxEnjoyment));
             const std::int32_t target = std::clamp(std::max(band, sc.stageFloor), 1, last);
-            if (target == sc.stage || (target < sc.stage && sc.stageElapsed < kStageBackMinSecs) ||
+            if (target == sc.stage) {
+                sc.stageSnap = false;
+            }
+            if (target == sc.stage || (target < sc.stage && !sc.stageSnap && sc.stageElapsed < kStageBackMinSecs) ||
                 (target == sc.stageMoveTarget && now - sc.stageMoveAt < kStageMoveResend)) {
                 return;
             }
@@ -2694,6 +2698,13 @@ namespace OrgasmEngine
             sc.stageFloor = stage;
             webui_log::info("OrgasmEngine: scene {} stage {}/{} not moved by enjoyment: floor", sid, stage, stageCount);
         }
+        // The player stepped back off the final stage: Num 5 and the orgasm's jump work again.
+        const bool backFromFinal =
+            stageCount == sc.stageCount && sc.stage >= stageCount && stage < stageCount && StageAdvanceEligible(sc);
+        if (backFromFinal) {
+            sc.primaryFinished = false;
+            webui_log::info("OrgasmEngine: scene {} stage {}/{} back from the final stage", sid, stage, stageCount);
+        }
         if (changed) {
             sc.stageElapsed = 0.0;
             sc.stagePunished = false;
@@ -2727,9 +2738,9 @@ namespace OrgasmEngine
         if (changed && stageCount >= 2 && stage == stageCount - 1) {
             sc.penultElapsed = 0.0;
         }
-        if (stageCount >= 2 && stage < stageCount - 1) {
-            // Back before the last two stages: the gate rolls again; a pending rush / wait and a failed
-            // final roll are dropped.
+        if (stageCount >= 2 && (stage < stageCount - 1 || backFromFinal)) {
+            // Back before the last two stages (stage by enjoyment: back off the final stage): the gate rolls again;
+            // a pending rush / wait and a failed final roll are dropped.
             for (const auto id : sc.actors) {
                 if (auto at = g_actors.find(id); at != g_actors.end()) {
                     if (sc.gateDone || sc.gateAwait) {
@@ -2872,6 +2883,7 @@ namespace OrgasmEngine
             }
         } else if (sc.stageRegistry != registry) {
             sc.stageFloor = 0;
+            sc.stageSnap = false;
             sc.spikedThrough = 0;
             sc.stageMoveTarget = 0;
             sc.stageMoveAt = 0.0;
@@ -2941,6 +2953,7 @@ namespace OrgasmEngine
             return;
         }
         it->second.stageEnjoymentOff = true;
+        it->second.stageSnap = false;
         webui_log::info("OrgasmEngine: scene {} stages on timers until Num 5 or a new animation", sid);
     }
 
@@ -2953,11 +2966,12 @@ namespace OrgasmEngine
         }
         SceneState& sc = it->second;
         sc.stageEnjoymentOff = false;
-        // The floor keeps the current stage: it moves up when the band passes it, not back after kStageBackMinSecs.
-        sc.stageFloor = sc.stage;
+        // The next tick goes to the primary's band, either way.
+        sc.stageFloor = 0;
+        sc.stageSnap = true;
         sc.stageMoveTarget = 0;
         sc.stageMoveAt = 0.0;
-        webui_log::info("OrgasmEngine: scene {} stages follow enjoyment again from stage {}/{}", sid, sc.stage,
+        webui_log::info("OrgasmEngine: scene {} stages follow enjoyment again, from stage {}/{}", sid, sc.stage,
             sc.stageCount);
     }
 

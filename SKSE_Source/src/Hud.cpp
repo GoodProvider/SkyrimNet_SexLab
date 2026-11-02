@@ -575,22 +575,23 @@ namespace Hud
             if (ctl == "next") {
                 ok = AnimEngine::Advance(id);
             } else if (ctl == "previous") {
+                AnimEngineOrgasm::OnStageBackFromFinal(id);
                 ok = AnimEngine::Back(id);
             } else if (ctl == "pause") {
                 ok = AnimEngine::TogglePaused(id);
             } else if (ctl == "stage_mode") {
-                // Scene.StageMode_Cycle: enjoyment -> timers -> paused -> enjoyment. The tick releases the hold when
-                // the mode goes off.
+                // Scene.StageMode_Cycle: enjoyment -> paused -> timers -> enjoyment. The tick releases the hold when
+                // the scene plays with the mode off.
                 const std::int32_t sid = AnimEngineOrgasm::SidOf(id);
                 const bool can_enjoy = OrgasmEngine::CanStageAdvancePrimaryEnjoyment(sid);
                 if (OrgasmEngine::IsSceneIdPaused(sid)) {
                     ok = AnimEngine::SetPaused(id, false);
-                    if (ok && can_enjoy) {
-                        OrgasmEngine::EnableStageAdvancePrimaryEnjoyment(sid);
-                        AnimEngineOrgasm::OnStageModeEnjoy(id);
-                    }
                 } else if (can_enjoy && OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid)) {
                     OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(sid);
+                    ok = AnimEngine::SetPaused(id, true);
+                } else if (can_enjoy) {
+                    OrgasmEngine::EnableStageAdvancePrimaryEnjoyment(sid);
+                    AnimEngineOrgasm::OnStageModeEnjoy(id);
                     ok = true;
                 } else {
                     ok = AnimEngine::TogglePaused(id);
@@ -1131,11 +1132,13 @@ namespace Hud
         j["acting"] = controlling ? NameOf(acting) : "";
         const bool scenePaused = OrgasmEngine::IsScenePaused(acting);
         j["paused"] = scenePaused;
-        // Pause cell: what a press does. Enjoyment -> play (timers) -> pause -> enjoy; plain pause / play without enjoyment.
+        // Pause cell: what a press does. Enjoyment -> pause -> play (timers) -> enjoy; plain pause / play without enjoyment.
         if (scenePaused) {
-            j["pauseLabel"] = OrgasmEngine::CanStageAdvancePrimaryEnjoyment(acting) ? "enjoy" : "play";
+            j["pauseLabel"] = "play";
+        } else if (!OrgasmEngine::IsStageAuto(acting) && OrgasmEngine::CanStageAdvancePrimaryEnjoyment(acting)) {
+            j["pauseLabel"] = "enjoy";
         } else {
-            j["pauseLabel"] = OrgasmEngine::IsStageAuto(acting) ? "play" : "pause";
+            j["pauseLabel"] = "pause";
         }
         // SexLab's free camera on: Num 3 reads "lock" (a press returns to the normal camera).
         const auto* camera = RE::PlayerCamera::GetSingleton();

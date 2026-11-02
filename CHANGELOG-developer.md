@@ -26,7 +26,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Fixed: selecting a switch line opened the Scene Creator on the pulldown's last actor. It now opens the Description Editor on the player, or on the driven NPC when the player is not in the scene. `Animation_Menu_Open` gained a `focus` argument.
 - Fixed: after Apply in the editor, the list's deadline could end the scene while the switch was still running. `LastStage_Commit` now ignores the deadline and select keys during a switch.
 - Fixed: a second animation stayed on timers. Apply's stage move set `stage_manual`, and neither it nor `primaryFinished` was cleared on an animation change. A new animation now returns to following enjoyment and clears a pause.
-- The HUD pause key (Num 5) now cycles enjoyment → timers → paused → enjoyment, and reads *play*, *pause* or *enjoy* for what a press does next. It stays plain pause / play where enjoyment can't apply. Auto play's pause key is unchanged.
+- The HUD pause key (Num 5) now cycles enjoyment → paused → timers → enjoyment, and reads *pause*, *play* or *enjoy* for what a press does next. It stays plain pause / play where enjoyment can't apply. Auto play's pause key is unchanged.
+- *enjoy* now moves straight to the stage for the primary's enjoyment, forward or back (`stageSnap`), instead of waiting for enjoyment to pass the current stage.
+- Stepping back off the final stage re-arms the ending with stage by enjoyment on (`Ending_Rearm`, `OnStageBackFromFinal`, `primaryFinished` cleared in `SetStage`), so the normal modes apply again after the primary's orgasm.
 - The next cell reads *next* instead of *select* while the list is up. It still applies the current line.
 - Untested in game.
 
