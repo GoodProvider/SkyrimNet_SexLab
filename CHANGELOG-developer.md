@@ -8,6 +8,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Scene Creator and Description Editor share one animation row: Start, subject, style, *sexual*, *bound*, sort, description, synonyms, All, None. Description and synonyms moved out of the tag panel. The Description Editor has no All / None, and its style pulldown moved here from the header, so it only shows on the animation filter tab.
 - *sexual* and *bound* cycle on click: white = must have the tag, red = must not have it, grey = no filter. Each word is a view over the `SC.tags` / `SC.suppress` chips. *bound* white also sends `_bound`, so a setting's `tags_suppress_unless_bound` cannot empty the list.
 - A Description Editor animation change now narrates "`<subject> <style> changes to <description>`" (`_change_by`, `Scene.animation_change_by`). Other switch routes keep "Scene changes to".
+- Fixed: the Description Editor's animation filter tab could open with its gender filter on `any`, left over from an earlier zero-result fallback or an affection start. It now opens on `gender` unless the player picked a mode this session. It still falls back to `any` when nothing matches by gender.
 
 ### Last-stage choice list
 - On the final stage, a list beside the HUD offers Stop, Cuddle after sex, Start vaginal sex, Start oral sex, and Start anal sex. W/S move the line, Enter selects it, and the stage deadline selects the current line. The current line is opacity 1; the others are 0.3. The list is not a HUD group.

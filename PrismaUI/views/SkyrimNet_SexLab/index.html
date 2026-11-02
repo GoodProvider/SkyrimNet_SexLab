@@ -13419,7 +13419,8 @@
         // bound scene's cast so only animations it can play are listed.
         function deOpenFilterTab() {
             if (!deIsSceneBound()) return;
-            scArmFilterDowngrade(SC.filterBy || SC_FILTER_DEFAULT);
+            // Opens on gender; a mode the player picked (filterAuto off) is kept until the WebUI closes.
+            if (SC.filterAuto) scArmFilterDowngrade(SC_FILTER_DEFAULT);
             scRequestDeviousTags();
             scRenderTagChips();
             scSetTagMode(SC.tagMode || 'include');
