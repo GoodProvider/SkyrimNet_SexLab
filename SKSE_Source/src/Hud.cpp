@@ -60,6 +60,8 @@ namespace Hud
         };
         constexpr std::uint32_t kFreeCameraDx = 0x51;  // Num 3
         constexpr std::uint32_t kSkyrimNetDx = 0x47;   // Num 7
+        constexpr std::uint32_t kNumMinusDx = 0x4A;    // last-stage list up when slower is unbound
+        constexpr std::uint32_t kNumPlusDx = 0x4E;     // last-stage list down when faster is unbound
         constexpr std::uint32_t kMouseCalmDx = 256;    // LMB (sexlab.minigame.mouse)
         constexpr std::uint32_t kMouseArouseDx = 257;  // RMB
 
@@ -88,9 +90,9 @@ namespace Hud
         // Last-stage list. The scene script owns the deadline; this is the highlighted line and whether the view is up.
         bool g_listOpen = false;
         int g_listIndex = 0;
-        std::uint32_t g_listForward = 0x11;  // W, replaced by the Forward binding when it is mapped
-        std::uint32_t g_listBack = 0x1F;     // S
-        std::uint32_t g_listAdvance = 0;     // SexLab's Advance key, from Papyrus
+        std::uint32_t g_listUp = kNumMinusDx;   // replaced by the slower binding when it is set
+        std::uint32_t g_listDown = kNumPlusDx;  // replaced by the faster binding when it is set
+        std::uint32_t g_listAdvance = 0;        // SexLab's Advance key, from Papyrus
 
         // Aid cell: whether the player has an affordable healing / stamina spell or a potion (inventory scan,
         // refreshed at most every kAidCheckInterval seconds).
@@ -606,17 +608,6 @@ namespace Hud
             webui_log::info("Hud: AnimEngine key {} scene {} -> {}", ctl, id, ok);
         }
 
-        std::uint32_t MappedKey(const RE::BSFixedString& eventId, std::uint32_t fallback)
-        {
-            auto* map = RE::ControlMap::GetSingleton();
-            if (!map)
-                return fallback;
-            const auto dx = map->GetMappedKey(eventId.c_str(), RE::INPUT_DEVICE::kKeyboard);
-            if (dx == RE::ControlMap::kInvalid || dx == 0)
-                return fallback;
-            return dx;
-        }
-
         void NotifyList(int index, bool select)
         {
             RE::Actor* acting = Acting();
@@ -644,21 +635,21 @@ namespace Hud
 
         void BindListKeys()
         {
-            auto* events = RE::UserEvents::GetSingleton();
-            std::uint32_t forward = 0x11;
-            std::uint32_t back = 0x1F;
-            if (events) {
-                forward = MappedKey(events->forward, 0x11);
-                back = MappedKey(events->back, 0x1F);
-            }
+            std::uint32_t up = kNumMinusDx;
+            std::uint32_t down = kNumPlusDx;
             std::uint32_t next = 0;
             std::uint32_t advance = 0;
             {
                 std::lock_guard lock(g_lock);
-                g_listForward = forward;
-                g_listBack = back;
-                const auto it = g_keyDx.find("next");
-                next = it != g_keyDx.end() ? it->second : 0;
+                const auto boundOr = [](const char* control, std::uint32_t fallback) {
+                    const auto it = g_keyDx.find(control);
+                    return it != g_keyDx.end() && it->second != 0 ? it->second : fallback;
+                };
+                up = boundOr("slower", kNumMinusDx);
+                down = boundOr("faster", kNumPlusDx);
+                g_listUp = up;
+                g_listDown = down;
+                next = boundOr("next", 0);
                 advance = g_listAdvance;
             }
             constexpr std::uint32_t kEnter = 0x1C;  // main Enter, not the numpad Enter the Aid cell uses
@@ -674,16 +665,17 @@ namespace Hud
             };
             std::map<std::uint32_t, KeyCallback> keys;
             // HUD next and SexLab's Advance select too: on the final stage next does nothing and Advance ends the
-            // scene. Stripped with the other list keys, so SexLab does not see them. Forward / back win a clash.
+            // scene. Stripped with the other list keys, so SexLab does not see them. Up / down win a clash. They are
+            // the slower / faster keys: KeyHandler runs list keys first, so those keys do not change the style here.
             keys[kEnter] = select;
             if (next != 0)
                 keys[next] = select;
             if (advance != 0)
                 keys[advance] = select;
-            keys[forward] = []() { MoveList(-1); };
-            if (back != forward)
-                keys[back] = []() { MoveList(1); };
-            KeyHandler::GetSingleton()->SetListKeys(std::move(keys), forward, back);
+            keys[up] = []() { MoveList(-1); };
+            if (down != up)
+                keys[down] = []() { MoveList(1); };
+            KeyHandler::GetSingleton()->SetListKeys(std::move(keys));
         }
 
         void RebindKeys()
@@ -961,6 +953,12 @@ namespace Hud
     void PressKey(const std::string& control, RE::FormID focus)
     {
         if (control == "slower" || control == "faster") {
+            // The last-stage list has these keys, and the HUD shows the style cells disabled.
+            {
+                std::lock_guard lock(g_lock);
+                if (g_listOpen)
+                    return;
+            }
             OnSpeed(control == "faster");
             return;
         }
@@ -1096,8 +1094,8 @@ namespace Hud
             }
             keys["free"] = DxLabel(kFreeCameraDx);
             keys["skyrimnet"] = DxLabel(kSkyrimNetDx);
-            keys["list_up"] = DxLabel(g_listForward);
-            keys["list_down"] = DxLabel(g_listBack);
+            keys["list_up"] = DxLabel(g_listUp);
+            keys["list_down"] = DxLabel(g_listDown);
             j["keys"] = std::move(keys);
         }
         // Punish cell: always shown, greyed out when nobody else is in the scene. The player punishes (as OnPunish),

@@ -28,9 +28,9 @@ public:
     /// AnimEngine scene keys: same handling as the HUD keys, live while SetAnimActive(true) and the HUD is not.
     void SetAnimKeys(std::map<uint32_t, KeyCallback> keys);
     void SetAnimActive(bool active);
-    /// Last-stage list keys (forward / back / main Enter). Live while SetListActive(true), even when the HUD
-    /// groups are off. passUpA / passUpB: those codes keep their key-up so a held move key does not stick.
-    void SetListKeys(std::map<uint32_t, KeyCallback> keys, std::uint32_t passUpA, std::uint32_t passUpB);
+    /// Last-stage list keys (up / down / select). Live while SetListActive(true), even when the HUD groups are off,
+    /// and ahead of the HUD keys.
+    void SetListKeys(std::map<uint32_t, KeyCallback> keys);
     void SetListActive(bool active);
 
 private:
@@ -51,8 +51,6 @@ private:
     std::atomic<bool> _animActive{ false };
     std::map<uint32_t, KeyCallback> _listKeys;
     std::atomic<bool> _listActive{ false };
-    std::uint32_t _listPassUpA = 0;
-    std::uint32_t _listPassUpB = 0;
     std::shared_mutex _mutex;
 };
 

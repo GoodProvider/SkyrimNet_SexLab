@@ -38,7 +38,7 @@ namespace Hud
     void PressKey(const std::string& control, RE::FormID focus = 0);
 
     /// Last-stage choice list, drawn beside the HUD. The scene script owns the deadline; this view owns the
-    /// highlighted line and the W / S / Enter keys while it is open.
+    /// highlighted line and the up / down (slower / faster keys) / Enter keys while it is open.
     void LastStageShow(int index, std::uint32_t advanceKey);
     void LastStageHide();
     int LastStageIndex();

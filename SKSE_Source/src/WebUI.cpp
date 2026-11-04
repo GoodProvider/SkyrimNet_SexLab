@@ -504,12 +504,10 @@ void KeyHandler::SetAnimActive(bool active)
     _animActive.store(active);
 }
 
-void KeyHandler::SetListKeys(std::map<uint32_t, KeyCallback> keys, std::uint32_t passUpA, std::uint32_t passUpB)
+void KeyHandler::SetListKeys(std::map<uint32_t, KeyCallback> keys)
 {
     std::unique_lock lock(_mutex);
     _listKeys = std::move(keys);
-    _listPassUpA = passUpA;
-    _listPassUpB = passUpB;
 }
 
 void KeyHandler::SetListActive(bool active)
@@ -534,18 +532,14 @@ uint32_t HudCode(const RE::ButtonEvent* btn)
 }
 
 /// Unlink every button event whose code is a live HUD key (down, held and up alike).
-/// passUpA / passUpB: those codes keep their key-up, so a move key held when the keys went live does not stick.
-void StripHudInputEvents(RE::InputEvent* const* a_eventList, const std::map<uint32_t, KeyCallback>& keys,
-                         uint32_t passUpA = 0, uint32_t passUpB = 0)
+void StripHudInputEvents(RE::InputEvent* const* a_eventList, const std::map<uint32_t, KeyCallback>& keys)
 {
     auto*& head = const_cast<RE::InputEvent*&>(*a_eventList);
     RE::InputEvent* prev = nullptr;
     for (auto* cur = head; cur;) {
         bool match = false;
         if (cur->eventType == RE::INPUT_EVENT_TYPE::kButton) {
-            const auto* btn = cur->AsButtonEvent();
-            const uint32_t code = HudCode(btn);
-            match = keys.contains(code) && !(btn->IsUp() && (code == passUpA || code == passUpB));
+            match = keys.contains(HudCode(cur->AsButtonEvent()));
         }
         auto* next = cur->next;
         if (!match) {
@@ -614,18 +608,13 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
     const bool list = _listActive.load() && overlayHidden;
     std::map<uint32_t, KeyCallback> hudKeys;
     std::map<uint32_t, KeyCallback> listKeys;
-    uint32_t listPassUpA = 0;
-    uint32_t listPassUpB = 0;
 
     {
         std::shared_lock lock(_mutex);
         if (hud)
             hudKeys = hudUp ? _hudKeys : _animKeys;
-        if (list) {
+        if (list)
             listKeys = _listKeys;
-            listPassUpA = _listPassUpA;
-            listPassUpB = _listPassUpB;
-        }
         for (auto event = *a_eventList; event; event = event->next) {
             if (event->eventType != RE::INPUT_EVENT_TYPE::kButton)
                 continue;
@@ -657,7 +646,7 @@ RE::BSEventNotifyControl KeyHandler::ProcessEvent(RE::InputEvent* const* a_event
     if (hud && !hudKeys.empty())
         StripHudInputEvents(a_eventList, hudKeys);
     if (list && !listKeys.empty())
-        StripHudInputEvents(a_eventList, listKeys, listPassUpA, listPassUpB);
+        StripHudInputEvents(a_eventList, listKeys);
 
     for (const auto& cb : toRun)
         cb();

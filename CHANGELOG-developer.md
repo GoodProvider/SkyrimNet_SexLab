@@ -16,15 +16,15 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Fixed: an added actor could not be marked as victim in the Description Editor's Actor table. Commits now match rows to actors by form id (`WebUI_PositionRowFor`), so a SexLab re-sort cannot put victim or position values on the wrong actor.
 
 ### Last-stage choice list
-- On the final stage, a list beside the HUD offers Stop, Cuddle after sex, Start vaginal sex, Start oral sex, and Start anal sex. W/S move the line, Enter selects it, and the stage deadline selects the current line. The current line is opacity 1; the others are 0.3. The list is not a HUD group.
+- On the final stage, a list beside the HUD offers Stop, Cuddle after sex, Start vaginal sex, Start oral sex, and Start anal sex. Num - / Num + move the line, Enter selects it, and the stage deadline selects the current line. The current line is opacity 1; the others are 0.3. The list is not a HUD group.
 - A non-player is asked first (JEV, `sexlab/last_stage`). A failed answer selects Stop. NPC-only scenes apply the choice with no list; after three of them, later ones stop with no question. Player scenes do not count.
 - Cuddle, vaginal, oral, and anal switch to a matching animation at the primary's enjoyment stage. `ending_done` is cleared, and the orgasm target is raised when the lead already met it, so the new animation is not jumped to its final stage. The mode is not turned off.
 - Dashboard **Animation Selection**: `sexlab.tags.player` (default on) and `sexlab.tags.nonplayer` (default off) open the Animation Selector for a new animation, and for a switch from this list when the player can see it. Off picks at random. NPC-only switches stay random. The Devious Devices tag toggle moved into the same category. The NPC stop-allow prompt stays on `sexlab.tagEdit.playerDialogs`.
 - Cuddle matches the `nonsexual` setting plus suppress `sexual`, `spanking`, `aggressive`. The Description Editor gets those tags explicitly, because its active-mode filter skips `_setting`.
 - Fixed: Cuddle found no animations, so the editor opened empty, because it also suppressed `foreplay` and `leadin`, which non-sexual affection animations are tagged with.
 - AnimEngine has no list. The HUD end key still stops the scene.
-- While the list is up, *up* and *down* cells (the Forward / Back keys, W and S by default) show at the top right of the HUD hotkeys, even with every HUD group off.
-- Fixed: W, S, and Enter did nothing, because `KeyHandler` never read the list keys.
+- While the list is up, *up* and *down* cells (the slower / faster keys, Num - and Num + by default) show beside the style cells, even with every HUD group off. Those keys move the list instead of changing the style, and the style cells are dimmed. Auto play can't change the style through them either.
+- Fixed: the list's move keys and Enter did nothing, because `KeyHandler` never read the list keys.
 - Fixed (legacy SexLab): when the final-stage hold released, SexLab's stage timer could end the scene before the list's deadline applied the current line. The list now keeps the hold.
 - While the list is up, the HUD next key (the cell reads *select*) and SexLab's Advance key (Space by default) select the current line, like Enter. Space used to end the scene and Num 6 did nothing. `LastStage_Show` gained an `advance_key` argument.
 - When the deadline hits a switch line, it picks a random match, or stops if none matches. The Description Editor only opens on a key press.

@@ -674,7 +674,7 @@ SkyrimNet_SexLab_Scene Function GetSceneBySid(int scene_sid)
     return None
 EndFunction
 
-; C++ last-stage list: JEV answer, W/S, Enter.
+; C++ last-stage list: JEV answer, up / down, Enter.
 Function LastStage_OnDecision(int scene_sid, int choice)
     SkyrimNet_SexLab_Scene sl_scene = GetSceneBySid(scene_sid)
     if sl_scene

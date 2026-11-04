@@ -10,7 +10,7 @@
         blocked, paused, pauseLabel (what the pause key does next: play / pause / enjoy), freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys; ask (Num .) sits under Num 3, aid (Num Enter) to its right.
-        A last column holds up / down (keys.list_up / list_down), shown only while lastStage.open, also with every HUD group off. The next cell stays lit while it is open, and a press applies the current line.
+        A last column holds up / down (keys.list_up / list_down, the slower / faster keys) beside slower / faster, shown only while lastStage.open, also with every HUD group off. While it is open the slower / faster cells are dimmed (those keys move the list), the next cell stays lit, and a press of it applies the current line.
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -382,9 +382,9 @@
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
             // Controls part, PgUp/PgDn column + numpad grid. Each label names what a press does.
-            //   <as npc>                         auto|control   up     (Num *: take control; up / down: list open)
-            //   PosUp   (Num 7)  calm   arouse   <slower step>  down
-            //   PosDn   prev     pause  next     <faster step>
+            //   <as npc>                         auto|control          (Num *: take control)
+            //   PosUp   (Num 7)  calm   arouse   <slower step>  up     (up / down: list open, on the slower / faster keys)
+            //   PosDn   prev     pause  next     <faster step>  down
             //           deny     end    free 📷
             //                           ask      aid                 (Num .: ask, always; Num Enter: aid, mini-game)
             // Every slot is always emitted (hidden with .off) so nothing shifts when parts toggle.
@@ -404,19 +404,19 @@
             }
             const tcLabel = state.takeControlLabel || 'auto';
             c += ctl(keys, 'take_control', tcLabel, 4, { off: cOff });
-            c += ctl(keys, 'list_up', 'up', 5, listKey);
+            c += ctl(keys, '', '', 5, { off: true });
             c += ctl(keys, 'pos_up', 'PosUp', 0, { off: cOff });
             c += ctl(keys, 'skyrimnet', '', 1, { dim: true, off: cOff });
             c += ctl(keys, 'calm', 'calm', 2, { blocked: blocked.calm, off: mgcOff });
             c += ctl(keys, 'arouse', 'arouse', 3, { blocked: blocked.arouse, off: mgcOff });
-            c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower, off: cOff });
-            c += ctl(keys, 'list_down', 'down', 5, listKey);
+            c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower || listOpen, off: cOff });
+            c += ctl(keys, 'list_up', 'up', 5, listKey);
             c += ctl(keys, 'pos_down', 'PosDn', 0, { off: cOff });
             c += ctl(keys, 'previous', 'prev', 1, { dim: state.stageAuto, off: cOff });
             c += ctl(keys, 'pause', state.pauseLabel || 'pause', 2, { off: cOff });
             c += ctl(keys, 'next', 'next', 3, listOpen ? listKey : { dim: state.stageAuto, off: cOff });
-            c += ctl(keys, 'faster', faster || NO_STEP, 4, { dim: !faster, off: cOff });
-            c += ctl(keys, '', '', 5, { off: true });
+            c += ctl(keys, 'faster', faster || NO_STEP, 4, { dim: !faster || listOpen, off: cOff });
+            c += ctl(keys, 'list_down', 'down', 5, listKey);
             c += ctl(keys, '', '', 0, { off: true });
             c += ctl(keys, 'deny', fa && fa.denied ? 'allow' : 'deny', 1, { off: cOff });
             c += ctl(keys, 'end', 'end', 2, { off: cOff });
