@@ -394,7 +394,7 @@ def parity(rows, db):
     for reg in sorted(set(old) & set(rows)):
         n, pc, sc, pg, ot = old[reg]
         r = rows[reg]
-        nt = set(r["_tags"]) | ({"sexual"} if "sexual" in ot else set())
+        nt = set(r["_tags"]) | ({"sexual", "restrained"} & ot)
         d = []
         if n != r["_name"]:
             d.append(f"name {n!r} != {r['_name']!r}")

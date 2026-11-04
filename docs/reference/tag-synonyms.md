@@ -75,3 +75,13 @@ All tag-based selection in `SkyrimNet_SexLab_Scene_Creator.psc` goes through `Se
 
 - Use `sexual` to require any sex act and suppress `sexual` to exclude them. `kissing` is **not** a sex tag.
 - The tag is only ever added. If you remove a tag from the file, rows that already have `sexual` keep it until AnimDB is force-rebuilt.
+
+## Derived `restrained` tag (`restraint_tags.json`)
+
+`SKSE/Plugins/SkyrimNet_SexLab/restraint_tags.json` works the same way: AnimDB adds the tag `restrained` to every animation with any listed tag (`bound`, `bondage`, `yoke`, `armbinder`, `cuffs`, `cuffed`, `rope`, `chains`, `hogtied`). The **bound** word in the animation row filters on it.
+
+- The page shows this tag as `bound` on its chip and in an animation's tag list, and leaves it out of the available tags list. Filters still use `restrained`.
+
+- It is a separate tag because worn-device tags, which include `bound` (`BondageCatalog::WornAnimationTags`), must match literally. Do not derive `bound` from these tags or cluster them.
+- It is stored on the row, so the synonyms pulldown does not change what it matches.
+- Asking for `restrained` or `bound` in a Papyrus query (`_must_tags`) counts as bound, so `tags_suppress_unless_bound` does not empty the result on an unbound cast.

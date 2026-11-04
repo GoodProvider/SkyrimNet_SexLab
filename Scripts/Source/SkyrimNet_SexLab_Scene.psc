@@ -447,6 +447,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     pending_animation_change = false
     animation_change_from = ""
     animation_change_by = ""
+    animation_change_style_from = ""
     pending_stage_restart = false
     ; Once per scene, not per stage: relief pending from earlier stages waits for OrgasmEnd / AnimationEnd.
     SLA_ReliefBegin()
@@ -616,6 +617,7 @@ Function Release()
     pending_animation_change = false
     animation_change_from = ""
     animation_change_by = ""
+    animation_change_style_from = ""
     pending_stage_restart = false
     SLA_ReliefBegin()
     orgasm_window_open = false
@@ -799,6 +801,8 @@ String animation_change_from = ""
 ; Description Editor switch: the subject pulldown's name. The narration becomes
 ; "<name> <style> changes to <new stage description>".
 String animation_change_by = ""
+; Style a Description Editor pick also changed from: its line merges into the switch narration.
+String animation_change_style_from = ""
 ; 1.6x animation switch while SexLab is Advancing (SetAnimation clamped the stage): restart at the next StageStart.
 bool pending_stage_restart = false
 
@@ -4378,6 +4382,7 @@ Function AnimationStart()
     pending_animation_change = false
     animation_change_from = ""
     animation_change_by = ""
+    animation_change_style_from = ""
     pending_stage_restart = false
     ; Re-entrant mid-scene AnimationStart must not force STATUS_SETUP (would re-run
     ; first-start/initiator path) or clear orgasm_messages_set while leaving non-empty
@@ -4650,6 +4655,7 @@ Function StageStart()
             ; No anidata transition lookup: those are per-animation stage pairs.
             if animation_change_by != ""
                 narration = animation_change_by+" "+style+" changes to "+desc
+                animation_change_style_from = ""
             else
                 narration = "Scene changes to '"+desc+"'"
             endif
@@ -4760,9 +4766,14 @@ Function StageStart()
     if cur_stage > 0
         stage_last = cur_stage
     endif
+    ; The new animation had no description to merge a style change into: it still gets its line.
+    if animation_change_style_from != ""
+        NarrateStyleChangeFrom(WebUI_StyleSpeaker(), animation_change_style_from)
+    endif
     pending_animation_change = false
     animation_change_from = ""
     animation_change_by = ""
+    animation_change_style_from = ""
 
     ; If this thread is being tracked print the thread's status
     if tracking
@@ -6164,14 +6175,26 @@ EndFunction
 ; LLM action / style hotkey: change style mid-scene with one DirectNarration.
 Function ChangeStyle(Actor who, String _style)
     String style_old = style
+    if ApplyStyleChange(_style)
+        NarrateStyleChangeFrom(who, style_old)
+    endif
+EndFunction
+
+; Sets the style without narrating. True if it changed.
+bool Function ApplyStyleChange(String _style)
+    String style_old = style
     SetStyle(_style)
     if style_old == style
-        return
+        return false
     endif
     ; HUD faster/slower is relative to the style: back to 1.0 on a style change.
     if thread != None && thread.positions.length > 0
         SkyrimNet_SexLab_OrgasmEngine.ResetSpeedScale(thread.positions[0])
     endif
+    return true
+EndFunction
+
+Function NarrateStyleChangeFrom(Actor who, String style_old)
     if orgasm_messages_set
         Trace("ChangeStyle", "--- skipping style DN, orgasm window open")
         return
@@ -6853,11 +6876,7 @@ Function WebUI_OnNarrate(String json)
         return
     endif
     if new_style != ""
-        Actor who = sender
-        if has_player
-            who = Game.GetPlayer()
-        endif
-        ChangeStyle(who, new_style)
+        ChangeStyle(WebUI_StyleSpeaker(), new_style)
         cancel_dirty = true
         return
     endif
@@ -6865,6 +6884,14 @@ Function WebUI_OnNarrate(String json)
         return
     endif
     DirectNarration("The scene changes to "+text, sender, receiver)
+EndFunction
+
+; Who a Description Editor style change is narrated as.
+Actor Function WebUI_StyleSpeaker()
+    if has_player
+        return Game.GetPlayer()
+    endif
+    return sender
 EndFunction
 
 ; HUD PosUp / PosDn (PgUp / PgDn): SexLab's swap positions. sexlab.narration.position_level narrates the
@@ -7372,6 +7399,7 @@ Function WebUI_RestoreCancelSnapshot()
     seeded_registry = snap_seeded
     pending_animation_change = false
     animation_change_by = ""
+    animation_change_style_from = ""
     pending_stage_restart = false
     if snap_style != "" && snap_style != style
         SetStyle(snap_style)
@@ -7531,8 +7559,19 @@ Function ApplyWebUICommit(int obj)
             endif
         endif
     endif
+    ; _narrate_style (Description Editor): this style change is said below, merged into a pick's narration.
+    String style_from = ""
     if JMap.hasKey(obj, "_style")
-        SetStyle(JMap.getStr(obj, "_style", style))
+        String style_new = JMap.getStr(obj, "_style", style)
+        if JMap.getInt(obj, "_narrate_style", 0) == 1
+            String style_was = style
+            if ApplyStyleChange(style_new)
+                style_from = style_was
+                cancel_dirty = true
+            endif
+        else
+            SetStyle(style_new)
+        endif
     endif
     if JMap.hasKey(obj, "_intent")
         intent = JMap.getStr(obj, "_intent", intent)
@@ -7622,11 +7661,29 @@ Function ApplyWebUICommit(int obj)
         ; orgasm/speaking, dressing only toward undressed. Without it (Scene Menu Update) the user's
         ; values above stand.
         animation_change_by = JMap.getStr(obj, "_change_by", "")
+        if style_from != ""
+            ; "Scene changes to" would drop the style, so the merged line always names someone.
+            if animation_change_by == ""
+                animation_change_by = GetDisplayName(WebUI_StyleSpeaker())
+            endif
+            animation_change_style_from = style_from
+        endif
         WebUI_SwitchToRegistry(active_reg, JMap.getInt(obj, "_reseed_defaults", 0) == 1)
         ; No narration queued (switch failed or nothing changed): a later switch must not use this name.
         if !pending_animation_change
             animation_change_by = ""
+            ; Already empty: StageStart ran during the switch and dealt with the style change.
+            if animation_change_style_from == ""
+                style_from = ""
+            endif
+            animation_change_style_from = ""
+        else
+            style_from = ""
         endif
+    endif
+    ; No pick carried the style change: its own line.
+    if style_from != ""
+        NarrateStyleChangeFrom(WebUI_StyleSpeaker(), style_from)
     endif
 EndFunction
 

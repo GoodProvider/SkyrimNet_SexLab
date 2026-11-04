@@ -120,6 +120,12 @@ namespace PapyrusBindings_AnimationDB
                             cast.push_back(actor);
                     }
                     bound = !BondageCatalog::WornAnimationTags(cast).empty();
+                    // Asked for bound animations (the animation row's word): the suppress would empty the result.
+                    for (const auto& tag : spec.must_tags) {
+                        const auto lower = AnimationDB::ToLower(tag);
+                        if (lower == "restrained" || lower == "bound")
+                            bound = true;
+                    }
                 }
                 AnimationDB::ParseSceneFilterKeys(j, spec, bound);
             } catch (...) {

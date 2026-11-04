@@ -292,6 +292,11 @@
             margin-bottom: var(--space-xs);
         }
 
+        /* The animation filter tab has its own style pulldown in the animation row. */
+        #description-editor-panel.de-tab-filter #de-style-pulldown-stages {
+            display: none;
+        }
+
         #description-editor-panel .de-desc-section,
         #description-editor-panel .de-animfilter-section {
             display: none;
@@ -2462,7 +2467,7 @@
                 <div id="sc-initiator-pulldown"></div>
                 <div id="sc-style-pulldown"></div>
                 <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
-                <span class="tag-toggle" data-tag="bound" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('bound')">bound</span>
+                <span class="tag-toggle" data-tag="restrained" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('restrained')">bound</span>
                 <span>sort:</span>
                 <div id="sc-sort-pulldown"></div>
                 <span>description:</span>
@@ -2530,6 +2535,7 @@
             <div class="action-btn de-btn-continue-close" onmousedown="event.preventDefault()" onclick="deContinueAndClose()">continue</div>
             <span class="tag-mode-btn de-tab active" id="de-tab-btn-stages" onmousedown="event.preventDefault()" onclick="deSetBottomTab('stages')">stage descriptions</span>
             <span class="tag-mode-btn de-tab" id="de-tab-btn-filter" onmousedown="event.preventDefault()" onclick="deSetBottomTab('filter')">animation filter</span>
+            <div id="de-style-pulldown-stages"></div>
         </div>
         <div class="de-section de-desc-section">
             <div class="section-header" id="de-desc-header">Description</div>
@@ -2567,7 +2573,7 @@
                 <div id="de-initiator-pulldown"></div>
                 <div id="de-style-pulldown"></div>
                 <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
-                <span class="tag-toggle" data-tag="bound" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('bound')">bound</span>
+                <span class="tag-toggle" data-tag="restrained" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('restrained')">bound</span>
                 <span>sort:</span>
                 <div id="de-sort-pulldown"></div>
                 <span>description:</span>
@@ -10220,6 +10226,7 @@
                     _next_registry: this.nextRegistry || this.activeRegistry,
                     _reseed_defaults: this.reseedDefaults ? 1 : 0,
                     _change_by: this.changeBy || '',
+                    _narrate_style: this.narrateStyle ? 1 : 0,
                     _stage: this.stage,
                     _stages: this.stages,
                     _selected_registries: this.selectedRegistries,
@@ -10304,6 +10311,7 @@
         // End of an overlay session: forget every SceneInfo and draft (no Papyrus calls).
         function clearSceneInfos() {
             DE.pendingSwitch = null;
+            DE.heldStyle = null;
             sceneInfoByKey.clear();
             selectedSceneInfoKey = 'new';
             sceneInfosSessionActive = false;
@@ -10359,6 +10367,7 @@
         function flushSceneInfos() {
             deDbg('flushSceneInfos'); // DEBUG-DELETE
             deSendPendingSwitch();
+            deSendHeldStyle(true);
             deFinalizeActorChanges();
             const scenes = [];
             sceneInfoByKey.forEach(info => {
@@ -10380,6 +10389,7 @@
             info.pendingReorder = false;
             info.pendingActorChange = false;
             info.reseedDefaults = false;
+            info.narrateStyle = false;
             info.origActiveRegistry = null;
         }
 
@@ -10401,7 +10411,10 @@
                 return;
             }
             // Unpausing is when a Description Editor animation pick takes effect.
-            if (gamePaused) deSendPendingSwitch();
+            if (gamePaused) {
+                deSendPendingSwitch();
+                deSendHeldStyle(false);
+            }
             setGamePaused(!gamePaused);
             if (typeof window.onGamePauseSet === 'function')
                 window.onGamePauseSet(gamePaused ? '1' : '0');
@@ -10414,6 +10427,7 @@
             if (deActorChangePending() && !dePendingActive()) return;
             if (gamePaused) {
                 deSendPendingSwitch();
+                deSendHeldStyle(true);
                 setGamePaused(false);
                 if (typeof window.onGamePauseSet === 'function') window.onGamePauseSet('0');
             }
@@ -11685,11 +11699,16 @@
             if (deEl) deEl.value = value;
         }
 
+        // Derived tag restrained is the bound word: tag values stay as they are, only the text shown changes.
+        function scTagLabel(tag) {
+            return tag === 'restrained' ? 'bound' : tag;
+        }
+
         function scRenderTagChips() {
             const incHtml = SC.tags.map(t =>
-                `<span class="tag-chip" onclick="scRemoveTag('include','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</span>`).join('');
+                `<span class="tag-chip" onclick="scRemoveTag('include','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(scTagLabel(t))}</span>`).join('');
             const excHtml = SC.suppress.map(t =>
-                `<span class="tag-chip" onclick="scRemoveTag('exclude','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</span>`).join('');
+                `<span class="tag-chip" onclick="scRemoveTag('exclude','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(scTagLabel(t))}</span>`).join('');
             for (const p of ['sc', 'de']) {
                 const incEl = document.getElementById(p + '-include-tags');
                 const excEl = document.getElementById(p + '-exclude-tags');
@@ -11793,7 +11812,7 @@
             if (!window._snslListPreset && SC.mode !== 'active' && SC.sceneSetting) {
                 filter._setting = SC.sceneSetting;
                 filter._bound = (SC.ddAuto || []).length > 0 || (SC.ddDismissed && SC.ddDismissed.size > 0)
-                    || SC.tags.includes('bound');
+                    || SC.tags.includes('restrained') || SC.tags.includes('bound');
             }
             if (window._snslListPreset) {
                 if (SC.listRequireAll) {
@@ -11819,7 +11838,8 @@
         }
 
         function scRenderAvailableTags() {
-            let tags = SC.lastTags || [];
+            // restrained is left out: the bound word already includes and suppresses it.
+            let tags = (SC.lastTags || []).filter(t => t._tag !== 'restrained');
             const scQ = document.getElementById('sc-tag-filter');
             const deQ = document.getElementById('de-tag-filter');
             const q = ((scQ && scQ.value) || (deQ && deQ.value) || '').toLowerCase();
@@ -12256,7 +12276,7 @@
             const el = document.getElementById('sc-last-anim-tags');
             if (!el) return;
             const a = scLastSelectedAnim();
-            const text = a ? 'tags: ' + deAnimTagsList(a).join(', ') : '';
+            const text = a ? 'tags: ' + deAnimTagLabels(a).join(', ') : '';
             el.textContent = text;
             el.title = text;
         }
@@ -12393,6 +12413,7 @@
             // Animation picked while paused: { key, reg, row }. Shown as a preview; sent to the scene on
             // play or a commit close (deSendPendingSwitch), dropped by Cancel.
             pendingSwitch: null,
+            heldStyle: null,
             stagesDraft: [],
             loadedStages: [],
             // Actor table rows: the live scene's per-actor values [{_no_orgasm, _speaking, _dressed, _victim}].
@@ -12528,6 +12549,11 @@
             return [];
         }
 
+        // For display: a row with both bound and restrained shows one bound.
+        function deAnimTagLabels(a) {
+            return [...new Set(deAnimTagsList(a).map(scTagLabel))];
+        }
+
         // The ControlPanel target's live scene: selectSceneInfoForActor's pick, else any live scene with the target.
         function deTargetSceneKey() {
             const sel = sceneInfoByKey.get(selectedSceneInfoKey);
@@ -12552,20 +12578,55 @@
             return picked && picked.mode === 'active' && picked.scene_sid >= 0 ? picked : null;
         }
 
-        // Style pulldown left of Save. A change goes straight to the scene (Scene.ChangeStyle:
-        // style, animation speed, one "changes from 'x' to 'y'" DirectNarration).
+        // Style pulldown, one per tab. While paused, or while a pick or added actor waits, the change is held so
+        // it goes out with the pick as one narration (deSendPendingSwitch) or on its own (deSendHeldStyle).
+        // Otherwise it goes straight to the scene (Scene.ChangeStyle: style, animation speed, one
+        // "changes from 'x' to 'y'" DirectNarration).
         function deRenderStylePulldown() {
-            const host = document.getElementById('de-style-pulldown');
-            if (!host) return;
-            host.innerHTML = '';
             const info = deStyleSceneInfo();
-            if (!info) return;
-            host.appendChild(createPulldown(['forcefully', 'normally', 'gently'], info.style || 'normally', (v) => {
-                if (v === info.style) return;
-                info.style = v;
-                if (typeof window.onSceneNarrate === 'function')
-                    window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _style: v }));
-            }));
+            const held = info && DE.heldStyle && DE.heldStyle.key === info.key ? DE.heldStyle.style : '';
+            const current = held || (info && info.style) || 'normally';
+            for (const id of ['de-style-pulldown', 'de-style-pulldown-stages']) {
+                const host = document.getElementById(id);
+                if (!host) continue;
+                host.innerHTML = '';
+                if (!info) continue;
+                host.appendChild(createPulldown(['forcefully', 'normally', 'gently'], current, (v) => {
+                    if (v === current) return;
+                    info.style = v;
+                    const pend = DE.pendingSwitch;
+                    if (gamePaused || info.pendingActorChange || (pend && pend.key === info.key && !pend.sent))
+                        DE.heldStyle = { key: info.key, style: v };
+                    else if (typeof window.onSceneNarrate === 'function')
+                        window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _style: v }));
+                    deRenderStylePulldown();
+                }));
+            }
+        }
+
+        // The style held for this scene, if any, handed over to a commit.
+        function deTakeHeldStyle(key) {
+            const held = DE.heldStyle;
+            if (!held || held.key !== key) return '';
+            DE.heldStyle = null;
+            return held.style;
+        }
+
+        // A held style no pick took. closing: the WebUI commit is about to send this scene if it has changes, so
+        // ride it (a separate onSceneNarrate could land after the commit set the style, and narrate nothing).
+        function deSendHeldStyle(closing) {
+            const held = DE.heldStyle;
+            if (!held) return;
+            DE.heldStyle = null;
+            const info = sceneInfoByKey.get(held.key);
+            if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
+            if (closing && (info.dirty || info.pendingActorChange)) {
+                info.style = held.style;
+                info.narrateStyle = true;
+                info.dirty = true;
+            } else if (typeof window.onSceneNarrate === 'function') {
+                window.onSceneNarrate(JSON.stringify({ _scene_sid: info.scene_sid, _style: held.style }));
+            }
         }
 
         function deEnsureSceneAnimRow() {
@@ -13071,7 +13132,7 @@
             if (!deStopLiveInfo() && stopDialogState.owner === 'de') stopDialogClose();
             deUpdateStageNavButtons();
             const tagsHost = document.getElementById('de-tags-row');
-            const tags = deAnimTagsList(a);
+            const tags = deAnimTagLabels(a);
             if (tagsHost) {
                 if (tags.length) {
                     tagsHost.style.display = '';
@@ -13703,6 +13764,8 @@
             const fid = scResolveInitiator();
             const subject = (info.positions || []).find(p => formIdU32(p && (p._form_id != null ? p._form_id : p.formId)) === fid);
             const changeBy = subject ? (subject._name || subject.name || '') : '';
+            // A held style change merges into the pick's one narration (Scene.ApplyWebUICommit).
+            const heldStyle = deTakeHeldStyle(info.key);
             // Added actors: the pick rides the SceneInfo commit with the new positions, so ChangeActors runs
             // first and the switch after it (SexLab P+ replays it after the restart).
             if (info.pendingActorChange) {
@@ -13711,18 +13774,27 @@
                 info.nextRegistry = pend.reg;
                 info.changeBy = changeBy;
                 info.reseedDefaults = true;
+                if (heldStyle) {
+                    info.style = heldStyle;
+                    info.narrateStyle = true;
+                }
                 info.dirty = true;
                 return;
             }
             deDbg('deSendPendingSwitch sending'); // DEBUG-DELETE
-            window.onSceneInfoCommit(JSON.stringify({ _scenes: [{
+            const commit = {
                 _key: info.key,
                 _mode: 'active',
                 _scene_sid: info.scene_sid,
                 _active_registry: pend.reg,
                 _change_by: changeBy,
                 _reseed_defaults: 1
-            }] }));
+            };
+            if (heldStyle) {
+                commit._style = heldStyle;
+                commit._narrate_style = 1;
+            }
+            window.onSceneInfoCommit(JSON.stringify({ _scenes: [commit] }));
         }
 
         // Commit close with added actors but no pick: send no registry, so SexLab's ChangeActors picks an

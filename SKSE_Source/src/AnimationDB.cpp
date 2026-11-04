@@ -45,22 +45,33 @@ namespace AnimationDB
         /// sex_tags.json: any of these on a row derives the "sexual" tag. Guarded by g_mutex.
         std::unordered_set<std::string> g_sex_tags;
         constexpr const char* kSexualTag = "sexual";
+        /// restraint_tags.json: any of these on a row derives the "restrained" tag (the animation row's bound
+        /// word). Not "bound" itself: worn-device tags, which include "bound", must match literally. Guarded by g_mutex.
+        std::unordered_set<std::string> g_restraint_tags;
+        constexpr const char* kRestrainedTag = "restrained";
 
-        /// Appends "sexual" when the row carries any sex_tags.json tag. Additive only.
-        bool ApplySexualTagLocked(AnimRow& row)
+        /// Appends derived when the row carries any source tag. Additive only.
+        bool ApplyDerivedTagLocked(AnimRow& row, const std::unordered_set<std::string>& sources, const char* derived)
         {
-            if (g_sex_tags.empty())
+            if (sources.empty())
                 return false;
-            bool has_sex = false;
+            bool has_source = false;
             for (const auto& tag : row.tags) {
-                if (tag == kSexualTag)
+                if (tag == derived)
                     return false;
-                if (g_sex_tags.contains(tag))
-                    has_sex = true;
+                if (sources.contains(tag))
+                    has_source = true;
             }
-            if (has_sex)
-                row.tags.emplace_back(kSexualTag);
-            return has_sex;
+            if (has_source)
+                row.tags.emplace_back(derived);
+            return has_source;
+        }
+
+        bool ApplyDerivedTagsLocked(AnimRow& row)
+        {
+            const bool sexual = ApplyDerivedTagLocked(row, g_sex_tags, kSexualTag);
+            const bool restrained = ApplyDerivedTagLocked(row, g_restraint_tags, kRestrainedTag);
+            return sexual || restrained;
         }
 
         const SynonymMap* SynonymMapFor(SynonymMode mode)
@@ -1312,13 +1323,13 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return out;
         }
 
-        /// Parses a flat ["tag", ...] array (lowercased + trimmed). Missing file → empty (no "sexual").
-        std::unordered_set<std::string> LoadSexTagsFile(const std::filesystem::path& path)
+        /// Parses a flat ["tag", ...] array (lowercased + trimmed). Missing file → empty (no derived tag).
+        std::unordered_set<std::string> LoadDerivedTagsFile(const std::filesystem::path& path)
         {
             std::unordered_set<std::string> out;
             std::error_code ec;
             if (!std::filesystem::exists(path, ec)) {
-                webui_log::warn("AnimationDB: sex tags file missing {} (no sexual tag)", path.string());
+                webui_log::warn("AnimationDB: derived tags file missing {}", path.string());
                 return out;
             }
             try {
@@ -1336,7 +1347,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             } catch (const std::exception& e) {
                 webui_log::warn("AnimationDB: failed to parse {}: {}", path.string(), e.what());
             }
-            webui_log::info("AnimationDB: sex_tags n={}", out.size());
+            webui_log::info("AnimationDB: {} n={}", path.filename().string(), out.size());
             return out;
         }
     }
@@ -1356,22 +1367,24 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         const auto dir = PluginDataDir();
         auto strict = LoadSynonymsFile(dir / "synonyms-strict.json");
         auto broad = LoadSynonymsFile(dir / "synonyms-broad.json");
-        auto sex_tags = LoadSexTagsFile(dir / "sex_tags.json");
+        auto sex_tags = LoadDerivedTagsFile(dir / "sex_tags.json");
+        auto restraint_tags = LoadDerivedTagsFile(dir / "restraint_tags.json");
         std::lock_guard lock(g_mutex);
         g_syn[0] = std::move(strict);
         g_syn[1] = std::move(broad);
         g_scene_filters.clear(); // scene settings reload at the same points as the synonym files
         g_sex_tags = std::move(sex_tags);
+        g_restraint_tags = std::move(restraint_tags);
         int added = 0;
         for (auto& [reg, row] : g_rows) {
-            if (ApplySexualTagLocked(row)) {
+            if (ApplyDerivedTagsLocked(row)) {
                 UpsertRowLocked(row);
                 ++added;
             }
         }
         if (added)
             RebuildTagIndexLocked();
-        webui_log::info("AnimationDB: sexual tag added to {} rows", added);
+        webui_log::info("AnimationDB: derived tags added to {} rows", added);
     }
 
     std::vector<std::string> SynonymsOf(const std::string& tag, SynonymMode mode)
@@ -1869,8 +1882,8 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             row.tags = JsonToVecStr(anim["tags"]);
         else if (anim.contains("_tags") && anim["_tags"].is_string())
             row.tags = SplitCsv(anim["_tags"].get<std::string>());
-        // Before the unchanged-row check: stored rows already carry the derived tag.
-        ApplySexualTagLocked(row);
+        // Before the unchanged-row check: stored rows already carry the derived tags.
+        ApplyDerivedTagsLocked(row);
 
         // Same registry already pushed this sync: later row overwrites the earlier one.
         {

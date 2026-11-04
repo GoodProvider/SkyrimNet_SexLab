@@ -1528,6 +1528,12 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - The tag is only added. Removing a tag from `sex_tags.json` needs a forced AnimDB rebuild to drop `sexual`.
 - TargetMenu options with `creatorTags` / `creatorSuppress` only replace SC tags / suppress while Scene Creator is open. Options without those fields still re-seed the whole creator (`ssApplySceneStartDefaultsToCreator`).
 
+## Why the bound word is not the `bound` tag (2026-11-02)
+
+The animation row's **bound** word covers yoke, armbinder, cuffs, rope, chains and hogtied through a derived tag, `restrained`. The page shows that tag as `bound`, so a literal `bound` chip (worn DD, or picked from the available list) looks the same as the word's chip but matches only the literal tag and does not light the word. The other routes break something:
+- Clustering them in `synonyms-*.json`, or deriving `bound` from them: worn-device tags must match literally, and `BondageCatalog::WornAnimationTags` emits `bound` for other heavy bondage, so that cast would get yoke animations.
+- `_any_tags` from the page: `any_tags` is one flat group shared with a scene setting's `tags_any`, so `consensual` plus the word would match any oral animation, and a Scene Creator start with nothing selected would ignore it.
+
 ## Scene start narrated twice (2026-10-16)
 
 **Symptom:** at scene start a `sexlab update` event ("Angi Start.<desc>") came right before the start DN / event ("Angi initiates: <desc>").
