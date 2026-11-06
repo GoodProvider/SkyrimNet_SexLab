@@ -4,6 +4,17 @@ SexLab P+ ships the same script names as SexLab 1.6x (`SexLabFramework`, `sslThr
 
 P+ scenes are directed graphs addressed by a case-sensitive NanoID. The legacy objects are proxies: `sslBaseAnimation.Name` / `Enabled` / tags stay empty (and an empty tag list makes `HasTag` true for every tag), `thread.Stage` is the length of the played history, `GoToStage(n)` moves one edge, and `UpdateTimer` sets `_ForceAdvance`.
 
+## Minimum version: P+ 2.17
+
+`SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()` is true when P+ is present and its `SexLabUtil` plugin version is at least `PPlusMinVersion()` = 34668544 (`0x02110000` = 2.17.0; versions pack as `0xMMmm....`, e.g. 2.17.1 = `0x02110010`, 2.15 = `0x020F0060`). `sslThreadModel.PauseTimer`, `GetLegacyStageNum` and `GetLegacyStagesCount` are not in P+ 2.12 or 2.15. Without `PauseTimer` no hold holds, and our ending's `EndAnimation` raced P+'s own end into a crash in the player's behavior graph (KNOWLEDGEBASE, 2026-11-06).
+
+Below 2.17:
+- `Scene_Manager.Setup` logs `WARN` and shows a MessageBox at every load. The `Setup` trace prints `P+ supported:<bool>`.
+- `Scene.Timer_SyncHold` does nothing: the pause key, gate, victim and ending holds have no effect.
+- `Scene.Ending_Hold` and `LastStage_Begin` return before arming. `Ending_Poll` / `Ending_Watch` never call `EndAnimation`, and neither do the `PPlus_StageStart` backstops. P+ ends the scene on its own timer, including its enjoyment-wait.
+- `AnimDb.ThreadStageNum` / `ThreadStageCount` use `thread.Stage` capped at `GetNumStages(scene)` (no `GetAllStages` in old P+).
+- The `Ending_ToFinal` `SkipToSink` jump still runs (`SkipTo` exists since 2.12).
+
 ## Bridge script and build
 
 All P+ API calls live in one script, `SkyrimNet_SexLab_PPlus` (global functions taking `Quest` / `Actor` / `String`).

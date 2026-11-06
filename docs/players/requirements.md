@@ -2,7 +2,7 @@
 
 ## Required
 
-- [SexLab Framework](https://www.loverslab.com/files/category/228-sexlab-framework-se/) (vanilla or [P+](https://www.loverslab.com/files/file/25318-sexlab-p/); P+ Separate/enjoyment-wait scenes are capped so LLM scenes end)
+- [SexLab Framework](https://www.loverslab.com/files/category/228-sexlab-framework-se/) (vanilla or [P+](https://www.loverslab.com/files/file/25318-sexlab-p/) **2.17 or newer**; P+ Separate/enjoyment-wait scenes are capped so LLM scenes end). On an older P+ (2.15 and below), a message at load tells you to update. Scene holds (pause key, waiting for the orgasm dialogue), the last-stage list and the LLM-driven ending are then off, and SexLab ends scenes itself.
 - [Papyrus MessageBox](https://www.nexusmods.com/skyrimspecialedition/mods/83578)
 - [JContainers](https://www.nexusmods.com/skyrimspecialedition/mods/16495)
 - [SkyUI SE](https://www.nexusmods.com/skyrimspecialedition/mods/12604)

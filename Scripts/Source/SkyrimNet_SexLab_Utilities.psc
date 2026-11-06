@@ -23,6 +23,32 @@ bool Function IsSexLabPPlus() global
     return v > 20000
 EndFunction
 
+; Packed SexLabUtil plugin version: 0xMMmm.... (2.17.1 = 0x02110010, 2.15 = 0x020F0060).
+int Function SexLabPluginVersion() global
+    int v = SKSE.GetPluginVersion("SexLabUtil")
+    if v <= 0
+        v = SexLabUtil.GetVersion()
+    endif
+    return v
+EndFunction
+
+; Oldest P+ this mod supports: 2.17.0 (0x02110000). Older P+ has no sslThreadModel.PauseTimer /
+; GetLegacyStageNum, so stage holds fail and the ending takeover raced P+'s own end into a crash
+; (docs/developers/sexlab-pplus.md "Minimum version").
+int Function PPlusMinVersion() global
+    return 34668544
+EndFunction
+
+; P+ at or above PPlusMinVersion. Holds, the ending takeover and GetLegacyStageNum run only when true.
+bool Function IsSexLabPPlusSupported() global
+    return IsSexLabPPlus() && SexLabPluginVersion() >= PPlusMinVersion()
+EndFunction
+
+; "2.17" from a packed P+ version.
+String Function PPlusVersionString(int v) global
+    return ((v / 16777216) % 256)+"."+((v / 65536) % 256)
+EndFunction
+
 ; P+ FindSimilarSceneStage hops every animation in SetAnimations; pass one only.
 sslBaseAnimation[] Function PickOneAnimation(sslBaseAnimation[] animations) global
     if !animations || animations.length <= 1

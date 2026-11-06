@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### SexLab P+
+- **SexLab P+ 2.17 or newer is now required.** On P+ 2.15 the game crashed at the end of every SexLab scene. On an older P+, a message at load tells you to update. Until then, scene holds (pause key, waiting for the orgasm dialogue), the last-stage list and the LLM-driven ending are off, and SexLab ends scenes itself, with no crash.
+
 ## [0.36.6](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6) — since [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5)
 
 ### Aid

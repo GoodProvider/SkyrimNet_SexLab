@@ -851,8 +851,15 @@ int Function ThreadStageNum(sslThreadController thread) global
     if !thread
         return 0
     endif
-    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
         return SkyrimNet_SexLab_PPlus.LegacyStage(thread as Quest)
+    elseif SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        ; P+ < 2.17 (unsupported): no GetLegacyStageNum / GetAllStages. History length capped at the stage count.
+        int count = ThreadStageCount(thread)
+        if count > 0 && thread.Stage > count
+            return count
+        endif
+        return thread.Stage
     endif
     return thread.Stage
 EndFunction
@@ -862,8 +869,10 @@ int Function ThreadStageCount(sslThreadController thread) global
     if !thread
         return 0
     endif
-    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
         return SkyrimNet_SexLab_PPlus.LegacyStageCount(thread as Quest)
+    elseif SkyrimNet_SexLab_Utilities.IsSexLabPPlus()
+        return SkyrimNet_SexLab_PPlus.NumStages(SkyrimNet_SexLab_PPlus.ActiveScene(thread as Quest))
     endif
     if !thread.animation
         return 0

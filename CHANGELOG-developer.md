@@ -4,6 +4,10 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### SexLab P+ 2.17+ required (crash at scene end on P+ 2.15)
+- New `Utilities.IsSexLabPPlusSupported()` / `PPlusMinVersion()` (0x02110000). Older P+ has no `PauseTimer` / `GetLegacyStageNum`, and our `Ending_Watch` `EndAnimation` raced P+'s own end into a crash (`SkyrimSE.exe+0ADA8D7`, `SendDefaultAnimEvent`).
+- Below 2.17: MessageBox at load, no holds (`Timer_SyncHold`), no ending hold or last-stage list, no `EndAnimation` from `Ending_Watch` / `PPlus_StageStart`. `AnimDb.ThreadStageNum` falls back to `thread.Stage` capped at `GetNumStages`. See docs/developers/sexlab-pplus.md "Minimum version".
+
 ### Punish can order a strategy
 - When the punish reason is the object's current strategy, the panel adds ", and orders them to <strategy>" (`currentReason` in the payload, `order` in `onPunishResult`).
 - `PunishNarrated` and `StrategyDecision::RequestAnswer` take an optional `orderKey`. `minigame_strategy.prompt` gets `ordered_key`, always set. An answer picking the ordered key skips `decision_min_confidence`.

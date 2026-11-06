@@ -58,7 +58,13 @@ Function Setup()
     Trace("Setup","")
     ; Bug reports: which SexLab build (1.6x vs P+, SLSO) the log came from.
     Trace("Setup", "SexLab version:"+SexLabUtil.GetVersion()+" plugin:"+SKSE.GetPluginVersion("SexLabUtil") \
-        +" P+:"+SkyrimNet_SexLab_Utilities.IsSexLabPPlus()+" SLSO:"+(Game.GetModByName("SLSO.esp") != 255))
+        +" P+:"+SkyrimNet_SexLab_Utilities.IsSexLabPPlus()+" P+ supported:"+SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported() \
+        +" SLSO:"+(Game.GetModByName("SLSO.esp") != 255))
+    if SkyrimNet_SexLab_Utilities.IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
+        String found = SkyrimNet_SexLab_Utilities.PPlusVersionString(SkyrimNet_SexLab_Utilities.SexLabPluginVersion())
+        Trace("Setup", "WARN SexLab P+ "+found+" is older than 2.17: scene holds and the LLM ending are off")
+        Debug.MessageBox("SkyrimNet SexLab needs SexLab P+ 2.17 or newer (found "+found+"). Scene holds and the LLM ending are off until you update.")
+    endif
     ; Auto fills bake into saves. Renaming scenes→sl_scenes / scene_generic→
     ; sl_scene_generic leaves the new names empty on old saves while creators
     ; (unchanged) still work — rebuild every Setup from known FormIDs.

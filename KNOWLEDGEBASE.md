@@ -1,5 +1,17 @@
 # Knowledgebase
 
+## Crash after every SexLab P+ scene on P+ 2.15; P+ 2.17+ now required (2026-11-06, built, untested in game)
+
+**Symptom:** the game crashes as a SexLab scene ends, every time. Crash log: `EXCEPTION_ACCESS_VIOLATION` at `SkyrimSE.exe+0ADA8D7` (`mov rcx, [rax+0x10]`) in the player's `hkbStateMachine "RootBehaviorGraph"`. The Papyrus stack is `Debug.SendAnimationEvent` ← `sslActorAlias.SendDefaultAnimEvent` ← `UnlockActor` ← `Clear` ← `OnRequestClear`. Papyrus.0.log is full of `Method PauseTimer not found on sslthreadcontroller`, plus `GetLegacyStageNum` and `GetLegacyStagesCount`. Our log shows `SexLab version:34537568` (0x020F0060 = P+ 2.15). The last line before the crash is `Ending_Watch ... P+ final stage done ... ending the animation ... stage:4/3`. Logs: `checkpoints/2026-11-06-crash/logs/2026-11-06-08-12-17/`.
+
+**Cause:** `sslThreadModel.PauseTimer` / `GetLegacyStageNum` / `GetLegacyStagesCount` exist only from P+ 2.17 (not in 2.12 or 2.15). Without `PauseTimer`, none of our holds hold, so P+ ran its final stage out on its own timer (stage 4 of a 3-node path). Our `Ending_Watch` still believed it owned the stage and called `EndAnimation()` while P+ was already moving on. The alias teardown that followed crashed in the player's behavior graph (`OrgasmEnd` in Papyrus.0.log comes from inside that `EndAnimation`).
+
+**Fix:** require P+ 2.17+. `Utilities.IsSexLabPPlusSupported()` checks plugin version >= `PPlusMinVersion()` (0x02110000). Below it: a MessageBox at load (`Scene_Manager.Setup`), `Timer_SyncHold` is a no-op, `Ending_Hold` / the last-stage list never arm, and neither `Ending_Watch` nor the `PPlus_StageStart` backstops call `EndAnimation`, so P+ ends its own scenes. `AnimDb.ThreadStageNum` / `ThreadStageCount` fall back to `thread.Stage` capped at `GetNumStages`. See docs/developers/sexlab-pplus.md "Minimum version".
+
+**Traps:**
+- On P+ 2.12–2.16, never call a bridge function that is missing from the old P+ sources (`C:\Skyrim\dev\mods\SexLab Framework PPLUS - V2.12.0 - 1.6.1170`). Papyrus only logs an error, but anything that depends on the call's effect then works on a false premise.
+- Never `EndAnimation` a P+ thread that this mod cannot hold: P+ may be ending or restarting it at the same moment.
+
 ## Last-stage switch ran to its final stage with no orgasm (2026-11-05, built, untested in game)
 
 **Symptom:** after the player's orgasm, the last-stage list picked a new animation (`B_B_ASide` → `B_B_CMiss`). The new animation reached 5/5 with nobody at 100. There was no `Victim_Hold` line in it, and each stage logged `not moved by enjoyment: floor`. Just before the switch: a second `gate 0x14 enjoyment=10.8 pass=true`, 11 s after the first orgasm.

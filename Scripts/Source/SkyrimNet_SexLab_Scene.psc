@@ -2152,7 +2152,8 @@ EndFunction
 ; _ForceAdvance there, so a pushed-out timer still advances the stage once it drains. P+'s own scene HUD
 ; focus calls PauseTimer(false); the 1 s polls call this again to keep a hold. No-op on 1.6x.
 Function Timer_SyncHold()
-    if thread == None || !IsSexLabPPlus()
+    ; P+ < 2.17 has no PauseTimer (unsupported): no holds there.
+    if thread == None || !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
         return
     endif
     SkyrimNet_SexLab_PPlus.PauseTimer(thread as Quest, scene_paused || gate_holding || victim_holding || ending_holding || ending_watching || list_holding)
@@ -2863,6 +2864,12 @@ Function Ending_Hold()
     if hold_max <= 0.0 || ending_holding
         return
     endif
+    if IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
+        ; P+ < 2.17: no PauseTimer, so the final stage cannot be held, and ending it ourselves raced P+'s own
+        ; end into a crash (KNOWLEDGEBASE). P+ ends the scene on its own timer.
+        Trace("Ending_Hold", "P+ older than 2.17: no final-stage hold, P+ ends the scene")
+        return
+    endif
     ending_holding = true
     ending_hold_started = Utility.GetCurrentRealTime()
     ending_hold_stage = thread.Stage
@@ -2923,6 +2930,11 @@ Function Ending_Poll()
         return
     endif
     ending_holding = false
+    if IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
+        Trace("Ending_Poll", "P+ older than 2.17: released after "+held+"s ("+why+"), P+ ends the scene")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
+    endif
     if IsSexLabPPlus()
         ; P+: never hand the final stage back to its own timer -- at its end P+ checks ThreadWaitsForOrgasm and
         ; restarts the graph. Keep it held (ending_watching) and end the animation at the stage's remaining
@@ -3021,6 +3033,11 @@ Function Ending_Watch()
     endif
     ending_watching = false
     ending_watch_anim = None
+    if IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
+        Trace("Ending_Watch", "P+ older than 2.17: not ending the animation, P+ owns the end")
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
+    endif
     if IsSexLabPPlus()
         Trace("Ending_Watch", "P+ final stage done "+(now - ending_watch_released)+"s after release, ending the animation "+Ending_TimerState())
     else
@@ -3417,6 +3434,10 @@ EndFunction
 
 Function LastStage_Begin()
     if thread == None || thread.Animation == None
+        return
+    endif
+    ; P+ < 2.17: the list cannot hold the stage and its stop path ends the animation itself (races P+'s end).
+    if IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
         return
     endif
     if list_phase != 0
@@ -4428,15 +4449,17 @@ EndFunction
 bool Function PPlus_StageStart()
     float now = Utility.GetCurrentRealTime()
     int count = Engine_StageCount()
+    ; P+ < 2.17 (unsupported): no EndAnimation backstops; they race P+'s own end (KNOWLEDGEBASE crash).
+    bool backstops = SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
     if pplus_expected_reset
         pplus_expected_reset = false
         pplus_was_sink = false
-    elseif pplus_was_sink && thread.Stage < pplus_sink_stage && pplus_sink_secs > 0.0 && now - pplus_sink_started >= pplus_sink_secs - 2.0
+    elseif backstops && pplus_was_sink && thread.Stage < pplus_sink_stage && pplus_sink_secs > 0.0 && now - pplus_sink_started >= pplus_sink_secs - 2.0
         Trace("PPlus_StageStart", "P+ restarted the scene from its sink (stage "+pplus_sink_stage+" -> "+thread.Stage+" after "+(now - pplus_sink_started)+"s), ending the animation")
         thread.EndAnimation()
         return true
     endif
-    if pplus_sink_reached_at > 0.0 && now - pplus_sink_reached_at >= DURATION_CAP_SECONDS
+    if backstops && pplus_sink_reached_at > 0.0 && now - pplus_sink_reached_at >= DURATION_CAP_SECONDS
         Trace("PPlus_StageStart", "P+ duration cap: "+(now - pplus_sink_reached_at)+"s since the first sink, ending the animation")
         thread.EndAnimation()
         return true
