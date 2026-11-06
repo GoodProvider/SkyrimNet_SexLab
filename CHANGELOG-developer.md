@@ -6,7 +6,14 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ### SexLab P+ 2.17+ required (crash at scene end on P+ 2.15)
 - New `Utilities.IsSexLabPPlusSupported()` / `PPlusMinVersion()` (0x02110000). Older P+ has no `PauseTimer` / `GetLegacyStageNum`, and our `Ending_Watch` `EndAnimation` raced P+'s own end into a crash (`SkyrimSE.exe+0ADA8D7`, `SendDefaultAnimEvent`).
-- Below 2.17: MessageBox at load, no holds (`Timer_SyncHold`), no ending hold or last-stage list, no `EndAnimation` from `Ending_Watch` / `PPlus_StageStart`. `AnimDb.ThreadStageNum` falls back to `thread.Stage` capped at `GetNumStages`. See docs/developers/sexlab-pplus.md "Minimum version".
+- Below 2.17: MessageBox at load, no holds (`Timer_SyncHold`), no ending hold or last-stage list, no `EndAnimation` from `Ending_Watch` / `PPlus_StageStart` / `Engine_EndStalled` (the stall end was missed at first). `AnimDb.ThreadStageNum` falls back to `thread.Stage` capped at `GetNumStages`. See docs/developers/sexlab-pplus.md "Minimum version".
+
+### Review fixes (2026-11-06)
+- Orgasm engine co-save: `Load` reads the `'ORGE'` record (v9, layout unchanged) but restores no scene. SexLab ends every scene on load, and a new scene that reused the thread id within the 10 s stale window used to "resume" the dead one (old enjoyment, gate, orgasm counts; no opening strategy decision; `primaryFinished` false). Sticky auto play is still loaded.
+- `Scene.OnUpdate` in menu mode (`Menu_FreezeDeadlines`): menu time is added to the P+ actor-change wait (`actor_change_at`, 15 s) and the ending watch (`ending_watch_released` / `ending_watch_deadline`), so a long menu no longer runs them out.
+- Removed the dead `sexlab.minigame.fear_cooldown` dashboard setting (nothing reads it since Force was removed).
+- `AnimationDB::PluginDataDir` drops a dead `|| true` test (same path).
+- Docs: player overview (plugin layout only since 0.36.0), `llms.txt` (`compile: pyro`).
 
 ### Punish can order a strategy
 - When the punish reason is the object's current strategy, the panel adds ", and orders them to <strategy>" (`currentReason` in the payload, `order` in `onPunishResult`).

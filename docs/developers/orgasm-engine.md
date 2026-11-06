@@ -71,7 +71,7 @@ SkyrimNet's decision model (e.g. Jev) picks a strategy per NPC; see [Strategy de
 `SKSE_Source/src/StrategyDecision.cpp` asks SkyrimNet's decision model through `PublicSendCustomDecisionToLLM` (public API v12+). One request decides one NPC (the *focus*), with the template `prompts/decisions/sexlab/minigame_strategy.prompt` (one `[ question strategy choice ]`). Off with `sexlab.minigame.decision_strategy` or in Together mode.
 
 - **Triggers:**
-  - *Scene start*: the tick marks a scene ready on the same rule as `StrategyStep` (first non-empty `SetStageTimers`, or `kUntimedGrace` after `BeginScene`) and dispatches `OnSceneReady(sid)` → one request per NPC (`SceneNpcs`). Once per scene (`decisionsStarted`); scenes restored from the co-save skip it.
+  - *Scene start*: the tick marks a scene ready on the same rule as `StrategyStep` (first non-empty `SetStageTimers`, or `kUntimedGrace` after `BeginScene`) and dispatches `OnSceneReady(sid)` → one request per NPC (`SceneNpcs`). Once per scene (`decisionsStarted`). The co-save restores no scene, so every scene after a load gets its decisions.
   - *Asked / ordered / punished*: `RequestAnswer(target, trigger, line, done)` from `AskOrderNarrated` / `PunishNarrated`; `last_line_text` is the ask / order / punishment narration (trigger `asked` | `ordered` | `punished`). Its `done` callback runs exactly once (answer or `kDropped`). An NPC the player controls (`playerDriven`) answers like any NPC and plays the answer at once (`AiDriven` ignores `playerDriven`). Above 80% Injury Engine torture (`PartPoints` `total > 0.8 × max`), a punishment sends no request. Instead `Submit` narrates "<target> can't take it any more and submits!" and sets a strategy: the punished request's key first, then the newest refused order, then the newest refused request. With none of those it is `selfless` (2+ actors) or `selfish` (solo).
   - *Dialogue*: `PublicRegisterEventCallback` for `dialogue`, `dialogue_npc` and `dialogue_background`. The originator, if a managed non-player actor, gets a request with the line (`data.text` / `dialogue` / `line`). In auto play, any line in the player's scene also sends a [player turn](#take-control-and-auto-play).
 - **Threading:** SkyrimNet calls both callbacks on its ThreadPool. They only copy strings, then `AddTask`; context building, relationship lookups and `ApplyStrategyDecision` run on the game thread.
@@ -301,11 +301,10 @@ if (auto* engine = SKYRIMNET_SEXLAB_API::RequestOrgasmEngine()) {
 
 ## Persistence
 
-- The co-save record `'ORGE'` (version 7) holds:
+- The co-save record `'ORGE'` (version 9) is written with every scene, but **`Load` restores none of them**. SexLab cancels every scene on load (the same reason `ActorLocker` drops its co-saved locks), so a restored scene was always dead, and a new scene that reused the thread id within the 10 s stale window "resumed" it with old enjoyment, gate and orgasm counts, no opening strategy decision, and `primaryFinished` back to false. `Load` reads every field to keep the layout, logs `co-save read N scene(s), M actor(s), not restored`, and keeps only the sticky auto play flag (v8). Record contents, for the layout:
   - per scene: stage, stage timers, LeadIn, pause and the final-stage clock;
   - per actor: enjoyment, orgasm count, role, skill, jitter, blocks, rate modifiers and DOM step state;
-  - v4: gate state; v5: the stage clock, and per actor the bonus, curve progress, strategy, target and forcer; v6: per actor stamina regen (before v6: 100); v7: per scene the mini-game rates (before v7: calibrated from the saved timers on load).
-- Versions 1 and 2 still load; their scenes use the fallback rate until the next stage. Before v5: bonus 0, Passive, curve rebased to the current progress.
+  - v4: gate state; v5: the stage clock, and per actor the bonus, curve progress, strategy, target and forcer; v6: per actor stamina regen; v7: per scene the mini-game rates; v8: sticky auto play; v9: strategy ids renumbered.
 - A revert (load or new game) clears everything.
 - The faster/slower scale is not saved; style speeds are not restored on load either.
 - A scene with no actor in `SexLabAnimatingFaction` for 10 s is dropped. This is the safety net for a missed `AnimationEnd`. AnimEngine scenes (sid > 100000) are never saved and use the bridge's `IsLive` instead ([AnimEngine scenes](#animengine-scenes)).
@@ -480,7 +479,7 @@ Built in checkpoint 12, untested in game. This is strangler step 2 in [scene-mig
 
 `sexlab.stamina.fatigue`. Each actor has `regen`, 100 → -10 (`kRegenFloor`) percent of its default stamina regen, tracked per actor:
 
-- The tick subtracts the scene's `regenRate` = `(100 − sexlab.stamina.regen_at_orgasm) / targetSecs` points per second (`ApplyStageTimers`; default 45 at the orgasm point, so an orgasm's cost leaves a Mutual NPC tired near 35). Scenes without stage timers use `sexlab.stamina.regen_decay` points per minute (40). This happens while the scene is animating and not paused. While no actor in the scene expects orgasm, an actor loses nothing until their enjoyment reaches 50. `regenRate` is not saved: the co-save load rebuilds it from the saved timers.
+- The tick subtracts the scene's `regenRate` = `(100 − sexlab.stamina.regen_at_orgasm) / targetSecs` points per second (`ApplyStageTimers`; default 45 at the orgasm point, so an orgasm's cost leaves a Mutual NPC tired near 35). Scenes without stage timers use `sexlab.stamina.regen_decay` points per minute (40). This happens while the scene is animating and not paused. While no actor in the scene expects orgasm, an actor loses nothing until their enjoyment reaches 50. `regenRate` is not saved; a scene after a load computes it from its own timers.
 - Crossing a fatigue stage sends one DirectNarration: below 90 "<name> is breathing hard.", 40 or less "is tired.", 0 or less "is exhausted." (`SpendRegen`; regen only falls, so a reload does not repeat it).
 - Each orgasm subtracts `sexlab.stamina.orgasm_cost` points (10).
 - The tick takes back the decayed share as stamina damage: `MaxStamina × base StaminaRate × base StaminaRateMult × (1 − regen/100) × dt`. It uses base values, so potions and buffs add on top. At full stamina only the negative share (`−regen/100`, regen below 0) drains. No damage is applied in combat. No actor value modifier is left behind.

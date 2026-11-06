@@ -1650,9 +1650,8 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                 reinterpret_cast<LPCWSTR>(&PluginDataDir), &hm)) {
             wchar_t buf[MAX_PATH]{};
             if (GetModuleFileNameW(hm, buf, MAX_PATH)) {
-                auto p = std::filesystem::path(buf).parent_path() / "SkyrimNet_SexLab";
-                if (std::filesystem::is_directory(p) || true)
-                    return p;
+                // Next to the DLL even before the folder exists (MO2 overwrite / first run); unchanged behavior.
+                return std::filesystem::path(buf).parent_path() / "SkyrimNet_SexLab";
             }
         }
         return std::filesystem::current_path() / "Data" / "SKSE" / "Plugins" / "SkyrimNet_SexLab";

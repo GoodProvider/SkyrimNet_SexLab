@@ -11,6 +11,18 @@
 **Traps:**
 - On P+ 2.12–2.16, never call a bridge function that is missing from the old P+ sources (`C:\Skyrim\dev\mods\SexLab Framework PPLUS - V2.12.0 - 1.6.1170`). Papyrus only logs an error, but anything that depends on the call's effect then works on a false premise.
 - Never `EndAnimation` a P+ thread that this mod cannot hold: P+ may be ending or restarting it at the same moment.
+- Every `EndAnimation` caller needs the gate, not only the ending ones: `Engine_EndStalled` (stall end, via `LastStage_Stop`) was missed at first. `grep EndAnimation\(` when adding one.
+
+## Orgasm engine co-save no longer restores scenes (2026-11-06, built, untested in game)
+
+**Symptom (from review, not seen in a log):** a scene started within 10 s of a load could pick up a dead scene's enjoyment, gate and orgasm counts and skip its opening strategy decision.
+
+**Cause:** `OrgasmEngine::Load` put every saved scene back in `g_scenes` and set `decisionsStarted`. SexLab ends every scene on load, so those scenes only lived until the 10 s stale drop; a new scene with the same (recycled) thread id and actors was treated as a resume by `BeginScene`.
+
+**Fix:** `Load` reads the record and drops the scenes; only sticky auto play is kept.
+
+**Traps:**
+- Same rule as `ActorLocker`: nothing scene-scoped may be restored from the co-save. Keep writing the record (layout v9) or bump `kRecordVersion` if fields change.
 
 ## Last-stage switch ran to its final stage with no orgasm (2026-11-05, built, untested in game)
 

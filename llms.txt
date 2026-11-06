@@ -42,5 +42,5 @@
 
 ## Compile reminders
 
-- Papyrus: Cursor task `compile: papyrus` only
+- Papyrus: Cursor task `compile: pyro` only (main + P+ bridge), then `make check-pex`. Never ship `compile: papyrus` pex (keeps `\"` literally; see AGENTS.md)
 - SKSE: CMake tasks under SKSE_Source (see docs/developers/webui.md)

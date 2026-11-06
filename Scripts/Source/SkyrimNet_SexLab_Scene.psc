@@ -91,6 +91,9 @@ float ending_watch_released = 0.0
 int ending_watch_stage = 0
 sslBaseAnimation ending_watch_anim = None
 float Property ENDING_WATCH_GRACE = 15.0 AutoReadOnly
+; OnUpdate in menu mode: real time of the last menu tick (0 = not in a menu). Menu time is added to the
+; actor-change wait and the ending watch, so a long menu cannot run those real-time deadlines out.
+float menu_tick_at = 0.0
 ; Last-stage choice. phase: 0 idle, 1 waiting on the NPC decision, 2 choosing (list, or an NPC-only deadline).
 ; The HUD view does not survive a save; these do, and OnPlayerLoadGame reopens the list.
 int list_phase = 0
@@ -2670,6 +2673,11 @@ Function Engine_EndStalled()
     String state_ = (thread as sslThreadModel).GetState()
     if state_ != "animating"
         Trace("Engine_EndStalled", "ignored, thread state '"+state_+"' stage:"+thread.Stage)
+        return
+    endif
+    ; P+ < 2.17: our EndAnimation races P+'s own end into a crash (KNOWLEDGEBASE 2026-11-06). P+ owns the end.
+    if IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
+        Trace("Engine_EndStalled", "P+ older than 2.17: not ending the animation, P+ owns the end")
         return
     endif
     Trace("Engine_EndStalled", "--- no enjoyment increase, ending at stage:"+thread.Stage+"/"+Engine_StageCount())
@@ -5581,6 +5589,23 @@ bool Function OrgasmWindow_HoldForStage()
     return true
 EndFunction
 
+; OnUpdate menu branch: push the actor-change wait and the ending watch forward by the time since the last menu
+; tick (Ending_Watch does the same for the pause key). A load resets real time: a negative step is skipped.
+Function Menu_FreezeDeadlines()
+    float now = Utility.GetCurrentRealTime()
+    if menu_tick_at > 0.0 && now > menu_tick_at
+        float dt = now - menu_tick_at
+        if actor_change_pending
+            actor_change_at += dt
+        endif
+        if ending_watching
+            ending_watch_released += dt
+            ending_watch_deadline += dt
+        endif
+    endif
+    menu_tick_at = now
+EndFunction
+
 Event OnUpdate()
     if prof_tid < 0 && thread != None
         prof_tid = thread.tid
@@ -5589,10 +5614,12 @@ Event OnUpdate()
     if Utility.IsInMenuMode()
         RegisterForSingleUpdate(0.5)
         Trace("OnUpdate", "--- orgasm window waiting on menu")
+        Menu_FreezeDeadlines()
         LastStage_Poll()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
+    menu_tick_at = 0.0
     if actor_change_ended && !orgasm_window_open && !ending_holding && !gate_holding && !victim_holding && !ending_watching
         ActorChange_Poll()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")

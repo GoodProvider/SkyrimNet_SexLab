@@ -4885,7 +4885,8 @@ namespace OrgasmEngine
         g_actors.clear();
         g_narrateDue.clear();
         g_autoPlaySticky = false;
-        const double now = Now();
+        std::uint32_t droppedScenes = 0;
+        std::uint32_t droppedActors = 0;
         std::uint32_t sceneCount = 0;
         if (!intfc->ReadRecordData(sceneCount)) {
             return;
@@ -5007,37 +5008,25 @@ namespace OrgasmEngine
                     webui_log::error("OrgasmEngine: co-save truncated");
                     return;
                 }
-                RE::FormID id = 0;
-                if (!intfc->ResolveFormID(oldId, id)) {
-                    continue;
-                }
-                st.id = id;
-                st.sid = sc.sid;
-                st.role = static_cast<Role>(std::clamp(role, 0, 2));
-                st.lastOrgasm = since < 0.0f ? -1.0 : now - since;
-                st.cooldown = OrgasmCooldown(ActorFor(id));
-                sc.actors.push_back(id);
-                g_actors[id] = std::move(st);
+                // Read to keep the record layout, then dropped (see below).
+                (void)oldId;
+                (void)role;
+                (void)since;
+                ++droppedActors;
             }
-            if (version < 5) {
-                // No saved curve progress: start it where the scene is, so the first tick does not jump.
-                for (const auto id : sc.actors) {
-                    g_actors[id].curveP = SceneProgress(sc);
-                }
-            }
-            if (!sc.actors.empty()) {
-                sc.decisionsStarted = true;  // strategies were saved: no scene-start decisions again
-                g_scenes[sc.sid] = std::move(sc);
-            }
+            // SexLab cancels every scene on load (same reason ActorLocker drops its co-saved locks), so a restored
+            // scene is always dead. Keeping it only let a new scene that reused the thread id within
+            // kStaleSceneSeconds "resume" it: old enjoyment, gate and orgasm counts, no opening strategy decision,
+            // and primaryFinished (not saved) back to false. The next BeginScene starts clean instead.
+            ++droppedScenes;
         }
-        if (version >= 8 && intfc->ReadRecordData(g_autoPlaySticky) && g_autoPlaySticky) {
-            // A scene saved with the player in it resumes in auto play.
-            if (auto* st = Find(RE::PlayerCharacter::GetSingleton()); st && SceneOf(*st)) {
-                st->autoPlay = true;
-            }
+        // Sticky auto play: the player's next scene starts in auto play (BeginScene).
+        if (version >= 8) {
+            intfc->ReadRecordData(g_autoPlaySticky);
         }
-        webui_log::info("OrgasmEngine: co-save loaded {} scene(s), {} actor(s) auto_play={}", g_scenes.size(),
-            g_actors.size(), g_autoPlaySticky);
+        webui_log::info("OrgasmEngine: co-save read {} scene(s), {} actor(s), not restored (SexLab ends scenes on "
+                        "load) auto_play={}",
+            droppedScenes, droppedActors, g_autoPlaySticky);
     }
 
     void Revert()

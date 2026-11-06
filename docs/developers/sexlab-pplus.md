@@ -11,7 +11,7 @@ P+ scenes are directed graphs addressed by a case-sensitive NanoID. The legacy o
 Below 2.17:
 - `Scene_Manager.Setup` logs `WARN` and shows a MessageBox at every load. The `Setup` trace prints `P+ supported:<bool>`.
 - `Scene.Timer_SyncHold` does nothing: the pause key, gate, victim and ending holds have no effect.
-- `Scene.Ending_Hold` and `LastStage_Begin` return before arming. `Ending_Poll` / `Ending_Watch` never call `EndAnimation`, and neither do the `PPlus_StageStart` backstops. P+ ends the scene on its own timer, including its enjoyment-wait.
+- `Scene.Ending_Hold` and `LastStage_Begin` return before arming. `Ending_Poll` / `Ending_Watch` never call `EndAnimation`, and neither do the `PPlus_StageStart` backstops or the stall end (`Engine_EndStalled`, from the orgasm engine's `StallCheck`). P+ ends the scene on its own timer, including its enjoyment-wait.
 - `AnimDb.ThreadStageNum` / `ThreadStageCount` use `thread.Stage` capped at `GetNumStages(scene)` (no `GetAllStages` in old P+).
 - The `Ending_ToFinal` `SkipToSink` jump still runs (`SkipTo` exists since 2.12).
 

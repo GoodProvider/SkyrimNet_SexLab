@@ -4,7 +4,7 @@ SkyrimNet_SexLab bridges SkyrimNet (LLM) and SexLab Framework.
 
 Hotkeys: [hotkeys.md](hotkeys.md). Authoring: [../authors/actions.md](../authors/actions.md). Changelog: [../../CHANGELOG.md](../../CHANGELOG.md).
 
-LLM actions and prompts ship in both layouts. SkyrimNet 0.25+ loads plugin `goodprovider.sexlab` (External on the Plugins page). Older SkyrimNet loads `prompts/` and `config/actions/`.
+LLM actions and prompts ship only as plugin `goodprovider.sexlab` (External on the Plugins page), which SkyrimNet 0.25+ loads. The old `prompts/` and `config/actions/` copies are gone since 0.36.0; delete leftover copies there (see [requirements.md](requirements.md)).
 
 ## FAQ
 
