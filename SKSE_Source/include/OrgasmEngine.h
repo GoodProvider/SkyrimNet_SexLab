@@ -226,6 +226,8 @@ namespace OrgasmEngine
     /// refused ask / order) or a reason a mod supplied (AddPunishReason), then an AI actor's current strategy as
     /// others see it ("Nina appears to be focused on her own enjoyment") while the mini-game is on.
     std::vector<std::string> GetPunishReasons(RE::FormID target);
+    /// The GetPunishReasons entry that is the actor's current strategy ("Nina appears to ..."); "" when there is none.
+    std::string GetCurrentStrategyReason(RE::FormID target);
     /// Another mod (SkyrimNet_DOM) supplies a reason `target` can be punished for ("Nina spoke without permission").
     void AddPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason);
     /// by asks or orders target to take a strategy: requestKey one of GetRequestOptions(target) keys, or "" with
@@ -246,8 +248,11 @@ namespace OrgasmEngine
     /// phrase ("biting"). location: body part ("" / "body": none named). reason: "" drops the "because ..." clause.
     /// amount: hits (Injury Engine damage_amount, clamped to 1..its max_strikes); above 1 the line says "N times".
     /// fromPlayer (HUD panel): Injury Engine never narrates and the line is NarratePlayer'd. Any thread. False when refused.
+    /// orderKey (one of GetRequestOptions(target) keys, honored only when reason is GetCurrentStrategyReason(target)):
+    /// the line adds ", and orders them to <text>", the decision gets it as ordered_key and the agree / refuse answer
+    /// follows, as for a punishment over a refused order.
     bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
-        const std::string& reason, std::int32_t amount = 1, bool fromPlayer = false);
+        const std::string& reason, std::int32_t amount = 1, bool fromPlayer = false, const std::string& orderKey = "");
     /// The actor is in a managed scene with someone else in it (SexLab_Scene_Punish eligibility).
     bool CanPunish(RE::Actor* actor);
     void EndScene(std::int32_t sid);

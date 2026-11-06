@@ -4,6 +4,11 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### Punish can order a strategy
+- When the punish reason is the object's current strategy, the panel adds ", and orders them to <strategy>" (`currentReason` in the payload, `order` in `onPunishResult`).
+- `PunishNarrated` and `StrategyDecision::RequestAnswer` take an optional `orderKey`. `minigame_strategy.prompt` gets `ordered_key`, always set. An answer picking the ordered key skips `decision_min_confidence`.
+- The order follows the refused-request path: agree / refuse line, refusal kept as a reason, Submit above 80% torture takes the ordered strategy.
+
 ### F/F scenes: who is expected to orgasm, who drives the stages, stuck scenes
 - A female position now expects an orgasm in 2-position animations tagged `doubledildo`, `tribbing` or `scissoring` (`InferOrgasmExpected`). Before, a female at position 1 was never expected unless the file said so. Existing database rows are updated once at load (`ReinferMutualRowsLocked`); a file's `orgasm_expected` stays.
 - Stages follow a victim only if nobody else qualifies (`PrimaryOf`), so an expected aggressor drives wherever they stand.

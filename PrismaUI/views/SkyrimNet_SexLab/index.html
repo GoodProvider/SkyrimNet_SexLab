@@ -2855,7 +2855,7 @@
         <div class="act-sentence">
             <span id="punish-punisher"></span> <span id="punish-verb"></span>
             <span id="punish-target"></span><span id="punish-ask-part"> to <span id="punish-request"></span></span><span id="punish-pun-part"> by <span id="punish-method"></span>
-            <span id="punish-target-name"></span>'s <span id="punish-part"></span>, because <span id="punish-reason"></span></span>.
+            <span id="punish-target-name"></span>'s <span id="punish-part"></span>, because <span id="punish-reason"></span><span id="punish-order-part" style="display:none">,<br>and orders them to <span id="punish-order"></span></span></span>.
         </div>
         <textarea id="punish-request-text" style="display:none" placeholder="stop resisting" oninput="punishUpdate()"></textarea>
         <textarea id="punish-custom-text" style="display:none" placeholder="biting" oninput="punishUpdate()"></textarea>
@@ -9235,14 +9235,15 @@
         }
 
         // ── Ask / Order / Punish (HUD punish key) ───────────────────
-        // C++ Hud OnPunish: {actors: [{id, name, female, isPlayer, spells, requests: [{key, text}], reasons: [string]}],
-        // defaultPunisher, injuryengine, injuryengineSexual, injuryengineMaxStrikes}. Each actor (Punish and Aid) may also
+        // C++ Hud OnPunish: {actors: [{id, name, female, isPlayer, spells, requests: [{key, text}], reasons: [string],
+        // currentReason}], defaultPunisher, injuryengine, injuryengineSexual, injuryengineMaxStrikes}. Each actor (Punish and Aid) may also
         // carry injury: {total, max, parts: {<pulldown term>: {points, max}}} (Injury Engine torture points). Reply onPunishResult:
         //   ask / order: {verb, subject, object, request (a request key) | text (free phrase after "to")}
-        //   punish:      {verb, subject, object, method, location, reason ("" for no reason), amount (hits)}
+        //   punish:      {verb, subject, object, method, location, reason ("" for no reason), amount (hits), order (a request key, "" for none)}
         // requests: what the object could be asked to do (strategies.json "order" phrases). reasons: what the object can
         // be punished for (refused requests, reasons other mods supply, then an AI actor's current strategy as
-        // "<name> appears to ..."); "no reason" and custom are always offered. firstTimes: ["pussy", "ass"] when this
+        // "<name> appears to ...", also sent as currentReason: picking it adds the order clause and its pulldown);
+        // "no reason" and custom are always offered. firstTimes: ["pussy", "ass"] when this
         // scene is the actor's first vaginal / anal (Lover's Ledger); those parts show as damaged.
         // The panel reopens on the last values (accepted or cancelled) that are still offered.
         // Presets: [key sent, label]. Then the subject's weak attack spells (with Injury Engine: its torture spells, see
@@ -9472,6 +9473,26 @@
             }));
         }
 
+        // Order pulldown (punish for the current strategy): the strategies the object could take instead.
+        function punishRenderOrder() {
+            const o = punishObject();
+            const reqs = (o && o.requests) || [];
+            if (!reqs.some(r => r.key === PUNISH.order)) PUNISH.order = reqs.length ? reqs[0].key : '';
+            const cur = reqs.find(r => r.key === PUNISH.order);
+            const host = document.getElementById('punish-order');
+            host.innerHTML = '';
+            host.appendChild(createPulldown(reqs.map(r => r.text), cur ? cur.text : '', (_, i) => {
+                PUNISH.order = reqs[i].key;
+            }));
+        }
+
+        // The ", and orders them to ..." clause: only when the reason is the object's current strategy.
+        function punishOrderShown() {
+            const o = punishObject();
+            return !punishIsAsk() && !!o && !!o.currentReason && PUNISH.reason === o.currentReason &&
+                ((o.requests && o.requests.length) || 0) > 0;
+        }
+
         // Method pulldown for the current subject: presets, its payload spells (weak attack / Injury Engine torture), custom.
         function punishRenderMethod() {
             const p = punishSubject();
@@ -9498,6 +9519,7 @@
                 PUNISH.object = list[i].id;
                 punishRenderVerb();
                 punishRenderRequest();
+                punishRenderOrder();
                 punishRenderPart(PUNISH.part);
                 punishRenderReason();
                 punishUpdate();
@@ -9528,6 +9550,7 @@
                 }
                 PUNISH.reason = i < reasons.length ? reasons[i] : PUNISH_NO_REASON;
                 PUNISH.reasonCustom = i >= held.length && i < reasons.length;
+                punishUpdate();
             }));
         }
 
@@ -9576,6 +9599,7 @@
             const o = punishObject();
             document.getElementById('punish-ask-part').style.display = ask ? '' : 'none';
             document.getElementById('punish-pun-part').style.display = ask ? 'none' : '';
+            document.getElementById('punish-order-part').style.display = punishOrderShown() ? '' : 'none';
             document.getElementById('punish-target-name').textContent = o ? o.name : '';
             document.getElementById('punish-title').textContent = PUNISH_VERBS[PUNISH.verb][1];
             document.getElementById('punish-accept').textContent = PUNISH_VERBS[PUNISH.verb][1];
@@ -9613,7 +9637,7 @@
         // Keeps the panel's values for the next open (the text fields too; an invalid hit count keeps the last one).
         function punishRemember() {
             PUNISH_LAST = { subject: PUNISH.subject, object: PUNISH.object, verb: PUNISH.verb, request: PUNISH.request,
-                method: PUNISH.method, part: PUNISH.part, reason: PUNISH.reason, reasonCustom: !!PUNISH.reasonCustom,
+                order: PUNISH.order, method: PUNISH.method, part: PUNISH.part, reason: PUNISH.reason, reasonCustom: !!PUNISH.reasonCustom,
                 amount: punishAmount() || (PUNISH_LAST && PUNISH_LAST.amount) || 1,
                 requestText: document.getElementById('punish-request-text').value,
                 methodText: document.getElementById('punish-custom-text').value,
@@ -9632,7 +9656,7 @@
             // A sexual part remembered from before Injury Engine's setting was turned off: back to body.
             const part = last.part && !partDimmed(last.part) ? last.part : BODY_PARTS[0];
             PUNISH = { actors, subject, object: last.object || 0, verb: last.verb || 'ask', request: last.request || '',
-                method: last.method || PUNISH_PRESETS[0][0], part, reason: last.reason || '',
+                order: last.order || '', method: last.method || PUNISH_PRESETS[0][0], part, reason: last.reason || '',
                 reasonCustom: !!last.reasonCustom };
             document.getElementById('punish-part-confirm').style.display = 'none';
             punishReasonDialogClose();
@@ -9648,6 +9672,7 @@
                 punishRenderObject();
                 punishRenderVerb();
                 punishRenderRequest();
+                punishRenderOrder();
                 punishRenderPart(PUNISH.part);
                 punishRenderReason();
                 punishUpdate();
@@ -9656,6 +9681,7 @@
             punishRenderObject();
             punishRenderVerb();
             punishRenderRequest();
+            punishRenderOrder();
             document.getElementById('punish-custom-text').value = last.methodText || '';
             document.getElementById('punish-request-text').value = last.requestText || '';
             document.getElementById('punish-part-text').value = last.partText || '';
@@ -9713,7 +9739,8 @@
             punishSend({ verb: 'punish', subject: p.id, object: t.id, method,
                 location: partLocation(PUNISH.part, 'punish-part-text'),
                 reason: PUNISH.reason === PUNISH_NO_REASON ? '' : PUNISH.reason,
-                amount: punishAmountShown() ? punishAmount() : 1 });
+                amount: punishAmountShown() ? punishAmount() : 1,
+                order: punishOrderShown() ? PUNISH.order : '' });
         }
 
         function punishCancel() {

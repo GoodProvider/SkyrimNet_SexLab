@@ -1197,8 +1197,9 @@ void InitWebUI()
         });
 
         // Ask / Order / Punish panel (HUD punish key): {cancel} or {verb, subject, object, ...}. verb "ask" | "order":
-        // request (a request key) or text (free phrase). verb "punish": method, location, reason. The engine narrates
-        // (source the subject, target the object; SkyrimNet picks who answers).
+        // request (a request key) or text (free phrase). verb "punish": method, location, reason, order (a request key,
+        // only for a punishment of the current strategy). The engine narrates (source the subject, target the object;
+        // SkyrimNet picks who answers).
         UiEngine::RegisterListener("onPunishResult", [](const char* value) {
             RunGuarded("onPunishResult", [&] {
                 WebUI_Invoke("hidePunishPanel();");
@@ -1218,15 +1219,16 @@ void InitWebUI()
                     const std::string location = j.value("location", std::string{});
                     const std::string reason = j.value("reason", std::string{});
                     const std::int32_t amount = j.value("amount", 1);
+                    const std::string order = j.value("order", std::string{});
                     webui_log::info("onPunishResult verb={} subject={:#x} object={:#x} request='{}' text='{}' "
-                                    "method='{}' location='{}' reason='{}' amount={}",
-                        verb, subject, object, request, text, method, location, reason, amount);
+                                    "method='{}' location='{}' reason='{}' amount={} order='{}'",
+                        verb, subject, object, request, text, method, location, reason, amount, order);
                     SKSE::GetTaskInterface()->AddTask(
-                        [verb, subject, object, request, text, method, location, reason, amount]() {
+                        [verb, subject, object, request, text, method, location, reason, amount, order]() {
                             RE::Actor* by = RE::TESForm::LookupByID<RE::Actor>(subject);
                             // The player's own act: speech queue purged, always a DirectNarration.
                             if (verb == "punish")
-                                OrgasmEngine::PunishNarrated(by, object, method, location, reason, amount, true);
+                                OrgasmEngine::PunishNarrated(by, object, method, location, reason, amount, true, order);
                             else
                                 OrgasmEngine::AskOrderNarrated(by, object, verb == "order", request, text, true);
                         });

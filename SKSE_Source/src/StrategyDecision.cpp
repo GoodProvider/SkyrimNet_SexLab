@@ -82,6 +82,7 @@ namespace StrategyDecision
             bool dirty = false;
             std::string trigger;
             std::string line;
+            std::string orderKey;  // the follow-up's ordered option ("" for none)
             Done active;  // the in-flight request's
             Done done;    // the follow-up's
         };
@@ -262,7 +263,7 @@ namespace StrategyDecision
         }
 
         nlohmann::json BuildContext(const OrgasmEngine::DecisionInput& in, RE::Actor* focus, const std::string& trigger,
-            const std::string& line)
+            const std::string& line, const std::string& orderKey)
         {
             nlohmann::json ctx;
             ctx["trigger"] = trigger;
@@ -276,6 +277,8 @@ namespace StrategyDecision
             ctx["timeline"] = BuildTimeline(in);
             // A punishment is about what the actor is doing now: only then is the current strategy shown.
             ctx["current_key"] = trigger == "punished" ? in.currentOption : std::string{};
+            // Always set: the template reads it for every trigger.
+            ctx["ordered_key"] = orderKey;
             auto partners = nlohmann::json::array();
             for (const auto& p : in.partners) {
                 const auto [label, rank] = Relationship(focus, RE::TESForm::LookupByID<RE::Actor>(p.id));
@@ -292,7 +295,8 @@ namespace StrategyDecision
             return ctx;
         }
 
-        void Request(RE::FormID id, const std::string& trigger, const std::string& line, Done done = {});
+        void Request(RE::FormID id, const std::string& trigger, const std::string& line, Done done = {},
+            const std::string& orderKey = "");
 
         // Game thread. Applies a strategy answer.
         OrgasmEngine::DecisionResult ApplyStrategyAnswer(RE::FormID id, const OrgasmEngine::DecisionInput& in,
@@ -337,7 +341,7 @@ namespace StrategyDecision
 
         // Game thread. The decision for `id` arrived (or failed).
         void OnAnswer(RE::FormID id, std::shared_ptr<OrgasmEngine::DecisionInput> in, const std::string& sentTrigger,
-            int success, const std::string& answer, const std::string& json)
+            const std::string& orderKey, int success, const std::string& answer, const std::string& json)
         {
             using R = OrgasmEngine::DecisionResult;
             Pending& p = g_pending[id];
@@ -372,7 +376,9 @@ namespace StrategyDecision
                 webui_log::info("StrategyDecision: {:#x} answer {} p={:.2f} (held after punished/ordered, {:.0f}s left)",
                     id, key, confidence, holdLeft);
             } else {
-                result = ApplyStrategyAnswer(id, *in, key, confidence);
+                // Obeying an order is never too unsure to count: the gate only guards the actor's own changes.
+                const bool obeys = !orderKey.empty() && key == orderKey;
+                result = ApplyStrategyAnswer(id, *in, key, obeys ? -1.0 : confidence);
                 if (result == R::kChanged && sentTrigger != "dialogue") {
                     g_holdUntil[id] = Seconds() + kHoldSeconds;
                 }
@@ -383,11 +389,12 @@ namespace StrategyDecision
                 p.dirty = false;
                 const std::string trigger = p.trigger;
                 const std::string next = p.line;
+                const std::string nextOrder = p.orderKey;
                 Done queued = std::exchange(p.done, nullptr);
                 if (done) {
                     done(result);
                 }
-                Request(id, trigger, next, std::move(queued));
+                Request(id, trigger, next, std::move(queued), nextOrder);
             } else {
                 g_pending.erase(id);
                 if (done) {
@@ -398,7 +405,8 @@ namespace StrategyDecision
 
         // Game thread. done (punished requests) is called exactly once: with the answer, or kDropped right away
         // when no decision is sent.
-        void Request(RE::FormID id, const std::string& trigger, const std::string& line, Done done)
+        void Request(RE::FormID id, const std::string& trigger, const std::string& line, Done done,
+            const std::string& orderKey)
         {
             using R = OrgasmEngine::DecisionResult;
             const auto skip = [&done]() {
@@ -431,19 +439,20 @@ namespace StrategyDecision
                 p.dirty = true;
                 p.trigger = trigger;
                 p.line = line;
+                p.orderKey = orderKey;
                 return;
             }
-            const std::string ctx = BuildContext(*in, actor, trigger, line).dump();
+            const std::string ctx = BuildContext(*in, actor, trigger, line, orderKey).dump();
             p.inFlight = true;
             p.active = std::move(done);
             const bool queued = PublicSendCustomDecisionToLLM(kTemplate, ctx.c_str(), kMaxProbabilities,
-                [id, in, trigger](const char* answer, const char* resultJson, int success) {
+                [id, in, trigger, orderKey](const char* answer, const char* resultJson, int success) {
                     // SkyrimNet ThreadPool: copy, then do the work on the game thread.
                     std::string a = answer ? answer : "";
                     std::string j = resultJson ? resultJson : "";
                     SKSE::GetTaskInterface()->AddTask(
-                        [id, in, trigger, success, a = std::move(a), j = std::move(j)]() {
-                            OnAnswer(id, in, trigger, success, a, j);
+                        [id, in, trigger, orderKey, success, a = std::move(a), j = std::move(j)]() {
+                            OnAnswer(id, in, trigger, orderKey, success, a, j);
                         });
                 });
             if (!queued) {
@@ -756,7 +765,7 @@ namespace StrategyDecision
             if (!player || !BuildTurn(player, askSpeak, *t)) {
                 return;
             }
-            nlohmann::json ctx = BuildContext(t->strategy, player, trigger, line);
+            nlohmann::json ctx = BuildContext(t->strategy, player, trigger, line, "");
             ctx["last_speaker"] = speaker;
             ctx["has_strategy"] = t->strategy.options.size() >= 2;
             ctx["ask_speak"] = askSpeak;
@@ -893,9 +902,9 @@ namespace StrategyDecision
     }
 
     void RequestAnswer(RE::FormID target, const std::string& trigger, const std::string& line,
-        std::function<void(OrgasmEngine::DecisionResult)> done)
+        std::function<void(OrgasmEngine::DecisionResult)> done, const std::string& orderKey)
     {
-        Request(target, trigger, line, std::move(done));
+        Request(target, trigger, line, std::move(done), orderKey);
     }
 
     void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,

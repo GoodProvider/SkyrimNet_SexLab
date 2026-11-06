@@ -25,6 +25,13 @@
 - `StallCheck` must compare against a high-water mark: an edge cycle (100 → 99.93 → 100) counts as rising otherwise. A climb back after a calm doesn't count until it passes the old high.
 - The stall (30 s) comes before the 60 s `StageHoldCap`, so it can end a scene before the cap's gate would pass an aggressor outright.
 
+## Punishment rarely changed strategy: no named target, confidence gate (2026-11-03, built, untested in game)
+
+- **Symptom:** the `trigger=punished` decision seldom changes strategy. 13 answers across 5 older log snapshots: 4 changed, 5 wanted a change but scored p=0.25 to 0.52 under `decision_min_confidence` (0.6) and were logged `low confidence, kept current`, 4 kept the current option. Also seen on the current build (2026-11-03 22:53): the player punished Skadi for her current strategy, and the answer `focused_p2 p=0.49` was dropped the same way.
+- **Likely cause:** the prompt only said "changing it may make it stop", so the model had no specific option to move to. Its probability spread over the options, and the gate then dropped the changes it did pick.
+- **Fix:** when the punish reason is the current strategy, the panel orders a specific strategy (`order` → `ordered_key`). Picking the ordered key skips the gate. Punishments without an order (other reasons, auto play, NPCs, the action) keep the gate and can still fail to change strategy.
+- **Rule kept:** Punish still sets no engine state by itself, and the LLM still decides. The only forced change remains Submit above 80% torture.
+
 ## Gate pass looked like no orgasm: stage waited for a voice, Global AI off (2026-11-03, fixed, untested in game)
 
 - **Symptom:** NPC-only scene, primary at 100, stage stuck for over 20 s with no orgasm. Reported as a position-0 / two-female problem. It wasn't: Coralyn had `no_orgasm: 1`, so position 0 was the correct primary. Log: `gate ... pass=true`, then `no gate voice after 21.6s`.

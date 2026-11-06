@@ -3725,14 +3725,29 @@ namespace OrgasmEngine
             std::string requestText;
             std::string reason;           // the reason as narrated ("" for none)
             bool strategyReason = false;  // a SexLab reason (refused request / order, observed strategy), not external
+            std::string orderKey;         // the option ordered with this punishment ("" for none)
+            std::string orderClause;      // ", and orders them to <text>" ("" for none)
         };
+
+        // Caller holds g_lock. The actor's current strategy as a punish reason: "Nina appears to be focused on her own
+        // enjoyment"; "" when not an AI actor in the mini-game.
+        std::string CurrentStrategyReason(const ActorState& st)
+        {
+            if (!g_settings.miniGame || !AiDriven(st)) {
+                return "";
+            }
+            const std::string name = NameOf(ActorFor(st.id));
+            const std::string seen = ObservedPhrase(st);
+            return name.empty() || seen.empty() ? "" : name + " " + seen;
+        }
 
         // Caller holds g_lock. "<punisher> punishes <target> by pinching <target>'s nipples, because <reason>."
         // amount > 1 adds " <amount> times" after the act.
         // Weak spell: "... by hitting <target>'s ass with Sparks". Free text is the method as typed
         // ("biting <target>'s lips"). location "body" / "" names no part. Empty line when refused.
         PunishPlan PunishLocked(RE::Actor* punisherActor, RE::FormID target, const std::string& method,
-            const std::string& location, const std::string& reason, const Aid::WeakSpell* spell, std::int32_t amount)
+            const std::string& location, const std::string& reason, const Aid::WeakSpell* spell, std::int32_t amount,
+            const std::string& orderKey)
         {
             PunishPlan plan;
             const SceneState* sc = PunisherScene(punisherActor);
@@ -3768,7 +3783,6 @@ namespace OrgasmEngine
                 why = Trimmed(why.substr(8));
             }
             plan.act = NameOf(punisherActor) + " punishes " + name + " by " + act;
-            plan.line = plan.act + (why.empty() ? "" : ", because " + why) + ".";
             plan.direct = PlayerScene(*sc);
             plan.reason = why;
             if (const auto at = g_actors.find(target); at != g_actors.end() && !why.empty()) {
@@ -3786,13 +3800,30 @@ namespace OrgasmEngine
                     }
                 }
                 // GetPunishReasons' observed strategy line ("Nina appears to be focused on ...").
-                if (!held && g_settings.miniGame && AiDriven(at->second)) {
-                    const std::string seen = ObservedPhrase(at->second);
-                    plan.strategyReason = !seen.empty() && why == name + " " + seen;
+                if (!held) {
+                    plan.strategyReason = why == CurrentStrategyReason(at->second);
+                }
+                // An order goes with a punishment for the current strategy only (the panel's rule).
+                if (!orderKey.empty()) {
+                    Strategy s = Strategy::kCount;
+                    RE::FormID t = 0;
+                    if (!held && plan.strategyReason && ParseRequest(*sc, at->second, orderKey, s, t)) {
+                        const std::string text = RequestText(at->second, s, t);
+                        plan.requestBy = punisherActor->GetFormID();
+                        plan.requestOrder = true;
+                        plan.requestKey = orderKey;
+                        plan.requestText = text;
+                        plan.orderKey = orderKey;
+                        plan.orderClause = ", and orders them to " + text;
+                    } else {
+                        webui_log::warn("OrgasmEngine: punish order '{}' dropped for {:#x} (reason '{}')", orderKey,
+                            target, why);
+                    }
                 }
             }
-            webui_log::info("OrgasmEngine: {:#x} punishes {:#x} by '{}' on '{}' because '{}'",
-                punisherActor->GetFormID(), target, method, location, why);
+            plan.line = plan.act + (why.empty() ? "" : ", because " + why) + plan.orderClause + ".";
+            webui_log::info("OrgasmEngine: {:#x} punishes {:#x} by '{}' on '{}' because '{}' order '{}'",
+                punisherActor->GetFormID(), target, method, location, why, plan.orderKey);
             return plan;
         }
 
@@ -3803,7 +3834,7 @@ namespace OrgasmEngine
             while (!out.empty() && (out.back() == '.' || out.back() == '!' || out.back() == ' ')) {
                 out.pop_back();
             }
-            return out + (plan.reason.empty() ? "" : ", because " + plan.reason) + ".";
+            return out + (plan.reason.empty() ? "" : ", because " + plan.reason) + plan.orderClause + ".";
         }
 
         // Game thread. Above 80% Injury Engine torture the target gives in, no decision: "<target> can't take it any
@@ -3927,7 +3958,7 @@ namespace OrgasmEngine
                         FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
                             plan.direct, result);
                     }
-                });
+                }, plan.orderKey);
             };
             const std::string line = PunishDecisionLine(plan, feeling);
             // Torture share from Injury Engine (Papyrus VM thread), then back to the game thread to ask or submit.
@@ -4013,18 +4044,19 @@ namespace OrgasmEngine
                 }
             }
             // An AI actor's current strategy, as others see it: "Nina appears to be focused on her own enjoyment".
-            if (g_settings.miniGame && AiDriven(st)) {
-                const std::string name = NameOf(ActorFor(st.id));
-                const std::string seen = ObservedPhrase(st);
-                if (!name.empty() && !seen.empty()) {
-                    std::string why = name + " " + seen;
-                    if (std::find(out.begin(), out.end(), why) == out.end()) {
-                        out.push_back(std::move(why));
-                    }
-                }
+            if (std::string why = CurrentStrategyReason(st);
+                !why.empty() && std::find(out.begin(), out.end(), why) == out.end()) {
+                out.push_back(std::move(why));
             }
         }
         return out;
+    }
+
+    std::string GetCurrentStrategyReason(RE::FormID target)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_actors.find(target);
+        return it != g_actors.end() && SceneOf(it->second) ? CurrentStrategyReason(it->second) : std::string{};
     }
 
     void AddPunishReason(RE::Actor* by, RE::Actor* target, const std::string& reason)
@@ -4159,7 +4191,7 @@ namespace OrgasmEngine
     }
 
     bool PunishNarrated(RE::Actor* punisher, RE::FormID target, const std::string& method, const std::string& location,
-        const std::string& reason, std::int32_t amount, bool fromPlayer)
+        const std::string& reason, std::int32_t amount, bool fromPlayer, const std::string& orderKey)
     {
         if (!punisher) {
             return false;
@@ -4171,7 +4203,7 @@ namespace OrgasmEngine
         PunishPlan plan;
         {
             std::lock_guard lock(g_lock);
-            plan = PunishLocked(punisher, target, method, location, reason, spell, amount);
+            plan = PunishLocked(punisher, target, method, location, reason, spell, amount, orderKey);
         }
         if (plan.line.empty()) {
             return false;

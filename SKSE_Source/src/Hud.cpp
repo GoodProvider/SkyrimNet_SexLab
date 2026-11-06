@@ -407,6 +407,7 @@ namespace Hud
                 list.push_back({ { "id", id }, { "name", name }, { "female", IsFemaleId(id) },
                     { "isPlayer", player && id == player->GetFormID() }, { "spells", std::move(spells) },
                     { "requests", std::move(requests) }, { "reasons", OrgasmEngine::GetPunishReasons(id) },
+                    { "currentReason", OrgasmEngine::GetCurrentStrategyReason(id) },
                     { "firstTimes", OrgasmEngine::GetFirstTimes(id) } });
             }
             nlohmann::json cfg;

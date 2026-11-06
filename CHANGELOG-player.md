@@ -10,6 +10,9 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - New setting "Stuck scene: end after" (30 s): an NPC-only scene ends if nobody's enjoyment has climbed for that long.
 - Picking a new animation from the last-stage list no longer lets it run to its last stage with no orgasm, and the aggressor no longer gets a second orgasm right after the first.
 
+### Punish
+- Punishing an NPC for what they are doing now can also order them to do something else. They may still defy the order, but a choice to obey always takes effect
+
 ## 0.36.6
 
 ### Aid

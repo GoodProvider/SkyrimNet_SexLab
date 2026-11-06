@@ -28,9 +28,10 @@ namespace StrategyDecision
     /// Game thread. target was just asked, ordered or punished (trigger "asked" | "ordered" | "punished"; line: that
     /// narration, the decision's last_line): decide its strategy now, then call done with the outcome (kDropped when
     /// no decision was made: none set up, not AI-driven, failed). done is always called exactly once, possibly before
-    /// this returns.
+    /// this returns. orderKey (a punishment that also orders a strategy): the option ordered, sent as ordered_key;
+    /// an answer picking it skips the confidence gate.
     void RequestAnswer(RE::FormID target, const std::string& trigger, const std::string& line,
-        std::function<void(OrgasmEngine::DecisionResult)> done);
+        std::function<void(OrgasmEngine::DecisionResult)> done, const std::string& orderKey = "");
     /// Game thread. The receiver NPC is offered giver's potion (how "drink" | "lips"; potionKind "healing" |
     /// "stamina"): asks the decision model (prompts/decisions/sexlab/aid_accept.prompt) whether it accepts, then calls
     /// done(accepted) on the game thread, exactly once. No decisions provider or a failed request: accepted.
