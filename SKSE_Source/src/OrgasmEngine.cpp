@@ -528,14 +528,15 @@ namespace OrgasmEngine
         }
 
         // Caller holds g_lock. The actor whose enjoyment drives the stage: expected to orgasm and not a DOM slave
-        // (its enjoyment does not move). Victims only if nobody else qualifies. Female over male with the femdom tag,
-        // otherwise male over female; within that, positions 1, 2, 3, ..., then 0. 0: nobody eligible. sc.actors is in
-        // position order (BeginScene).
+        // (its enjoyment does not move). Male first, then female (creatures by sex); within each, positions 1, 2, 3,
+        // ..., then 0. The femdom tag and the victim role do not change it: the primary aligns the animation with an
+        // actor's enjoyment. 0: nobody eligible, so the stages keep their timers. sc.actors is in position order
+        // (BeginScene).
         RE::FormID PrimaryOf(const SceneState& sc)
         {
             const auto n = static_cast<std::int32_t>(sc.actors.size());
             RE::FormID best = 0;
-            std::int32_t bestRank = 4 * n;
+            std::int32_t bestRank = 2 * n;
             for (std::int32_t i = 0; i < n; ++i) {
                 const RE::FormID id = sc.actors[static_cast<std::size_t>(i)];
                 const auto at = g_actors.find(id);
@@ -544,8 +545,7 @@ namespace OrgasmEngine
                 }
                 const std::int32_t gender = at->second.stageGender;
                 const bool female = gender >= 0 ? gender % 2 == 1 : IsFemale(ActorFor(id));
-                const std::int32_t rank = (at->second.role == Role::kVictim ? 2 * n : 0) +
-                                          (female == sc.stageFemdom ? 0 : n) + (i == 0 ? n - 1 : i - 1);
+                const std::int32_t rank = (female ? n : 0) + (i == 0 ? n - 1 : i - 1);
                 if (rank < bestRank) {
                     bestRank = rank;
                     best = id;

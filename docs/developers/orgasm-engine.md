@@ -361,17 +361,21 @@ With the engine on, stages follow one actor's enjoyment instead of SexLab's stag
 **Primary** (`PrimaryOf`, computed each tick; log `stage primary`):
 
 1. Must expect an orgasm and not be a DOM slave, whose enjoyment doesn't move.
-2. A victim only if nobody else qualifies, so an expected aggressor drives wherever they stand.
-3. Female over male with the `femdom` tag, otherwise male over female. Creatures count by sex (`gender % 2`).
-4. Positions 1, 2, 3, ..., then 0.
+2. Male first, then female. Creatures count by sex (`gender % 2`).
+3. Within each, positions 1, 2, 3, ..., then 0.
+4. Nobody qualifies: the stages keep their timers.
 
-| `femdom` tag | Expected | Positions | Primary |
-|---|---|---|---|
-| yes | [1,1] | [F,M] | 0 |
-| no | [1,0] | [F,M] | 0 |
-| no | [1,1,1] | [F,M,F] | 1 |
-| no | [1,1,0] | [F,F,M] | 1 |
-| no | [1,1], position 1 is the victim | [F,F] | 0 |
+The `femdom` tag and the victim role don't change the order: the primary is there to line the animation up with an actor's enjoyment.
+
+| Expected | Positions | Primary |
+|---|---|---|
+| [1,1] | [F,M] | 1 |
+| [1,0] | [F,M] | 0 |
+| [1,1,1] | [F,M,F] | 1 |
+| [1,1,0] | [F,F,M] | 1 |
+| [1,1] | [M,M] | 1 |
+| [1,1], position 1 is the victim | [F,F] | 1 |
+| [0,0] | any | none (timers) |
 
 **Stage from enjoyment** (`StageFollowPrimary`; log `stage follows`): N stages give N−1 equal bands, and the last stage is the orgasm's. Stage `k` (2..N−1) needs `enjoyment > 100 × (k−1) / (N−1)`. With 5 stages: above 25 → 2, above 50 → 3, above 75 → 4, and stage 4 holds until the primary orgasms.
 

@@ -11,7 +11,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ### F/F scenes: who is expected to orgasm, who drives the stages, stuck scenes
 - A female position now expects an orgasm in 2-position animations tagged `doubledildo`, `tribbing` or `scissoring` (`InferOrgasmExpected`). Before, a female at position 1 was never expected unless the file said so. Existing database rows are updated once at load (`ReinferMutualRowsLocked`); a file's `orgasm_expected` stays.
-- Stages follow a victim only if nobody else qualifies (`PrimaryOf`), so an expected aggressor drives wherever they stand.
+- Primary (`PrimaryOf`) order is now male (positions 1, 2+, then 0), then female in the same order, then timers. The `femdom` tag and the victim role no longer change it.
 - New `sexlab.enjoyment.stall_end_after` (30 s, 0 = never): an NPC-only scene whose stages follow enjoyment ends where it is when nobody's enjoyment reaches a new high for that long (`StallCheck`, `Scene.Engine_EndStalled`, `AnimEngineOrgasm::OnStallEnd`).
 - The primary's orgasm marks the gate done (`NotePrimaryFinished`), so the gate on the final stage no longer fires a second orgasm. A final jump lost to an animation change (last-stage list switch) no longer leaves `ending_done` set: `Scene.Ending_StageStart` re-arms the ending, so the new animation's stages are held again instead of running out on SexLab's timers.
 
