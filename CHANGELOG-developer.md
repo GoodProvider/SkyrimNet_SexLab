@@ -4,6 +4,17 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### F/F scenes: who is expected to orgasm, who drives the stages, stuck scenes
+- A female position now expects an orgasm in 2-position animations tagged `doubledildo`, `tribbing` or `scissoring` (`InferOrgasmExpected`). Before, a female at position 1 was never expected unless the file said so. Existing database rows are updated once at load (`ReinferMutualRowsLocked`); a file's `orgasm_expected` stays.
+- Stages follow a victim only if nobody else qualifies (`PrimaryOf`), so an expected aggressor drives wherever they stand.
+- New `sexlab.enjoyment.stall_end_after` (30 s, 0 = never): an NPC-only scene whose stages follow enjoyment ends where it is when nobody's enjoyment reaches a new high for that long (`StallCheck`, `Scene.Engine_EndStalled`, `AnimEngineOrgasm::OnStallEnd`).
+- The primary's orgasm marks the gate done (`NotePrimaryFinished`), so the gate on the final stage no longer fires a second orgasm. A final jump lost to an animation change (last-stage list switch) no longer leaves `ending_done` set: `Scene.Ending_StageStart` re-arms the ending, so the new animation's stages are held again instead of running out on SexLab's timers.
+
+### Orgasm check no longer waits for the voice
+- After a passed orgasm check, the scene goes to the last stage at once instead of waiting up to 20 s for the narration's voice (`Scene.Engine_GatePassed`).
+- The enjoyment bar flashes from the moment of the pass until 2 s into the voice reply, so you can see it was triggered. `sexlab.ending.gate_wait_max` now only caps that flash.
+- With SkyrimNet's AI off, nothing waits for a voice: the flash ends shortly after the orgasm and the last stage has no dialogue hold (`Utilities.GlobalAIEnabled`). AnimEngine scenes still run their dialogue hold to its cap.
+
 ### Animation panel
 - Scene Creator and Description Editor share one animation row: Start, subject, style, *sexual*, *bound*, sort, description, synonyms, All, None. Description and synonyms moved out of the tag panel. The Description Editor has no All / None, and its style pulldown moved here from the header. The stage descriptions tab has its own in the tab bar.
 - *sexual* and *bound* cycle on click: white = must have the tag, red = must not have it, grey = no filter. Each word is a view over the `SC.tags` / `SC.suppress` chips. *bound* white also sends `_bound`, so a setting's `tags_suppress_unless_bound` cannot empty the list.

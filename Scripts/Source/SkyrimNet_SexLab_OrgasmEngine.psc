@@ -247,6 +247,18 @@ Function Effect_AdvanceToFinal(Actor akActor) global
     endif
 EndFunction
 
+; NPC-only scene with no enjoyment increase for sexlab.enjoyment.stall_end_after seconds: end it where it is.
+Function Effect_EndStalled(Actor akActor) global
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager == None || akActor == None
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(akActor)
+    if sl_scene != None
+        sl_scene.Engine_EndStalled()
+    endif
+EndFunction
+
 ; Stage by enjoyment: the primary's enjoyment moved to another band.
 Function Effect_MoveStage(Actor akActor, int stage) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()

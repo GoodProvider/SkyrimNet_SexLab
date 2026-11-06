@@ -55,7 +55,7 @@ To rebind a key, open the SkyrimNet dashboard (**Scene HUD** / **Mini-game**) an
 
 While you are in a SexLab scene, a small HUD appears in the upper left, where the WebUI ControlPanel sits. It has no background, it doesn't pause the game, and it hides whenever a menu or the WebUI is open. Each group can be switched on or off in the dashboard (**Scene HUD** / **Mini-game**):
 
-- **Enjoyment:** one bar per actor. The bar pulses near orgasm and flashes during one.
+- **Enjoyment:** one bar per actor. The bar pulses near orgasm and flashes during one. In a scene the AI plays out, the flash starts the moment the orgasm is triggered and lasts until about 2 seconds into the spoken reply.
 - **Controls:** a fixed grid laid out like the numpad. Each label names what pressing its key will do.
 
   ```

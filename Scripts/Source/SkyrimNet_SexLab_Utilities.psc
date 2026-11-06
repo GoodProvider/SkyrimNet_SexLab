@@ -617,6 +617,13 @@ int Function NarrationLevel(String path) global
     return 3
 EndFunction
 
+; SkyrimNet's master AI toggle (its hotkey or TriggerToggleGlobalAI). Off: DNs are still recorded, but no reply
+; or voice will ever come, so nothing should wait for one. SkyrimNet has no getter; its own menu reads this config
+; by name. C++ can't read it: PublicGetPluginConfigValue only reaches Plugin_* configs.
+bool Function GlobalAIEnabled() global
+    return SkyrimNetApi.GetConfigBool("Game", "general.globalAIEnabled", true)
+EndFunction
+
 ; Below-Direct send for a level setting: 2+ an event (force: no CheckDuplicate, like
 ; RegisterEventForce), 1 a 30 s short-lived event (stable id per type / source / target, so a
 ; repeat replaces it), 0 nothing. Returns true when something was sent.

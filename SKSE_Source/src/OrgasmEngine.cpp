@@ -34,6 +34,8 @@ namespace OrgasmEngine
         constexpr float kMaxEnjoyment = 100.0f;
         constexpr float kEdgeThreshold = 90.0f;
         constexpr double kFlashSeconds = 3.0;
+        constexpr double kGateFlashInitial = 5.0;  // gate pass: flash until this, or the voice wait if one is expected
+        constexpr double kFlashAfterVoice = 2.0;   // gate pass: flash this long into the voice reply
         constexpr double kMirrorInterval = 1.0;
         constexpr double kMirrorRefresh = 3.0;
         constexpr double kRollInterval = 1.0;
@@ -87,6 +89,7 @@ namespace OrgasmEngine
             float stageSpike = 5.0f;  // enjoyment added on each stage advance
             bool gate = true;         // orgasm roll just before the final stage
             float gateLeadDefault = 5.0f;  // DN -> speech seconds until NarrationTiming has samples
+            float gateVoiceMax = 20.0f;    // gate pass: longest the bar flashes while waiting for the voice
             // SexLab bonus (skill, Lewd/Pure, victim/aggressor, relationship rank): see ComputeBonus.
             float bonusScale = 0.5f;
             float bonusClamp = 0.75f;
@@ -100,6 +103,7 @@ namespace OrgasmEngine
             bool stageAdvancePrimaryEnjoyment = true;  // stages follow the primary's enjoyment, not their timers
             float stagePunishAfter = 30.0f;  // stage by enjoyment: stuck this long, the primary punishes (0 = never)
             float stageHoldMax = 60.0f;      // stage by enjoyment: stuck this long (or its timer), it advances (0 = never)
+            float stallEndAfter = 30.0f;     // stage by enjoyment, NPC-only: no enjoyment increase this long, scene ends (0 = never)
             Strategy defaultNormal = Strategy::kMutual;
             Strategy defaultAggressor = Strategy::kSelfish;
             Strategy defaultVictim = Strategy::kPassive;
@@ -139,6 +143,7 @@ namespace OrgasmEngine
             std::int32_t lewd = 0;
             bool sceneBlocked = false;
             bool orgasmExpected = true;  // position's orgasm_expected; false: no passive gain
+            float stallMark = 0.0f;      // StallCheck: highest enjoyment since the last orgasm in the scene. Not saved.
             std::map<std::string, bool> blocks;
             std::map<std::string, float> rateMods;
             bool pending = false;
@@ -227,13 +232,16 @@ namespace OrgasmEngine
             // it on every BeginScene.
             RE::FormID endingLead = 0;
             std::int32_t endingTarget = 0;
-            // Gate passed in the second-to-last stage (held by the Scene): one of this scene's actors
-            // starting to speak after the gate narration (NarrationTiming::StartedSince(gateSpeechMark,
-            // actors)) pushes the scene to its final stage. Scoped to the scene's actors: another scene's
-            // reply must not advance this one (2026-10-08).
+            // Legacy: the gate used to hold the second-to-last stage for its voice. Never set now; kept in
+            // the co-save format, and a save made mid-hold still has it until the final stage.
             bool gateAwait = false;
-            bool gateMarked = false;  // GateNarrationSent seen
-            std::uint64_t gateSpeechMark = 0;
+            // Gate pass: the passers' bars flash until kFlashAfterVoice into the voice reply. One of this
+            // scene's actors starting to speak after the narration (StartedSince(flashVoiceMark, actors))
+            // ends the wait; another scene's reply must not (2026-10-08). Not saved.
+            std::vector<RE::FormID> flashVoiceActors;
+            bool flashVoiceAwait = false;  // GateNarrationSent seen: a voice is expected
+            std::uint64_t flashVoiceMark = 0;
+            double flashVoiceUntil = 0.0;  // give up on the voice at this time
             // Together: animating, unpaused seconds in the current stage (progress clock).
             double stageElapsed = 0.0;
             bool exhaustedSent = false;  // a non-victim gave out (regen at kRegenFloor): scene end sent
@@ -271,6 +279,10 @@ namespace OrgasmEngine
             bool stagePunished = false;        // the primary punished on this stage entry
             bool stageFinalSent = false;       // Together, gate off: the primary at kRushHover asked for the final stage
             double animElapsed = 0.0;          // Together: animating, unpaused seconds in this animation
+            // StallCheck. Not saved: the clock starts over after a load.
+            double stallRiseAt = 0.0;          // last new high in anyone's enjoyment, or the clock's last frozen tick
+            std::int32_t stallOrgasms = 0;     // orgasm total at the last check: a change resets the marks
+            double stallEndSentAt = 0.0;       // scene end sent; sent again in case the thread wasn't animating
         };
 
         // Work collected under the lock, run after it is released (Papyrus dispatch / events / HUD).
@@ -361,12 +373,13 @@ namespace OrgasmEngine
             std::vector<std::int32_t> decisionScenes;  // scenes ready for NPC steps: scene-start decisions
             std::vector<StageMoveFx> stageMoves;
             std::vector<StagePunishFx> stagePunishes;
+            std::vector<RE::FormID> stallEnds;  // no enjoyment increase in an NPC-only scene: end this actor's scene
             bool empty() const
             {
                 return orgasms.empty() && mirrors.empty() && narrations.empty() && events.empty() &&
                        domSyncs.empty() && gatePasses.empty() && advances.empty() && strategies.empty() &&
                        exhausted.empty() && directs.empty() && decisionScenes.empty() && stageMoves.empty() &&
-                       stagePunishes.empty();
+                       stagePunishes.empty() && stallEnds.empty();
             }
         };
 
@@ -515,13 +528,14 @@ namespace OrgasmEngine
         }
 
         // Caller holds g_lock. The actor whose enjoyment drives the stage: expected to orgasm and not a DOM slave
-        // (its enjoyment does not move). Female over male with the femdom tag, otherwise male over female; within
-        // that, positions 1, 2, 3, ..., then 0. 0: nobody eligible. sc.actors is in position order (BeginScene).
+        // (its enjoyment does not move). Victims only if nobody else qualifies. Female over male with the femdom tag,
+        // otherwise male over female; within that, positions 1, 2, 3, ..., then 0. 0: nobody eligible. sc.actors is in
+        // position order (BeginScene).
         RE::FormID PrimaryOf(const SceneState& sc)
         {
             const auto n = static_cast<std::int32_t>(sc.actors.size());
             RE::FormID best = 0;
-            std::int32_t bestRank = 2 * n;
+            std::int32_t bestRank = 4 * n;
             for (std::int32_t i = 0; i < n; ++i) {
                 const RE::FormID id = sc.actors[static_cast<std::size_t>(i)];
                 const auto at = g_actors.find(id);
@@ -530,7 +544,8 @@ namespace OrgasmEngine
                 }
                 const std::int32_t gender = at->second.stageGender;
                 const bool female = gender >= 0 ? gender % 2 == 1 : IsFemale(ActorFor(id));
-                const std::int32_t rank = (female == sc.stageFemdom ? 0 : n) + (i == 0 ? n - 1 : i - 1);
+                const std::int32_t rank = (at->second.role == Role::kVictim ? 2 * n : 0) +
+                                          (female == sc.stageFemdom ? 0 : n) + (i == 0 ? n - 1 : i - 1);
                 if (rank < bestRank) {
                     bestRank = rank;
                     best = id;
@@ -758,6 +773,8 @@ namespace OrgasmEngine
 
         // Caller holds g_lock. The orgasm is the primary's: stage moves end here, so the reset to 0 cannot send the
         // stage back before the Scene jumps to the final stage. True when it was.
+        // It is also the gate's orgasm: the gate on reaching the final stage must not fire the primary again
+        // (SetStage re-arms it on a new animation or a step back).
         bool NotePrimaryFinished(const ActorState& st)
         {
             SceneState* sc = SceneOf(st);
@@ -765,6 +782,7 @@ namespace OrgasmEngine
                 return false;
             }
             sc->primaryFinished = true;
+            sc->gateDone = true;
             return true;
         }
 
@@ -786,7 +804,7 @@ namespace OrgasmEngine
             st.orgasmCount += 1;
             SpendRegen(st, g_settings.regenOrgasmCost, fx);
             st.lastOrgasm = now;
-            st.flashUntil = now + kFlashSeconds;
+            st.flashUntil = std::max(st.flashUntil, now + kFlashSeconds);  // not shorter than a gate pass's flash
             st.pending = false;
             st.pendingForce = false;
             st.deniedSent = false;
@@ -1743,6 +1761,13 @@ namespace OrgasmEngine
             for (const auto& p : fx.stagePunishes) {
                 PunishNarrated(ActorFor(p.punisher), p.target, p.method, "body", p.reason, 1, false);
             }
+            for (const auto id : fx.stallEnds) {
+                if (auto* a = ActorFor(id); a && AnimEngineOrgasm::OwnsActor(id)) {
+                    AnimEngineOrgasm::OnStallEnd(a);
+                } else if (a) {
+                    DispatchShell("Effect_EndStalled", RE::MakeFunctionArguments(std::move(a)));
+                }
+            }
             for (const auto& m : fx.mirrors) {
                 // Mirror: SexLab's enjoyment; AnimEngine scenes have no SexLab thread.
                 if (AnimEngineOrgasm::OwnsActor(m.actor)) {
@@ -1900,6 +1925,56 @@ namespace OrgasmEngine
             webui_log::info("OrgasmEngine: scene {} stage {}/{} stuck for {:.0f}s: {:#x} punishes {:#x} enjoyment={:.1f}",
                 sc.sid, sc.stage, sc.stageCount, sc.stageElapsed, primary.id, target, primary.enjoyment);
             fx.stagePunishes.push_back({ primary.id, target, RandomPunishMethod(), std::move(reason) });
+        }
+
+        // Caller holds g_lock, each tick. NPC-only scene whose stages follow enjoyment: nobody's enjoyment has reached a
+        // new high for stallEndAfter seconds, so the scene ends where it is. A new high, not any rise: an edge cycle
+        // (100 -> 99.93 -> 100) would otherwise count forever. following is false with no eligible primary, which also
+        // keeps scenes with nobody expected to orgasm out: they never gain.
+        void StallCheck(SceneState& sc, bool following, bool finalStage, Effects& fx, double now)
+        {
+            constexpr float kStallMinRise = 0.05f;   // below this, a change is noise
+            constexpr double kStallResend = 5.0;
+            std::int32_t orgasms = 0;
+            bool rushing = false;
+            for (const auto id : sc.actors) {
+                if (const auto at = g_actors.find(id); at != g_actors.end()) {
+                    orgasms += at->second.orgasmCount;
+                    rushing = rushing || at->second.rushing;
+                }
+            }
+            const bool orgasmed = orgasms != sc.stallOrgasms;
+            sc.stallOrgasms = orgasms;
+            for (const auto id : sc.actors) {
+                const auto at = g_actors.find(id);
+                if (at == g_actors.end() || at->second.dom) {
+                    continue;
+                }
+                ActorState& st = at->second;
+                if (orgasmed || st.enjoyment > st.stallMark + kStallMinRise) {
+                    st.stallMark = st.enjoyment;
+                    sc.stallRiseAt = now;
+                }
+            }
+            if (g_settings.stallEndAfter <= 0.0f || sc.hasPlayer || !following || sc.paused || !sc.staged || finalStage ||
+                sc.primaryFinished || sc.flashVoiceAwait || rushing || sc.stallRiseAt <= 0.0) {
+                sc.stallRiseAt = now;
+                return;
+            }
+            const double flat = now - sc.stallRiseAt;
+            if (flat < g_settings.stallEndAfter || now < sc.stallEndSentAt + kStallResend || sc.actors.empty()) {
+                return;
+            }
+            sc.stallEndSentAt = now;
+            webui_log::info("OrgasmEngine: scene {} no enjoyment increase for {:.0f}s, ending at stage {}/{}", sc.sid, flat,
+                sc.stage, sc.stageCount);
+            for (const auto id : sc.actors) {
+                if (const auto at = g_actors.find(id); at != g_actors.end()) {
+                    webui_log::info("OrgasmEngine: scene {} stall {:#x} enjoyment={:.1f} high={:.1f} count={}", sc.sid, id,
+                        at->second.enjoyment, at->second.stallMark, at->second.orgasmCount);
+                }
+            }
+            fx.stallEnds.push_back(sc.actors.front());
         }
 
         // Caller holds g_lock. Stage by enjoyment, each tick: N stages give N-1 equal bands (stage k needs enjoyment >
@@ -2350,18 +2425,34 @@ namespace OrgasmEngine
                                 }
                             }
                             if (!pass.actors.empty()) {
-                                sc.gateAwait = penultimate;
-                                sc.gateMarked = false;
+                                // The bars flash from now, so the player sees the orgasm was triggered. The Scene goes
+                                // to the final stage at once; GateNarrationSent extends the flash if a voice is expected.
+                                for (const auto id : pass.actors) {
+                                    if (auto at = g_actors.find(id); at != g_actors.end()) {
+                                        at->second.flashUntil = std::max(at->second.flashUntil, now + kGateFlashInitial);
+                                    }
+                                }
+                                sc.flashVoiceActors = pass.actors;
+                                sc.flashVoiceAwait = false;
                                 fx.gatePasses.push_back(std::move(pass));
                             }
                         }
                     }
-                    // The voice for the gate narration started: final stage now (the rush fires there).
-                    if (sc.gateAwait && sc.gateMarked && !sc.paused && !sc.actors.empty() &&
-                        NarrationTiming::StartedSince(sc.gateSpeechMark, sc.actors)) {
-                        sc.gateAwait = false;
-                        webui_log::info("OrgasmEngine: scene {} gate voice started, to the final stage", sid);
-                        fx.advances.push_back(sc.actors.front());
+                    // The voice for the gate narration started: the flash ends kFlashAfterVoice into it.
+                    if (sc.flashVoiceAwait) {
+                        if (now >= sc.flashVoiceUntil) {
+                            sc.flashVoiceAwait = false;
+                            webui_log::info("OrgasmEngine: scene {} no gate voice in time, flash over", sid);
+                        } else if (NarrationTiming::StartedSince(sc.flashVoiceMark, sc.actors)) {
+                            sc.flashVoiceAwait = false;
+                            for (const auto id : sc.flashVoiceActors) {
+                                if (auto at = g_actors.find(id); at != g_actors.end()) {
+                                    at->second.flashUntil = now + kFlashAfterVoice;
+                                }
+                            }
+                            webui_log::info("OrgasmEngine: scene {} gate voice started, flash ends in {}s", sid,
+                                kFlashAfterVoice);
+                        }
                     }
                     if (stagePrimary) {
                         // Together, gate off: no orgasm comes before the final stage, so the primary at the curve's
@@ -2376,6 +2467,7 @@ namespace OrgasmEngine
                         }
                         StageFollowPrimary(sc, stagePrimary, fx, now);
                     }
+                    StallCheck(sc, stagePrimary != 0, finalStage, fx, now);
 
                     // 4b. Safety net (gate off, or no timers): at 90% of the final stage's timer, each
                     // non-DOM actor at kSafetyMin or more who has not finished. Without timers: at
@@ -2549,6 +2641,7 @@ namespace OrgasmEngine
         s.stageSpike = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_spike", 5.0f));
         s.gate = GetConfigBool("sexlab.ending.gate", true);
         s.gateLeadDefault = std::clamp(GetConfigFloat("sexlab.ending.gate_lead_default", 5.0f), 1.0f, 30.0f);
+        s.gateVoiceMax = std::clamp(GetConfigFloat("sexlab.ending.gate_wait_max", 20.0f), 5.0f, 60.0f);
         s.bonusScale = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.bonus_scale", 0.5f));
         s.bonusClamp = std::clamp(GetConfigFloat("sexlab.enjoyment.bonus_clamp", 0.75f), 0.0f, 1.0f);
         s.togetherK = std::clamp(GetConfigFloat("sexlab.enjoyment.together_k_range", 2.0f), 0.0f, 5.0f);
@@ -2561,6 +2654,7 @@ namespace OrgasmEngine
         s.stageAdvancePrimaryEnjoyment = GetConfigBool("sexlab.enjoyment.stage_advance_primary_enjoyment", true);
         s.stagePunishAfter = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_punish_after", 30.0f));
         s.stageHoldMax = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_hold_max", 60.0f));
+        s.stallEndAfter = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stall_end_after", 30.0f));
         s.defaultNormal = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_normal", "Mutual"),
             Strategy::kMutual);
         s.defaultAggressor = ParseStrategy(
@@ -2583,11 +2677,11 @@ namespace OrgasmEngine
             s.randomBonus, s.narrateWindow, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
         webui_log::info("OrgasmEngine: config engine_off={} mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
                         "press={}-{}x/{}s gap={}s rest={}s step={}-{} mutual_target={} passive_share={} budget={} defaults={}/{}/{} "
-                        "stage_by_enjoyment={} punish_after={}s hold_max={}s",
+                        "stage_by_enjoyment={} punish_after={}s hold_max={}s stall_end={}s",
             s.engineOff, s.engineOff ? "sexlab" : s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
             kPressMin, kPressMax, kPressTick, kPressGap, kRestSecs, s.npcStepMin, s.npcStepMax, s.mutualTarget, s.passiveShare, s.enjoymentBudget, InfoOf(s.defaultNormal).key,
             InfoOf(s.defaultAggressor).key, InfoOf(s.defaultVictim).key, s.stageAdvancePrimaryEnjoyment, s.stagePunishAfter,
-            s.stageHoldMax);
+            s.stageHoldMax, s.stallEndAfter);
     }
 
     bool IsMiniGameEnabled()
@@ -2751,6 +2845,7 @@ namespace OrgasmEngine
             }
             sc.gateDone = false;
             sc.gateAwait = false;
+            sc.flashVoiceAwait = false;
             sc.victimHoldExpired = false;
         }
         if (stageCount > 0 && stage >= stageCount) {
@@ -2812,14 +2907,21 @@ namespace OrgasmEngine
     {
         std::lock_guard lock(g_lock);
         const auto it = g_scenes.find(sid);
-        if (it == g_scenes.end() || !it->second.gateAwait) {
+        if (it == g_scenes.end() || it->second.flashVoiceActors.empty()) {
             return;
         }
-        it->second.gateSpeechMark =
-            mark >= 0 ? static_cast<std::uint64_t>(mark) : NarrationTiming::SpeakerMark();
-        it->second.gateMarked = true;
-        webui_log::info("OrgasmEngine: scene {} gate narration sent, waiting for speech (mark {})", sid,
-            it->second.gateSpeechMark);
+        SceneState& sc = it->second;
+        const double now = Now();
+        sc.flashVoiceMark = mark >= 0 ? static_cast<std::uint64_t>(mark) : NarrationTiming::SpeakerMark();
+        sc.flashVoiceUntil = now + g_settings.gateVoiceMax;
+        sc.flashVoiceAwait = true;
+        for (const auto id : sc.flashVoiceActors) {
+            if (auto at = g_actors.find(id); at != g_actors.end()) {
+                at->second.flashUntil = std::max(at->second.flashUntil, sc.flashVoiceUntil);
+            }
+        }
+        webui_log::info("OrgasmEngine: scene {} gate narration sent, flashing until speech (mark {})", sid,
+            sc.flashVoiceMark);
     }
 
     std::vector<RE::FormID> SceneActors(std::int32_t sid)
@@ -4163,7 +4265,7 @@ namespace OrgasmEngine
             st->orgasmCount += 1;
             SpendRegen(*st, g_settings.regenOrgasmCost, fx);
             st->lastOrgasm = now;
-            st->flashUntil = now + kFlashSeconds;
+            st->flashUntil = std::max(st->flashUntil, now + kFlashSeconds);  // not shorter than a gate pass's flash
             st->pending = false;
             st->pendingForce = false;
             st->deniedSent = false;

@@ -1658,6 +1658,12 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         return std::filesystem::current_path() / "Data" / "SKSE" / "Plugins" / "SkyrimNet_SexLab";
     }
 
+    // Tags where both partners are stimulated, so a female at position 1 expects an orgasm too.
+    bool HasMutualFemaleTag(const std::unordered_set<std::string>& tags)
+    {
+        return HasTag(tags, "doubledildo") || HasTag(tags, "tribbing") || HasTag(tags, "scissoring");
+    }
+
     std::vector<int> InferOrgasmExpected(int position_count, const std::vector<int>& pos_genders,
         const std::unordered_set<std::string>& tags,
         const std::optional<std::vector<int>>& file_override)
@@ -1677,6 +1683,8 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             if (HasTag(tags, "estrus")) {
                 out[i] = 1;
             } else if (HasTag(tags, "69") || HasTag(tags, "masturbation")) {
+                out[i] = 1;
+            } else if (has_pussy && HasMutualFemaleTag(tags)) {
                 out[i] = 1;
             } else if (i == 0) {
                 if (has_pussy && (HasTag(tags, "vaginal") || HasTag(tags, "cunnilingus") ||
@@ -1746,6 +1754,95 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         }
     }
 
+    // After LoadAnimJson: orgasm_expected and speaking defaults for whatever the animation's file left unset.
+    void ApplyInferredDefaults(AnimRow& row, const std::optional<std::vector<int>>& orgasm_file,
+        std::vector<char>& speaking_from_file)
+    {
+        std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
+        auto orgasm = InferOrgasmExpected(row.position_count, row.pos_genders, tagset, orgasm_file);
+        row.pos_no_orgasm.resize(orgasm.size());
+        for (size_t i = 0; i < orgasm.size(); ++i)
+            row.pos_no_orgasm[i] = 1 - orgasm[i];
+
+        // Prefer resolved SNSL stage-1 tags (including empty []) over SexLab tags.
+        std::unordered_set<std::string> tags_for_infer;
+        if (row.stage_tags.contains(1)) {
+            const auto& t = row.stage_tags[1];
+            tags_for_infer.insert(t.begin(), t.end());
+        } else {
+            tags_for_infer = tagset;
+        }
+
+        std::vector<std::string> inferred;
+        InferSpeakingModifiers(row.pos_no_orgasm, tags_for_infer, inferred);
+        if (row.pos_speaking_modifiers.size() < orgasm.size())
+            row.pos_speaking_modifiers.resize(orgasm.size());
+        if (speaking_from_file.size() < orgasm.size())
+            speaking_from_file.resize(orgasm.size(), 0);
+        for (size_t i = 0; i < orgasm.size(); ++i) {
+            if (!speaking_from_file[i] && i < inferred.size())
+                row.pos_speaking_modifiers[i] = inferred[i];
+        }
+        if (row.stage_count >= 1)
+            row.stage_speaking[1] = row.pos_speaking_modifiers;
+
+        // Fill in inferred speaking for stages 2+ that weren't authored/resolved
+        // by ApplyAnimJsonToRow (climax stages otherwise stay blank).
+        for (int s = 2; s <= row.stage_count; ++s) {
+            if (row.stage_speaking.contains(s))
+                continue;
+            std::unordered_set<std::string> tags_for_infer_s;
+            if (row.stage_tags.contains(s)) {
+                const auto& t = row.stage_tags[s];
+                tags_for_infer_s.insert(t.begin(), t.end());
+            } else {
+                tags_for_infer_s = tagset;
+            }
+            std::vector<std::string> inferred_s;
+            InferSpeakingModifiers(row.pos_no_orgasm, tags_for_infer_s, inferred_s);
+            row.stage_speaking[s] = inferred_s;
+        }
+
+        if (row.pos_clothed.size() < orgasm.size())
+            row.pos_clothed.resize(orgasm.size(), 0);
+    }
+
+    namespace
+    {
+        // Caller holds g_mutex. PushAnim skips unchanged rows, and a load doesn't re-sync, so rows stored before
+        // HasMutualFemaleTag still say position 1 is not expected. Fix those once; a saved orgasm_expected stays.
+        void ReinferMutualRowsLocked()
+        {
+            int changed = 0;
+            for (auto& [reg, row] : g_rows) {
+                if (row.position_count != 2 || row.pos_genders.size() < 2 || row.pos_no_orgasm.size() < 2 ||
+                    row.pos_no_orgasm[1] != 1 || row.pos_genders[1] % 2 != 1) {
+                    continue;
+                }
+                const std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
+                if (!HasMutualFemaleTag(tagset)) {
+                    continue;
+                }
+                AnimRow fresh = row;
+                fresh.pos_speaking_modifiers.clear();
+                fresh.stage_speaking.clear();
+                std::optional<std::vector<int>> orgasm_file;
+                std::vector<char> speaking_from_file;
+                LoadAnimJson(fresh.registry, fresh.name, fresh, orgasm_file, &speaking_from_file);
+                if (orgasm_file && static_cast<int>(orgasm_file->size()) == fresh.position_count) {
+                    continue;
+                }
+                ApplyInferredDefaults(fresh, orgasm_file, speaking_from_file);
+                row.pos_no_orgasm = std::move(fresh.pos_no_orgasm);
+                row.pos_speaking_modifiers = std::move(fresh.pos_speaking_modifiers);
+                row.stage_speaking = std::move(fresh.stage_speaking);
+                UpsertRowLocked(row);
+                ++changed;
+            }
+            webui_log::info("AnimationDB: position 1 orgasm re-inferred on {} mutual rows", changed);
+        }
+    }
+
     bool Open()
     {
         std::lock_guard lock(g_mutex);
@@ -1767,6 +1864,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         LoadAllRowsLocked();
         webui_log::info("AnimationDB: opened {} ({} rows)", path.string(), g_rows.size());
         LoadSynonyms();
+        ReinferMutualRowsLocked();
         return true;
     }
 
@@ -1913,57 +2011,10 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             }
         }
 
-        std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
         std::optional<std::vector<int>> orgasm_file;
         std::vector<char> speaking_from_file;
         LoadAnimJson(row.registry, row.name, row, orgasm_file, &speaking_from_file);
-
-        auto orgasm = InferOrgasmExpected(row.position_count, row.pos_genders, tagset, orgasm_file);
-        row.pos_no_orgasm.resize(orgasm.size());
-        for (size_t i = 0; i < orgasm.size(); ++i)
-            row.pos_no_orgasm[i] = 1 - orgasm[i];
-
-        // Prefer resolved SNSL stage-1 tags (including empty []) over SexLab tags.
-        std::unordered_set<std::string> tags_for_infer;
-        if (row.stage_tags.contains(1)) {
-            const auto& t = row.stage_tags[1];
-            tags_for_infer.insert(t.begin(), t.end());
-        } else {
-            tags_for_infer = tagset;
-        }
-
-        std::vector<std::string> inferred;
-        InferSpeakingModifiers(row.pos_no_orgasm, tags_for_infer, inferred);
-        if (row.pos_speaking_modifiers.size() < orgasm.size())
-            row.pos_speaking_modifiers.resize(orgasm.size());
-        if (speaking_from_file.size() < orgasm.size())
-            speaking_from_file.resize(orgasm.size(), 0);
-        for (size_t i = 0; i < orgasm.size(); ++i) {
-            if (!speaking_from_file[i] && i < inferred.size())
-                row.pos_speaking_modifiers[i] = inferred[i];
-        }
-        if (row.stage_count >= 1)
-            row.stage_speaking[1] = row.pos_speaking_modifiers;
-
-        // Fill in inferred speaking for stages 2+ that weren't authored/resolved
-        // by ApplyAnimJsonToRow (climax stages otherwise stay blank).
-        for (int s = 2; s <= row.stage_count; ++s) {
-            if (row.stage_speaking.contains(s))
-                continue;
-            std::unordered_set<std::string> tags_for_infer_s;
-            if (row.stage_tags.contains(s)) {
-                const auto& t = row.stage_tags[s];
-                tags_for_infer_s.insert(t.begin(), t.end());
-            } else {
-                tags_for_infer_s = tagset;
-            }
-            std::vector<std::string> inferred_s;
-            InferSpeakingModifiers(row.pos_no_orgasm, tags_for_infer_s, inferred_s);
-            row.stage_speaking[s] = inferred_s;
-        }
-
-        if (row.pos_clothed.size() < orgasm.size())
-            row.pos_clothed.resize(orgasm.size(), 0);
+        ApplyInferredDefaults(row, orgasm_file, speaking_from_file);
 
         row.sync_gen = g_sync_gen;
         UpsertRowLocked(row);

@@ -850,6 +850,22 @@ namespace AnimEngineOrgasm
         AnimEngine::EndScene(ae_id);
     }
 
+    void OnStallEnd(RE::Actor* actor)
+    {
+        if (!actor)
+            return;
+        int ae_id = -1;
+        {
+            std::lock_guard lock(g_mutex);
+            if (auto* w = FindByActorLocked(actor->GetFormID()))
+                ae_id = w->ae_id;
+        }
+        if (ae_id < 0)
+            return;
+        webui_log::info("AnimEngineOrgasm: scene {} no enjoyment increase, ending", ae_id);
+        AnimEngine::EndScene(ae_id);
+    }
+
     void Tick(double dt)
     {
         if (dt <= 0.0)

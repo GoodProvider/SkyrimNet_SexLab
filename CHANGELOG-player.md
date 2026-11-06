@@ -2,6 +2,14 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## Unreleased
+
+### Scenes
+- In double dildo, tribbing and scissoring animations, both women can now orgasm by default.
+- With a victim, stages now follow the aggressor's enjoyment, not the victim's, whichever position the aggressor is in.
+- New setting "Stuck scene: end after" (30 s): an NPC-only scene ends if nobody's enjoyment has climbed for that long.
+- Picking a new animation from the last-stage list no longer lets it run to its last stage with no orgasm, and the aggressor no longer gets a second orgasm right after the first.
+
 ## 0.36.6
 
 ### Aid

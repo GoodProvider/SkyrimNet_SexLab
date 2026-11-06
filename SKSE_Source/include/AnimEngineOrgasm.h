@@ -60,6 +60,8 @@ namespace AnimEngineOrgasm
     /// Stage by enjoyment: one step toward this stage (Scene.Engine_MoveStage).
     void OnMoveStage(RE::Actor* actor, std::int32_t stage);
     void OnExhausted(const std::vector<RE::Actor*>& actors);
+    /// No enjoyment increase in an NPC-only scene: end it where it is (OrgasmEngine StallCheck).
+    void OnStallEnd(RE::Actor* actor);
     /// End of each OrgasmEngine tick (game thread). dt: unpaused game seconds. Gate wait, victim cap, ending hold.
     void Tick(double dt);
 

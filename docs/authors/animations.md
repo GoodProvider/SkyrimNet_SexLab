@@ -46,6 +46,8 @@ Inja `2.0`: actors array; victim usually first; `{{sl.actors.0}}`, `{{sl.actors.
 
 Int array by thread position: `0` no orgasm expected, `1` expects orgasm.
 
+If the file doesn't set it, it is inferred from tags. Animations with 3 or more positions expect everyone. In a 2-position animation, `69` and `masturbation` expect both, and a female position expects an orgasm with `doubledildo`, `tribbing` or `scissoring`. Otherwise position 0 expects one from a matching act, and position 1 only with a penis. So a female at position 1 of a one-sided lesbian animation (such as fingering or cunnilingus) is not expected unless the file says so. A value in the file always wins.
+
 ### Sex style (Tag Editor)
 
 Forcefully fucking / having sex / gently making love.

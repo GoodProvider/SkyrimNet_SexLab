@@ -552,7 +552,7 @@ schema:
     - name: "Stages follow enjoyment"
       path: "sexlab.enjoyment.stage_advance_primary_enjoyment"
       type: "bool"
-      description: "With the orgasm engine on, stages follow one actor's enjoyment instead of their timers, in both directions, and that actor's orgasm goes to the last stage. The actor is whoever is expected to orgasm: a male, or a female if the animation is tagged femdom; among several, position 1, 2, ... then 0. Pressing the stage keys returns the scene to timers until it ends. Orgasm targets don't apply to these scenes."
+      description: "With the orgasm engine on, stages follow one actor's enjoyment instead of their timers, in both directions, and that actor's orgasm goes to the last stage. The actor is whoever is expected to orgasm, a victim only if nobody else is: a male, or a female if the animation is tagged femdom; among several, position 1, 2, ... then 0. Pressing the stage keys returns the scene to timers until it ends. Orgasm targets don't apply to these scenes."
       defaultValue: true
       category: "Enjoyment"
 
@@ -572,6 +572,15 @@ schema:
       min: 0
       max: 600
       defaultValue: 60
+      category: "Enjoyment"
+
+    - name: "Stuck scene: end after"
+      path: "sexlab.enjoyment.stall_end_after"
+      type: "float"
+      description: "When stages follow enjoyment, NPC-only scenes: seconds with nobody's enjoyment reaching a new high before the scene ends where it is, with or without an orgasm. Not counted while paused or in the last stage. 0 = never."
+      min: 0
+      max: 600
+      defaultValue: 30
       category: "Enjoyment"
 
     - name: "Orgasm roll random bonus"
@@ -629,7 +638,7 @@ schema:
     - name: "Orgasm check before the last stage"
       path: "sexlab.ending.gate"
       type: "bool"
-      description: "Shortly before the last stage (early by the measured time from narration to voice), each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. For those who pass, the orgasm narration is sent at once, their bars fill, and the last stage starts with the orgasm when the voice begins. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm. Mini-game: only when nobody is under the player's control (NPCs, player on auto play); then the scene lead always passes, earlier orgasms still count, and nobody else orgasms in the last two stages except at this check."
+      description: "Shortly before the last stage (early by the measured time from narration to voice), each actor who has not orgasmed rolls once, with a chance equal to their enjoyment. For those who pass, the orgasm narration is sent at once, their bars flash, and the last stage starts straight away with the orgasm, without waiting for the voice. If nobody passes, the scene goes on with no orgasm. Off: actors at 90%+ near the end of the last stage still orgasm. Mini-game: only when nobody is under the player's control (NPCs, player on auto play); then the scene lead always passes, earlier orgasms still count, and nobody else orgasms in the last two stages except at this check."
       defaultValue: true
       category: "Scene ending"
 
@@ -642,10 +651,10 @@ schema:
       defaultValue: 5
       category: "Scene ending"
 
-    - name: "Longest wait for the orgasm voice"
+    - name: "Longest orgasm flash without a voice"
       path: "sexlab.ending.gate_wait_max"
       type: "float"
-      description: "After a passed orgasm check, the stage before the last is held until the orgasm narration starts speaking, for at most this many seconds."
+      description: "After a passed orgasm check, the enjoyment bar flashes until 2 seconds into the voice reply, for at most this many seconds. The scene does not wait for it, and with SkyrimNet's AI off the flash ends right after the orgasm."
       min: 5
       max: 60
       defaultValue: 20

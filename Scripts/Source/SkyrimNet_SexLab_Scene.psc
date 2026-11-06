@@ -125,8 +125,9 @@ float orgasm_dn_at = 0.0
 String start_orgasm_narration = ""
 ; Silence nudge: index into thread.Positions of the next speaker (SilenceTick rotates it).
 int silence_turn = 0
-; Engine gate passed in the second-to-last stage: that stage is held until the gate narration's voice
-; starts (Engine_AdvanceToFinal) or sexlab.ending.gate_wait_max. gate_hold_timer: UpdateTimer applied.
+; Legacy: the gate used to hold the second-to-last stage for its voice. Nothing sets this now, but a save made
+; mid-hold on an older version restores it, and Gate_Poll / Gate_Release still release it. gate_hold_timer:
+; UpdateTimer applied.
 bool gate_holding = false
 bool gate_hold_timer = false
 float gate_hold_started = 0.0
@@ -2160,7 +2161,7 @@ EndFunction
 ; --------------------------------------------
 ; Scene ending (sexlab.ending.*). The lead's orgasm target is rolled once per scene; reaching it
 ; (Orgasm_ApplyGroup) jumps to the final stage. The engine's gate passes just before the final stage
-; (Engine_GatePassed: DN now, stage held) and its voice starting jumps (Engine_AdvanceToFinal). The
+; (Engine_GatePassed: DN now, then straight to the final stage; the engine flashes the bar meanwhile). The
 ; final stage is then held (UpdateTimer, like the pause key) until the orgasm dialogue has played.
 ; --------------------------------------------
 Function Ending_Reset()
@@ -2229,8 +2230,8 @@ Function Ending_Reset()
 EndFunction
 
 float Function Ending_HoldMax()
-    if NarrationLevel("sexlab.narration.orgasm_level") < 3
-        ; Orgasm narration below Direct: no orgasm dialogue to hold for.
+    if NarrationLevel("sexlab.narration.orgasm_level") < 3 || !GlobalAIEnabled()
+        ; Orgasm narration below Direct, or Global AI off: no orgasm dialogue to hold for.
         return 0.0
     endif
     float hold_max = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.dialogue_hold_max", ENDING_HOLD_CAP)
@@ -2420,9 +2421,11 @@ Function Ending_Check(Actor[] actors)
 EndFunction
 
 ; Engine gate passed (in the second-to-last stage, early by the measured DN -> voice time; or on
-; reaching the final stage first): narrate the passers now as one direct DN so the voice is ready when
-; the stage turns. Their orgasms follow as a "gate" group (ForceOrgasm only) once their bars fill in
-; the final stage. hold_stage: hold the second-to-last stage until the voice starts.
+; reaching the final stage first): narrate the passers now as one direct DN and go to the final stage at once,
+; never waiting for the voice. Their orgasms follow as a "gate" group (ForceOrgasm only) once their bars fill in
+; the final stage. The engine flashes their bars from the pass until 2 s into the voice (GateNarrationSent);
+; no voice expected: it isn't told, and the flash ends soon after the orgasm.
+; hold_stage: the pass came in the second-to-last stage.
 Function Engine_GatePassed(Actor[] actors, bool hold_stage)
     if thread == None || thread.Animation == None || !actors
         return
@@ -2460,59 +2463,30 @@ Function Engine_GatePassed(Actor[] actors, bool hold_stage)
         endif
     endif
     bool sent = NarrateOrgasmStash(first, FirstOtherPosition(first), force_direct=True)
-    if NarrationLevel("sexlab.narration.orgasm_level") < 3
-        ; Orgasm narration below Direct: no voice will start, so do not hold for one.
-        Trace("Engine_GatePassed", "--- orgasm_level below Direct, no gate hold")
-        Victim_Release()
-        if hold_stage
-            Engine_AdvanceToFinal()
-        elseif !ending_done && !thread.LeadIn
-            Ending_ToFinal()
+    int orgasm_level = NarrationLevel("sexlab.narration.orgasm_level")
+    bool global_ai = GlobalAIEnabled()
+    if orgasm_level >= 3 && global_ai
+        if sent
+            ; ending_response_mark was taken just before the DN, so a fast voice still counts.
+            SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid, ending_response_mark)
+        else
+            ; NarrateOrgasmStash was busy: the window will flush this force_direct and notify the
+            ; engine once it actually goes out (FlushOrgasmWindow).
+            gate_pending_notify = true
         endif
-        return
-    endif
-    if sent
-        ; ending_response_mark was taken just before the DN, so a fast voice still counts.
-        SkyrimNet_SexLab_OrgasmEngine.GateNarrationSent(sid, ending_response_mark)
     else
-        ; NarrateOrgasmStash was busy: the window will flush this force_direct and notify the
-        ; engine once it actually goes out (FlushOrgasmWindow).
-        gate_pending_notify = true
+        Trace("Engine_GatePassed", "--- no voice expected (orgasm_level:"+orgasm_level+" global_ai:"+global_ai+"), flash ends after the orgasm")
     endif
-    if hold_stage && victim_holding
-        ; The victim hold already holds this stage: the gate's voice wait takes it over as is.
-        victim_holding = false
-        gate_holding = true
-        gate_hold_timer = victim_hold_timer
-        victim_hold_timer = false
-        gate_hold_started = Utility.GetCurrentRealTime()
-        Trace("Engine_GatePassed", "victim hold handed to the gate hold, stage:"+thread.Stage)
-        RegisterForSingleUpdate(1.0)
-    elseif hold_stage
-        Gate_Hold()
+    if hold_stage
+        ; GoToStage below resets the timer: not Victim_Release, whose pull-back could turn the stage on its own.
+        Victim_Drop("gate passed")
+        Engine_AdvanceToFinal()
     else
         Victim_Release()
         if !ending_done && !thread.LeadIn
             Ending_ToFinal()
         endif
     endif
-EndFunction
-
-Function Gate_Hold()
-    if gate_holding
-        return
-    endif
-    gate_holding = true
-    gate_hold_started = Utility.GetCurrentRealTime()
-    ; The pause key already holds the stage; its resume restores the timer.
-    gate_hold_timer = !scene_paused
-    if IsSexLabPPlus()
-        Timer_SyncHold()
-    elseif gate_hold_timer
-        thread.UpdateTimer(PAUSE_HOLD_SECONDS)
-    endif
-    Trace("Gate_Hold", "holding stage:"+thread.Stage+" for the gate voice")
-    RegisterForSingleUpdate(1.0)
 EndFunction
 
 Function Gate_Release()
@@ -2535,7 +2509,7 @@ Function Gate_Release()
     gate_hold_timer = false
 EndFunction
 
-; No voice by sexlab.ending.gate_wait_max (DN dropped, TTS off, load mid-wait): go on anyway.
+; Only for a save made mid-hold on an older version (see gate_holding): go on once the wait has run out.
 Function Gate_Poll()
     if prof_tid < 0 && thread != None
         prof_tid = thread.tid
@@ -2686,6 +2660,22 @@ Function Engine_MoveStage(int stage)
     endif
 EndFunction
 
+; NPC-only scene with no enjoyment increase (OrgasmEngine StallCheck): end where it is, skipping the gate and final
+; stage. The engine sends again a few seconds later if the thread isn't animating yet. AnimationEnd narrates as usual.
+Function Engine_EndStalled()
+    if thread == None
+        return
+    endif
+    String state_ = (thread as sslThreadModel).GetState()
+    if state_ != "animating"
+        Trace("Engine_EndStalled", "ignored, thread state '"+state_+"' stage:"+thread.Stage)
+        return
+    endif
+    Trace("Engine_EndStalled", "--- no enjoyment increase, ending at stage:"+thread.Stage+"/"+Engine_StageCount())
+    Victim_Drop("no enjoyment increase")
+    LastStage_Stop()
+EndFunction
+
 ; One stage forward along the engine's stage count. False at the end of it.
 bool Function Stage_Forward()
     int stage = thread.Stage
@@ -2783,15 +2773,15 @@ Function Victim_Poll()
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
-; The gate narration's voice started (engine) or Gate_Poll gave up: release the gate hold and go to
-; the final stage (plus the dialogue hold); the engine's rush fires the orgasm there.
+; A gate pass, an engine jump (Effect_AdvanceToFinal) or an old save's Gate_Poll: release any legacy gate hold and
+; go to the final stage (plus the dialogue hold); the engine's rush fires a gate pass's orgasm there.
 Function Engine_AdvanceToFinal()
     Gate_Release()
     if thread == None || thread.Animation == None || thread.LeadIn
         return
     endif
     int count = Engine_StageCount()
-    Trace("Engine_AdvanceToFinal", "gate voice stage:"+thread.Stage+"/"+count)
+    Trace("Engine_AdvanceToFinal", "stage:"+thread.Stage+"/"+count)
     if ending_done && thread.Stage >= count
         return
     endif
@@ -2822,6 +2812,15 @@ Function Ending_ToFinal()
 EndFunction
 
 Function Ending_StageStart()
+    ; A new animation on a stage below its last while the ending is done: a final jump (GoToStage) sent during the
+    ; animation change was lost. Re-arm, or Victim_StageStart holds nothing and SexLab's timers end the animation.
+    if pending_animation_change && ending_done && thread != None && thread.Animation != None && thread.Stage < Engine_StageCount()
+        Trace("Ending_StageStart", "--- new animation on stage "+thread.Stage+"/"+Engine_StageCount()+", final jump lost: re-arming the ending")
+        ; The new animation reset SexLab's timer: drop the old final-stage holds without a pull-back onto it.
+        ending_holding = false
+        list_held_timer = false
+        Ending_Rearm()
+    endif
     Victim_StageStart()
     ; A new animation started while the gate hold was active: the engine already dropped gateAwait /
     ; rushing on this SetStage (stage < stageCount-1), so the old hold is stale. Drop it without
@@ -4742,7 +4741,8 @@ Function StageStart()
                 delay = main.orgasm_delay
             endif
             ; P+: UpdateTimer also sets _ForceAdvance (advances a manual scene); only extend an auto-advancing one.
-            if !IsSexLabPPlus() || thread.AutoAdvance
+            ; Global AI off: the DN still goes out, but no reply will come to extend the stage for.
+            if (!IsSexLabPPlus() || thread.AutoAdvance) && GlobalAIEnabled()
                 thread.UpdateTimer(delay)
             endif
             if orgasm_change != ""

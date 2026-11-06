@@ -1,5 +1,38 @@
 # Knowledgebase
 
+## Last-stage switch ran to its final stage with no orgasm (2026-11-05, built, untested in game)
+
+**Symptom:** after the player's orgasm, the last-stage list picked a new animation (`B_B_ASide` → `B_B_CMiss`). The new animation reached 5/5 with nobody at 100. There was no `Victim_Hold` line in it, and each stage logged `not moved by enjoyment: floor`. Just before the switch: a second `gate 0x14 enjoyment=10.8 pass=true`, 11 s after the first orgasm.
+
+**Cause:** the primary's engine orgasm never set `gateDone`, so the gate on reaching the final stage fired the primary again. That orgasm landed during the switch. `Ending_Check` counted it against the new animation and sent `GoToStage 1 -> 5`, which SexLab dropped mid-change. `ending_done` stayed true on stage 1, `Victim_StageStart` held nothing, and SexLab's own timers ended the animation.
+
+**Fix:** `NotePrimaryFinished` sets `gateDone`. `Ending_StageStart` re-arms the ending when a new animation starts below its last stage with `ending_done` set.
+
+**Traps:**
+- The re-arm must clear `ending_holding` / `list_held_timer` before `Ending_Rearm`: its `LastStage_ReleaseTimer` pull-back would otherwise land on the new animation's fresh timer and end stage 1 at once.
+- Any `GoToStage` sent while the thread is `Advancing` (animation change) can be lost. Don't treat a flag set next to it as proof the stage moved.
+
+## F/F position 1 not expected: victim drove stages, nobody orgasmed (2026-11-03, built, untested in game)
+
+**Symptom:** `B_B_LesDoubleD2`, Coralyn (victim, position 0), Skadi (aggressor, position 1): stages followed the victim, nobody orgasmed, and the scene still reached the final stage. Log: `orgasm expected false` for the aggressor, then `gate skips` for both (`expected=false`, `teased=true`).
+
+**Cause:** with no `orgasm_expected` in the file, `InferOrgasmExpected` only expected position 1 with a penis, so `PrimaryOf` skipped a female aggressor there. The aggressor's own deny then blocked the victim. It shows up in the Description Editor as `no_orgasm` on position 1, which looks like a user choice.
+
+**Fix:** a female position is expected with `doubledildo`, `tribbing` or `scissoring`. One-sided lesbian animations (such as `B_B_LYFingMiss`) deliberately stay position-0-only. Victims rank last in `PrimaryOf`.
+
+**Traps:**
+- Changing the inference alone doesn't reach existing users: `PushAnim` skips unchanged rows and a load doesn't re-sync. `ReinferMutualRowsLocked` in `Open` handles this rule; a future rule change needs the same.
+- `StallCheck` must compare against a high-water mark: an edge cycle (100 → 99.93 → 100) counts as rising otherwise. A climb back after a calm doesn't count until it passes the old high.
+- The stall (30 s) comes before the 60 s `StageHoldCap`, so it can end a scene before the cap's gate would pass an aggressor outright.
+
+## Gate pass looked like no orgasm: stage waited for a voice, Global AI off (2026-11-03, fixed, untested in game)
+
+- **Symptom:** NPC-only scene, primary at 100, stage stuck for over 20 s with no orgasm. Reported as a position-0 / two-female problem. It wasn't: Coralyn had `no_orgasm: 1`, so position 0 was the correct primary. Log: `gate ... pass=true`, then `no gate voice after 21.6s`.
+- **Cause:** a gate pass only starts the rush, and `Fire` needs the final stage. The Scene held the second-to-last stage for the narration's voice, and the Global AI hotkey was off (SkyrimNet.log `Global AI toggled: disabled`), so no voice could come. Scenes with the player in them have no gate, so they looked fine in the same session.
+- **Fix:** a gate pass goes to the final stage at once. The bar flashes from the pass until 2 s into the voice (`sexlab.ending.gate_wait_max` caps the wait for it).
+- **Reading Global AI:** SkyrimNet has no getter, but `SkyrimNetApi.GetConfigBool("Game", "general.globalAIEnabled", true)` reads its config (`Utilities.GlobalAIEnabled()`). Not yet confirmed in game that this returns the live value: the hotkey doesn't rewrite `SkyrimNet.yaml`. C++ can't read it (`PublicGetPluginConfigValue` only reaches `Plugin_*`), so the AnimEngine dialogue hold runs to its cap with AI off.
+- **Do not** use `Victim_Release` before the `GoToStage` here: `GoToStage` resets the timer, and the pull-back could turn the stage by itself. Use `Victim_Drop`.
+
 ## Last-stage choice list (2026-11-01, built, untested in game)
 
 **Design:** [checkpoints/last-stage-options/checkpoint-03.md](checkpoints/last-stage-options/checkpoint-03.md). Input and hold fixes: [checkpoint-04.md](checkpoints/last-stage-options/checkpoint-04.md). Select keys, editor, deadline: [checkpoint-05.md](checkpoints/last-stage-options/checkpoint-05.md).
