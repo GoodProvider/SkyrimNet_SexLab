@@ -387,6 +387,8 @@
 
 **Rule:** register a native with `true` when it is thread-safe: it touches only plugin data under its own mutex (`JsonStore` `g_mutex`, `AnimationDB` `g_mutex`) or is a pure function. Leave it `false` when it reads or writes game objects (forms, actors, UI `Invoke`), or for the AnimDB sync / save natives. Keep Papyrus hot paths (seed, `BuildWebUISceneMenuObject`, Cancel snapshot) free of debug walks such as `DbgAnimList`.
 
+**Orgasm engine (2026-11-06):** 16 read-only `SkyrimNet_SexLab_OrgasmEngine` natives are now `true` (state under `OrgasmEngine` / `NarrationTiming` `g_lock`, only the argument's FormID). Anything that reaches `PrimaryOf` (`IsFemale` fallback reads the actor base), actor values, `AnimSpeed`, display names or returns a `LookupByID` actor stays `false`; see the comment above the registrations in `Papyrus_OrgasmEngine.cpp`.
+
 ## Lone hug pulled a scene victim out of SexLab (2026-10-07)
 
 **Symptom:** Nia (bystander) ran `SexLab_Nonsexual_General` "hugging" on Nina, the victim in an active SexLab thread with Bob. Nina left the SexLab animation. Log: `lone hug pa_HugA target=Nina speaker=Nia The Nerd`.

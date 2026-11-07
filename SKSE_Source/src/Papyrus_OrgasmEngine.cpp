@@ -286,7 +286,11 @@ namespace PapyrusBindings_OrgasmEngine
         }
         constexpr std::string_view s = "SkyrimNet_SexLab_OrgasmEngine";
 
-        a_vm->RegisterFunction("GetEnjoyment", s, GetEnjoyment);
+        // true = callable from a VM tasklet (no wait for the game frame). Only for natives that read engine state
+        // under OrgasmEngine / NarrationTiming g_lock and touch no game object beyond the argument's FormID. Not for
+        // anything reaching PrimaryOf (IsFemale fallback), actor values, AnimSpeed, names, or LookupByID results.
+
+        a_vm->RegisterFunction("GetEnjoyment", s, GetEnjoyment, true);
         a_vm->RegisterFunction("SetEnjoyment", s, SetEnjoyment);
         a_vm->RegisterFunction("AddEnjoyment", s, AddEnjoyment);
         a_vm->RegisterFunction("Arouse", s, Arouse);
@@ -295,13 +299,13 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetRateModifier", s, SetRateModifier);
         a_vm->RegisterFunction("ClearRateModifier", s, ClearRateModifier);
         a_vm->RegisterFunction("SetOrgasmBlocked", s, SetOrgasmBlocked);
-        a_vm->RegisterFunction("IsOrgasmAllowed", s, IsOrgasmAllowed);
+        a_vm->RegisterFunction("IsOrgasmAllowed", s, IsOrgasmAllowed, true);
         a_vm->RegisterFunction("RequestOrgasm", s, RequestOrgasm);
-        a_vm->RegisterFunction("GetOrgasmCount", s, GetOrgasmCount);
-        a_vm->RegisterFunction("GetSecondsSinceOrgasm", s, GetSecondsSinceOrgasm);
-        a_vm->RegisterFunction("IsManaged", s, IsManaged);
-        a_vm->RegisterFunction("IsMiniGameEnabled", s, IsMiniGameEnabled);
-        a_vm->RegisterFunction("IsEngineDisabled", s, IsEngineDisabled);
+        a_vm->RegisterFunction("GetOrgasmCount", s, GetOrgasmCount, true);
+        a_vm->RegisterFunction("GetSecondsSinceOrgasm", s, GetSecondsSinceOrgasm, true);
+        a_vm->RegisterFunction("IsManaged", s, IsManaged, true);
+        a_vm->RegisterFunction("IsMiniGameEnabled", s, IsMiniGameEnabled, true);
+        a_vm->RegisterFunction("IsEngineDisabled", s, IsEngineDisabled, true);
         a_vm->RegisterFunction("SetRates", s, SetRates);
         a_vm->RegisterFunction("ReloadConfig", s, ReloadConfig);
 
@@ -311,21 +315,21 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetScenePaused", s, SetScenePaused);
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
         a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
-        a_vm->RegisterFunction("IsGateScene", s, IsGateScene);
+        a_vm->RegisterFunction("IsGateScene", s, IsGateScene, true);
         a_vm->RegisterFunction("IsVictimHoldScene", s, IsVictimHoldScene);
         a_vm->RegisterFunction("VictimHoldExpired", s, VictimHoldExpired);
         a_vm->RegisterFunction("SetStageInputs", s, SetStageInputs);
-        a_vm->RegisterFunction("StageInputsKnown", s, StageInputsKnown);
+        a_vm->RegisterFunction("StageInputsKnown", s, StageInputsKnown, true);
         a_vm->RegisterFunction("IsStageAdvancePrimaryEnjoyment", s, IsStageAdvancePrimaryEnjoyment);
         a_vm->RegisterFunction("GetStagePrimary", s, GetStagePrimary);
-        a_vm->RegisterFunction("StageHoldCap", s, StageHoldCap);
+        a_vm->RegisterFunction("StageHoldCap", s, StageHoldCap, true);
         a_vm->RegisterFunction("DisableStageAdvancePrimaryEnjoyment", s, DisableStageAdvancePrimaryEnjoyment);
         a_vm->RegisterFunction("EnableStageAdvancePrimaryEnjoyment", s, EnableStageAdvancePrimaryEnjoyment);
         a_vm->RegisterFunction("CanStageAdvancePrimaryEnjoyment", s, CanStageAdvancePrimaryEnjoyment);
-        a_vm->RegisterFunction("NarrationMark", s, NarrationMark);
-        a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince);
-        a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince);
-        a_vm->RegisterFunction("FinalStageRemaining", s, FinalStageRemaining);
+        a_vm->RegisterFunction("NarrationMark", s, NarrationMark, true);
+        a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince, true);
+        a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince, true);
+        a_vm->RegisterFunction("FinalStageRemaining", s, FinalStageRemaining, true);
         a_vm->RegisterFunction("SetSceneBlocked", s, SetSceneBlocked);
         a_vm->RegisterFunction("SetOrgasmExpected", s, SetOrgasmExpected);
         a_vm->RegisterFunction("SetSceneActs", s, SetSceneActs);
@@ -335,9 +339,9 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetActorSkills", s, SetActorSkills);
         a_vm->RegisterFunction("SetBonusInputs", s, SetBonusInputs);
         a_vm->RegisterFunction("SetStrategy", s, SetStrategy);
-        a_vm->RegisterFunction("GetStrategy", s, GetStrategy);
+        a_vm->RegisterFunction("GetStrategy", s, GetStrategy, true);
         a_vm->RegisterFunction("GetStrategyText", s, GetStrategyText);
-        a_vm->RegisterFunction("GetStaminaRegen", s, GetStaminaRegen);
+        a_vm->RegisterFunction("GetStaminaRegen", s, GetStaminaRegen, true);
         a_vm->RegisterFunction("Aid", s, AidAction);
         a_vm->RegisterFunction("Punish", s, PunishAction);
         a_vm->RegisterFunction("AskOrder", s, AskOrder);

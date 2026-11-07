@@ -14,6 +14,7 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Removed the dead `sexlab.minigame.fear_cooldown` dashboard setting (nothing reads it since Force was removed).
 - `AnimationDB::PluginDataDir` drops a dead `|| true` test (same path).
 - Docs: player overview (plugin layout only since 0.36.0), `llms.txt` (`compile: pyro`).
+- 16 read-only orgasm-engine natives are tasklet-callable (`GetEnjoyment`, `GetOrgasmCount`, `IsManaged`, `IsEngineDisabled`, `IsMiniGameEnabled`, `IsGateScene`, `StageInputsKnown`, `StageHoldCap`, `FinalStageRemaining`, `GetStrategy`, `GetStaminaRegen`, `IsOrgasmAllowed`, `GetSecondsSinceOrgasm`, `NarrationMark`, `ResponseStartedSince`, `ResponseDoneSince`), so the Scene poll no longer waits a frame per call. Natives that reach `PrimaryOf`, actor values or `AnimSpeed` stay frame-synced.
 
 ### Punish can order a strategy
 - When the punish reason is the object's current strategy, the panel adds ", and orders them to <strategy>" (`currentReason` in the payload, `order` in `onPunishResult`).
