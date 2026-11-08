@@ -106,10 +106,12 @@ namespace PapyrusBindings_AnimationDB
                     }
                 }
                 // Scene-setting keys. Papyrus natives run on the main thread, so `_form_ids` (the cast)
-                // can be scanned for worn DD here to decide tags_suppress_unless_bound.
+                // can be scanned for worn heavy bondage here: unbound casts get no bound animations
+                // (ParseSceneFilterKeys; asking for bound tags is handled there too).
                 std::optional<bool> bound;
-                if (!j.contains("_bound") && j.contains("_form_ids") && j["_form_ids"].is_array()) {
-                    std::vector<RE::Actor*> cast;
+                std::vector<RE::Actor*> cast;
+                const bool hasCast = j.contains("_form_ids") && j["_form_ids"].is_array();
+                if (hasCast) {
                     for (const auto& el : j["_form_ids"]) {
                         if (!el.is_number())
                             continue;
@@ -119,15 +121,17 @@ namespace PapyrusBindings_AnimationDB
                         if (auto* actor = formId ? RE::TESForm::LookupByID<RE::Actor>(formId) : nullptr)
                             cast.push_back(actor);
                     }
-                    bound = !BondageCatalog::WornAnimationTags(cast).empty();
-                    // Asked for bound animations (the animation row's word): the suppress would empty the result.
-                    for (const auto& tag : spec.must_tags) {
-                        const auto lower = AnimationDB::ToLower(tag);
-                        if (lower == "restrained" || lower == "bound")
-                            bound = true;
-                    }
+                    if (!j.contains("_bound"))
+                        bound = BondageCatalog::WearsHeavyBondage(cast);
                 }
                 AnimationDB::ParseSceneFilterKeys(j, spec, bound);
+                // Necro animations only for a cast with someone dead, unless asked for (every Papyrus picker: Scene
+                // Creator, last-stage and mid-scene switches; 2026-11-07 log: FB_NecroFemDomCow for a living cast).
+                if (hasCast) {
+                    const bool anyDead = std::any_of(cast.begin(), cast.end(), [](RE::Actor* a) { return a->IsDead(); });
+                    if (AnimationDB::SuppressUnlessDead(spec, anyDead))
+                        webui_log::debug("AnimationDB: nobody in the cast dead, necro suppressed");
+                }
             } catch (...) {
                 webui_log::warn("AnimationDB: bad filter JSON");
             }

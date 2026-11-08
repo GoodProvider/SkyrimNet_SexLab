@@ -1,6 +1,7 @@
 #include "Hud.h"
 
 #include "UiEngine.h"
+#include "TaskPost.h"
 #include "Aid.h"
 #include "AnimEngine.h"
 #include "AnimEngineOrgasm.h"
@@ -172,7 +173,8 @@ namespace Hud
                 std::lock_guard lock(g_lock);
                 anchor = g_anchor;
             }
-            SKSE::GetTaskInterface()->AddTask([ctl, focus, anchor]() {
+            // HUD keys arrive on the input sink (main thread): VR-safe post (TaskPost.h).
+            TaskPost::FromEntryPoint([ctl, focus, anchor]() {
                 auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
                 RE::TESQuest* quest = FindMainQuest();
                 if (!vm || !quest) {
@@ -583,18 +585,21 @@ namespace Hud
             } else if (ctl == "pause") {
                 ok = AnimEngine::TogglePaused(id);
             } else if (ctl == "stage_mode") {
-                // Scene.StageMode_Cycle: enjoyment -> paused -> timers -> enjoyment. The tick releases the hold when
-                // the scene plays with the mode off.
+                // Scene.StageMode_Cycle: enjoyment -> timers running -> timers paused -> enjoyment; the last stage
+                // (or no enjoyment possible) is plain pause / play. The tick releases the hold when the scene plays
+                // with the mode off.
                 const std::int32_t sid = AnimEngineOrgasm::SidOf(id);
                 const bool can_enjoy = OrgasmEngine::CanStageAdvancePrimaryEnjoyment(sid);
-                if (OrgasmEngine::IsSceneIdPaused(sid)) {
+                if (OrgasmEngine::IsLastStage(sid)) {
+                    ok = AnimEngine::TogglePaused(id);
+                } else if (OrgasmEngine::IsSceneIdPaused(sid)) {
                     ok = AnimEngine::SetPaused(id, false);
+                    if (ok && can_enjoy) {
+                        OrgasmEngine::EnableStageAdvancePrimaryEnjoyment(sid);
+                        AnimEngineOrgasm::OnStageModeEnjoy(id);
+                    }
                 } else if (can_enjoy && OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid)) {
                     OrgasmEngine::DisableStageAdvancePrimaryEnjoyment(sid);
-                    ok = AnimEngine::SetPaused(id, true);
-                } else if (can_enjoy) {
-                    OrgasmEngine::EnableStageAdvancePrimaryEnjoyment(sid);
-                    AnimEngineOrgasm::OnStageModeEnjoy(id);
                     ok = true;
                 } else {
                     ok = AnimEngine::TogglePaused(id);
@@ -1070,7 +1075,8 @@ namespace Hud
                     focusPos = static_cast<int>(i);
                 }
                 rows.push_back({ { "pos", i }, { "name", a.name },
-                    { "enjoyment", static_cast<int>(a.enjoyment + 0.5f) }, { "flash", a.flashing },
+                    // Tenths, so the afterglow drain moves the bar every tick (hud.html smooths it).
+                    { "enjoyment", std::round(a.enjoyment * 10.0f) / 10.0f }, { "flash", a.flashing },
                     { "near", a.dom ? a.domChance >= 0.9f : a.enjoyment >= 90.0f }, { "dom", a.dom },
                     { "chance", static_cast<int>(a.domChance * 100.0f + 0.5f) }, { "denied", a.denied }, { "strategy", a.strategy },
                     { "magicka", static_cast<int>(a.magicka + 0.5f) },
@@ -1131,11 +1137,20 @@ namespace Hud
         j["acting"] = controlling ? NameOf(acting) : "";
         const bool scenePaused = OrgasmEngine::IsScenePaused(acting);
         j["paused"] = scenePaused;
-        // Pause cell: what a press does. Enjoyment -> pause -> play (timers) -> enjoy; plain pause / play without enjoyment.
-        if (scenePaused) {
-            j["pauseLabel"] = "play";
-        } else if (!OrgasmEngine::IsStageAuto(acting) && OrgasmEngine::CanStageAdvancePrimaryEnjoyment(acting)) {
-            j["pauseLabel"] = "enjoy";
+        // Stage mode (Scene.StageMode_Cycle): "enjoy" greys Num 4 / 5 / 6 (a press switches to timers); "timer" and
+        // "last" (the last stage, or the end list up) do not.
+        std::string stageMode = OrgasmEngine::StageModeOf(acting);
+        if (listVisible) {
+            stageMode = "last";
+        }
+        j["stageMode"] = stageMode;
+        // Pause cell: what a press does. enjoy: "timer" (to timers, running) -> "pause" -> "enjoy" (unpause, back to
+        // enjoyment). Last stage, or no enjoyment possible: pause / play (the afterglow keeps draining).
+        if (stageMode == "enjoy") {
+            j["pauseLabel"] = scenePaused ? "play" : "timer";
+        } else if (scenePaused) {
+            j["pauseLabel"] =
+                stageMode == "timer" && OrgasmEngine::CanStageAdvancePrimaryEnjoyment(acting) ? "enjoy" : "play";
         } else {
             j["pauseLabel"] = "pause";
         }

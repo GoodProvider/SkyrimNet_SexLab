@@ -273,12 +273,24 @@ namespace AnimationDB
     SceneSettingFilter LoadSceneSettingFilter(const std::string& name);
     /// Adds a setting's tags_any / tags_prefer / exclude_settings to `spec`, plus tags_suppress_unless_bound
     /// when `bound` is false. Does not touch must/suppress (callers already send the setting's tags/suppress).
-    void ApplySceneSetting(FilterSpec& spec, const std::string& name, bool bound);
-    /// Base spec for ResolveTags on a scene start: setting tags (must), tags_suppress (+ unless_bound when
-    /// unbound), tags_any, exclude_settings, and its synonym mode.
+    /// Returns `bound` after the setting's assume_bound.
+    bool ApplySceneSetting(FilterSpec& spec, const std::string& name, bool bound);
+    /// The query asks for bound animations itself (must / any tags name a restraint or worn-device tag).
+    bool AsksBound(const FilterSpec& spec);
+    /// Same for a comma-separated tag list (ResolveTags requests).
+    bool AsksBoundCsv(const std::string& csv);
+    /// Unbound and not asked for: suppress `restrained` (derived on every bound / bondage / DD animation).
+    void SuppressUnlessBound(FilterSpec& spec, bool bound);
+    /// The query asks for necro animations itself (must / any tags name `necro`).
+    bool AsksNecro(const FilterSpec& spec);
+    /// Nobody in the cast dead and not asked for: suppress `necro` (derived from necro_tags.json). True when added.
+    bool SuppressUnlessDead(FilterSpec& spec, bool anyDead);
+    /// Base spec for ResolveTags on a scene start: setting tags (must), tags_suppress (+ unless_bound and
+    /// `restrained` when unbound), tags_any, exclude_settings, and its synonym mode.
     FilterSpec SceneSettingResolveBase(const std::string& name, bool bound);
     /// Parses the scene-setting filter keys shared by Papyrus and WebUI filter JSON:
-    /// `_any_tags`, `_prefer_tags`, `_exclude_settings`, and `_setting` (+ `_bound`, default false).
+    /// `_any_tags`, `_prefer_tags`, `_exclude_settings`, and `_setting` (+ `_bound`, default false). A query with a
+    /// cast (bound_override), `_bound` or `_setting` leaves out bound animations unless bound (SuppressUnlessBound).
     void ParseSceneFilterKeys(const nlohmann::json& j, FilterSpec& spec, std::optional<bool> bound_override = std::nullopt);
 
     /// "strict" / "none" (case-insensitive); anything else (incl. empty) → Broad.

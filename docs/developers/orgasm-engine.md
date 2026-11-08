@@ -149,8 +149,8 @@ For each managed scene:
    - **Early final roll:** in the second-to-last stage of a timed, non-LeadIn scene, when the Scene's ending lead (`SetEndingTarget`) is in the group and has reached the target, or (victim hold scene) any aggressor is in the group whatever the target (the Scene is about to jump), everyone still out rolls again with `enjoyment + random(0, random_bonus) + stage_spike ≥ 100`. A pass joins this group, so it goes into the same DN. A fail sets `finalRollFailed`: no more orgasms (no denied event either) until the scene steps back before the last two stages, except a forced request. Not saved. Log `final roll … victim_hold=`.
    - The same `JoinGroup` runs for `NoteExternalOrgasm` and `AllowOrgasm`.
 
-   The group is sent as one `Effect_OrgasmGroup`, so it gets one narration. It is `individual` unless every trigger came from the safety net. Pending arouse/calm narrations about the group's actors are flushed as short-lived events at the same time (`extras` stays empty).
-   `FinalStageRemaining(sid)` (native) returns the final stage's timer minus its animating, unpaused seconds, or -1 outside a timed final stage. `Scene.OrgasmWindow_HoldForFinish` uses it.
+   The group is sent as one `Effect_OrgasmGroup`, so it gets one narration. It is `individual` unless every trigger came from the safety net (`extras` stays empty).
+   `FinalStageRemaining(sid)` (native) returns the final stage's timer minus its animating, unpaused seconds, or -1 outside a timed final stage. In the last stage it returns the seconds until the afterglow bars drain to 0 instead. `Scene.OrgasmWindow_HoldForFinish` uses it.
 5. **Mirror:** at most once a second per actor, `Effect_Mirror` → `AdjustEnjoyment(ours − SexLab's)`, so SexLab voices and expressions follow our value. One `Scene.Mirror_Apply` per position at a time (`mirror_busy_at`, 5 s stale guard): ticks queued while a menu paused the VM used to run together and apply the same correction twice.
 
 **Firing an orgasm:**
@@ -204,10 +204,22 @@ For each managed scene:
 | Calm | Costs `who`'s magicka: `magicka_cost × (1 + 0.05 × lewd)`. Removes `calm_amount × mult`, but never below 0. If the target was at 90 or more, it **edges**: no orgasm test for `edge_seconds`. |
 | Skill / lewd | `skill` is SexLab's skill level for the act, picked by animation tag (Vaginal, Anal, Oral, else Foreplay). `lewd` is lewd level − pure level. Both are sent by the Scene script at start, on each stage and on an animation change. |
 
-**Narration**
-- Acting on someone else is narrated as `"<A> arouses <B>, pushing them closer to orgasm."` or `"<A> calms <B>, keeping them further from orgasm."`.
-- Presses are coalesced per (who, target, action) inside `narrate_window`.
-- It is sent through `Effect_Narrate`, as is the HUD faster/slower narration (`sexlab_speed`). All of these are optional, and this includes scenes with the player:
+**Mini-game plays in the silence nudge**
+- Presses are not narrated one by one. `ArouseLocked` / `CalmLocked` call `NotePlay`, which records on the presser (player keys and NPC strategy presses alike) when they last aroused or calmed themselves or another actor, and whom.
+- The Scene's silence nudge (`Utilities.SilenceNudge`) asks `GetMiniGameSummary(speaker)`: one sentence per actor of the scene who played since the scene's last summary (at most 30 s back), from their latest play. Then it marks those plays as summarized.
+
+  | Latest play | Sentence |
+  |---|---|
+  | Aroused self and another in the window, or an NPC on Mutual | "A focused on mutual pleasure." |
+  | Aroused another | "A focused on B's pleasure." |
+  | Aroused self | "A focused on her own pleasure." |
+  | Calmed self | "A resisted her orgasm." |
+  | Calmed another | "A held back B's orgasm." |
+
+  The pronoun comes from `stageGender`. The nudge sends the joined sentences as its DirectNarration, or `"continue scene"` when nobody played.
+
+**Other engine narrations**
+- The HUD faster/slower narration (`sexlab_speed`) goes through `Effect_Narrate` (a short-lived event). Engine narrations are optional, and this includes scenes with the player:
   - They go through `DirectNarration_Optional`, which sends a `DirectNarration` only when `NarrationCoolOffAllows` (the speech queue is empty and the cooldown, last-audio and distance checks pass).
   - Otherwise it falls back to `RegisterEvent`, so nothing is dropped.
   - Orgasm and finish narrations are the exception: in NPC-only scenes they use `DirectNarration_Nearby` (distance only). See [../reference/orgasm-narration.md](../reference/orgasm-narration.md).
@@ -340,7 +352,8 @@ Older plugins call SexLab rather than the engine. The engine picks up both kinds
   - Together mode and the disabled engine are unchanged (the Together gate already passes every expected actor).
 - **Dialogue hold:** on the final stage's `StageStart` (`Ending_StageStart` → `Ending_Hold`) the stage is held with `thread.UpdateTimer(PAUSE_HOLD_SECONDS)`, as the pause key does. A stage change under the hold (the hold landed as SexLab turned the stage) applies it again to the new stage, once per (animation, stage).
   - **Response:** every orgasm DN (`NarrateOrgasmStash`, the `StageStart` fold) first takes `ending_response_mark = OrgasmEngine.NarrationMark()` (`NarrationTiming::SpeakerMark()`). `NarrationTiming` tracks each non-player speaker's response (first `SpeechStarted` to its `SkyrimNet_SpeechComplete`). `ResponseStartedSince(sid, mark)` / `ResponseDoneSince(sid, mark)` only count the scene's own actors (`OrgasmEngine::SceneActors`), so two scenes narrating together don't release each other's holds (2026-10-08).
-  - **Release** (`Ending_Poll`, shares `OnUpdate` with the orgasm window, 1 s; held ≥ 2 s, window closed): `ResponseDoneSince(mark)` (log `(response played)`). While one of the scene's actors is speaking after the mark, wait. With no paired response yet (the DN went out as an event, TTS off): `GetSpeechQueueSize() == 0` and audio ended at least 1 s after the first poll, min 3 s (`(speech queue empty)`). Always at `dialogue_hold_max` (30 s, capped at `ENDING_HOLD_CAP` 30; halved when `!thread.HasPlayer`; 0 = no hold; `(max)`).
+  - **Release** (`Ending_Poll`, shares `OnUpdate` with the orgasm window, 1 s, 0.5 s once drained): 2 s after `FinalStageRemaining(sid)` first read ≤ 0 (`ending_drained_at`; the afterglow drain in the last stage, else the final stage's timer; unknown counts as drained), once `GetSpeechQueueSize() == 0`, the orgasm window is closed and `NarrationIdle()` (`NarrationTiming::Idle() && NarrationQueue::Empty()`: no DN sent in the last 10 s without speech, no line playing up to 20 s past its last speech event, no speech event within 1 s). Log `(drained)`. Always at `dialogue_hold_max` (30 s, capped at `ENDING_HOLD_CAP` 30; halved when `!thread.HasPlayer`; 0 = no hold; `(max)`). The response mark no longer releases: it never fired on 2026-11-07 and ignored the drain.
+  - A `(drained)` release sets `ending_released_drained`: `LastStage_TimedLeft` returns 0 (no `LIST_MIN_SECONDS` floor), so a timed end list commits its highlighted line on the next poll, and `Ending_MidPoll` switches at once.
   - Release takes the hold back off (`UpdateTimer(-PAUSE_HOLD_SECONDS)`) without adding the held time: the final stage ends at the later of its own timer and the response. While the pause key holds the stage the timer is left to the pause.
 
 ## Stage by enjoyment
@@ -360,11 +373,11 @@ With the engine on, stages follow one actor's enjoyment instead of SexLab's stag
 **Primary** (`PrimaryOf`, computed each tick; log `stage primary`):
 
 1. Must expect an orgasm and not be a DOM slave, whose enjoyment doesn't move.
-2. Male first, then female. Creatures count by sex (`gender % 2`).
+2. Male first, then female; a `femdom` animation (`stageFemdom`) puts females first. Creatures count by sex (`gender % 2`).
 3. Within each, positions 1, 2, 3, ..., then 0.
 4. Nobody qualifies: the stages keep their timers.
 
-The `femdom` tag and the victim role don't change the order: the primary is there to line the animation up with an actor's enjoyment.
+The victim role doesn't change the order: the primary is there to line the animation up with an actor's enjoyment. In a femdom animation with no female expected to orgasm, the male is the primary.
 
 | Expected | Positions | Primary |
 |---|---|---|
@@ -387,16 +400,56 @@ The `femdom` tag and the victim role don't change the order: the primary is ther
 
 **Stuck stage** (per-stage clock, animating and unpaused):
 
-- `sexlab.enjoyment.stage_punish_after` (30 s, 0 = never), once per stage entry: the primary punishes (`StagePunish` → `PunishNarrated`, so the hit, narration and target decision run as usual). The target is an actor on Deny all, or on Deny / Tease against the primary, otherwise the next position. A random method from `kPunishMethods`. Skipped if the primary is alone, or is the player without auto play.
+- `sexlab.enjoyment.stage_punish_after` (15 s, 0 = never), once per stage entry: the primary punishes (`StagePunish` → `PunishNarrated`, so the hit, narration and target decision run as usual). The target is an actor on Deny all, or on Deny / Tease against the primary, otherwise the next position. A random method from `kPunishMethods`. Skipped if the primary is alone, or is the player without auto play.
+  - `VictimScene`: an aggressor punishes instead of the primary: the ending lead if the engine plays it as an expected aggressor, else the first such aggressor. The target is a victim on Deny / Deny all / Tease against it, else a Passive victim, else the first victim. A victim never punishes.
+  - No decision for the punished actor (AI off, no provider, failure): `NoDecisionFallback` sets an engine-played target to the ordered option, or Focused on the punisher (log `punished, no decision`).
+  - The victim hold's Papyrus clock (`Victim_HeldTick`) caps each step between polls at 2 s, so menu time doesn't count toward `StageHoldCap`.
 - `StageHoldCap` = the later of `sexlab.enjoyment.stage_hold_max` (60 s, 0 = no limit) and the stage's own timer: the stage advances outright (`Stage_Forward`), because a released timer would wait for the key on an untimed stage with `AutoAdvance` off. In a gate scene the second-to-last stage asks for the gate first (`VictimHoldExpired`), and advances 3 s later if nobody passed.
 - `sexlab.enjoyment.stall_end_after` (30 s, 0 = never), NPC-only scenes, per-scene clock (`StallCheck`): if no non-DOM actor's enjoyment reaches a new high, the scene ends where it is (`Effect_EndStalled` → `Engine_EndStalled` → `LastStage_Stop`; AnimEngine `OnStallEnd`), with no gate and no final stage. It compares against a per-actor high-water mark, because an edge cycle (100 → 99.93 → 100) would otherwise count as rising forever. An orgasm resets the marks. The clock is frozen while paused, in the final stage, once the primary has finished, while anyone is rushing, and during a gate's voice wait. With no primary (timers, or nobody expected) it doesn't run. At 30 s it comes before the 60 s `StageHoldCap`, so it can end a scene before the cap's gate would have passed an aggressor outright. The engine resends every 5 s until the scene ends, because `Engine_EndStalled` ignores a thread that isn't `animating`.
 
-**Ending.** The primary's orgasm goes to the final stage from any stage (`Stage_PrimaryFinished` in `Ending_Check` / `Ending_WillJump`). If that jump is sent during an animation change, SexLab drops it. The new animation's first `StageStart` then sees `ending_done` on a stage below its last, and `Ending_StageStart` re-arms the ending (stale final-stage holds are dropped without a timer pull-back). Without that, `Victim_StageStart` holds nothing and SexLab's timers carry the new animation to its final stage. `sexlab.ending.target_*` no longer applies, and other actors can orgasm several times before that. The early final roll in `JoinGroup` runs when the primary is in the group.
+**Ending.** The primary's orgasm goes to the final stage from any stage (`Stage_PrimaryFinished` in `Ending_Check` / `Ending_WillJump`).
+
+**Victim scene ending** (`VictimScene`: a victim and a non-DOM aggressor expected to orgasm). The stages still follow `PrimaryOf`, because the animation says who is aroused (a victim can be the primary). The primary's orgasm doesn't finish the scene: `NotePrimaryFinished`, `JoinGroup`'s `primaryFired`, the penultimate gate's primary-at-top trigger and `Stage_PrimaryFinished` all skip it. Instead the penultimate gate fires when an aggressor expected to orgasm reaches 100 (`victim scene: aggressor X at 100, gate`), and the 98 `gateHeld` cap doesn't apply to those aggressors. `Ending_PickLead` prefers an expected non-victim, so the lead is an aggressor. When the lead reaches `ending_target` (`Ending_EndReached`), `Ending_EndState` does the following:
+- It sets `ending_done` and `ending_end_state` and calls `SetEndHold(sid, true)`.
+- It releases the victim hold, jumps to the final stage (`Ending_ToFinal`: 1.6x `GoToStage`, P+ `SkipToSink`; the final stage's `StageStart` holds its fresh timer through `ending_hold_pending`) and opens the last-stage list (`LastStage_Begin`).
+- **The lead below its target** (`NoteLeadMidFinish` in `Fire`): the engine sets `primaryFinished` / `gateDone`, so the reset bar does not send the stage back and the lead's bar drains (afterglow). Log `victim scene: lead X orgasm n/target at stage s/N, last stage`. The Scene (`Ending_MidReached`, native `IsPrimaryFinished`) sets `ending_mid` and calls `Ending_ToFinal`. `LastStage_Begin` takes no list and no NPC decision. `Ending_MidPoll` waits until the engine is in its last stage (`IsLastStage`; right after the jump the Papyrus stage is final first, so it keeps waiting while only `IsPrimaryFinished` is true) and `FinalStageRemaining` is 0, never before `LIST_MIN_SECONDS`, then switches through `LastStage_TrySwitch`: line 5 (the Scene Creator's tags and suppressed tags, `SetStartTags`), else lines 2–4 in a random order. After 3 failed tries it falls back to `LastStage_Step(-1)` (Num 4). The new animation clears `primaryFinished`, and `Ending_Rearm` keeps the target.
+- **Any other orgasm** below the final stage (a victim primary, an aggressor that isn't the lead, or any non-primary partner, in any scene): `StartOrgasmHold` in `Fire` / `NoteExternalOrgasm` keeps the bar as an `afterglowFree` drain, so `StageFollowPrimary` waits on the orgasm's stage while it drains at the afterglow rate. It sets `stagePunished` (the hold is not a stall). At 0, `OrgasmHoldSpeaking` keeps waiting until a line that started after the orgasm finishes (`SpeakerMark` → `StartedSince` / `DoneSinceMostRecentStarted`). When none started, it waits for the speech estimate + 4 s, never longer than `hold_max`. Then the afterglow ends and the stages follow again. Without stage by enjoyment only the drain applies (no `stagePunished`). `AfterglowRemaining` counts these bars too, so one that runs into the last stage holds the end. `ArouseLocked` refuses any `afterglow` target (no partner gain while draining). Logs: `orgasm hold at stage s/N (scene n, primary 0x…)`, `orgasm hold ended after Ns`.
+- `endHold` stops stage moves, the gate and the stall end. The engine sets it itself in `Fire` (`NoteEndReached`), the moment the lead's orgasm reaches `endingTarget`. A Papyrus round-trip would be too late: `StageFollowPrimary` sends the stage back on the reset enjoyment within the same second. The Scene's `SetEndHold(true)` is then a no-op. `Ending_Check` releases an engine hold the Scene doesn't turn into an end state (ending off, P+ < 2.17).
+- While `endHold` is set, `FinalStageRemaining` returns the time until the lead's afterglow drains to 0, so the list has a deadline (at least 4 s, `LIST_MIN_SECONDS`). The player picks with Num 6 / Enter / Space. When the time runs out, the highlighted line is committed. An NPC-only scene commits the NPC's line.
+- **The lead follows expectations.** If the lead fell to a victim because no aggressor was expected to orgasm (the first animation's position defaults), and a later animation makes an aggressor expected, `Ending_RollTarget` (every `StageStart`, through `Engine_BeginScene`) moves the lead to that aggressor with a target one above their count. Log `lead X (victim) -> Y (aggressor now expected)`. Otherwise the stages follow the aggressor while the end waits on the victim's target, and every stage waits for the victim hold's cap.
+
+### Last stage (afterglow)
+
+`InLastStage` is `endHold`, or `primaryFinished` on the final stage. Native `IsLastStage(sid)` (tasklet-callable) exposes it.
+- **Afterglow:** an orgasm that starts the last stage (the primary's, or the lead reaching the target), or any orgasm during it, keeps its bar (`afterglow`, `afterglowFrom`).
+  - While the jump to the final stage is still in flight, the bar holds.
+  - Then it drains at one fixed rate: `sexlab.ending.afterglow_seconds` (default 10) per 100 points, in every scene. Num 5's pause doesn't stop it (only a game, menu or narration-queue pause does, through `dt`).
+  - An afterglow actor gets no gain, steps or orgasm test (`CanOrgasmNow` is false); a forced request still fires.
+- **Length:** `AfterglowRemaining` = the highest afterglow bar / the rate. `FinalStageRemaining` returns it in the last stage. `lastStageElapsed` is kept for the log only.
+- **List deadline:** `LastStage_TimedLeft` = `max(LIST_MIN_SECONDS (4), FinalStageRemaining)`. It is read at the snapshot and again whenever the countdown (re)starts after a freeze (Num 5 pause, a menu, an NPC deciding), because the bar kept draining meanwhile.
+- **Leaving:** `ClearAfterglow` sets those actors to 0 on any way out except Num 4: `SetEndHold(false)`, a new animation (`ClearAfterglow(sc, true)` also ends a Num 4 drain), a step back off the final stage, or the tick seeing the last stage end.
+- **Keys** (Scene `LastStage_Active` → `LastStage_Step`): none of them switches stages to timers. `LastStage_Active` is true whenever the engine is in the last stage (`IsLastStage`), not only once the list is up. A Num 4 pressed before the list appeared used to take the old path and switch to timers.
+  - **Num 4:** `LeaveLastStage` first, then `LastStage_Close` and `Ending_Rearm`, so `SetEndHold(false)` can't zero the drain. The Scene moves to stage 1 (the return value), and `StageFollowPrimary` skips the scene while any actor has `afterglowFree`, so the stage waits at 1 until the drain reaches 0.
+    - `LeaveLastStage` marks the afterglow actors `afterglowFree`, clears `endHold`, `primaryFinished`, `stageEnjoymentOff`, `gateDone` and the floor, and returns the stage for the primary's bar now (the `StageFollowPrimary` band, 1..N−1). The Scene moves there (P+: `SkipToLegacy`), because the engine doesn't move off the final stage itself.
+    - The bar keeps draining and `StageFollowPrimary` steps the stages down with it (3 s per step back). At 0 the afterglow ends (`afterglow ended at 0`) and gain resumes.
+    - A pause drops too.
+  - **Num 6:** commits the list line. Before the list is up, it does nothing.
+  - **Num 5:** pause / play for SexLab's timer and the list countdown only (`StageMode_Cycle` checks `LastStage_Active` first).
+- `LastStage_Close` clears the end state and `endHold`, as do a new animation (`SetStageInputs`) and a stage key (`Ending_CanLeaveFinal`). If that jump is sent during an animation change, SexLab drops it. The new animation's first `StageStart` then sees `ending_done` on a stage below its last, and `Ending_StageStart` re-arms the ending (stale final-stage holds are dropped without a timer pull-back). Without that, `Victim_StageStart` holds nothing and SexLab's timers carry the new animation to its final stage. `sexlab.ending.target_*` no longer applies, and other actors can orgasm several times before that. The early final roll in `JoinGroup` runs when the primary is in the group.
 
 - **Gate scene:** due when the primary reaches 100 and `CanOrgasmNow`, not on the stage timer. The primary passes outright and is exempt from the 98 cap (`gateHeld`). Aggressors still pass outright, but an aggressor's orgasm no longer jumps the stage.
 - **Together:** `SceneProgress` uses an animation-wide clock over stages 1..N−1, because a stage-by-stage clock would deadlock: stages would wait for enjoyment and enjoyment for stages. The gate is due at `kRushHover`. With the gate off, the primary at `kRushHover` goes to the final stage directly (`fx.advances`) and the safety net finishes it.
 
-**Manual takeover.** While the mode drives the scene, the HUD's `prev` and `next` are greyed (`stageAuto`, `IsStageAuto`) but still work. `StageStep`, `StageGoTo` and the editor's direct `GoToStage` call `StageManual_TakeOver` after a move that happened: `DisableStageAdvancePrimaryEnjoyment` and `Victim_Drop` (GoToStage already reset the timer, and `Victim_Release` would subtract the hold from the new stage's timer). Timers run for the rest of the scene. On AnimEngine, `Hud::OnAnimKey` does the same. Auto play isn't offered `previous` / `next` while the mode is active (`BuildTurn`), so the AI can't turn it off by accident. The AnimEngine debug panel's next / back don't take over.
+**HUD stage modes** (`StageModeOf` → the HUD's `stageMode`; Scene `StageMode_Cycle`, AnimEngine `Hud::OnAnimKey`):
+
+| Mode | Num 4 / 5 / 6 | Num 5 label | Num 5 press |
+|---|---|---|---|
+| `enjoy` (stages follow enjoyment) | greyed | timer | to timers, running (`StageMode_Timers`: the victim hold's pull-back leaves out the held time, so the stage gets the rest of its own timer) |
+| `timer`, running | normal | pause | pauses the timer |
+| `timer`, paused | normal | enjoy (play if enjoyment isn't possible) | unpauses and returns to enjoyment (`StageMode_Enjoy`) |
+| `last` (last stage, or the end list up) | normal | pause / play | pauses / resumes the timer and the list; the afterglow keeps draining |
+
+**Manual takeover.** While the mode drives the scene, the HUD's `prev`, `pause` and `next` are greyed (`stageMode` `enjoy`) but still work. `StageStep`, `StageGoTo` and the editor's direct `GoToStage` call `StageManual_TakeOver` after a move that happened: `DisableStageAdvancePrimaryEnjoyment` and `Victim_Drop` (GoToStage already reset the timer, and `Victim_Release` would subtract the hold from the new stage's timer). Timers run for the rest of the scene. On AnimEngine, `Hud::OnAnimKey` does the same. Auto play isn't offered `previous` / `next` while the mode is active (`BuildTurn`), so the AI can't turn it off by accident. The AnimEngine debug panel's next / back don't take over.
 
 **Not saved.** Nothing new goes in the co-save. After a load the mode stays off until `SetStageInputs` arrives (`stageInputsKnown`): `Victim_Poll` re-sends it within 1 s, and `Engine_SetStageInputs` re-sends the Scene's `stage_manual`. A hold whose real-time clock reset on load starts its clock over instead of expiring.
 

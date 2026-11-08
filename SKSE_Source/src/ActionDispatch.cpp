@@ -431,7 +431,8 @@ namespace ActionCatalog
                 // method never resolves to tags the setting then empties in Papyrus.
                 const std::string setting = settingIndex >= 0 && settingIndex < static_cast<int>(captured.size())
                                                 ? captured[settingIndex].str : std::string();
-                const auto base = AnimationDB::SceneSettingResolveBase(setting, !dd.empty());
+                const bool bound = BondageCatalog::WearsHeavyBondage(cast) || AnimationDB::AsksBoundCsv(tags);
+                const auto base = AnimationDB::SceneSettingResolveBase(setting, bound);
                 startTags = AnimationDB::ResolveTags(tags, n, base.synonyms, &base);
                 if (startTags.empty())
                     startTags = tags;
@@ -1022,6 +1023,7 @@ namespace ActionCatalog
             po["_dressed"] = 0;
             po["_no_orgasm"] = 0;
             po["_victim"] = (params.victim && a == params.victim) ? 1 : 0;
+            po["_dead"] = (a && a->IsDead()) ? 1 : 0;
             po["_speaking"] = "_pleasure_";
             po["_gender"] = ActorGenderSexLab(a);
             po["_race_key"] = "";

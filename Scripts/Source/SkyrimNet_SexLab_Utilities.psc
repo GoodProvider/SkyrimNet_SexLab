@@ -742,14 +742,19 @@ Bool Function SilenceAllows(Actor source, float silence) global
     return NarrationNearby(source)
 EndFunction
 
-; "continue scene" DN from speaker. Skips CheckDuplicate: the text repeats on purpose.
+; Silence nudge DN from speaker: what the mini-game players did last ("Bob focused on Coralyn's pleasure. Mary resisted
+; her orgasm."), or "continue scene" when nobody played. Skips CheckDuplicate: the text repeats on purpose.
 Function SilenceNudge(Actor speaker, Actor partner=None) global
     SkyrimNet_SexLab_Main main = Game.GetFormFromFile(0x800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Main
-    SendDirectNarration("continue scene", speaker, partner)
+    String text = SkyrimNet_SexLab_OrgasmEngine.GetMiniGameSummary(speaker)
+    if text == ""
+        text = "continue scene"
+    endif
+    SendDirectNarration(text, speaker, partner)
     if main != None
         main.direct_narration_last_time = Utility.GetCurrentRealTime()
     endif
-    String msg = "speaker:"+speaker.GetDisplayName()
+    String msg = "speaker:"+speaker.GetDisplayName()+" text:"+text
     if partner != None
         msg += " partner:"+partner.GetDisplayName()
     endif

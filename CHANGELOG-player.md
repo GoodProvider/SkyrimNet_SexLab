@@ -4,9 +4,38 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ## Unreleased
 
+### Skyrim VR (Magelight UI)
+- With the Start Sex / Edit Stage hotkey enabled, **Grip + A** on either controller opens or closes the menu (new settings **VR menu button**, modifier and hand under Controls). Point with the laser; B / Y closes it. SkyrimNet DOM's menus come with it. Untested in a headset.
+
 ### Scenes
 - In double dildo, tribbing and scissoring animations, both women can now orgasm by default.
-- With a victim, stages now follow the aggressor's enjoyment, not the victim's, whichever position the aggressor is in.
+- With a victim, stages still follow whoever the animation arouses, but the aggressor's orgasms end the scene. When the aggressor reaches their orgasm count, the animation goes to its last stage and the end list (stop, cuddle, vaginal, oral, anal) appears there until the aggressor's bar has sunk to 0. Num 6, Enter or Space picks a line. The victim's own orgasm no longer jumps to the final stage.
+  - An aggressor orgasm before their count is reached also goes to the last stage. Once their bar has sunk to 0, a random new animation with the scene's tags starts at stage 1 and the scene goes on. Before, the stage fell straight back to 1. The new animation now waits for the bar to reach 0; it no longer starts a second after the jump.
+- Last stage: after an orgasm, the bar no longer drops to 0 at once. It sinks smoothly at one steady rate in every scene (new setting **Afterglow drain**, Scene ending, default 10 seconds from 100 to 0). The animation stays put until you pick a line, press Num 4, or the list's time runs out when the bar reaches 0 (never less than 4 seconds).
+  - With a victim, when the person the stages follow (often the victim) orgasms, the stage now stays where the orgasm happened while their bar sinks to 0 and the orgasm narration finishes, then the stages follow enjoyment again. Before, it dropped back to stage 1 about two seconds after the orgasm.
+  - Any orgasm below the last stage now sinks the bar the same way, the partner's too, and the stage waits until it reaches 0. Before, a partner's bar dropped straight to 0. A draining bar can't be raised by the partner's presses.
+  - The last stage now ends (or the end list takes its highlighted line, or the new animation starts) about 2 seconds after every bar has reached 0 and nothing is being said or waiting to be said. Before, it often waited the full 30 seconds.
+  - Num 4 leaves the last stage with stages following enjoyment, even before the list appears: the animation goes back to stage 1 and waits there while the bar sinks; at 0 enjoyment builds again and the stages follow it.
+  - Num 4 pressed right after the jump to the last stage, while SexLab is still playing its orgasm, no longer ends the scene: the stage is held and the move back is tried again for a few seconds.
+  - Num 5 pauses the animation and the countdown, but the bar keeps sinking; resuming gives at least 4 seconds.
+  - No key switches stages to timers there. Picking a line resets the bar to 0.
+- HUD: while stages follow enjoyment, Num 4, Num 5 and Num 6 are greyed. Num 5 reads *timer* and puts stages on their timers (running); then *pause* pauses them, and *enjoy* unpauses and goes back to following enjoyment.
+- The enjoyment bars now move smoothly instead of in steps.
+- Mini-game moves are no longer narrated one by one. When the scene goes quiet, the keep-talking nudge says what the players did last, for example "Bob focused on Coralyn's pleasure. Coralyn focused on mutual pleasure. Mary resisted her orgasm.", instead of "continue scene". NPC moves count too.
+- With a victim, when the first animation had the aggressor not orgasming and a later one (an end-list pick) does, the aggressor's orgasm now ends the scene. Before, each stage waited minutes for the victim instead.
+- Animation filter: a position that isn't expected to orgasm shows `-` instead of m / f and matches either gender.
+- Aid panel: body parts go from most to least injured (a first time counts as one point), then head to legs. It starts on the top injured part, a first time included, and healing that part clears the first time (it turns white). The Punish panel lists body parts head to legs (face, lips, throat, ... right leg); injured parts are still red.
+- Animations named as necro or bound (for example `FB_NecroFemDomCow`, `FB_BoundFemCowGirl`) now count as necro / bound even when their tags don't say so. They are left out when those words are off.
+- Animation filter: a new **necro** word next to rape: red (necro animations left out) unless someone in the scene is dead, then white. Animations picked without the menu (end list, the new animation after an aggressor's early orgasm, AI starts) also leave necro out unless someone is dead or necro is asked for.
+- **Stuck stage: punish after** now defaults to 15 seconds (was 30). A value you already saved stays until you change it.
+- Description Editor: the header above the stage descriptions reads "animation name: tags".
+- With a victim, the aggressor's orgasm comes as soon as their bar reaches 100, instead of after a minute or more. A female aggressor's bar is no longer stuck just below 100.
+- With a victim, only an aggressor punishes a stuck scene, and they punish a victim who isn't pleasing them. With the AI decisions off, a punished NPC now turns to pleasing whoever punished them.
+- In femdom animations the woman's enjoyment drives the stages (if she can orgasm); otherwise the man's.
+- Opening a menu during a held stage no longer counts toward the stage's time limit.
+- Animation filter: **sexual** now always starts white (sexual animations only). A new **rape** word sits next to sexual and bound: red (left out) normally, white once someone is marked victim. With a victim and only women as aggressors, the **femdom** tag is added. Clicking a word, or removing femdom, keeps your choice.
+- Bound (bondage) animations are left out unless someone in the scene wears a heavy bondage device, even with "Devious devices are added to tags" off. The bound word in the Scene Creator and Description Editor starts red; click it to allow them.
+- A bound scene counts as rape: once bound is on (the bound word clicked, or someone wears heavy bondage), the rape word is never red. A red rape word turns grey, and clicking rape skips red while bound is on. It does not turn white, so bound animations without rape tags can still play.
 - New setting "Stuck scene: end after" (30 s): an NPC-only scene ends if nobody's enjoyment has climbed for that long.
 - Picking a new animation from the last-stage list no longer lets it run to its last stage with no orgasm, and the aggressor no longer gets a second orgasm right after the first.
 

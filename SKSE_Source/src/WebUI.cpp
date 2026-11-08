@@ -41,6 +41,9 @@ static std::atomic<bool> g_webuiGamePaused{true};
 static std::mutex g_invokeMutex;
 static std::deque<std::string> g_pendingInvokes;
 static std::atomic<uint32_t> g_menuHotkey{0};
+namespace {
+void BindMenuVrChord();  // VR controller chord for the menu; defined next to WebUI_SetMenuHotkey
+}
 static std::mutex g_rebuildTsMutex;
 static std::string g_lastRebuildTimestamp;
 static int g_sexlabAnimCount = -1;  // -1 = not yet reported by Papyrus
@@ -1157,6 +1160,8 @@ void InitWebUI()
         if (!viewOk) {
             webui_log::critical(
                 "CreateView returned invalid view — ensure Data/PrismaUI/views/SkyrimNet_SexLab/index.html exists.");
+        } else {
+            BindMenuVrChord();  // the config may have been applied before the view existed
         }
 
         UiEngine::Hide();
@@ -1904,6 +1909,30 @@ void InitWebUI()
     });
 }
 
+/// The menu hotkey's work, from the keyboard binding (input sink) or the VR chord (SKSE task):
+/// a visible overlay closes, else Menu.ProcessHotkey opens it.
+static void ToggleMenuFromHotkey(uint32_t dxScanCode)
+{
+    if (!g_gameReady) {
+        webui_log::info("WebUI hotkey blocked — no game loaded.");
+        return;
+    }
+    // Always toggle: visible overlay closes immediately (any focus actor).
+    // Do not dispatch ProcessHotkey on close — AfterTargetOpen would reconfigure.
+    if (!WebUI_IsHidden()) {
+        webui_log::info("WebUI hotkey: hide overlay");
+        WebUI_Visibility_Hide();
+        return;
+    }
+    if (!WebUI_IsReady()) {
+        webui_log::critical(
+            "WebUI hotkey: overlay not ready (missing Data/PrismaUI/views/SkyrimNet_SexLab/index.html?).");
+        WebUI_Visibility_Hide();
+        return;
+    }
+    PapyrusBindings_WebUI::Call_ProcessHotkey(static_cast<std::int32_t>(dxScanCode));
+}
+
 /// MCM enable/remap: bind dxScanCode to Menu.ProcessHotkey, or clear when disabled.
 void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled)
 {
@@ -1917,25 +1946,49 @@ void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled)
     }
 
     g_menuHotkey = dxScanCode;
-    KeyHandler::GetSingleton()->Register(dxScanCode, [dxScanCode]() {
-        if (!g_gameReady) {
-            webui_log::info("WebUI hotkey blocked — no game loaded.");
-            return;
-        }
-        // Always toggle: visible overlay closes immediately (any focus actor).
-        // Do not dispatch ProcessHotkey on close — AfterTargetOpen would reconfigure.
-        if (!WebUI_IsHidden()) {
-            webui_log::info("WebUI hotkey: hide overlay");
-            WebUI_Visibility_Hide();
-            return;
-        }
-        if (!WebUI_IsReady()) {
-            webui_log::critical(
-                "WebUI hotkey: overlay not ready (missing Data/PrismaUI/views/SkyrimNet_SexLab/index.html?).");
-            WebUI_Visibility_Hide();
-            return;
-        }
-        PapyrusBindings_WebUI::Call_ProcessHotkey(static_cast<std::int32_t>(dxScanCode));
-    });
+    KeyHandler::GetSingleton()->Register(dxScanCode, [dxScanCode]() { ToggleMenuFromHotkey(dxScanCode); });
     webui_log::info("WebUI menu hotkey registered dx={:#x}.", dxScanCode);
+}
+
+namespace {
+std::mutex g_vrChordLock;
+std::string g_vrButton{ "a" };
+std::string g_vrModifier{ "grip" };
+std::string g_vrHand{ "either" };
+bool g_vrEnabled = false;
+std::atomic<uint32_t> g_vrDx{ 0x2B };
+
+// Game thread (an SKSE task posted by Magelight): the menu hotkey's work. ProcessHotkey ignores its key code.
+void OnMenuVrChord()
+{
+    ToggleMenuFromHotkey(g_vrDx.load());
+}
+
+void BindMenuVrChord()
+{
+    std::string button, modifier, hand;
+    bool enabled = false;
+    {
+        std::lock_guard lock(g_vrChordLock);
+        button = g_vrButton;
+        modifier = g_vrModifier;
+        hand = g_vrHand;
+        enabled = g_vrEnabled;
+    }
+    UiEngine::BindVrChord(enabled ? button : std::string{ "none" }, modifier, hand, enabled ? OnMenuVrChord : nullptr);
+}
+}  // namespace
+
+void WebUI_SetMenuVrChord(std::string button, std::string modifier, std::string hand, bool enabled)
+{
+    {
+        std::lock_guard lock(g_vrChordLock);
+        g_vrButton = std::move(button);
+        g_vrModifier = std::move(modifier);
+        g_vrHand = std::move(hand);
+        g_vrEnabled = enabled;
+    }
+    if (const auto dx = g_menuHotkey.load(); dx != 0)
+        g_vrDx = dx;
+    BindMenuVrChord();
 }

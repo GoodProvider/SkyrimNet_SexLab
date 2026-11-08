@@ -29,4 +29,8 @@ namespace BondageCatalog
     /// (specific first, so callers drop from the end). Empty when sexlab.tags.filter_by_devious_devices is off.
     /// Worn-keyword scan only (no DD API). Main thread.
     std::vector<std::string> WornAnimationTags(const std::vector<RE::Actor*>& actors);
+    /// Someone wears DD heavy bondage (armbinder, yoke, front cuffs, other heavy bondage), whatever
+    /// sexlab.tags.filter_by_devious_devices says: bound animations are left out of every AnimDB pick unless this is
+    /// true. Same worn-keyword scan. Main thread.
+    bool WearsHeavyBondage(const std::vector<RE::Actor*>& actors);
 }

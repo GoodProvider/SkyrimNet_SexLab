@@ -1909,6 +1909,11 @@
             padding-bottom: var(--space-xs);
             margin: var(--space-md) 0 var(--space-xs);
         }
+        /* Description Editor header: "<ANIMATION NAME>: tags" - the tags keep their own case. */
+        .section-header .de-desc-tags {
+            text-transform: none;
+            letter-spacing: normal;
+        }
 
         .option-row {
             display: flex;
@@ -2468,6 +2473,8 @@
                 <div id="sc-style-pulldown"></div>
                 <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
                 <span class="tag-toggle" data-tag="restrained" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('restrained')">bound</span>
+                <span class="tag-toggle" data-tag="rape" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('rape')">rape</span>
+                <span class="tag-toggle" data-tag="necro" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('necro')">necro</span>
                 <span>sort:</span>
                 <div id="sc-sort-pulldown"></div>
                 <span>description:</span>
@@ -2574,6 +2581,8 @@
                 <div id="de-style-pulldown"></div>
                 <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
                 <span class="tag-toggle" data-tag="restrained" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('restrained')">bound</span>
+                <span class="tag-toggle" data-tag="rape" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('rape')">rape</span>
+                <span class="tag-toggle" data-tag="necro" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('necro')">necro</span>
                 <span>sort:</span>
                 <div id="de-sort-pulldown"></div>
                 <span>description:</span>
@@ -6540,16 +6549,17 @@
                 .then(() => requestActorMeta(ssCastFormIds(cast)))
                 .then(meta => {
                     ssApplyActorMeta(state, meta);
-                    return requestDeviousTags(ssCastFormIds(cast));
+                    return requestDeviousTags(ssCastFormIds(cast), true);
                 })
-                .then(dd => {
+                .then(r => {
+                    const dd = r.tags;
                     const have = ssSplitTags(state._tags).concat(ssSplitTags(state._tags_suppress));
                     ssRandomQuery({
                         id: 'x' + (++ssRandomQueryId),
                         state: state,
                         genders: state._gender_match !== false,
-                        // Any worn heavy-bondage DD: the setting's tags_suppress_unless_bound is dropped.
-                        bound: dd.length > 0,
+                        // Worn heavy bondage (whatever the DD tag setting): bound animations are allowed.
+                        bound: r.worn === true || dd.length > 0,
                         dd: dd.filter(t => !have.includes(t))
                     });
                 });
@@ -9255,8 +9265,9 @@
         const PUNISH_NO_REASON = 'no reason';
         // Punish and Aid narrate where on the target; 'body' keeps the unlocated wording. With Injury Engine
         // installed the part is also where the whip damage / heal lands ('body' and custom text: a random part).
-        const BODY_PARTS = ['body', 'face', 'lips', 'throat', 'nipples', 'back', 'left arm', 'right arm', 'left leg', 'right leg',
-            'pussy', 'cock', 'ass', 'custom'];
+        // Head to legs (the order ties keep in sortPartsByDamage).
+        const BODY_PARTS = ['body', 'face', 'lips', 'throat', 'nipples', 'back', 'left arm', 'right arm', 'pussy', 'cock', 'ass',
+            'left leg', 'right leg', 'custom'];
         // Injury Engine's "include sexual body parts" setting: shown darker while off; picking one asks to turn it on.
         const SEXUAL_PARTS = new Set(['lips', 'nipples', 'pussy', 'cock', 'penis', 'ass']);
         // From the Hud payload (injuryengine, injuryengineSexual, injuryengineMaxStrikes).
@@ -9279,10 +9290,12 @@
         // A body-part pulldown into hostId for actor; custom shows textId. onPick(part) on change.
         // current: the part to show (undefined on open: 'body', custom text cleared; one the actor lacks: 'body').
         // partList: the parts to offer instead of bodyPartsFor(actor) (Aid potions).
-        // Listed by damage (sortPartsByDamage); damaged parts red, hovering one shows its damage bar to the right.
-        function renderPartPulldown(hostId, textId, onPick, actor, current, partList) {
+        // Listed by damage (sortPartsByDamage), or head to legs with byPlace (Punish: sortPartsByPlace); damaged parts
+        // red, hovering one shows its damage bar to the right.
+        function renderPartPulldown(hostId, textId, onPick, actor, current, partList, byPlace) {
             const host = document.getElementById(hostId);
-            const parts = sortPartsByDamage(actor, partList || bodyPartsFor(actor));
+            const offered = partList || bodyPartsFor(actor);
+            const parts = byPlace ? sortPartsByPlace(offered) : sortPartsByDamage(actor, offered);
             const shown = parts.includes(current) ? current : parts[0];
             const confirmId = hostId + '-confirm';
             host.innerHTML = '';
@@ -9291,8 +9304,8 @@
                 if (partDimmed(v)) {
                     injuryEngineConfirm(confirmId, () => {
                         onPick(v);
-                        renderPartPulldown(hostId, textId, onPick, actor, v, partList);
-                    }, () => renderPartPulldown(hostId, textId, onPick, actor, shown, partList));
+                        renderPartPulldown(hostId, textId, onPick, actor, v, partList, byPlace);
+                    }, () => renderPartPulldown(hostId, textId, onPick, actor, shown, partList, byPlace));
                     return;
                 }
                 onPick(v);
@@ -9324,15 +9337,31 @@
             return !!d && (d.points > 0 || d.first);
         }
 
-        // drink / body first, then damaged parts by points (a first time with no points after the pointed ones),
-        // then the rest as listed, custom last.
+        // How injured a part is for sorting: its points, a first time counting one more.
+        function partDamageRank(actor, part) {
+            const d = partDamage(actor, part);
+            return d ? d.points + (d.first ? 1 : 0) : 0;
+        }
+
+        // drink / body first, then injured parts (points, or a first time) from most to least injured (a first time
+        // counts one point), ties head to legs (BODY_PARTS), then the uninjured head to legs, custom last.
         function sortPartsByDamage(actor, parts) {
             const top = parts.filter(p => p === 'drink' || p === 'body');
             const rest = parts.filter(p => p !== 'drink' && p !== 'body' && p !== 'custom');
+            const where = (p) => { const i = BODY_PARTS.indexOf(p === 'penis' ? 'cock' : p); return i < 0 ? BODY_PARTS.length : i; };
+            const byPlace = (a, b) => where(a) - where(b);
             const damaged = rest.filter(p => partDamaged(actor, p))
-                .sort((a, b) => partDamage(actor, b).points - partDamage(actor, a).points);
-            const undamaged = rest.filter(p => !partDamaged(actor, p));
+                .sort((a, b) => (partDamageRank(actor, b) - partDamageRank(actor, a)) || byPlace(a, b));
+            const undamaged = rest.filter(p => !partDamaged(actor, p)).sort(byPlace);
             return top.concat(damaged, undamaged, parts.filter(p => p === 'custom'));
+        }
+
+        // drink / body first, then face to legs (BODY_PARTS), custom last: the Punish panel's fixed order.
+        function sortPartsByPlace(parts) {
+            const top = parts.filter(p => p === 'drink' || p === 'body');
+            const where = (p) => { const i = BODY_PARTS.indexOf(p === 'penis' ? 'cock' : p); return i < 0 ? BODY_PARTS.length : i; };
+            const rest = parts.filter(p => p !== 'drink' && p !== 'body' && p !== 'custom').sort((a, b) => where(a) - where(b));
+            return top.concat(rest, parts.filter(p => p === 'custom'));
         }
 
         // The hovered damaged part's bar (percent of its max) and points / "first time", right of the option.
@@ -9590,7 +9619,7 @@
             renderPartPulldown('punish-part', 'punish-part-text', (v) => {
                 PUNISH.part = v;
                 punishUpdate();
-            }, punishObject(), current);
+            }, punishObject(), current, undefined, true);
         }
 
         // Shows the ask / order or the punish half of the sentence and enables the accept button.
@@ -9769,20 +9798,13 @@
             return `${o.name} (${o.cost} magicka)`;
         }
 
-        // The actor's part with the most torture points (Injury Engine), first listed on a tie; sexual parts while
-        // Injury Engine has them off are skipped. 'body' when nothing is damaged or there is no data.
+        // The actor's most injured part in the list's order (sortPartsByDamage: torture points, a Lover's Ledger first
+        // time counting as injured); sexual parts while Injury Engine has them off are skipped. 'body' when nothing is
+        // damaged.
         function aidMostDamagedPart(actor) {
-            let best = 'body';
-            let bestPoints = 0;
-            for (const p of bodyPartsFor(actor)) {
-                if (p === 'body' || p === 'custom' || partDimmed(p)) continue;
-                const inj = injuryFor(actor, p);
-                if (inj && inj.points > bestPoints) {
-                    best = p;
-                    bestPoints = inj.points;
-                }
-            }
-            return best;
+            const best = sortPartsByDamage(actor, bodyPartsFor(actor))
+                .find(p => p !== 'body' && p !== 'custom' && !partDimmed(p) && partDamaged(actor, p));
+            return best || 'body';
         }
 
         // The part to start on: a potion drinks, a spell goes to the most damaged part.
@@ -10365,6 +10387,16 @@
             SC.ddAuto = [];
             SC.ddProbe = false;
             SC.ddDismissed = new Set();
+            SC.boundWorn = null;
+            SC.boundTouched = false;
+            SC.boundAuto = false;
+            SC.sexualTouched = false;
+            SC.rapeTouched = false;
+            SC.rapeAuto = false;
+            SC.necroTouched = false;
+            SC.necroAuto = false;
+            SC.femdomAuto = false;
+            SC.femdomDismissed = false;
             if (SC.nameFilterTimer) clearTimeout(SC.nameFilterTimer);
             SC.nameFilterTimer = 0;
             SC.animNameFilter = '';
@@ -11253,21 +11285,24 @@
         const ddPending = new Map();
         let ddRequestSeq = 0;
 
-        function requestDeviousTags(formIds) {
+        // withWorn: resolves { tags, worn } instead (worn: the cast wears heavy bondage whatever the DD tag setting;
+        // null when unknown).
+        function requestDeviousTags(formIds, withWorn) {
+            const wrap = (tags, worn) => withWorn ? { tags, worn } : tags;
             return new Promise(resolve => {
                 const ids = (formIds || []).map(id => formIdU32(id)).filter(id => id);
                 if (typeof window.onResolveDeviousTags !== 'function' || !ids.length) {
-                    resolve([]);
+                    resolve(wrap([], null));
                     return;
                 }
                 const rid = 'd' + (++ddRequestSeq);
                 const timer = setTimeout(() => {
                     ddPending.delete(rid);
-                    resolve([]);
+                    resolve(wrap([], null));
                 }, DD_TAGS_TIMEOUT_MS);
-                ddPending.set(rid, tags => {
+                ddPending.set(rid, (tags, worn) => {
                     clearTimeout(timer);
-                    resolve(tags);
+                    resolve(wrap(tags, worn));
                 });
                 window.onResolveDeviousTags(JSON.stringify({ _request_id: rid, _form_ids: ids }));
             });
@@ -11278,22 +11313,144 @@
             const done = ddPending.get(rid);
             if (!done) return;
             ddPending.delete(rid);
-            done(((payload && payload._tags) || []).map(String));
+            const worn = payload && typeof payload._worn === 'boolean' ? payload._worn : null;
+            done(((payload && payload._tags) || []).map(String), worn);
         }
 
         function scRequestDeviousTags() {
             const ids = (SC.positions || []).map(p => p._form_id || 0);
             const qid = ++SC.ddQueryId;
-            requestDeviousTags(ids).then(tags => {
-                if (qid === SC.ddQueryId) scApplyDeviousTags(tags);
+            requestDeviousTags(ids, true).then(r => {
+                if (qid === SC.ddQueryId) scApplyDeviousTags(r.tags, r.worn);
             });
+        }
+
+        // Bound animations only when the cast wears heavy bondage (_worn, whatever the DD tag setting): otherwise the
+        // bound word starts red. A click on the word or its chip is the player's and is kept (boundTouched).
+        function scApplyBoundDefault() {
+            if (SC.boundTouched || SC.boundWorn !== false) return false;
+            if (SC.tags.includes('restrained') || SC.suppress.includes('restrained')) return false;
+            SC.suppress.push('restrained');
+            SC.boundAuto = true;
+            return true;
+        }
+
+        // The sexual word starts white (sexual animations only), except for a nonsexual scene setting, a live scene's
+        // own tags (active mode) and a last-stage list preset. A click on the word or its chip is the player's.
+        function scApplySexualDefault() {
+            if (SC.sexualTouched || window._snslListPreset || SC.mode === 'active') return false;
+            if (String(SC.sceneSetting || '').indexOf('nonsexual') === 0) return false;
+            if (SC.tags.includes('sexual') || SC.suppress.includes('sexual')) return false;
+            SC.tags.push('sexual');
+            return true;
+        }
+
+        // Bound is enabled: the bound word is white, the cast wears heavy bondage, or the player clicked the word off
+        // red. A red bound word never counts.
+        function scBoundEnabled() {
+            if (SC.suppress.includes('restrained')) return false;
+            return SC.tags.includes('restrained') || SC.boundWorn === true || !!SC.boundTouched;
+        }
+
+        // The rape word (AnimDB derives "rape" from rape_tags.json): white while the cast has a victim, red without
+        // one. Only moves a word it set itself (rapeAuto); a click on the word or its chip is the player's.
+        // A bound scene counts as rape: while bound is enabled the word is never red. A red word goes gray (not white:
+        // bound rows need not carry rape tags), even a player's red; rapeAuto is kept, so an auto red returns when
+        // bound is turned off again.
+        function scApplyRapeDefault() {
+            if (scBoundEnabled()) {
+                if (!SC.suppress.includes('rape')) return false;
+                SC.suppress = SC.suppress.filter(t => t !== 'rape');
+                return true;
+            }
+            if (SC.rapeTouched || window._snslListPreset) return false;
+            const inTags = SC.tags.includes('rape');
+            const inSuppress = SC.suppress.includes('rape');
+            if ((inTags || inSuppress) && !SC.rapeAuto) return false;
+            const victim = (SC.positions || []).some(p => p && p._victim);
+            if (victim ? inTags : inSuppress) return false;
+            SC.tags = SC.tags.filter(t => t !== 'rape');
+            SC.suppress = SC.suppress.filter(t => t !== 'rape');
+            (victim ? SC.tags : SC.suppress).push('rape');
+            SC.rapeAuto = true;
+            return true;
+        }
+
+        // The necro word (AnimDB derives "necro" from necro_tags.json): white while anyone in the cast is dead (_dead), red
+        // without. Only moves a word it set itself (necroAuto); a click on the word or its chip is the player's.
+        function scApplyNecroDefault() {
+            if (SC.necroTouched || window._snslListPreset) return false;
+            const inTags = SC.tags.includes('necro');
+            const inSuppress = SC.suppress.includes('necro');
+            if ((inTags || inSuppress) && !SC.necroAuto) return false;
+            const dead = (SC.positions || []).some(p => p && p._dead);
+            if (dead ? inTags : inSuppress) return false;
+            SC.tags = SC.tags.filter(t => t !== 'necro');
+            SC.suppress = SC.suppress.filter(t => t !== 'necro');
+            (dead ? SC.tags : SC.suppress).push('necro');
+            SC.necroAuto = true;
+            return true;
+        }
+
+        // femdom while the cast has a victim and every other actor is female; dropped again when that stops (only if
+        // it was added here). A player removal is kept (femdomDismissed).
+        function scApplyFemdomDefault() {
+            if (window._snslListPreset || !scPositionsGendersReady()) return false;
+            const pos = SC.positions || [];
+            const aggressors = pos.filter(p => p && !p._victim);
+            const want = aggressors.length > 0 && aggressors.length < pos.length
+                && aggressors.every(p => scPosGender(p) === 1);
+            const isFemdom = t => String(t).toLowerCase() === 'femdom';
+            const has = SC.tags.some(isFemdom);
+            if (want && !has && !SC.femdomDismissed) {
+                SC.tags.push('femdom');
+                SC.femdomAuto = true;
+                return true;
+            }
+            if (!want && has && SC.femdomAuto) {
+                SC.tags = SC.tags.filter(t => !isFemdom(t));
+                SC.femdomAuto = false;
+                return true;
+            }
+            return false;
+        }
+
+        // Every default word / auto tag. True when a list changed.
+        function scApplyTagDefaults() {
+            const bound = scApplyBoundDefault();
+            const sexual = scApplySexualDefault();
+            const rape = scApplyRapeDefault();
+            const necro = scApplyNecroDefault();
+            const femdom = scApplyFemdomDefault();
+            return bound || sexual || rape || necro || femdom;
+        }
+
+        // A click on a word or chip: that tag is the player's from now on.
+        function scNoteTagTouched(tag) {
+            if (tag === 'restrained') SC.boundTouched = true;
+            else if (tag === 'sexual') SC.sexualTouched = true;
+            else if (tag === 'rape') SC.rapeTouched = true;
+            else if (tag === 'necro') SC.necroTouched = true;
+            else if (String(tag).toLowerCase() === 'femdom' && SC.femdomAuto) {
+                SC.femdomAuto = false;
+                SC.femdomDismissed = true;
+            }
         }
 
         // Adds the cast's DD tags the player has not removed and drops auto tags the cast no longer wears.
         // Tags already present (player or scene setting) stay player-owned.
-        function scApplyDeviousTags(tags) {
+        function scApplyDeviousTags(tags, worn) {
             const want = (tags || []).filter(t => !SC.ddDismissed.has(t));
             let changed = false;
+            if (worn !== null && worn !== undefined && SC.boundWorn !== worn) {
+                SC.boundWorn = worn;
+                changed = true;
+                // Now wearing: the red word was only the default, so drop it.
+                if (worn && SC.boundAuto && !SC.boundTouched) {
+                    SC.suppress = SC.suppress.filter(t => t !== 'restrained');
+                    SC.boundAuto = false;
+                }
+            }
             SC.ddAuto = SC.ddAuto.filter(t => {
                 if (want.includes(t)) return true;
                 SC.tags = SC.tags.filter(x => x !== t);
@@ -11732,6 +11889,8 @@
         }
 
         function scRenderTagChips() {
+            // Every tag change renders: re-assert the defaults after a wholesale SC.tags / SC.suppress set (setting, preset).
+            scApplyTagDefaults();
             const incHtml = SC.tags.map(t =>
                 `<span class="tag-chip" onclick="scRemoveTag('include','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(scTagLabel(t))}</span>`).join('');
             const excHtml = SC.suppress.map(t =>
@@ -11761,13 +11920,15 @@
 
         // Click: white (must have) -> red (must not have) -> grey (no filter) -> white.
         function scCycleTagToggle(tag) {
+            scNoteTagTouched(tag);
             if (SC.tags.includes(tag)) {
                 SC.tags = SC.tags.filter(t => t !== tag);
                 if (SC.ddAuto.includes(tag)) {
                     SC.ddAuto = SC.ddAuto.filter(t => t !== tag);
                     SC.ddDismissed.add(tag);
                 }
-                if (!SC.suppress.includes(tag)) SC.suppress.push(tag);
+                // White rape skips red while bound is enabled (a bound scene counts as rape).
+                if (!SC.suppress.includes(tag) && !(tag === 'rape' && scBoundEnabled())) SC.suppress.push(tag);
             } else if (SC.suppress.includes(tag)) {
                 SC.suppress = SC.suppress.filter(t => t !== tag);
             } else {
@@ -11780,6 +11941,7 @@
         }
 
         function scRemoveTag(list, tag) {
+            scNoteTagTouched(tag);
             if (list === 'include') {
                 SC.tags = SC.tags.filter(t => t !== tag);
                 if (SC.ddAuto.includes(tag)) {
@@ -11793,8 +11955,10 @@
         }
 
         function scAddTag(tag, list) {
+            scNoteTagTouched(tag);
             const arr = list === 'include' ? SC.tags : SC.suppress;
-            if (!arr.includes(tag)) arr.push(tag);
+            const blocked = list !== 'include' && tag === 'rape' && scBoundEnabled();
+            if (!blocked && !arr.includes(tag)) arr.push(tag);
             if (list === 'include') SC.ddDismissed.delete(tag);
             scRenderTagChips();
             scRefreshTags();
@@ -11802,6 +11966,8 @@
         }
 
         function scBuildFilter() {
+            // Victim or cast changes move the rape word and femdom: re-apply before every query.
+            if (scApplyTagDefaults()) scRenderTagChips();
             const posCount = (SC.positions || []).length;
             const filter = { _must_tags: SC.tags, _suppress_tags: SC.suppress, _require_all: SC.tags.length > 0 };
             if (posCount > 0)
@@ -11838,9 +12004,13 @@
             // Active mode, and a last-stage list preset, skip _setting: the preset tags are explicit.
             if (!window._snslListPreset && SC.mode !== 'active' && SC.sceneSetting) {
                 filter._setting = SC.sceneSetting;
-                filter._bound = (SC.ddAuto || []).length > 0 || (SC.ddDismissed && SC.ddDismissed.size > 0)
-                    || SC.tags.includes('restrained') || SC.tags.includes('bound');
             }
+            // Always sent: C++ leaves bound animations out of an unbound query (ParseSceneFilterKeys). A grey bound word
+            // the player chose means no filter; untouched, only a cast in heavy bondage allows them.
+            filter._bound = SC.boundWorn === true || (SC.ddAuto || []).length > 0
+                || (SC.ddDismissed && SC.ddDismissed.size > 0)
+                || SC.tags.includes('restrained') || SC.tags.includes('bound')
+                || (!!SC.boundTouched && !SC.suppress.includes('restrained'));
             if (window._snslListPreset) {
                 if (SC.listRequireAll) {
                     filter._must_tags = (SC.tags || []).slice();
@@ -12135,9 +12305,9 @@
                 const sel = SC.mode === 'active' ? inThread.has(reg) : scIsAnimSelected(reg);
                 const an = scAnimAnLetter(reg);
                 const genders = (a._pos_genders || []).map((g, gi) => {
-                    const letter = (g === 0 || g === 2) ? 'm' : 'f';
-                    const no = (a._pos_no_orgasm || [])[gi];
-                    return no ? letter : letter.toUpperCase();
+                    // No orgasm expected: gender is not matched for that position ('-').
+                    if ((a._pos_no_orgasm || [])[gi]) return '-';
+                    return ((g === 0 || g === 2) ? 'm' : 'f').toUpperCase();
                 }).join(' ');
                 const mods = formatMods(a);
                 const name = a._name || '(unnamed)';
@@ -12561,11 +12731,23 @@
         function deUpdateDescHeader() {
             const el = document.getElementById('de-desc-header');
             if (!el) return;
+            // "<animation name>: <tags>" (the tags in their own case; the header style uppercases the rest).
             const name = deFocusedAnimName();
-            let text = name ? ('Description: ' + name) : 'Description';
-            if (dePendingActive()) text += ' (on unpause)';
-            else if (!deIsSceneBound() && sceneInfosSeeded) text = 'Description (target is not in a scene)';
-            el.textContent = text;
+            const a = DE.focusRegistry ? deFindAnim(DE.focusRegistry) : null;
+            const tags = a ? deAnimTagLabels(a).join(', ') : '';
+            let text = name || 'Description';
+            let suffix = '';
+            if (dePendingActive()) suffix = ' (on unpause)';
+            else if (!deIsSceneBound() && sceneInfosSeeded) { text = 'Description'; suffix = ' (target is not in a scene)'; }
+            el.textContent = '';
+            el.appendChild(document.createTextNode(text + (name && tags && text === name ? ': ' : '')));
+            if (name && tags && text === name) {
+                const span = document.createElement('span');
+                span.className = 'de-desc-tags';
+                span.textContent = tags;
+                el.appendChild(span);
+            }
+            if (suffix) el.appendChild(document.createTextNode(suffix));
         }
 
         function deAnimTagsList(a) {
@@ -13623,9 +13805,9 @@
 
         function deAnimRowCells(a) {
             const genders = (a._pos_genders || []).map((g, gi) => {
-                const letter = (g === 0 || g === 2) ? 'm' : 'f';
-                const no = (a._pos_no_orgasm || [])[gi];
-                return no ? letter : letter.toUpperCase();
+                // No orgasm expected: gender is not matched for that position ('-').
+                if ((a._pos_no_orgasm || [])[gi]) return '-';
+                return ((g === 0 || g === 2) ? 'm' : 'f').toUpperCase();
             }).join(' ');
             const stages = (a._stage_count != null) ? a._stage_count : '';
             const desc = previewDescription(a);

@@ -76,6 +76,20 @@ All tag-based selection in `SkyrimNet_SexLab_Scene_Creator.psc` goes through `Se
 - Use `sexual` to require any sex act and suppress `sexual` to exclude them. `kissing` is **not** a sex tag.
 - The tag is only ever added. If you remove a tag from the file, rows that already have `sexual` keep it until AnimDB is force-rebuilt.
 
+## Derived `rape` tag (`rape_tags.json`)
+
+`SKSE/Plugins/SkyrimNet_SexLab/rape_tags.json` works like `sex_tags.json`: AnimDB adds the tag `rape` to every animation with any listed tag (`rape`, `aggressive`, `forced`, `fbrape`, `assault`, `defeated`, `conquering`, `aggressivedefault`). The **rape** word in the animation row filters on it: red (suppressed) by default, white while the cast has a victim (`scApplyRapeDefault`), until the player clicks it. A bound scene counts as rape: while bound is enabled (`scBoundEnabled`) the word is never red; a red word goes grey, not white. `restrained` does not derive `rape` (other packs may add non-rape bound animations).
+
+## Derived `necro` tag (`necro_tags.json`)
+
+`SKSE/Plugins/SkyrimNet_SexLab/necro_tags.json` works the same way: AnimDB adds the tag `necro` to every animation with any listed tag (`necro`, `necrophilia`, `corpse`, `dead`). The **necro** word in the animation row filters on it: red (suppressed) unless someone in the cast is dead (`_dead` on the position, `scApplyNecroDefault`), white then, until the player clicks it.
+
+- Papyrus queries (`AnimDb_QueryTopNAnims` with `_form_ids`) suppress `necro` themselves when nobody in the cast is dead and the query doesn't ask for `necro` in its must / any tags (`AnimationDB::SuppressUnlessDead`). This covers the Scene Creator's own query, the end-list picks and the mid-scene switch.
+
+## Name words (`necro`, `restrained`)
+
+For `necro` and `restrained` only, a listed word also counts when it is a whole word of the animation's name or registry: split at non-letters and at a lower-to-upper case change (`FB_NecroFemDomCow` → `fb necro fem dom cow`, `FB_BoundFemCowGirl` → `… bound …`). Many SLAL packs name the act without tagging it. `sexual` and `rape` stay tag-only.
+
 ## Derived `restrained` tag (`restraint_tags.json`)
 
 `SKSE/Plugins/SkyrimNet_SexLab/restraint_tags.json` works the same way: AnimDB adds the tag `restrained` to every animation with any listed tag (`bound`, `bondage`, `yoke`, `armbinder`, `cuffs`, `cuffed`, `rope`, `chains`, `hogtied`). The **bound** word in the animation row filters on it.
@@ -84,4 +98,5 @@ All tag-based selection in `SkyrimNet_SexLab_Scene_Creator.psc` goes through `Se
 
 - It is a separate tag because worn-device tags, which include `bound` (`BondageCatalog::WornAnimationTags`), must match literally. Do not derive `bound` from these tags or cluster them.
 - It is stored on the row, so the synonyms pulldown does not change what it matches.
-- Asking for `restrained` or `bound` in a Papyrus query (`_must_tags`) counts as bound, so `tags_suppress_unless_bound` does not empty the result on an unbound cast.
+- Unbound casts leave it out: every AnimDB query that knows its cast (`_form_ids`, scanned with `WearsHeavyBondage` whatever the DD tag setting), `_bound` or `_setting` suppresses `restrained` unless the cast wears heavy bondage (`SuppressUnlessBound`).
+- Asking for a restraint or worn-device tag (`restrained`, `bound`, `bondage`, `armbinder`, `yoke`, `cuffs`, `cuffed`, `rope`, `chains`, `hogtied`, `deviousdevice`) in `_must_tags` / `_any_tags`, or in the tags being resolved, counts as bound (`AsksBound`). Then neither that suppress nor `tags_suppress_unless_bound` empties the result.

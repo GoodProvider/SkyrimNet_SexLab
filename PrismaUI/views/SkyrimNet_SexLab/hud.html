@@ -240,10 +240,25 @@
             return 'rgb(' + c.join(',') + ')';
         }
 
+        // Bar fills of the current hudUpdate, in document order. The row HTML carries a token per fill, so the
+        // structure (without widths / colors) can be compared with the last push: unchanged, the existing fills get
+        // their new width in place and the CSS width transition smooths the 4 Hz updates (a rebuild would restart
+        // it, and the near / flash animations, on every push).
+        let rowFills = [];
+        let lastRowsKey = '';
+        function fillAttrs(pct, color) {
+            const i = rowFills.length;
+            rowFills.push({ w: Math.max(0, Math.min(100, Number(pct) || 0)), c: color || '' });
+            return ' data-f="' + i + '" style="@F' + i + '@"';
+        }
+        function fillStyle(f) {
+            return 'width:' + f.w + '%' + (f.c ? ';background-color:' + f.c : '');
+        }
+
         // Mini-game resource bar: kind 'magicka' (calm cost) or 'stamina' (arouse cost), pct 0..100.
         function resBar(kind, pct, off) {
-            return '<td class="rescell' + (off || '') + '"><div class="bar res"><div class="fill ' + kind + '" style="width:' +
-                Math.max(0, Math.min(100, Number(pct) || 0)) + '%"></div></div></td>';
+            return '<td class="rescell' + (off || '') + '"><div class="bar res"><div class="fill ' + kind + '"' +
+                fillAttrs(pct) + '></div></div></td>';
         }
 
         // Speed level names, slowest first. Mirrors OrgasmEngine::kSpeedLevelNames (SKSE_Source/include/OrgasmEngine.h).
@@ -255,7 +270,7 @@
         const COLUMN_LABELS = [
             ['', 'PosUp', 'PosDn'],
             ['', 'prev', 'deny', 'allow'],
-            ['calm', 'pause', 'play', 'enjoy', 'end'],
+            ['calm', 'pause', 'play', 'enjoy', 'timer', 'end'],
             ['arouse', 'next', 'free ' + CAM, 'lock ' + CAM, 'ask'],
             SPEED_NAMES.concat([NO_STEP, 'auto', 'control', 'release', 'aid']),
             ['up', 'down'],
@@ -330,6 +345,7 @@
 
             // Enjoyment part: stage row + actor rows (bars; mini-game adds focus + magicka/stamina columns).
             const rows = document.getElementById('rows');
+            rowFills = [];
             let html = '';
             // All columns are always emitted; non-minigame columns get .off so widths never change.
             const mgOff = g.minigame ? '' : ' off';
@@ -345,9 +361,8 @@
                         '<td class="name">' + esc(a.name) + (a.dom ? ' <span class="dom" title="DOM decides the orgasm">DOM</span>' : '') +
                             (a.strategy ? ' <span class="dom" title="mini-game strategy">' + esc(a.strategy) + '</span>' : '') + '</td>' +
                         resBar('magicka', a.magicka, mgOff) + resBar('stamina', a.stamina, mgOff) +
-                        '<td class="barcell"><div class="bar' + cls + (a.dom ? ' chancebar' : '') + '"><div class="fill" style="width:' +
-                        Math.max(0, Math.min(100, a.enjoyment)) + '%;background-color:' + barColor(a.enjoyment) +
-                        '"></div>' + (a.dom ? '<span class="chance" title="chance the next orgasm roll succeeds">' + a.chance + '%</span>' : '') +
+                        '<td class="barcell"><div class="bar' + cls + (a.dom ? ' chancebar' : '') + '"><div class="fill"' +
+                        fillAttrs(a.enjoyment, barColor(a.enjoyment)) + '></div>' + (a.dom ? '<span class="chance" title="chance the next orgasm roll succeeds">' + a.chance + '%</span>' : '') +
                         '</div></td>' +
                         '<td class="lock">' + (a.denied ? '<span title="orgasm denied">🔒</span>' : '') + '</td>' +
                         '</tr>';
@@ -377,7 +392,17 @@
                     '<td colspan="3"><div class="stages">' + s + '</div></td>' +
                     '<td class="lock"></td></tr>' + html;
             }
-            rows.innerHTML = html;
+            if (html !== lastRowsKey) {
+                lastRowsKey = html;
+                rows.innerHTML = html.replace(/@F(\d+)@/g, function (m, i) { return fillStyle(rowFills[Number(i)]); });
+            } else {
+                rows.querySelectorAll('.fill[data-f]').forEach(function (el) {
+                    const f = rowFills[Number(el.getAttribute('data-f'))];
+                    if (!f) return;
+                    el.style.width = f.w + '%';
+                    if (f.c) el.style.backgroundColor = f.c;
+                });
+            }
             const enjoyOn = !!g.enjoyment && html !== '';
             document.getElementById('enjoyment').classList.toggle('visible', enjoyOn);
 
@@ -412,9 +437,11 @@
             c += ctl(keys, 'slower', slower || NO_STEP, 4, { dim: !slower || listOpen, off: cOff });
             c += ctl(keys, 'list_up', 'up', 5, listKey);
             c += ctl(keys, 'pos_down', 'PosDn', 0, { off: cOff });
-            c += ctl(keys, 'previous', 'prev', 1, { dim: state.stageAuto, off: cOff });
-            c += ctl(keys, 'pause', state.pauseLabel || 'pause', 2, { off: cOff });
-            c += ctl(keys, 'next', 'next', 3, listOpen ? listKey : { dim: state.stageAuto, off: cOff });
+            // Stages follow enjoyment: Num 4 / 5 / 6 greyed (a press switches to timers). Timers and the last stage: not.
+            const enjoyMode = state.stageMode ? state.stageMode === 'enjoy' : !!state.stageAuto;
+            c += ctl(keys, 'previous', 'prev', 1, { dim: enjoyMode, off: cOff });
+            c += ctl(keys, 'pause', state.pauseLabel || 'pause', 2, { dim: enjoyMode, off: cOff });
+            c += ctl(keys, 'next', 'next', 3, listOpen ? listKey : { dim: enjoyMode, off: cOff });
             c += ctl(keys, 'faster', faster || NO_STEP, 4, { dim: !faster || listOpen, off: cOff });
             c += ctl(keys, 'list_down', 'down', 5, listKey);
             c += ctl(keys, '', '', 0, { off: true });

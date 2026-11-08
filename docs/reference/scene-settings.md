@@ -14,7 +14,7 @@ Files under `SKSE/Plugins/SkyrimNet_SexLab/scenes/(setting_name).json`, loaded w
 | `tags_suppress` | Animation must not include these tags |
 | `tags_any` | Animation must include **at least one** of these tags (ANDed with `tags` and the method tag). This is how a setting names its intent when the TargetMenu method is **random**. Never dropped by the fallback |
 | `tags_prefer` | Soft OR group: when some candidates have one of these tags, only those are used; otherwise the whole pool is |
-| `tags_suppress_unless_bound` | Suppressed only while nobody in the cast wears Devious Devices heavy bondage (and **Devious devices are added to tags** is on). Bound casts drop the list, and the worn-device tags then steer the pick |
+| `tags_suppress_unless_bound` | Suppressed only while nobody in the cast wears Devious Devices heavy bondage, whatever **Devious devices are added to tags** says. Bound casts drop the list, and the worn-device tags (that setting on) then steer the pick. Separately, every AnimDB query that knows its cast, `_bound` or `_setting` suppresses `restrained` for an unbound cast unless it asks for a bound tag itself (`SuppressUnlessBound`) |
 | `assume_bound` | `true`: treat the cast as bound, so `tags_suppress_unless_bound` never applies (`punish_whipping_oral`: every whip animation is a DD one) |
 | `exclude_settings` | Setting names. An animation is excluded if it passes that setting's own `tags` / `tags_any` / `tags_suppress` |
 | `synonyms` | `broad` (default) · `strict` · `none`: which [tag-synonyms](tag-synonyms.md) clusters widen **every** tag key above, suppress lists included |

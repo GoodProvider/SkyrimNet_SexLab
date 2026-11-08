@@ -41,6 +41,12 @@ bool AnyActiveFocus();  // some view of OUR engine holds focus / UI mode
 /// JS → pause toggle: Prisma re-focuses from scratch; Magelight retargets the live UI mode in place.
 void SetPaused(bool paused);
 
+/// Skyrim VR: bind a controller chord to the webui view (Magelight BindVRHotkeyCallback). `body` runs on the game
+/// thread inside an SKSE task (PostGameTask). Names: "none" "a" "stick" "trigger" "touchpad" "grip"; hand
+/// "either" "left" "right". button "none" clears. Returns false (and binds nothing) on flat, under PrismaUI or
+/// without a view.
+bool BindVrChord(std::string_view button, std::string_view modifier, std::string_view hand, void (*body)());
+
 void InvokeJS(const char* script);                     // webui view (queued by caller until domReady)
 void RegisterListener(std::string_view name, JsListenerBody body);  // webui view
 

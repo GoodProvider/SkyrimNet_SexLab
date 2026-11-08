@@ -45,13 +45,51 @@ namespace AnimationDB
         /// sex_tags.json: any of these on a row derives the "sexual" tag. Guarded by g_mutex.
         std::unordered_set<std::string> g_sex_tags;
         constexpr const char* kSexualTag = "sexual";
-        /// restraint_tags.json: any of these on a row derives the "restrained" tag (the animation row's bound
-        /// word). Not "bound" itself: worn-device tags, which include "bound", must match literally. Guarded by g_mutex.
+        /// restraint_tags.json: any of these on a row (or a whole word of its name / registry) derives the
+        /// "restrained" tag (the animation row's bound word). Not "bound" itself: worn-device tags, which include
+        /// "bound", must match literally. Guarded by g_mutex.
         std::unordered_set<std::string> g_restraint_tags;
         constexpr const char* kRestrainedTag = "restrained";
+        /// rape_tags.json: any of these on a row derives the "rape" tag (the animation row's rape word, set by a
+        /// victim). Guarded by g_mutex.
+        std::unordered_set<std::string> g_rape_tags;
+        constexpr const char* kRapeTag = "rape";
+        /// necro_tags.json: any of these on a row (or a whole word of its name / registry) derives the "necro" tag
+        /// (the animation row's necro word; queries for a cast with nobody dead suppress it, SuppressUnlessDead).
+        /// Guarded by g_mutex.
+        std::unordered_set<std::string> g_necro_tags;
+        constexpr const char* kNecroTag = "necro";
 
-        /// Appends derived when the row carries any source tag. Additive only.
-        bool ApplyDerivedTagLocked(AnimRow& row, const std::unordered_set<std::string>& sources, const char* derived)
+        /// Lowercase words of an animation name / registry: split at non-letters and at a lower→upper case
+        /// change ("FB_NecroFemDomCow" → fb, necro, fem, dom, cow).
+        void NameWords(const std::string& s, std::vector<std::string>& out)
+        {
+            std::string cur;
+            char prev = 0;
+            for (const char c : s) {
+                const auto uc = static_cast<unsigned char>(c);
+                if (!std::isalpha(uc)) {
+                    if (!cur.empty())
+                        out.push_back(std::move(cur));
+                    cur.clear();
+                } else {
+                    if (std::isupper(uc) && prev && std::islower(static_cast<unsigned char>(prev)) && !cur.empty()) {
+                        out.push_back(std::move(cur));
+                        cur.clear();
+                    }
+                    cur.push_back(static_cast<char>(std::tolower(uc)));
+                }
+                prev = c;
+            }
+            if (!cur.empty())
+                out.push_back(std::move(cur));
+        }
+
+        /// Appends derived when the row carries any source tag, or (by_name) when a whole word of its name or
+        /// registry is one: SLAL packs often name the act without tagging it (2026-11-07: FB_NecroFemDomCow has no
+        /// necro tag, FB_BoundFemCowGirl no bound tag). Additive only.
+        bool ApplyDerivedTagLocked(AnimRow& row, const std::unordered_set<std::string>& sources, const char* derived,
+            bool by_name = false)
         {
             if (sources.empty())
                 return false;
@@ -62,6 +100,13 @@ namespace AnimationDB
                 if (sources.contains(tag))
                     has_source = true;
             }
+            if (!has_source && by_name) {
+                std::vector<std::string> words;
+                NameWords(row.name, words);
+                NameWords(row.registry, words);
+                has_source = std::any_of(words.begin(), words.end(),
+                    [&](const std::string& w) { return sources.contains(w); });
+            }
             if (has_source)
                 row.tags.emplace_back(derived);
             return has_source;
@@ -70,8 +115,10 @@ namespace AnimationDB
         bool ApplyDerivedTagsLocked(AnimRow& row)
         {
             const bool sexual = ApplyDerivedTagLocked(row, g_sex_tags, kSexualTag);
-            const bool restrained = ApplyDerivedTagLocked(row, g_restraint_tags, kRestrainedTag);
-            return sexual || restrained;
+            const bool restrained = ApplyDerivedTagLocked(row, g_restraint_tags, kRestrainedTag, true);
+            const bool rape = ApplyDerivedTagLocked(row, g_rape_tags, kRapeTag);
+            const bool necro = ApplyDerivedTagLocked(row, g_necro_tags, kNecroTag, true);
+            return sexual || restrained || rape || necro;
         }
 
         const SynonymMap* SynonymMapFor(SynonymMode mode)
@@ -1037,6 +1084,66 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return true;
         }
 
+        // A position with no orgasm expected (pos_no_orgasm) takes either gender: only human vs creature still counts.
+        bool PosNoOrgasm(const AnimRow& row, int i)
+        {
+            return i >= 0 && i < static_cast<int>(row.pos_no_orgasm.size()) && row.pos_no_orgasm[i] != 0;
+        }
+
+        // SexLab gender g (0 male, 1 female, 2 male creature, 3 female creature) fits row position i.
+        bool PosGenderFits(const AnimRow& row, int i, int g)
+        {
+            if (i < 0 || i >= static_cast<int>(row.pos_genders.size()))
+                return false;
+            const int have = row.pos_genders[i];
+            if (PosNoOrgasm(row, i))
+                return (have >= 2) == (g >= 2);
+            return have == g;
+        }
+
+        // The row's positions by kind: orgasm-expected male / female / male creature / female creature, and the
+        // no-orgasm human / creature positions, which take either gender.
+        struct GenderSlots
+        {
+            int m = 0, f = 0, mc = 0, fc = 0, freeHuman = 0, freeCreature = 0;
+        };
+        GenderSlots SlotsOf(const AnimRow& row)
+        {
+            GenderSlots s;
+            for (int i = 0; i < static_cast<int>(row.pos_genders.size()); ++i) {
+                const int g = row.pos_genders[i];
+                if (PosNoOrgasm(row, i)) {
+                    if (g >= 2)
+                        ++s.freeCreature;
+                    else
+                        ++s.freeHuman;
+                } else if (g == 0) {
+                    ++s.m;
+                } else if (g == 1) {
+                    ++s.f;
+                } else if (g == 2) {
+                    ++s.mc;
+                } else if (g == 3) {
+                    ++s.fc;
+                }
+            }
+            return s;
+        }
+
+        // A cast of m / f fixed-sex actors and x intersex ones (either sex) seats in M / F orgasm positions and W
+        // free ones (any gender): totals equal, each sex fits its own plus the free positions, and each sex's
+        // positions are filled by that sex or intersex. m / f < 0: not asked (the total only when both are given).
+        bool CastFits(int m, int f, int x, int M, int F, int W)
+        {
+            if (m >= 0 && f >= 0 && M + F + W != m + f + x)
+                return false;
+            if (m >= 0 && (m > M + W || M > m + x))
+                return false;
+            if (f >= 0 && (f > F + W || F > f + x))
+                return false;
+            return true;
+        }
+
         bool MatchesFilter(const AnimRow& row, const FilterSpec& spec, const ExpandedTags& ex)
         {
             if (spec.enabled_only && !row.enabled)
@@ -1059,10 +1166,10 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                 for (int i = 0; i < row.position_count; ++i) {
                     if (i >= static_cast<int>(row.pos_genders.size()))
                         return false;
-                    // Intersex (penis + pussy) fills any male or female position.
+                    // Intersex (penis + pussy) fills any male or female position. No orgasm expected: either gender.
                     const bool intersex = i < static_cast<int>(spec.pos_intersex.size()) && spec.pos_intersex[i];
                     if (intersex ? (row.pos_genders[i] != 0 && row.pos_genders[i] != 1)
-                                 : row.pos_genders[i] != spec.pos_genders[i])
+                                 : !PosGenderFits(row, i, spec.pos_genders[i]))
                         return false;
                     if (i < static_cast<int>(spec.pos_race_keys.size()) &&
                         !spec.pos_race_keys[i].empty()) {
@@ -1076,23 +1183,17 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             }
 
             if (spec.gender_match) {
+                // No-orgasm positions take either gender (GenderSlots' free ones).
+                const GenderSlots slots = SlotsOf(row);
                 if (spec.intersex > 0) {
-                    // Each intersex actor takes a male or a female slot: at least the fixed sexes, and
-                    // the human slots add up to the human cast.
-                    const int males = std::max(spec.males, 0);
-                    const int females = std::max(spec.females, 0);
-                    if (row.males < males || row.females < females ||
-                        row.males + row.females != males + females + spec.intersex)
+                    // Each intersex actor takes a male or a female slot: the human slots add up to the human cast.
+                    if (!CastFits(std::max(spec.males, 0), std::max(spec.females, 0), spec.intersex, slots.m, slots.f,
+                            slots.freeHuman))
                         return false;
-                } else {
-                    if (spec.males >= 0 && row.males != spec.males)
-                        return false;
-                    if (spec.females >= 0 && row.females != spec.females)
-                        return false;
-                }
-                if (spec.male_creatures >= 0 && row.male_creatures != spec.male_creatures)
+                } else if (!CastFits(spec.males, spec.females, 0, slots.m, slots.f, slots.freeHuman)) {
                     return false;
-                if (spec.female_creatures >= 0 && row.female_creatures != spec.female_creatures)
+                }
+                if (!CastFits(spec.male_creatures, spec.female_creatures, 0, slots.mc, slots.fc, slots.freeCreature))
                     return false;
             }
 
@@ -1116,19 +1217,30 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         {
             if (cast.empty())
                 return 0;
-            if (row.pos_genders == cast)
+            // No-orgasm positions take either gender (PosGenderFits / CastFits).
+            const auto inOrder = [&](const std::vector<int>& order) {
+                if (order.size() != row.pos_genders.size())
+                    return false;
+                for (int i = 0; i < static_cast<int>(order.size()); ++i) {
+                    if (!PosGenderFits(row, i, order[i]))
+                        return false;
+                }
+                return true;
+            };
+            if (inOrder(cast))
                 return 0;
             std::vector<int> femalesFirst = cast;
             std::stable_partition(femalesFirst.begin(), femalesFirst.end(), [](int g) { return g == 1; });
-            if (row.pos_genders == femalesFirst)
+            if (inOrder(femalesFirst))
                 return 0;
             int counts[4] = { 0, 0, 0, 0 };
             for (int g : cast) {
                 if (g >= 0 && g < 4)
                     ++counts[g];
             }
-            if (row.males == counts[0] && row.females == counts[1] && row.male_creatures == counts[2] &&
-                row.female_creatures == counts[3])
+            const GenderSlots slots = SlotsOf(row);
+            if (CastFits(counts[0], counts[1], 0, slots.m, slots.f, slots.freeHuman) &&
+                CastFits(counts[2], counts[3], 0, slots.mc, slots.fc, slots.freeCreature))
                 return 1;
             return 2;
         }
@@ -1369,12 +1481,16 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         auto broad = LoadSynonymsFile(dir / "synonyms-broad.json");
         auto sex_tags = LoadDerivedTagsFile(dir / "sex_tags.json");
         auto restraint_tags = LoadDerivedTagsFile(dir / "restraint_tags.json");
+        auto rape_tags = LoadDerivedTagsFile(dir / "rape_tags.json");
+        auto necro_tags = LoadDerivedTagsFile(dir / "necro_tags.json");
         std::lock_guard lock(g_mutex);
         g_syn[0] = std::move(strict);
         g_syn[1] = std::move(broad);
         g_scene_filters.clear(); // scene settings reload at the same points as the synonym files
         g_sex_tags = std::move(sex_tags);
         g_restraint_tags = std::move(restraint_tags);
+        g_rape_tags = std::move(rape_tags);
+        g_necro_tags = std::move(necro_tags);
         int added = 0;
         for (auto& [reg, row] : g_rows) {
             if (ApplyDerivedTagsLocked(row)) {
@@ -1580,27 +1696,98 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         return out;
     }
 
-    void ApplySceneSetting(FilterSpec& spec, const std::string& name, bool bound)
+    namespace
     {
-        const auto f = LoadSceneSettingFilter(name);
-        auto append = [](std::vector<std::string>& dst, const std::vector<std::string>& src) {
+        void AppendUnique(std::vector<std::string>& dst, const std::vector<std::string>& src)
+        {
             for (const auto& t : src) {
                 if (std::find(dst.begin(), dst.end(), t) == dst.end())
                     dst.push_back(t);
             }
+        }
+    }
+
+    bool AsksBound(const FilterSpec& spec)
+    {
+        // The restraint tags (restraint_tags.json, which derive restrained) and the worn-device tags.
+        static const char* kBoundTags[] = { "restrained", "bound", "bondage", "armbinder", "yoke", "cuffs", "cuffed",
+            "rope", "chains", "hogtied", "deviousdevice" };
+        const auto asks = [](const std::vector<std::string>& tags) {
+            for (const auto& tag : tags) {
+                const auto lower = ToLower(tag);
+                for (const char* b : kBoundTags) {
+                    if (lower == b)
+                        return true;
+                }
+            }
+            return false;
         };
-        append(spec.any_tags, f.tags_any);
-        append(spec.prefer_tags, f.tags_prefer);
-        // With DD tag filtering off the worn scan reports nothing, so never gate DD animations then.
+        return asks(spec.must_tags) || asks(spec.any_tags);
+    }
+
+    bool AsksBoundCsv(const std::string& csv)
+    {
+        FilterSpec probe;
+        std::string cur;
+        for (const char c : csv + ",") {
+            if (c != ',') {
+                cur += c;
+                continue;
+            }
+            const auto b = cur.find_first_not_of(" \t");
+            const auto e = cur.find_last_not_of(" \t");
+            if (b != std::string::npos)
+                probe.must_tags.push_back(cur.substr(b, e - b + 1));
+            cur.clear();
+        }
+        return AsksBound(probe);
+    }
+
+    void SuppressUnlessBound(FilterSpec& spec, bool bound)
+    {
+        if (!bound && !AsksBound(spec))
+            AppendUnique(spec.suppress_tags, { "restrained" });
+    }
+
+    bool AsksNecro(const FilterSpec& spec)
+    {
+        const auto asks = [](const std::vector<std::string>& tags) {
+            for (const auto& tag : tags) {
+                if (ToLower(tag) == kNecroTag)
+                    return true;
+            }
+            return false;
+        };
+        return asks(spec.must_tags) || asks(spec.any_tags);
+    }
+
+    bool SuppressUnlessDead(FilterSpec& spec, bool anyDead)
+    {
+        if (anyDead || AsksNecro(spec))
+            return false;
+        if (std::find(spec.suppress_tags.begin(), spec.suppress_tags.end(), kNecroTag) != spec.suppress_tags.end())
+            return false;
+        spec.suppress_tags.emplace_back(kNecroTag);
+        return true;
+    }
+
+    bool ApplySceneSetting(FilterSpec& spec, const std::string& name, bool bound)
+    {
+        const auto f = LoadSceneSettingFilter(name);
+        AppendUnique(spec.any_tags, f.tags_any);
+        AppendUnique(spec.prefer_tags, f.tags_prefer);
+        // Bound only when the cast wears heavy bondage (WearsHeavyBondage, whatever the DD tag setting) or asked
+        // for it; most actors are not bound.
         if (f.assume_bound)
             bound = true;
-        if (!bound && SexLabNet::GetConfigBool("sexlab.tags.filter_by_devious_devices", true))
-            append(spec.suppress_tags, f.tags_suppress_unless_bound);
+        if (!bound)
+            AppendUnique(spec.suppress_tags, f.tags_suppress_unless_bound);
         std::lock_guard lock(g_mutex);
         for (const auto& ex : f.exclude_settings) {
             if (auto sub = ExcludeFilterForLocked(ex))
                 spec.exclude_filters.push_back(std::move(*sub));
         }
+        return bound;
     }
 
     FilterSpec SceneSettingResolveBase(const std::string& name, bool bound)
@@ -1610,7 +1797,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         base.must_tags = f.tags;
         base.suppress_tags = f.tags_suppress;
         base.synonyms = f.synonyms.value_or(SynonymMode::Broad);
-        ApplySceneSetting(base, name, bound);
+        SuppressUnlessBound(base, ApplySceneSetting(base, name, bound));
         // ResolveTags only asks "does any animation exist"; preference never empties a probe.
         base.prefer_tags.clear();
         return base;
@@ -1631,15 +1818,22 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                     spec.exclude_filters.push_back(std::move(*sub));
             }
         }
-        if (j.contains("_setting") && j["_setting"].is_string()) {
-            bool bound = false;
-            if (bound_override)
-                bound = *bound_override;
-            else if (j.contains("_bound"))
-                bound = j["_bound"].is_boolean() ? j["_bound"].get<bool>()
-                        : j["_bound"].is_number() && j["_bound"].get<double>() != 0;
-            ApplySceneSetting(spec, j["_setting"].get<std::string>(), bound);
-        }
+        // Bound animations are left out unless the cast wears heavy bondage (bound_override: the caller scanned
+        // _form_ids), the query says _bound, its setting assumes it, or it asks for bound tags. Only for a query that
+        // knows its cast or setting; a plain browse (no _form_ids, _bound or _setting) is unchanged.
+        const bool hasSetting = j.contains("_setting") && j["_setting"].is_string();
+        const bool hasBound = j.contains("_bound");
+        if (!hasSetting && !hasBound && !bound_override)
+            return;
+        bool bound = false;
+        if (bound_override)
+            bound = *bound_override;
+        else if (hasBound)
+            bound = j["_bound"].is_boolean() ? j["_bound"].get<bool>()
+                    : j["_bound"].is_number() && j["_bound"].get<double>() != 0;
+        if (hasSetting)
+            bound = ApplySceneSetting(spec, j["_setting"].get<std::string>(), bound);
+        SuppressUnlessBound(spec, bound);
     }
 
     std::filesystem::path PluginDataDir()

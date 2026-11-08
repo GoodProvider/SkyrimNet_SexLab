@@ -576,7 +576,8 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
         return None
     endif
     sl_scene.scene_creator_menu_called = scene_creator_menu_called
-    Release() 
+    sl_scene.SetStartTags(tags_string, tags_suppress_string)
+    Release()
     DbgReturn("FinishStartScene", "sl_scene")
     return sl_scene 
 EndFunction
@@ -1561,6 +1562,7 @@ int Function BuildWebUIObject()
         JMap.setInt(po, "_dressed", no_stripping_mask[i])
         JMap.setInt(po, "_no_orgasm", no_orgasm_mask[i])
         JMap.setInt(po, "_victim", victim_mask[i])
+        JMap.setInt(po, "_dead", actors[i].IsDead() as int)
         JMap.setStr(po, "_speaking", speaking_modifiers[i])
         JMap.setInt(po, "_gender", SexLabGender(sexlab, actors[i]))
         JMap.setInt(po, "_intersex", IsIntersex(sexlab, actors[i]) as int)

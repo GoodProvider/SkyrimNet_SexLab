@@ -80,3 +80,6 @@ void WebUI_Reset();
 void Reset_To_Default();
 /// MCM-driven menu hotkey: register dxScanCode when enabled, else unregister.
 void WebUI_SetMenuHotkey(uint32_t dxScanCode, bool enabled);
+/// Skyrim VR: the controller chord that does what the menu hotkey does (sexlab.editor.vr_*). Bound while the menu
+/// hotkey is enabled; stored and re-applied once the view exists. No-op on flat.
+void WebUI_SetMenuVrChord(std::string button, std::string modifier, std::string hand, bool enabled);

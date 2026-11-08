@@ -304,6 +304,62 @@ void SetPaused(bool paused)
     }
 }
 
+namespace {
+
+std::uint32_t VrButtonCode(std::string_view name)
+{
+    if (name == "a") return kVRButtonA;
+    if (name == "stick") return kVRButtonStickClick;
+    if (name == "trigger") return kVRButtonTrigger;
+    if (name == "touchpad") return kVRButtonTouchpad;
+    if (name == "grip") return kVRButtonGrip;
+    return kVRButtonNone;
+}
+
+// Present thread: hand the body to the game thread.
+void OnVrChord(ViewId, void* user)
+{
+    if (!g_ml || !g_mod || !user) return;
+    g_ml->PostGameTask([](void* p) {
+        auto body = reinterpret_cast<void (*)()>(p);
+        if (body)
+            body();
+    }, user);
+}
+
+}  // namespace
+
+bool BindVrChord(std::string_view button, std::string_view modifier, std::string_view hand, void (*body)())
+{
+    const auto v = g_view.load();
+    if (!g_ml || !g_mod || !v) return false;
+    // BindVRHotkeyCallback arrived in 0.21.0 (below our 0.30.1 floor); "vr" is 1 only while the presenter is live.
+    if (g_ml->hostVersionNumber < 2100 || g_ml->QueryCapability("vr") != 1) {
+        webui_log::info("UiEngine: not VR, controller chord skipped.");
+        return false;
+    }
+    VRHotkeyDesc desc{};
+    desc.size = sizeof(VRHotkeyDesc);
+    desc.button = body ? VrButtonCode(button) : kVRButtonNone;
+    desc.modifier = VrButtonCode(modifier);
+    if (desc.modifier == desc.button)
+        desc.modifier = kVRButtonNone;
+    desc.hand = hand == "left" ? 1 : hand == "right" ? 2 : 0;
+    const auto r = g_ml->BindVRHotkeyCallback(v, &desc, desc.button ? OnVrChord : nullptr,
+                                              reinterpret_cast<void*>(body));
+    if (r != Result::Ok) {
+        std::string msg = g_ml->GetLastErrorMessage(g_mod);
+        webui_log::warn("UiEngine: BindVRHotkeyCallback -> {} ({})", static_cast<int>(r), msg.c_str());
+        return false;
+    }
+    if (desc.button)
+        webui_log::info("UiEngine: VR controller chord bound: {}+{} ({})", button,
+                        desc.modifier ? modifier : std::string_view{"none"}, hand);
+    else
+        webui_log::info("UiEngine: VR controller chord cleared.");
+    return true;
+}
+
 void InvokeJS(const char* script)
 {
     if (!script || !Available()) return;

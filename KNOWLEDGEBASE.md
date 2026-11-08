@@ -1,5 +1,149 @@
 # Knowledgebase
 
+## The final-stage hold ran to its max; a partner's bar dropped; necro picked by name (2026-11-07, verified in game)
+
+**Symptom:**
+- The final stage (a victim scene's mid jump, and a consensual scene's end list) stayed up long after the drain and the narration ended: 30 s `(max)`, or until the user pressed select.
+- Coralyn's bar fell to 0 at her orgasm instead of draining.
+- A mid switch with `necro` suppressed played `FB_NecroFemDomCow`.
+
+Log: `checkpoints/2026-11-06-review/logs/2026-11-07-15-31-46/SkyrimNet_SexLab.log`:
+- L982 `Ending_Hold`, then L1039 `released … 30.76s (max)`;
+- L2256 `Ending_Hold`, then L2314 `LastStage_Commit … deadline:False` (user key; the list was frozen by `ending_holding`);
+- L2225–2227: Coralyn's orgasm before Bob's group join;
+- L1041 the necro switch.
+
+**Cause:**
+- `Ending_Poll` released on the response mark (`ResponseDoneSince`), which didn't fire here (it did on 14:38), and it never looked at the drain.
+- `StartOrgasmHold` only held the stage primary.
+- The SLAL tags of `FB_NecroFemDomCow` / `FB_BoundFemCowGirl` don't name the act, so the derived tags missed them.
+
+**Fix:**
+- Release 2 s after `FinalStageRemaining` reaches 0, once nothing is queued or playing (`NarrationIdle` + `GetSpeechQueueSize`). A timed list then commits at once (`ending_released_drained`).
+- Every orgasm below the final stage drains and holds the stage.
+- `necro` / `restrained` also match whole name words.
+
+**Traps:** a release condition must not depend only on pairing a speech event to a narration. Per-sentence `SpeechStarted` / `SpeechComplete` ordering is not guaranteed; the debug lines `NarrationTiming: started/complete` show it. `OrgasmHoldSpeaking` still uses `DoneSinceMostRecentStarted` (bounded by `hold_max`).
+
+## The victim's orgasm sent the stage back before the narration (2026-11-07, built, untested in game)
+
+**Symptom:** in a femdom victim scene, Bob (the victim) was the stage primary of the new animation. He orgasmed at 4/5, and the stage fell to 1 1.7 s later, while his orgasm narration was still coming.
+
+Log: `checkpoints/2026-11-06-review/logs/2026-11-07-15-04-38/SkyrimNet_SexLab.log` L1132–1153 (`orgasm 0x14`, then L1146 `stage follows 0x14 enjoyment=0.6 … 4 -> 1/5`). Again at L1497–1498, in the same tick.
+
+**Cause:** `NotePrimaryFinished` skips victim scenes, and `NoteLeadMidFinish` / `NoteEndReached` cover only the ending lead. Any other primary's orgasm reset the bar with nothing holding the stage.
+
+**Fix:** `StartOrgasmHold` uses the Num 4 drain (`afterglowFree`): the bar drains at the afterglow rate while `StageFollowPrimary` waits. At 0 it also waits for the narration's speech to finish (`OrgasmHoldSpeaking`).
+
+**Traps:** any new orgasm path in a stage-by-enjoyment scene must decide who holds the stage. A bare `enjoyment = 0` sends it back within `kStageBackMinSecs`.
+
+## Mid-scene switch before the drain; Num 4 at the jump ended the scene (2026-11-07, built, untested in game)
+
+**Symptom:**
+- A victim scene's lead orgasm below the target jumped to the final stage, then a new animation started 1.7 s later with the bar zeroed. The pick was a necro animation for a living cast.
+- Num 4 pressed 1.4 s after the jump to the final stage left the list, but the stage stayed final, the list reopened and the scene ended 3 s later.
+
+Log: `checkpoints/2026-11-06-review/logs/2026-11-07-14-48-39/SkyrimNet_SexLab.log`:
+- L2300 `mid scene` 14:23:31.65, then `WebUI_SwitchToRegistry ... FB_NecroFemDomCow` 14:23:33.3;
+- L3314 `LeaveLastStage`, `TM_StagePrev stage 5 -> 5`, then `status:Frozen` at 14:29:39.9.
+
+**Cause:**
+- `Ending_MidPoll` treated "engine not in its last stage" as drained. The Papyrus stage reaches the final one before the engine's `SetStage` does.
+- SexLab 1.6x ignores `GoToStage` during its final-stage `OrgasmStart`, and `LastStage_Close` had already pulled the list's timer hold, so SexLab's final timer ran out.
+
+**Fix:**
+- Drained = `IsLastStage && FinalStageRemaining <= 0`, waiting while only `IsPrimaryFinished` is true.
+- `Back_Arm` / `Back_Poll` re-hold the timer and retry the move for 5 s.
+- AnimDB suppresses the new derived `necro` tag for a cast with nobody dead.
+
+**Traps:**
+- After a `GoToStage` on 1.6x, check `thread.Stage`: a move can be dropped silently.
+- Never release a final-stage timer hold before the stage has actually moved.
+
+## Victim scene end state stayed on the second-to-last stage (2026-11-07, built, untested in game)
+
+**Symptom:** in every victim scene with stages following enjoyment, the end list ran on stage 4/5. The animation and HUD never showed the final stage. A lead orgasm below the target (target 2) sent the stage straight back to 1, with no drain. Log: `checkpoints/2026-11-06-review/logs/2026-11-07-14-04-53/SkyrimNet_SexLab.log` L517 / L1275 / L4059 / L4947 `Ending_EndState … at stage 4/5`, with no `Ending_ToFinal`; L941–954 orgasm, then `4 -> 1/5`, then `orgasms:1/2`.
+
+**Cause:** `Ending_EndState` was written to hold the current stage ("no final-stage jump"). `NotePrimaryFinished` skips victim scenes, so nothing stopped `StageFollowPrimary` from following the lead's reset bar after an orgasm below the target.
+
+**Fix:** `Ending_EndState` calls `Ending_ToFinal` before the list. `NoteLeadMidFinish` sets `primaryFinished` for the lead below its target. The Scene's `ending_mid` goes to the final stage, waits for the drain (`Ending_MidPoll`), then switches to a random animation with the creator's tags.
+
+**Traps:**
+- `endHold` and `primaryFinished` both put the engine in the last stage (`InLastStage`), but only `primaryFinished` waits for the final stage. Use `endHold` for "stop here", and `primaryFinished` for "go to the final stage and drain there".
+- `SetStage`'s stage spike used to add +5 to a draining bar on the jump. It now skips `afterglow` actors.
+
+## Victim scene: the aggressor at 100 waited for the stage cap (2026-11-07, built, untested in game)
+
+**Symptom:** with stages following enjoyment, a victim scene's aggressor sat at 100 (or was pulled back to 98.3 again and again) on the second-to-last stage until the stage hold cap ran out. The victim, not the aggressor, punished. Log: `checkpoints/2026-11-06-review/logs/2026-11-07-10-07-19/SkyrimNet_SexLab.log`: L525 Frandar at 100, L539–543 `stage hold expired, gate` 69 s later; L1316–1350 Coralyn 100 → 98.3; L1290 `0xff000f16 punishes 0x29000d95` (victim punishes aggressor).
+
+**Cause:** three checks keyed on the wrong scene flag or actor:
+- The penultimate gate's stage-by-enjoyment branch skips a primary at the top in a `VictimScene` (the lead's target ends the scene), and the victim-hold branch that watches aggressors at 100 is never reached: `VictimHoldScene()` returns false whenever stages follow enjoyment.
+- The `gateHeld` 98 cap exempted aggressors only under `victimHold`, so a non-primary aggressor could never reach 100.
+- `StagePunish` always made the stage primary the punisher, and the primary can be the victim (male first).
+
+**Fix:** a `victimScene` flag beside `victimHold`: the gate fires for an expected aggressor at 100 and the cap spares those aggressors. In a victim scene an aggressor punishes a victim. With no strategy decision (AI off) the punished NPC falls back to Focused on the punisher (`NoDecisionFallback`).
+
+**Traps:**
+- `VictimHoldScene` and `VictimScene` are different: the first is the timer-mode hold only. Check both when a rule is about victims.
+- The stage primary is about the animation's arousal, not the scene's roles; don't use it as "who acts".
+
+## Victim hold clock counted menu time (2026-11-07, built, untested in game)
+
+**Symptom:** a held stage gave up after "77 s" with only about 14 s of play; the stuck-stage punishment never came in the same scene. Log: same file, L396→L397, L533→L534, L1350→L1359: about 65 s gaps with only SkyrimNet's HTTP thread logging (game paused in a menu).
+
+**Cause:** `Victim_Poll` measured `GetCurrentRealTime() - victim_hold_started`. Real time runs in menus, but Papyrus updates (and the engine's `stageElapsed`) don't.
+
+**Fix:** `Victim_HeldTick` adds the step between polls, capped at 2 s (polls run every 1 s), so a menu adds at most 2 s. A negative step (save/load resets the clock) adds nothing, which removed the old negative-time branches.
+
+**Trap:** any Papyrus deadline built on `GetCurrentRealTime` counts menu time; cap the per-poll step or freeze it in menu mode (`Menu_FreezeDeadlines`).
+
+## Skyrim VR: the WebUI opens with a controller chord (2026-11-07, built, untested in a headset)
+
+The DLL is already SE+AE+VR (MinLL/CommonLibVR, below). Magelight places the views on VR (panel lazy-follow, HUD head-locked) and drives the laser by itself (`extern/MagelightUI/docs/VR_PRESENTER.md`). Under PrismaUI there is no VR UI.
+
+- **Opening needs a controller chord.** The menu hotkey is a keyboard key. `UiEngine::BindVrChord` → `BindVRHotkeyCallback` on the webui view (host 0.21.0+, below our 0.30.1 floor), bound only when `QueryCapability("vr") == 1`. Settings `sexlab.editor.vr_button` / `vr_modifier` / `vr_hand` (Grip + A; SkyrimNet_Leashed's panel uses Grip + Stick click), active while `hotkey_enabled` is on. Config can apply before the view exists, so `WebUI_SetMenuVrChord` stores the settings and WebUI init binds them again. B / Y is Magelight's built-in close, so `menu` is not offered. While the view has focus, only its own chord fires (to close).
+- **The chord callback runs on the present thread.** It only `PostGameTask`s the body. The body runs inside an SKSE task, so `AddTask` from there is safe.
+- **`AddTask` from a main-thread entry point can hang on VR.** SKSE VR drains its task queue on game job threads while holding the queue lock, so an input sink or Papyrus native that calls `AddTask` can wait on a job that waits for the frame (`MagelightUI_API.h` threading contract). `TaskPost::FromEntryPoint` posts from a thread of our own on VR. Only the input-sink UI paths use it so far (`Call_ProcessHotkey`, `Hud::DispatchMenuKey`). The ~60 other `AddTask` sites are an open audit (SkyrimNet_Leashed `checkpoints/2026-11-07-vr-support/`).
+- **The main view keeps the text-entry gate** (no `kUIModeFlagNoTextEntry`): it has text fields (Edit Stage Description), and VR's keyboard handles them.
+- `Hud.cpp` already uses `CrosshairPickData::GetActiveTarget()`. Don't read its members: the cross-runtime build lays it out with VR's per-device arrays, which are wrong on SE / AE.
+
+## Num 4 in the last stage switched to timers (2026-11-07, built, untested in game)
+
+**Symptom:** after the main actor's orgasm took the scene to its final stage, Num 4 went back one stage on timers (`stages on timers`) instead of leaving the last stage with stages following enjoyment. Log: `checkpoints/2026-11-06-review/logs/2026-11-07-09-19-02/SkyrimNet_SexLab.log`: L2428 `last stage at 5/5`, L2441 Num 4 1.3 s later, L2447 `stages on timers`, L2448 `TM_StagePrev stage 5 -> 4`.
+
+**Cause:** `LastStage_Active` was only true once the end list was up (`list_phase != 0`) or in a victim end state. The engine enters the last stage at the orgasm, but `LastStage_Consider` runs at the end of `StageStart`, seconds later. A key pressed in between took the old `StageStep` path (`Ending_LeaveFinal` → `StageManual_TakeOver`).
+
+**Fix:** native `IsLastStage(sid)`; `LastStage_Active` is true while the engine is in the last stage. Num 4 now also keeps the afterglow draining (`LeaveLastStage` sets `afterglowFree`, before `LastStage_Close`) and moves to the stage for the primary's bar; the stages follow the drain down.
+
+**Traps:**
+- Papyrus state that trails the engine (`list_phase`) must not gate keys; ask the engine.
+- `LastStage_Close` calls `SetEndHold(false)`, which zeros the afterglow: call `LeaveLastStage` first.
+- `StageFollowPrimary` never moves off the final stage (and not while `gateDone` from N−1 on), so leaving it needs an explicit stage move.
+
+## Victim scene stalled minutes per stage after an end-list switch (2026-11-07, built, untested in game)
+
+**Symptom:** an NPC-only victim scene (Coralyn victim, the guard aggressor). After the end list picked a new animation, every stage waited 78–105 s, and the guard sat at 100 enjoyment on the second-to-last stage without orgasming. Log: `checkpoints/2026-11-06-review/logs/2026-11-07-09-19-02/SkyrimNet_SexLab.log`: L4415 `ending lead 0x29000d95 target 2`, then `Victim_Poll ... no orgasm after 104.9s` / `92.3s` / `78.8s`; the guard reached 100 at 09:06:41.
+
+**Cause:** the first animation (cunnilingus) defaulted the guard to no orgasm, so `Ending_PickLead` fell back to the victim. The switch's animation made him orgasm-expected: he became the stage primary and `VictimScene` turned true. In a victim scene the gate ignores a primary at the top (the lead's target ends it), and the lead was still the victim, so nothing ended the stage but the `StageHoldCap`. `Ending_RollTarget` only moved a lead that had 0 orgasms and was no longer expected.
+
+**Fix:** `Ending_RollTarget` (every `StageStart`) moves the lead from a victim to an aggressor who became expected, with target = their count + 1.
+
+**Traps:**
+- Orgasm expectations change on every animation (position defaults reseed unless locked). Anything chosen from them at scene start (lead, primary) must be re-checked on an animation change.
+
+## Victim end list came after the stage had dropped to 1 (2026-11-07, built, untested in game)
+
+**Symptom:** a victim scene with stages following enjoyment. The aggressor (also the primary) orgasmed at stage 4, the stage went back to 1, and only then did the end list appear, on stage 1. Log: `checkpoints/2026-11-06-review/logs/2026-11-07-08-14-17/SkyrimNet_SexLab.log`: L488 `stage follows 0x14 enjoyment=0.0 ... 4 -> 1/5`; L508-509 `Ending_EndState` and `end hold true at stage 4/5`, 2.3 s later.
+
+**Cause:** the end hold was set by Papyrus (`Ending_Check` → `Ending_EndState` → `SetEndHold`), which runs after the orgasm group is dispatched. `Fire` had already reset enjoyment to 0, and the next tick's `StageFollowPrimary` sent the stage back. A victim scene never sets `primaryFinished`, so nothing in the engine held the stage.
+
+**Fix:** the engine sets `endHold` itself in `Fire` (`NoteEndReached`) when the ending lead reaches `endingTarget`. `Ending_Check` releases a hold the Scene doesn't take. The orgasming actor's bar also no longer drops to 0 in the last stage: it decays over the final stage's timer (afterglow). See docs/developers/orgasm-engine.md "Last stage (afterglow)".
+
+**Traps:**
+- Any hold that must stop a stage move caused by an orgasm has to be set under `g_lock` in the same tick as the orgasm, never from Papyrus.
+- `NoteExternalOrgasm` must not set the hold: no `Ending_Check` follows that path, so nothing would release it.
+- The engine's `endingTarget` is a copy: re-send it (`Engine_SetEndingTarget`) whenever the Scene changes `ending_target` or `ending_done` (`Ending_Rearm`, `Ending_EndState`, `LastStage_SwitchFailed`).
+
 ## Crash after every SexLab P+ scene on P+ 2.15; P+ 2.17+ now required (2026-11-06, built, untested in game)
 
 **Symptom:** the game crashes as a SexLab scene ends, every time. Crash log: `EXCEPTION_ACCESS_VIOLATION` at `SkyrimSE.exe+0ADA8D7` (`mov rcx, [rax+0x10]`) in the player's `hkbStateMachine "RootBehaviorGraph"`. The Papyrus stack is `Debug.SendAnimationEvent` ← `sslActorAlias.SendDefaultAnimEvent` ← `UnlockActor` ← `Clear` ← `OnRequestClear`. Papyrus.0.log is full of `Method PauseTimer not found on sslthreadcontroller`, plus `GetLegacyStageNum` and `GetLegacyStagesCount`. Our log shows `SexLab version:34537568` (0x020F0060 = P+ 2.15). The last line before the crash is `Ending_Watch ... P+ final stage done ... ending the animation ... stage:4/3`. Logs: `checkpoints/2026-11-06-crash/logs/2026-11-06-08-12-17/`.
@@ -215,7 +359,7 @@
 - **Report (Delicious Nuts):** hotkey scene, Hulda + player, with the player giving. There was no dialogue for a long time, then Hulda was described as the one penetrating. The ending narration was fine. Logs: `checkpoints/2026-10-19-no-narration/logs/2026-10-19-08-53-21/`.
 - **Late start:** the animation began at 20:19:39 and the start DN went out at 20:20:45 (`SkyrimNet_SexLab.log:668`, `:798`). The StageStarts for stages 2 and 3 still logged `status:Setup` (`:734`, `:768`): the first StageStart was still in its bookkeeping (each Papyrus call took about 0.2 s). **Rule:** narrate first, then do the bookkeeping. `StageStart` claims `STATUS_ACTIVE` at its top and calls `StageStart_NarrateStart`.
 - **No silence timer existed.** The only continue was on a stage change with an unchanged description, gated by `NarrationCoolOffAllows` (20 s since *any* audio ended). Bystander chatter in the inn kept that under 20 s, so it was dropped (`:843`).
-- **CheckDuplicate stores before the send decision:** `DirectNarration_Optional` dropped the continue but the text was already stored, so each later identical continue was blanked (`:846`, `:907`). A drop now clears the stored text. Silence nudges (`SilenceNudge`, `"continue scene"`) bypass CheckDuplicate on purpose.
+- **CheckDuplicate stores before the send decision:** `DirectNarration_Optional` dropped the continue but the text was already stored, so each later identical continue was blanked (`:846`, `:907`). A drop now clears the stored text. Silence nudges (`SilenceNudge`: the mini-game summary, or `"continue scene"`) bypass CheckDuplicate on purpose.
 - **Tag-fallback wording:** SexLab sorts the receiver to position 0. "<pos0> is having anal sex with <pos1>" made the LLM read position 0 as the doer. Use receiver verbs ("receiving … from").
 - **Tongue out:** this mod sets no expressions. It comes from SexLab expressions or an expression mod.
 - **Devkit (beta28-rc2):** there is no per-scene continue API, no trigger interval, and no C++ audio or queue query. Own the timer and use `SkyrimNetApi.DirectNarration` with an explicit speaker.
@@ -387,7 +531,7 @@
 
 **Rule:** register a native with `true` when it is thread-safe: it touches only plugin data under its own mutex (`JsonStore` `g_mutex`, `AnimationDB` `g_mutex`) or is a pure function. Leave it `false` when it reads or writes game objects (forms, actors, UI `Invoke`), or for the AnimDB sync / save natives. Keep Papyrus hot paths (seed, `BuildWebUISceneMenuObject`, Cancel snapshot) free of debug walks such as `DbgAnimList`.
 
-**Orgasm engine (2026-11-06):** 16 read-only `SkyrimNet_SexLab_OrgasmEngine` natives are now `true` (state under `OrgasmEngine` / `NarrationTiming` `g_lock`, only the argument's FormID). Anything that reaches `PrimaryOf` (`IsFemale` fallback reads the actor base), actor values, `AnimSpeed`, display names or returns a `LookupByID` actor stays `false`; see the comment above the registrations in `Papyrus_OrgasmEngine.cpp`.
+**Orgasm engine (2026-11-06):** 16 read-only `SkyrimNet_SexLab_OrgasmEngine` natives are now `true` (state under `OrgasmEngine` / `NarrationTiming` `g_lock`, only the argument's FormID). `PrimaryOf` reads only the cached `stageGender` (BeginScene seeds it from the base sex on the game thread; `SetStageInputs` overwrites it), so `IsStageAdvancePrimaryEnjoyment`, `CanStageAdvancePrimaryEnjoyment` and `IsVictimHoldScene` are `true` too. Anything that reads actor values, `AnimSpeed`, display names or returns a `LookupByID` actor (`GetStagePrimary`) stays `false`; see the comment above the registrations in `Papyrus_OrgasmEngine.cpp`.
 
 ## Lone hug pulled a scene victim out of SexLab (2026-10-07)
 

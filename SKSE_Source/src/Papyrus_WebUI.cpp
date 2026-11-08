@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+
+#include "TaskPost.h"
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -1596,7 +1598,7 @@ namespace PapyrusBindings_WebUI
             if (!j.contains("_form_ids")) {
                 std::optional<AnimationDB::FilterSpec> base;
                 if (!setting.empty())
-                    base = AnimationDB::SceneSettingResolveBase(setting, false);
+                    base = AnimationDB::SceneSettingResolveBase(setting, AnimationDB::AsksBoundCsv(tags));
                 const auto mode = explicitMode.value_or(base ? base->synonyms : AnimationDB::SynonymMode::Broad);
                 InvokeResolveTagsResult(request_id, tags,
                     AnimationDB::ResolveTags(tags, actor_count, mode, base ? &*base : nullptr));
@@ -1605,10 +1607,12 @@ namespace PapyrusBindings_WebUI
             // TargetMenu scene start: append the cast's worn DD tags that still match (main thread for the scan).
             const auto formIds = ParseFormIds(j);
             SKSE::GetTaskInterface()->AddTask([request_id, tags, actor_count, explicitMode, formIds, setting]() {
-                const auto dd = BondageCatalog::WornAnimationTags(ActorsFromFormIds(formIds));
+                const auto cast = ActorsFromFormIds(formIds);
+                const auto dd = BondageCatalog::WornAnimationTags(cast);
+                const bool bound = BondageCatalog::WearsHeavyBondage(cast) || AnimationDB::AsksBoundCsv(tags);
                 std::optional<AnimationDB::FilterSpec> base;
                 if (!setting.empty())
-                    base = AnimationDB::SceneSettingResolveBase(setting, !dd.empty());
+                    base = AnimationDB::SceneSettingResolveBase(setting, bound);
                 const auto mode = explicitMode.value_or(base ? base->synonyms : AnimationDB::SynonymMode::Broad);
                 const auto* pbase = base ? &*base : nullptr;
                 std::string resolved = AnimationDB::ResolveTags(tags, actor_count, mode, pbase);
@@ -1727,11 +1731,16 @@ namespace PapyrusBindings_WebUI
         }
 
         SKSE::GetTaskInterface()->AddTask([request_id, formIds]() {
-            const auto dd = BondageCatalog::WornAnimationTags(ActorsFromFormIds(formIds));
-            webui_log::info("HandleResolveDeviousTags id={} actors={} tags={}", request_id, formIds.size(), JoinTags(dd));
+            const auto cast = ActorsFromFormIds(formIds);
+            const auto dd = BondageCatalog::WornAnimationTags(cast);
+            // _worn: heavy bondage on the cast whatever the DD tag setting (the bound word starts red without it).
+            const bool worn = BondageCatalog::WearsHeavyBondage(cast);
+            webui_log::info("HandleResolveDeviousTags id={} actors={} tags={} worn={}", request_id, formIds.size(),
+                JoinTags(dd), worn);
             nlohmann::json out;
             out["_request_id"] = request_id;
             out["_tags"] = dd;
+            out["_worn"] = worn;
             WebUI_Invoke(std::string("deviousTagsResult(") + SafeDump(out) + ");");
         });
     }
@@ -1774,7 +1783,8 @@ namespace PapyrusBindings_WebUI
 
     void Call_ProcessHotkey(std::int32_t keyCode)
     {
-        SKSE::GetTaskInterface()->AddTask([keyCode]() {
+        // Called from the input sink (main thread) or the VR chord's task: VR-safe post (TaskPost.h).
+        TaskPost::FromEntryPoint([keyCode]() {
             auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
             if (!vm) {
                 webui_log::error("Call_ProcessHotkey: no VM");

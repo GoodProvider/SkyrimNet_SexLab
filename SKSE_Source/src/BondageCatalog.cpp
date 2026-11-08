@@ -484,44 +484,58 @@ namespace BondageCatalog
         return state;
     }
 
-    std::vector<std::string> WornAnimationTags(const std::vector<RE::Actor*>& actors)
+    namespace
     {
         // Worn-keyword scan only: no DeviousDevicesAPI / zadLibs, so the core never depends on DD.
-        static const std::pair<const char*, const char*> kDeviousTagKeywords[] = {
-            {"zad_DeviousArmbinderElbow", "armbinder"},
-            {"zad_DeviousArmbinder", "armbinder"},
-            {"zad_DeviousYokeBB", "yoke"},
-            {"zad_DeviousYoke", "yoke"},
-            {"zad_DeviousCuffsFront", "cuffs"},
-        };
+        std::unordered_set<std::string> ScanWornBondage(const std::vector<RE::Actor*>& actors)
+        {
+            static const std::pair<const char*, const char*> kDeviousTagKeywords[] = {
+                {"zad_DeviousArmbinderElbow", "armbinder"},
+                {"zad_DeviousArmbinder", "armbinder"},
+                {"zad_DeviousYokeBB", "yoke"},
+                {"zad_DeviousYoke", "yoke"},
+                {"zad_DeviousCuffsFront", "cuffs"},
+            };
+            std::unordered_set<std::string> found;
+            for (auto* actor : actors) {
+                if (!actor)
+                    continue;
+                auto inv = actor->GetInventory([](RE::TESBoundObject& o) { return o.IsArmor(); });
+                for (const auto& [obj, data] : inv) {
+                    if (!data.second || !data.second->IsWorn())
+                        continue;
+                    auto* armo = obj ? obj->As<RE::TESObjectARMO>() : nullptr;
+                    if (!armo)
+                        continue;
+                    bool matched = false;
+                    for (const auto& [kw, tag] : kDeviousTagKeywords) {
+                        if (armo->HasKeywordString(kw)) {
+                            found.insert(tag);
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched && armo->HasKeywordString("zad_DeviousHeavyBondage"))
+                        found.insert("bound");
+                }
+            }
+            return found;
+        }
+    }
+
+    bool WearsHeavyBondage(const std::vector<RE::Actor*>& actors)
+    {
+        return !ScanWornBondage(actors).empty();
+    }
+
+    std::vector<std::string> WornAnimationTags(const std::vector<RE::Actor*>& actors)
+    {
         static const char* kTagOrder[] = { "armbinder", "yoke", "cuffs", "bound" };
 
         std::vector<std::string> out;
         if (!SexLabNet::GetConfigBool("sexlab.tags.filter_by_devious_devices", true))
             return out;
-        std::unordered_set<std::string> found;
-        for (auto* actor : actors) {
-            if (!actor)
-                continue;
-            auto inv = actor->GetInventory([](RE::TESBoundObject& o) { return o.IsArmor(); });
-            for (const auto& [obj, data] : inv) {
-                if (!data.second || !data.second->IsWorn())
-                    continue;
-                auto* armo = obj ? obj->As<RE::TESObjectARMO>() : nullptr;
-                if (!armo)
-                    continue;
-                bool matched = false;
-                for (const auto& [kw, tag] : kDeviousTagKeywords) {
-                    if (armo->HasKeywordString(kw)) {
-                        found.insert(tag);
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched && armo->HasKeywordString("zad_DeviousHeavyBondage"))
-                    found.insert("bound");
-            }
-        }
+        const auto found = ScanWornBondage(actors);
         for (const char* tag : kTagOrder) {
             if (found.contains(tag))
                 out.emplace_back(tag);

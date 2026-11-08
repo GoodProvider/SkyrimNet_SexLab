@@ -114,6 +114,12 @@ namespace NarrationQueue
         }
     }
 
+    bool Empty()
+    {
+        std::lock_guard lock(g_lock);
+        return g_entries.empty();
+    }
+
     bool IsPaused()
     {
         if (WebUI_IsGamePaused())

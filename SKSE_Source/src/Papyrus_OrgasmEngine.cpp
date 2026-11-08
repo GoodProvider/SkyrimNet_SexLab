@@ -3,6 +3,7 @@
 #include "Aid.h"
 #include "Config.h"
 #include "AnimSpeed.h"
+#include "NarrationQueue.h"
 #include "NarrationTiming.h"
 #include "OrgasmEngine.h"
 #include "WebUI_Log.h"
@@ -103,6 +104,12 @@ namespace PapyrusBindings_OrgasmEngine
         bool IsGateScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsGateScene(sid); }
         bool IsVictimHoldScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsVictimHoldScene(sid); }
         void VictimHoldExpired(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::VictimHoldExpired(sid); }
+        bool IsVictimScene(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsVictimScene(sid); }
+        void SetEndHold(RE::StaticFunctionTag*, std::int32_t sid, bool on) { OrgasmEngine::SetEndHold(sid, on); }
+        bool IsEndHold(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsEndHold(sid); }
+        bool IsPrimaryFinished(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsPrimaryFinished(sid); }
+        bool IsLastStage(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsLastStage(sid); }
+        std::int32_t LeaveLastStage(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::LeaveLastStage(sid); }
         void SetStageInputs(RE::StaticFunctionTag*, std::int32_t sid, std::vector<RE::Actor*> positions,
             std::vector<std::int32_t> genders, bool femdom, RE::BSFixedString registry)
         {
@@ -146,6 +153,16 @@ namespace PapyrusBindings_OrgasmEngine
         {
             return mark >= 0 && NarrationTiming::DoneSinceMostRecentStarted(static_cast<std::uint64_t>(mark),
                                     OrgasmEngine::SceneActors(sid));
+        }
+        // Final-stage hold (Scene.Ending_Poll): no narration in flight in this mod (sent and not yet spoken, playing,
+        // or queued while paused). SkyrimNet's own generation queue is checked in Papyrus (GetSpeechQueueSize).
+        bool NarrationIdle(RE::StaticFunctionTag*)
+        {
+            return NarrationTiming::Idle() && NarrationQueue::Empty();
+        }
+        std::string GetMiniGameSummary(RE::StaticFunctionTag*, RE::Actor* anyInScene)
+        {
+            return OrgasmEngine::GetMiniGameSummary(anyInScene);
         }
         float FinalStageRemaining(RE::StaticFunctionTag*, std::int32_t sid)
         {
@@ -288,7 +305,8 @@ namespace PapyrusBindings_OrgasmEngine
 
         // true = callable from a VM tasklet (no wait for the game frame). Only for natives that read engine state
         // under OrgasmEngine / NarrationTiming g_lock and touch no game object beyond the argument's FormID. Not for
-        // anything reaching PrimaryOf (IsFemale fallback), actor values, AnimSpeed, names, or LookupByID results.
+        // actor values, AnimSpeed, names, or LookupByID results. PrimaryOf reads only the cached stageGender (seeded
+        // at BeginScene), so the stage-by-enjoyment queries qualify; GetStagePrimary does not (LookupByID).
 
         a_vm->RegisterFunction("GetEnjoyment", s, GetEnjoyment, true);
         a_vm->RegisterFunction("SetEnjoyment", s, SetEnjoyment);
@@ -316,20 +334,28 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
         a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
         a_vm->RegisterFunction("IsGateScene", s, IsGateScene, true);
-        a_vm->RegisterFunction("IsVictimHoldScene", s, IsVictimHoldScene);
+        a_vm->RegisterFunction("IsVictimHoldScene", s, IsVictimHoldScene, true);
         a_vm->RegisterFunction("VictimHoldExpired", s, VictimHoldExpired);
+        a_vm->RegisterFunction("IsVictimScene", s, IsVictimScene, true);
+        a_vm->RegisterFunction("SetEndHold", s, SetEndHold);
+        a_vm->RegisterFunction("IsEndHold", s, IsEndHold, true);
+        a_vm->RegisterFunction("IsPrimaryFinished", s, IsPrimaryFinished, true);
+        a_vm->RegisterFunction("IsLastStage", s, IsLastStage, true);
+        a_vm->RegisterFunction("LeaveLastStage", s, LeaveLastStage);
         a_vm->RegisterFunction("SetStageInputs", s, SetStageInputs);
         a_vm->RegisterFunction("StageInputsKnown", s, StageInputsKnown, true);
-        a_vm->RegisterFunction("IsStageAdvancePrimaryEnjoyment", s, IsStageAdvancePrimaryEnjoyment);
+        a_vm->RegisterFunction("IsStageAdvancePrimaryEnjoyment", s, IsStageAdvancePrimaryEnjoyment, true);
         a_vm->RegisterFunction("GetStagePrimary", s, GetStagePrimary);
         a_vm->RegisterFunction("StageHoldCap", s, StageHoldCap, true);
         a_vm->RegisterFunction("DisableStageAdvancePrimaryEnjoyment", s, DisableStageAdvancePrimaryEnjoyment);
         a_vm->RegisterFunction("EnableStageAdvancePrimaryEnjoyment", s, EnableStageAdvancePrimaryEnjoyment);
-        a_vm->RegisterFunction("CanStageAdvancePrimaryEnjoyment", s, CanStageAdvancePrimaryEnjoyment);
+        a_vm->RegisterFunction("CanStageAdvancePrimaryEnjoyment", s, CanStageAdvancePrimaryEnjoyment, true);
         a_vm->RegisterFunction("NarrationMark", s, NarrationMark, true);
         a_vm->RegisterFunction("ResponseStartedSince", s, ResponseStartedSince, true);
         a_vm->RegisterFunction("ResponseDoneSince", s, ResponseDoneSince, true);
         a_vm->RegisterFunction("FinalStageRemaining", s, FinalStageRemaining, true);
+        a_vm->RegisterFunction("NarrationIdle", s, NarrationIdle, true);
+        a_vm->RegisterFunction("GetMiniGameSummary", s, GetMiniGameSummary);
         a_vm->RegisterFunction("SetSceneBlocked", s, SetSceneBlocked);
         a_vm->RegisterFunction("SetOrgasmExpected", s, SetOrgasmExpected);
         a_vm->RegisterFunction("SetSceneActs", s, SetSceneActs);

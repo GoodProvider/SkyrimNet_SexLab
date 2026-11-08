@@ -307,6 +307,18 @@ void Config::ApplyMenuHotkey()
     const auto dx = static_cast<uint32_t>(VkToDx(vk));
     webui_log::info("ApplyMenuHotkey: enabled={} vk={} dx={:#x}", enabled, vk, dx);
     WebUI_SetMenuHotkey(dx, enabled);
+    // Skyrim VR: the same toggle on a controller chord (default Grip + A; Leashed's panel uses Grip + Stick).
+    const auto pick = [](const char* path, const char* def, std::initializer_list<std::string_view> allowed) {
+        std::string v = GetRaw(path, def);
+        std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        for (auto a : allowed)
+            if (a == v)
+                return v;
+        return std::string{ def };
+    };
+    WebUI_SetMenuVrChord(pick("sexlab.editor.vr_button", "a", { "none", "a", "stick", "trigger", "touchpad", "grip" }),
+                         pick("sexlab.editor.vr_modifier", "grip", { "none", "grip", "a", "stick", "trigger", "touchpad" }),
+                         pick("sexlab.editor.vr_hand", "either", { "either", "left", "right" }), enabled);
 }
 
 void Config::ApplyLogLevel()

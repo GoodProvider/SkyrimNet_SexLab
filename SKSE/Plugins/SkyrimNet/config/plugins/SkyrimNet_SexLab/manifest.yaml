@@ -164,6 +164,45 @@ schema:
       category: "Controls"
       supportsOverride: false
 
+    - name: "VR menu button"
+      path: "sexlab.editor.vr_button"
+      type: "select"
+      description: "Skyrim VR only (Magelight UI): controller button that does what the Start Sex / Edit Stage hotkey does, while the hotkey is enabled. B / Y closes the menu too. none = no controller button."
+      defaultValue: "a"
+      options:
+        - "none"
+        - "a"
+        - "stick"
+        - "trigger"
+        - "touchpad"
+        - "grip"
+      category: "Controls"
+
+    - name: "VR menu button modifier"
+      path: "sexlab.editor.vr_modifier"
+      type: "select"
+      description: "Skyrim VR only: button held with the VR menu button (default grip + A). none = the button alone, which also fires during play. SkyrimNet_Leashed's panel defaults to grip + stick click."
+      defaultValue: "grip"
+      options:
+        - "none"
+        - "grip"
+        - "a"
+        - "stick"
+        - "trigger"
+        - "touchpad"
+      category: "Controls"
+
+    - name: "VR menu button hand"
+      path: "sexlab.editor.vr_hand"
+      type: "select"
+      description: "Skyrim VR only: which controller the VR menu button is read from."
+      defaultValue: "either"
+      options:
+        - "either"
+        - "left"
+        - "right"
+      category: "Controls"
+
     - name: "Style changes animation speed"
       path: "sexlab.speed.enabled"
       type: "bool"
@@ -251,7 +290,7 @@ schema:
     - name: "Silence before keep-talking (sec)"
       path: "sexlab.narration.silence_seconds"
       type: "float"
-      description: "Seconds of silence (no SkyrimNet speech queued or playing) before an actor in an active scene is prompted to keep talking (\"continue scene\"). Speakers rotate among the non-player actors. Needs Stage change narration at Direct; NPC-only scenes only when the player can see them. 0 = off."
+      description: "Seconds of silence (no SkyrimNet speech queued or playing) before an actor in an active scene is prompted to keep talking: what the mini-game players did last (\"Bob focused on Coralyn's pleasure.\"), or \"continue scene\" when nobody played. Speakers rotate among the non-player actors. Needs Stage change narration at Direct; NPC-only scenes only when the player can see them. 0 = off."
       min: 0
       max: 120
       defaultValue: 8
@@ -562,7 +601,7 @@ schema:
       description: "When stages follow enjoyment: seconds on one stage before that actor punishes someone in the scene, once per stage. 0 = never. Your own character only does this on auto play."
       min: 0
       max: 600
-      defaultValue: 30
+      defaultValue: 15
       category: "Enjoyment"
 
     - name: "Stuck stage: advance after"
@@ -676,6 +715,15 @@ schema:
       min: 0
       max: 30
       defaultValue: 30
+      category: "Scene ending"
+
+    - name: "Afterglow drain (sec per 100)"
+      path: "sexlab.ending.afterglow_seconds"
+      type: "float"
+      description: "Last stage: whoever orgasmed into it keeps their bar, which drains at this fixed rate (seconds from 100 to 0). The end list waits for the bar to reach 0, and always gives at least 4 seconds."
+      min: 1
+      max: 120
+      defaultValue: 10
       category: "Scene ending"
 
     - name: "DOM arousal per scene"
@@ -804,15 +852,6 @@ schema:
       min: 0
       max: 30
       defaultValue: 4
-      category: "Mini-game"
-
-    - name: "Calm / arouse narration window (sec)"
-      path: "sexlab.minigame.narrate_window"
-      type: "float"
-      description: "Presses on another actor within this window give one narration."
-      min: 0
-      max: 30
-      defaultValue: 3
       category: "Mini-game"
 
     - name: "NPC step minimum"

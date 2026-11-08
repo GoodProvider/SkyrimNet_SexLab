@@ -72,6 +72,23 @@ namespace OrgasmEngine
     bool IsVictimHoldScene(std::int32_t sid);
     /// The Scene's victim hold cap ran out: a gate scene runs its gate on the next tick.
     void VictimHoldExpired(std::int32_t sid);
+    /// A victim and an aggressor expected to orgasm. Stage by enjoyment: the primary's orgasm does not finish the
+    /// scene; the ending lead's target opens the Scene's end list instead.
+    bool IsVictimScene(std::int32_t sid);
+    /// The Scene's end list is up on a non-final stage: no stage moves, gate or stall end until it is cleared or a
+    /// new animation starts.
+    void SetEndHold(std::int32_t sid, bool on);
+    /// The end hold is on (the engine sets it the moment the ending lead reaches the target; SetEndHold clears it).
+    bool IsEndHold(std::int32_t sid);
+    /// Stage moves ended for an orgasm: the primary's (final stage), or a victim scene's ending lead below its
+    /// target (final stage, then the Scene starts a new animation). Cleared by a new animation or a step back.
+    bool IsPrimaryFinished(std::int32_t sid);
+    /// The last stage: the end hold, or the final stage after the primary's orgasm (afterglow draining).
+    bool IsLastStage(std::int32_t sid);
+    /// Num 4 in the last stage: clears the end hold and the primary's finish, stages follow enjoyment again (never
+    /// timers). Whoever orgasmed in it keeps draining; the stages wait at 1 until the drain reaches 0. Returns 1
+    /// (0 = fewer than 2 stages); the Scene moves there.
+    std::int32_t LeaveLastStage(std::int32_t sid);
     /// Stage by enjoyment: per position SexLab gender (0 male, 1 female, 2 male creature, 3 female creature), the
     /// animation's femdom tag and registry. Sent on every StageStart; a new registry resets the animation's state.
     void SetStageInputs(std::int32_t sid, const std::vector<RE::Actor*>& positions,
@@ -83,6 +100,9 @@ namespace OrgasmEngine
     bool IsStageAdvancePrimaryEnjoyment(std::int32_t sid);
     /// That mode is driving the anchor's scene right now (HUD: stage keys greyed; auto play is not offered them).
     bool IsStageAuto(RE::Actor* anchor);
+    /// HUD stage mode for the anchor's scene: "last" (the last stage, stage by enjoyment on), "enjoy" (stages follow
+    /// the primary's enjoyment), "timer", or "" (no scene).
+    const char* StageModeOf(RE::Actor* anchor);
     /// The actor whose enjoyment drives the stage; 0 when the mode is off.
     RE::FormID GetStagePrimary(std::int32_t sid);
     /// Seconds a stage may hold: the later of sexlab.enjoyment.stage_hold_max and its own timer; 0: no limit.
@@ -102,6 +122,10 @@ namespace OrgasmEngine
     void SetEndingTarget(std::int32_t sid, RE::Actor* lead, std::int32_t target);
     // Seconds left on the timed final stage (unpaused, animating); -1 when not in one.
     float FinalStageRemaining(std::int32_t sid);
+    /// The silence nudge's text: one sentence per actor of the anchor's scene who played the mini-game since the last
+    /// summary (at most 30 s back), from their latest play ("Bob focused on Coralyn's pleasure. Mary resisted her
+    /// orgasm."). "" when nobody played. Marks the scene's plays as summarized.
+    std::string GetMiniGameSummary(RE::Actor* anyInScene);
     bool IsPlayerScenePaused();
     /// Pause state of the anchor actor's scene (HUD: the player, or the NPC the player took control of).
     bool IsScenePaused(RE::Actor* anchor);
@@ -119,6 +143,8 @@ namespace OrgasmEngine
     void SetFirstTimes(RE::Actor* actor, bool vaginal, bool anal);
     /// The Punish / Aid panel parts of the actor's first times this scene: "pussy" (vaginal), "ass" (anal).
     std::vector<std::string> GetFirstTimes(RE::FormID actor);
+    /// A heal on "pussy" / "ass" (Aid) clears that first time for the rest of the scene. Other parts: no-op.
+    void ClearFirstTime(RE::FormID actor, std::string_view part);
     // Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
     void SetOrgasmExpected(RE::Actor* actor, bool expected);
     /// DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync) and DOM decides the orgasm.

@@ -52,4 +52,9 @@ namespace NarrationTiming
     /// The latest response that started after `mark` among `speakers` has finished (avoids releasing on an
     /// earlier partner line while the orgasm narration is still queued).
     bool DoneSinceMostRecentStarted(std::uint64_t mark, std::span<const RE::FormID> speakers);
+
+    /// Nothing in flight: no narration sent in the last 10 s without its speech started yet, no line playing
+    /// (a line counts at most 20 s past its last speech event), and no SpeechStarted / SpeechComplete within
+    /// the last second (sentences of one response).
+    bool Idle();
 }

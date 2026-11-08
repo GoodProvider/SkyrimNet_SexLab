@@ -59,6 +59,11 @@ namespace NarrationTiming
         };
         std::uint64_t g_seq = 0;
         std::unordered_map<RE::FormID, Speaker> g_speakers;
+        // The latest SpeechStarted / SpeechComplete (Idle).
+        std::optional<Clock::time_point> g_lastEventAt;
+        constexpr auto kIdleQuiet = std::chrono::seconds(1);
+        constexpr auto kIdlePendingMax = std::chrono::seconds(10);
+        constexpr auto kIdleSpeakingMax = std::chrono::seconds(20);
 
         // Caller holds g_lock.
         void ExpireStale(Clock::time_point now)
@@ -94,6 +99,7 @@ namespace NarrationTiming
         {
             const auto now = Clock::now();
             g_speaking = true;
+            g_lastEventAt = now;
             ExpireStale(now);
             // The player's own voiced line is not the response to the narration.
             if (sender && sender->GetFormID() == 0x14)
@@ -105,6 +111,10 @@ namespace NarrationTiming
                 if (sp.openStart == 0)
                     sp.openStart = g_seq;
                 sp.lastStart = g_seq;
+                // Diagnostics (checkpoint-11): does a sentence start after its response's SpeechComplete and
+                // reopen it (the final-stage hold never saw "response played" on 2026-11-07)?
+                webui_log::debug("NarrationTiming: started {:08X} seq={} open={} lastDone={}", sender->GetFormID(),
+                    g_seq, sp.openStart, sp.lastDone);
             }
             if (!g_pending)
                 return;
@@ -133,10 +143,13 @@ namespace NarrationTiming
         void OnSpeechComplete(RE::TESForm* sender)
         {
             g_speaking = false;
+            g_lastEventAt = Clock::now();
             const RE::FormID id = sender ? sender->GetFormID() : 0;
             if (const auto it = g_speakers.find(id); id != 0 && it != g_speakers.end()) {
                 it->second.lastDone = it->second.openStart ? it->second.openStart : it->second.lastStart;
                 it->second.openStart = 0;
+                webui_log::debug("NarrationTiming: complete {:08X} seq={} lastDone={}", id, g_seq,
+                    it->second.lastDone);
             }
             if (g_openResponse == 0) {
                 return;
@@ -274,6 +287,20 @@ namespace NarrationTiming
                 return true;
         }
         return false;
+    }
+
+    bool Idle()
+    {
+        const auto now = Clock::now();
+        std::lock_guard lock(g_lock);
+        ExpireStale(now);
+        // A narration whose speech never came (the LLM chose silence) or a lost SpeechComplete stops counting
+        // after a while, so the final-stage hold is not stuck at its max (DN->speech: median 1.3 s, max 2.4 s).
+        if (g_pending && now - g_pending->sent < kIdlePendingMax)
+            return false;
+        if (g_speaking && g_lastEventAt && now - *g_lastEventAt < kIdleSpeakingMax)
+            return false;
+        return !g_lastEventAt || now - *g_lastEventAt >= kIdleQuiet;
     }
 
     bool DoneSinceMostRecentStarted(std::uint64_t mark, std::span<const RE::FormID> speakers)

@@ -18,4 +18,7 @@ namespace NarrationQueue
 
     /// Drops the queue (load / new game): narrations belong to the session that made them.
     void Clear();
+
+    /// Nothing is waiting for the unpause flush.
+    bool Empty();
 }

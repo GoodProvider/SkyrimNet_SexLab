@@ -53,6 +53,21 @@ bool Function IsGateScene(int sid) global native
 bool Function IsVictimHoldScene(int sid) global native
 ; The victim hold cap ran out: a gate scene runs its gate on the next tick.
 Function VictimHoldExpired(int sid) global native
+; A victim and an aggressor expected to orgasm. Stage by enjoyment: the primary's orgasm does not finish the
+; scene; the ending lead's target opens the end list on the current stage (Scene.Ending_EndState).
+bool Function IsVictimScene(int sid) global native
+; The end list is up on a non-final stage: no stage moves, gate or stall end until cleared or a new animation.
+Function SetEndHold(int sid, bool on) global native
+; The end hold is on. The engine sets it the moment the ending lead reaches the target (before Ending_Check runs).
+bool Function IsEndHold(int sid) global native
+; Stage moves ended for an orgasm: the primary's, or a victim scene's ending lead below its target (the Scene then goes
+; to the final stage and starts a new animation after the drain). Cleared by a new animation or a step back.
+bool Function IsPrimaryFinished(int sid) global native
+; The last stage: the end hold, or the final stage after the primary's orgasm (afterglow draining). Tasklet-safe.
+bool Function IsLastStage(int sid) global native
+; Num 4 in the last stage: end hold and the primary's finish cleared, stages follow enjoyment (never timers). Whoever
+; orgasmed keeps draining; the stages wait at 1 until it reaches 0. Returns 1 (0 = fewer than 2 stages).
+int Function LeaveLastStage(int sid) global native
 ; Stage by enjoyment: per position SexLab gender, the animation's femdom tag and registry. Every StageStart.
 Function SetStageInputs(int sid, Actor[] positions, int[] genders, bool femdom, String registry) global native
 ; False until SetStageInputs (scene start, and after a load: none of it is saved).
@@ -76,8 +91,14 @@ bool Function CanStageAdvancePrimaryEnjoyment(int sid) global native
 int Function NarrationMark() global native
 bool Function ResponseStartedSince(int sid, int mark) global native
 bool Function ResponseDoneSince(int sid, int mark) global native
-; Seconds left on the final stage's timer (unpaused, animating); -1 when not in a timed final stage.
+; Seconds left on the final stage's timer (unpaused, animating); in the last stage, until the afterglow drains to 0;
+; -1 when not in a timed final stage.
 float Function FinalStageRemaining(int sid) global native
+; Final-stage hold: no narration of this mod in flight (sent and not yet spoken, playing, or queued while paused).
+bool Function NarrationIdle() global native
+; The silence nudge's text: who played the mini-game since the last summary and how ("Bob focused on Coralyn's
+; pleasure. Mary resisted her orgasm."); "" when nobody played.
+String Function GetMiniGameSummary(Actor anyInScene) global native
 Function SetSceneBlocked(Actor akActor, bool blocked) global native
 ; Position's orgasm_expected; false: no passive gain (mini-game Arouse / Calm only).
 Function SetOrgasmExpected(Actor akActor, bool expected) global native
@@ -366,8 +387,9 @@ Function Effect_NarrateOptional(String msg, Actor source, Actor target) global
     endif
 EndFunction
 
-; Arouse / calm narrations: short-lived events only (no DN, no history). Stable eventId per
-; (type, source, target) so a repeat replaces the previous one instead of stacking.
+; Engine narrations as short-lived events only (no DN, no history), e.g. the HUD's speed change. Stable eventId per
+; (type, source, target) so a repeat replaces the previous one instead of stacking. Mini-game plays are no longer
+; sent here: the silence nudge carries them (GetMiniGameSummary).
 Function Effect_Narrate(String event_type, String msg, Actor source, Actor target) global
     if msg == "" || source == None || target == None
         return

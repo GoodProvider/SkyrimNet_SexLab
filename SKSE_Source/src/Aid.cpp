@@ -611,6 +611,10 @@ namespace Aid
         if (injuryEngine) {
             *injuryEngine = toInjuryEngine && !callerNarrates;
         }
+        // A heal on the part a first time hurt (Aid panel: shown as injured) clears it.
+        if (o.health > 0.0f) {
+            OrgasmEngine::ClearFirstTime(targetId, location);
+        }
         SKSE::GetTaskInterface()->AddTask([o, casterId, targetId, toInjuryEngine, callerNarrates, line, part, split,
                                               share]() {
             auto* c = RE::TESForm::LookupByID<RE::Actor>(casterId);
@@ -720,6 +724,8 @@ namespace Aid
             EnsureChannelThread();
         }
         if (!ch.stamina) {
+            // A heal on the part a first time hurt (Aid panel: shown as injured) clears it.
+            OrgasmEngine::ClearFirstTime(ch.target, ch.part);
             SKSE::GetTaskInterface()->AddTask([casterId, targetId = ch.target, points]() {
                 NotifyAidStart(RE::TESForm::LookupByID<RE::Actor>(casterId), RE::TESForm::LookupByID<RE::Actor>(targetId),
                     false, points);
