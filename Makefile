@@ -46,8 +46,8 @@ release: check-pex
 	if exist "$(subst /,\\,core)" rmdir /s /q "$(subst /,\\,core)"	
 	mkdir core 
 	powershell -NoProfile -Command "Copy-Item -Path 'Scripts','SKSE','SkyrimNet_SexLab.esp','PrismaUI' -Destination 'core/.' -Recurse -Force"
-	# sex-graph.json (developer AnimEngine settings, Sex Graph panel) never ships.
-	powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue 'core/SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json'"
+	@rem sex-graph.json (developer AnimEngine settings, Sex Graph panel) never ships.
+	powershell -NoProfile -Command "$$p='core/SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json'; if (Test-Path $$p) { Remove-Item -Force $$p }; exit 0"
 
 	if exist "$(subst /,\\,handler_udng)" rmdir /s /q "$(subst /,\\,handler_udng)"	
 	mkdir handler_udng 
