@@ -24,6 +24,10 @@ namespace PapyrusBindings_WebUI {
     extern bool EditTagsNonPlayer;
     /// C++ TargetMenu opened Scene Creator; cleared on Start handoff / cancel.
     extern bool SceneCreatorOpenedForPending;
+    /// SexLab gender before Papyrus answers: 0 male, 1 female, 2 male creature, 3 female creature. Creature =
+    /// no ActorTypeNPC keyword (as AnimEngine). Papyrus SexLabGender (the actor meta reply) overrides it: SexLab's
+    /// creature-gender option can map every creature to 2.
+    int ActorSexLabGender(RE::Actor* actor);
     /// TargetMenu is open until Cancel / Reset — HideAllPanels spares it.
     extern bool TargetMenuSessionActive;
     /// One-shot: TargetMenu Start should skip Scene Creator for the next Action_Start creator.

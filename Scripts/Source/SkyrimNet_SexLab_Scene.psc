@@ -3933,7 +3933,14 @@ String Function LastStage_PickRegistry()
     Actor[] positions = thread.Positions
     int filter = JMap.object()
     JMap.setInt(filter, "_actor_count", positions.length)
-    JMap.setStr(filter, "_creature", "exclude")
+    ; Creature cast: only animations whose creature positions take these species (and genders: mc / fc).
+    int creature_arr = CreatureWantsJArray(sexlab, positions, False)
+    if creature_arr
+        JMap.setStr(filter, "_creature", "require")
+        JMap.setObj(filter, "_creatures", creature_arr)
+    else
+        JMap.setStr(filter, "_creature", "exclude")
+    endif
     JMap.setStr(filter, "_synonyms", "broad")
     JMap.setInt(filter, "_rank", 1)
     int cast_arr = JArray.object()
@@ -3942,7 +3949,7 @@ String Function LastStage_PickRegistry()
     while i < positions.length
         if positions[i]
             JArray.addInt(cast_arr, positions[i].GetFormID())
-            JArray.addInt(gender_arr, SexLabGender(sexlab, positions[i]))
+            JArray.addInt(gender_arr, CastGender(sexlab, positions[i]))
         endif
         i += 1
     endwhile
@@ -4015,6 +4022,8 @@ String Function LastStage_PickRegistry()
     JValue.release(arr)
     if picked == ""
         Trace("LastStage_PickRegistry", "line:"+list_index+" results:"+count+" none playable")
+    else
+        Trace("LastStage_PickRegistry", "line:"+list_index+" results:"+count+" creatures:"+(creature_arr != 0)+" picked:"+picked)
     endif
     return picked
 EndFunction
@@ -7262,7 +7271,7 @@ int Function BuildWebUISceneMenuObject()
             uuid = GetUUID(ak)
             form_id = ak.GetFormID()
             victim = thread.IsVictim(ak) as int
-            gender = SexLabGender(sexlab, ak)
+            gender = CastGender(sexlab, ak)
         elseif position_objs && i < position_objs.length && position_objs[i] > 0
             name = SNSL_JMap.getStr(position_objs[i], "name")
             uuid = SNSL_JMap.getStr(position_objs[i], "uuid")
@@ -7306,6 +7315,11 @@ int Function BuildWebUISceneMenuObject()
         if gender >= 0
             SNSL_JMap.setInt(po, "_gender", gender)
             SNSL_JMap.setInt(po, "_intersex", IsIntersex(sexlab, ak) as int)
+            ; Creature species for the Description Editor's AnimDB `_creatures` filter (scPosRaceKeys).
+            if gender >= 2
+                SNSL_JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, ak))
+                SNSL_JMap.setStr(po, "_race_keys", GetRaceKeysForActor(sexlab, ak))
+            endif
         endif
         SNSL_JArray.addObj(pos_arr, po)
         i += 1

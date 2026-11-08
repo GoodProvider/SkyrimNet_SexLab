@@ -1266,11 +1266,13 @@ Function WebUI_OnResolveActorMeta(String json)
         if ak
             int gender = 0
             if sexlab
-                gender = SexLabGender(sexlab, ak)
+                gender = CastGender(sexlab, ak)
             endif
             SNSL_JMap.setInt(po, "_gender", gender)
             SNSL_JMap.setInt(po, "_intersex", (sexlab && IsIntersex(sexlab, ak)) as int)
             SNSL_JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, ak))
+            ; Every race key of a creature's race (Wolves,Canines): AnimDB `_creatures` species match.
+            SNSL_JMap.setStr(po, "_race_keys", GetRaceKeysForActor(sexlab, ak))
             SNSL_JMap.setStr(po, "_name", ak.GetDisplayName())
         else
             SNSL_JMap.setInt(po, "_gender", 0)

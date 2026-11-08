@@ -131,6 +131,16 @@ namespace AnimationDB
     /// Which synonyms-*.json cluster set expands must/suppress tags. None = literal tags only.
     enum class SynonymMode { None, Strict, Broad };
 
+    /// One creature in the cast (FilterSpec::creatures): SexLab gender 2 mc / 3 fc (-1 any) and the SexLab race
+    /// keys its race belongs to (lowercase; a race can sit under several keys, e.g. wolves + canines). Empty = any.
+    struct CreatureWant
+    {
+        int gender = -1;
+        std::vector<std::string> race_keys;
+        /// Row position this creature must seat (position match); -1 = any creature position.
+        int pos = -1;
+    };
+
     struct FilterSpec
     {
         std::optional<int> actor_count;
@@ -168,6 +178,9 @@ namespace AnimationDB
         std::vector<std::string> prefer_tags;
         /// Scene-setting `exclude_settings`: a row matching any of these tag filters is dropped.
         std::vector<FilterSpec> exclude_filters;
+        /// `_creatures`: the cast's creatures. Rows need exactly this many creature positions, each seated by one
+        /// of them whose race keys hold the position's race key (and, with gender_match, whose gender fits).
+        std::vector<CreatureWant> creatures;
     };
 
     /// Tag-filter keys of one scenes/<name>.json (default.json merged under it; the named file wins per key).
@@ -252,6 +265,12 @@ namespace AnimationDB
         std::vector<std::string>& out_csv_per_pos);
 
     std::string ToLower(std::string s);
+    /// SexLab gender from a filter JSON value: 0..3, or "m" / "f" / "mc" / "fc" (case-insensitive). -1 = unknown.
+    int ParseGenderToken(const nlohmann::json& v);
+    /// Reads `_creatures` ([{"_gender": 2|3|"mc"|"fc", "_race_keys": [..] | "a,b", "_pos": i}]) into spec.creatures.
+    void ParseCreatureKeys(const nlohmann::json& j, FilterSpec& spec);
+    /// FilterSpec::creatures for query logs: "mc:wolves|canines,fc:*" ("-" when none).
+    std::string CreaturesLogText(const FilterSpec& spec);
     int ParseHasDescriptionMode(const nlohmann::json& j);
     bool RowHasAnyDescription(const AnimRow& row);
     /// Sanitize aliases + lowercase; empty if blank after trim.

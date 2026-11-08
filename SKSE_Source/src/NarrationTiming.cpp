@@ -56,6 +56,7 @@ namespace NarrationTiming
             std::uint64_t openStart = 0;  // seq of the open response's first sentence (0 = none open)
             std::uint64_t lastStart = 0;  // seq of the latest sentence
             std::uint64_t lastDone = 0;   // first-sentence seq of the latest completed response
+            std::uint64_t lastDoneEnd = 0;  // last-sentence seq of the latest completed response
         };
         std::uint64_t g_seq = 0;
         std::unordered_map<RE::FormID, Speaker> g_speakers;
@@ -111,8 +112,9 @@ namespace NarrationTiming
                 if (sp.openStart == 0)
                     sp.openStart = g_seq;
                 sp.lastStart = g_seq;
-                // Diagnostics (checkpoint-11): does a sentence start after its response's SpeechComplete and
-                // reopen it (the final-stage hold never saw "response played" on 2026-11-07)?
+                // SkyrimNet sends one SpeechStarted per sentence but one SpeechComplete per response (2026-11-07:
+                // started 41, started 42, complete), so "done" compares against the response's last sentence
+                // (lastDoneEnd); comparing the first one kept the orgasm hold up to its 60 s cap.
                 webui_log::debug("NarrationTiming: started {:08X} seq={} open={} lastDone={}", sender->GetFormID(),
                     g_seq, sp.openStart, sp.lastDone);
             }
@@ -147,9 +149,10 @@ namespace NarrationTiming
             const RE::FormID id = sender ? sender->GetFormID() : 0;
             if (const auto it = g_speakers.find(id); id != 0 && it != g_speakers.end()) {
                 it->second.lastDone = it->second.openStart ? it->second.openStart : it->second.lastStart;
+                it->second.lastDoneEnd = it->second.lastStart;
                 it->second.openStart = 0;
-                webui_log::debug("NarrationTiming: complete {:08X} seq={} lastDone={}", id, g_seq,
-                    it->second.lastDone);
+                webui_log::debug("NarrationTiming: complete {:08X} seq={} lastDone={} lastDoneEnd={}", id, g_seq,
+                    it->second.lastDone, it->second.lastDoneEnd);
             }
             if (g_openResponse == 0) {
                 return;
@@ -326,6 +329,8 @@ namespace NarrationTiming
         const Speaker& sp = it->second;
         if (sp.openStart != 0)
             return false;
-        return sp.lastDone >= bestStart && sp.lastDone > mark;
+        // The response holding the latest sentence completed (a multi-sentence response: lastDone is its first
+        // sentence, lastDoneEnd its last).
+        return sp.lastDoneEnd >= bestStart;
     }
 }

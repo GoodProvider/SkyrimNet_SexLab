@@ -1564,9 +1564,10 @@ int Function BuildWebUIObject()
         JMap.setInt(po, "_victim", victim_mask[i])
         JMap.setInt(po, "_dead", actors[i].IsDead() as int)
         JMap.setStr(po, "_speaking", speaking_modifiers[i])
-        JMap.setInt(po, "_gender", SexLabGender(sexlab, actors[i]))
+        JMap.setInt(po, "_gender", CastGender(sexlab, actors[i]))
         JMap.setInt(po, "_intersex", IsIntersex(sexlab, actors[i]) as int)
         JMap.setStr(po, "_race_key", GetRaceKeyForActor(sexlab, actors[i]))
+        JMap.setStr(po, "_race_keys", GetRaceKeysForActor(sexlab, actors[i]))
         JArray.addObj(pos_arr, po)
         i += 1
     endwhile
@@ -2075,7 +2076,14 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
 
     int filter = JMap.object()
     JMap.setInt(filter, "_actor_count", num_actors)
-    JMap.setStr(filter, "_creature", "exclude")
+    ; Creature cast: only animations whose creature positions take these species (and genders: mc / fc).
+    int creature_arr = CreatureWantsJArray(sexlab, actors, False)
+    if creature_arr
+        JMap.setStr(filter, "_creature", "require")
+        JMap.setObj(filter, "_creatures", creature_arr)
+    else
+        JMap.setStr(filter, "_creature", "exclude")
+    endif
     JMap.setStr(filter, "_synonyms", synonyms_mode)
     ; Top 32 of the matches: described, then cast-gender fit (_rank_pos_genders), then least played, then random.
     JMap.setInt(filter, "_rank", 1)
@@ -2092,7 +2100,7 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     while ci < num_actors
         if actors[ci]
             JArray.addInt(cast_arr, actors[ci].GetFormID())
-            JArray.addInt(gender_arr, SexLabGender(sexlab, actors[ci]))
+            JArray.addInt(gender_arr, CastGender(sexlab, actors[ci]))
         endif
         ci += 1
     endwhile

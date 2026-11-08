@@ -1791,3 +1791,18 @@ The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feel
 **Rule:** gate every call into an optional mod on (1) `TESDataHandler::LookupModByName("<plugin>.esp")` and (2) the function listed in `type->GetGlobalFuncIter()` / `GetNumGlobalFuncs()`, cached once per session (pattern: `InjuryEngine::Installed` / `HasGlobal`, and `OrgasmEngine` `DomPanelPunishedAvailable`). Build `MakeFunctionArguments` only after the check so a skipped call leaks nothing. A crash log's `RBX`/`RCX` `FunctionArguments<...>` type names the dispatch by its argument signature.
 
 **Agent workflow:** the agent builds and verifies the SKSE plugin as **Release** (`cmake --build --preset build-release` from `SKSE_Source`, then copy `SKSE_Source/build/release/Release/SkyrimNet_SexLab.dll` to `SKSE/Plugins/`, the same as the `CMake: Build SKSE (Release)` task); the user tests in game. A Debug DLL crashes in game (heap corruption, see "Debug SKSE DLL").
+
+## Creature genders and race keys in AnimDB filters (2026-11-07)
+
+**Symptom:** a wolf in the Scene Creator showed as `M`/`F` and gender-mode filtering listed horse / troll animations; scenes started from Papyrus never used creature animations from AnimDB.
+**Cause:** C++ seeded genders from `TESNPC::GetSex()` only (creatures read as humans until the Papyrus meta reply); gender mode sent only mc / fc counts, no species; `Scene_Creator` / `Scene.LastStage_PickRegistry` hard-coded `_creature: exclude`.
+**Rules:**
+- Creature = no `ActorTypeNPC` keyword (`PapyrusBindings_WebUI::ActorSexLabGender`, same test as AnimEngine). Papyrus `SexLabGender` stays authoritative: with SexLab's creature-gender option off, every creature is 2 (mc), so a female creature only matches mc slots.
+- SexLab files one race under several race keys (a wolf: `Wolves` and `Canines`); animations name one of them per position. Match against the full set (`GetAllRaceKeys`), never one `GetRaceKey` value. AnimDB `_creatures` carries the set.
+- SexLab 1.6x `GetGender` inside a running thread reported the werewolf player as human (0) while it said creature before the scene (2026-11-07: last stage picked `B_B_CGAnal`, the DE listed human rows). AnimDB-facing casts use `Utilities.CastGender` (no `ActorTypeNPC` + a SexLab race key on `Actor.GetRace()` = creature), not `SexLabGender`. Read race keys from `Actor.GetRace()` first: a transformed player's race lives on the actor.
+
+## SkyrimNet speech events: one SpeechStarted per sentence, one SpeechComplete per response (2026-11-07)
+
+**Symptom:** after an NPC orgasm, arouse was refused "(afterglow)" for 60 s; `orgasm hold ended after 60.1s`.
+**Cause:** the log showed `started seq=41`, `started seq=42`, `complete`. `NarrationTiming` stored the completed response's first sentence (41) and compared it with the latest sentence (42), so "done" never passed and every hold ran to `hold_max`.
+**Rule:** "response done" compares against the last sentence started before its `SpeechComplete` (`Speaker::lastDoneEnd`), never the first.

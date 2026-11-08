@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <random>
 #include <sstream>
@@ -1144,6 +1145,46 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return true;
         }
 
+        // The cast's creatures (FilterSpec::creatures) seat the row's creature positions one-to-one: same count,
+        // each position's race key among its creature's keys (either side empty: any species), the creature's
+        // pinned position (pos >= 0) honoured, and with checkGender its gender fits (PosGenderFits).
+        bool CreaturesFit(const AnimRow& row, const std::vector<CreatureWant>& want, bool checkGender)
+        {
+            std::vector<int> slots;
+            for (int i = 0; i < static_cast<int>(row.pos_genders.size()); ++i) {
+                if (row.pos_genders[i] >= 2)
+                    slots.push_back(i);
+            }
+            if (slots.size() != want.size())
+                return false;
+            const auto fits = [&](const CreatureWant& w, int i) {
+                if (w.pos >= 0 && w.pos != i)
+                    return false;
+                if (checkGender && w.gender >= 2 && !PosGenderFits(row, i, w.gender))
+                    return false;
+                const std::string have = i < static_cast<int>(row.pos_race_keys.size()) ? row.pos_race_keys[i] : "";
+                if (have.empty() || w.race_keys.empty())
+                    return true;
+                return std::find(w.race_keys.begin(), w.race_keys.end(), ToLower(have)) != w.race_keys.end();
+            };
+            // At most a handful of creatures: plain backtracking.
+            std::vector<bool> used(slots.size(), false);
+            const std::function<bool(size_t)> seat = [&](size_t k) {
+                if (k == want.size())
+                    return true;
+                for (size_t s = 0; s < slots.size(); ++s) {
+                    if (used[s] || !fits(want[k], slots[s]))
+                        continue;
+                    used[s] = true;
+                    if (seat(k + 1))
+                        return true;
+                    used[s] = false;
+                }
+                return false;
+            };
+            return seat(0);
+        }
+
         bool MatchesFilter(const AnimRow& row, const FilterSpec& spec, const ExpandedTags& ex)
         {
             if (spec.enabled_only && !row.enabled)
@@ -1153,6 +1194,11 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             if (spec.creature == 1 && !row.has_creature)
                 return false;
             if (spec.creature == 2 && row.has_creature)
+                return false;
+            // Creature casts: the row's creature positions must take these species (any filter mode); genders
+            // too under gender / position match.
+            if (!spec.creatures.empty() &&
+                (!row.has_creature || !CreaturesFit(row, spec.creatures, spec.gender_match || spec.position_match)))
                 return false;
 
             // Within a cluster any member matches; require_all is AND/OR across requested tags.
@@ -1171,7 +1217,8 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                     if (intersex ? (row.pos_genders[i] != 0 && row.pos_genders[i] != 1)
                                  : !PosGenderFits(row, i, spec.pos_genders[i]))
                         return false;
-                    if (i < static_cast<int>(spec.pos_race_keys.size()) &&
+                    // spec.creatures (race-key sets, CreaturesFit above) supersedes the single-key compare.
+                    if (spec.creatures.empty() && i < static_cast<int>(spec.pos_race_keys.size()) &&
                         !spec.pos_race_keys[i].empty()) {
                         std::string want = ToLower(spec.pos_race_keys[i]);
                         std::string have =
@@ -1193,7 +1240,9 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                 } else if (!CastFits(spec.males, spec.females, 0, slots.m, slots.f, slots.freeHuman)) {
                     return false;
                 }
-                if (!CastFits(spec.male_creatures, spec.female_creatures, 0, slots.mc, slots.fc, slots.freeCreature))
+                // spec.creatures already seated the creatures with their genders (CreaturesFit).
+                if (spec.creatures.empty() &&
+                    !CastFits(spec.male_creatures, spec.female_creatures, 0, slots.mc, slots.fc, slots.freeCreature))
                     return false;
             }
 
@@ -1294,6 +1343,88 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         std::transform(s.begin(), s.end(), s.begin(),
             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return s;
+    }
+
+    int ParseGenderToken(const nlohmann::json& v)
+    {
+        if (v.is_number_integer()) {
+            const int g = v.get<int>();
+            return g >= 0 && g <= 3 ? g : -1;
+        }
+        if (v.is_string()) {
+            const std::string t = ToLower(v.get<std::string>());
+            if (t == "m" || t == "male")
+                return 0;
+            if (t == "f" || t == "female")
+                return 1;
+            if (t == "mc")
+                return 2;
+            if (t == "fc")
+                return 3;
+        }
+        return -1;
+    }
+
+    std::string CreaturesLogText(const FilterSpec& spec)
+    {
+        if (spec.creatures.empty())
+            return "-";
+        std::string out;
+        for (const auto& w : spec.creatures) {
+            if (!out.empty())
+                out += ',';
+            out += w.gender == 3 ? "fc" : w.gender == 2 ? "mc" : "c";
+            out += ':';
+            if (w.race_keys.empty())
+                out += '*';
+            for (size_t i = 0; i < w.race_keys.size(); ++i)
+                out += (i ? "|" : "") + w.race_keys[i];
+            if (w.pos >= 0)
+                out += "@" + std::to_string(w.pos);
+        }
+        return out;
+    }
+
+    void ParseCreatureKeys(const nlohmann::json& j, FilterSpec& spec)
+    {
+        if (!j.contains("_creatures") || !j["_creatures"].is_array())
+            return;
+        for (const auto& el : j["_creatures"]) {
+            if (!el.is_object())
+                continue;
+            CreatureWant w;
+            if (el.contains("_gender"))
+                w.gender = ParseGenderToken(el["_gender"]);
+            if (el.contains("_pos") && el["_pos"].is_number_integer())
+                w.pos = el["_pos"].get<int>();
+            const auto add = [&](std::string k) {
+                k = ToLower(k);
+                k.erase(0, k.find_first_not_of(" \t"));
+                k.erase(k.find_last_not_of(" \t") + 1);
+                if (!k.empty() && std::find(w.race_keys.begin(), w.race_keys.end(), k) == w.race_keys.end())
+                    w.race_keys.push_back(k);
+            };
+            if (el.contains("_race_keys")) {
+                const auto& rk = el["_race_keys"];
+                if (rk.is_array()) {
+                    for (const auto& k : rk) {
+                        if (k.is_string())
+                            add(k.get<std::string>());
+                    }
+                } else if (rk.is_string()) {
+                    std::string csv = rk.get<std::string>();
+                    size_t start = 0;
+                    while (start <= csv.size()) {
+                        const size_t comma = csv.find(',', start);
+                        add(csv.substr(start, comma == std::string::npos ? std::string::npos : comma - start));
+                        if (comma == std::string::npos)
+                            break;
+                        start = comma + 1;
+                    }
+                }
+            }
+            spec.creatures.push_back(std::move(w));
+        }
     }
 
     std::string SanitizeTag(std::string tag)

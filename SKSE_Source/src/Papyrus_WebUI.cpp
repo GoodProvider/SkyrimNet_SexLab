@@ -175,6 +175,15 @@ namespace PapyrusBindings_WebUI
     bool EditTagsPlayer = true;
     bool EditTagsNonPlayer = false;
     bool SceneCreatorOpenedForPending = false;
+
+    int ActorSexLabGender(RE::Actor* actor)
+    {
+        if (!actor)
+            return 0;
+        const auto* base = actor->GetActorBase();
+        const int female = base && base->GetSex() == RE::SEX::kFemale ? 1 : 0;
+        return actor->HasKeywordString("ActorTypeNPC") ? female : 2 + female;
+    }
     bool TargetMenuSessionActive = false;
     bool SkipSceneCreatorOnce = false;
     bool OpenSceneCreatorOnce = false;
@@ -294,8 +303,9 @@ namespace PapyrusBindings_WebUI
                 spec.position_match = j["_position_match"].get<bool>();
             if (j.contains("_pos_genders") && j["_pos_genders"].is_array()) {
                 for (const auto& el : j["_pos_genders"]) {
-                    if (el.is_number_integer())
-                        spec.pos_genders.push_back(el.get<int>());
+                    // 0..3 or "m" / "f" / "mc" / "fc".
+                    if (const int g = AnimationDB::ParseGenderToken(el); g >= 0)
+                        spec.pos_genders.push_back(g);
                 }
             }
             if (j.contains("_pos_intersex") && j["_pos_intersex"].is_array()) {
@@ -340,11 +350,14 @@ namespace PapyrusBindings_WebUI
                             : j["_rank"].is_number() && j["_rank"].get<double>() != 0;
             if (j.contains("_rank_pos_genders") && j["_rank_pos_genders"].is_array()) {
                 for (const auto& el : j["_rank_pos_genders"]) {
-                    if (el.is_number_integer())
-                        spec.rank_pos_genders.push_back(el.get<int>());
+                    // 0..3 or "m" / "f" / "mc" / "fc".
+                    if (const int g = AnimationDB::ParseGenderToken(el); g >= 0)
+                        spec.rank_pos_genders.push_back(g);
                 }
             }
             // Scene-setting keys; JS sends `_bound` (from its DD probe), never scanned here (UI thread).
+            // The cast's creatures: species (race-key sets) + gender, any filter mode.
+            AnimationDB::ParseCreatureKeys(j, spec);
             AnimationDB::ParseSceneFilterKeys(j, spec);
         } catch (...) {
             webui_log::warn("ParseFilterJson failed");
@@ -871,15 +884,6 @@ namespace PapyrusBindings_WebUI
 
         constexpr float kAllowedRadii[] = { 1600.f, 2400.f, 3200.f, 4000.f, 4800.f };
 
-        /// 0 male, 1 female — SexLab human mapping. Papyrus GetGender overwrites (creatures 2/3).
-        int ActorSex(RE::Actor* actor)
-        {
-            if (!actor)
-                return 0;
-            if (auto* base = actor->GetActorBase())
-                return static_cast<int>(base->GetSex());
-            return 0;
-        }
 
         std::string ActorDisplayNameLocal(RE::Actor* actor)
         {
@@ -1018,7 +1022,7 @@ namespace PapyrusBindings_WebUI
                 { "selectable", cls.selectable },
                 { "sortRank", cls.sortRank },
                 { "isPlayer", isPlayer },
-                { "gender", ActorSex(actor) }
+                { "gender", ActorSexLabGender(actor) }
             });
         }
 
@@ -1172,7 +1176,7 @@ namespace PapyrusBindings_WebUI
                 playerUUID ? std::to_string(playerUUID) : std::to_string(static_cast<unsigned>(formId));
             std::string playerName = ActorDisplayNameLocal(player);
             WebUI_Invoke(std::format("setPlayerActor('{}', {}, {}, {});", uuidStr, SafeDump(nlohmann::json(playerName)),
-                static_cast<unsigned>(formId), ActorSex(player)));
+                static_cast<unsigned>(formId), ActorSexLabGender(player)));
         }
 
         if (!player) {
@@ -1493,10 +1497,12 @@ namespace PapyrusBindings_WebUI
                     }
                 }
                 webui_log::info(
-                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} has_description={} results={} total={}",
+                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} creatures={} has_description={} results={} "
+                    "total={}",
                     request_id,
                     spec.actor_count ? *spec.actor_count : -1,
                     spec.gender_match,
+                    AnimationDB::CreaturesLogText(spec),
                     spec.has_description,
                     rows.size(),
                     AnimationDB::TotalEnabledCount());

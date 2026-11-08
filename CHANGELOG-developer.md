@@ -2,6 +2,16 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+## Unreleased
+
+### Creatures
+- AnimDB filter key `_creatures` (gender + SexLab race-key set per creature, optional `_pos`) seats a cast's creatures in matching creature positions (`CreaturesFit`); species applies in every filter mode, gender under gender / position match. String genders `m` / `f` / `mc` / `fc` are accepted. C++ seeds creature genders 2 / 3 from the `ActorTypeNPC` keyword (`ActorSexLabGender`) before Papyrus meta; the meta reply adds `_race_keys` (`GetRaceKeysForActor`). Papyrus scene-start and last-stage queries no longer hard-exclude creatures. See `docs/reference/tag-synonyms.md`.
+- `Utilities.CastGender`: the gender for AnimDB-facing casts (`CreatureWantsJArray`, race-key helpers, actor meta reply, Scene Creator seed and query, last-stage `_rank_pos_genders`, `BuildWebUISceneMenuState`). When SexLab 1.6x says human but the actor has no `ActorTypeNPC` and its current race has a SexLab race key, it returns 2 (or 3 with creature genders on) and logs `CastGender … sexlab:g -> c`. Race keys come from `Actor.GetRace()` first (`ActorRaceForKeys`). The scene-menu seed now sends `_race_key` / `_race_keys`.
+- `AnimDb_QueryTopNAnims` logs `creature= creatures= actor_count= results= first=`. `CreaturesLogText` moved to `AnimationDB`. `LastStage_PickRegistry` traces the pick.
+
+### Orgasm engine
+- `NarrationTiming::DoneSinceMostRecentStarted` compares against the response's last sentence (`Speaker::lastDoneEnd`). SkyrimNet sends one `SpeechStarted` per sentence but one `SpeechComplete` per response, so the old first-sentence compare never passed: orgasm-hold afterglows (and the other "response played" checks) ran to `hold_max`. The `Hud: … refused` log no longer claims "cost".
+
 ## 0.37.0
 
 ### Stages follow enjoyment

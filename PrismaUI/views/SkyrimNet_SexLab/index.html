@@ -6573,6 +6573,9 @@
                 if (!meta) return;
                 if (scGenderKnown(meta._gender)) p._gender = Number(meta._gender);
                 p._intersex = Number(meta._intersex) ? 1 : 0;
+                // Creature species for the random pick's `_creatures` (scApplyCreatures).
+                if (meta._race_key != null) p._race_key = meta._race_key;
+                if (meta._race_keys != null) p._race_keys = String(meta._race_keys);
             });
         }
 
@@ -6598,6 +6601,8 @@
             filter._creature = genders.some(g => g != null && g >= 2) ? 'require' : 'exclude';
             if (withGenders && genders.length && genders.every(g => g != null))
                 scApplyGenderCounts(filter, positions);
+            // Species never loosens (even after the genders retry): a wolf cast only gets canine animations.
+            scApplyCreatures(filter, positions, false);
             return filter;
         }
 
@@ -8689,6 +8694,36 @@
             if (intersex) filter._intersex = intersex;
         }
 
+        /// SexLab gender -> animation-filter label: M, F, MC (male creature), FC (female creature).
+        function scGenderLabel(g) {
+            const n = Number(g);
+            if (n === 2) return 'MC';
+            if (n === 3) return 'FC';
+            return n === 1 ? 'F' : 'M';
+        }
+
+        /// A position's SexLab race keys (lowercase): every key its race sits under (`_race_keys` CSV from the
+        /// actor meta), else the single `_race_key`. Empty for humans and unresolved creatures.
+        function scPosRaceKeys(p) {
+            const csv = (p && (p._race_keys || p._race_key)) || '';
+            return String(csv).split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        }
+
+        /// AnimDB `_creatures` for the cast's creatures (gender 2 / 3): C++ seats each one in a creature position
+        /// whose race key it has, so a wolf never gets a horse animation. Gender is checked under gender /
+        /// position match. pinPositions: the creature must take its own cast slot (position match).
+        function scApplyCreatures(filter, positions, pinPositions) {
+            const want = [];
+            (positions || []).forEach((p, i) => {
+                const g = scPosGender(p);
+                if (g == null || g < 2) return;
+                const w = { _gender: g, _race_keys: scPosRaceKeys(p) };
+                if (pinPositions) w._pos = i;
+                want.push(w);
+            });
+            if (want.length) filter._creatures = want;
+        }
+
         function scPositionsGendersReady() {
             const pos = SC.positions || [];
             if (!pos.length) return true;
@@ -8702,7 +8737,7 @@
                 const g = scPosGender(p);
                 if (g == null) return '?';
                 if (scPosIntersex(p)) return 'I';
-                return (g === 0 || g === 2) ? 'M' : 'F';
+                return scGenderLabel(g);
             }).join(' ');
         }
 
@@ -11546,6 +11581,11 @@
                     p._race_key = rk;
                     changed = true;
                 }
+                const rks = meta._race_keys != null ? String(meta._race_keys) : '';
+                if ((p._race_keys || '') !== rks) {
+                    p._race_keys = rks;
+                    changed = true;
+                }
                 if (meta._name && p._name !== meta._name) {
                     p._name = meta._name;
                     changed = true;
@@ -11991,6 +12031,9 @@
             } else if (mode === 'gender' && gendersReady && posCount > 0) {
                 scApplyGenderCounts(filter, SC.positions);
             }
+            // Creatures in the cast: their species (and mc / fc under gender / position match), any mode.
+            if (hasCreature)
+                scApplyCreatures(filter, SC.positions, mode === 'positions' && gendersReady && posCount > 0);
             if (SC.hasDescription && SC.hasDescription !== 'any') {
                 filter._has_description = SC.hasDescription;
             }
@@ -12206,9 +12249,7 @@
         }
 
         function scGenderPosKey(a) {
-            return (a._pos_genders || []).map(g =>
-                ((g | 0) === 0 || (g | 0) === 2) ? 'M' : 'F'
-            ).join('');
+            return (a._pos_genders || []).map(g => scGenderLabel(g | 0)).join(' ');
         }
 
         function scAnimSortName(a) {
@@ -12307,7 +12348,7 @@
                 const genders = (a._pos_genders || []).map((g, gi) => {
                     // No orgasm expected: gender is not matched for that position ('-').
                     if ((a._pos_no_orgasm || [])[gi]) return '-';
-                    return ((g === 0 || g === 2) ? 'm' : 'f').toUpperCase();
+                    return scGenderLabel(g);
                 }).join(' ');
                 const mods = formatMods(a);
                 const name = a._name || '(unnamed)';
@@ -12504,6 +12545,14 @@
             if (!pos.length || want.length !== pos.length) return null;
             if (pos.some(p => scPosGender(p) == null)) return null;
             const sex = g => ((g | 0) === 0 || (g | 0) === 2) ? 0 : 1;
+            const creature = g => (g | 0) >= 2;
+            const raceKeys = a._pos_race_keys || [];
+            // A creature only seats a creature slot of its species (slot or actor without a key: any).
+            const raceFits = (p, i) => {
+                const want = String(raceKeys[i] || '').toLowerCase();
+                const have = scPosRaceKeys(p);
+                return !want || !have.length || have.includes(want);
+            };
             const order = new Array(pos.length).fill(-1);
             const used = new Set();
             const fill = (match) => {
@@ -12511,15 +12560,16 @@
                     if (order[i] >= 0) continue;
                     const w = Number(want[i]);
                     // Prefer the actor already in this slot so a matching order stays put.
-                    let j = (!used.has(i) && match(scPosGender(pos[i]), w)) ? i : -1;
-                    if (j < 0) j = pos.findIndex((p, k) => !used.has(k) && match(scPosGender(p), w));
+                    const ok = (p, k) => !used.has(k) && match(scPosGender(p), w) && (!creature(w) || raceFits(p, i));
+                    let j = ok(pos[i], i) ? i : -1;
+                    if (j < 0) j = pos.findIndex(ok);
                     if (j < 0) continue;
                     order[i] = j;
                     used.add(j);
                 }
             };
             fill((g, w) => g === w);
-            fill((g, w) => sex(g) === sex(w));
+            fill((g, w) => sex(g) === sex(w) && creature(g) === creature(w));
             return order.some(j => j < 0) ? null : order;
         }
 
@@ -13807,7 +13857,7 @@
             const genders = (a._pos_genders || []).map((g, gi) => {
                 // No orgasm expected: gender is not matched for that position ('-').
                 if ((a._pos_no_orgasm || [])[gi]) return '-';
-                return ((g === 0 || g === 2) ? 'm' : 'f').toUpperCase();
+                return scGenderLabel(g);
             }).join(' ');
             const stages = (a._stage_count != null) ? a._stage_count : '';
             const desc = previewDescription(a);

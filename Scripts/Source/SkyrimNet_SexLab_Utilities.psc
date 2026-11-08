@@ -85,6 +85,50 @@ int Function SexLabGender(SexLabFramework sexlab, Actor akActor) global
     return sexlab.GetGender(akActor)
 EndFunction
 
+; The actor's current race (a transformed player: WerewolfBeastRace), else its base race.
+Race Function ActorRaceForKeys(Actor akActor) global
+    if akActor == None
+        return None
+    endif
+    Race r = akActor.GetRace()
+    if r != None && sslCreatureAnimationSlots.GetRaceKey(r) != ""
+        return r
+    endif
+    ActorBase base = akActor.GetLeveledActorBase()
+    if base != None && base.GetRace() != None
+        return base.GetRace()
+    endif
+    return r
+EndFunction
+
+; SexLabGender for AnimDB filters (casts sent to animation queries). SexLab 1.6x GetGender inside a running
+; thread reported the werewolf player as human (2026-11-07: last stage picked B_B_CGAnal, DE listed human rows),
+; while before the scene it said creature. A non-NPC (no ActorTypeNPC, the C++ ActorSexLabGender rule) whose
+; current race has a SexLab race key is a creature: 2, or 2 + sex with SexLab creature genders on. P+: as is.
+int Function CastGender(SexLabFramework sexlab, Actor akActor) global
+    int g = SexLabGender(sexlab, akActor)
+    if g >= 2 || akActor == None || sexlab == None || IsSexLabPPlus()
+        return g
+    endif
+    if akActor.HasKeywordString("ActorTypeNPC")
+        return g
+    endif
+    Race r = akActor.GetRace()
+    if r == None
+        return g
+    endif
+    String rk = sslCreatureAnimationSlots.GetRaceKey(r)
+    if rk == ""
+        return g
+    endif
+    int c = 2
+    if sexlab.Config && sexlab.Config.UseCreatureGender && g == 1
+        c = 3
+    endif
+    Trace("CastGender", GetDisplayName(akActor)+" sexlab:"+g+" -> "+c+" race:"+rk)
+    return c
+EndFunction
+
 ; Registry / P+ scene id -> animation object. P+ binds the id straight to a proxy alias (the registry scan
 ; there costs seconds per call and misses most ids); 1.6x looks up humans, then creatures.
 sslBaseAnimation Function ResolveAnimation(SexLabFramework sexlab, String reg) global
@@ -237,20 +281,16 @@ Function SetGenderChoice(SexLabFramework sexlab, Actor akActor, int choice) glob
     Trace("SetGenderChoice", GetDisplayName(akActor)+" "+before+" -> "+choice+" (SexLab gender "+sexlab.GetGender(akActor)+")")
 EndFunction
 
-; SexLab owns creature vs non-creature. Race key only for SexLab creature genders (2/3).
+; Race key only for creatures (CastGender 2/3), from the current race (ActorRaceForKeys).
 String Function GetRaceKeyForActor(SexLabFramework sexlab, Actor akActor) global
     if akActor == None || sexlab == None
         return ""
     endif
-    int gender = SexLabGender(sexlab, akActor)
+    int gender = CastGender(sexlab, akActor)
     if gender < 2
         return ""
     endif
-    ActorBase base = akActor.GetLeveledActorBase()
-    if base == None
-        return ""
-    endif
-    Race r = base.GetRace()
+    Race r = ActorRaceForKeys(akActor)
     if r == None
         return ""
     endif
@@ -259,6 +299,66 @@ String Function GetRaceKeyForActor(SexLabFramework sexlab, Actor akActor) global
         return ""
     endif
     return rk
+EndFunction
+
+; Every SexLab race key the creature's race sits under, comma-joined (a wolf: Wolves,Canines), so AnimDB matches
+; animations registered under any of them. "" for humans. Case is left as SexLab has it; C++ lowercases.
+String Function GetRaceKeysForActor(SexLabFramework sexlab, Actor akActor) global
+    if akActor == None || sexlab == None
+        return ""
+    endif
+    if CastGender(sexlab, akActor) < 2
+        return ""
+    endif
+    Race r = ActorRaceForKeys(akActor)
+    if r == None
+        return ""
+    endif
+    String[] keys = sslCreatureAnimationSlots.GetAllRaceKeys(r)
+    String out = ""
+    int i = 0
+    while keys && i < keys.length
+        if keys[i]
+            if out != ""
+                out += ","
+            endif
+            out += keys[i]
+        endif
+        i += 1
+    endwhile
+    if out == ""
+        String rk = sslCreatureAnimationSlots.GetRaceKey(r)
+        if rk
+            out = rk
+        endif
+    endif
+    return out
+EndFunction
+
+; JArray of the cast's creatures for AnimDB `_creatures`: {"_gender": 2|3, "_race_keys": "a,b"} per creature, in
+; cast order. 0 when the cast has none. pinPositions: also "_pos" (the cast index), for position-matched queries.
+int Function CreatureWantsJArray(SexLabFramework sexlab, Actor[] cast, bool pinPositions) global
+    int arr = 0
+    int i = 0
+    while i < cast.length
+        if cast[i]
+            int g = CastGender(sexlab, cast[i])
+            if g >= 2
+                if arr == 0
+                    arr = JArray.object()
+                endif
+                int w = JMap.object()
+                JMap.setInt(w, "_gender", g)
+                JMap.setStr(w, "_race_keys", GetRaceKeysForActor(sexlab, cast[i]))
+                if pinPositions
+                    JMap.setInt(w, "_pos", i)
+                endif
+                JArray.addObj(arr, w)
+            endif
+        endif
+        i += 1
+    endwhile
+    return arr
 EndFunction
 
 String Function IntToHex(int value) global

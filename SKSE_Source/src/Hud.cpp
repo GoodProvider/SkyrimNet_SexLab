@@ -248,7 +248,8 @@ namespace Hud
             const bool ok = arouse ? OrgasmEngine::Arouse(source, target, 1.0f)
                                    : OrgasmEngine::Calm(source, target, 1.0f);
             if (!ok) {
-                webui_log::info("Hud: {} refused (cost)", arouse ? "arouse" : "calm");
+                // OrgasmEngine logs why (cost, afterglow, ...) just before.
+                webui_log::info("Hud: {} refused", arouse ? "arouse" : "calm");
             }
             std::lock_guard lock(g_lock);
             g_lastPush.clear();

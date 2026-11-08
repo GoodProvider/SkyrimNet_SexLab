@@ -897,15 +897,6 @@ namespace ActionCatalog
             return out.speaker != nullptr && !out.actorsResolved.empty();
         }
 
-        int ActorGenderSexLab(RE::Actor* actor)
-        {
-            if (!actor)
-                return 0;
-            if (auto* base = actor->GetActorBase())
-                return static_cast<int>(base->GetSex()); // 0 male, 1 female — SexLab human mapping
-            return 0;
-        }
-
         std::string ActorUuidDecimal(RE::Actor* actor)
         {
             if (!actor)
@@ -1025,7 +1016,7 @@ namespace ActionCatalog
             po["_victim"] = (params.victim && a == params.victim) ? 1 : 0;
             po["_dead"] = (a && a->IsDead()) ? 1 : 0;
             po["_speaking"] = "_pleasure_";
-            po["_gender"] = ActorGenderSexLab(a);
+            po["_gender"] = PapyrusBindings_WebUI::ActorSexLabGender(a);
             po["_race_key"] = "";
             positions.push_back(std::move(po));
         }

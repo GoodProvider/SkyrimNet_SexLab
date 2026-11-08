@@ -62,8 +62,9 @@ namespace PapyrusBindings_AnimationDB
                     spec.position_match = j["_position_match"].get<bool>();
                 if (j.contains("_pos_genders") && j["_pos_genders"].is_array()) {
                     for (const auto& el : j["_pos_genders"]) {
-                        if (el.is_number_integer())
-                            spec.pos_genders.push_back(el.get<int>());
+                        // 0..3 or "m" / "f" / "mc" / "fc".
+                        if (const int g = AnimationDB::ParseGenderToken(el); g >= 0)
+                            spec.pos_genders.push_back(g);
                     }
                 }
                 if (j.contains("_pos_intersex") && j["_pos_intersex"].is_array()) {
@@ -101,8 +102,9 @@ namespace PapyrusBindings_AnimationDB
                                 : j["_rank"].is_number() && j["_rank"].get<double>() != 0;
                 if (j.contains("_rank_pos_genders") && j["_rank_pos_genders"].is_array()) {
                     for (const auto& el : j["_rank_pos_genders"]) {
-                        if (el.is_number_integer())
-                            spec.rank_pos_genders.push_back(el.get<int>());
+                        // 0..3 or "m" / "f" / "mc" / "fc".
+                        if (const int g = AnimationDB::ParseGenderToken(el); g >= 0)
+                            spec.rank_pos_genders.push_back(g);
                     }
                 }
                 // Scene-setting keys. Papyrus natives run on the main thread, so `_form_ids` (the cast)
@@ -124,6 +126,8 @@ namespace PapyrusBindings_AnimationDB
                     if (!j.contains("_bound"))
                         bound = BondageCatalog::WearsHeavyBondage(cast);
                 }
+                // The cast's creatures: species (race-key sets) + gender, any filter mode.
+                AnimationDB::ParseCreatureKeys(j, spec);
                 AnimationDB::ParseSceneFilterKeys(j, spec, bound);
                 // Necro animations only for a cast with someone dead, unless asked for (every Papyrus picker: Scene
                 // Creator, last-stage and mid-scene switches; 2026-11-07 log: FB_NecroFemDomCow for a living cast).
@@ -327,6 +331,10 @@ namespace PapyrusBindings_AnimationDB
     {
         auto spec = ParseFilter(filter_json.c_str());
         auto rows = AnimationDB::QueryTopNAnims(spec, n);
+        // Papyrus pickers (Scene Creator, last stage, mid-scene): what the creature filter asked for.
+        webui_log::info("AnimDb_QueryTopNAnims creature={} creatures={} actor_count={} results={} first={}",
+            spec.creature == 1 ? "req" : spec.creature == 2 ? "excl" : "-", AnimationDB::CreaturesLogText(spec),
+            spec.actor_count ? *spec.actor_count : -1, rows.size(), rows.empty() ? "-" : rows.front().registry);
         nlohmann::json arr = nlohmann::json::array();
         for (const auto& row : rows)
             arr.push_back(RowToJson(row));
