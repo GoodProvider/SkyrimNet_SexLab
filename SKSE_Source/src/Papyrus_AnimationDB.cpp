@@ -20,7 +20,9 @@ namespace PapyrusBindings_AnimationDB
             if (!json || !json[0])
                 return spec;
             try {
-                auto j = nlohmann::json::parse(json);
+                // Papyrus-built keys can arrive in another case (KNOWLEDGEBASE "JsonLowerCaseKeys cannot change
+                // case"): `_Creature` from the string pool silently dropped `_creature: exclude`.
+                auto j = LowerCaseKeys(nlohmann::json::parse(json));
                 if (j.contains("_actor_count") && j["_actor_count"].is_number())
                     spec.actor_count = j["_actor_count"].get<int>();
                 else if (j.contains("actor_count") && j["actor_count"].is_number())

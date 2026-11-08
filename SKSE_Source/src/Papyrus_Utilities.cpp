@@ -20,30 +20,6 @@
 
 namespace PapyrusBindings_Utilities
 {
-    /// Recursively rebuilds JSON with all object keys converted to lowercase (ASCII).
-    /// Case-only key collisions use last-wins. Arrays and scalars are left structurally intact.
-    static nlohmann::json LowerCaseKeys(const nlohmann::json& in)
-    {
-        if (in.is_object()) {
-            nlohmann::json out = nlohmann::json::object();
-            for (auto it = in.begin(); it != in.end(); ++it) {
-                std::string key = it.key();
-                std::transform(key.begin(), key.end(), key.begin(),
-                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                out[key] = LowerCaseKeys(it.value());
-            }
-            return out;
-        }
-        if (in.is_array()) {
-            nlohmann::json out = nlohmann::json::array();
-            for (const auto& el : in) {
-                out.push_back(LowerCaseKeys(el));
-            }
-            return out;
-        }
-        return in;
-    }
-
     /// Parses json, lowercases all object keys recursively, returns compact dump.
     /// Invalid or empty input returns "" and logs a warning.
     RE::BSFixedString JsonLowerCaseKeys(RE::StaticFunctionTag*, RE::BSFixedString json)
