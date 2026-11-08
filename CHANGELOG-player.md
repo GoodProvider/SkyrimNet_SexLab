@@ -1,17 +1,17 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
-## Unreleased
+## 0.37.1
 
 ### Creatures
-- Creatures are recognized as creatures; the animation list shows them as **MC** (male creature) and **FC** (female creature)
-- Filtering by gender or position only lists animations made for your creature: a wolf gets canine animations, never horse or troll ones
-- Scenes started by NPCs or actions with a creature now pick creature animations from the animation database (before, creature animations were left out)
-- A transformed player (werewolf) keeps creature animations at the last stage and in the Description Editor's list (before, they switched to human animations)
+- Creatures are recognized; animation lists show **MC** (male creature) and **FC** (female creature)
+- Filtering by gender or position lists only your creature's animations: a wolf gets canine ones
+- Scenes started by NPCs or actions with a creature now pick creature animations
+- Fixed: a werewolf player got human animations at the last stage and in the Description Editor
 
 ### Orgasm engine
-- After an orgasm, arousing that actor works again once the afterglow drains (about 10 seconds). Before, it stayed blocked for a full minute
+- Fixed: arousing an actor stayed blocked for a full minute after an orgasm, not just the afterglow
 
 ## 0.37.0
 

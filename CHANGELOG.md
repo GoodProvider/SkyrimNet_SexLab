@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.37.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1) — since [0.37.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0)
+
+### Creatures
+- AnimDB filter key `_creatures` (gender + SexLab race-key set per creature, optional `_pos`) seats a cast's creatures in matching creature positions (`CreaturesFit`). Species applies in every filter mode, gender under gender / position match. `_pos_genders` and `_rank_pos_genders` also take `m` / `f` / `mc` / `fc`. Contract: [docs/reference/tag-synonyms.md](docs/reference/tag-synonyms.md).
+- C++ seeds creature genders 2 / 3 from the `ActorTypeNPC` keyword (`ActorSexLabGender`) before the Papyrus meta reply; the reply adds `_race_keys` (`GetRaceKeysForActor`, all of `GetAllRaceKeys`).
+- WebUI: `MC` / `FC` labels in the animation table and cast label (`scGenderLabel`); `scApplyCreatures` sends `_creatures` in every filter mode and `ssRandomFilter` never loosens it.
+- `Scene_Creator.QuerySexLabAnimsFromAnimDb` and `Scene.LastStage_PickRegistry` no longer hard-exclude creatures: a creature cast sends `_creature: require` + `_creatures` (`CreatureWantsJArray`).
+- `Utilities.CastGender`: the gender for AnimDB-facing casts (`CreatureWantsJArray`, race-key helpers, actor meta reply, Scene Creator seed and query, last-stage `_rank_pos_genders`, `BuildWebUISceneMenuState`). When SexLab 1.6x says human but the actor has no `ActorTypeNPC` and its current race has a SexLab race key, it returns 2 (3 with creature genders on) and traces `CastGender … sexlab:g -> c`. Race keys come from `Actor.GetRace()` first (`ActorRaceForKeys`). The scene-menu seed now sends `_race_key` / `_race_keys`.
+- Logs: `HandleAnimDbQuery … creatures=`, `AnimDb_QueryTopNAnims creature= creatures= actor_count= results= first=` (`AnimationDB::CreaturesLogText`), `LastStage_PickRegistry line: results: creatures: picked:`.
+
+### Orgasm engine
+- `NarrationTiming::DoneSinceMostRecentStarted` compares against the response's last sentence (`Speaker::lastDoneEnd`). SkyrimNet sends one `SpeechStarted` per sentence but one `SpeechComplete` per response, so the old first-sentence compare never passed: orgasm-hold afterglows (and the other "response played" checks) ran to `hold_max`.
+- The `Hud: … refused` log no longer claims "cost"; OrgasmEngine logs the reason.
+
 ## [0.37.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0) — since [0.36.6](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6)
 
 ### Stages follow enjoyment

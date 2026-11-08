@@ -1,8 +1,8 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## Unreleased
+## 0.37.1
 
 ### Creatures
 - AnimDB filter key `_creatures` (gender + SexLab race-key set per creature, optional `_pos`) seats a cast's creatures in matching creature positions (`CreaturesFit`); species applies in every filter mode, gender under gender / position match. String genders `m` / `f` / `mc` / `fc` are accepted. C++ seeds creature genders 2 / 3 from the `ActorTypeNPC` keyword (`ActorSexLabGender`) before Papyrus meta; the meta reply adds `_race_keys` (`GetRaceKeysForActor`). Papyrus scene-start and last-stage queries no longer hard-exclude creatures. See `docs/reference/tag-synonyms.md`.
