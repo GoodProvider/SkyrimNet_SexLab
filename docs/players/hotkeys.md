@@ -2,6 +2,8 @@
 
 Enable the optional hot key in the SkyrimNet dashboard plugin settings (**Enable Start Sex / Edit Stage hotkey**, default **backslash** `\\`). A dashboard save rebinds the key in-game; you do not need to open the MCM or reload. The in-game MCM only points at that page. Do not bind this to the same key as SkyrimNet_Leashed’s leash panel.
 
+Skyrim VR (Magelight UI only): with the hotkey enabled, **Grip + A** on either controller opens or closes the menu (settings **VR menu button**, modifier and hand under Controls). Point with the laser; B / Y closes it. Untested in a headset.
+
 The first time you press it on a save, if the animation database does not match SexLab's animation count, a dialog warns of a likely problem and offers to rebuild the database. Press the hotkey again to open the overlay.
 
 ## Out of animation

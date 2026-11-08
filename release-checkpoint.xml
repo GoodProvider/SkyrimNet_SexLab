@@ -12,10 +12,10 @@
     <project>SkyrimNet_SexLab</project>
     <summary>Bridge mod between SkyrimNet (LLM) and SexLab Framework.</summary>
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
-    <updated>2026-10-24</updated>
-    <base_tag>0.36.5</base_tag>
-    <next_version>0.36.6</next_version>
-    <version_status>Makefile VERSION 0.36.6 (2026-10-24); info.json and FOMOD info.xml / ModuleConfig.xml written by make release; latest git tag 0.36.5 (041ef41d, WebUI lock-up fix only); 0.36.6 not tagged</version_status>
+    <updated>2026-11-07</updated>
+    <base_tag>0.36.6</base_tag>
+    <next_version>0.37.0</next_version>
+    <version_status>Makefile VERSION 0.37.0 (2026-11-07); info.json and FOMOD info.xml / ModuleConfig.xml written by make release; latest git tag 0.36.6 (9cc7d270); 0.37.0 not tagged</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -66,6 +66,7 @@
   </doc_files>
 
   <status>
+    <note>2026-11-07: 0.37.0 since tagged 0.36.6 (9cc7d270), HEAD a52e800e + release pass. Version picked by the maintainer (minor bump). The developer changelog's Unreleased work log was condensed into CHANGELOG.md; the developer changelog now has one bullet per topic. Post-tag edits to the 0.36.6 player section (52080513: DOM heading, Punish-panel crash fix) were restored to the tag text; the crash fix moved to 0.37.0 Bug Fixes. Topics: Stages follow enjoyment, Last stage and endings, Victim scenes, Animation filter, Mini-game, Punish, Aid, SexLab P+ (untested), Magelight UI, Skyrim VR (untested), Bug Fixes; AnimEngine (developer only) and Build in CHANGELOG.md / developer only. Untested by decision (checkpoints/2026-11-06-review): necro word with a dead actor, P+ paths, VR headset, sticky auto play, AnimEngine. hotkeys.md / webui.md gained the VR chord. AnimEngine stays developer-only (sex-graph.json removed by make release). Omit: extern/, Headers/, checkpoints/, SKSE/Plugins/SkyrimNet/config/actions/, SKSE/Plugins/SkyrimNet/prompts/, z-*, reviews/.</note>
     <note>2026-10-24 (later): 0.36.6 opened since tagged 0.36.5 (041ef41d). The post-tag work had been written into the 0.36.5 sections; all three changelogs now have a 0.36.6 section with it and 0.36.5 is restored to the tagged WebUI lock-up fix. Topics unchanged from the note below. Omit: z-*, reviews/.</note>
     <note>2026-10-24: 0.36.5 still untagged; per maintainer the Unreleased work (Aid food, NPC press bursts, take control, Punish, DOM bar / is_aroused_for, hug, Description Editor add actors, C++ decorators / cum, profiler, actor_profile panel) was folded into 0.36.5 and all topics are tested. Topics: Aid, NPC strategy, Controlling a scene you aren't in, Punish, DOM slaves, Target menu, Description Editor, Prompts, Bug Fixes, WebUI, Profiling and Build (CHANGELOG.md / developer only). Whole working tree committed incl. checkpoints/review deletions. Leftover: sexlab.minigame.fear_cooldown unused. Omit: z-*, reviews/.</note>
     <note>2026-10-20: 0.36.5 since tagged 0.36.4. Delta: bff44ff5 WebUI closes other PrismaUI views (SkyrimNet dashboard) before Show, fixing the dashboard lock-up (tested). Topic: WebUI.</note>

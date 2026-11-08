@@ -1,9 +1,88 @@
 # Changelog
 
-## Unreleased
+## [0.37.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0) — since [0.36.6](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6)
 
-### SexLab P+
-- **SexLab P+ 2.17 or newer is now required.** On P+ 2.15 the game crashed at the end of every SexLab scene. On an older P+, a message at load tells you to update. Until then, scene holds (pause key, waiting for the orgasm dialogue), the last-stage list and the LLM-driven ending are off, and SexLab ends scenes itself, with no crash.
+### Stages follow enjoyment
+- **Stages follow one actor's enjoyment** with the engine on (`sexlab.enjoyment.stage_advance_primary_enjoyment`, default on), forward and back: N stages give N−1 equal bands, and the primary's orgasm goes to the final stage. Details: [docs/developers/orgasm-engine.md](docs/developers/orgasm-engine.md#stage-by-enjoyment).
+- **Primary** (`PrimaryOf`): expected to orgasm and not a DOM slave; male first, then female (positions 1, 2+, then 0); a `femdom` animation puts females first. `BeginScene` seeds `stageGender` from the base sex, so `PrimaryOf` never reads the actor.
+- New settings `sexlab.enjoyment.stage_punish_after` (15 s; a saved value stays), `stage_hold_max` (60 s, or the stage's own timer if longer) and `stall_end_after` (30 s, 0 = never: an NPC-only scene ends when nobody reaches a new enjoyment high for that long; `StallCheck`, `Scene.Engine_EndStalled`).
+- `sexlab.ending.target_*` no longer applies in these scenes; moves ignore SexLab's `AutoAdvance` off.
+- **HUD**: `prev` / `next` greyed while active (`stageAuto`). Num 5 cycles enjoyment → timers → paused → enjoyment and reads *timer*, *pause* or *enjoy*; *enjoy* moves straight to the stage for the primary's enjoyment (`stageSnap`). A manual stage move (HUD, WebUI menu, editor) puts stages on timers (`StageManual_TakeOver`); a new animation returns to following enjoyment.
+- Menu time is not counted toward a held stage's limit. The enjoyment bars are interpolated in `hud.html`.
+- New natives: `SetStageInputs`, `StageInputsKnown`, `IsStageAdvancePrimaryEnjoyment`, `CanStageAdvancePrimaryEnjoyment`, `GetStagePrimary`, `StageHoldCap`, `DisableStageAdvancePrimaryEnjoyment`; effect `Effect_MoveStage`.
+
+### Last stage and endings
+- **Orgasm check**: a passed check moves to the last stage at once (`Scene.Engine_GatePassed`); the bar flashes until 2 s into the voice reply, and `sexlab.ending.gate_wait_max` only caps the flash. With SkyrimNet's AI off nothing waits for a voice (`Utilities.GlobalAIEnabled`).
+- **Last-stage list** beside the HUD: Stop, Cuddle after sex, Start vaginal / oral / anal sex. Num - / Num + move the line; Enter, the HUD next key (Num 6) and SexLab's Advance key (Space) select it; the deadline selects the current line. A non-player is asked first (JEV `sexlab/last_stage`; a failed answer selects Stop); NPC-only scenes apply the choice with no list and stop after three. A switch line clears `ending_done` and raises the orgasm target when the lead already met it (`Ending_Rearm`, `Engine_SetEndingTarget`).
+- New settings `sexlab.tags.player` (default on) and `sexlab.tags.nonplayer` (default off): open the Animation Selector for a new animation, or a switch from the list the player can see; off picks at random. Selecting a switch line opens the Description Editor on the player (or the driven NPC); `Animation_Menu_Open` gained a `focus` argument, `LastStage_Show` an `advance_key` argument.
+- **Afterglow**: an orgasm that starts or comes during the last stage keeps the bar (`ActorState::afterglow`) and drains it at `sexlab.ending.afterglow_seconds` (new, default 10) per 100, not tied to the stage timer; Num 5 doesn't stop it. Afterglow actors get no gain, steps or orgasm test; `ArouseLocked` refuses them. `FinalStageRemaining` returns `AfterglowRemaining`; `LastStage_TimedLeft` floors at `LIST_MIN_SECONDS` (4).
+- **Orgasm hold**: an orgasm below the final stage (`StartOrgasmHold`, from `Fire` and `NoteExternalOrgasm`, any actor) keeps the bar draining at the afterglow rate; with stage by enjoyment the stage waits until 0 and a line that started after the orgasm has finished (`OrgasmHoldSpeaking`, capped by `hold_max`).
+- **Release when drained and quiet**: `Scene.Ending_Poll` releases once `FinalStageRemaining <= 0` has held 2 s, `GetSpeechQueueSize() == 0`, the orgasm window is closed and the new native `OrgasmEngine.NarrationIdle()` (`NarrationTiming::Idle() && NarrationQueue::Empty()`) is true. `(max)` stays as the cap. A `(drained)` release commits a timed list line on the next poll.
+- **Num 4 in the last stage** (`LastStage_Step`, active whenever `IsLastStage`): `LeaveLastStage` marks the drain `afterglowFree` and returns stage 1; `StageFollowPrimary` waits while any bar is `afterglowFree`. On SexLab 1.6x a `GoToStage` during the final `OrgasmStart` is retried every 0.5 s for up to 5 s with the timer held (`Back_Arm` / `Back_Poll`).
+- New natives `IsEndHold`, `IsLastStage`, `IsPrimaryFinished`, `NarrationIdle` (tasklet-callable), `SetEndHold`, `LeaveLastStage` (frame-synced).
+- Fixed: a switch from the list let the new animation run to its last stage with no orgasm, and gave the aggressor a second orgasm; a second animation stayed on timers (`stage_manual` / `primaryFinished` now cleared on an animation change).
+- Fixed: Cuddle (`nonsexual` setting, suppress `sexual`, `spanking`, `aggressive`) found nothing because it also suppressed `foreplay` / `leadin`.
+
+### Victim scenes
+- `VictimScene` (a victim and a non-DOM aggressor expected to orgasm): stages still follow `PrimaryOf`, but the primary's orgasm no longer finishes the scene. `Ending_PickLead` prefers an expected non-victim.
+- The ending lead reaching `endingTarget` sets `endHold` in `Fire` (`NoteEndReached`); `Scene.Ending_EndState` calls `Ending_ToFinal()` (1.6x `GoToStage`, P+ `SkipToSink`) before `LastStage_Begin()`, so the end list runs on the final stage.
+- The lead's orgasm below `endingTarget` (`NoteLeadMidFinish`): the Scene (`Ending_MidReached`) jumps to the final stage; once drained, `LastStage_TrySwitch` starts line 5 (the creator's tags, passed by `Scene.SetStartTags`), then lines 2–4 in random order; nothing playable after 3 tries → `LastStage_Step(-1)`.
+- The aggressor's orgasm fires at 100 enjoyment; a female aggressor's bar no longer stops below 100.
+- Only an aggressor punishes a stuck victim scene, and only a victim not pleasing them. With AI decisions off, a punished NPC turns to pleasing the punisher.
+- With a victim and only women as aggressors, the Scene Creator adds `femdom`.
+
+### Animation filter
+- **Shared animation row** (Scene Creator and Description Editor): Start, subject, style, *sexual*, *bound*, *rape*, *necro*, sort, description, synonyms, All, None (no All / None in the editor). Each word cycles white (in `SC.tags`) → red (`SC.suppress`) → grey; an explicit click keeps the player's choice.
+- *sexual* starts white. *rape* starts red, white once someone is victim (`scApplyRapeDefault`). *bound* starts red unless `SC.boundWorn`; white also sends `_bound`. While bound is enabled (`scBoundEnabled()`), `rape` is never suppressed (grey, not white: bound != rape, no derived tag).
+- New derived tag `restrained` (`restraint_tags.json`: yoke, armbinder, cuffs, rope, chains, hogtied); shown as `bound`. Bound animations are suppressed unless someone wears a heavy bondage device, even with DD tags off. Papyrus queries with `restrained` or `bound` in `_must_tags` count as bound.
+- New derived tag `necro` (`necro_tags.json`: necro, necrophilia, corpse, dead). `AnimationDB::AsksNecro` / `SuppressUnlessDead`: `Papyrus_AnimationDB` suppresses `necro` unless a filter `_form_ids` actor `IsDead()` or the query asks for it, so every Papyrus picker is covered. Positions payloads carry `_dead`; `scApplyNecroDefault` mirrors rape. Untested with a dead actor.
+- `necro` / `restrained` also match whole words of the row's name and registry (`NameWords`); `LoadSynonyms` re-applies derived tags to stored rows at startup.
+- New derived tag `rape` (`rape_tags.json`: rape, aggressive, forced, fbrape, assault, …). See [docs/reference/tag-synonyms.md](docs/reference/tag-synonyms.md).
+- **Sort and play counts**: `sort:` pulldown (default, freq asc / desc, name asc / desc) and a `freq` column. AnimDB `play_counts` table (survives resync), native `AnimDb_RecordPlay`, row key `_play_count`; `SeedRegistry` records one play per new animation. `default` sort: described → gender → least played → random. Scene starts send `_rank` + `_rank_pos_genders`; `QueryTopNAnims` keeps the top 32 in that order.
+- `InferOrgasmExpected`: a female position expects an orgasm in 2-position `doubledildo` / `tribbing` / `scissoring` animations (`ReinferMutualRowsLocked` updates rows once; a file's `orgasm_expected` stays). A position not expected to orgasm shows `-` and matches either gender.
+- Description Editor: header "animation name: tags"; an animation change narrates "`<subject> <style> changes to <description>`" (`_change_by`); a style change and a pick give one narration (`DE.heldStyle`, `_narrate_style`); the Actor table previews a pending pick's slots and defaults.
+
+### Mini-game
+- Plays are recorded per presser (`NotePlay`); the new native `GetMiniGameSummary(actor)` turns them into "A focused on B's pleasure." / "A resisted her orgasm." etc., and `Utilities.SilenceNudge` sends that instead of "continue scene". Removed: per-move narration (`g_narrateDue`, `NarrateKey`, `FlushNarrations`) and `sexlab.minigame.narrate_window`.
+- New setting `sexlab.minigame.enjoyment_budget` (default on): a strategy press must leave `max × (1 − enjoyment / 100)` stamina / magicka (`OverBudget`). NPCs and auto play only; HUD keys, DOM slaves and the plugin API are not limited.
+- Removed the unused `sexlab.minigame.fear_cooldown` setting.
+
+### Punish
+- When the punish reason is the target's current strategy, the panel adds ", and orders them to <strategy>" (`currentReason`, `order` in `onPunishResult`). `PunishNarrated` / `StrategyDecision::RequestAnswer` take an optional `orderKey`; `minigame_strategy.prompt` gets `ordered_key`. An answer picking it skips `decision_min_confidence`.
+
+### Aid
+- `sortPartsByDamage` ranks a first time as one point; `aidMostDamagedPart` takes the first damaged, non-dimmed part. New `OrgasmEngine::ClearFirstTime` (pussy / ass) from `Aid::Apply` and `Aid::StartChannel` (health); a healed flag keeps `SetFirstTimes` from setting it again.
+- Punish panel: `renderPartPulldown(..., byPlace)` lists parts head to legs (`sortPartsByPlace`).
+
+### SexLab P+ (untested)
+- **P+ 2.17+ required** (`Utilities.IsSexLabPPlusSupported()`, `PPlusMinVersion()` = 0x02110000). On 2.15, `Ending_Watch`'s `EndAnimation` raced P+'s own end into a crash (`SkyrimSE.exe+0ADA8D7`, `SendDefaultAnimEvent`).
+- Below 2.17: MessageBox at load; no holds (`Timer_SyncHold`), ending hold or last-stage list; no `EndAnimation` from `Ending_Watch` / `PPlus_StageStart` / `Engine_EndStalled`. `AnimDb.ThreadStageNum` falls back to `thread.Stage`. See [docs/developers/sexlab-pplus.md](docs/developers/sexlab-pplus.md).
+
+### Magelight UI
+- `UiEngine` prefers **Magelight UI v4** (`RequestApi4()`, host ≥ 0.30.1) and falls back to PrismaUI V1. Both read `Data/PrismaUI/views/SkyrimNet_SexLab/`. See [docs/developers/webui.md](docs/developers/webui.md#ui-engine-magelight--prismaui).
+- Under Magelight, `SetNetworkPolicy(LoopbackOnly)` lets pages read the Dashboard `ui_scale`.
+- Fixed: under Magelight, Escape never reached `handleGlobalEscape()`; the page now captures Escape (`__escapecapture`), and the Aid / Ask / Aid-offer panels are mutually exclusive.
+
+### Skyrim VR (untested)
+- `UiEngine::BindVrChord` binds Magelight `BindVRHotkeyCallback` when `QueryCapability("vr") == 1`; new settings `sexlab.editor.vr_button` / `vr_modifier` / `vr_hand` (default Grip + A, either hand), active with `sexlab.editor.hotkey_enabled`. The callback posts `ToggleMenuFromHotkey`.
+- New `include/TaskPost.h` `TaskPost::FromEntryPoint`: on VR, posts from its own thread (an `AddTask` from a main-thread entry point can hang); used by `Call_ProcessHotkey` and `Hud::DispatchMenuKey`.
+
+### Bug Fixes
+- Fixed: a crash when punishing from the Punish panel without SkyrimNet_DOM or with an older DOM (`PanelPunished` gated on the ESP and global function).
+- Fixed: the Description Editor's animation filter tab could open with gender `any`; it opens on `gender` unless the player picked a mode this session.
+- Fixed: an added actor could not be marked victim; commits match rows by form id (`WebUI_PositionRowFor`). `ApplyWebUICommit` waits for SexLab's post-`ChangeActors` refresh (`WaitForActorChangeRefresh`, SexLab 1.6x).
+- Fixed: orgasm engine co-save `Load` reads `'ORGE'` (v9) but restores no scene, so a new scene reusing a thread id no longer resumes the dead one. Sticky auto play still loads.
+- Fixed: `Scene.OnUpdate` in menu mode (`Menu_FreezeDeadlines`) adds menu time to the P+ actor-change wait and the ending watch.
+
+### AnimEngine (developer only)
+- Experimental AnimEngine (plays AnimDB playback data without SexLab's thread), `SlalLoader` / `SlsbLoader`, `anim_playback` table, scene registry (`Scenes::Registry`) and `AnimEngineOrgasm` bridge. SexLab runs every scene unless the developer-only `SKSE/Plugins/SkyrimNet_SexLab/sex-graph.json` turns it on; `make release` removes that file, and the **Sex Graph** panel (`MainPanels/1050_sex_graph.json`, `requiresFile`) is hidden without it. Design: [docs/developers/anim-engine.md](docs/developers/anim-engine.md).
+- New ESP records `00081D` (`SkyrimNet_SexLab_AE_DoNothing`) and `00081E` (`SkyrimNet_SexLab_AE_Marker`), and script `SkyrimNet_SexLab_AnimEngine`.
+- AnimDB registry owner change (walk / SLAL / SLSB) rebuilds once on load (`last_registry_owner`).
+
+### Build
+- CommonLibSSE via the SkyrimNet vcpkg port; headers moved to `SKSE_Source/include/`; Devious Devices NG API header corrected.
+- Debug DLLs skip `RegisterDecorators` (`CrossDllStdStringSafe`) and are no longer copied into `SKSE/Plugins`.
+- Read-only orgasm-engine natives (`GetEnjoyment`, `FinalStageRemaining`, `IsLastStage`, …) are tasklet-callable, so the Scene poll no longer waits a frame per call.
 
 ## [0.36.6](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.6) — since [0.36.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.36.5)
 

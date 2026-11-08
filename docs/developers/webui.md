@@ -311,6 +311,8 @@ Engine selection lives in `SKSE_Source/src/UiEngine.cpp`: **Magelight UI v4** (`
 
 **View path:** both engines read the **same folder — `Data/PrismaUI/views/SkyrimNet_SexLab/index.html`** (and `hud.html`) — never `SKSE/Plugins/`. Prisma resolves it relative to its runtime dir; Magelight is created with an absolute path into that same folder, so one shipped tree serves both. This mod’s HTML **is** shipped: `make release` copies `PrismaUI/` into FOMOD `core`. Missing file → open path looks fine; do not `Focus` until DomReady or the game pauses with a blank overlay (Escape is JS-only unless C++ Hide runs).
 
+**VR menu chord:** under Magelight with `QueryCapability("vr") == 1`, `UiEngine::BindVrChord` binds `BindVRHotkeyCallback` on the webui view from `sexlab.editor.vr_button` / `vr_modifier` / `vr_hand` (default Grip + A, either hand), active while `sexlab.editor.hotkey_enabled` is on. The callback `PostGameTask`s `ToggleMenuFromHotkey`. Main-thread entry points post through `TaskPost::FromEntryPoint` (`include/TaskPost.h`), which uses its own thread on VR. Untested in a headset.
+
 **Display scale:** Overlay matches SkyrimNet’s system — px design tokens (~15px base), `body.style.zoom` × Dashboard `ui_scale` × up-only 1080p baseline, scrollable left-column / panel shells. Under Magelight, `UiEngine::Init` sets `NetworkPolicy::LoopbackOnly` so the pages can fetch `ui_scale` from `http://localhost:8080`. See [KNOWLEDGEBASE.md](../../KNOWLEDGEBASE.md).
 
 After changing action `label`s: regenerate `actions_index.json` with `tools/generate_actions_index.py`.
