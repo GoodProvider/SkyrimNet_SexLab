@@ -529,7 +529,7 @@ The DLL is already SE+AE+VR (MinLL/CommonLibVR, below). Magelight places the vie
 
 **Cause:** every `a_vm->RegisterFunction` in `SKSE_Source/src` omitted the 4th argument `a_callableFromTasklets` (CommonLib default `false`). Such a native waits for the next frame on every call (`RE/N/NativeLatentFunction.h`). The overlay seed and scene pushes are built from hundreds of `SNSL_J*` store calls plus `TraceLog`, so each build cost hundreds of frames. JContainers, which the store replaced, registers its natives as tasklet-callable, which is why the move to the store made it slower.
 
-**Rule:** register a native with `true` when it is thread-safe: it touches only plugin data under its own mutex (`JsonStore` `g_mutex`, `AnimationDB` `g_mutex`) or is a pure function. Leave it `false` when it reads or writes game objects (forms, actors, UI `Invoke`), or for the AnimDB sync / save natives. Keep Papyrus hot paths (seed, `BuildWebUISceneMenuObject`, Cancel snapshot) free of debug walks such as `DbgAnimList`.
+**Rule:** register a native with `true` when it is thread-safe: it touches only plugin data under its own mutex (`JsonStore` `g_mutex`, `AnimationDB` `g_mutex`) or is a pure function. Leave it `false` when it reads or writes game objects (forms, actors, UI `Invoke`), or for the AnimDB sync / save natives (`AnimDb_PushRow` is the exception: one call per row, so a frame wait per call would add up). Keep Papyrus hot paths (seed, `BuildWebUISceneMenuObject`, Cancel snapshot) free of debug walks such as `DbgAnimList`.
 
 **Orgasm engine (2026-11-06):** 16 read-only `SkyrimNet_SexLab_OrgasmEngine` natives are now `true` (state under `OrgasmEngine` / `NarrationTiming` `g_lock`, only the argument's FormID). `PrimaryOf` reads only the cached `stageGender` (BeginScene seeds it from the base sex on the game thread; `SetStageInputs` overwrites it), so `IsStageAdvancePrimaryEnjoyment`, `CanStageAdvancePrimaryEnjoyment` and `IsVictimHoldScene` are `true` too. Anything that reads actor values, `AnimSpeed`, display names or returns a `LookupByID` actor (`GetStagePrimary`) stays `false`; see the comment above the registrations in `Papyrus_OrgasmEngine.cpp`.
 
@@ -1806,3 +1806,11 @@ The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feel
 **Symptom:** after an NPC orgasm, arouse was refused "(afterglow)" for 60 s; `orgasm hold ended after 60.1s`.
 **Cause:** the log showed `started seq=41`, `started seq=42`, `complete`. `NarrationTiming` stored the completed response's first sentence (41) and compared it with the latest sentence (42), so "done" never passed and every hold ran to `hold_max`.
 **Rule:** "response done" compares against the last sentence started before its `SpeechComplete` (`Speaker::lastDoneEnd`), never the first.
+
+## AnimDB walk and saves (2026-11-08, built, untested in game)
+
+**Symptom (player report, 0.37.1, P+ 2.19):** CTD loading a save made during the walk. RBX held 10,259, the exact length of a half-built batch JSON string stored in the save; RAX held text from offset 333 of that string. A later save in the same session still held the string after the walk had finished.
+**Not proven:** why the engine crashes, the safe string length (the `SkyrimSE.exe` code is encrypted on disk), or that this string is the only trigger.
+**Rule:** do not grow long strings in Papyrus locals across a walk or other long job; a save can capture them. The walks send fields through `AnimDb_PushRow`. Saves that already hold the string are not repaired.
+**Resuming:** C++ sync state is per process (`g_sync_gen` starts at 0) but Papyrus walk state is in the save. A walk resumed without `BeginSync` makes `EndSync` delete every earlier row, so `CheckAlignmentOnLoad` restarts it, and `walk_epoch` stops any restored stack.
+**New games:** `last_registry_owner` is per save but AnimDB is global, so `-1` alone must not force a rebuild of a filled DB. `last_sync_*` are per save too, so a new game can show the count prompt for a gap that an older save had already explained.

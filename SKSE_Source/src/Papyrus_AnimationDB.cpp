@@ -225,45 +225,46 @@ namespace PapyrusBindings_AnimationDB
         return static_cast<std::int32_t>(AnimationDB::BeginSync(force_rebuild));
     }
 
-    // Papyrus-built batch from SkyrimNet_SexLab_AnimDb (WalkPPlusBatch / OnUpdate). A pex built by papyrus.exe keeps
-    // "\"" as backslash+quote (KNOWLEDGEBASE "non-pyro compiler kept \" literally"), so every batch fails to parse:
-    // log where, then retry once unescaped so a bad build still fills the DB.
-    std::int32_t AnimDb_PushAnimBatch(RE::StaticFunctionTag*, RE::BSFixedString json)
+    // One row of the Papyrus walk (WalkPPlusBatch / OnUpdate), as separate fields: Papyrus must not hold row or batch
+    // JSON, because a long string in a save can crash the game on load (KNOWLEDGEBASE "AnimDB walk and saves").
+    // Registered tasklet-callable so a row does not wait a frame.
+    void AnimDb_PushRow(RE::StaticFunctionTag*, RE::BSFixedString registry, bool keep_case, RE::BSFixedString name,
+        std::int32_t enabled, std::int32_t source, std::int32_t position_count, std::int32_t stage_count,
+        std::int32_t males, std::int32_t females, std::int32_t male_creatures, std::int32_t female_creatures,
+        std::int32_t has_creature, RE::BSFixedString race_type, std::vector<std::int32_t> pos_genders,
+        std::vector<RE::BSFixedString> pos_race_keys, std::vector<RE::BSFixedString> tags)
     {
-        const std::string text = json.c_str() ? json.c_str() : "";
-        try {
-            auto j = nlohmann::json::parse(text);
-            return AnimationDB::PushAnimBatch(j);
-        } catch (const nlohmann::json::parse_error& e) {
-            const int failures = AnimationDB::NoteBatchParseError();
-            if (failures == 1) {
-                const size_t at = e.byte > 0 ? static_cast<size_t>(e.byte - 1) : 0;
-                const size_t from = at > 60 ? at - 60 : 0;
-                webui_log::warn("AnimDb_PushAnimBatch: parse failed len={} byte={}: {} | near='{}'", text.size(),
-                    e.byte, e.what(), text.substr(from, 120));
-            }
-            if (text.find("\\\"") != std::string::npos) {
-                std::string fixed = text;
-                for (size_t pos = 0; (pos = fixed.find("\\\"", pos)) != std::string::npos; ++pos)
-                    fixed.erase(pos, 1);
-                try {
-                    auto j = nlohmann::json::parse(fixed);
-                    if (failures == 1)
-                        webui_log::warn("AnimDb_PushAnimBatch: batch had literal \\\" (pex not built with pyro); "
-                                        "unescaped");
-                    return AnimationDB::PushAnimBatch(j);
-                } catch (const std::exception& e2) {
-                    if (failures <= 3)
-                        webui_log::warn("AnimDb_PushAnimBatch: unescaped retry failed: {}", e2.what());
-                }
-            }
-            AnimationDB::NoteBatchDropped();
-            return 0;
-        } catch (const std::exception& e) {
-            AnimationDB::NoteBatchDropped();
-            webui_log::warn("AnimDb_PushAnimBatch: failed len={}: {}", text.size(), e.what());
-            return 0;
-        }
+        const auto text = [](const RE::BSFixedString& s) { return std::string(s.c_str() ? s.c_str() : ""); };
+        const auto texts = [&](const std::vector<RE::BSFixedString>& list) {
+            auto out = nlohmann::json::array();
+            for (const auto& s : list)
+                out.push_back(text(s));
+            return out;
+        };
+        const auto positions = static_cast<std::size_t>((std::max)(position_count, 0));
+        pos_genders.resize(positions, 0);
+        pos_race_keys.resize(positions);
+
+        nlohmann::json row = {
+            { "_registry", text(registry) },
+            { "_name", text(name) },
+            { "_enabled", enabled },
+            { "_source", source },
+            { "_position_count", position_count },
+            { "_stage_count", stage_count },
+            { "_males", males },
+            { "_females", females },
+            { "_male_creatures", male_creatures },
+            { "_female_creatures", female_creatures },
+            { "_has_creature", has_creature },
+            { "_race_type", text(race_type) },
+            { "_pos_genders", pos_genders },
+            { "_pos_race_keys", texts(pos_race_keys) },
+            { "_tags", texts(tags) },
+        };
+        if (keep_case)
+            row["_case"] = 1;
+        AnimationDB::QueueSyncRow(std::move(row));
     }
 
     bool AnimDb_EndSync(RE::StaticFunctionTag*)
@@ -484,7 +485,7 @@ namespace PapyrusBindings_AnimationDB
 
         a_vm->RegisterFunction("AnimDb_Open", scriptName, AnimDb_Open);
         a_vm->RegisterFunction("AnimDb_BeginSync", scriptName, AnimDb_BeginSync);
-        a_vm->RegisterFunction("AnimDb_PushAnimBatch", scriptName, AnimDb_PushAnimBatch);
+        a_vm->RegisterFunction("AnimDb_PushRow", scriptName, AnimDb_PushRow, true);
         a_vm->RegisterFunction("AnimDb_EndSync", scriptName, AnimDb_EndSync);
         a_vm->RegisterFunction("AnimDb_SyncFromSlal", scriptName, AnimDb_SyncFromSlal);
         a_vm->RegisterFunction("AnimDb_IsSlalSyncRunning", scriptName, AnimDb_IsSlalSyncRunning, true);

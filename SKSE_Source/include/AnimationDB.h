@@ -210,11 +210,8 @@ namespace AnimationDB
 
     std::int64_t BeginSync(bool force_rebuild);
     bool PushAnim(const nlohmann::json& anim);
-    int PushAnimBatch(const nlohmann::json& arr);
-    /// Papyrus binding: a batch's first parse failed. Returns that count for the current sync.
-    int NoteBatchParseError();
-    /// Papyrus binding: a batch could not be parsed even after unescaping \"; its rows are lost.
-    void NoteBatchDropped();
+    /// Papyrus walk: stores `row` (PushAnim's keys) with the next batch of rows, in one transaction. EndSync flushes.
+    void QueueSyncRow(nlohmann::json row);
     bool EndSync();
 
     /// Registry loaders: replaces every row of `source` (registry rows go through PushAnim, so anidata, orgasm and

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.37.2 (unreleased)
+
+### AnimDB
+- **(untested on SexLab P+)** The Papyrus walks no longer build row or batch JSON. `AnimDb_PushRow` takes each row as fields and replaces `AnimDb_PushAnimBatch`, because a save made during a P+ walk kept a 10,259-byte batch string and crashed on load. Saves that already hold such a string are not repaired.
+- A load that finds an interrupted walk starts it again (not forced). Before, the resumed walk had no `BeginSync`, so `EndSync` would have deleted the rows pushed before the save.
+- A new game no longer forces a rebuild when AnimDB already has rows (`last_registry_owner` -1 adopts the current owner; an empty DB still builds).
+- Walk rows are stored 64 to a SQLite transaction instead of syncing to disk per write. `BeginWalk` can no longer run twice from `OnSexLabEnabled` and the poll. `FinishSourceOrDone` logs `elapsed_s=`.
+
 ## [0.37.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1) — since [0.37.0](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.0)
 
 ### Creatures

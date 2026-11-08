@@ -8,7 +8,8 @@ SexLabFramework Property sexlab Auto
 ; Native bindings (SKSE)
 Function AnimDb_Open() global native
 int Function AnimDb_BeginSync(Bool force_rebuild) global native
-int Function AnimDb_PushAnimBatch(String json) global native
+; One walk row as fields. Never build row or batch JSON here: a long string held by a save can crash the game on load.
+Function AnimDb_PushRow(String registry, Bool keep_case, String name, int enabled, int source, int position_count, int stage_count, int males, int females, int male_creatures, int female_creatures, int has_creature, String race_type, int[] pos_genders, String[] pos_race_keys, String[] tags) global native
 Bool Function AnimDb_EndSync() global native
 String Function AnimDb_QueryTopNAnims(String filter_json, int n) global native
 String Function AnimDb_QueryTopNTags(String filter_json, int n) global native
@@ -90,12 +91,15 @@ Bool walk_active = False
 Bool walk_force = False
 String batch_json = ""
 
-; 0 idle, 1 waiting for SexLab, 2 walking slots
+; 0 idle, 1 waiting for SexLab, 2 walking slots, 3 BeginWalk running
 int sync_phase = 0
 int walk_slots_human = 0
 int walk_slots_creature = 0
 int walk_slots_total = 0
 float progress_last_time = 0.0
+float walk_start_time = 0.0
+; Raised by BeginWalk: a walk function from an older walk (a stack restored from a save) stops when it changes.
+int walk_epoch = 0
 
 ; SexLab P+: scene ids of the source being walked (SkyrimNet_SexLab_PPlus.AllSceneIds, no proxy alias cap);
 ; pplus_ids_source = which walk_source they belong to (-1 none).
@@ -126,7 +130,19 @@ EndFunction
 ; Compare AnimDB vs SexLab after load. Prompts if counts differ; auto-rebuilds only when the owner changed
 ; (AnimEngine / P+ registry toggled in sex-graph.json, or the file removed), since the old rows came from elsewhere.
 Function CheckAlignmentOnLoad()
+    ; A walk in this save lost its native sync (BeginSync) when the game loaded: EndSync would delete every row
+    ; pushed before the save. Walk again; not forced, since rows already stored are still good.
+    Bool walk_interrupted = sync_phase >= 2
+    if walk_interrupted
+        sync_phase = 0
+        walk_active = False
+    endif
     int owner = RegistryOwner()
+    ; AnimDB is shared by every save: a new game has no owner recorded, but that does not make a filled DB wrong.
+    if last_registry_owner == -1 && AnimDb_TotalCount() > 0
+        Trace("CheckAlignmentOnLoad", "no owner recorded, AnimDB has rows, keeping them owner="+owner)
+        last_registry_owner = owner
+    endif
     if owner != last_registry_owner
         Trace("CheckAlignmentOnLoad", "AnimDB owner changed "+last_registry_owner+" -> "+owner+", rebuilding")
         StartSync(True)
@@ -135,6 +151,11 @@ Function CheckAlignmentOnLoad()
     if UsesCppRegistry()
         SyncCppRegistry(False)
         Trace("CheckAlignmentOnLoad", CppRegistrySummary())
+        return
+    endif
+    if walk_interrupted
+        Trace("CheckAlignmentOnLoad", "restarting walk interrupted by a save")
+        StartSync(False)
         return
     endif
     if walk_active || sync_phase != 0 || align_mbox_id != 0
@@ -320,6 +341,12 @@ EndFunction
 
 Function BeginWalk()
     Int prof_id = SkyrimNet_SexLab_WebUI.Prof_Begin("papyrus", "AnimDb.BeginWalk", -1)
+    ; OnSexLabEnabled and the phase 1 OnUpdate poll can both get here.
+    if sync_phase >= 2
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
+    endif
+    sync_phase = 3
     UnregisterForModEvent("SexLabEnabled")
     RefreshSlotCounts()
     if !walk_force
@@ -342,7 +369,9 @@ Function BeginWalk()
     walk_skip_empty = 0
     walk_skip_logged = 0
     pplus_ids_source = -1
+    walk_epoch += 1
     progress_last_time = Utility.GetCurrentRealTime()
+    walk_start_time = progress_last_time
     AnimDb_BeginSync(walk_force)
     Trace("BeginWalk", "SkyrimNet SexLab loading", True)
     RegisterForSingleUpdate(0.05)
@@ -413,10 +442,9 @@ Event OnUpdate()
     endif
     int slotted = slots.Slotted
     int batch_count = 0
-    String json = "["
-    Bool first = True
+    int epoch = walk_epoch
 
-    while walk_index < slotted && batch_count < BATCH_SIZE
+    while walk_index < slotted && batch_count < BATCH_SIZE && epoch == walk_epoch
         sslBaseAnimation anim = slots.GetBySlot(walk_index)
         walk_index += 1
         if !anim
@@ -424,26 +452,17 @@ Event OnUpdate()
         elseif !anim.Registered
             walk_skip_unreg += 1
             LogWalkSkip("unregistered", anim)
+        elseif PushAnimRow(anim, walk_source)
+            batch_count += 1
+            walk_total += 1
         else
-            String piece = BuildAnimJson(anim, walk_source)
-            if piece != ""
-                if !first
-                    json += ","
-                endif
-                json += piece
-                first = False
-                batch_count += 1
-                walk_total += 1
-            else
-                walk_skip_empty += 1
-                LogWalkSkip("empty registry", anim)
-            endif
+            walk_skip_empty += 1
+            LogWalkSkip("empty registry", anim)
         endif
     endwhile
-    json += "]"
-
-    if batch_count > 0
-        AnimDb_PushAnimBatch(json)
+    if epoch != walk_epoch
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
     endif
 
     float now = Utility.GetCurrentRealTime()
@@ -481,30 +500,21 @@ Function WalkPPlusBatch()
     endif
     int total = pplus_ids.length
     int batch_count = 0
-    String json = "["
-    Bool first = True
-    while walk_index < total && batch_count < BATCH_SIZE
+    int epoch = walk_epoch
+    while walk_index < total && batch_count < BATCH_SIZE && epoch == walk_epoch
         String id = pplus_ids[walk_index]
         walk_index += 1
-        String piece = ""
         if id != ""
-            piece = BuildAnimJson_PPlus(id, walk_source)
-        endif
-        if piece != ""
-            if !first
-                json += ","
-            endif
-            json += piece
-            first = False
+            PushPPlusRow(id, walk_source)
             batch_count += 1
             walk_total += 1
         else
             walk_skip_empty += 1
         endif
     endwhile
-    json += "]"
-    if batch_count > 0
-        AnimDb_PushAnimBatch(json)
+    if epoch != walk_epoch
+        SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+        return
     endif
     float now = Utility.GetCurrentRealTime()
     if now - progress_last_time >= 5.0
@@ -530,9 +540,9 @@ Function WalkPPlusBatch()
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
-; P+ row from SexlabRegistry (the proxy's Name / Enabled / tags stay empty). Same keys as BuildAnimJson;
-; "_case":1 keeps the NanoID's case as the AnimDB key (NanoIDs are case-sensitive).
-String Function BuildAnimJson_PPlus(String id, int source)
+; P+ row from SexlabRegistry (the proxy's Name / Enabled / tags stay empty). Same fields as PushAnimRow;
+; keep_case keeps the NanoID's case as the AnimDB key (NanoIDs are case-sensitive).
+Function PushPPlusRow(String id, int source)
     String name = SkyrimNet_SexLab_PPlus.SceneName(id)
     int enabled = 0
     if SkyrimNet_SexLab_PPlus.SceneEnabled(id)
@@ -547,14 +557,8 @@ String Function BuildAnimJson_PPlus(String id, int source)
     int male_creatures = 0
     int female_creatures = 0
     String race_type = ""
-    String pos_genders = "["
-    String pos_race = "["
     int i = 0
     while i < pos_count
-        if i > 0
-            pos_genders += ","
-            pos_race += ","
-        endif
         int g = 0
         if i < genders.length
             g = genders[i]
@@ -568,50 +572,17 @@ String Function BuildAnimJson_PPlus(String id, int source)
         else
             males += 1
         endif
-        pos_genders += g
-        String rk = ""
-        if i < race_keys.length && race_keys[i]
-            rk = race_keys[i]
+        if race_type == "" && i < race_keys.length && race_keys[i]
+            race_type = race_keys[i]
         endif
-        if race_type == "" && rk != ""
-            race_type = rk
-        endif
-        pos_race += "\""+EscapeJson(rk)+"\""
         i += 1
     endwhile
-    pos_genders += "]"
-    pos_race += "]"
     int has_creature = 0
     if male_creatures + female_creatures > 0
         has_creature = 1
     endif
     String[] tags = SkyrimNet_SexLab_PPlus.SceneTags(id)
-    String tags_json = "["
-    i = 0
-    while i < tags.length
-        if i > 0
-            tags_json += ","
-        endif
-        tags_json += "\""+EscapeJson(tags[i])+"\""
-        i += 1
-    endwhile
-    tags_json += "]"
-    return "{\"_registry\":\""+EscapeJson(id)+"\""\
-        +",\"_case\":1"\
-        +",\"_name\":\""+EscapeJson(name)+"\""\
-        +",\"_enabled\":"+enabled\
-        +",\"_source\":"+source\
-        +",\"_position_count\":"+pos_count\
-        +",\"_stage_count\":"+stage_count\
-        +",\"_males\":"+males\
-        +",\"_females\":"+females\
-        +",\"_male_creatures\":"+male_creatures\
-        +",\"_female_creatures\":"+female_creatures\
-        +",\"_has_creature\":"+has_creature\
-        +",\"_race_type\":\""+EscapeJson(race_type)+"\""\
-        +",\"_pos_genders\":"+pos_genders\
-        +",\"_pos_race_keys\":"+pos_race\
-        +",\"_tags\":"+tags_json+"}"
+    AnimDb_PushRow(id, True, name, enabled, source, pos_count, stage_count, males, females, male_creatures, female_creatures, has_creature, race_type, genders, race_keys, tags)
 EndFunction
 
 Function LogWalkSkip(String reason, sslBaseAnimation anim)
@@ -635,7 +606,7 @@ Function FinishSourceOrDone()
     int db_count = AnimDb_TotalCount()
     last_sync_slots_total = walk_slots_total
     last_sync_db_count = db_count
-    Trace("FinishSourceOrDone", "total_pushed="+walk_total+" slots="+walk_slots_total+" db_rows="+db_count+" skip_null="+walk_skip_null+" skip_unregistered="+walk_skip_unreg+" skip_empty_registry="+walk_skip_empty+" not_stored="+(walk_total - db_count))
+    Trace("FinishSourceOrDone", "total_pushed="+walk_total+" slots="+walk_slots_total+" db_rows="+db_count+" skip_null="+walk_skip_null+" skip_unregistered="+walk_skip_unreg+" skip_empty_registry="+walk_skip_empty+" not_stored="+(walk_total - db_count)+" elapsed_s="+(Utility.GetCurrentRealTime() - walk_start_time))
     if db_count == 0 && walk_total > 0
         Trace("FinishSourceOrDone", "AnimDB build failed: 0 of "+walk_total+" animations stored, see SkyrimNet_SexLab.log", True)
     else
@@ -650,13 +621,14 @@ Function FinishSourceOrDone()
     endif
 EndFunction
 
-String Function BuildAnimJson(sslBaseAnimation anim, int source)
+; False: the animation has no registry, nothing was pushed.
+Bool Function PushAnimRow(sslBaseAnimation anim, int source)
     if !anim
-        return ""
+        return False
     endif
     String registry = anim.Registry
     if registry == ""
-        return ""
+        return False
     endif
     String name = anim.Name
     int enabled = 0
@@ -693,57 +665,15 @@ String Function BuildAnimJson(sslBaseAnimation anim, int source)
         race_type = ""
     endif
 
-    String pos_genders = "["
-    String pos_race = "["
+    int[] pos_genders = Utility.CreateIntArray(pos_count)
     int i = 0
     while i < pos_count
-        if i > 0
-            pos_genders += ","
-            pos_race += ","
-        endif
-        pos_genders += anim.GetGender(i)
-        String rk = ""
-        String[] rts = anim.GetRaceTypes()
-        if rts && i < rts.length && rts[i]
-            rk = rts[i]
-        endif
-        pos_race += "\""+EscapeJson(rk)+"\""
+        pos_genders[i] = anim.GetGender(i)
         i += 1
     endwhile
-    pos_genders += "]"
-    pos_race += "]"
 
-    String[] tags = anim.GetRawTags()
-    String tags_json = "["
-    i = 0
-    int ntags = 0
-    if tags
-        ntags = tags.length
-    endif
-    while i < ntags
-        if i > 0
-            tags_json += ","
-        endif
-        tags_json += "\""+EscapeJson(tags[i])+"\""
-        i += 1
-    endwhile
-    tags_json += "]"
-
-    return "{\"_registry\":\""+EscapeJson(registry)+"\""\
-        +",\"_name\":\""+EscapeJson(name)+"\""\
-        +",\"_enabled\":"+enabled\
-        +",\"_source\":"+source\
-        +",\"_position_count\":"+pos_count\
-        +",\"_stage_count\":"+stage_count\
-        +",\"_males\":"+males\
-        +",\"_females\":"+females\
-        +",\"_male_creatures\":"+male_creatures\
-        +",\"_female_creatures\":"+female_creatures\
-        +",\"_has_creature\":"+has_creature\
-        +",\"_race_type\":\""+EscapeJson(race_type)+"\""\
-        +",\"_pos_genders\":"+pos_genders\
-        +",\"_pos_race_keys\":"+pos_race\
-        +",\"_tags\":"+tags_json+"}"
+    AnimDb_PushRow(registry, False, name, enabled, source, pos_count, stage_count, males, females, male_creatures, female_creatures, has_creature, race_type, pos_genders, anim.GetRaceTypes(), anim.GetRawTags())
+    return True
 EndFunction
 
 String Function EscapeJson(String s) global

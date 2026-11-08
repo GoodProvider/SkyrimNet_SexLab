@@ -35,12 +35,12 @@ No SexLab code goes into AnimDB or AnimEngine. SexLab P+ is supported in the C++
 
 | Profile | Owner | How |
 |---------|-------|-----|
-| SexLab AE, `anim_engine.enabled` off (default) | Papyrus walk (`OnUpdate` / `BuildAnimJson`) | SexLab's `AnimSlots` + `CreatureSlots`; `BeginSync` / `EndSync` as below. The load-time count check against SexLab's slots applies. |
+| SexLab AE, `anim_engine.enabled` off (default) | Papyrus walk (`OnUpdate` / `PushAnimRow`) | SexLab's `AnimSlots` + `CreatureSlots`; `BeginSync` / `EndSync` as below. The load-time count check against SexLab's slots applies. |
 | SexLab AE, `anim_engine.enabled` on | `SlalLoader` | `AnimDb.psc` `UsesSlalRegistry()` is true. `StartSync` and `CheckAlignmentOnLoad` call `AnimDb_SyncFromSlal(force, drop_legacy=True)`. Rows get `source = 2` (`AnimationDB::kSourceSlal`). Afterwards `DropNonSlalRows` removes rows that the old SexLab registry walk pushed. |
 | SexLab P+, `anim_engine.slsb_registry` on | `SlsbLoader` | `UsesSlsbRegistry()`; `AnimDb_SyncFromSlsb(force, drop_legacy=True)`. Rows get `source = 3` (`kSourceSlsb`) and keep the scene id's case (`_case`). |
 | SexLab P+, setting off (default) | Papyrus walk (`WalkPPlusBatch`) | `BeginSync` / `EndSync` wipe and prune **every** row (and the playback table), loader rows included. MO2's `overwrite` (where `animationdb.sql` lives) is shared between profiles. |
 
-- **Owner change:** `AnimDb.RegistryOwner()` (0 walk, 1 SLAL, 2 SLSB) is stored in `last_registry_owner` at every `StartSync`. `CheckAlignmentOnLoad` runs `StartSync(True)` when it differs (a toggle in `sex-graph.json`, or the file removed); `-1` on older saves rebuilds once. The Sex Graph panel also rebuilds right away when `enabled` / `slsb_registry` changes.
+- **Owner change:** `AnimDb.RegistryOwner()` (0 walk, 1 SLAL, 2 SLSB) is stored in `last_registry_owner` at every `StartSync`. `CheckAlignmentOnLoad` runs `StartSync(True)` when it differs (a toggle in `sex-graph.json`, or the file removed). `-1` (new game or older save) rebuilds only when AnimDB is empty; with rows present it adopts the current owner and takes the normal count check. The Sex Graph panel also rebuilds right away when `enabled` / `slsb_registry` changes.
 - The load runs on a worker thread. `ReplaceSlalRows` takes the DB lock in chunks of 64 rows, so Papyrus and WebUI readers wait for at most one chunk.
 - If no source file changed (mtime:size stamps in `playback_sources`, keyed `<source>|<path>`), the load logs `unchanged (…), skipped reparse` and stops. The stamps include `@playback_format` = `kPlaybackFormat`, so a playback format change reparses once.
 - The P+ switch to `SlsbLoader` waits for in-game parity with the walk (checkpoint 02 Next). `AnimDb.psc` `UsesCppRegistry()` covers both loaders.
@@ -86,7 +86,7 @@ Offline parity (`tools/slal_offline.py parity`) against the SexLab-built DB of t
 | `SKSE/SexLab/Registry/*.slr` | Only stamped and matched to a json by the header `pack_name` (u8 length at byte 8). A `.slr` with no json is logged (`slr_without_json`); its scenes are not in AnimDB. |
 | FNIS lists | Same index as SLAL. SLSB events are `<prefix_hash><event[0]>` (`xujsCan_B_BoobJ_A1_S1`). |
 
-**Row (as `BuildAnimJson_PPlus` pushed it):**
+**Row (as `PushPPlusRow` pushes it):**
 - `registry` = scene id, case kept (`_case: 1`).
 - `pos_genders` from the root stage's positions: human male or futa 0, female 1; creature 2, female-only creature 3 (`SkyrimNet_SexLab_PPlus.PositionGenders`).
 - `pos_race_keys` = the SLSB `race` display name for creatures, `""` for `Human`. P+ `GetRaceKeyPositionA` returns its race keys (`Dogs`, `Draugrs`, …); the mapping waits for in-game parity.

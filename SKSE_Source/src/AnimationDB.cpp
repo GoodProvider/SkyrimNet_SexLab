@@ -25,9 +25,8 @@ namespace AnimationDB
         bool g_force_rebuild = false;
         int g_sync_collisions = 0;
         int g_sync_upsert_failures = 0;
-        // Papyrus batches that failed to parse this sync (BeginSync resets). Guarded by g_mutex.
-        int g_sync_batch_parse_errors = 0; // first parse failed (unescaped retry may still have saved it)
-        int g_sync_batches_dropped = 0;    // no parse at all: every row in it lost
+        // Walk rows waiting for the next transaction (QueueSyncRow). BeginSync clears it. Guarded by g_mutex.
+        std::vector<nlohmann::json> g_sync_pending;
         std::unordered_map<std::string, AnimRow> g_rows;
         std::unordered_map<std::string, std::unordered_set<std::string>> g_tag_to_regs;
         /// Favorited registries (lowercase). Own table so animation resyncs never wipe it. Guarded by g_mutex.
@@ -2218,8 +2217,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         g_sync_gen += 1;
         g_sync_collisions = 0;
         g_sync_upsert_failures = 0;
-        g_sync_batch_parse_errors = 0;
-        g_sync_batches_dropped = 0;
+        g_sync_pending.clear();
         if (g_force_rebuild) {
             // Only the Papyrus registry walks call this (SexLab AE with AnimEngine off, P+ with the SLSB registry off;
             // the C++ loaders use ReplaceRegistryRows), so the walk owns the whole table, loader rows from another
@@ -2345,29 +2343,33 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         return true;
     }
 
-    int PushAnimBatch(const nlohmann::json& arr)
+    namespace
     {
-        std::lock_guard lock(g_mutex);
-        if (!arr.is_array())
-            return 0;
-        int n = 0;
-        for (const auto& el : arr) {
-            if (el.is_object() && PushAnim(el))
-                ++n;
+        constexpr std::size_t kSyncFlushRows = 64;
+
+        // One transaction per flush: without it every row's upsert and tag writes each sync to disk.
+        void FlushSyncRowsLocked()
+        {
+            if (g_db && !g_sync_pending.empty()) {
+                // A registry loader may hold its own transaction open between chunks.
+                const bool own_transaction = sqlite3_get_autocommit(g_db) != 0;
+                if (own_transaction)
+                    Exec("BEGIN");
+                for (const auto& row : g_sync_pending)
+                    PushAnim(row);
+                if (own_transaction)
+                    Exec("COMMIT");
+            }
+            g_sync_pending.clear();
         }
-        return n;
     }
 
-    int NoteBatchParseError()
+    void QueueSyncRow(nlohmann::json row)
     {
         std::lock_guard lock(g_mutex);
-        return ++g_sync_batch_parse_errors;
-    }
-
-    void NoteBatchDropped()
-    {
-        std::lock_guard lock(g_mutex);
-        ++g_sync_batches_dropped;
+        g_sync_pending.push_back(std::move(row));
+        if (g_sync_pending.size() >= kSyncFlushRows)
+            FlushSyncRowsLocked();
     }
 
     bool EndSync()
@@ -2375,6 +2377,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         std::lock_guard lock(g_mutex);
         if (!g_db)
             return false;
+        FlushSyncRowsLocked();
         sqlite3_stmt* stmt = nullptr;
         // The Papyrus walk owns the table (see BeginSync): rows it did not push this sync go, SLAL rows included.
         if (sqlite3_prepare_v2(g_db, "DELETE FROM animations WHERE sync_gen != ?", -1, &stmt, nullptr) ==
@@ -2387,13 +2390,6 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         LoadAllRowsLocked();
         webui_log::info("AnimationDB: EndSync gen={} rows={} duplicate_registries={} upsert_failures={}",
             g_sync_gen, g_rows.size(), g_sync_collisions, g_sync_upsert_failures);
-        if (g_sync_batches_dropped > 0 && g_rows.empty())
-            webui_log::error("AnimationDB: every batch failed to parse ({}); the AnimDb pex is likely not built "
-                             "with pyro (KNOWLEDGEBASE: non-pyro compiler kept \\\" literally)",
-                g_sync_batches_dropped);
-        else if (g_sync_batch_parse_errors > g_sync_batches_dropped)
-            webui_log::warn("AnimationDB: {} batch(es) needed \\\" unescaping; rebuild the pex with pyro",
-                g_sync_batch_parse_errors - g_sync_batches_dropped);
         LoadSynonyms();
         return true;
     }
