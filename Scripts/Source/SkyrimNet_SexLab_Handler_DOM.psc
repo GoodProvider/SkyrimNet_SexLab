@@ -489,7 +489,7 @@ String storage_dom_debt_key = "skyrimnet_sexlab_dom_debt"
 
 ; DOM_Mind.IncreaseArousal's value during sex (sex_active): the arousal_factor change for amount/reason.
 float Function DomArousalValue(DOM_Mind mind, Actor akActor, float amount, float reason)
-    float m = mind.FACET_Sensuality / 200.0 + 0.5 + reason / 10.0
+    float m = mind.PRISM_Sensuality / 200.0 + 0.5 + reason / 10.0
     float speed = 0.5
     float trainer_mod = 1.0
     if mind.DOM01 != None
@@ -533,9 +533,9 @@ Function DomSync(Actor akActor, float miniDelta, float daring, float naivety, bo
         return
     endif
     if prepay
-        ; DOM adds IncreaseArousal(20, MOD_Daring) at its scene start and, with the player,
+        ; DOM adds IncreaseArousal(20, MOD_SocialBoldness) at its scene start and, with the player,
         ; IncreaseArousal(20, MOD_Naivety) at its roll. The steps replace those: take them off now.
-        float owed = DomArousalValue(mind, akActor, 20.0, mind.MOD_Daring)
+        float owed = DomArousalValue(mind, akActor, 20.0, mind.MOD_SocialBoldness)
         if hasPlayer
             owed += DomArousalValue(mind, akActor, 20.0, mind.MOD_Naivety)
         endif
@@ -556,7 +556,7 @@ Function DomSync(Actor akActor, float miniDelta, float daring, float naivety, bo
         AddArousal(akActor, miniDelta)
     endif
     if daring > 0.0
-        PushStep(mind, akActor, daring, mind.MOD_Daring)
+        PushStep(mind, akActor, daring, mind.MOD_SocialBoldness)
     endif
     if naivety > 0.0
         PushStep(mind, akActor, naivety, mind.MOD_Naivety)
@@ -570,7 +570,7 @@ Function StepRoll(Actor akActor, bool hasPlayer, float share)
     if mind == None || share <= 0.0
         return
     endif
-    mind.IsArousedAfterSex(mind.MOD_Daring)
+    mind.IsArousedAfterSex(mind.MOD_SocialBoldness)
     if !CouldOrgasm(akActor)
         return
     endif

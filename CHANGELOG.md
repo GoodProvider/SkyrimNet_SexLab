@@ -2,6 +2,10 @@
 
 ## 0.37.2 (unreleased)
 
+### Diary of Mine 8.5.6d
+- `SkyrimNet_SexLab_Handler_DOM`: DOM arousal math and the step roll read `FACET_Sensuality` and `MOD_Daring`, which DOM removed. They now use `PRISM_Sensuality` and `MOD_SocialBoldness`, the values DOM itself uses in `IncreaseArousal` and at scene start.
+- `skyrimse.ppj` imports `Leash Framework\Source\Scripts`. Without it `Handler_DOM` failed to compile while Pyro still exited 0, leaving a stale `.pex`.
+
 ### AnimDB
 - **(untested on SexLab P+)** The Papyrus walks no longer build row or batch JSON. `AnimDb_PushRow` takes each row as fields and replaces `AnimDb_PushAnimBatch`, because a save made during a P+ walk kept a 10,259-byte batch string and crashed on load. Saves that already hold such a string are not repaired.
 - A load that finds an interrupted walk starts it again (not forced). Before, the resumed walk had no `BeginSync`, so `EndSync` would have deleted the rows pushed before the save.

@@ -23,6 +23,7 @@
         <Import>.\Headers_Source\LoversLedger</Import>
         <Import>@ModsFolder\SkyrimNet_DOM\scripts\Source</Import>
             <Import>@ModsFolder\SkyrimNet_DOM\Headers_Source\DOM</Import>
+            <Import>@ModsFolder\Leash Framework\Source\Scripts</Import>
 
         <Import>@ModsFolder\SKSE64\Scripts\Source</Import>
         <Import>@ModsFolder\SkyrimNet\Source\Scripts</Import>
