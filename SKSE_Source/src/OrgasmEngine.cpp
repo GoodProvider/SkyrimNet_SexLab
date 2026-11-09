@@ -174,13 +174,18 @@ namespace OrgasmEngine
             // at kRushFireAt in the final stage. Not saved.
             bool rushing = false;
             float rushRate = 0.0f;
-            // DOM slave: passive gain is progress pushed to DOM in steps; enjoyment is a meter computed
-            // by DOM (SetDomMeter).
+            // DOM slave: passive gain is progress pushed to DOM in steps; enjoyment is the level from DOM's
+            // real state (SetDomMeter, Handler_DOM.DomLevel).
             bool dom = false;
-            float domChance = 0.0f;  // chance DOM's next roll succeeds (SetDomMeter); not saved
+            float domChance = 0.0f;  // chance DOM's full end-of-act roll succeeds (SetDomMeter); not saved
+            std::string domName;  // SetDomBreakdown; not saved
+            std::vector<DomRow> domRows;  // upper-right DOM enjoyment list; not saved
             float domDelta = 0.0f;  // mini-game arouse / calm, pushed as before
             float domShare = 0.0f;  // step-roll share from Arouse
             float domProgress = 0.0f;
+            float domArousal = 0.0f;  // HUD bar total, DOM's arousal_factor (SetDomStep); not saved
+            float domStepChance = 0.0f;  // chance the next step roll succeeds, the HUD's % (SetDomStep); not saved
+            std::string domLabel;     // HUD bar text (SetDomStep); not saved
             float domStepAcc = 0.0f;
             bool domPrepaid = false;  // DOM's own recurring adds cancelled for this scene
             double lastDomSyncAt = 0.0;
@@ -546,26 +551,26 @@ namespace OrgasmEngine
             return any;
         }
 
-        // Caller holds g_lock. The actor whose enjoyment drives the stage: expected to orgasm and not a DOM slave
-        // (its enjoyment does not move). Male first, then female (creatures by sex); a femdom animation puts females
-        // first. Within each, positions 1, 2, 3, ..., then 0. The victim role does not change it: the primary aligns
-        // the animation with an actor's enjoyment. 0: nobody eligible, so the stages keep their timers. sc.actors is
-        // in position order (BeginScene).
+        // Caller holds g_lock. The actor whose enjoyment drives the stage: expected to orgasm. Male first, then female
+        // (creatures by sex); a femdom animation puts females first. Within each, positions 1, 2, 3, ..., then 0. A DOM
+        // slave comes after everyone else: its enjoyment is its DOM level (SetDomMeter), so the stages show how close
+        // it really is. The victim role does not change it: the primary aligns the animation with an actor's
+        // enjoyment. 0: nobody eligible, so the stages keep their timers. sc.actors is in position order (BeginScene).
         RE::FormID PrimaryOf(const SceneState& sc)
         {
             const auto n = static_cast<std::int32_t>(sc.actors.size());
             RE::FormID best = 0;
-            std::int32_t bestRank = 2 * n;
+            std::int32_t bestRank = 4 * n;
             for (std::int32_t i = 0; i < n; ++i) {
                 const RE::FormID id = sc.actors[static_cast<std::size_t>(i)];
                 const auto at = g_actors.find(id);
-                if (at == g_actors.end() || !at->second.orgasmExpected || at->second.dom) {
+                if (at == g_actors.end() || !at->second.orgasmExpected) {
                     continue;
                 }
                 // Cached only (BeginScene seeds it): no game-object read, so tasklet natives can reach here.
                 const bool female = at->second.stageGender % 2 == 1;
                 const bool later = sc.stageFemdom ? !female : female;
-                const std::int32_t rank = (later ? n : 0) + (i == 0 ? n - 1 : i - 1);
+                const std::int32_t rank = (at->second.dom ? 2 * n : 0) + (later ? n : 0) + (i == 0 ? n - 1 : i - 1);
                 if (rank < bestRank) {
                     bestRank = rank;
                     best = id;
@@ -1580,14 +1585,15 @@ namespace OrgasmEngine
         }
 
         // Caller holds g_lock. Enjoyment budget of a strategy press: the share of max stamina / magicka an actor may
-        // spend equals its own enjoyment, so a press must leave at least max x (1 - enjoyment / 100). A DOM slave
-        // is exempt: its enjoyment is DOM's meter, which presses and passive progress do not move.
+        // spend equals its own enjoyment, so a press must leave at least max x (1 - enjoyment / 100). A DOM slave's
+        // share is its DOM arousal, or its level when higher: an aroused slave can be low on points after an orgasm.
         bool OverBudget(RE::Actor* self, const ActorState& st, RE::ActorValue av, float cost)
         {
-            if (!g_settings.enjoymentBudget || st.dom) {
+            if (!g_settings.enjoymentBudget) {
                 return false;
             }
-            const float reserve = MaxAv(self, av) * (1.0f - st.enjoyment / kMaxEnjoyment);
+            const float share = st.dom ? std::max(std::min(st.domArousal, kMaxEnjoyment), st.enjoyment) : st.enjoyment;
+            const float reserve = MaxAv(self, av) * (1.0f - share / kMaxEnjoyment);
             return CurrentAv(self, av) - cost < reserve;
         }
 
@@ -2175,7 +2181,7 @@ namespace OrgasmEngine
         // Caller holds g_lock, each tick. NPC-only scene whose stages follow enjoyment: nobody's enjoyment has reached a
         // new high for stallEndAfter seconds, so the scene ends where it is. A new high, not any rise: an edge cycle
         // (100 -> 99.93 -> 100) would otherwise count forever. following is false with no eligible primary, which also
-        // keeps scenes with nobody expected to orgasm out: they never gain.
+        // keeps scenes with nobody expected to orgasm out: they never gain. It is also false for a DOM slave primary.
         void StallCheck(SceneState& sc, bool following, bool finalStage, Effects& fx, double now)
         {
             constexpr float kStallMinRise = 0.05f;   // below this, a change is noise
@@ -2244,7 +2250,9 @@ namespace OrgasmEngine
                 }
             }
             const ActorState& st = at->second;
-            if (!sc.stagePunished && g_settings.stagePunishAfter > 0.0f && sc.stageElapsed >= g_settings.stagePunishAfter) {
+            // Not a DOM slave: its level waits on DOM, not on a partner, and a slave does not punish its owner.
+            if (!st.dom && !sc.stagePunished && g_settings.stagePunishAfter > 0.0f &&
+                sc.stageElapsed >= g_settings.stagePunishAfter) {
                 StagePunish(sc, st, fx);
             }
             const std::int32_t last = sc.stageCount - 1;
@@ -2781,7 +2789,9 @@ namespace OrgasmEngine
                         }
                         StageFollowPrimary(sc, stagePrimary, fx, now);
                     }
-                    StallCheck(sc, stagePrimary != 0, finalStage, fx, now);
+                    // A DOM slave's level can sit still for a whole scene: that is not a stall.
+                    const auto stallPrimary = g_actors.find(stagePrimary);
+                    StallCheck(sc, stallPrimary != g_actors.end() && !stallPrimary->second.dom, finalStage, fx, now);
 
                     // 4b. Safety net (gate off, or no timers): at 90% of the final stage's timer, each
                     // non-DOM actor at kSafetyMin or more who has not finished. Without timers: at
@@ -3754,6 +3764,12 @@ namespace OrgasmEngine
             st->dom = dom;
             st->domDelta = 0.0f;
             st->domSyncNow = dom;
+            if (!dom) {
+                st->domRows.clear();
+                st->domArousal = 0.0f;
+                st->domStepChance = 0.0f;
+                st->domLabel.clear();
+            }
             webui_log::info("OrgasmEngine: {:#x} dom slave {}", st->id, dom ? "on (DOM decides)" : "off");
         }
     }
@@ -3762,13 +3778,60 @@ namespace OrgasmEngine
     {
         std::lock_guard lock(g_lock);
         if (auto* st = Find(actor); st && st->dom) {
-            const float value = std::clamp(meter, 0.0f, kMaxEnjoyment);
-            if (std::lround(value) != std::lround(st->enjoyment)) {
-                webui_log::info("OrgasmEngine: dom meter {:#x} -> {}", st->id, value);
+            const float level = std::clamp(meter, 0.0f, kMaxEnjoyment);
+            const float rollChance = std::clamp(chance, 0.0f, 1.0f);
+            if (std::lround(level) != std::lround(st->enjoyment)) {
+                webui_log::info("OrgasmEngine: dom meter {:#x} -> level {:.1f} chance {:.3f}", st->id, level, rollChance);
             }
-            st->enjoyment = value;
-            st->domChance = std::clamp(chance, 0.0f, 1.0f);
+            st->enjoyment = level;
+            st->domChance = rollChance;
         }
+    }
+
+    void SetDomStep(RE::Actor* actor, float arousal, std::string label, float stepChance)
+    {
+        std::lock_guard lock(g_lock);
+        if (auto* st = Find(actor); st && st->dom) {
+            const float total = std::max(0.0f, arousal);
+            if (std::lround(total) != std::lround(st->domArousal) || label != st->domLabel) {
+                webui_log::info("OrgasmEngine: dom step bar {:#x} -> {} '{}'", st->id, total, label);
+            }
+            st->domArousal = total;
+            st->domLabel = std::move(label);
+            st->domStepChance = std::clamp(stepChance, 0.0f, 1.0f);
+        }
+    }
+
+    bool IsDomSlave(RE::Actor* actor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(actor);
+        return st && st->dom;
+    }
+
+    void SetDomBreakdown(RE::Actor* actor, std::vector<DomRow> rows)
+    {
+        const std::string name = NameOf(actor);
+        std::lock_guard lock(g_lock);
+        if (auto* st = Find(actor); st && st->dom) {
+            st->domName = name;
+            st->domRows = std::move(rows);
+        }
+    }
+
+    std::vector<DomBreakdown> GetDomBreakdowns()
+    {
+        std::vector<DomBreakdown> out;
+        {
+            std::lock_guard lock(g_lock);
+            for (const auto& [id, st] : g_actors) {
+                if (st.dom && !st.domRows.empty()) {
+                    out.push_back({ st.domName, st.domRows });
+                }
+            }
+        }
+        std::sort(out.begin(), out.end(), [](const DomBreakdown& a, const DomBreakdown& b) { return a.name < b.name; });
+        return out;
     }
 
     void SetActorSkills(RE::Actor* actor, std::int32_t skill, std::int32_t lewd)
@@ -3850,6 +3913,12 @@ namespace OrgasmEngine
             return "barely aroused";
         }
 
+        // Caller holds g_lock. A DOM slave under 25 cannot orgasm yet and is not aroused at all (Handler_DOM.DomLevel).
+        const char* ArousalBandOf(const ActorState& st)
+        {
+            return st.dom && st.enjoyment < 25.0f ? "not aroused" : ArousalBand(st.enjoyment);
+        }
+
         // Decision option text for strategy s (target: Deny / Tease / Focused).
         std::string OptionText(const ActorState& st, Strategy s, RE::FormID target)
         {
@@ -3892,7 +3961,7 @@ namespace OrgasmEngine
         out.id = st->id;
         out.name = NameOf(actor);
         out.role = RoleName(st->role);
-        out.arousal = ArousalBand(st->enjoyment);
+        out.arousal = ArousalBandOf(*st);
         out.orgasms = st->orgasmCount;
         out.expectsOrgasm = st->orgasmExpected;
         out.currentKey = InfoOf(st->strategy).key;
@@ -3909,7 +3978,7 @@ namespace OrgasmEngine
             p.name = NameOf(other);
             p.isPlayer = IsPlayer(other);
             p.role = RoleName(at->second.role);
-            p.arousal = ArousalBand(at->second.enjoyment);
+            p.arousal = ArousalBandOf(at->second);
             p.orgasms = at->second.orgasmCount;
             out.partners.push_back(std::move(p));
         }
@@ -4230,6 +4299,36 @@ namespace OrgasmEngine
             NarrateRequest(line, target, by, direct);
         }
 
+        // An order waiting for DOM's obedience roll (Effect_DomOrderRoll -> DomOrderAnswer).
+        struct PendingDomOrder
+        {
+            RE::FormID target = 0;
+            std::string key;  // the option ordered ("" for a free-text order: nothing to apply)
+            std::function<void(DecisionResult)> done;
+        };
+        std::unordered_map<std::int32_t, PendingDomOrder> g_domOrders;  // under g_lock
+        std::int32_t g_domOrderToken = 0;
+
+        // Game thread. An order that got no decision: a DOM slave's own obedience roll answers instead. On obey the
+        // key is applied, then done runs with kChanged, or kKept on refusal. false: not a DOM slave, done not called.
+        bool RollDomOrder(RE::FormID byId, RE::FormID targetId, const std::string& key,
+            std::function<void(DecisionResult)> done)
+        {
+            std::int32_t token = 0;
+            {
+                std::lock_guard lock(g_lock);
+                const auto at = g_actors.find(targetId);
+                if (at == g_actors.end() || !at->second.dom || !SceneOf(at->second)) {
+                    return false;
+                }
+                token = ++g_domOrderToken;
+                g_domOrders[token] = PendingDomOrder{ targetId, key, std::move(done) };
+            }
+            webui_log::info("OrgasmEngine: no decision for the order to {:#x}: DOM obedience roll", targetId);
+            DispatchShell("Effect_DomOrderRoll", RE::MakeFunctionArguments(ActorFor(byId), ActorFor(targetId), std::move(token)));
+            return true;
+        }
+
         struct PunishPlan
         {
             std::string line;         // "Bob punishes Nina by pinching Nina's nipples, because ..."
@@ -4507,8 +4606,7 @@ namespace OrgasmEngine
                     feelingFromInjuryEngine || injuryEngineNarrates ? 0.0f : spellDamage);
             }
             const auto ask = [plan, punisherId, targetId, narrate](const std::string& line) {
-                StrategyDecision::RequestAnswer(targetId, "punished", line,
-                    [plan, punisherId, targetId, narrate](DecisionResult result) {
+                const auto finish = [plan, punisherId, targetId, narrate](DecisionResult result) {
                     const bool none = result == DecisionResult::kDropped || result == DecisionResult::kUnknown;
                     // No decision: the fallback's choice is narrated with the punishment instead.
                     const bool fellBack = none && NoDecisionFallback(punisherId, targetId, plan);
@@ -4517,6 +4615,14 @@ namespace OrgasmEngine
                         FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
                             plan.direct, result);
                     }
+                };
+                StrategyDecision::RequestAnswer(targetId, "punished", line,
+                    [plan, punisherId, targetId, finish](DecisionResult result) {
+                    if (result == DecisionResult::kDropped && !plan.orderKey.empty() &&
+                        RollDomOrder(punisherId, targetId, plan.orderKey, finish)) {
+                        return;
+                    }
+                    finish(result);
                 }, plan.orderKey);
             };
             const std::string line = PunishDecisionLine(plan, feeling);
@@ -4638,6 +4744,36 @@ namespace OrgasmEngine
         }
     }
 
+    void DomOrderAnswer(std::int32_t token, bool obeyed)
+    {
+        // The strategy change and narrations run on the game thread (Papyrus calls this from a VM thread).
+        SKSE::GetTaskInterface()->AddTask([token, obeyed]() {
+            PendingDomOrder pending;
+            Effects fx;
+            {
+                std::lock_guard lock(g_lock);
+                const auto it = g_domOrders.find(token);
+                if (it == g_domOrders.end()) {
+                    return;
+                }
+                pending = std::move(it->second);
+                g_domOrders.erase(it);
+                const auto at = g_actors.find(pending.target);
+                const SceneState* sc = at != g_actors.end() ? SceneOf(at->second) : nullptr;
+                Strategy s = Strategy::kCount;
+                RE::FormID t = 0;
+                if (obeyed && sc && !pending.key.empty() && ParseRequest(*sc, at->second, pending.key, s, t)) {
+                    SetStrategyLocked(*sc, at->second, s, t, false, fx);
+                }
+            }
+            PostEffects(std::move(fx));
+            webui_log::info("OrgasmEngine: DOM obedience roll for {:#x}: {}", pending.target, obeyed ? "obeyed" : "refused");
+            if (pending.done) {
+                pending.done(obeyed ? DecisionResult::kChanged : DecisionResult::kKept);
+            }
+        });
+    }
+
     bool AskOrderNarrated(RE::Actor* by, RE::FormID target, bool order, const std::string& requestKey,
         const std::string& customText, bool fromPlayer)
     {
@@ -4687,7 +4823,13 @@ namespace OrgasmEngine
             }
             StrategyDecision::RequestAnswer(target, order ? "ordered" : "asked", line,
                 [byId, target, order, requestKey, text, direct](DecisionResult result) {
-                    FinishRequest(byId, target, order, requestKey, text, direct, result);
+                    const auto finish = [=](DecisionResult r) {
+                        FinishRequest(byId, target, order, requestKey, text, direct, r);
+                    };
+                    if (order && result == DecisionResult::kDropped && RollDomOrder(byId, target, requestKey, finish)) {
+                        return;
+                    }
+                    finish(result);
                 });
         });
         return true;
@@ -4854,6 +4996,10 @@ namespace OrgasmEngine
             }
             const float before = st->enjoyment;
             st->enjoyment = 0.0f;
+            if (st->dom) {
+                // Enjoyment climbs again from DOM's score. domStepAcc drives the arousal pushes, so they are unaffected.
+                st->domProgress = 0.0f;
+            }
             st->orgasmCount += 1;
             // No NoteEndReached here: no Ending_Check follows this path, so nothing would take or release the hold.
             StartAfterglow(*st, before, primaryDone);
@@ -5191,6 +5337,9 @@ namespace OrgasmEngine
             v.flashing = now < at->second.flashUntil;
             v.dom = at->second.dom;
             v.domChance = at->second.domChance;
+            v.domArousal = at->second.domArousal;
+            v.domStepChance = at->second.domStepChance;
+            v.domLabel = at->second.domLabel;
             v.denied = at->second.sceneBlocked;
             if (g_settings.miniGame && AiDriven(at->second)) {
                 v.strategy = HudLabel(at->second);
@@ -5448,6 +5597,7 @@ namespace OrgasmEngine
         std::lock_guard lock(g_lock);
         g_scenes.clear();
         g_actors.clear();
+        g_domOrders.clear();
         g_autoPlaySticky = false;
         std::uint32_t droppedScenes = 0;
         std::uint32_t droppedActors = 0;
@@ -5598,6 +5748,7 @@ namespace OrgasmEngine
         std::lock_guard lock(g_lock);
         g_scenes.clear();
         g_actors.clear();
+        g_domOrders.clear();
         g_autoPlaySticky = false;
     }
 

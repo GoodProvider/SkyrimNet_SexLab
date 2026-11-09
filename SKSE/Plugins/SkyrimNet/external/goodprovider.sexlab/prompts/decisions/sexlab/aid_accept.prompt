@@ -9,11 +9,21 @@
    (focus to giver: lovers .. archnemeses, strangers), relationship_rank (4 .. -4), timeline [lines, oldest first].
    Keys are read back by the game: keep accept / refuse as given. #}
 {% set _focus = decnpc(focus_uuid) %}
+{% set _dom_slave = is_plugin_loaded("SkyrimNet_DOM.esp") and is_in_faction(focus_uuid, "DOMPlayerSlaveFaction") %}
 [ state focus ]
 {{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}.
 {{ render_character_profile("short_inline", focus_uuid) }}
 [ end state ]
 
+{% if _dom_slave %}
+{% set _dom_npc.UUID = focus_uuid %}
+{% set _dom_npc.name = focus_name %}
+{% set _dom_args.npc = _dom_npc %}
+[ state dom_instructions ]
+{{ render_template("submodules\\user_final_instructions\\0551_dom_instructions", _dom_args) }}
+[ end state ]
+
+{% endif %}
 [ state scene ]
 {% set _sexlab = sexlab_get_threads(focus_uuid) %}
 {% if existsIn(_sexlab, "threads") %}
@@ -48,7 +58,8 @@ Nothing has happened yet.
 
 [ question accept choice ]
 Decide whether {{ focus_name }} accepts {{ giver_name }}'s {{ potion_kind }} potion right now.
-Base it on their relationship (`giver`), what is happening (`scene`), and what {{ focus_name }} has thought, said and experienced (`timeline`), recent events over older ones.
+{% if _dom_slave %}Follow `dom_instructions` for how {{ focus_name }} obeys and feels; it outweighs their usual preferences.
+{% endif %}Base it on their relationship (`giver`), what is happening (`scene`), and what {{ focus_name }} has thought, said and experienced (`timeline`), recent events over older ones.
 A {{ potion_kind }} potion helps whoever takes it. A lover, friend or someone tired and willing is likely to accept. A resisting victim, a rival or an enemy who distrusts the giver may refuse.
 [ criteria ]
 accept: {{ focus_name }} takes the potion

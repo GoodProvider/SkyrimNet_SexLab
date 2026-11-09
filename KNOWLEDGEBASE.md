@@ -244,6 +244,7 @@ The DLL is already SE+AE+VR (MinLL/CommonLibVR, below). Magelight places the vie
 - **A hold applied in `StageStart` survives on 1.6x, stage 1 included.** `sslThreadController` runs `Action("Animating")` (`FireAction` → `PlayStageAnimations` sets `StageTimer`) before `SendThreadEvent("StageStart")`. `thread.Timers` is empty only at the `AnimationStart` `Engine_BeginScene`.
 - **`Engine_BeginScene` runs on every `StageStart`,** so per-position data sent from it follows position swaps.
 - **On P+, `thread.GoToStage(stage + 1)` can open the player's branch menu at a fork.** Automatic moves use `SkipTo(pplus_path[thread.Stage])`.
+- **A DOM slave primary needs its own exemptions (2026-11-09, built, untested in game).** With no other actor expected to orgasm, the stages follow the slave's DOM level. Without guards, `StagePunish` has the slave punish its owner for a stuck stage, and `StallCheck` ends an NPC-only scene after 30 s, because the level sits still and the check skips DOM actors. `stage_hold_max` still moves a stuck stage on, so the final stage can come while orgasm is impossible.
 
 ## Magelight ignored the Dashboard UI scale (2026-11-01, fixed, untested in game)
 
@@ -1060,7 +1061,8 @@ Unquoted `comparisonOperator: >` is a YAML folded block scalar, so SkyrimNet sto
 **Fix:** DOM slaves are now DOM-driven (`SetDomSlave`) instead of blocked.
 - Engine gains (passive, Arouse, Calm) go to DOM's `arousal_factor` through `Effect_DomSync` → `Handler_DOM.AddArousal`.
 - After each rise, if `CouldOrgasm`, the engine calls `mind.handleSexOrgasm`. DOM decides.
-- The bar fill is `Handler_DOM.OrgasmMeter`: every non-random term of DOM's roll summed. The text over the bar end is `OrgasmProbability`, the chance the roll succeeds with the random terms averaged out. DOM's `block_orgasm` and `abuse_type` are private variables, so they cannot be read (`sex_is_non_consensual` stands in for `abuse_type`).
+- The HUD bar is DOM's `arousal_factor` in steps of 100 (`SetDomStep`): the fill is the position inside the step and the label comes from DOM's real state. An earlier bar of score plus the scene's arousal reached 128% while `is_aroused_for` was 0, so nothing could happen. `is_aroused_for` above 0 is what allows an orgasm, and below `arousal_factor` 100 DOM's rolls for it exit at once (lust potions excepted). A scene adds only about 1 per step and 0.6 per Arouse press, so most slaves stay at "orgasm impossible". `enjoyment` is still the score (`OrgasmMeter`) plus `domProgress` + Arouse - Calm, for the engine and the SexLab mirror. The score uses only the acts played (`PlayedBase`), as DOM's rolls do. The text over the bar end is `OrgasmProbability`, the chance the roll succeeds with the random terms averaged out. DOM's `block_orgasm` and `abuse_type` are private variables, so they cannot be read (`sex_is_non_consensual` stands in for `abuse_type`).
+- A DOM slave's `enjoyment` is `Handler_DOM.DomLevel`, from DOM's real state. Score plus scene arousal reached 100 at arousal 22 with orgasm impossible, so prompts said "on the verge of orgasm". Arousal points cannot replace it: `is_aroused_for` is the gate, and one slave orgasmed at 37 arousal after being impossible at 98. `speaker.arousal` was never set for anyone (always -1); it is now the level for DOM slaves only.
 - A melt calls `NoteExternalOrgasm(slave, "dom")`.
 - Do not bring back the block, and do not let the engine `Fire` DOM slaves except through a forced WebUI request.
 
@@ -1552,6 +1554,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Pause key DX:** `MapVirtualKey(VK_PAUSE)` returns no scancode. `HotkeyVkToDx` maps it to DIK_PAUSE 0xC5 explicitly.
 - **Num Enter DX:** Num Enter and main Enter are both `VK_RETURN`, so the dashboard can't tell them apart. `HotkeyVkToDx` puts `VK_RETURN` in the extended list (0x80 | 0x1C = 0x9C, DIK_NUMPADENTER): Enter always binds Num Enter, and main Enter can't be bound. Aid defaults to it.
 - **DOM compile headers:** `SkyrimNet_DOM/Headers_Source/DOM/` stubs (imported by `skyrimse.ppj`) only declare what we call. Add a member there (copied from `extern/Source_DOM`) before using it from Handler_DOM, or Pyro reports "not a property".
+- **DOM has no fixed orgasm threshold:** `IsOrgasmingAfterArousal` succeeds when `RandomFloat()` (0..1) is below a computed, unclamped `chance`, and the rolled value is a local that can't be read. The HUD's % is an estimate: it takes the best act modifier whether or not the act was played, and leaves out `handleSexOrgasm`'s virginity doublings and `× 0.3` not-aroused penalty. The light `StepRoll` scales only the act base by `share`, so the additive bonuses apply in full on every step. `sexlab.hud.dom_enjoyment` lists these values in game.
 - **Why thread-wide:** a per-actor `DisableOrgasm` would be re-enabled by the existing `DisableOrgasm(a, false)` call sites. Those now route through `Scene.SetOrgasmDisabled`, which also sets the engine block.
 - **Enjoyment trap:** SexLab's `CalcReaction` uses the **absolute** enjoyment, so a large negative `BaseEnjoyment` reads as strong. The engine's mirror (`AdjustEnjoyment(ours − GetEnjoyment())`) never targets below 0.
 - **HUD view:** `hud.html` is shown but never `Focus`ed, so it does not pause the game or take input. Keys come through `KeyHandler` HUD keys, not the page.
@@ -1816,3 +1819,12 @@ The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feel
 **Rule:** do not grow long strings in Papyrus locals across a walk or other long job; a save can capture them. The walks send fields through `AnimDb_PushRow`. Saves that already hold the string are not repaired.
 **Resuming:** C++ sync state is per process (`g_sync_gen` starts at 0) but Papyrus walk state is in the save. A walk resumed without `BeginSync` makes `EndSync` delete every earlier row, so `CheckAlignmentOnLoad` restarts it, and `walk_epoch` stops any restored stack.
 **New games:** `last_registry_owner` is per save but AnimDB is global, so `-1` alone must not force a rebuild of a filled DB. `last_sync_*` are per save too, so a new game can show the count prompt for a gap that an older save had already explained.
+
+## Prompt object literals are JSON only (2026-11-09)
+
+**Symptom:** every `minigame_strategy` decision failed: `Failed to parse template ... [json.exception.parse_error.101] ... last read: '"UUID": fo'`, then `rendered empty` and `template_failed`.
+**Cause:** `{% set x = {"UUID": focus_uuid} %}`. A `{...}` expression in a template is parsed as literal JSON, so a bare variable inside it is a syntax error. SkyrimNet's own uses hold constants only (`{"stable_split": true}`).
+**Rules:**
+- A parse error fails the whole template for every actor, so an `{% if %}` guard around the bad line does not contain it. Missing variables and functions only warn at render time.
+- Build objects with dotted `set` on a new name: `{% set a.b = value %}`.
+- `render_template(name, object)` and `render_subcomponent(name, mode, object)` exist. Passing a variable as `render_template`'s object works: 12 of 13 decisions in the 2026-11-09 14:35 session rendered 0551 with it (see `checkpoints/2026-08-dom-enjoyment/checkpoint-07.md`).

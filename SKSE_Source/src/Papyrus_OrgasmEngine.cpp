@@ -189,6 +189,27 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetDomMeter(a, meter, chance);
         }
+        void SetDomStep(RE::StaticFunctionTag*, RE::Actor* a, float arousal, RE::BSFixedString label, float stepChance)
+        {
+            OrgasmEngine::SetDomStep(a, arousal, label.c_str(), stepChance);
+        }
+        void DomOrderAnswer(RE::StaticFunctionTag*, std::int32_t token, bool obeyed)
+        {
+            OrgasmEngine::DomOrderAnswer(token, obeyed);
+        }
+        void SetDomBreakdown(RE::StaticFunctionTag*, RE::Actor* a, std::vector<RE::BSFixedString> labels,
+            std::vector<float> lows, std::vector<float> highs, std::vector<std::int32_t> kinds)
+        {
+            const auto count = std::min({ labels.size(), lows.size(), highs.size(), kinds.size() });
+            std::vector<OrgasmEngine::DomRow> rows;
+            rows.reserve(count);
+            for (std::size_t i = 0; i < count; ++i) {
+                if (!labels[i].empty()) {
+                    rows.push_back({ labels[i].c_str(), lows[i], highs[i], kinds[i] });
+                }
+            }
+            OrgasmEngine::SetDomBreakdown(a, std::move(rows));
+        }
         void SetActorSkills(RE::StaticFunctionTag*, RE::Actor* a, std::int32_t skill, std::int32_t lewd)
         {
             OrgasmEngine::SetActorSkills(a, skill, lewd);
@@ -362,6 +383,9 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetFirstTimes", s, SetFirstTimes);
         a_vm->RegisterFunction("SetDomSlave", s, SetDomSlave);
         a_vm->RegisterFunction("SetDomMeter", s, SetDomMeter);
+        a_vm->RegisterFunction("SetDomStep", s, SetDomStep);
+        a_vm->RegisterFunction("DomOrderAnswer", s, DomOrderAnswer);
+        a_vm->RegisterFunction("SetDomBreakdown", s, SetDomBreakdown);
         a_vm->RegisterFunction("SetActorSkills", s, SetActorSkills);
         a_vm->RegisterFunction("SetBonusInputs", s, SetBonusInputs);
         a_vm->RegisterFunction("SetStrategy", s, SetStrategy);

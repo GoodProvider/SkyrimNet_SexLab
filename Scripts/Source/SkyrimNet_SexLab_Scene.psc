@@ -1387,6 +1387,8 @@ bool Function SetActor(int i, Actor akActor)
 
     if main.handler_dom.IsDOMSlave(akActor)
         SNSL_JMap.setInt(obj, "dom_slave", 1)
+        ; The prompts' arousal: DomLevel, the same value as enjoyment. Decorators.cpp overlays the live one.
+        SNSL_JMap.setInt(obj, "arousal", enjoyment)
     else
         SNSL_JMap.setInt(obj, "dom_slave", 0)
     endif

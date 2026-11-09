@@ -86,6 +86,8 @@ Change the words and meaning each time.
 {# This actor's orgasm is denied (deny_orgasm: player or aggressor) and enjoyment is maxed #}
 {%  if existsIn(speaker, "deny_orgasm") and speaker.deny_orgasm == 1 and existsIn(speaker, "enjoyment") and speaker.enjoyment >= 100 %}
 Your mind is consumed by a need to cum; release is being denied to you.
+{% else if existsIn(speaker, "dom_slave") and speaker.dom_slave == 1 and speaker.arousal >= 0 and speaker.arousal < 25 %}
+You are not aroused. Your body is not responding, and orgasm is out of reach right now. Do not describe yourself as aroused or close to orgasm.
 {% else if speaker.arousal > 99 %}
 Your mind is awash in hormones and neurotransmitters, a painful itch that only sexual release will scratch.
 {% else if speaker.arousal > 95 %}

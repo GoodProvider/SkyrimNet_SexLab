@@ -32,14 +32,34 @@ EndFunction
 Function AddArousal(Actor akActor, float delta)
 EndFunction
 
-; 0-100 bar: every non-random term of DOM's orgasm roll summed (the score the roll is compared against)
-float Function OrgasmMeter(Actor akActor)
+; 0-100 level for the engine, the SexLab mirror and the prompts, from DOM's real state
+float Function DomLevel(Actor akActor)
     return 0.0
 EndFunction
 
-; 0-1 probability that DOM's next orgasm roll succeeds (random terms averaged; 0 when it cannot)
+; An order with no decision: DOM's obedience roll. True when the slave obeys.
+Bool Function RollOrder(Actor superior, Actor slave)
+    return true
+EndFunction
+
+; 0-1 probability that DOM's full end-of-act roll succeeds (random terms averaged; 0 when it cannot)
 float Function OrgasmProbability(Actor akActor)
     return 0.0
+EndFunction
+
+; 0-1 probability that the next step roll succeeds. share > 0 replaces the remembered step size.
+float Function StepProbability(Actor akActor, float share)
+    return 0.0
+EndFunction
+
+; The HUD bar's total: DOM's arousal_factor. Each hundred is one step.
+float Function DomArousal(Actor akActor)
+    return 0.0
+EndFunction
+
+; The HUD bar's label, from DOM's real state ("orgasm impossible", "orgasm likely", ...)
+String Function DomStepLabel(Actor akActor)
+    return ""
 EndFunction
 
 ; True when DOM's current values could produce an orgasm (aroused / arousable, not refractory)
@@ -55,9 +75,13 @@ EndFunction
 Function StepRoll(Actor akActor, bool hasPlayer, float share)
 EndFunction
 
+; Upper-right DOM enjoyment list (sexlab.hud.dom_enjoyment): pushes every value behind DOM's orgasm decision.
+Function PushEnjoymentBreakdown(Actor akActor)
+EndFunction
+
 int Function GetThreads()
     return 0
-EndFunction 
+EndFunction
 
 ; ------------------------------------------------------------
 

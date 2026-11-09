@@ -73,6 +73,7 @@ namespace Hud
         std::mutex g_lock;
         bool g_showEnjoyment = true;
         bool g_showControls = true;
+        bool g_showDomEnjoyment = false;
         bool g_miniGame = false;
         bool g_miniGameMouse = true;   // LMB calm / RMB arouse
         std::map<std::string, int> g_keyVk;            // control -> VK (dashboard value)
@@ -501,6 +502,36 @@ namespace Hud
             }
         }
 
+        // The upper-right DOM enjoyment list, for hud.html. Values in hundredths so unchanged ones skip the push.
+        nlohmann::json DomJson(const std::vector<OrgasmEngine::DomBreakdown>& slaves)
+        {
+            const auto hundredths = [](float v) { return std::round(v * 100.0f) / 100.0f; };
+            nlohmann::json out = nlohmann::json::array();
+            for (const auto& slave : slaves) {
+                nlohmann::json rows = nlohmann::json::array();
+                for (const auto& row : slave.rows) {
+                    rows.push_back({ { "label", row.label }, { "low", hundredths(row.low) },
+                        { "high", hundredths(row.high) }, { "kind", row.kind } });
+                }
+                out.push_back({ { "name", slave.name }, { "rows", std::move(rows) } });
+            }
+            return out;
+        }
+
+        // Sends the state to hud.html unless it is the same as the last one sent.
+        void PushState(const nlohmann::json& state)
+        {
+            const std::string payload = state.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            {
+                std::lock_guard lock(g_lock);
+                if (payload == g_lastPush) {
+                    return;
+                }
+                g_lastPush = payload;
+            }
+            UiEngine::HudInvokeJS(("hudUpdate(" + payload + ");").c_str());
+        }
+
         RE::Actor* CrosshairActor()
         {
             auto* pick = RE::CrosshairPickData::GetSingleton();
@@ -868,6 +899,7 @@ namespace Hud
             std::lock_guard lock(g_lock);
             g_showEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.enjoyment", true);
             g_showControls = SexLabNet::GetConfigBool("sexlab.hud.controls", true);
+            g_showDomEnjoyment = SexLabNet::GetConfigBool("sexlab.hud.dom_enjoyment", false);
             g_miniGame = SexLabNet::IsMiniGameMode() && !SexLabNet::IsOrgasmEngineDisabled();
             g_miniGameMouse = SexLabNet::GetConfigBool("sexlab.minigame.mouse", true);
             g_keyVk.clear();
@@ -1003,19 +1035,27 @@ namespace Hud
         bool controlsShown = false;
         bool listOpen = false;
         int listIndex = 0;
+        bool showDom = false;
         {
             std::lock_guard lock(g_lock);
             anyGroup = g_showEnjoyment || g_showControls || g_miniGame;
             controlsShown = g_showControls;
             listOpen = g_listOpen;
             listIndex = g_listIndex;
+            showDom = g_showDomEnjoyment;
+        }
+        std::vector<OrgasmEngine::DomBreakdown> domSlaves;
+        if (showDom) {
+            domSlaves = OrgasmEngine::GetDomBreakdowns();
         }
         const bool menu = BlockingMenuOpen();
         const bool overlayHidden = WebUI_IsHidden();
         // The choice list is not a HUD group: it stays up when enjoyment, controls, and the mini-game are all off.
         const bool hudVisible = inScene && anyGroup && overlayHidden && !menu;
         const bool listVisible = listOpen && inScene && overlayHidden && !menu;
-        const bool visible = hudVisible || listVisible;
+        // The DOM enjoyment list covers any scene, so it can be up with no player scene and no HUD keys.
+        const bool domVisible = !domSlaves.empty() && overlayHidden && !menu;
+        const bool visible = hudVisible || listVisible || domVisible;
         KeyHandler::GetSingleton()->SetHudActive(hudVisible);
         KeyHandler::GetSingleton()->SetListActive(listVisible);
         // AnimEngine keys: without the HUD, or with it up for an AnimEngine scene that hides the HUD controls (with
@@ -1062,7 +1102,14 @@ namespace Hud
             return;
         }
 
+        // Only the DOM list is up: no "groups", so hudUpdate hides the bars and controls.
+        if (!hudVisible && !listVisible) {
+            PushState({ { "dom", DomJson(domSlaves) } });
+            return;
+        }
+
         nlohmann::json j;
+        j["dom"] = DomJson(domSlaves);
         {
             std::lock_guard lock(g_lock);
             ResolveFocus(actors, acting ? acting->GetFormID() : 0);
@@ -1075,11 +1122,14 @@ namespace Hud
                 if (a.id == g_focus) {
                     focusPos = static_cast<int>(i);
                 }
+                // DOM slave: the fill is the position inside the current step of 100.
+                const float domFill = a.dom ? std::fmod(a.domArousal, 100.0f) : 0.0f;
                 rows.push_back({ { "pos", i }, { "name", a.name },
                     // Tenths, so the afterglow drain moves the bar every tick (hud.html smooths it).
-                    { "enjoyment", std::round(a.enjoyment * 10.0f) / 10.0f }, { "flash", a.flashing },
-                    { "near", a.dom ? a.domChance >= 0.9f : a.enjoyment >= 90.0f }, { "dom", a.dom },
-                    { "chance", static_cast<int>(a.domChance * 100.0f + 0.5f) }, { "denied", a.denied }, { "strategy", a.strategy },
+                    { "enjoyment", std::round((a.dom ? domFill : a.enjoyment) * 10.0f) / 10.0f }, { "flash", a.flashing },
+                    { "near", a.dom ? domFill >= 94.0f && a.domChance > 0.0f : a.enjoyment >= 90.0f }, { "dom", a.dom },
+                    { "stepLabel", a.domLabel },
+                    { "chance", static_cast<int>(a.domStepChance * 100.0f + 0.5f) }, { "denied", a.denied }, { "strategy", a.strategy },
                     { "magicka", static_cast<int>(a.magicka + 0.5f) },
                     { "stamina", static_cast<int>(a.stamina + 0.5f) } });
             }
@@ -1182,15 +1232,7 @@ namespace Hud
             { "lines", nlohmann::json::array({ "Stop having sex", "Cuddle after sex", "Start vaginal sex",
                            "Start oral sex", "Start anal sex" }) } };
 
-        const std::string payload = j.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        {
-            std::lock_guard lock(g_lock);
-            if (payload == g_lastPush) {
-                return;
-            }
-            g_lastPush = payload;
-        }
-        UiEngine::HudInvokeJS(("hudUpdate(" + payload + ");").c_str());
+        PushState(j);
     }
 
     void LastStageShow(int index, std::uint32_t advanceKey)

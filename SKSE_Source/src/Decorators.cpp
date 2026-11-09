@@ -163,6 +163,10 @@ namespace Decorators
                     if (!a || !actors[i].is_object() || !OrgasmEngine::IsManaged(a))
                         continue;
                     actors[i]["enjoyment"] = static_cast<int>(OrgasmEngine::GetEnjoyment(a));
+                    // DOM slave: the prompts' arousal is the live level (Handler_DOM.DomLevel).
+                    if (OrgasmEngine::IsDomSlave(a)) {
+                        actors[i]["arousal"] = static_cast<int>(OrgasmEngine::GetEnjoyment(a));
+                    }
                     // Mini-game NPC strategy phrase ("focuses on self enjoyment"); "" in Together mode.
                     actors[i]["strategy"] = OrgasmEngine::GetStrategyText(a);
                     // Stamina regen, percent of default (0550 tiredness tiers).

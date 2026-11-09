@@ -149,8 +149,34 @@ namespace OrgasmEngine
     void SetOrgasmExpected(RE::Actor* actor, bool expected);
     /// DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync) and DOM decides the orgasm.
     void SetDomSlave(RE::Actor* actor, bool dom);
-    /// DOM slave: the 0-100 meter Papyrus computed from DOM's orgasm values (HUD bar + SexLab mirror).
+    /// DOM slave: meter is the 0-100 level from DOM's real state (Handler_DOM.DomLevel): the engine's enjoyment, the
+    /// SexLab mirror and the prompts' arousal. chance is DOM's full end-of-act roll.
     void SetDomMeter(RE::Actor* actor, float meter, float chance);
+    /// DOM slave: the HUD bar. arousal is DOM's arousal_factor (each hundred is one step); label is its text;
+    /// stepChance is the chance the next step roll succeeds (the % over the bar).
+    void SetDomStep(RE::Actor* actor, float arousal, std::string label, float stepChance);
+    /// True for an actor the engine manages as a DOM slave.
+    bool IsDomSlave(RE::Actor* actor);
+    /// Answer to Effect_DomOrderRoll: DOM's obedience roll for an order that got no decision.
+    void DomOrderAnswer(std::int32_t token, bool obeyed);
+    /// One row of the upper-right DOM enjoyment list. kind: 0 neutral, 1 adds to the threshold, 2 the roll or a
+    /// random-check term, 3 text only.
+    struct DomRow
+    {
+        std::string label;
+        float low = 0.0f;
+        float high = 0.0f;
+        std::int32_t kind = 0;
+    };
+    struct DomBreakdown
+    {
+        std::string name;
+        std::vector<DomRow> rows;
+    };
+    /// DOM slave: the list's rows, from Papyrus (Handler_DOM.PushEnjoymentBreakdown). Not saved.
+    void SetDomBreakdown(RE::Actor* actor, std::vector<DomRow> rows);
+    /// Every DOM slave in a scene with rows, sorted by name (any scene, not only the player's).
+    std::vector<DomBreakdown> GetDomBreakdowns();
     void SetActorSkills(RE::Actor* actor, std::int32_t skill, std::int32_t lewd);
     /// SexLab's starting-enjoyment inputs (sslActorAlias StartAnimating): GetSkillLevels arrays of the actor
     /// and of the partner SexLab bases skills on (empty: unskilled, e.g. creatures), the lowest / highest
@@ -327,8 +353,11 @@ namespace OrgasmEngine
         std::string name;
         float enjoyment = 0.0f;
         bool flashing = false;
-        bool dom = false;  // DOM slave: bar is DOM's non-random roll score, DOM decides
-        float domChance = 0.0f;  // DOM slave: 0..1 chance its next orgasm roll succeeds (text over the bar)
+        bool dom = false;  // DOM slave: bar is DOM's arousal in steps of 100, DOM decides
+        float domChance = 0.0f;  // DOM slave: 0..1 chance of DOM's full end-of-act roll (the pulse)
+        float domStepChance = 0.0f;  // DOM slave: 0..1 chance the next step roll succeeds (text over the bar)
+        float domArousal = 0.0f;  // DOM slave: the bar's total; the fill is its position inside the step
+        std::string domLabel;  // DOM slave: the step's text on the bar
         bool denied = false;  // player's deny_orgasm (SetSceneBlocked)
         std::string strategy;  // mini-game NPC strategy label ("selfish", "forced"), "" when none
         float magicka = 0.0f;  // 0..100 % of max (calm cost)

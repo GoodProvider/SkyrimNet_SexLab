@@ -15,12 +15,22 @@
    The current strategy is shown only for a punishment. Keys are read back by the game: keep {{ o.key }} as given.
    A criterion is one line; profiles and other multi-line decorators belong in the state blocks. #}
 {% set _focus = decnpc(focus_uuid) %}
+{% set _dom_slave = is_plugin_loaded("SkyrimNet_DOM.esp") and is_in_faction(focus_uuid, "DOMPlayerSlaveFaction") %}
 [ state focus ]
 {{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}, is the {{ role }} in this scene{% if not expects_orgasm %} (this act is not expected to bring {{ focus_name }} to orgasm){% endif %}.
 {{ focus_name }} is {{ arousal }}{% if orgasms > 0 %} and has climaxed {{ orgasms }} time{% if orgasms > 1 %}s{% endif %} so far{% endif %}.
 {{ render_character_profile("short_inline", focus_uuid) }}
 [ end state ]
 
+{% if _dom_slave %}
+{% set _dom_npc.UUID = focus_uuid %}
+{% set _dom_npc.name = focus_name %}
+{% set _dom_args.npc = _dom_npc %}
+[ state dom_instructions ]
+{{ render_template("submodules\\user_final_instructions\\0551_dom_instructions", _dom_args) }}
+[ end state ]
+
+{% endif %}
 [ state scene ]
 {% set _sexlab = sexlab_get_threads(focus_uuid) %}
 {% if existsIn(_sexlab, "threads") %}
@@ -59,7 +69,8 @@ Nothing has happened yet.
 
 [ question strategy choice ]
 Decide which strategy {{ focus_name }} decides to start using right now.
-Base it on their relationship with each partner (`partners`), what is happening (`scene`), and what {{ focus_name }} has thought, said and experienced (`timeline`).
+{% if _dom_slave %}Follow `dom_instructions` for how {{ focus_name }} obeys and feels; it outweighs their usual preferences.
+{% endif %}Base it on their relationship with each partner (`partners`), what is happening (`scene`), and what {{ focus_name }} has thought, said and experienced (`timeline`).
 In order of importance: `last_line`, {{ focus_name }}'s thoughts, and recent events over older events. {{ focus_name }}'s words are more about changing other people's behavior than describing {{ focus_name }}'s own desires.
 A victim who is resisting does not cooperate. A lover or friend who is lagging behind may be helped. A rival or enemy is unlikely to be generous.
 {% if trigger == "punished" %}

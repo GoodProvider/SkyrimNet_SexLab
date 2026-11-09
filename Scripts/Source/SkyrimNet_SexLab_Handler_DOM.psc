@@ -7,6 +7,8 @@ import SkyrimNet_SexLab_Utilities
 String storage_actor_orgasm_total_key = "skyrimnet_sexlab_domactor_orgasm_total"
 String storage_actor_orgasm_message_key = "skyrimnet_sexlab_domactor_orgasm_message"
 String storage_behaviour_key = "skyrimnet_sexlab_dom_behaviour"
+; The last non-zero step share: the size of the next step roll (HUD %, list).
+String storage_last_share_key = "skyrimnet_sexlab_dom_last_share"
 
 
 
@@ -236,7 +238,8 @@ Function AddArousal(Actor akActor, float delta)
         return
     endif
     if delta > 0.0
-        ; An aroused slave first tops up is_aroused_for (1 point = 1 tick) to DOM's plateau max; the rest raises arousal_factor.
+        ; An aroused slave also tops up is_aroused_for (1 point = 1 tick) to DOM's plateau max. The full delta
+        ; always goes to arousal_factor, so one press moves the HUD bar by the same amount in every step.
         int aroused = mind.is_aroused_for
         if aroused > 0
             int plateau_max = (mind.PRISM_Sensuality * 0.5 + mind.submission * 0.5) as int
@@ -247,13 +250,10 @@ Function AddArousal(Actor akActor, float delta)
                     used = room
                 endif
                 mind.is_aroused_for = aroused + (used as int)
-                Trace("AddArousal", GetDisplayName(akActor)+" aroused_for:"+aroused+"->"+mind.is_aroused_for+" max:"+plateau_max+" overflow:"+(delta - (used as int)))
-                delta -= (used as int)
+                Trace("AddArousal", GetDisplayName(akActor)+" aroused_for:"+aroused+"->"+mind.is_aroused_for+" max:"+plateau_max)
             endif
         endif
-        if delta > 0.0
-            mind.IncreaseArousal(delta, mind.MOD_SocialBoldness)
-        endif
+        mind.IncreaseArousal(delta, mind.MOD_SocialBoldness)
     else
         float af = mind.arousal_factor + delta
         if af < 0.0
@@ -263,16 +263,25 @@ Function AddArousal(Actor akActor, float delta)
     endif
 EndFunction
 
-; DOM_Mind.IsOrgasmingAfterArousal's additive terms before the arousal multiplier, without its random
-; ones, with handleSexOrgasm's act base.
-float Function ScoreBase(DOM_Mind mind, Actor akActor)
-    float base = mind.MOD_Vaginal
-    if mind.MOD_Anal > base
+; The best modifier among the acts played so far; 0 when none.
+float Function PlayedBase(DOM_Mind mind)
+    float base = 0.0
+    if mind.hadVaginalSex
+        base = mind.MOD_Vaginal
+    endif
+    if mind.hadAnalSex && mind.MOD_Anal > base
         base = mind.MOD_Anal
     endif
-    if mind.MOD_Oral > base
+    if mind.hadOralSex && mind.MOD_Oral > base
         base = mind.MOD_Oral
     endif
+    return base
+EndFunction
+
+; DOM_Mind.IsOrgasmingAfterArousal's additive terms before the arousal multiplier, without its random
+; ones, with handleSexOrgasm's act base. share < 1: a step roll's slice of the act (StepRoll).
+float Function ScoreBase(DOM_Mind mind, Actor akActor, float share = 1.0)
+    float base = PlayedBase(mind)
     float speed = 0.25
     if mind.DOM01 != None
         speed = mind.DOM01.train_speed_orgasm
@@ -280,7 +289,7 @@ float Function ScoreBase(DOM_Mind mind, Actor akActor)
             base = 1000.0
         endif
     endif
-    float chance = base * mind.MOD_Orgasm * speed
+    float chance = base * share * mind.MOD_Orgasm * speed
     if chance > 0.5
         chance = 0.5 + (chance - 0.5) / 20.0
     endif
@@ -382,11 +391,12 @@ EndFunction
 
 ; Probability (0-1) that IsOrgasmingAfterArousal's next roll succeeds: its random additions (orgasm control,
 ; whipping submissive, rapture oath) averaged over their outcomes; 0 when it cannot roll.
-float Function RollProbability(DOM_Mind mind, Actor akActor)
+; share 1: the full end-of-act roll. Smaller: a step roll.
+float Function RollProbability(DOM_Mind mind, Actor akActor, float share = 1.0)
     if mind.is_aroused_for <= 0 || IsRefractory(mind, akActor)
         return 0.0
     endif
-    float base = ScoreBase(mind, akActor)
+    float base = ScoreBase(mind, akActor, share)
 
     float[] cP = Utility.CreateFloatArray(3, 0.0)
     float[] cA = Utility.CreateFloatArray(3, 0.0)
@@ -442,6 +452,18 @@ float Function OrgasmProbability(Actor akActor)
     return RollProbability(mind, akActor)
 EndFunction
 
+; The chance the next step roll succeeds. share > 0 becomes the size used from now on.
+float Function StepProbability(Actor akActor, float share)
+    DOM_Mind mind = GetMind(akActor, "StepProbability")
+    if mind == None
+        return 0.0
+    endif
+    if share > 0.0
+        StorageUtil.SetFloatValue(akActor, storage_last_share_key, share)
+    endif
+    return RollProbability(mind, akActor, StorageUtil.GetFloatValue(akActor, storage_last_share_key, 0.0))
+EndFunction
+
 bool Function IsMale(Actor akActor)
     ActorBase base = akActor.GetLeveledActorBase()
     return base != None && base.GetSex() == 0
@@ -463,12 +485,80 @@ bool Function IsRefractory(DOM_Mind mind, Actor akActor)
     return enraptured > enraptured_max - 4
 EndFunction
 
-float Function OrgasmMeter(Actor akActor)
-    DOM_Mind mind = GetMind(akActor, "OrgasmMeter")
+; The 0-100 level the engine, the SexLab mirror and the prompts read, from DOM's real state and not from arousal
+; alone: a slave can orgasm at 37 arousal once aroused, and cannot at 98 before. Bands match the prompts':
+; under 25 not aroused, 25-49 can become aroused, 50 and up aroused. Chance 0.5 is the top: the highest band seen in play.
+float Function DomLevel(Actor akActor)
+    DOM_Mind mind = GetMind(akActor, "DomLevel")
     if mind == None
         return 0.0
     endif
-    return 100.0 * Clamp01(EstimateChance(mind, akActor))
+    if IsRefractory(mind, akActor)
+        return 15.0
+    endif
+    if mind.is_aroused_for > 0
+        float scaled = RollProbability(mind, akActor) / 0.5
+        if scaled > 1.0
+            scaled = 1.0
+        endif
+        return 50.0 + 49.0 * scaled
+    endif
+    float arousal = mind.arousal_factor
+    if arousal >= 100.0
+        float over = (arousal - 100.0) / 100.0
+        if over > 1.0
+            over = 1.0
+        endif
+        return 25.0 + 24.0 * over
+    endif
+    if arousal < 0.0
+        arousal = 0.0
+    endif
+    return arousal * 0.24
+EndFunction
+
+; An order to this slave with no decision (SkyrimNet decisions off or failed): DOM's obedience roll.
+Bool Function RollOrder(Actor superior, Actor slave)
+    return SkyrimNet_DOM_Obedience.RollOrder(superior, slave, "masturbate_harder")
+EndFunction
+
+; The HUD bar's total: DOM's arousal. Each hundred is one step; the bar's height is the position inside the step.
+float Function DomArousal(Actor akActor)
+    DOM_Mind mind = GetMind(akActor, "DomArousal")
+    if mind == None
+        return 0.0
+    endif
+    return mind.arousal_factor
+EndFunction
+
+; The step's label, from DOM's real state and not from the hundreds: a lust potion can arouse a slave below 100.
+String Function StepLabel(DOM_Mind mind, Actor akActor)
+    if IsRefractory(mind, akActor)
+        return "just orgasmed"
+    endif
+    if mind.is_aroused_for <= 0
+        if mind.arousal_factor < 100.0
+            return "orgasm impossible"
+        endif
+        return "impossible, can become aroused"
+    endif
+    float chance = RollProbability(mind, akActor)
+    if chance < 0.25
+        return "orgasm possible, low"
+    elseif chance < 0.5
+        return "orgasm possible, moderate"
+    elseif chance < 0.75
+        return "orgasm likely"
+    endif
+    return "orgasm very likely"
+EndFunction
+
+String Function DomStepLabel(Actor akActor)
+    DOM_Mind mind = GetMind(akActor, "DomStepLabel")
+    if mind == None
+        return ""
+    endif
+    return StepLabel(mind, akActor)
 EndFunction
 
 Bool Function CouldOrgasm(Actor akActor)
@@ -480,6 +570,249 @@ Bool Function CouldOrgasm(Actor akActor)
         return false
     endif
     return EstimateChance(mind, akActor) > 0.0
+EndFunction
+
+; ---- DOM enjoyment list (sexlab.hud.dom_enjoyment, docs/developers/webui.md) ----
+; Adds a row at n and returns the next index. Row kinds: 0 neutral (gates, inputs), 1 adds to the threshold,
+; 2 the roll or a term decided by a random check, 3 text only. All-zero rows are skipped unless always.
+int Function BreakdownRow(String[] labels, float[] lows, float[] highs, int[] kinds, int n, String label, float low, float high, int kind, bool always)
+    if n >= labels.Length || (low == 0.0 && high == 0.0 && !always)
+        return n
+    endif
+    labels[n] = label
+    lows[n] = low
+    highs[n] = high
+    kinds[n] = kind
+    return n + 1
+EndFunction
+
+float Function OutcomeLow(float[] probs, float[] adds)
+    float lowest = 0.0
+    bool found = false
+    int i = 0
+    while i < probs.Length
+        if probs[i] > 0.0 && (!found || adds[i] < lowest)
+            lowest = adds[i]
+            found = true
+        endif
+        i += 1
+    endwhile
+    return lowest
+EndFunction
+
+float Function OutcomeHigh(float[] probs, float[] adds)
+    float highest = 0.0
+    bool found = false
+    int i = 0
+    while i < probs.Length
+        if probs[i] > 0.0 && (!found || adds[i] > highest)
+            highest = adds[i]
+            found = true
+        endif
+        i += 1
+    endwhile
+    return highest
+EndFunction
+
+; Read-only: walks the terms of ScoreBase / RollProbability in DOM's order, so the HUD's numbers can be compared
+; with everything behind them. Contributions and random terms add up to the threshold range.
+Function PushEnjoymentBreakdown(Actor akActor)
+    DOM_Mind mind = GetMind(akActor, "PushEnjoymentBreakdown")
+    if mind == None
+        return
+    endif
+    String[] labels = new String[40]
+    float[] lows = new float[40]
+    float[] highs = new float[40]
+    int[] kinds = new int[40]
+    int n = 0
+
+    ; The bar: these rows add up to the bar total, in arousal points.
+    float total = mind.arousal_factor
+    float start = StorageUtil.GetFloatValue(akActor, DomLedgerKey("start"), 0.0)
+    float prepaid = StorageUtil.GetFloatValue(akActor, DomLedgerKey("prepaid"), 0.0)
+    float steps = StorageUtil.GetFloatValue(akActor, DomLedgerKey("steps"), 0.0)
+    float aroused = StorageUtil.GetFloatValue(akActor, DomLedgerKey("arouse"), 0.0)
+    float calmed = StorageUtil.GetFloatValue(akActor, DomLedgerKey("calm"), 0.0)
+    float other = total - start - prepaid - steps - aroused - calmed
+    if Math.Abs(other) < 0.005
+        other = 0.0
+    endif
+    n = BreakdownRow(labels, lows, highs, kinds, n, "arousal at scene start", start, start, 1, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "DOM's scene adds, prepaid", prepaid, prepaid, 1, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "scene steps", steps, steps, 1, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "Arouse", aroused, aroused, 1, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "Calm", calmed, calmed, 1, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "DOM and decay", other, other, 1, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "bar total", total, total, 0, true)
+    int stepIndex = Math.Floor(total / 100.0)
+    float needed = (stepIndex + 1) * 100.0 - total
+    n = BreakdownRow(labels, lows, highs, kinds, n, "needed for next step", needed, needed, 0, true)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "step " + (stepIndex + 1) + ": " + StepLabel(mind, akActor), 0.0, 0.0, 3, true)
+
+    float base = PlayedBase(mind)
+    float speed = 0.25
+    bool separateBase = false
+    if mind.DOM01 != None
+        speed = mind.DOM01.train_speed_orgasm
+        if mind.DOM01.DOMSexlab != None && mind.DOM01.DOMSexlab.separateOrgasmToggle
+            base = 1000.0
+            separateBase = true
+        endif
+    endif
+
+    ; Fixed contributions.
+    float term = base * mind.MOD_Orgasm * speed
+    n = BreakdownRow(labels, lows, highs, kinds, n, "act x orgasm x speed", term, term, 1, false)
+    float additive = term
+    if additive > 0.5
+        term = (0.5 + (additive - 0.5) / 20.0) - additive
+        n = BreakdownRow(labels, lows, highs, kinds, n, "soft cap above 0.5", term, term, 1, false)
+        additive += term
+    endif
+    if IsMale(akActor)
+        term = additive + 0.1
+        n = BreakdownRow(labels, lows, highs, kinds, n, "male", term, term, 1, false)
+        additive += term
+    endif
+    term = mind.getArousalBonus()
+    n = BreakdownRow(labels, lows, highs, kinds, n, "mood bonus", term, term, 1, false)
+    additive += term
+    if mind.WasWarned(20) || mind.WasWarned(21)
+        n = BreakdownRow(labels, lows, highs, kinds, n, "warned", 0.1, 0.1, 1, false)
+        additive += 0.1
+    endif
+    if mind.whipping_active && (mind.whipping_reason == 20 || mind.whipping_reason == 21)
+        n = BreakdownRow(labels, lows, highs, kinds, n, "whipping reason", 0.1, 0.1, 1, false)
+        additive += 0.1
+    endif
+    DOM_Actor slave_alias = mind.actor_alias
+    if slave_alias != None
+        ; The same stand-in for DOM's private abuse_type as ScoreBase.
+        if !slave_alias.canAnimate && !mind.sex_is_non_consensual && slave_alias.has_sex_with_player
+            n = BreakdownRow(labels, lows, highs, kinds, n, "restrained", 0.1, 0.1, 1, false)
+            additive += 0.1
+            if mind.number_of_sex == 0
+                n = BreakdownRow(labels, lows, highs, kinds, n, "restrained, first sex", 0.1, 0.1, 1, false)
+                additive += 0.1
+            endif
+        endif
+        if mind.number_of_sex == 0 && slave_alias.has_sex_with_player
+            n = BreakdownRow(labels, lows, highs, kinds, n, "first sex with player", 0.1, 0.1, 1, false)
+            additive += 0.1
+        endif
+        if mind.number_of_sexformoney == 0 && slave_alias.has_sex_for_money
+            n = BreakdownRow(labels, lows, highs, kinds, n, "first sex for money", 0.1, 0.1, 1, false)
+            additive += 0.1
+        endif
+    endif
+    term = mind.number_of_orgasm * 0.01
+    n = BreakdownRow(labels, lows, highs, kinds, n, "past orgasms", term, term, 1, false)
+    additive += term
+
+    float scale = 1.0 + mind.arousal_factor / 1000.0
+    term = additive * (scale - 1.0)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "arousal multiplier", term, term, 1, false)
+    term = mind.submission / 1000.0
+    n = BreakdownRow(labels, lows, highs, kinds, n, "submission", term, term, 1, false)
+    term = mind.love_desire / 200.0
+    n = BreakdownRow(labels, lows, highs, kinds, n, "love", term, term, 1, false)
+
+    float fixedSum = ApplyArousalTerms(mind, additive)
+    float estimate = EstimateChance(mind, akActor)
+    if Math.Abs(fixedSum - estimate) > 0.001
+        Trace("PushEnjoymentBreakdown", "--- "+GetDisplayName(akActor)+" rows sum "+fixedSum+" but EstimateChance is "+estimate)
+    endif
+
+    ; Terms decided by their own random check; scaled by the arousal multiplier as DOM applies it after them.
+    float[] controlP = Utility.CreateFloatArray(3, 0.0)
+    float[] controlA = Utility.CreateFloatArray(3, 0.0)
+    ControlOutcomes(mind, controlP, controlA)
+    float[] whipP = Utility.CreateFloatArray(2, 0.0)
+    float[] whipA = Utility.CreateFloatArray(2, 0.0)
+    whipP[0] = 1.0
+    if mind.whipping_active
+        whipP[0] = 1.0 - Clamp01(mind.PRISM_Submissivity)
+        whipP[1] = Clamp01(mind.PRISM_Submissivity)
+        whipA[1] = 0.1
+    endif
+    float[] raptureP = Utility.CreateFloatArray(3, 0.0)
+    float[] raptureA = Utility.CreateFloatArray(3, 0.0)
+    raptureP[0] = 1.0
+    if mind.promiseOath == "rapture"
+        float pSub = Clamp01(mind.submission / 100.0)
+        float pSens = Clamp01(mind.PRISM_Sensuality / 100.0)
+        raptureP[0] = 1.0 - pSub - (1.0 - pSub) * pSens
+        raptureP[1] = pSub
+        raptureA[1] = 0.1
+        raptureP[2] = (1.0 - pSub) * pSens
+        raptureA[2] = 0.2
+    endif
+    float controlLow = OutcomeLow(controlP, controlA) * scale
+    float controlHigh = OutcomeHigh(controlP, controlA) * scale
+    float whipLow = OutcomeLow(whipP, whipA) * scale
+    float whipHigh = OutcomeHigh(whipP, whipA) * scale
+    float raptureLow = OutcomeLow(raptureP, raptureA) * scale
+    float raptureHigh = OutcomeHigh(raptureP, raptureA) * scale
+    n = BreakdownRow(labels, lows, highs, kinds, n, "whipping submissive", whipLow, whipHigh, 2, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "orgasm control", controlLow, controlHigh, 2, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "rapture oath", raptureLow, raptureHigh, 2, false)
+
+    String blocked = ""
+    if mind.is_aroused_for <= 0
+        blocked = "blocked: not aroused"
+    elseif IsRefractory(mind, akActor)
+        blocked = "blocked: just orgasmed"
+    endif
+
+    n = BreakdownRow(labels, lows, highs, kinds, n, "roll", 0.0, 1.0, 2, false)
+    if blocked == ""
+        float rangeLow = fixedSum + controlLow + whipLow + raptureLow
+        float rangeHigh = fixedSum + controlHigh + whipHigh + raptureHigh
+        if rangeLow != rangeHigh
+            n = BreakdownRow(labels, lows, highs, kinds, n, "threshold range", rangeLow, rangeHigh, 1, false)
+        endif
+    endif
+    float threshold = RollProbability(mind, akActor)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "full roll chance", threshold, threshold, 1, false)
+
+    ; Most syncs carry no share, so the step rows use the last one seen.
+    float lastShare = StorageUtil.GetFloatValue(akActor, storage_last_share_key, 0.0)
+    if blocked == "" && lastShare > 0.0 && base > 0.0
+        n = BreakdownRow(labels, lows, highs, kinds, n, "last step share", lastShare, lastShare, 0, false)
+        float stepThreshold = RollProbability(mind, akActor, lastShare)
+        n = BreakdownRow(labels, lows, highs, kinds, n, "next step roll (HUD chance)", stepThreshold, stepThreshold, 1, false)
+    endif
+
+    ; Inputs: not added to anything above. Only the acts played count towards the roll.
+    n = BreakdownRow(labels, lows, highs, kinds, n, "aroused for", mind.is_aroused_for, mind.is_aroused_for, 0, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "enraptured for", mind.is_enraptured_for, mind.is_enraptured_for, 0, false)
+    if mind.hadVaginalSex
+        n = BreakdownRow(labels, lows, highs, kinds, n, "vaginal", mind.MOD_Vaginal, mind.MOD_Vaginal, 0, false)
+    endif
+    if mind.hadAnalSex
+        n = BreakdownRow(labels, lows, highs, kinds, n, "anal", mind.MOD_Anal, mind.MOD_Anal, 0, false)
+    endif
+    if mind.hadOralSex
+        n = BreakdownRow(labels, lows, highs, kinds, n, "oral", mind.MOD_Oral, mind.MOD_Oral, 0, false)
+    endif
+    if separateBase
+        n = BreakdownRow(labels, lows, highs, kinds, n, "separate orgasm base", 1000.0, 1000.0, 0, false)
+    endif
+    n = BreakdownRow(labels, lows, highs, kinds, n, "orgasm mod", mind.MOD_Orgasm, mind.MOD_Orgasm, 0, false)
+    n = BreakdownRow(labels, lows, highs, kinds, n, "train speed", speed, speed, 0, false)
+
+    SkyrimNet_SexLab_OrgasmEngine.SetDomBreakdown(akActor, labels, lows, highs, kinds)
+EndFunction
+
+; Where this scene's arousal changes are kept for the list's bar rows.
+String Function DomLedgerKey(String part)
+    return "skyrimnet_sexlab_dom_ledger_" + part
+EndFunction
+
+Function AddToDomLedger(Actor akActor, String part, float amount)
+    String ledgerKey = DomLedgerKey(part)
+    StorageUtil.SetFloatValue(akActor, ledgerKey, StorageUtil.GetFloatValue(akActor, ledgerKey, 0.0) + amount)
 EndFunction
 
 ; ---- Spread DOM arousal (docs/developers/orgasm-engine.md#dom-slaves) ----
@@ -551,15 +884,31 @@ Function DomSync(Actor akActor, float miniDelta, float daring, float naivety, bo
         mind.arousal_factor = af - take
         StorageUtil.SetFloatValue(akActor, storage_dom_debt_key, debt - take)
         Trace("DomSync", GetDisplayName(akActor)+" prepay owed:"+owed+" taken:"+take+" debt:"+(debt - take)+" arousal:"+af+"->"+mind.arousal_factor)
+        ; The first sync of a scene: the list's bar rows start here.
+        StorageUtil.SetFloatValue(akActor, DomLedgerKey("start"), af)
+        StorageUtil.SetFloatValue(akActor, DomLedgerKey("prepaid"), -take)
+        StorageUtil.SetFloatValue(akActor, DomLedgerKey("steps"), 0.0)
+        StorageUtil.SetFloatValue(akActor, DomLedgerKey("arouse"), 0.0)
+        StorageUtil.SetFloatValue(akActor, DomLedgerKey("calm"), 0.0)
     endif
     if miniDelta != 0.0
+        float miniBefore = mind.arousal_factor
         AddArousal(akActor, miniDelta)
+        if miniDelta > 0.0
+            AddToDomLedger(akActor, "arouse", mind.arousal_factor - miniBefore)
+        else
+            AddToDomLedger(akActor, "calm", mind.arousal_factor - miniBefore)
+        endif
     endif
+    float stepsBefore = mind.arousal_factor
     if daring > 0.0
         PushStep(mind, akActor, daring, mind.MOD_SocialBoldness)
     endif
     if naivety > 0.0
         PushStep(mind, akActor, naivety, mind.MOD_Naivety)
+    endif
+    if daring > 0.0 || naivety > 0.0
+        AddToDomLedger(akActor, "steps", mind.arousal_factor - stepsBefore)
     endif
 EndFunction
 
@@ -574,16 +923,7 @@ Function StepRoll(Actor akActor, bool hasPlayer, float share)
     if !CouldOrgasm(akActor)
         return
     endif
-    float base = 0.0
-    if mind.hadVaginalSex
-        base = mind.MOD_Vaginal
-    endif
-    if mind.hadAnalSex && mind.MOD_Anal > base
-        base = mind.MOD_Anal
-    endif
-    if mind.hadOralSex && mind.MOD_Oral > base
-        base = mind.MOD_Oral
-    endif
+    float base = PlayedBase(mind)
     if mind.DOM01 != None && mind.DOM01.DOMSexlab != None && mind.DOM01.DOMSexlab.separateOrgasmToggle
         base = 1000.0
     endif

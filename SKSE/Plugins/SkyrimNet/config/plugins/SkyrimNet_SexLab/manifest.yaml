@@ -335,6 +335,13 @@ schema:
       defaultValue: true
       category: "Scene HUD"
 
+    - name: "Display DOM slave enjoyment"
+      path: "sexlab.hud.dom_enjoyment"
+      type: "bool"
+      description: "Upper right, while a Diary of Mine slave has sex (also in scenes without the player): each non-zero value that goes into DOM's orgasm decision, the range of the roll, and the threshold it must beat."
+      defaultValue: false
+      category: "Scene HUD"
+
     - name: "End scene key"
       path: "sexlab.hud.key_end"
       type: "hotkey"
@@ -875,7 +882,7 @@ schema:
     - name: "Enjoyment budget for strategy play"
       path: "sexlab.minigame.enjoyment_budget"
       type: "bool"
-      description: "NPCs (and you on auto play) spend stamina and magicka in proportion to their own enjoyment: at 10% enjoyment they may spend 10% of their maximum, at 90% they may spend 90%. They start out holding back and finish close to exhausted. DOM slaves are exempt, and your own key presses are never limited. Off: they play until they can't pay."
+      description: "NPCs (and you on auto play) spend stamina and magicka in proportion to their own enjoyment: at 10% enjoyment they may spend 10% of their maximum, at 90% they may spend 90%. They start out holding back and finish close to exhausted. A DOM slave's share follows their DOM arousal instead. Your own key presses are never limited. Off: they play until they can't pay."
       defaultValue: true
       category: "Mini-game"
 

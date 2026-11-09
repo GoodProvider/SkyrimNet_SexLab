@@ -109,9 +109,16 @@ Function SetSceneActs(Actor akAnchor, bool vaginal, bool anal, bool oral) global
 Function SetFirstTimes(Actor akActor, bool vaginal, bool anal) global native
 ; DOM slave: passive progress goes to DOM's arousal in steps (Effect_DomSync); DOM decides the orgasm.
 Function SetDomSlave(Actor akActor, bool dom) global native
-; DOM slave: 0-100 bar (DOM's non-random roll score; HUD bar + SexLab mirror) and the 0-1 chance
-; that DOM's next roll succeeds (HUD text over the bar end).
+; DOM slave: meter is DOM's non-random roll score, 0-100 (the engine adds the scene's arousal for the SexLab
+; mirror), and the 0-1 chance that DOM's next roll succeeds (HUD text over the bar end).
 Function SetDomMeter(Actor akActor, float meter, float chance) global native
+; DOM slave: the HUD bar. arousal is DOM's arousal_factor (each hundred is one step), label its text.
+Function SetDomStep(Actor akActor, float arousal, String label, float stepChance) global native
+; Answers Effect_DomOrderRoll.
+Function DomOrderAnswer(int token, bool obeyed) global native
+; DOM slave: rows of the upper-right enjoyment list. Parallel arrays; an empty label is skipped.
+; kinds: 0 neutral, 1 adds to a total below it, 2 the roll or a random-check term, 3 text only.
+Function SetDomBreakdown(Actor akActor, String[] labels, float[] lows, float[] highs, int[] kinds) global native
 Function SetActorSkills(Actor akActor, int skill, int lewd) global native
 ; SexLab's starting-enjoyment inputs: GetSkillLevels of the actor and of the partner SexLab bases skills on
 ; (empty arrays: unskilled), lowest / highest present relationship rank, act skill (0 foreplay 1 vaginal 2 anal
@@ -316,7 +323,22 @@ Function Effect_DomSync(Actor akActor, float miniDelta, float daring, float naiv
     if share > 0.0
         dom.StepRoll(akActor, hasPlayer, share)
     endif
-    SetDomMeter(akActor, dom.OrgasmMeter(akActor), dom.OrgasmProbability(akActor))
+    SetDomMeter(akActor, dom.DomLevel(akActor), dom.OrgasmProbability(akActor))
+    SetDomStep(akActor, dom.DomArousal(akActor), dom.DomStepLabel(akActor), dom.StepProbability(akActor, share))
+    if SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.hud.dom_enjoyment", false)
+        dom.PushEnjoymentBreakdown(akActor)
+    endif
+EndFunction
+
+; An order to a DOM slave that got no decision (SkyrimNet decisions off or failed): DOM's obedience roll decides.
+; Always answers, so the engine's pending order is released.
+Function Effect_DomOrderRoll(Actor superior, Actor slave, int token) global
+    bool obeyed = true
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager != None && manager.main != None && manager.main.handler_dom != None
+        obeyed = manager.main.handler_dom.RollOrder(superior, slave)
+    endif
+    DomOrderAnswer(token, obeyed)
 EndFunction
 
 ; Strategy change (no notification). narrate: optional narration of msg (LLM / API / forced
