@@ -5,6 +5,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#ifdef HKXANIM_DIAG
+#include <cstdio>
+#endif
 #include <span>
 #include <unordered_map>
 
@@ -346,6 +349,7 @@ namespace HkxAnim
             int32_t nframes = 0;
             int32_t nblocks = 0;
             int32_t max_frames = 256;
+            int32_t mask_size = 0;
             float block_duration = 1.f;
             std::vector<uint32_t> block_offsets;
             std::vector<uint8_t> blob;
@@ -406,6 +410,7 @@ namespace HkxAnim
             out.nframes = ReadI32(anim_obj + 0x38);
             out.nblocks = ReadI32(anim_obj + 0x3C);
             out.max_frames = ReadI32(anim_obj + 0x40);
+            out.mask_size = ReadI32(anim_obj + 0x44);
             out.block_duration = ReadF32(anim_obj + 0x48);
             auto offs = Arr<uint32_t>(anim_obj, 0x58);
             out.block_offsets.assign(offs.begin(), offs.end());
@@ -431,17 +436,50 @@ namespace HkxAnim
             Dynamic = 2
         };
 
-        Sub SubType(uint8_t types, int shift)
+        // Havok track flags: bits 0-3 mark static components, bits 4-7 mark spline components.
+        Sub SubType(uint8_t flags, int comp)
         {
-            return static_cast<Sub>((types >> shift) & 3);
+            if ((flags >> (4 + comp)) & 1)
+                return Sub::Dynamic;
+            if ((flags >> comp) & 1)
+                return Sub::Static;
+            return Sub::Identity;
         }
 
-        bool ReadSplineVector(const uint8_t* blob, int& p, int end, uint8_t types, int type_shift,
-            uint8_t quant, float defv, float frame, float& ox, float& oy, float& oz)
+        void SplineBasis(const std::vector<float>& knots, int degree, int n, float frame, int& span, float* N)
         {
-            const Sub sx = SubType(types, type_shift);
-            const Sub sy = SubType(types, type_shift + 2);
-            const Sub sz = SubType(types, type_shift + 4);
+            span = degree;
+            const float lo = knots[static_cast<size_t>(degree)];
+            const float hi = knots[static_cast<size_t>(n)];
+            // Manual clamp: lo <= hi is validated by callers (avoid std::clamp assert).
+            float v = frame;
+            if (v < lo)
+                v = lo;
+            else if (v > hi)
+                v = hi;
+            while (span < n - 1 && v >= knots[static_cast<size_t>(span + 1)])
+                ++span;
+            N[0] = 1.f;
+            for (int i = 1; i < 6; ++i)
+                N[i] = 0.f;
+            for (int i = 1; i <= degree && i < 5; ++i) {
+                for (int j = i - 1; j >= 0; --j) {
+                    const float den =
+                        knots[static_cast<size_t>(span + i - j)] - knots[static_cast<size_t>(span - j)];
+                    const float A = den != 0.f ? (v - knots[static_cast<size_t>(span - j)]) / den : 0.f;
+                    const float tmp = N[j] * A;
+                    N[j + 1] += N[j] - tmp;
+                    N[j] = tmp;
+                }
+            }
+        }
+
+        bool ReadSplineVector(const uint8_t* blob, int& p, int end, uint8_t flags, uint8_t quant, float defv,
+            float frame, float& ox, float& oy, float& oz)
+        {
+            const Sub sx = SubType(flags, 0);
+            const Sub sy = SubType(flags, 1);
+            const Sub sz = SubType(flags, 2);
             const bool dyn = sx == Sub::Dynamic || sy == Sub::Dynamic || sz == Sub::Dynamic;
             auto rd = [&](float& dst, Sub st) -> bool {
                 if (st == Sub::Identity) {
@@ -464,7 +502,9 @@ namespace HkxAnim
             }
             if (p + 3 > end)
                 return false;
-            const int nitems = blob[p];
+            uint16_t nitems16 = 0;
+            std::memcpy(&nitems16, blob + p, 2);
+            const int nitems = nitems16;
             p += 2;
             const int degree = blob[p++];
             // Degree > 4 exceeds local N[] and is not a valid Havok spline track.
@@ -541,27 +581,8 @@ namespace HkxAnim
                 if (n <= 1)
                     return pts[c][0];
                 int span = degree;
-                const float lo = knots[static_cast<size_t>(degree)];
-                const float hi = knots[static_cast<size_t>(n)];
-                // Manual clamp: lo <= hi already validated above (avoid std::clamp assert).
-                float v = frame;
-                if (v < lo)
-                    v = lo;
-                else if (v > hi)
-                    v = hi;
-                while (span < n - 1 && v >= knots[static_cast<size_t>(span + 1)])
-                    ++span;
-                float N[6]{1, 0, 0, 0, 0, 0};
-                for (int i = 1; i <= degree && i < 5; ++i) {
-                    for (int j = i - 1; j >= 0; --j) {
-                        const float den =
-                            knots[static_cast<size_t>(span + i - j)] - knots[static_cast<size_t>(span - j)];
-                        const float A = den != 0.f ? (v - knots[static_cast<size_t>(span - j)]) / den : 0.f;
-                        const float tmp = N[j] * A;
-                        N[j + 1] += N[j] - tmp;
-                        N[j] = tmp;
-                    }
-                }
+                float N[6];
+                SplineBasis(knots, degree, n, frame, span, N);
                 float r = 0.f;
                 for (int i = 0; i <= degree && i < 5; ++i) {
                     const int idx = span - i;
@@ -576,49 +597,140 @@ namespace HkxAnim
             return true;
         }
 
-        Quat ReadPackedQuat(const uint8_t* blob, int& p, int end, int qtype)
+        // Rotation quantization: 0 polar32, 1 three-comp 40, 2 three-comp 48, 3 three-comp 24,
+        // 4 straight 16, 5 uncompressed. Skyrim SE clips use 40 and 48 bit; the rest are refused.
+        int QuatAlign(int qtype)
         {
-            Quat q{0, 0, 0, 1};
-            if (qtype == 3) {
-                if (p + 16 > end)
-                    return q;
-                q = {ReadF32(blob + p), ReadF32(blob + p + 4), ReadF32(blob + p + 8), ReadF32(blob + p + 12)};
-                p += 16;
-                return q;
+            switch (qtype) {
+            case 2:
+                return 2;
+            case 5:
+                return 4;
+            default:
+                return 1;
             }
-            if (qtype == 0) {
-                if (p + 4 > end)
-                    return q;
-                // 32-bit polar (approximate)
-                const uint32_t c = ReadU32(blob + p);
-                p += 4;
-                const float r = 1.f - std::pow(static_cast<float>((c >> 18) & 1023) / 1023.f, 2.f);
-                q.w = r;
-                q.x = ((c & 0x3F) / 63.f) * 2.f - 1.f;
-                q.y = (((c >> 6) & 0x3F) / 63.f) * 2.f - 1.f;
-                q.z = (((c >> 12) & 0x3F) / 63.f) * 2.f - 1.f;
-                return q;
+        }
+
+        Quat InsertLargest(float a, float b, float c, int largest, bool negative)
+        {
+            const float dot = a * a + b * b + c * c;
+            float w = std::sqrt(std::max(0.f, 1.f - dot));
+            if (negative)
+                w = -w;
+            float out[4]{a, b, c, 0.f};
+            for (int i = 2; i >= largest; --i)
+                out[i + 1] = out[i];
+            out[largest] = w;
+            return {out[0], out[1], out[2], out[3]};
+        }
+
+        bool ReadPackedQuat(const uint8_t* blob, int& p, int end, int qtype, Quat& q)
+        {
+            if (qtype == 1) {
+                if (p + 5 > end)
+                    return false;
+                uint64_t v = 0;
+                std::memcpy(&v, blob + p, 5);
+                p += 5;
+                constexpr int kMax = 2047;
+                constexpr float kFrac = 0.000345436f;
+                const int a = static_cast<int>(v & 0xFFF) - kMax;
+                const int b = static_cast<int>((v >> 12) & 0xFFF) - kMax;
+                const int c = static_cast<int>((v >> 24) & 0xFFF) - kMax;
+                q = InsertLargest(a * kFrac, b * kFrac, c * kFrac, static_cast<int>((v >> 36) & 3), ((v >> 38) & 1) != 0);
+                return true;
             }
             if (qtype == 2) {
                 if (p + 6 > end)
-                    return q;
-                int16_t a, b, c;
-                std::memcpy(&a, blob + p, 2);
-                std::memcpy(&b, blob + p + 2, 2);
-                std::memcpy(&c, blob + p + 4, 2);
+                    return false;
+                uint16_t x, y, z;
+                std::memcpy(&x, blob + p, 2);
+                std::memcpy(&y, blob + p + 2, 2);
+                std::memcpy(&z, blob + p + 4, 2);
                 p += 6;
-                constexpr float frac = 0.000043161f;
-                q.x = (a & 0x7FFF) * frac;
-                q.y = (b & 0x7FFF) * frac;
-                q.z = (c & 0x7FFF) * frac;
-                q.w = std::sqrt(std::max(0.f, 1.f - q.x * q.x - q.y * q.y - q.z * q.z));
-                return q;
+                constexpr int kMax = 0x3FFF;
+                constexpr float kFrac = 0.000043161f;
+                const int largest = ((y >> 14) & 2) | ((x >> 15) & 1);
+                const bool negative = (z >> 15) != 0;
+                q = InsertLargest(((x & 0x7FFF) - kMax) * kFrac, ((y & 0x7FFF) - kMax) * kFrac,
+                    ((z & 0x7FFF) - kMax) * kFrac, largest, negative);
+                return true;
             }
-            // 40-bit
-            if (p + 5 > end)
-                return q;
-            p += 5;
-            return q;
+            if (qtype == 5) {
+                if (p + 16 > end)
+                    return false;
+                q = {ReadF32(blob + p), ReadF32(blob + p + 4), ReadF32(blob + p + 8), ReadF32(blob + p + 12)};
+                p += 16;
+                return true;
+            }
+#ifdef HKXANIM_DIAG
+            std::fprintf(stderr, "HkxAnim: unsupported rotation quantization %d\n", qtype);
+#endif
+            return false;
+        }
+
+        Quat Normalized(const Quat& q)
+        {
+            const float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+            if (len <= 0.f)
+                return {0, 0, 0, 1};
+            return {q.x / len, q.y / len, q.z / len, q.w / len};
+        }
+
+        bool ReadSplineRotation(const uint8_t* blob, int& p, int end, uint8_t flags, int qtype, float frame, Quat& out)
+        {
+            out = {0, 0, 0, 1};
+            if (flags & 0xF0) {
+                if (p + 3 > end)
+                    return false;
+                uint16_t nitems16 = 0;
+                std::memcpy(&nitems16, blob + p, 2);
+                const int nitems = nitems16;
+                p += 2;
+                const int degree = blob[p++];
+                if (degree < 0 || degree > 4)
+                    return false;
+                const int nknots = nitems + degree + 2;
+                if (p + nknots > end)
+                    return false;
+                std::vector<float> knots(static_cast<size_t>(nknots));
+                for (int i = 0; i < nknots; ++i)
+                    knots[static_cast<size_t>(i)] = static_cast<float>(blob[p++]);
+                p = Align(p, QuatAlign(qtype));
+                const int npts = nitems + 1;
+                std::vector<Quat> pts(static_cast<size_t>(npts));
+                for (int i = 0; i < npts; ++i) {
+                    if (!ReadPackedQuat(blob, p, end, qtype, pts[static_cast<size_t>(i)]))
+                        return false;
+                }
+                if (npts == 1) {
+                    out = Normalized(pts[0]);
+                    return true;
+                }
+                if (!(knots[static_cast<size_t>(degree)] <= knots[static_cast<size_t>(npts)]))
+                    return false;
+                int span = degree;
+                float N[6];
+                SplineBasis(knots, degree, npts, frame, span, N);
+                Quat r{0, 0, 0, 0};
+                for (int i = 0; i <= degree && i < 5; ++i) {
+                    const int idx = span - i;
+                    if (idx < 0 || idx >= npts)
+                        continue;
+                    const Quat& c = pts[static_cast<size_t>(idx)];
+                    r.x += c.x * N[i];
+                    r.y += c.y * N[i];
+                    r.z += c.z * N[i];
+                    r.w += c.w * N[i];
+                }
+                out = Normalized(r);
+                return true;
+            }
+            if (flags & 0x0F) {
+                p = Align(p, QuatAlign(qtype));
+                return ReadPackedQuat(blob, p, end, qtype, out);
+            }
+            return true;
         }
 
         bool SampleSplineAll(const SplineAnim& anim, float time, std::vector<Transform>& tracks)
@@ -633,7 +745,8 @@ namespace HkxAnim
                 return false;
             const int end = static_cast<int>(anim.blob.size());
             int p = static_cast<int>(anim.block_offsets[static_cast<size_t>(block)]);
-            const int mask_bytes = anim.ntracks * 2;
+            // Four mask bytes per transform track, then one per float track.
+            const int mask_bytes = std::max(anim.mask_size, anim.ntracks * 4);
             if (p + mask_bytes > end)
                 return false;
             const uint8_t* masks = anim.blob.data() + p;
@@ -647,39 +760,24 @@ namespace HkxAnim
 
             tracks.resize(static_cast<size_t>(anim.ntracks));
             for (int t = 0; t < anim.ntracks; ++t) {
-                const uint8_t quant = masks[t * 2];
-                const uint8_t types = masks[t * 2 + 1];
+                const uint8_t quant = masks[t * 4];
+                const uint8_t pos_flags = masks[t * 4 + 1];
+                const uint8_t rot_flags = masks[t * 4 + 2];
+                const uint8_t scale_flags = masks[t * 4 + 3];
                 Transform xf{};
                 xf.scale = {1, 1, 1};
-                if (!ReadSplineVector(anim.blob.data(), p, end, types, 0, quant, 0.f, local_frame,
-                        xf.translation.x, xf.translation.y, xf.translation.z))
+                if (!ReadSplineVector(anim.blob.data(), p, end, pos_flags, static_cast<uint8_t>(quant & 3), 0.f,
+                        local_frame, xf.translation.x, xf.translation.y, xf.translation.z))
                     return false;
-                const Sub rot = SubType(types, 6);
-                if (rot == Sub::Dynamic) {
-                    if (p + 3 > end)
-                        return false;
-                    const int nitems = anim.blob[p];
-                    p += 2;
-                    const int degree = anim.blob[p++];
-                    const int nknots = nitems + degree + 2;
-                    p += nknots;
-                    const int qtype = (quant >> 2) & 3;
-                    if (qtype == 2)
-                        p = Align(p, 2);
-                    else if (qtype == 0 || qtype == 3)
-                        p = Align(p, 4);
-                    Quat last{0, 0, 0, 1};
-                    for (int i = 0; i <= nitems; ++i)
-                        last = ReadPackedQuat(anim.blob.data(), p, end, qtype);
-                    xf.rotation = last;
-                } else if (rot == Sub::Static) {
-                    const int qtype = (quant >> 2) & 3;
-                    xf.rotation = ReadPackedQuat(anim.blob.data(), p, end, qtype);
-                }
                 p = Align(p, 4);
-                if (!ReadSplineVector(anim.blob.data(), p, end, types, 8, static_cast<uint8_t>(quant >> 4), 1.f,
-                        local_frame, xf.scale.x, xf.scale.y, xf.scale.z))
+                const int qtype = (quant >> 2) & 0xF;
+                if (!ReadSplineRotation(anim.blob.data(), p, end, rot_flags, qtype, local_frame, xf.rotation))
                     return false;
+                p = Align(p, 4);
+                if (!ReadSplineVector(anim.blob.data(), p, end, scale_flags, static_cast<uint8_t>((quant >> 6) & 3),
+                        1.f, local_frame, xf.scale.x, xf.scale.y, xf.scale.z))
+                    return false;
+                p = Align(p, 4);
                 tracks[static_cast<size_t>(t)] = xf;
             }
             return true;
@@ -725,6 +823,11 @@ namespace HkxAnim
         local.resize(nbones);
 
         const float t = std::clamp(t01, 0.f, 1.f);
+#ifdef HKXANIM_DIAG
+        std::fprintf(stderr, "HkxAnim: path=%s type=%d tracks=%d bound=%zu frames=%d blocks=%d maxf=%d dur=%.3f\n",
+            anim.interleaved.empty() ? "spline" : "interleaved", anim.type, anim.ntracks, anim.track_to_bone.size(),
+            anim.nframes, anim.nblocks, anim.max_frames, anim.duration);
+#endif
         if (!anim.interleaved.empty() && anim.ntracks > 0 && anim.nframes > 0) {
             int fr = static_cast<int>(t * static_cast<float>(anim.nframes - 1));
             fr = std::clamp(fr, 0, anim.nframes - 1);
