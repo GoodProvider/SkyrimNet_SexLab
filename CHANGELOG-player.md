@@ -1,6 +1,20 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.2
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
+
+## 0.37.2
+
+### Diary of Mine 8.5.6d
+- Fixed: the DOM handler uses Diary of Mine 8.5.6d's values for arousal and step rolls
+
+### AnimDB
+- Fixed: human casts got creature animations at the last stage and in the Scene Creator
+- A load that finds an interrupted animation database build restarts it
+- A new game no longer rebuilds an animation database that already has animations
+
+### SexLab P+ (untested)
+- Fixed: a save made during the animation database build crashed the game on load
+- Saves that already hold the bad data are not repaired
 
 ## 0.37.1
 

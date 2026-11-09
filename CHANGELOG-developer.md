@@ -1,6 +1,21 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.2
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
+
+## 0.37.2
+
+### Diary of Mine 8.5.6d
+- Fixed: `Handler_DOM` read `FACET_Sensuality` and `MOD_Daring`, which DOM removed. It now uses `PRISM_Sensuality` and `MOD_SocialBoldness`, the values DOM itself uses.
+- `skyrimse.ppj` imports `Leash Framework\Source\Scripts`. Without it `Handler_DOM` failed to compile while Pyro still exited 0, leaving a stale `.pex`.
+
+### AnimDB
+- A load that finds an interrupted walk starts it again (not forced). Before, the resumed walk had no `BeginSync`, so `EndSync` would have deleted the rows pushed before the save.
+- A new game no longer forces a rebuild when AnimDB already has rows; an empty DB still builds.
+- Walk rows are stored 64 to a SQLite transaction, and `BeginWalk` can no longer run twice.
+- Fixed: human casts got creature animations from the last-stage switch or the Scene Creator's tag lookup. `ParseFilter` now lowercases every filter key, because the Papyrus string pool could turn `_creature` into `_Creature`.
+
+### SexLab P+ (untested)
+- Fixed: a save made during a P+ walk kept a long batch string and crashed on load. The walks now send each row as fields through `AnimDb_PushRow`, which replaces `AnimDb_PushAnimBatch`. Saves that already hold such a string are not repaired.
 
 ## 0.37.1
 

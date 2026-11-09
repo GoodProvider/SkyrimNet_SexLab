@@ -234,9 +234,9 @@ Goal: with no mini-game, arousal grows by the same total as in a vanilla DOM sce
 
 - **Progress:** the slave's passive curve (see [Tick](#tick)) feeds `domProgress`, which runs 0→100 over a normal scene. It never changes the slave's enjoyment.
 - **Steps:** every 10 progress points (about 10 pushes per scene), `Effect_DomSync` → `Handler_DOM.DomSync` calls:
-  - `IncreaseArousal(10 × sexlab.dom.arousal_scale, MOD_Daring)`, with a default scale of 0.2;
+  - `IncreaseArousal(10 × sexlab.dom.arousal_scale, MOD_SocialBoldness)`, with a default scale of 0.2;
   - in player scenes, also `IncreaseArousal(10 × sexlab.dom.arousal_scale_player, MOD_Naivety)`, also 0.2 by default.
-- **Prepay:** DOM adds 20 (`MOD_Daring`) itself at scene start, and 20 (`MOD_Naivety`) at its roll in player scenes.
+- **Prepay:** DOM adds 20 (`MOD_SocialBoldness`) itself at scene start, and 20 (`MOD_Naivety`) at its roll in player scenes.
   - The first sync of the scene subtracts those amounts from `arousal_factor` using `Handler_DOM.DomArousalValue`, a copy of `IncreaseArousal`'s formula.
   - Whatever cannot come off without going below 0 becomes a debt (StorageUtil `skyrimnet_sexlab_dom_debt` on the actor). Later steps pay it first.
   - One-time adds are not cancelled: virginity, first act, same-sex, kink.
@@ -245,7 +245,7 @@ Goal: with no mini-game, arousal grows by the same total as in a vanilla DOM sce
 - **Step roll after every rise** (`Handler_DOM.StepRoll(actor, hasPlayer, share)`):
   - It runs only when the actor is not blocked (`no_orgasm` / deny / plugin block), not edging and not cooling down.
   - It is a light roll, not `handleSexOrgasm`:
-    1. `mind.IsArousedAfterSex(MOD_Daring)`.
+    1. `mind.IsArousedAfterSex(MOD_SocialBoldness)`.
     2. If `CouldOrgasm`: `mind.IsOrgasmingAfterArousal(actBase × share)`. `actBase` is the best `MOD_Vaginal` / `MOD_Anal` / `MOD_Oral` among the acts played (1000 with DOM's separate orgasm on).
     3. On success, it does what `handleSexOrgasm` does: `SendExternalEventSS("Orgasm", sex|rape|masturbate)` and `DOM04.NotifyOrgasm`.
   - `share` is 0.1 per passive step, plus `arouse amount / 100` for Arouse. Below 0.5, DOM's chance is linear in `base_chance`, so about 10 rolls at 1/10 add up to roughly one full roll.
