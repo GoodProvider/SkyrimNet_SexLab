@@ -3893,10 +3893,12 @@ Function LastStage_Commit(bool from_deadline)
         LastStage_Stop()
         return
     endif
+    ; Several loaded animations (thread.Animations): the next unplayed one plays on every path, no editor
+    ; (LastStage_PickRegistry). Once all have played, the paths below apply as before.
     ; NPC-only (list_ui false) always random-picks, even when sexlab.tags.nonplayer is on:
     ; nobody is there to operate the Description Editor. The deadline random-picks too: the editor
     ; only opens on a key press, and a commit that leaves the list up would repeat every poll.
-    if !from_deadline && list_ui && LastStage_SelectorOn()
+    if !from_deadline && list_ui && LastStage_SelectorOn() && LastStage_LoadedNext() == ""
         Trace("LastStage_Commit", "line:"+list_index+" deadline:"+from_deadline+" editor")
         LastStage_OpenEditor()
         return
@@ -3924,9 +3926,51 @@ Function LastStage_AddStr(int arr, String tag)
     endif
 EndFunction
 
+; The scene's loaded list (thread.Animations, picked in the Description Editor / Scene Creator): the first entry after
+; the playing one that this scene has not played yet and SexLab can resolve. No wrap. "" with one loaded animation or
+; none left. A pick that was not loaded is appended last (WebUI_AddRegistryToThread), so it never jumps the queue.
+String Function LastStage_LoadedNext()
+    if thread == None || sexlab == None
+        return ""
+    endif
+    sslBaseAnimation[] anims = thread.Animations
+    if !anims || anims.length < 2
+        return ""
+    endif
+    String cur = ""
+    if thread.Animation
+        cur = thread.Animation.Registry
+    endif
+    int start = 0
+    int i = 0
+    while i < anims.length
+        if anims[i] && cur != "" && anims[i].Registry == cur
+            start = i + 1
+        endif
+        i += 1
+    endwhile
+    i = start
+    while i < anims.length
+        if anims[i]
+            String reg = anims[i].Registry
+            if reg != "" && reg != cur && !WasRegistryPlayed(reg) && ResolveAnimation(sexlab, reg) != None
+                Trace("LastStage_LoadedNext", "picked:"+reg+" index:"+i+"/"+anims.length)
+                return reg
+            endif
+        endif
+        i += 1
+    endwhile
+    return ""
+EndFunction
+
 String Function LastStage_PickRegistry()
     if thread == None || sexlab == None || list_index < 1 || list_index > 5
         return ""
+    endif
+    String loaded = LastStage_LoadedNext()
+    if loaded != ""
+        Trace("LastStage_PickRegistry", "line:"+list_index+" loaded next:"+loaded)
+        return loaded
     endif
     ; Line 5 (Ending_MidPoll): the Scene Creator's tags; a scene it did not start has none, so the act lines follow.
     if list_index == 5 && start_tags == ""

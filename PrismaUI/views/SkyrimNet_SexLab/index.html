@@ -10818,6 +10818,8 @@
         const SC_FILTER_LABELS = { none: 'any' };
         const SC_HAS_DESCRIPTION_OPTIONS = ['any', 'described', 'undescribed'];
         const SC_SORT_OPTIONS = ['default', 'freq asc', 'freq desc', 'name asc', 'name desc'];
+        // Opens on start frequency, least started first.
+        const SC_SORT_DEFAULT = 'freq asc';
         // AnimDB tag synonym clusters (synonyms-broad.json / synonyms-strict.json); none = literal tags.
         const SC_SYNONYM_DEFAULT = 'broad';
         const SC_SYNONYM_OPTIONS = ['broad', 'strict', 'none'];
@@ -10859,7 +10861,7 @@
             filterByOnce: '',
             hasDescription: 'any',
             // Animation table "sort:" pulldown (SC_SORT_OPTIONS), shared by the SC and DE tables.
-            animSort: 'default',
+            animSort: SC_SORT_DEFAULT,
             favoritesOnly: false,
             // Animation table name filter (lowercase substring), shared by the SC and DE tables.
             animNameFilter: '',
@@ -10929,7 +10931,7 @@
 
         // Client-side re-sort of the listed rows only; no re-query.
         function scRenderSortPulldown() {
-            if (!SC.animSort) SC.animSort = 'default';
+            if (!SC.animSort) SC.animSort = SC_SORT_DEFAULT;
             const onPick = v => {
                 if (v === SC.animSort) return;
                 SC.animSort = v;
@@ -12339,7 +12341,7 @@
         // Animation table "sort:" pulldown order; 'default' (and opts.ignoreSort) falls through to the
         // described / gender / freq asc / random order below. Returns 0 on a tie.
         function scCompareAnimSort(a, b) {
-            const mode = SC.animSort || 'default';
+            const mode = SC.animSort || SC_SORT_DEFAULT;
             if (mode === 'name asc' || mode === 'name desc') {
                 const c = scAnimSortName(a).localeCompare(scAnimSortName(b), undefined, { sensitivity: 'base' });
                 return mode === 'name asc' ? c : -c;

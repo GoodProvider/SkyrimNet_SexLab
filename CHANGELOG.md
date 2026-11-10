@@ -7,6 +7,11 @@
 - The animation filter list keeps at least eight rows. When the window is too short (common in VR), the Description Editor scrolls instead of squeezing the list down to one row.
 - Verbose logging adds `[UI layout]` lines to `SkyrimNet_SexLab.log`: UI engine, VR, screen size, UI scale and each panel's size. Turn it on when reporting window size problems.
 
+- The animation tables' `sort:` pulldown now opens on `freq asc`: the animations started least often come first. `default` is still in the list.
+
+### Scene
+- Last stage: if you started the scene with several animations (Ctrl+click in the Description Editor), a list line that starts a new animation plays the next one you picked that hasn't played yet, instead of opening the Description Editor or picking at random. This also covers the list's timeout, NPC-only scenes and the victim-scene switch. Once all have played, the list works as before (`LastStage_LoadedNext`).
+
 ### Settings
 - "Stages follow enjoyment" moved to the top of the Enjoyment section.
 
