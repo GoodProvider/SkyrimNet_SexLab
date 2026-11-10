@@ -269,6 +269,49 @@ void Hide()
     }
 }
 
+void LogViewLayout(const char* reason)
+{
+    const char* why = reason ? reason : "";
+    const auto v = g_view.load();
+    if (g_ml) {
+        std::int32_t dw = 0, dh = 0;
+        if (g_ml->GetDisplaySize)
+            g_ml->GetDisplaySize(&dw, &dh);
+        const int vr = g_ml->QueryCapability ? g_ml->QueryCapability("vr") : -1;
+        webui_log::info("[UI layout] {} engine=Magelight host={} vr={} display={}x{} view={}", why,
+                        g_ml->hostVersionNumber, vr, dw, dh, static_cast<std::uint64_t>(v));
+        if (!v)
+            return;
+        ViewDesc desc{};
+        desc.size = sizeof(ViewDesc);
+        if (g_ml->GetViewInfo(v, &desc) == Result::Ok) {
+            webui_log::info("[UI layout] {} view fullscreen={} rect={},{} {}x{} anchor={} uiScale={} layer={} visible={}",
+                            why, desc.fullscreen, desc.x, desc.y, desc.w, desc.h, static_cast<int>(desc.anchor),
+                            desc.uiScale, static_cast<int>(desc.layer), desc.startVisible);
+        } else {
+            webui_log::info("[UI layout] {} GetViewInfo failed: {}", why, g_ml->GetLastErrorMessage(g_mod));
+        }
+        if (vr == 1 && g_ml->hostVersionNumber >= 1800 && g_ml->GetViewVRPlacement) {
+            VRPlacementDesc pl{};
+            pl.size = sizeof(VRPlacementDesc);
+            if (g_ml->GetViewVRPlacement(v, &pl) == Result::Ok) {
+                webui_log::info("[UI layout] {} VR placement mode={} distance={}m width={}m heightOffset={}m", why,
+                                static_cast<int>(pl.mode), pl.distanceMeters, pl.widthMeters, pl.heightOffset);
+            } else {
+                webui_log::info("[UI layout] {} GetViewVRPlacement failed: {}", why, g_ml->GetLastErrorMessage(g_mod));
+            }
+        }
+        return;
+    }
+    if (g_prisma) {
+        webui_log::info("[UI layout] {} engine=PrismaUI view={} valid={} hidden={}", why,
+                        static_cast<std::uint64_t>(v), v ? g_prisma->IsValid(v) : false,
+                        v ? g_prisma->IsHidden(v) : true);
+        return;
+    }
+    webui_log::info("[UI layout] {} engine=none", why);
+}
+
 bool HasFocus()
 {
     if (g_kind == Kind::None) return false;

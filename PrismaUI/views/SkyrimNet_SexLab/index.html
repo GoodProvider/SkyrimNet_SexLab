@@ -268,9 +268,11 @@
             min-height: 0;
         }
 
+        /* Scrolls when too short (small VR view) so the animation filter list keeps its minimum rows. */
         #main-panel-host > #description-editor-panel {
             position: relative;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             display: none;
             flex-direction: column;
             min-height: 0;
@@ -309,6 +311,11 @@
         #description-editor-panel.de-tab-stages .de-desc-section,
         #description-editor-panel.de-tab-filter .de-animfilter-section {
             display: flex;
+        }
+
+        /* Never shrink below its content (the list's minimum rows): the panel scrolls instead. */
+        #description-editor-panel .de-animfilter-section {
+            flex-shrink: 0;
         }
 
         #description-editor-panel #de-stages-host {
@@ -399,9 +406,12 @@
             font-style: italic;
         }
 
+        /* Two header rows (titles + filter inputs) and at least eight rows; the panel scrolls rather than
+           squeezing the list away. */
         #description-editor-panel #de-anims-list {
-            flex: 1 1 auto;
-            min-height: 0;
+            flex: 1 0 auto;
+            min-height: calc(8 * 1.9em + 4.4em);
+            height: 0;
             overflow-y: auto;
             max-height: none;
         }
@@ -2979,6 +2989,7 @@
             const finalScale = clamped * resolutionBaseline();
             document.body.style.zoom = String(finalScale);
             document.documentElement.style.setProperty('--ui-scale', String(finalScale));
+            if (typeof uiLayoutLog === 'function') uiLayoutLog('scale');
         }
 
         function skyrimNetApiBase() {
@@ -3000,12 +3011,92 @@
                 });
         }
 
+        // ── Verbose layout diagnostics (VR reports): viewport, scale and panel sizes → SkyrimNet_SexLab.log
+        // "[UI layout]" lines via onUiLayoutLog. Off unless C++ calls setUiLayoutVerbose(true) on Show (the
+        // Verbose logging setting). Debounced; a line is only written when the numbers change.
+        let _uiLayoutVerbose = false;
+        let _uiLayoutTimer = null;
+        let _uiLayoutLast = '';
+        let _uiLayoutReasons = [];
+
+        function setUiLayoutVerbose(on) {
+            _uiLayoutVerbose = !!on;
+            _uiLayoutLast = '';
+            if (_uiLayoutVerbose) uiLayoutLog('verbose on');
+        }
+
+        function uiLayoutLog(reason) {
+            if (!_uiLayoutVerbose || typeof window.onUiLayoutLog !== 'function') return;
+            if (reason && !_uiLayoutReasons.includes(reason)) _uiLayoutReasons.push(reason);
+            if (_uiLayoutTimer) clearTimeout(_uiLayoutTimer);
+            _uiLayoutTimer = setTimeout(uiLayoutLogNow, 500);
+        }
+
+        function uiLayoutRect(sel) {
+            const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
+            if (!el) return null;
+            const cs = getComputedStyle(el);
+            if (cs.display === 'none') return null;
+            const r = el.getBoundingClientRect();
+            return Math.round(r.width) + 'x' + Math.round(r.height) + '@' + Math.round(r.left) + ',' + Math.round(r.top);
+        }
+
+        function uiLayoutLogNow() {
+            _uiLayoutTimer = null;
+            const reasons = _uiLayoutReasons.join(',');
+            _uiLayoutReasons = [];
+            const parts = [];
+            parts.push('viewport=' + window.innerWidth + 'x' + window.innerHeight +
+                ' dpr=' + (window.devicePixelRatio || 1) +
+                ' zoom=' + (document.body.style.zoom || '1') +
+                ' ui_scale=' + _uiUserScale +
+                ' baseline=' + resolutionBaseline().toFixed(3) +
+                ' engine=' + (window.magelight || window.__MAGELIGHT__ ? 'Magelight' : 'Prisma'));
+            const ids = ['#left-column', '#control-panel', '#yesno-panel', '#main-panel-host'];
+            const host = document.getElementById('main-panel-host');
+            if (host) {
+                for (const p of Array.from(host.children)) {
+                    if (p.id && getComputedStyle(p).display !== 'none') ids.push('#' + p.id);
+                }
+            }
+            const de = document.getElementById('description-editor-panel');
+            const deOpen = de && getComputedStyle(de).display !== 'none';
+            if (deOpen) {
+                ids.push('#de-header-row', '#de-tab-bar', '#description-editor-panel .de-desc-section',
+                    '#description-editor-panel .de-animfilter-section', '.de-selected-tags-split',
+                    '.de-animfilter-top', '#de-loaded-list', '#de-anims-list');
+            }
+            for (const id of ids) {
+                const r = uiLayoutRect(id);
+                if (r) parts.push(id + '=' + r);
+            }
+            if (deOpen) {
+                const list = document.getElementById('de-anims-list');
+                if (list && getComputedStyle(list).display !== 'none') {
+                    const row = list.querySelector('tbody tr');
+                    const rowH = row ? row.getBoundingClientRect().height : 0;
+                    const head = list.querySelector('thead');
+                    const headH = head ? head.getBoundingClientRect().height : 0;
+                    const visible = rowH > 0 ? Math.floor((list.clientHeight - headH) / rowH) : 0;
+                    const total = list.querySelectorAll('tbody tr').length;
+                    parts.push('anim list rowH=' + rowH.toFixed(1) + ' visibleRows=' + visible + ' totalRows=' + total +
+                        ' panelScrolls=' + (de.scrollHeight > de.clientHeight + 1) +
+                        ' panelScroll=' + de.scrollHeight + '/' + de.clientHeight);
+                }
+            }
+            const line = parts.join(' | ');
+            if (line === _uiLayoutLast) return;
+            _uiLayoutLast = line;
+            try { window.onUiLayoutLog('[' + reasons + '] ' + line); } catch (e) {}
+        }
+
         applyUiScale(1);
         loadDashboardUiScale();
         window.addEventListener('resize', function () {
             if (_uiScaleResizeTimer) clearTimeout(_uiScaleResizeTimer);
             _uiScaleResizeTimer = setTimeout(function () {
                 applyUiScale(_uiUserScale);
+                uiLayoutLog('resize');
             }, 75);
         });
 
@@ -3396,6 +3487,7 @@
                         logStopPolling();
                 }
             }
+            uiLayoutLog('panel ' + panelKey);
         }
 
         function concealMainPanel(panelKey) {
@@ -9247,20 +9339,7 @@
             const host = document.getElementById('main-panel-host');
             if (host) host.style.display = 'none';
             document.getElementById('yesno-panel').style.display = 'block';
-            // DEBUG-DELETE
-            setTimeout(() => {
-                if (typeof window.onDebugLog !== 'function') return;
-                const desc = (id) => {
-                    const el = document.getElementById(id);
-                    if (!el) return id + '=missing';
-                    const r = el.getBoundingClientRect();
-                    return id + '=' + getComputedStyle(el).display + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
-                        '@' + Math.round(r.left) + ',' + Math.round(r.top);
-                };
-                window.onDebugLog('yesno solo ' + desc('yesno-panel') + ' ' + desc('left-column') + ' ' +
-                    desc('control-panel') + ' ' + desc('main-panel-host'));
-            }, 150);
-            // DEBUG-DELETE end
+            uiLayoutLog('yesno solo');
         }
 
         // button: 0 Yes, 1 Yes (Random), 2 No (Silent), 3 No, 4 No, explain (reason = text).
@@ -10306,6 +10385,7 @@
                     _scene_setting: this.sceneSetting || '',
                     _synonyms: this.synonyms || SC_SYNONYM_DEFAULT,
                     _in_thread_registries: this.inThreadRegistries,
+                    _add_registries: this.addRegistries || [],
                     _active_registry: this.activeRegistry,
                     _next_registry: this.nextRegistry || this.activeRegistry,
                     _reseed_defaults: this.reseedDefaults ? 1 : 0,
@@ -13268,6 +13348,7 @@
             if (info.reseedDefaults && info.origActiveRegistry != null) info.activeRegistry = info.origActiveRegistry;
             info.origActiveRegistry = null;
             info.reseedDefaults = false;
+            info.addRegistries = [];
             SC.positions = sceneInfoClone(info.positions);
             if (selectedSceneInfo() === info) scRenderPositions();
             deLoadFocusAnimFromScene();
@@ -13791,6 +13872,7 @@
             deApplyBottomTabClass();
             if (DE.bottomTab === 'filter') deOpenFilterTab();
             else deFitStageInputs();
+            uiLayoutLog('de tab ' + DE.bottomTab);
         }
 
         function deFilterTabActive() {
@@ -13934,7 +14016,8 @@
         }
 
         // The animation filter tab's result list. L = already loaded, A = playing. A click adds the animation to
-        // the scene's loaded list (on unpause) and makes it the current pick.
+        // the scene's loaded list (on unpause) and makes it the current pick; Ctrl+click adds several
+        // (deAddAnimToScene). Every pending addition is highlighted.
         function deRenderAnimList() {
             // Static thead (filter row inputs keep focus); only the rows re-render.
             const host = document.getElementById('de-anims-tbody');
@@ -13942,19 +14025,22 @@
             const info = deSceneInfoForPick();
             const inThread = info ? (info.inThreadRegistries || []) : [];
             const current = deCurrentSceneReg(info);
+            const adds = dePendingAdds();
             const anims = DE.filterAnims || [];
             const order = sortAnimListRows(anims, { active: true, inThread: inThread, activeRegistry: info ? info.activeRegistry : '' });
             const rows = order.map(i => {
                 const a = anims[i];
                 const reg = a._registry || '';
                 const mark = info && deRegEq(reg, info.activeRegistry) ? 'A' : (deRegInList(inThread, reg) ? 'L' : '');
-                return `<tr class="${deRegEq(reg, current) ? 'selected' : ''}" onclick="deAddAnimToScene(${i})">` +
+                const sel = deRegEq(reg, current) || deRegInList(adds, reg);
+                return `<tr class="${sel ? 'selected' : ''}" onclick="deAddAnimToScene(${i}, event)">` +
                     `<td class="col-fav" onclick="deToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
                     `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
             }).join('');
             host.innerHTML = rows;
             animTableStickFilterRow('de-anims-tbody');
             deRenderStartBtn();
+            uiLayoutLog('anim list');
         }
 
         // Star click on a filter-tab row: same AnimDB favorite as Scene Creator's scToggleFavorite.
@@ -13973,16 +14059,73 @@
             }
         }
 
-        function deAddAnimToScene(i) {
+        // Registries the pending pick added to the loaded list in the page only (not in the thread yet).
+        function dePendingAdds() {
+            return dePendingActive() ? (DE.pendingSwitch.adds || []) : [];
+        }
+
+        // Take page-only additions back out of the loaded list.
+        function deDropPageAdds(info, regs) {
+            if (!info || !regs || !regs.length) return;
+            info.inThreadRegistries = (info.inThreadRegistries || []).filter(r => !deRegInList(regs, r));
+            info.lastAnims = (info.lastAnims || []).filter(x => !deRegInList(regs, x && x._registry));
+        }
+
+        // Plain click: this animation alone becomes the pick (earlier page-only additions are dropped).
+        // Ctrl+click: add it next to the earlier additions and make it the pick; Ctrl+click on an addition
+        // removes it. On Start every addition joins SexLab's list (_add_registries) and the pick plays.
+        function deAddAnimToScene(i, ev) {
             const info = deSceneInfoForPick();
             const a = (DE.filterAnims || [])[i];
             if (!info || !a || !a._registry) return;
-            if (!deRegInList(info.inThreadRegistries, a._registry)) {
-                info.inThreadRegistries = (info.inThreadRegistries || []).concat([a._registry]);
-                info.lastAnims = (info.lastAnims || []).concat([{ _registry: a._registry, _name: a._name, _tags: a._tags }]);
+            const reg = a._registry;
+            const ctrl = !!(ev && (ev.ctrlKey || ev.metaKey));
+            const prevAdds = dePendingAdds().slice();
+            if (ctrl && deRegInList(prevAdds, reg)) {
+                deRemovePendingAdd(info, reg);
+                return;
             }
-            dePickSceneAnimation(a._registry, a);
-            deDbg('deAddAnimToScene ' + a._registry); // DEBUG-DELETE
+            // Ctrl+click on the playing animation would drop the pending pick and its additions.
+            if (ctrl && prevAdds.length && deRegEq(reg, info.activeRegistry)) return;
+            if (!ctrl) deDropPageAdds(info, prevAdds);
+            const adds = ctrl ? prevAdds : [];
+            if (!deRegInList(info.inThreadRegistries, reg)) {
+                info.inThreadRegistries = (info.inThreadRegistries || []).concat([reg]);
+                info.lastAnims = (info.lastAnims || []).concat([{ _registry: reg, _name: a._name, _tags: a._tags }]);
+                adds.push(reg);
+            }
+            dePickSceneAnimation(reg, a);
+            if (dePendingActive()) {
+                DE.pendingSwitch.adds = adds;
+            } else if (adds.length) {
+                // No pick was made (e.g. picking the playing animation): nothing will carry the additions.
+                deDropPageAdds(info, adds);
+            }
+            deRenderLoadedList();
+            deRenderAnimList();
+        }
+
+        // Ctrl+click on an addition: remove it; if it was the pick, the newest remaining addition is picked.
+        function deRemovePendingAdd(info, reg) {
+            const pend = DE.pendingSwitch;
+            deDropPageAdds(info, [reg]);
+            pend.adds = (pend.adds || []).filter(r => !deRegEq(r, reg));
+            if (deRegEq(pend.reg, reg)) {
+                const last = pend.adds[pend.adds.length - 1];
+                if (last) {
+                    pend.reg = last;
+                    pend.row = (DE.filterAnims || []).find(x => deRegEq(x._registry, last))
+                        || (info.lastAnims || []).find(x => deRegEq(x._registry, last)) || { _registry: last };
+                    info.nextRegistry = last;
+                    deLoadPendingPreview();
+                } else {
+                    DE.pendingSwitch = null;
+                    info.nextRegistry = '';
+                    deLoadFocusAnimFromScene();
+                }
+            }
+            deRenderLoadedList();
+            deRenderAnimList();
         }
 
         // Make reg the editor's current animation for the bound scene. Picking the playing one drops a pending
@@ -14027,10 +14170,13 @@
             const heldStyle = deTakeHeldStyle(info.key);
             // Added actors: the pick rides the SceneInfo commit with the new positions, so ChangeActors runs
             // first and the switch after it (SexLab P+ replays it after the restart).
+            // Ctrl+click additions other than the pick join SexLab's list (Scene.ApplyWebUICommit).
+            const adds = (pend.adds || []).filter(r => !deRegEq(r, pend.reg));
             if (info.pendingActorChange) {
                 if (!info.reseedDefaults) info.origActiveRegistry = info.activeRegistry;
                 info.activeRegistry = pend.reg;
                 info.nextRegistry = pend.reg;
+                info.addRegistries = adds;
                 info.changeBy = changeBy;
                 info.reseedDefaults = true;
                 if (heldStyle) {
@@ -14049,6 +14195,7 @@
                 _change_by: changeBy,
                 _reseed_defaults: 1
             };
+            if (adds.length) commit._add_registries = adds;
             if (heldStyle) {
                 commit._style = heldStyle;
                 commit._narrate_style = 1;

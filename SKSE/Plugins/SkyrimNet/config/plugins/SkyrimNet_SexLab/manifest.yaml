@@ -452,6 +452,13 @@ schema:
       category: "Scene HUD"
       supportsOverride: false
 
+    - name: "Stages follow enjoyment"
+      path: "sexlab.enjoyment.stage_advance_primary_enjoyment"
+      type: "bool"
+      description: "With the orgasm engine on, stages follow one actor's enjoyment instead of their timers, in both directions, and that actor's orgasm goes to the last stage. The actor is whoever is expected to orgasm, a victim only if nobody else is: a male, or a female if the animation is tagged femdom; among several, position 1, 2, ... then 0. Pressing the stage keys returns the scene to timers until it ends. Orgasm targets don't apply to these scenes."
+      defaultValue: true
+      category: "Enjoyment"
+
     - name: "Disable OrgasmEngine, switch back to SexLab"
       path: "sexlab.enjoyment.engine_disabled"
       type: "bool"
@@ -593,13 +600,6 @@ schema:
       min: 0
       max: 30
       defaultValue: 5
-      category: "Enjoyment"
-
-    - name: "Stages follow enjoyment"
-      path: "sexlab.enjoyment.stage_advance_primary_enjoyment"
-      type: "bool"
-      description: "With the orgasm engine on, stages follow one actor's enjoyment instead of their timers, in both directions, and that actor's orgasm goes to the last stage. The actor is whoever is expected to orgasm, a victim only if nobody else is: a male, or a female if the animation is tagged femdom; among several, position 1, 2, ... then 0. Pressing the stage keys returns the scene to timers until it ends. Orgasm targets don't apply to these scenes."
-      defaultValue: true
       category: "Enjoyment"
 
     - name: "Stuck stage: punish after"

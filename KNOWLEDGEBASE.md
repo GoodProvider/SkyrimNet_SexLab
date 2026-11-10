@@ -1828,3 +1828,9 @@ The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feel
 - A parse error fails the whole template for every actor, so an `{% if %}` guard around the bad line does not contain it. Missing variables and functions only warn at render time.
 - Build objects with dotted `set` on a new name: `{% set a.b = value %}`.
 - `render_template(name, object)` and `render_subcomponent(name, mode, object)` exist. Passing a variable as `render_template`'s object works: 12 of 13 decisions in the 2026-11-09 14:35 session rendered 0551 with it (see `checkpoints/2026-08-dom-enjoyment/checkpoint-07.md`).
+
+## WebUI flex lists squeezed to one row in VR (2026-11-09, built, untested in game)
+
+**Symptom:** an external VR user saw the Description Editor's animation filter list shrink until one row showed, with no way to resize it.
+**Cause:** `#de-anims-list` was `flex:1 1 auto; min-height:0` inside a panel with `overflow:hidden`. In a short view (Magelight VR, or a high `ui_scale`) the tag chips, filter block and loaded list take the height first, so the list could shrink to zero. `resolutionBaseline()` never goes below 1, so a small viewport is not scaled down.
+**Rule:** a list the user must scroll needs a real `min-height`, and its panel should scroll (`overflow-y:auto`, parents `flex-shrink:0`) rather than clip. Ask VR reporters to turn on Verbose logging: the `[UI layout]` lines give the viewport, zoom and every panel rect.

@@ -887,6 +887,13 @@ static void WebUI_ShowNow(bool showControlPanel)
     KeyHandler::PromoteSink();
     g_webuiGamePaused = true;
     WebUI_Invoke("setGamePaused(true);");
+    // Verbose: the page reports its panel sizes through onUiLayoutLog (VR layout diagnostics).
+    {
+        const bool verbose = SexLabNet::IsVerbose();
+        WebUI_Invoke(verbose ? "setUiLayoutVerbose(true);" : "setUiLayoutVerbose(false);");
+        if (verbose)
+            UiEngine::LogViewLayout("show");
+    }
     // Start / Cancel hide ControlPanel in JS. Show must restore it — same-actor
     // Target_Menu_Open used to skip showPanel and left a blank left column.
     if (showControlPanel)
@@ -1364,6 +1371,12 @@ void InitWebUI()
             webui_log::info("[JS DEBUG] {}", value ? value : "");
         });
         // DEBUG-DELETE end
+
+        // Verbose only: the page's panel / viewport sizes (uiLayoutLog in index.html), for VR layout reports.
+        UiEngine::RegisterListener("onUiLayoutLog", [](const char* value) {
+            if (SexLabNet::IsVerbose())
+                webui_log::info("[UI layout] {}", value ? value : "");
+        });
 
         UiEngine::RegisterListener("onScenePanelClose", [](const char*) {
             RunGuarded("onScenePanelClose", [&] {

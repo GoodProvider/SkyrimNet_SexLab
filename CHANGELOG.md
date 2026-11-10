@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### WebUI
+- Fixed: Ctrl+clicking several animations in the Description Editor's animation filter only used the last one. A plain click now picks one animation, Ctrl+click adds more (Ctrl+click again removes one), and every one you picked is highlighted. On Start they all join SexLab's animation list and the last one plays. SexLab P+ still plays only the last one.
+- The animation filter list keeps at least eight rows. When the window is too short (common in VR), the Description Editor scrolls instead of squeezing the list down to one row.
+- Verbose logging adds `[UI layout]` lines to `SkyrimNet_SexLab.log`: UI engine, VR, screen size, UI scale and each panel's size. Turn it on when reporting window size problems.
+
+### Settings
+- "Stages follow enjoyment" moved to the top of the Enjoyment section.
+
 ## [0.37.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.2) — since [0.37.1](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.1)
 
 ### Diary of Mine 8.5.6d

@@ -36,6 +36,9 @@ bool IsValid();      // webui view
 bool IsHidden();     // webui view
 void Show();         // webui view; Magelight also requests UI mode (pause)
 void Hide();         // webui view; Magelight releases UI mode first
+/// Verbose diagnostics: logs the engine, VR capability, display size, the webui view's rect / scale and (VR)
+/// its headset placement as "[UI layout]" lines. Callers gate it on the Verbose setting.
+void LogViewLayout(const char* reason);
 bool HasFocus();     // webui view
 bool AnyActiveFocus();  // some view of OUR engine holds focus / UI mode
 /// JS → pause toggle: Prisma re-focuses from scratch; Magelight retargets the live UI mode in place.

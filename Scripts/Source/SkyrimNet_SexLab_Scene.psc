@@ -7631,43 +7631,18 @@ String Function DbgAnimList()
 EndFunction
 ; DEBUG-DELETE end
 
-; Makes reg the playing animation: SetAnimation when the thread already has it, else appends it to a
-; rebuilt list (at SexLab's 128 cap, evicts an unplayed non-active entry first). reseed: reload the new animation's
-; orgasm/speaking defaults, dressing only toward undressed, and narrate the change (CheckAnimationChange).
-; Otherwise only record it (NoteSeededRegistry), for callers that already applied their own choices.
-bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
+; Index of reg in thread.Animations, adding it first when missing (rebuilt list, never thread.AddAnimation).
+; -1 when the registry is unknown or the list is full of played animations. SexLab 1.6x only (not P+).
+int Function WebUI_AddRegistryToThread(String reg)
     if thread == None || reg == "" || !sexlab
-        return false
-    endif
-    if IsSexLabPPlus()
-        ; P+: play the scene with ResetScene; the playing set (thread.Animations) stays the one start scene,
-        ; since P+'s enjoyment-wait hops between its entries.
-        if thread.animation == None || thread.animation.Registry != reg
-            LastStage_ArmSwitch()
-            if !PPlus_SwitchScene(reg)
-                LastStage_SwitchFailed()
-                Trace("WebUI_SwitchToRegistry", "P+ cannot play "+reg+" with these actors", true)
-                return false
-            endif
-        endif
-        LastStage_OnSwitched()
-        NotePlayedRegistry(reg)
-        cancel_dirty = true
-        if reseed
-            CheckAnimationChange()
-        else
-            NoteSeededRegistry(reg)
-        endif
-        Trace("WebUI_SwitchToRegistry", "P+ "+reg+" reseed:"+reseed)
-        WebUI_ConfigureIfOverlayVisible()
-        return true
+        return -1
     endif
     sslBaseAnimation next_anim = ResolveAnimation(sexlab, reg)
     if next_anim == None
-        Trace("WebUI_SwitchToRegistry", "unknown registry:"+reg, true)
-        return false
+        Trace("WebUI_AddRegistryToThread", "unknown registry:"+reg, true)
+        return -1
     endif
-    Trace("WebUI_SwitchToRegistry", "DEBUG before "+reg+" "+DbgAnimList()) ; DEBUG-DELETE
+    Trace("WebUI_AddRegistryToThread", "DEBUG before "+reg+" "+DbgAnimList()) ; DEBUG-DELETE
     sslBaseAnimation[] cur = thread.Animations
     int idx = -1
     int i = 0
@@ -7712,8 +7687,8 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
                 i += 1
             endwhile
             if evict < 0
-                Trace("WebUI_SwitchToRegistry", "cannot evict at cap", true)
-                return false
+                Trace("WebUI_AddRegistryToThread", "cannot evict at cap", true)
+                return -1
             endif
             kept -= 1
         endif
@@ -7743,6 +7718,44 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
             i += 1
         endwhile
     endif
+    if idx < 0
+        Trace("WebUI_AddRegistryToThread", "add failed:"+reg, true)
+    endif
+    return idx
+EndFunction
+
+; Makes reg the playing animation: SetAnimation when the thread already has it, else appends it to a
+; rebuilt list (at SexLab's 128 cap, evicts an unplayed non-active entry first). reseed: reload the new animation's
+; orgasm/speaking defaults, dressing only toward undressed, and narrate the change (CheckAnimationChange).
+; Otherwise only record it (NoteSeededRegistry), for callers that already applied their own choices.
+bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
+    if thread == None || reg == "" || !sexlab
+        return false
+    endif
+    if IsSexLabPPlus()
+        ; P+: play the scene with ResetScene; the playing set (thread.Animations) stays the one start scene,
+        ; since P+'s enjoyment-wait hops between its entries.
+        if thread.animation == None || thread.animation.Registry != reg
+            LastStage_ArmSwitch()
+            if !PPlus_SwitchScene(reg)
+                LastStage_SwitchFailed()
+                Trace("WebUI_SwitchToRegistry", "P+ cannot play "+reg+" with these actors", true)
+                return false
+            endif
+        endif
+        LastStage_OnSwitched()
+        NotePlayedRegistry(reg)
+        cancel_dirty = true
+        if reseed
+            CheckAnimationChange()
+        else
+            NoteSeededRegistry(reg)
+        endif
+        Trace("WebUI_SwitchToRegistry", "P+ "+reg+" reseed:"+reseed)
+        WebUI_ConfigureIfOverlayVisible()
+        return true
+    endif
+    int idx = WebUI_AddRegistryToThread(reg)
     if idx < 0
         Trace("WebUI_SwitchToRegistry", "add failed:"+reg, true)
         return false
@@ -8203,6 +8216,28 @@ Function ApplyWebUICommit(int obj)
     String active_reg = JMap.getStr(obj, "_active_registry", "")
     if active_reg == ""
         active_reg = JMap.getStr(obj, "_next_registry", "")
+    endif
+    ; Description Editor Ctrl+click: extra animations join the thread's list; the pick (active_reg) is added
+    ; by the switch below. P+ plays one start scene, so there is no list to extend.
+    int add_arr = JMap.getObj(obj, "_add_registries")
+    int add_count = 0
+    if add_arr
+        add_count = JArray.count(add_arr)
+    endif
+    if add_count > 0
+        if IsSexLabPPlus()
+            Trace("ApplyWebUICommit", "P+: ignoring "+add_count+" added animations (only the pick plays)")
+        else
+            int ai = 0
+            while ai < add_count
+                String add_reg = JArray.getStr(add_arr, ai, "")
+                if add_reg != "" && add_reg != active_reg
+                    WebUI_AddRegistryToThread(add_reg)
+                endif
+                ai += 1
+            endwhile
+            Trace("ApplyWebUICommit", "added "+add_count+" animations to the thread list")
+        endif
     endif
     if active_reg != "" && (thread.animation == None || thread.animation.Registry != active_reg)
         ; _reseed_defaults (Description Editor switch): the new animation's defaults replace the actors'
