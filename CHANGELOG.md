@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### WebUI
+- Scene Creator takes less room. The Positions title, range, override and Save share one row; the actor table shows four actors before it scrolls, and the Filter column matches its height. The animation table gets the rest.
+- Filter tags are plain text with counts, such as "sexual (76)", in the same white (must have) / red (must not have) / grey (no filter) colours as the animation-row words. Click a tag to cycle it. White and red tags come first, then the rest by count. The separate tags and suppress rows are gone.
+- Filter: the tag words sexual, vaginal, oral, anal, bound, rape and necro now sit on their own line under the filter field, with counts, such as "vaginal (41)". They are always shown, and they are gone from the row above the animation table and from the tag list below. They start as: sexual and vaginal white, oral and anal grey, bound, rape and necro red (bound, rape and necro still follow the cast: heavy bondage, a victim, a corpse). Vaginal stays white only while it matches at least one animation, so a male-only cast starts with it grey.
+- Animation chain: the Scene Creator and the Description Editor's Animation Selection tab (renamed from "animation filter") list the scene's chain of animations at the top of the table. Click a row to add or remove an animation and use ▲ / ▼ to reorder. In the Description Editor, clicking the current animation removes it from the chain, and clicking any other animation makes it current. The Scene Creator opens with one random animation from the least-played matches. All / None are gone.
+- New **last animation** pulldown: what the last stage of the chain's last animation does. **end** stops the scene, **loop** makes the first animation the next one, **NPC choice** (default) asks the NPC as before.
+- Description Editor: the current animation is blue, and clicking a chained animation switches to it. The "SexLab current animations" list is gone (the chain replaces it), and the actor table shows four actors before it scrolls.
 - Fixed: Ctrl+clicking several animations in the Description Editor's animation filter only used the last one. A plain click now picks one animation, Ctrl+click adds more (Ctrl+click again removes one), and every one you picked is highlighted. On Start they all join SexLab's animation list and the last one plays. SexLab P+ still plays only the last one.
 - The animation filter list keeps at least eight rows. When the window is too short (common in VR), the Description Editor scrolls instead of squeezing the list down to one row.
 - Verbose logging adds `[UI layout]` lines to `SkyrimNet_SexLab.log`: UI engine, VR, screen size, UI scale and each panel's size. Turn it on when reporting window size problems.
@@ -10,7 +16,15 @@
 - The animation tables' `sort:` pulldown now opens on `freq asc`: the animations started least often come first. `default` is still in the list.
 
 ### Scene
+- Last stage follows the animation chain: while there is a next animation (or the chain ends under **end**), the NPC is not asked and the next animation is preselected. This replaces "plays the next loaded animation" below; scenes started outside the Scene Creator have a chain only after you edit it in the Description Editor (`LastStage_ChainNext`).
 - Last stage: if you started the scene with several animations (Ctrl+click in the Description Editor), a list line that starts a new animation plays the next one you picked that hasn't played yet, instead of opening the Description Editor or picking at random. This also covers the list's timeout, NPC-only scenes and the victim-scene switch. Once all have played, the list works as before (`LastStage_LoadedNext`).
+- Last stage: when the chain has a next animation (under **loop**, the first one after the last), it is the list's top line, "Next: <animation name>", and it is always selected for you, so the list's timeout plays it. The other lines work as before: Start vaginal / oral / anal sex picks by tag or opens the Description Editor.
+
+### Mini-game
+- Ask, order and punish: the target's strategy decision now waits for the target's spoken reply and follows it, with the target's newest thought counting most (`latest_thought`). Before, the decision ran before the reply, so an NPC could say "I agree" and then pick a different strategy. The reply sends no separate dialogue decision. If no reply comes, it decides after 20 seconds.
+- Ask, order, a punishment that orders a strategy, and a punishment for a refused request: after the reply, the decision model is asked one yes/no question, "does this reply comply with the request?" (new template `decisions/sexlab/minigame_comply`). On "comply" the requested strategy is applied with no confidence floor, and "<name> agrees to …" is narrated. On "refuse" the strategy stays, and "<name> refuses …" is narrated. Before, the model picked again from all strategies and often kept the old one even when the NPC had given in. Plain punishments still use the full strategy decision.
+- The punishment is narrated at once and no longer ends with "<name> chooses to ...".
+- New setting "Maximum serial punishment rejects" (`sexlab.minigame.max_serial_punishment_rejects`, default 3, 0 = never). When an NPC has refused that many punishments minus one in a row, the next punishment skips the decision model, and the NPC gives in as part of its narration: "<punishment>. Nina switches to <strategy>." The strategy is the punished request, else the newest refused order or request, else pleasing the others (alone: her own pleasure), the same as giving in to torture. A comply or a strategy change resets the count. DOM slaves are included.
 
 ### Settings
 - "Stages follow enjoyment" moved to the top of the Enjoyment section.

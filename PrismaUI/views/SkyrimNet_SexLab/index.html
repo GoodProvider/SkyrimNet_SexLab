@@ -330,41 +330,7 @@
             flex-shrink: 0;
         }
 
-        /* Selected tags (left half) | suppress (right half); both grow to show every chip; click a chip to remove it. */
-        .de-selected-tags-split {
-            display: flex;
-            gap: var(--space-sm);
-            align-items: flex-start;
-            flex-shrink: 0;
-        }
-
-        .de-selected-tags-split > .tag-mode-row {
-            flex: 1 1 0;
-            min-width: 0;
-            align-items: flex-start;
-        }
-
-        .de-selected-tags-split .tag-mode-btn {
-            flex-shrink: 0;
-            min-height: 0;
-            align-items: flex-start;
-            /* chip border (1px) + chip padding (1px) so label text lines up with chip text */
-            padding-top: 2px;
-            line-height: 1.6;
-        }
-
-        .de-selected-tags-split .active-tag-list {
-            flex: 1 1 auto;
-            min-width: 0;
-            align-items: flex-start;
-            align-content: flex-start;
-        }
-
-        .de-selected-tags-split .tag-chip {
-            line-height: 1.6;
-        }
-
-        /* Animation filter tab top: filters (left) | SexLab current animations (right). */
+        /* Animation Selection tab top: the tag filter (plain text tags, white / red / grey). */
         .de-animfilter-top {
             display: flex;
             gap: var(--space-sm);
@@ -381,29 +347,9 @@
             padding-top: 0;
         }
 
-        .de-loaded-col {
-            flex: 1 1 0;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* The filter column sets the row height; the loaded list scrolls within it (at least five rows). */
-        .de-loaded-body {
-            position: relative;
-            flex: 1 1 auto;
-            min-height: calc(5 * 1.9em + 2.2em);
-        }
-
-        #de-loaded-list {
-            position: absolute;
-            inset: 0;
-            max-height: none;
+        #de-available-tags {
+            max-height: calc(4 * 1.6em + 2 * var(--space-xs));
             overflow-y: auto;
-        }
-
-        #de-loaded-list tr.de-pending td {
-            font-style: italic;
         }
 
         /* Two header rows (titles + filter inputs) and at least eight rows; the panel scrolls rather than
@@ -797,12 +743,13 @@
             color: var(--text-primary);
         }
 
+        /* Sized by the Positions column (at most 4 actor rows, scPositionsLimitRows); Filter matches it. */
         .sc-split-row {
             display: flex;
             align-items: stretch;
             gap: var(--space-md);
             min-height: 0;
-            flex: 1 1 auto;
+            flex: 0 0 auto;
             overflow: hidden;
         }
 
@@ -844,29 +791,48 @@
             min-width: 0;
         }
 
-        #sc-range-row {
+        /* Positions header row: title, range, override, save. */
+        #sc-override-row,
+        .compact-row.sc-filter-head {
             flex-shrink: 0;
-            margin-top: var(--space-xs);
-            font-size: var(--text-sm);
+            flex-wrap: nowrap;
+            margin: var(--space-xs) 0;
+            padding-bottom: var(--space-xs);
+            border-bottom: 1px solid var(--border);
         }
 
-        /* Inline flow (not flex) so the tag list wraps back under "range <pulldown>". */
-        #sc-range-row.compact-row {
-            display: block;
-            line-height: 1.6;
+        #sc-override-row > .section-header,
+        .sc-filter-head > .section-header {
+            margin: 0;
+            padding: 0;
+            border: none;
         }
 
-        #sc-range-row > span:first-child,
-        #sc-range-pulldown {
-            display: inline-block;
-            vertical-align: top;
-            margin-right: var(--space-sm);
+        #sc-override-label {
+            cursor: pointer;
         }
 
-        .sc-last-anim-tags {
-            display: inline;
-            white-space: normal;
-            overflow-wrap: anywhere;
+        /* Narrow column: the range pulldown sizes to its value; the row wraps rather than hiding Save. */
+        #sc-override-row {
+            flex-wrap: wrap;
+            row-gap: 2px;
+        }
+
+        #sc-override-row .pulldown {
+            min-width: 0;
+        }
+
+        /* Compact controls in the Positions panel so four actor rows fit in less height. */
+        #sc-override-row .pulldown-value,
+        #sc-override-row .action-btn,
+        #sc-positions-table .pulldown-value {
+            min-height: 0;
+            padding: 1px var(--space-sm);
+        }
+
+        .sc-filter-head #sc-tag-filter {
+            flex: 1 1 auto;
+            min-width: 0;
         }
 
         #sc-override-row #sc-btn-save-anim {
@@ -898,9 +864,7 @@
             margin-top: var(--space-sm);
             padding-top: var(--space-sm);
             border-top: 1px solid var(--border);
-            flex: 0 0 50%;
-            height: 50%;
-            max-height: 50%;
+            flex: 1 1 auto;
             min-height: 0;
             overflow: hidden;
             display: flex;
@@ -1507,51 +1471,43 @@
             flex-shrink: 0;
         }
 
-        .sc-selected-tags {
-            flex: 1 1 0;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .sc-selected-tags > .tag-mode-row {
-            flex: 1 1 0;
-            min-height: 0;
-            overflow: hidden;
-            align-items: stretch;
-        }
-
-        .sc-selected-tags > .tag-mode-row > .tag-mode-btn {
-            align-self: flex-start;
-            flex-shrink: 0;
-        }
-
-        .sc-selected-tags .active-tag-list {
-            flex: 1 1 auto;
-            min-width: 0;
-            min-height: 0;
-            overflow-y: auto;
-            align-content: flex-start;
-        }
-
+        /* The tag list fills whatever height the Positions column gives the row; it never sets that height. */
         .sc-available-block {
-            flex: 2 1 0;
+            flex: 1 1 0;
             min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .sc-available-block > .compact-row {
-            flex-shrink: 0;
+            position: relative;
         }
 
         #sc-available-tags {
-            flex: 1 1 auto;
-            min-height: 0;
+            position: absolute;
+            inset: 0;
             max-height: none;
             overflow-y: auto;
+        }
+
+        /* Plain text tags (no boxes): white = must have, red = must not have, grey = no filter. */
+        .tag-text-list {
+            font-family: var(--font-ui);
+            font-size: var(--text-sm);
+            line-height: 1.6;
+            white-space: normal;
+        }
+
+        .tag-text-list .tag-toggle {
+            display: inline;
+            margin-right: var(--space-sm);
+        }
+
+        .tag-text-list .tag-toggle:hover {
+            text-decoration: underline;
+        }
+
+        /* Fixed tag words (sexual ... necro) on their own line under the filter field; always shown. */
+        .fixed-tags {
+            flex-shrink: 0;
+            padding-bottom: var(--space-xs);
+            margin-bottom: var(--space-xs);
+            border-bottom: 1px solid var(--border);
         }
 
         #sc-positions-table,
@@ -1562,7 +1518,7 @@
         }
 
         .sc-positions-scroll {
-            flex: 1 1 auto;
+            flex: 0 1 auto;
             max-height: none;
             overflow-y: auto;
             overflow-x: hidden;
@@ -1605,7 +1561,8 @@
 
         #sc-positions-table .pos-move,
         #tm-positions-table .pos-move,
-        #de-actors-table .pos-move {
+        #de-actors-table .pos-move,
+        .anim-table .pos-move {
             display: inline-flex;
             flex-direction: column;
             gap: 2px;
@@ -1619,13 +1576,15 @@
 
         #sc-positions-table .pos-move span,
         #tm-positions-table .pos-move span,
-        #de-actors-table .pos-move span {
+        #de-actors-table .pos-move span,
+        .anim-table .pos-move span {
             padding: 0 var(--space-xs);
         }
 
         #sc-positions-table .pos-move span:hover,
         #tm-positions-table .pos-move span:hover,
-        #de-actors-table .pos-move span:hover {
+        #de-actors-table .pos-move span:hover,
+        .anim-table .pos-move span:hover {
             background: var(--accent-muted);
         }
 
@@ -1720,6 +1679,20 @@
         .anim-table tbody tr.selected td {
             color: var(--accent);
             background: var(--accent-muted);
+        }
+
+        /* Description Editor: the scene's current animation (playing, or the pending pick). */
+        .anim-table tbody tr.current td {
+            color: #7fb6ff;
+            background: rgba(90, 150, 255, 0.16);
+        }
+
+        /* Chain column: ▲ / ▼ stacked (a row click adds / removes). */
+        .anim-table td.col-chain {
+            width: 1.5em;
+            text-align: center;
+            padding-top: 0;
+            padding-bottom: 0;
         }
 
         .anim-table .col-genders,
@@ -2169,7 +2142,7 @@
             color: var(--accent);
         }
 
-        /* Animation row sexual / bound words: white = must have, red = must not have, grey = no filter. */
+        /* Tag words (Filter section): white = must have, red = must not have, grey = no filter. */
         .tag-toggle {
             color: var(--text-muted);
             cursor: pointer;
@@ -2431,10 +2404,12 @@
         </div>
         <div class="sc-split-row">
             <div class="sc-col-positions">
-                <div class="section-header">Positions</div>
                 <div class="compact-row" id="sc-override-row">
+                    <span class="section-header">Positions</span>
+                    <span>range</span>
+                    <div id="sc-range-pulldown"></div>
+                    <span id="sc-override-label" onclick="scToggleOverride()">override</span>
                     <span id="sc-override-toggle" class="cell-toggle" onclick="scToggleOverride()">—</span>
-                    <span id="sc-override-label" onclick="scToggleOverride()">override animation settings</span>
                     <span id="sc-save-anim-unsaved">unsaved</span>
                     <div class="action-btn" id="sc-btn-save-anim" onclick="scSaveAnimSettings()">Save</div>
                 </div>
@@ -2449,28 +2424,15 @@
                         <th class="col-mods">modifiers</th>
                     </tr></thead><tbody></tbody></table>
                 </div>
-                <div class="compact-row" id="sc-range-row">
-                    <span>range</span>
-                    <div id="sc-range-pulldown"></div>
-                    <span id="sc-last-anim-tags" class="sc-last-anim-tags"></span>
-                </div>
             </div>
             <div class="sc-col-tags">
-                <div class="section-header">Filter</div>
-                <div class="sc-selected-tags">
-                    <div class="tag-mode-row">
-                        <span class="tag-mode-btn active" id="sc-btn-include" onclick="scSetTagMode('include')">tags</span>
-                        <div id="sc-include-tags" class="active-tag-list"></div>
-                    </div>
-                    <div class="tag-mode-row">
-                        <span class="tag-mode-btn" id="sc-btn-exclude" onclick="scSetTagMode('exclude')">suppress</span>
-                        <div id="sc-exclude-tags" class="active-tag-list"></div>
-                    </div>
+                <div class="compact-row sc-filter-head">
+                    <span class="section-header">Filter</span>
+                    <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
                 </div>
+                <div id="sc-fixed-tags" class="fixed-tags tag-text-list"></div>
                 <div class="sc-available-block">
-                    <div class="compact-row">
-                        <input id="sc-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />                    </div>
-                    <div id="sc-available-tags" class="scroll-list"></div>
+                    <div id="sc-available-tags" class="scroll-list tag-text-list"></div>
                 </div>
             </div>
         </div>
@@ -2481,21 +2443,16 @@
                 <div class="option-cancel" id="sc-btn-stop" onclick="scStop()" style="display:none">Stop</div>
                 <div id="sc-initiator-pulldown"></div>
                 <div id="sc-style-pulldown"></div>
-                <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
-                <span class="tag-toggle" data-tag="restrained" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('restrained')">bound</span>
-                <span class="tag-toggle" data-tag="rape" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('rape')">rape</span>
-                <span class="tag-toggle" data-tag="necro" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('necro')">necro</span>
                 <span>sort:</span>
                 <div id="sc-sort-pulldown"></div>
-                <span>description:</span>
+                <span>filter:</span>
                 <div id="sc-filter-has-description"></div>
                 <span>synonyms:</span>
                 <div id="sc-filter-synonyms"></div>
-                <div class="action-btn" id="sc-btn-all" onclick="scClearAnims()">All</div>
-                <div class="action-btn" id="sc-btn-none" onclick="scNoneAnims()">None</div>
+                <span>last animation:</span>
+                <div id="sc-last-stage-pulldown"></div>
                 <div class="action-btn" id="sc-btn-update" onclick="scAnimUpdate()" style="display:none">Update</div>
                 <span id="sc-anim-count"></span>
-                <span id="sc-selected-count"></span>
             </div>
             <div id="sc-anims-list" class="scroll-list">
                 <table class="data-table anim-table"><thead><tr>
@@ -2551,7 +2508,7 @@
         <div class="de-section" id="de-tab-bar">
             <div class="action-btn de-btn-continue-close" onmousedown="event.preventDefault()" onclick="deContinueAndClose()">continue</div>
             <span class="tag-mode-btn de-tab active" id="de-tab-btn-stages" onmousedown="event.preventDefault()" onclick="deSetBottomTab('stages')">stage descriptions</span>
-            <span class="tag-mode-btn de-tab" id="de-tab-btn-filter" onmousedown="event.preventDefault()" onclick="deSetBottomTab('filter')">animation filter</span>
+            <span class="tag-mode-btn de-tab" id="de-tab-btn-filter" onmousedown="event.preventDefault()" onclick="deSetBottomTab('filter')">Animation Selection</span>
             <div id="de-style-pulldown-stages"></div>
         </div>
         <div class="de-section de-desc-section">
@@ -2561,44 +2518,25 @@
         <div class="de-section de-animfilter-section">
             <div class="de-animfilter-top">
             <div class="de-filter-section">
-                <div class="de-selected-tags-split">
-                    <div class="tag-mode-row">
-                        <span class="tag-mode-btn active" id="de-btn-include" onclick="scSetTagMode('include')">tags</span>
-                        <div id="de-include-tags" class="active-tag-list"></div>
-                    </div>
-                    <div class="tag-mode-row">
-                        <span class="tag-mode-btn" id="de-btn-exclude" onclick="scSetTagMode('exclude')">suppress</span>
-                        <div id="de-exclude-tags" class="active-tag-list"></div>
-                    </div>
+                <div class="compact-row">
+                    <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
                 </div>
-                <div class="sc-available-block">
-                    <div class="compact-row">
-                        <input id="de-tag-filter" type="text" placeholder="filter tags" oninput="deSyncTagFilter(this.value); scRenderAvailableTags()" />
-                    </div>
-                    <div id="de-available-tags" class="scroll-list"></div>
-                </div>
-            </div>
-            <div class="de-loaded-col">
-                <div class="section-header">SexLab current animations</div>
-                <div class="de-loaded-body">
-                    <div id="de-loaded-list" class="scroll-list"></div>
-                </div>
+                <div id="de-fixed-tags" class="fixed-tags tag-text-list"></div>
+                <div id="de-available-tags" class="scroll-list tag-text-list"></div>
             </div>
             </div>
             <div class="compact-row">
                 <div class="action-btn disabled" id="de-btn-start" onmousedown="event.preventDefault()" onclick="deStartPick()">Start</div>
                 <div id="de-initiator-pulldown"></div>
                 <div id="de-style-pulldown"></div>
-                <span class="tag-toggle" data-tag="sexual" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('sexual')">sexual</span>
-                <span class="tag-toggle" data-tag="restrained" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('restrained')">bound</span>
-                <span class="tag-toggle" data-tag="rape" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('rape')">rape</span>
-                <span class="tag-toggle" data-tag="necro" onmousedown="event.preventDefault()" onclick="scCycleTagToggle('necro')">necro</span>
                 <span>sort:</span>
                 <div id="de-sort-pulldown"></div>
-                <span>description:</span>
+                <span>filter:</span>
                 <div id="de-filter-has-description"></div>
                 <span>synonyms:</span>
                 <div id="de-filter-synonyms"></div>
+                <span>last animation:</span>
+                <div id="de-last-stage-pulldown"></div>
                 <span id="de-anim-count"></span>
             </div>
             <div id="de-anims-list" class="scroll-list">
@@ -3063,8 +3001,8 @@
             const deOpen = de && getComputedStyle(de).display !== 'none';
             if (deOpen) {
                 ids.push('#de-header-row', '#de-tab-bar', '#description-editor-panel .de-desc-section',
-                    '#description-editor-panel .de-animfilter-section', '.de-selected-tags-split',
-                    '.de-animfilter-top', '#de-loaded-list', '#de-anims-list');
+                    '#description-editor-panel .de-animfilter-section',
+                    '.de-animfilter-top', '#de-available-tags', '#de-anims-list');
             }
             for (const id of ids) {
                 const r = uiLayoutRect(id);
@@ -10275,6 +10213,9 @@
                 this.groupOrder = [];
                 this.event_hook = '';
                 this.selectedRegistries = [];
+                // Live scene chain (Scene._chain_registries) and its last-stage mode (loop / end / npc).
+                this.chainRegistries = [];
+                this.lastStage = 'npc';
                 this.pendingStop = false;
                 this.stopStyle = 'stop';
                 this.stopNarration = '';
@@ -10343,6 +10284,8 @@
                 if (state._next_registry != null) this.nextRegistry = state._next_registry || '';
                 if (state._played_registries)
                     this.playedRegistries = Array.isArray(state._played_registries) ? state._played_registries.slice() : [];
+                if (Array.isArray(state._chain_registries)) this.chainRegistries = state._chain_registries.filter(Boolean);
+                if (state._last_stage != null) this.lastStage = state._last_stage || 'npc';
                 if (state._stage != null) this.stage = state._stage || 1;
                 if (state._stage_count != null) this.stageCount = state._stage_count || 0;
                 if (Array.isArray(state._stages)) this.stages = sceneInfoClone(state._stages);
@@ -10394,6 +10337,8 @@
                     _stage: this.stage,
                     _stages: this.stages,
                     _selected_registries: this.selectedRegistries,
+                    _chain_registries: this.chainRegistries || [],
+                    _last_stage: this.lastStage || 'npc',
                     _event_hook: this.event_hook,
                     _pending_stop: this.pendingStop ? 1 : 0,
                     _stop_style: this.stopStyle,
@@ -10489,7 +10434,6 @@
         function resetAnimFilters() {
             SC.tags = [];
             SC.suppress = [];
-            SC.tagMode = 'include';
             SC.filterBy = SC_FILTER_DEFAULT;
             SC.filterStart = SC_FILTER_DEFAULT;
             SC.filterChain = [];
@@ -10506,6 +10450,8 @@
             SC.boundTouched = false;
             SC.boundAuto = false;
             SC.sexualTouched = false;
+            SC.vaginalTouched = false;
+            SC.vaginalAuto = false;
             SC.rapeTouched = false;
             SC.rapeAuto = false;
             SC.necroTouched = false;
@@ -10724,6 +10670,7 @@
             info.mode = SC.mode;
             if (typeof scSelectedRegistries === 'function')
                 info.selectedRegistries = scSelectedRegistries();
+            if (SC.mode !== 'active') info.lastStage = lastStageValue(SC.lastStage);
             if (extra) Object.assign(info, extra);
             info.dirty = true;
             return info;
@@ -10836,11 +10783,15 @@
             positions: [],
             tags: [],
             suppress: [],
+            // The chain: ordered registries to play (Scene Creator). chainSeeded: the opening random pick ran.
             selectedRegistries: [],
+            chainSeeded: false,
+            // "last animation:" at the last stage of the chain's last animation: loop / end / npc (LAST_STAGE_OPTIONS).
+            lastStage: 'npc',
             lastAnimRegistries: [],
             lastAnims: [],
             lastTags: [],
-            tagMode: 'include',            groupTags: {},
+            groupTags: {},
             groupOrder: [],
             presets: [],
             animQueryId: 0,
@@ -11000,7 +10951,7 @@
         // Star click: persist to AnimDB; when the favorites filter is on, re-query so an unstarred row drops out.
         function scToggleFavorite(idx, ev) {
             if (ev) ev.stopPropagation();
-            const a = (SC.lastAnims || [])[idx];
+            const a = chainShownRows.sc[idx];
             if (!a || !a._registry) return;
             a._favorite = !a._favorite;
             if (typeof window.onAnimFavoriteSet === 'function')
@@ -11061,6 +11012,8 @@
             if (state._stage != null && typeof deOnThreadStage === 'function') deOnThreadStage(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
             SC.selectedRegistries = [];
+            SC.chainSeeded = false;
+            SC.lastStage = LAST_STAGE_DEFAULT;
             SC.lastAnimRegistries = [];
             if (SC.mode === 'active' && SC.inThreadRegistries.length)
                 SC.selectedRegistries = [];
@@ -11090,6 +11043,7 @@
             scRenderHasDescriptionPulldown();
             scRenderSortPulldown();
             scRenderSynonymsPulldown();
+            scRenderLastStagePulldown();
             scRenderFavoritesToggle();
             scSyncNameFilterInputs();
             scApplyModeChrome();
@@ -11322,7 +11276,9 @@
         }
 
         function scOnActorCountChanged() {
+            // Animations are per actor count: the chain no longer fits, so the next result seeds a new one.
             SC.selectedRegistries = [];
+            SC.chainSeeded = false;
             scPersistPositionsToSceneInfo();
             if (SC.mode === 'creator') scRequestDeviousTags();
             scRefreshTags();
@@ -11462,6 +11418,31 @@
             return true;
         }
 
+        // The vaginal word starts white under the same rules as sexual (vaginalAuto). scCheckVaginalCount then keeps
+        // it white only while it matches at least one animation (e.g. a male-only cast drops it to grey).
+        function scApplyVaginalDefault() {
+            if (SC.vaginalTouched || SC.vaginalAuto || window._snslListPreset || SC.mode === 'active') return false;
+            if (String(SC.sceneSetting || '').indexOf('nonsexual') === 0) return false;
+            if (SC.tags.includes('vaginal') || SC.suppress.includes('vaginal')) return false;
+            SC.tags.push('vaginal');
+            SC.vaginalAuto = true;
+            return true;
+        }
+
+        // After a tag query: an auto vaginal word is white when its count is > 0, grey at 0. The count is how many
+        // matching rows carry vaginal either way, so the word cannot flip back and forth. True when it moved.
+        function scCheckVaginalCount() {
+            if (!SC.vaginalAuto || SC.vaginalTouched || SC.suppress.includes('vaginal')) return false;
+            if (window._snslListPreset || SC.mode === 'active') return false;
+            const row = (SC.lastTags || []).find(t => String(t._tag || '').toLowerCase() === 'vaginal');
+            const matches = !!row && (row._count | 0) > 0;
+            const white = SC.tags.includes('vaginal');
+            if (white === matches) return false;
+            if (matches) SC.tags.push('vaginal');
+            else SC.tags = SC.tags.filter(t => t !== 'vaginal');
+            return true;
+        }
+
         // Bound is enabled: the bound word is white, the cast wears heavy bondage, or the player clicked the word off
         // red. A red bound word never counts.
         function scBoundEnabled() {
@@ -11536,16 +11517,18 @@
         function scApplyTagDefaults() {
             const bound = scApplyBoundDefault();
             const sexual = scApplySexualDefault();
+            const vaginal = scApplyVaginalDefault();
             const rape = scApplyRapeDefault();
             const necro = scApplyNecroDefault();
             const femdom = scApplyFemdomDefault();
-            return bound || sexual || rape || necro || femdom;
+            return bound || sexual || vaginal || rape || necro || femdom;
         }
 
         // A click on a word or chip: that tag is the player's from now on.
         function scNoteTagTouched(tag) {
             if (tag === 'restrained') SC.boundTouched = true;
             else if (tag === 'sexual') SC.sexualTouched = true;
+            else if (tag === 'vaginal') SC.vaginalTouched = true;
             else if (tag === 'rape') SC.rapeTouched = true;
             else if (tag === 'necro') SC.necroTouched = true;
             else if (String(tag).toLowerCase() === 'femdom' && SC.femdomAuto) {
@@ -11730,9 +11713,9 @@
         function scSaveAnimTargets() {
             if (SC.mode === 'active' || SC.positionOverride === false) return [];
             const n = (SC.positions || []).length;
-            return scSelectedRegistries()
-                .map(reg => (SC.lastAnims || []).find(x => x._registry === reg))
-                .filter(a => a && deAnimActorCount(a) === n);
+            // The actor table follows the chain's first animation, so Save writes that one only.
+            const a = scLastSelectedAnim();
+            return a && deAnimActorCount(a) === n ? [a] : [];
         }
 
         // True when the actor table's dressed / O / modifiers columns equal the animation's settings.
@@ -11956,6 +11939,16 @@
                 tr.appendChild(emptyTd('col-mods'));
                 tbody.appendChild(tr);
             });
+            scPositionsLimitRows(tbody);
+        }
+
+        // At most SC_POSITIONS_MAX_ROWS actor rows (cast + nearby) before the table scrolls; the Filter column and
+        // the whole top row follow this height. Measured again next frame: rows have no height until laid out.
+        const SC_POSITIONS_MAX_ROWS = 4;
+        function scPositionsLimitRows(tbody) {
+            const scroll = document.querySelector('#scene-creator-panel .sc-positions-scroll');
+            limitTableRows(tbody, scroll, SC_POSITIONS_MAX_ROWS);
+            setTimeout(() => limitTableRows(tbody, scroll, SC_POSITIONS_MAX_ROWS), 16);
         }
 
         function scTogglePos(i, key) {
@@ -11988,16 +11981,6 @@
             scRenderPositions();
         }
 
-        function scSetTagMode(mode) {
-            SC.tagMode = mode;
-            for (const p of ['sc', 'de']) {
-                const inc = document.getElementById(p + '-btn-include');
-                const exc = document.getElementById(p + '-btn-exclude');
-                if (inc) inc.classList.toggle('active', mode === 'include');
-                if (exc) exc.classList.toggle('active', mode === 'exclude');
-            }
-        }
-
         function deSyncTagFilter(value) {
             const scEl = document.getElementById('sc-tag-filter');
             const deEl = document.getElementById('de-tag-filter');
@@ -12010,34 +11993,11 @@
             return tag === 'restrained' ? 'bound' : tag;
         }
 
+        // Every tag change renders the white / red / grey words: the header toggles and the Filter tag list.
         function scRenderTagChips() {
-            // Every tag change renders: re-assert the defaults after a wholesale SC.tags / SC.suppress set (setting, preset).
+            // Re-assert the defaults after a wholesale SC.tags / SC.suppress set (setting, preset).
             scApplyTagDefaults();
-            const incHtml = SC.tags.map(t =>
-                `<span class="tag-chip" onclick="scRemoveTag('include','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(scTagLabel(t))}</span>`).join('');
-            const excHtml = SC.suppress.map(t =>
-                `<span class="tag-chip" onclick="scRemoveTag('exclude','${String(t).replace(/'/g, "\\'")}')">${escapeHtml(scTagLabel(t))}</span>`).join('');
-            for (const p of ['sc', 'de']) {
-                const incEl = document.getElementById(p + '-include-tags');
-                const excEl = document.getElementById(p + '-exclude-tags');
-                if (incEl) incEl.innerHTML = incHtml;
-                if (excEl) excEl.innerHTML = excHtml;
-            }
-            scRenderTagToggles();
-        }
-
-        // Animation row sexual / bound words: a view over SC.tags / SC.suppress, so chips and words stay in sync.
-        function scRenderTagToggles() {
-            for (const el of document.querySelectorAll('.tag-toggle')) {
-                const tag = el.dataset.tag;
-                const include = SC.tags.includes(tag);
-                el.classList.toggle('include', include);
-                el.classList.toggle('suppress', !include && SC.suppress.includes(tag));
-                // DEBUG-DELETE: last-stage preset, why "sexual" may not show red.
-                if (window._snslListPreset && tag === 'sexual' && typeof window.onDebugLog === 'function')
-                    window.onDebugLog('tagToggle tags=[' + SC.tags.join(',') + '] suppress=[' + SC.suppress.join(',') + ']' +
-                        ' class=' + el.className + ' color=' + getComputedStyle(el).color + ' visible=' + !!el.offsetParent);
-            }
+            scRenderAvailableTags();
         }
 
         // Click: white (must have) -> red (must not have) -> grey (no filter) -> white.
@@ -12057,31 +12017,6 @@
                 SC.tags.push(tag);
                 SC.ddDismissed.delete(tag);
             }
-            scRenderTagChips();
-            scRefreshTags();
-            scRefreshAnims();
-        }
-
-        function scRemoveTag(list, tag) {
-            scNoteTagTouched(tag);
-            if (list === 'include') {
-                SC.tags = SC.tags.filter(t => t !== tag);
-                if (SC.ddAuto.includes(tag)) {
-                    SC.ddAuto = SC.ddAuto.filter(t => t !== tag);
-                    SC.ddDismissed.add(tag);
-                }
-            } else SC.suppress = SC.suppress.filter(t => t !== tag);
-            scRenderTagChips();
-            scRefreshTags();
-            scRefreshAnims();
-        }
-
-        function scAddTag(tag, list) {
-            scNoteTagTouched(tag);
-            const arr = list === 'include' ? SC.tags : SC.suppress;
-            const blocked = list !== 'include' && tag === 'rape' && scBoundEnabled();
-            if (!blocked && !arr.includes(tag)) arr.push(tag);
-            if (list === 'include') SC.ddDismissed.delete(tag);
             scRenderTagChips();
             scRefreshTags();
             scRefreshAnims();
@@ -12159,32 +12094,67 @@
             window.onAnimDbQuery(JSON.stringify({ _request_id: String(id), _type: 'tags', _filter: scBuildFilter(), _n: 0 }));
         }
 
+        // Fixed tag words, always shown on their own line under the filter field (restrained shows as "bound").
+        const SC_FIXED_TAGS = ['sexual', 'vaginal', 'oral', 'anal', 'restrained', 'rape', 'necro'];
+        const SC_FIXED_SET = new Set(SC_FIXED_TAGS);
+        const scIsFixedTag = t => SC_FIXED_SET.has(String(t).toLowerCase());
+
+        // Filter tag list (SC and DE): plain "tag (count)" words, no boxes. The fixed words come first on their own
+        // line; the list below never repeats them. In the list, white (must have) and red (must not have) come
+        // first, A-Z; then the grey (no filter) tags by animation count. A click cycles white -> red -> grey ->
+        // white (scCycleTagToggle). The "filter tags" prefix narrows only the grey part.
+        let scTagListShown = [];
         function scRenderAvailableTags() {
-            // restrained is left out: the bound word already includes and suppresses it.
-            let tags = (SC.lastTags || []).filter(t => t._tag !== 'restrained');
+            const counts = new Map();
+            for (const t of (SC.lastTags || [])) {
+                const k = String(t._tag || '').toLowerCase();
+                counts.set(k, (counts.get(k) || 0) + (t._count | 0));
+            }
+            const countOf = t => counts.get(String(t).toLowerCase()) || 0;
+            const wordCls = t => SC.tags.includes(t) ? ' include' : (SC.suppress.includes(t) ? ' suppress' : '');
+            const fixedHtml = SC_FIXED_TAGS.map(t =>
+                `<span class="tag-toggle${wordCls(t)}" data-tag="${t}" onmousedown="event.preventDefault()"` +
+                ` onclick="scCycleTagToggle('${t}')">${escapeHtml(scTagLabel(t))} (${countOf(t)})</span>`).join(' ');
+            for (const id of ['sc-fixed-tags', 'de-fixed-tags']) {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = fixedHtml;
+            }
+            const byName = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+            const chosen = Array.from(new Set((SC.tags || []).concat(SC.suppress || [])))
+                .filter(t => t && !scIsFixedTag(t)).sort(byName);
+            const chosenSet = new Set(chosen);
             const scQ = document.getElementById('sc-tag-filter');
             const deQ = document.getElementById('de-tag-filter');
             const q = ((scQ && scQ.value) || (deQ && deQ.value) || '').toLowerCase();
-            if (q) {
-                tags = tags.filter(t => (t._tag || '').toLowerCase().startsWith(q));
-            } else {
-                tags = tags.slice(0, 30);
-            }
-            const html = tags.map(t =>
-                `<span class="tag-member" onclick="scAddTag('${String(t._tag).replace(/'/g, "\\'")}', SC.tagMode)">${escapeHtml(t._tag)} (${t._count})</span>`
-            ).join(' ');
+            const grey = (SC.lastTags || [])
+                .map(t => String(t._tag || ''))
+                .filter(t => t && !scIsFixedTag(t) && !chosenSet.has(t))
+                .filter(t => !q || t.toLowerCase().startsWith(q))
+                .sort((a, b) => (countOf(b) - countOf(a)) || byName(a, b));
+            scTagListShown = chosen.concat(grey);
+            const html = scTagListShown.map((t, i) => {
+                return `<span class="tag-toggle${wordCls(t)}" data-tag="${escapeHtml(t)}" onmousedown="event.preventDefault()"` +
+                    ` onclick="scCycleTagAt(${i})">${escapeHtml(scTagLabel(t))} (${countOf(t)})</span>`;
+            }).join(' ');
             for (const id of ['sc-available-tags', 'de-available-tags']) {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = html;
             }
         }
 
+        function scCycleTagAt(i) {
+            const tag = scTagListShown[i];
+            if (tag) scCycleTagToggle(tag);
+        }
+
+        // Scene Creator chain (SC.selectedRegistries), in play order. Kept across filter changes: chained rows
+        // render from chainRowCache when the current query no longer returns them.
         function scSelectedRegistries() {
-            return (SC.selectedRegistries || []).filter(r => SC.lastAnimRegistries.includes(r));
+            return (SC.selectedRegistries || []).filter(Boolean);
         }
 
         function scIsAnimSelected(reg) {
-            return (SC.selectedRegistries || []).includes(reg);
+            return (SC.selectedRegistries || []).some(r => deRegEq(r, reg));
         }
 
         function escapeHtml(s) {
@@ -12407,51 +12377,157 @@
             return '';
         }
 
+        // ── Animation chain (Scene Creator + Description Editor) ─────────────
+        // The chain is the ordered list of animations a scene plays: at each animation's last stage the scene moves
+        // to the next one without asking the NPC: the end list shows it as a preselected top line "Next: <name>"
+        // (Scene.LastStage_ChainNext). "last animation" picks what the last stage of the chain's last animation does:
+        // loop (the first animation is the next), end the scene, or NPC choice (the decision call, as before).
+        const LAST_STAGE_OPTIONS = ['loop', 'end', 'npc'];
+        const LAST_STAGE_LABELS = { npc: 'NPC choice' };
+        const LAST_STAGE_DEFAULT = 'npc';
+        // Full AnimDB rows seen this session, so chained rows still render when the filter drops them.
+        const chainRowCache = new Map();
+        // Rows as last rendered per table ('sc' / 'de'): onclick handlers pass the row index.
+        const chainShownRows = { sc: [], de: [] };
+
+        function chainCacheRows(rows) {
+            for (const a of rows || []) {
+                if (a && a._registry) chainRowCache.set(String(a._registry).toLowerCase(), a);
+            }
+        }
+
+        function chainRowFor(reg, rows) {
+            return (rows || []).find(x => deRegEq(x && x._registry, reg))
+                || chainRowCache.get(String(reg || '').toLowerCase())
+                || { _registry: reg, _name: reg };
+        }
+
+        // Chain rows first (chain order), then the other rows in the table's sort order.
+        function chainOrderedRows(anims, chain, sortOpts, extraRows) {
+            const pool = (anims || []).concat(extraRows || []);
+            const head = (chain || []).map((reg, ci) => ({ a: chainRowFor(reg, pool), chainIdx: ci }));
+            const rest = sortAnimListRows(anims || [], sortOpts || {})
+                .map(i => anims[i])
+                .filter(a => a && !(chain || []).some(r => deRegEq(r, a._registry)))
+                .map(a => ({ a: a, chainIdx: -1 }));
+            return head.concat(rest);
+        }
+
+        // Second column: up (chained, not first) / down (chained, not last), stacked. Adding and removing is a row
+        // click (scClickAnim / deClickAnimRow).
+        function chainCellHtml(prefix, i, ci, n) {
+            const span = (op, text, title) =>
+                `<span title="${title || ''}" onmousedown="event.preventDefault()"` +
+                ` onclick="event.stopPropagation(); chainOp('${prefix}', ${i}, '${op}')">${text}</span>`;
+            let h = '<td class="col-an col-chain"><div class="pos-move">';
+            if (ci > 0) h += span('up', '&#9650;', 'move up the chain');
+            if (ci >= 0 && ci < n - 1) h += span('down', '&#9660;', 'move down the chain');
+            return h + '</div></td>';
+        }
+
+        function chainApply(list, reg, op) {
+            const out = (list || []).slice();
+            const k = out.findIndex(r => deRegEq(r, reg));
+            if (op === 'add') {
+                if (k < 0) out.push(reg);
+                return out;
+            }
+            if (k < 0) return out;
+            if (op === 'remove') out.splice(k, 1);
+            else if (op === 'up' && k > 0) [out[k - 1], out[k]] = [out[k], out[k - 1]];
+            else if (op === 'down' && k < out.length - 1) [out[k + 1], out[k]] = [out[k], out[k + 1]];
+            return out;
+        }
+
+        function chainOp(prefix, i, op) {
+            const a = (chainShownRows[prefix] || [])[i];
+            if (!a || !a._registry) return;
+            if (prefix === 'de') deChainOp(a, op);
+            else scChainOp(a, op);
+        }
+
+        function lastStageValue(v) {
+            return LAST_STAGE_OPTIONS.includes(v) ? v : LAST_STAGE_DEFAULT;
+        }
+
+        // "last animation:" pulldowns. Scene Creator: SC.lastStage (sent with Start). Description Editor: the bound
+        // scene's lastStage, sent right away (deCommitChain).
+        function scRenderLastStagePulldown() {
+            SC.lastStage = lastStageValue(SC.lastStage);
+            const label = (el, v) => { el.textContent = LAST_STAGE_LABELS[v] || v; };
+            const scHost = document.getElementById('sc-last-stage-pulldown');
+            if (scHost) {
+                scHost.innerHTML = '';
+                scHost.appendChild(createPulldown(LAST_STAGE_OPTIONS, SC.lastStage, v => {
+                    SC.lastStage = lastStageValue(v);
+                }, null, label));
+            }
+            const deHost = document.getElementById('de-last-stage-pulldown');
+            const info = typeof deSceneInfoForPick === 'function' ? deSceneInfoForPick() : null;
+            if (deHost) {
+                deHost.innerHTML = '';
+                if (info) {
+                    info.lastStage = lastStageValue(info.lastStage);
+                    deHost.appendChild(createPulldown(LAST_STAGE_OPTIONS, info.lastStage, v => {
+                        info.lastStage = lastStageValue(v);
+                        deCommitChain(info);
+                    }, null, label));
+                }
+            }
+        }
+
+        // Scene Creator chain edit. A new first animation re-seats the actors and copies its defaults, as a
+        // selection did before.
+        function scChainOp(a, op) {
+            const reg = a && a._registry;
+            if (!reg) return;
+            const before = (SC.selectedRegistries || [])[0] || '';
+            if (op === 'add') chainCacheRows([a]);
+            SC.selectedRegistries = chainApply(SC.selectedRegistries, reg, op);
+            const first = SC.selectedRegistries[0] || '';
+            if (first && !deRegEq(first, before)) {
+                const fa = chainRowFor(first, SC.lastAnims);
+                const reordered = scReorderPositionsForAnim(fa);
+                scApplyAnimToPositions(fa);
+                scPersistPositionsToSceneInfo();
+                scRenderPositions();
+                scRenderAnimList();
+                // Position-match queries depend on actor order, so requery after a swap.
+                if (reordered && SC.filterBy === 'positions') scRefreshAnims();
+                return;
+            }
+            scRenderAnimList();
+        }
+
         function scRenderAnimList() {
             const anims = SC.lastAnims || [];
-            const selectedCount = SC.mode === 'active'
-                ? SC.inThreadRegistries.length
-                : scSelectedRegistries().length;
-            document.getElementById('sc-selected-count').textContent =
-                SC.mode === 'active' ? `in-thread ${selectedCount}` : `selected ${selectedCount}`;
-            document.getElementById('sc-btn-start').classList.toggle('disabled',
-                SC.mode !== 'active' && selectedCount === 0);
+            const creator = SC.mode !== 'active';
+            const chain = scSelectedRegistries();
+            document.getElementById('sc-btn-start').classList.toggle('disabled', creator && chain.length === 0);
             const inThread = new Set(SC.inThreadRegistries || []);
-            const indices = sortAnimListRows(anims, {
-                active: SC.mode === 'active',
-                inThread: SC.inThreadRegistries,
-                activeRegistry: SC.activeRegistry
-            });
-            const rows = indices.map((i) => {
-                const a = anims[i];
+            const rows = creator
+                ? chainOrderedRows(anims, chain, {})
+                : sortAnimListRows(anims, {
+                    active: true,
+                    inThread: SC.inThreadRegistries,
+                    activeRegistry: SC.activeRegistry
+                }).map(i => ({ a: anims[i], chainIdx: -1 }));
+            chainShownRows.sc = rows.map(r => r.a);
+            const html = rows.map((r, i) => {
+                const a = r.a;
                 const reg = a._registry || '';
-                const sel = SC.mode === 'active' ? inThread.has(reg) : scIsAnimSelected(reg);
-                const an = scAnimAnLetter(reg);
-                const genders = (a._pos_genders || []).map((g, gi) => {
-                    // No orgasm expected: gender is not matched for that position ('-').
-                    if ((a._pos_no_orgasm || [])[gi]) return '-';
-                    return scGenderLabel(g);
-                }).join(' ');
-                const mods = formatMods(a);
-                const name = a._name || '(unnamed)';
-                const stages = (a._stage_count != null) ? a._stage_count : '';
-                const desc = previewDescription(a);
+                const sel = creator ? r.chainIdx >= 0 : inThread.has(reg);
+                const second = creator
+                    ? chainCellHtml('sc', i, r.chainIdx, chain.length)
+                    : `<td class="col-an">${escapeHtml(scAnimAnLetter(reg))}</td>`;
                 return `<tr class="${sel ? 'selected' : ''}" onclick="scClickAnim(${i}, event)">` +
                     `<td class="col-fav" onclick="scToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
-                    `<td class="col-an">${escapeHtml(an)}</td>` +
-                    `<td class="col-genders">${escapeHtml(genders)}</td>` +
-                    `<td class="col-mods">${escapeHtml(mods)}</td>` +
-                    `<td class="col-name">${escapeHtml(name)}</td>` +
-                    `<td class="col-stages">${escapeHtml(stages)}</td>` +
-                    `<td class="col-freq">${a._play_count | 0}</td>` +
-                    `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>` +
-                    `</tr>`;
+                    second + deAnimRowCells(a) + `</tr>`;
             }).join('');
             // Static thead (filter row inputs keep focus); only the rows re-render.
-            document.getElementById('sc-anims-tbody').innerHTML = rows;
+            document.getElementById('sc-anims-tbody').innerHTML = html;
             animTableStickFilterRow('sc-anims-tbody');
             scUpdateSaveAnimButton();
-            scRenderLastAnimTags();
         }
 
         function scRefreshAnims() {
@@ -12513,12 +12589,15 @@
                     countEl.textContent = `animations ${anims.length}/${payload._total_enabled || '?'}`
                         + (cast ? ` (${cast})` : '');
                 }
+                chainCacheRows(anims);
                 if (SC.mode !== 'active') {
-                    SC.selectedRegistries = (SC.selectedRegistries || [])
-                        .filter(r => SC.lastAnimRegistries.includes(r));
-                    if (!SC.selectedRegistries.length && anims.length) {
-                        const top = sortAnimListRows(anims, { ignoreSort: true })[0];
-                        scAddAnimToSelection(top);
+                    // Opening seed: one random animation among the matches tied for the fewest plays. Once only,
+                    // so emptying the chain by hand leaves it empty.
+                    if (!SC.chainSeeded && !scSelectedRegistries().length && anims.length) {
+                        SC.chainSeeded = true;
+                        const min = anims.reduce((m, x) => Math.min(m, x._play_count | 0), Infinity);
+                        const pool = anims.filter(x => (x._play_count | 0) === min);
+                        scChainOp(pool[Math.floor(Math.random() * pool.length)], 'add');
                         return;
                     }
                     scSyncPositionsToLastAnim();
@@ -12528,13 +12607,19 @@
             }
             let tags = payload._tags || [];
             SC.lastTags = tags;
+            // An auto vaginal word follows its count: re-query when it moved (the count is the same either way).
+            if (String(rid) === String(SC.tagQueryId) && scCheckVaginalCount()) {
+                scRenderTagChips();
+                scRefreshTags();
+                scRefreshAnims();
+                return;
+            }
             scRenderAvailableTags();
         }
 
-        // Plain click on an unselected row selects only it; Ctrl+click adds it. Clicking a
-        // selected row (with or without Ctrl) removes it from the selection.
+        // Scene Creator row click: an unchained row joins the end of the chain; a chained row leaves it.
         function scClickAnim(idx, ev) {
-            const a = SC.lastAnims[idx];
+            const a = chainShownRows.sc[idx];
             const reg = a && a._registry;
             if (!reg) return;
             if (SC.mode === 'active') {
@@ -12543,32 +12628,7 @@
                 scRenderAnimList();
                 return;
             }
-            if (scIsAnimSelected(reg)) {
-                SC.selectedRegistries = SC.selectedRegistries.filter(r => r !== reg);
-                scSyncPositionsToLastAnim();
-                scRenderAnimList();
-                return;
-            }
-            const ctrl = !!(ev && (ev.ctrlKey || ev.metaKey));
-            if (!ctrl) SC.selectedRegistries = [];
-            scAddAnimToSelection(idx);
-        }
-
-        // Adds an animation to the selection and makes the Actor table follow it: actors are
-        // reordered to match its position genders (when a full match exists), then dressed /
-        // orgasm / speaking columns take its per-position defaults.
-        function scAddAnimToSelection(idx) {
-            const a = SC.lastAnims[idx];
-            const reg = a && a._registry;
-            if (!reg) return;
-            if (!scIsAnimSelected(reg)) SC.selectedRegistries.push(reg);
-            const reordered = scReorderPositionsForAnim(a);
-            scApplyAnimToPositions(a);
-            scPersistPositionsToSceneInfo();
-            scRenderPositions();
-            scRenderAnimList();
-            // Position-match queries depend on actor order, so requery after a swap.
-            if (reordered && SC.filterBy === 'positions') scRefreshAnims();
+            scChainOp(a, scIsAnimSelected(reg) ? 'remove' : 'add');
         }
 
         // Copies an animation's per-position dressed / orgasm / speaking defaults into the Actor table.
@@ -12584,24 +12644,13 @@
             });
         }
 
-        // The most recently selected animation still in the list, or null.
+        // The chain's first animation (it plays first, so the Actor table follows it), or null.
         function scLastSelectedAnim() {
-            const regs = scSelectedRegistries();
-            if (!regs.length) return null;
-            const reg = regs[regs.length - 1];
-            return (SC.lastAnims || []).find(x => x._registry === reg) || null;
+            const reg = scSelectedRegistries()[0];
+            return reg ? chainRowFor(reg, SC.lastAnims) : null;
         }
 
-        function scRenderLastAnimTags() {
-            const el = document.getElementById('sc-last-anim-tags');
-            if (!el) return;
-            const a = scLastSelectedAnim();
-            const text = a ? 'tags: ' + deAnimTagLabels(a).join(', ') : '';
-            el.textContent = text;
-            el.title = text;
-        }
-
-        // With override off the Actor table mirrors the last-selected animation's settings.
+        // With override off the Actor table mirrors the chain's first animation's settings.
         function scSyncPositionsToLastAnim() {
             if (SC.mode === 'active' || SC.positionOverride !== false) return;
             const a = scLastSelectedAnim();
@@ -12653,18 +12702,6 @@
             fill((g, w) => g === w);
             fill((g, w) => sex(g) === sex(w) && creature(g) === creature(w));
             return order.some(j => j < 0) ? null : order;
-        }
-
-        function scClearAnims() {
-            SC.selectedRegistries = (SC.lastAnimRegistries || []).slice();
-            scSyncPositionsToLastAnim();
-            scRenderAnimList();
-        }
-
-        function scNoneAnims() {
-            SC.selectedRegistries = [];
-            scSyncPositionsToLastAnim();
-            scRenderAnimList();
         }
 
         function scBuildResult(action) {
@@ -13174,7 +13211,7 @@
             }
         }
 
-        const DE_ACTORS_MAX_ROWS = 8;
+        const DE_ACTORS_MAX_ROWS = 4;
 
         function deRenderActors() {
             const wrap = document.getElementById('de-actors-table-wrap');
@@ -13292,18 +13329,22 @@
             deLimitActorRows(tbody);
         }
 
-        // Header plus DE_ACTORS_MAX_ROWS rows, measured because row heights vary (chips wrap, nearby rows are short).
+        // Header plus maxRows rows, measured because row heights vary (chips wrap, nearby rows are short).
         // Offsets, not getBoundingClientRect: the result goes back into CSS px, and rects need dividing by body.zoom.
-        function deLimitActorRows(tbody) {
-            const scroll = document.getElementById('de-actors-scroll');
-            if (!scroll) return;
-            const last = tbody.rows.length > DE_ACTORS_MAX_ROWS ? tbody.rows[DE_ACTORS_MAX_ROWS - 1] : null;
+        // Shared by the DE actor table and the Scene Creator positions table.
+        function limitTableRows(tbody, scroll, maxRows) {
+            if (!tbody || !scroll) return;
+            const last = tbody.rows.length > maxRows ? tbody.rows[maxRows - 1] : null;
             if (!last) {
                 scroll.style.maxHeight = '';
                 return;
             }
             // Zero while the panel is hidden: opening the panel renders again.
             if (last.offsetHeight > 0) scroll.style.maxHeight = (last.offsetTop + last.offsetHeight) + 'px';
+        }
+
+        function deLimitActorRows(tbody) {
+            limitTableRows(tbody, document.getElementById('de-actors-scroll'), DE_ACTORS_MAX_ROWS);
         }
 
         function deActorChangePending() {
@@ -13890,7 +13931,6 @@
             if (SC.filterAuto) scArmFilterDowngrade(SC_FILTER_DEFAULT);
             scRequestDeviousTags();
             scRenderTagChips();
-            scSetTagMode(SC.tagMode || 'include');
             scRenderFilterByPulldown();
             scRenderHasDescriptionPulldown();
             scRenderSortPulldown();
@@ -13898,7 +13938,7 @@
             scRenderInitiatorPulldown();
             scRenderFavoritesToggle();
             scSyncNameFilterInputs();
-            deRenderLoadedList();
+            scRenderLastStagePulldown();
             scRefreshTags();
             deRefreshFilterAnims();
         }
@@ -13912,12 +13952,17 @@
                 return;
             }
             const id = ++DE.filterQueryId;
-            window.onAnimDbQuery(JSON.stringify({ _request_id: 'f' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 }));
+            const payload = { _request_id: 'f' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 };
+            const info = deSceneInfoForPick();
+            const chain = info ? deChainFor(info) : [];
+            if (chain.length) payload._also_registries = chain.slice();
+            window.onAnimDbQuery(JSON.stringify(payload));
         }
 
         // animDbQueryResult 'f…': the animation filter tab's list.
         function deOnFilterAnimsResult(payload, rid) {
             if (rid !== 'f' + DE.filterQueryId) return;
+            chainCacheRows(payload._anims || []);
             const anims = scFilterAnimsByHasDescription(payload._anims || []);
             if (scDropDeviousTagIfEmpty(anims)) {
                 deRefreshFilterAnims();
@@ -13953,13 +13998,6 @@
                 `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>`;
         }
 
-        function deAnimTableHead() {
-            return `<table class="data-table anim-table"><thead><tr>` +
-                `<th class="col-an"></th><th class="col-genders">genders</th><th class="col-mods">modifiers</th>` +
-                `<th class="col-name">name</th><th class="col-stages">num stages</th><th class="col-freq">freq</th><th class="col-desc">description</th>` +
-                `</tr></thead><tbody>`;
-        }
-
         function deRegInList(list, reg) {
             return (list || []).some(r => deRegEq(r, reg));
         }
@@ -13970,30 +14008,63 @@
             return (info && info.activeRegistry) || '';
         }
 
-        // SexLab's loaded list for the bound scene (thread.Animations). A = playing; the current pick is
-        // highlighted and marked "next" until the game unpauses and switches to it.
-        function deRenderLoadedList() {
-            const host = document.getElementById('de-loaded-list');
-            if (!host) return;
+        // The bound scene's chain; a scene Papyrus sent none for starts as its playing animation.
+        function deChainFor(info) {
+            if (!info) return [];
+            if ((!info.chainRegistries || !info.chainRegistries.length) && info.activeRegistry)
+                info.chainRegistries = [info.activeRegistry];
+            return info.chainRegistries || [];
+        }
+
+        // Chain and last-stage edits go to the scene at once (Scene.ApplyWebUICommit, _chain_only): they decide
+        // what the next last stage does, paused or not.
+        function deCommitChain(info) {
+            if (!info || info.mode !== 'active' || info.scene_sid < 0) return;
+            if (typeof window.onSceneInfoCommit !== 'function') return;
+            window.onSceneInfoCommit(JSON.stringify({ _scenes: [{
+                _key: info.key,
+                _mode: 'active',
+                _scene_sid: info.scene_sid,
+                _chain_only: 1,
+                _chain_registries: deChainFor(info).slice(),
+                _last_stage: lastStageValue(info.lastStage)
+            }] }));
+        }
+
+        // Description Editor chain edit. add also makes the animation current (blue).
+        function deChainOp(a, op) {
             const info = deSceneInfoForPick();
-            const regs = info ? (info.inThreadRegistries || []) : [];
-            const current = deCurrentSceneReg(info);
-            deDbg('deRenderLoadedList'); // DEBUG-DELETE
-            const rows = regs.map((reg, i) => {
-                const a = (info.lastAnims || []).find(x => deRegEq(x._registry, reg))
-                    || (DE.filterAnims || []).find(x => deRegEq(x._registry, reg))
-                    || { _registry: reg };
-                const playing = deRegEq(reg, info.activeRegistry);
-                const pending = dePendingActive() && deRegEq(reg, DE.pendingSwitch.reg);
-                const mark = playing ? 'A' : (pending ? 'next' : '');
-                const cls = (deRegEq(reg, current) ? 'selected' : '') + (pending ? ' de-pending' : '');
-                return `<tr class="${cls}" onclick="dePickLoadedAnimation(${i})">` +
-                    `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
-            }).join('');
-            host.innerHTML = deAnimTableHead() + rows + `</tbody></table>`;
-            const sel = host.querySelector('tr.selected');
-            if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
-            deRenderStartBtn();
+            const reg = a && a._registry;
+            if (!info || !reg) return;
+            chainCacheRows([a]);
+            info.chainRegistries = chainApply(deChainFor(info), reg, op);
+            deCommitChain(info);
+            if (op === 'add') {
+                dePickSceneAnimation(reg, a);
+                return;
+            }
+            deRenderAnimList();
+        }
+
+        // Row click. The current (blue) animation leaves the chain, or rejoins it if it already left; it stays
+        // current. The only chained animation stays (an empty _chain_registries keeps the scene's chain). Any
+        // other row becomes current; an unchained one also joins the chain.
+        function deClickAnimRow(i, ev) {
+            const info = deSceneInfoForPick();
+            const a = chainShownRows.de[i];
+            if (!info || !a || !a._registry) return;
+            const chain = deChainFor(info);
+            const chained = deRegInList(chain, a._registry);
+            if (deRegEq(a._registry, deCurrentSceneReg(info))) {
+                if (!chained) deChainOp(a, 'add');
+                else if (chain.length > 1) deChainOp(a, 'remove');
+                return;
+            }
+            if (!chained) {
+                deChainOp(a, 'add');
+                return;
+            }
+            dePickSceneAnimation(a._registry, a);
         }
 
         // Start (animation filter tab) is live only while a pick differs from the playing animation.
@@ -14011,35 +14082,28 @@
             deContinueAndClose();
         }
 
-        function dePickLoadedAnimation(i) {
-            const info = deSceneInfoForPick();
-            const reg = info && (info.inThreadRegistries || [])[i];
-            if (reg) dePickSceneAnimation(reg);
-        }
-
-        // The animation filter tab's result list. L = already loaded, A = playing. A click adds the animation to
-        // the scene's loaded list (on unpause) and makes it the current pick; Ctrl+click adds several
-        // (deAddAnimToScene). Every pending addition is highlighted.
+        // Animation Selection list: the bound scene's chain first (its order), then the filter results. The current
+        // animation (playing, or the pending pick) is blue; other chained rows are highlighted.
         function deRenderAnimList() {
             // Static thead (filter row inputs keep focus); only the rows re-render.
             const host = document.getElementById('de-anims-tbody');
             if (!host) return;
             const info = deSceneInfoForPick();
-            const inThread = info ? (info.inThreadRegistries || []) : [];
             const current = deCurrentSceneReg(info);
-            const adds = dePendingAdds();
+            const chain = info ? deChainFor(info) : [];
             const anims = DE.filterAnims || [];
-            const order = sortAnimListRows(anims, { active: true, inThread: inThread, activeRegistry: info ? info.activeRegistry : '' });
-            const rows = order.map(i => {
-                const a = anims[i];
+            const rows = chainOrderedRows(anims, chain, {}, info ? info.lastAnims : []);
+            chainShownRows.de = rows.map(r => r.a);
+            const html = rows.map((r, i) => {
+                const a = r.a;
                 const reg = a._registry || '';
-                const mark = info && deRegEq(reg, info.activeRegistry) ? 'A' : (deRegInList(inThread, reg) ? 'L' : '');
-                const sel = deRegEq(reg, current) || deRegInList(adds, reg);
-                return `<tr class="${sel ? 'selected' : ''}" onclick="deAddAnimToScene(${i}, event)">` +
+                const isCurrent = !!current && deRegEq(reg, current);
+                const cls = isCurrent ? 'current' : (r.chainIdx >= 0 ? 'selected' : '');
+                return `<tr class="${cls}" onclick="deClickAnimRow(${i}, event)">` +
                     `<td class="col-fav" onclick="deToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
-                    `<td class="col-an">${escapeHtml(mark)}</td>` + deAnimRowCells(a) + `</tr>`;
+                    chainCellHtml('de', i, r.chainIdx, chain.length) + deAnimRowCells(a) + `</tr>`;
             }).join('');
-            host.innerHTML = rows;
+            host.innerHTML = html;
             animTableStickFilterRow('de-anims-tbody');
             deRenderStartBtn();
             uiLayoutLog('anim list');
@@ -14048,7 +14112,7 @@
         // Star click on a filter-tab row: same AnimDB favorite as Scene Creator's scToggleFavorite.
         function deToggleFavorite(idx, ev) {
             if (ev) ev.stopPropagation();
-            const a = (DE.filterAnims || [])[idx];
+            const a = chainShownRows.de[idx];
             if (!a || !a._registry) return;
             a._favorite = !a._favorite;
             if (typeof window.onAnimFavoriteSet === 'function')
@@ -14059,75 +14123,6 @@
             } else {
                 deRenderAnimList();
             }
-        }
-
-        // Registries the pending pick added to the loaded list in the page only (not in the thread yet).
-        function dePendingAdds() {
-            return dePendingActive() ? (DE.pendingSwitch.adds || []) : [];
-        }
-
-        // Take page-only additions back out of the loaded list.
-        function deDropPageAdds(info, regs) {
-            if (!info || !regs || !regs.length) return;
-            info.inThreadRegistries = (info.inThreadRegistries || []).filter(r => !deRegInList(regs, r));
-            info.lastAnims = (info.lastAnims || []).filter(x => !deRegInList(regs, x && x._registry));
-        }
-
-        // Plain click: this animation alone becomes the pick (earlier page-only additions are dropped).
-        // Ctrl+click: add it next to the earlier additions and make it the pick; Ctrl+click on an addition
-        // removes it. On Start every addition joins SexLab's list (_add_registries) and the pick plays.
-        function deAddAnimToScene(i, ev) {
-            const info = deSceneInfoForPick();
-            const a = (DE.filterAnims || [])[i];
-            if (!info || !a || !a._registry) return;
-            const reg = a._registry;
-            const ctrl = !!(ev && (ev.ctrlKey || ev.metaKey));
-            const prevAdds = dePendingAdds().slice();
-            if (ctrl && deRegInList(prevAdds, reg)) {
-                deRemovePendingAdd(info, reg);
-                return;
-            }
-            // Ctrl+click on the playing animation would drop the pending pick and its additions.
-            if (ctrl && prevAdds.length && deRegEq(reg, info.activeRegistry)) return;
-            if (!ctrl) deDropPageAdds(info, prevAdds);
-            const adds = ctrl ? prevAdds : [];
-            if (!deRegInList(info.inThreadRegistries, reg)) {
-                info.inThreadRegistries = (info.inThreadRegistries || []).concat([reg]);
-                info.lastAnims = (info.lastAnims || []).concat([{ _registry: reg, _name: a._name, _tags: a._tags }]);
-                adds.push(reg);
-            }
-            dePickSceneAnimation(reg, a);
-            if (dePendingActive()) {
-                DE.pendingSwitch.adds = adds;
-            } else if (adds.length) {
-                // No pick was made (e.g. picking the playing animation): nothing will carry the additions.
-                deDropPageAdds(info, adds);
-            }
-            deRenderLoadedList();
-            deRenderAnimList();
-        }
-
-        // Ctrl+click on an addition: remove it; if it was the pick, the newest remaining addition is picked.
-        function deRemovePendingAdd(info, reg) {
-            const pend = DE.pendingSwitch;
-            deDropPageAdds(info, [reg]);
-            pend.adds = (pend.adds || []).filter(r => !deRegEq(r, reg));
-            if (deRegEq(pend.reg, reg)) {
-                const last = pend.adds[pend.adds.length - 1];
-                if (last) {
-                    pend.reg = last;
-                    pend.row = (DE.filterAnims || []).find(x => deRegEq(x._registry, last))
-                        || (info.lastAnims || []).find(x => deRegEq(x._registry, last)) || { _registry: last };
-                    info.nextRegistry = last;
-                    deLoadPendingPreview();
-                } else {
-                    DE.pendingSwitch = null;
-                    info.nextRegistry = '';
-                    deLoadFocusAnimFromScene();
-                }
-            }
-            deRenderLoadedList();
-            deRenderAnimList();
         }
 
         // Make reg the editor's current animation for the bound scene. Picking the playing one drops a pending
@@ -14151,7 +14146,6 @@
                 info.nextRegistry = reg;
                 deLoadPendingPreview();
             }
-            deRenderLoadedList();
             deRenderAnimList();
         }
 
@@ -14198,6 +14192,8 @@
                 _reseed_defaults: 1
             };
             if (adds.length) commit._add_registries = adds;
+            commit._chain_registries = deChainFor(info).slice();
+            commit._last_stage = lastStageValue(info.lastStage);
             if (heldStyle) {
                 commit._style = heldStyle;
                 commit._narrate_style = 1;
@@ -14359,8 +14355,11 @@
                     deRenderActors();
                 }
                 deUpdateActiveStageRow();
-                deRenderLoadedList();
-                if (DE.bottomTab === 'filter') deRenderAnimList();
+                deRenderStartBtn();
+                if (DE.bottomTab === 'filter') {
+                    scRenderLastStagePulldown();
+                    deRenderAnimList();
+                }
             } else {
                 deBindTargetScene();
             }

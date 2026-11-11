@@ -110,6 +110,7 @@ namespace OrgasmEngine
             Strategy defaultVictim = Strategy::kPassive;
             bool decisionStrategy = true;  // the decision model picks NPC strategies (StrategyDecision)
             float decisionMinConfidence = 0.6f;  // a strategy change needs at least this answer confidence
+            std::int32_t maxSerialPunishRejects = 3;  // after N-1 refused punishments, the Nth forces a switch (0 = never)
             // Sex is hard work: stamina regen (share of the actor's default) decays while animating.
             // Disabled for now: the sexlab.stamina.* settings were removed (0.35.2); code kept for later.
             bool staminaFatigue = false;
@@ -209,6 +210,7 @@ namespace OrgasmEngine
             bool autoPlay = false;
             bool playerDriven = false;
             std::vector<PunishRecord> reasons;  // punishment reasons held (last kPunishKept), oldest first
+            std::int32_t punishRejects = 0;     // punishments refused in a row (LLM answers only). Not saved.
             // This scene is the actor's first vaginal / anal (SetFirstTimes, Lover's Ledger). Sticky for the
             // scene. Not saved.
             bool firstVaginal = false;
@@ -1436,14 +1438,6 @@ namespace OrgasmEngine
             return text;
         }
 
-        // Caller holds g_lock. The strategy as the actor's choice ("focus on her own pleasure"), no leading name.
-        std::string ChoicePhrase(const ActorState& st)
-        {
-            std::string text = InfoOf(st.strategy).choice;
-            FillStrategyText(text, st.id, st.strategyTarget);
-            return text;
-        }
-
         // Strategy change: narration (narrate) or, for a decision-made change, a short-term
         // event with observed (empty: the phrase itself).
         void Announce(const SceneState& sc, const ActorState& st, const std::string& phrase, Effects& fx,
@@ -2282,6 +2276,7 @@ namespace OrgasmEngine
             g_lastTick = wall;
             g_gameClock.store(g_gameClock.load() + dt);
             const double now = Now();
+            StrategyDecision::Tick();
 
             Effects fx;
             if (!paused) {
@@ -2987,6 +2982,8 @@ namespace OrgasmEngine
         s.decisionStrategy = GetConfigBool("sexlab.minigame.decision_strategy", true);
         s.decisionMinConfidence =
             std::clamp(GetConfigFloat("sexlab.minigame.decision_min_confidence", 0.6f), 0.0f, 1.0f);
+        s.maxSerialPunishRejects =
+            std::clamp(SexLabNet::GetConfigInt("sexlab.minigame.max_serial_punishment_rejects", 3), 0, 10);
         {
             std::lock_guard lock(g_lock);
             g_settings = s;
@@ -3000,11 +2997,12 @@ namespace OrgasmEngine
             s.randomBonus, s.groupJoin, s.groupJoinFinal, s.stageSpike, s.gate, s.gateLeadDefault);
         webui_log::info("OrgasmEngine: config engine_off={} mode={} bonus scale={} clamp={} together_k={} minigame_bonus={} npc "
                         "press={}-{}x/{}s gap={}s rest={}s step={}-{} mutual_target={} passive_share={} budget={} defaults={}/{}/{} "
-                        "stage_by_enjoyment={} punish_after={}s hold_max={}s stall_end={}s afterglow={}s",
+                        "stage_by_enjoyment={} punish_after={}s hold_max={}s stall_end={}s afterglow={}s "
+                        "max_serial_punish_rejects={}",
             s.engineOff, s.engineOff ? "sexlab" : s.miniGame ? "minigame" : "together", s.bonusScale, s.bonusClamp, s.togetherK, s.miniGameBonusMult,
             kPressMin, kPressMax, kPressTick, kPressGap, kRestSecs, s.npcStepMin, s.npcStepMax, s.mutualTarget, s.passiveShare, s.enjoymentBudget, InfoOf(s.defaultNormal).key,
             InfoOf(s.defaultAggressor).key, InfoOf(s.defaultVictim).key, s.stageAdvancePrimaryEnjoyment, s.stagePunishAfter,
-            s.stageHoldMax, s.stallEndAfter, s.afterglowSeconds);
+            s.stageHoldMax, s.stallEndAfter, s.afterglowSeconds, s.maxSerialPunishRejects);
     }
 
     bool IsMiniGameEnabled()
@@ -4494,9 +4492,46 @@ namespace OrgasmEngine
             return applied;
         }
 
+        // Caller holds g_lock. The strategy a target gives in to: the punished request, else the newest refused order
+        // (then request), else selfless (2+ actors) / selfish (solo). Applied; the chosen key's reasons are cleared.
+        // s / t: the strategy picked. Returns the key, " (not applied)" appended when SetStrategyLocked refused.
+        std::string GiveInLocked(const SceneState& sc, ActorState& st, const PunishPlan& plan, Strategy& s,
+            RE::FormID& t, Effects& fx)
+        {
+            std::string chosen;
+            s = Strategy::kCount;
+            t = 0;
+            const auto accept = [&](const std::string& key) {
+                if (chosen.empty() && !key.empty() && ParseRequest(sc, st, key, s, t)) {
+                    chosen = key;
+                }
+            };
+            accept(plan.requestKey);
+            for (const bool orders : { true, false }) {
+                for (auto r = st.reasons.rbegin(); r != st.reasons.rend(); ++r) {
+                    if ((r->reason.find(" order to ") != std::string::npos) == orders) {
+                        accept(r->strategyKey);
+                    }
+                }
+            }
+            if (chosen.empty()) {
+                s = sc.actors.size() > 1 ? Strategy::kSelfless : Strategy::kSelfish;
+                t = 0;
+                chosen = InfoOf(s).key;
+            }
+            if (SetStrategyLocked(sc, st, s, t, false, fx)) {
+                auto& list = st.reasons;
+                list.erase(std::remove_if(list.begin(), list.end(),
+                               [&](const PunishRecord& r) { return r.strategyKey == chosen; }),
+                    list.end());
+            } else {
+                chosen += " (not applied)";
+            }
+            return chosen;
+        }
+
         // Game thread. Above 80% Injury Engine torture the target gives in, no decision: "<target> can't take it any
-        // more and submits!" and the strategy becomes the punished request, else the newest refused order (then
-        // request), else selfless (2+ actors) / selfish (solo). The obeyed request's reasons are cleared.
+        // more and submits!" and the strategy is GiveInLocked's.
         void Submit(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan, double total, double max)
         {
             RE::Actor* punisher = ActorFor(punisherId);
@@ -4511,35 +4546,10 @@ namespace OrgasmEngine
                 const auto at = g_actors.find(targetId);
                 const SceneState* sc = at != g_actors.end() ? SceneOf(at->second) : nullptr;
                 if (sc) {
-                    ActorState& st = at->second;
                     Strategy s = Strategy::kCount;
                     RE::FormID t = 0;
-                    const auto accept = [&](const std::string& key) {
-                        if (chosen.empty() && !key.empty() && ParseRequest(*sc, st, key, s, t)) {
-                            chosen = key;
-                        }
-                    };
-                    accept(plan.requestKey);
-                    for (const bool orders : { true, false }) {
-                        for (auto r = st.reasons.rbegin(); r != st.reasons.rend(); ++r) {
-                            if ((r->reason.find(" order to ") != std::string::npos) == orders) {
-                                accept(r->strategyKey);
-                            }
-                        }
-                    }
-                    if (chosen.empty()) {
-                        s = sc->actors.size() > 1 ? Strategy::kSelfless : Strategy::kSelfish;
-                        t = 0;
-                        chosen = InfoOf(s).key;
-                    }
-                    if (SetStrategyLocked(*sc, st, s, t, false, fx)) {
-                        auto& list = st.reasons;
-                        list.erase(std::remove_if(list.begin(), list.end(),
-                                       [&](const PunishRecord& r) { return r.strategyKey == chosen; }),
-                            list.end());
-                    } else {
-                        chosen += " (not applied)";
-                    }
+                    chosen = GiveInLocked(*sc, at->second, plan, s, t, fx);
+                    at->second.punishRejects = 0;
                 }
             }
             PostEffects(std::move(fx));
@@ -4552,22 +4562,71 @@ namespace OrgasmEngine
             }
         }
 
-        // "Nina chooses to focus on her own pleasure." for the actor's current strategy ("" when none).
-        std::string ChoiceLine(RE::FormID id)
+        // Caller holds g_lock. sexlab.minigame.max_serial_punishment_rejects applies to this target: setting on, the
+        // mini-game on, an AI actor. DOM slaves included (their LLM answers decide the strategy too).
+        bool PunishCapApplies(const ActorState& st)
         {
-            std::lock_guard lock(g_lock);
-            const auto at = g_actors.find(id);
-            if (at == g_actors.end() || !SceneOf(at->second)) {
-                return "";
-            }
-            const std::string choice = ChoicePhrase(at->second);
-            const std::string name = NameOf(ActorFor(id));
-            return choice.empty() || name.empty() ? "" : name + " chooses to " + choice + ".";
+            return g_settings.maxSerialPunishRejects > 0 && g_settings.miniGame && AiDriven(st);
         }
 
-        // Game thread. The hit has landed (feeling: Injury Engine's text, "" when none): narrate the punishment, then
-        // ask the target's strategy decision (PunishDecisionLine as last_line), or Submit above 80% Injury Engine
-        // torture; a punishment for a refused request gets the agree / refuse answer.
+        // Game thread. Counts the target's LLM answer to a punishment (sexlab.minigame.max_serial_punishment_rejects).
+        // No answer (dropped / unknown) or the cap not applying: unchanged. With a request: refused unless now on the
+        // requested key (as FinishRequest). Plain: refused on kept / low confidence. Refused: +1, otherwise reset to 0.
+        void NotePunishAnswer(RE::FormID targetId, const PunishPlan& plan, DecisionResult result)
+        {
+            if (result == DecisionResult::kDropped || result == DecisionResult::kUnknown) {
+                return;
+            }
+            std::lock_guard lock(g_lock);
+            const auto at = g_actors.find(targetId);
+            const SceneState* sc = at != g_actors.end() ? SceneOf(at->second) : nullptr;
+            if (!sc || !PunishCapApplies(at->second)) {
+                return;
+            }
+            ActorState& st = at->second;
+            const bool refused = !plan.requestKey.empty()
+                                     ? CurrentRequestKey(*sc, st) != plan.requestKey
+                                     : result == DecisionResult::kKept || result == DecisionResult::kLowConfidence;
+            st.punishRejects = refused ? st.punishRejects + 1 : 0;
+            webui_log::info("OrgasmEngine: punish rejects {:#x} = {}/{}", targetId, st.punishRejects,
+                g_settings.maxSerialPunishRejects);
+        }
+
+        // Game thread. After max_serial_punishment_rejects - 1 refused punishments in a row, this one skips the
+        // decision: the target gives in (GiveInLocked) and switchText is "<target> switches to <choice>". false: not
+        // due (PunishCapApplies false, or fewer refusals). DOM slaves included.
+        bool ForcedGiveIn(RE::FormID targetId, const PunishPlan& plan, std::string& switchText)
+        {
+            Effects fx;
+            std::string chosen;
+            std::int32_t rejects = 0;
+            {
+                std::lock_guard lock(g_lock);
+                const auto at = g_actors.find(targetId);
+                const SceneState* sc = at != g_actors.end() ? SceneOf(at->second) : nullptr;
+                const std::int32_t n = g_settings.maxSerialPunishRejects;
+                if (!sc || !PunishCapApplies(at->second) || at->second.punishRejects < n - 1) {
+                    return false;
+                }
+                ActorState& st = at->second;
+                rejects = st.punishRejects;
+                Strategy s = Strategy::kCount;
+                RE::FormID t = 0;
+                chosen = GiveInLocked(*sc, st, plan, s, t, fx);
+                st.punishRejects = 0;
+                std::string choice = InfoOf(s).choice;
+                FillStrategyText(choice, st.id, t);
+                switchText = NameOf(ActorFor(targetId)) + " switches to " + choice;
+            }
+            PostEffects(std::move(fx));
+            webui_log::info("OrgasmEngine: {:#x} gives in after {} refused punishments -> {}", targetId, rejects, chosen);
+            return true;
+        }
+
+        // Game thread. The hit has landed (feeling: Injury Engine's text, "" when none): narrate the punishment at
+        // once (the target's LLM reply answers it), then ask the target's strategy decision (PunishDecisionLine as
+        // last_line; StrategyDecision sends it after that reply), or Submit above 80% Injury Engine torture; a
+        // punishment for a refused request gets the agree / refuse answer.
         void ContinuePunish(RE::FormID punisherId, RE::FormID targetId, const PunishPlan& plan,
             const std::string& method, const std::string& location, RE::FormID spell, float spellDamage,
             const std::string& feeling, bool feelingFromInjuryEngine, std::int32_t amount)
@@ -4577,7 +4636,16 @@ namespace OrgasmEngine
             if (!punisher || !target) {
                 return;
             }
-            const std::string text = feeling.empty() ? plan.line : plan.line + " " + feeling;
+            std::string text = feeling.empty() ? plan.line : plan.line + " " + feeling;
+            // Refused too often in a row: this punishment skips the decision and its narration carries the switch.
+            std::string switchText;
+            const bool forced = ForcedGiveIn(targetId, plan, switchText);
+            if (forced) {
+                while (!text.empty() && (text.back() == '.' || text.back() == '!' || text.back() == ' ')) {
+                    text.pop_back();
+                }
+                text += ". " + switchText + ".";
+            }
             webui_log::info("OrgasmEngine: punishment of {:#x} narrated: {}", targetId, text);
             bool injuryEngineNarrates = false;
             if (!feelingFromInjuryEngine) {
@@ -4587,54 +4655,66 @@ namespace OrgasmEngine
                     !plan.fromPlayer);
                 injuryEngineNarrates = landed && !plan.fromPlayer;
             }
-            // Narrated once the decision is in, with the choice appended (Injury Engine narrating: already said).
-            const auto narrate = [plan, punisherId, targetId, text, injuryEngineNarrates](const std::string& choice) {
-                RE::Actor* p = ActorFor(punisherId);
-                RE::Actor* t = ActorFor(targetId);
-                if (!p || !t || injuryEngineNarrates) {
-                    return;
-                }
-                const std::string out = choice.empty() ? text : text + " " + choice;
+            // Narrated now, without the choice: the target's reply says what it does, and the decision follows that
+            // reply (Injury Engine narrating: already said).
+            // Forced while Injury Engine narrates the hit: only the switch is added.
+            const std::string said = !injuryEngineNarrates ? text : forced ? switchText + "." : "";
+            if (!said.empty()) {
                 if (plan.fromPlayer) {
-                    NarratePlayer(out, p, t);
+                    NarratePlayer(said, punisher, target);
                 } else {
-                    NarrateRequest(out, p, t, plan.direct);
+                    NarrateRequest(said, punisher, target, plan.direct);
                 }
-            };
+            }
             if (spell) {
                 Aid::QueueWeakSpellHit(punisher, target, spell,
                     feelingFromInjuryEngine || injuryEngineNarrates ? 0.0f : spellDamage);
             }
-            const auto ask = [plan, punisherId, targetId, narrate](const std::string& line) {
-                const auto finish = [plan, punisherId, targetId, narrate](DecisionResult result) {
-                    const bool none = result == DecisionResult::kDropped || result == DecisionResult::kUnknown;
-                    // No decision: the fallback's choice is narrated with the punishment instead.
-                    const bool fellBack = none && NoDecisionFallback(punisherId, targetId, plan);
-                    narrate(none && !fellBack ? std::string{} : ChoiceLine(targetId));
+            if (forced) {
+                // No decision, no torture check. A refused request is now obeyed: agrees, its reason cleared.
+                if (!plan.requestKey.empty()) {
+                    FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
+                        plan.direct, DecisionResult::kChanged);
+                }
+                return;
+            }
+            const auto ask = [plan, punisherId, targetId](const std::string& line) {
+                const auto finish = [plan, punisherId, targetId](DecisionResult result) {
+                    // No decision: the fallback picks the strategy.
+                    if (result == DecisionResult::kDropped || result == DecisionResult::kUnknown) {
+                        NoDecisionFallback(punisherId, targetId, plan);
+                    }
                     if (!plan.requestKey.empty()) {
                         FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
                             plan.direct, result);
                     }
                 };
-                StrategyDecision::RequestAnswer(targetId, "punished", line,
-                    [plan, punisherId, targetId, finish](DecisionResult result) {
+                auto answered = [plan, punisherId, targetId, finish](DecisionResult result) {
+                    NotePunishAnswer(targetId, plan, result);  // the LLM's answer only, not DOM's roll
                     if (result == DecisionResult::kDropped && !plan.orderKey.empty() &&
                         RollDomOrder(punisherId, targetId, plan.orderKey, finish)) {
                         return;
                     }
                     finish(result);
-                }, plan.orderKey);
+                };
+                // An order with the punishment, or a punishment for a refused request: after the reply, only "does it
+                // comply" is asked (the key applies on comply). A plain punishment: the strategy decision.
+                if (!plan.requestKey.empty()) {
+                    StrategyDecision::RequestComply(targetId, "punished", line, plan.requestBy, plan.requestKey,
+                        plan.requestText, std::move(answered));
+                } else {
+                    StrategyDecision::RequestAnswer(targetId, "punished", line, std::move(answered), plan.orderKey);
+                }
             };
             const std::string line = PunishDecisionLine(plan, feeling);
             // Torture share from Injury Engine (Papyrus VM thread), then back to the game thread to ask or submit.
             const bool points =
-                InjuryEngine::PartPoints(target, [ask, narrate, line, plan, punisherId, targetId](std::string json) {
+                InjuryEngine::PartPoints(target, [ask, line, plan, punisherId, targetId](std::string json) {
                 const auto j = nlohmann::json::parse(json, nullptr, false);
                 const double max = j.is_object() ? j.value("max", 0.0) : 0.0;
                 const double total = j.is_object() ? j.value("total", 0.0) : 0.0;
                 if (max > 0.0 && total > 0.8 * max) {
-                    SKSE::GetTaskInterface()->AddTask([narrate, plan, punisherId, targetId, total, max]() {
-                        narrate("");
+                    SKSE::GetTaskInterface()->AddTask([plan, punisherId, targetId, total, max]() {
                         Submit(punisherId, targetId, plan, total, max);
                     });
                 } else {
@@ -4821,7 +4901,8 @@ namespace OrgasmEngine
             } else {
                 NarrateRequest(line, asker, asked, direct);
             }
-            StrategyDecision::RequestAnswer(target, order ? "ordered" : "asked", line,
+            // After target's reply, only "does it comply" is asked; the requested key applies on comply.
+            StrategyDecision::RequestComply(target, order ? "ordered" : "asked", line, byId, requestKey, text,
                 [byId, target, order, requestKey, text, direct](DecisionResult result) {
                     const auto finish = [=](DecisionResult r) {
                         FinishRequest(byId, target, order, requestKey, text, direct, r);

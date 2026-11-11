@@ -1,0 +1,81 @@
+{# Decision template: whether an NPC in a SexLab mini-game scene complies with one request it was just asked,
+   ordered, or punished into (punished: a punishment that also orders a strategy, or a punishment for a refused
+   request). Sent by SkyrimNet_SexLab.dll (StrategyDecision.cpp RequestComply / SendComply) through
+   PublicSendCustomDecisionToLLM after the NPC's LLM reply to the narration (its thought, or a 20 s timeout).
+   comply: the game applies the requested strategy and narrates "<focus> agrees to <by>'s request to <text>.";
+   refuse: the strategy stays, "<focus> refuses ..." is narrated and becomes a punishment reason.
+   Rendered into a decisions request, never into chat messages.
+
+   Context pushed by the game (C++ snapshot): trigger (asked | ordered | punished), focus_uuid, focus_name,
+   by_uuid, by_name, by_is_player, request_text ("focus on Bob's pleasure"), last_line_text (the ask / order
+   narration, or for a punishment "<act>. <feeling>, because <reason>."), current_text (the current strategy's option
+   text, "passive: Nina stops trying and lets things happen"; "" when unknown), latest_thought (the focus actor's newest thought; "" when none), timeline [lines, oldest first:
+   speech, thoughts, narrations and other events of the focus actor].
+   Keys are read back by the game: keep comply / refuse as given. #}
+{% set _focus = decnpc(focus_uuid) %}
+{% set _dom_slave = is_plugin_loaded("SkyrimNet_DOM.esp") and is_in_faction(focus_uuid, "DOMPlayerSlaveFaction") %}
+[ state focus ]
+{{ focus_name }}, {{ _focus.gender }} {{ _focus.race }}.
+{{ render_character_profile("short_inline", focus_uuid) }}
+[ end state ]
+
+{% if _dom_slave %}
+{% set _dom_npc.UUID = focus_uuid %}
+{% set _dom_npc.name = focus_name %}
+{% set _dom_args.npc = _dom_npc %}
+[ state dom_instructions ]
+{{ render_template("submodules\\user_final_instructions\\0551_dom_instructions", _dom_args) }}
+[ end state ]
+
+{% endif %}
+[ state scene ]
+{% set _sexlab = sexlab_get_threads(focus_uuid) %}
+{% if existsIn(_sexlab, "threads") %}
+{% for thread in _sexlab.threads %}
+{% for actor_record in thread.actors %}
+{% if to_number(actor_record.uuid) == focus_uuid %}
+{% if existsIn(thread, "location") and thread.location != "" %}On {{ thread.location }}, {% endif %}{{ thread.description }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+[ end state ]
+
+[ state requester ]
+{{ by_name }}{% if by_is_player %} (the player){% endif %}.
+- {{ render_character_profile("short_inline", by_uuid) }}
+[ end state ]
+
+[ state timeline ]
+{% if length(timeline) > 0 %}
+{% for line in timeline %}
+{{ line }}
+{% endfor %}
+{% else %}
+Nothing has happened yet.
+{% endif %}
+[ end state ]
+
+{% if latest_thought != "" %}
+[ state latest_thought ]
+{{ focus_name }}'s most recent thought: "{{ latest_thought }}"
+[ end state ]
+
+{% endif %}
+[ state request ]
+{% if trigger == "punished" %}{{ last_line_text }}
+While punishing them, {{ by_name }} demands that {{ focus_name }} {{ request_text }}.{% else %}{{ last_line_text }}{% endif %}
+{% if current_text != "" %}What {{ focus_name }} was doing until now: {{ current_text }}.{% endif %}
+[ end state ]
+
+[ question comply choice ]
+{{ focus_name }} has already answered `request`: the newest speech and thought at the end of `timeline`, and `latest_thought`. Decide only whether that answer goes along with {{ by_name }}'s demand that {{ focus_name }} {{ request_text }}.
+{% if _dom_slave %}Follow `dom_instructions` for how {{ focus_name }} obeys; it outweighs their usual preferences.
+{% endif %}The answer decides it, not how {{ focus_name }} felt earlier: someone who resisted before and now gives in, says yes, or thinks they will do as told complies, even reluctantly, bitterly or out of fear. Insults spoken while giving in still count as complying.
+{% if latest_thought != "" %}When speech and `latest_thought` disagree, `latest_thought` is what {{ focus_name }} really decided.
+{% endif %}
+[ criteria ]
+comply: {{ focus_name }} goes along with the demand to {{ request_text }}, willingly or not
+refuse: {{ focus_name }} refuses, resists or ignores the demand to {{ request_text }}
+[ end criteria ]
+[ end question ]

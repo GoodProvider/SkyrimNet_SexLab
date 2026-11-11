@@ -38,8 +38,10 @@ namespace Hud
     void PressKey(const std::string& control, RE::FormID focus = 0);
 
     /// Last-stage choice list, drawn beside the HUD. The scene script owns the deadline; this view owns the
-    /// highlighted line and the up / down (slower / faster keys) / Enter keys while it is open.
-    void LastStageShow(int index, std::uint32_t advanceKey);
+    /// highlighted line and the up / down (slower / faster keys) / Enter keys while it is open. index is a Scene
+    /// choice code (0 stop .. 4 anal, 6 the chain's next). nextName: the chain's next animation, shown as the top
+    /// row "Next: <name>" ("" for none). LastStageIndex returns a choice code too.
+    void LastStageShow(int index, std::uint32_t advanceKey, const std::string& nextName = {});
     void LastStageHide();
     int LastStageIndex();
     /// The NPC the player is driving (take control), or nullptr.

@@ -26,12 +26,24 @@ namespace StrategyDecision
     /// Game thread. Auto play just turned on: the player's first turn.
     void OnAutoPlay();
     /// Game thread. target was just asked, ordered or punished (trigger "asked" | "ordered" | "punished"; line: that
-    /// narration, the decision's last_line): decide its strategy now, then call done with the outcome (kDropped when
-    /// no decision was made: none set up, not AI-driven, failed). done is always called exactly once, possibly before
-    /// this returns. orderKey (a punishment that also orders a strategy): the option ordered, sent as ordered_key;
-    /// an answer picking it skips the confidence gate.
+    /// narration, already sent, the decision's last_line). The decision waits for target's LLM reply to the narration
+    /// (its next thought or line, or a timeout) and replaces the dialogue decision that reply would send; then done
+    /// is called with the outcome (kDropped when no decision was made: none set up, not AI-driven, failed). done is
+    /// always called exactly once, possibly before this returns. orderKey (a punishment that also orders a strategy):
+    /// the option ordered, sent as ordered_key; an answer picking it skips the confidence gate.
     void RequestAnswer(RE::FormID target, const std::string& trigger, const std::string& line,
         std::function<void(OrgasmEngine::DecisionResult)> done, const std::string& orderKey = "");
+    /// Game thread. Like RequestAnswer (same wait for target's reply), but then asks the decision model only whether
+    /// that reply complies with one request by `by` (prompts/decisions/sexlab/minigame_comply.prompt). requestKey: the
+    /// option asked for (e.g. focused_p2), "" for a free-text request; requestText: "focus on Bob's pleasure".
+    /// comply + key: the key is applied with no confidence gate (kChanged, or kKept when already on it); comply with
+    /// no key: kChanged; refuse: kKept; nothing sent or failed: kDropped. done is called exactly once.
+    void RequestComply(RE::FormID target, const std::string& trigger, const std::string& line, RE::FormID by,
+        const std::string& requestKey, const std::string& requestText,
+        std::function<void(OrgasmEngine::DecisionResult)> done);
+    /// Game thread, every OrgasmEngine tick: sends the asked / ordered / punished decisions whose reply arrived or
+    /// timed out.
+    void Tick();
     /// Game thread. The receiver NPC is offered giver's potion (how "drink" | "lips"; potionKind "healing" |
     /// "stamina"): asks the decision model (prompts/decisions/sexlab/aid_accept.prompt) whether it accepts, then calls
     /// done(accepted) on the game thread, exactly once. No decisions provider or a failed request: accepted.

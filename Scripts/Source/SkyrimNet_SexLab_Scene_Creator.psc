@@ -53,6 +53,8 @@ bool Property force_open_selector = false Auto
 bool Property position_override = false Auto
 String[] pending_registries = None
 int num_pending_registries = 0
+; WebUI "last stage:" (loop / end / npc): what follows the chain's last animation (Scene.SetChain).
+String pending_last_stage = "npc"
 
 String no_orgasm_names = ""
 String no_stripping_names = "" 
@@ -577,6 +579,7 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     endif
     sl_scene.scene_creator_menu_called = scene_creator_menu_called
     sl_scene.SetStartTags(tags_string, tags_suppress_string)
+    sl_scene.SetChain(pending_registries, num_pending_registries, pending_last_stage)
     Release()
     DbgReturn("FinishStartScene", "sl_scene")
     return sl_scene 
@@ -1741,6 +1744,8 @@ Function ApplyWebUIState(int obj)
     else
         num_pending_registries = 0
     endif
+    ; _selected_registries is the Scene Creator chain, in play order.
+    pending_last_stage = JMap.getStr(obj, "_last_stage", "npc")
     ; Rebuild victims from V column — do not SetNames/SetMasks (would wipe UI mask).
     RebuildVictimsFromMask()
     ; WebUI initiator pulldown -> speaker (Scene.initiator, "X initiates: ..."); must be in the cast.

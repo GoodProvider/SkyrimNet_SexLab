@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Defined in PublicAPI.h (included once from Config.cpp).
@@ -99,6 +100,45 @@ namespace StrategyDecision
             static const auto start = steady_clock::now();
             return duration<double>(steady_clock::now() - start).count();
         }
+
+        // Game thread. An asked / ordered / punished decision waits for the target's LLM reply to the narration
+        // (RequestAnswer): its inline thought arrives as soon as the reply is generated; its dialogue event only when
+        // the speech completes (can be 40 s+ later). Tick sends it kReplySettle after the thought (so the reply line is
+        // in recent events), on the dialogue event, or after kReplyTimeout. Meanwhile the reply's own dialogue
+        // decision is not sent: this one replaces it.
+        constexpr double kReplySettle = 1.0;
+        constexpr double kReplyTimeout = 20.0;
+        struct Awaiting
+        {
+            std::string trigger;
+            std::string line;
+            std::string orderKey;
+            Done done;
+            double since = 0.0;
+            double thoughtAt = -1.0;
+            bool replied = false;  // the target's dialogue event arrived
+            // RequestComply: ask "comply or refuse" for one request instead of the strategy decision.
+            bool comply = false;
+            RE::FormID by = 0;
+            std::string requestKey;  // "" for a free-text request
+            std::string requestText;
+        };
+        std::unordered_map<RE::FormID, Awaiting> g_awaiting;
+        // Game thread. A comply decision is in flight for these targets: their dialogue sends no strategy decision.
+        std::unordered_set<RE::FormID> g_complyInFlight;
+
+        // Game thread. Each NPC's newest thought (SkyrimNet npc_thoughts event) and when it arrived (Seconds()):
+        // the decision's latest_thought.
+        constexpr double kThoughtFresh = 120.0;
+        struct Thought
+        {
+            std::string text;
+            double at = 0.0;
+        };
+        std::unordered_map<RE::FormID, Thought> g_lastThought;
+        // npc_thoughts callback registered. Then only a thought (or the timeout) counts as the reply: a dialogue event
+        // fires when speech completes and may belong to an earlier line.
+        bool g_thoughtsOn = false;
 
         bool ApiReady()
         {
@@ -211,8 +251,8 @@ namespace StrategyDecision
 
         // The focus actor's recent events as one timeline, oldest first, one line each: speech ("Bob said: ..."),
         // thoughts ("Nina thought: ..."), direct narrations and other events as their text. Narration inside
-        // speech is pulled out into its own line.
-        std::vector<std::string> BuildTimeline(const OrgasmEngine::DecisionInput& in)
+        // speech is pulled out into its own line. latestThought (optional): the focus actor's newest thought.
+        std::vector<std::string> BuildTimeline(const OrgasmEngine::DecisionInput& in, std::string* latestThought = nullptr)
         {
             std::vector<std::string> out;
             if (!PublicGetRecentEvents) {
@@ -251,6 +291,9 @@ namespace StrategyDecision
                 } else if (type == "npc_thoughts") {
                     if (who == in.name) {  // other actors' thoughts (telepathy) are not this actor's
                         out.push_back(who + " thought: " + text);
+                        if (latestThought) {
+                            *latestThought = text;  // oldest first: the last one is the newest
+                        }
                     }
                 } else {
                     out.push_back(text);
@@ -274,7 +317,14 @@ namespace StrategyDecision
             ctx["arousal"] = in.arousal;
             ctx["orgasms"] = in.orgasms;
             ctx["expects_orgasm"] = in.expectsOrgasm;
-            ctx["timeline"] = BuildTimeline(in);
+            std::string thought;
+            ctx["timeline"] = BuildTimeline(in, &thought);
+            // The newest thought weighs most: the one the event callback caught (fresh), else the timeline's newest.
+            if (const auto t = g_lastThought.find(in.id);
+                t != g_lastThought.end() && !t->second.text.empty() && Seconds() - t->second.at <= kThoughtFresh) {
+                thought = t->second.text;
+            }
+            ctx["latest_thought"] = Trim(thought);
             // A punishment is about what the actor is doing now: only then is the current strategy shown.
             ctx["current_key"] = trigger == "punished" ? in.currentOption : std::string{};
             // Always set: the template reads it for every trigger.
@@ -466,6 +516,147 @@ namespace StrategyDecision
             }
             webui_log::info("StrategyDecision: send {:#x} trigger={} current={} options={}", id, trigger,
                 in->currentKey, in->options.size());
+        }
+
+        // Game thread. The comply decision for `id` arrived (or failed): apply the requested key on comply.
+        void OnComplyAnswer(RE::FormID id, const Awaiting& w, int success, const std::string& answer,
+            const std::string& json)
+        {
+            using R = OrgasmEngine::DecisionResult;
+            g_complyInFlight.erase(id);
+            R result = R::kDropped;
+            std::string key = answer;
+            double confidence = -1.0;
+            if (!success) {
+                NoteFailure(id, json);
+            } else {
+                try {
+                    const auto& a = nlohmann::json::parse(json).at("answers").at("comply");
+                    key = a.value("choice", key);
+                    confidence = a.value("confidence", -1.0);
+                } catch (...) {
+                }
+                if (key != "comply") {
+                    result = R::kKept;
+                } else if (w.requestKey.empty()) {
+                    result = R::kChanged;  // a free-text request: nothing to apply, but it agreed
+                } else {
+                    RE::Actor* actor = RE::TESForm::LookupByID<RE::Actor>(id);
+                    OrgasmEngine::DecisionInput in;
+                    if (actor && OrgasmEngine::GetStrategyDecisionInput(actor, in)) {
+                        result = ApplyStrategyAnswer(id, in, w.requestKey, -1.0);  // complying: no confidence gate
+                    }
+                    if (result == R::kChanged) {
+                        g_holdUntil[id] = Seconds() + kHoldSeconds;
+                    }
+                }
+            }
+            webui_log::info("StrategyDecision: comply {:#x} trigger={} key='{}' answer {} p={:.2f} ({})", id, w.trigger,
+                w.requestKey, success ? key : std::string("failed"), confidence,
+                success ? ResultText(result) : "dropped: request failed");
+            if (w.done) {
+                w.done(result);
+            }
+        }
+
+        // Game thread. Released comply request: asks whether target's reply complies with the request.
+        void SendComply(RE::FormID id, Awaiting w)
+        {
+            using R = OrgasmEngine::DecisionResult;
+            constexpr const char* kComplyTemplate = "sexlab/minigame_comply";
+            RE::Actor* actor = RE::TESForm::LookupByID<RE::Actor>(id);
+            RE::Actor* by = RE::TESForm::LookupByID<RE::Actor>(w.by);
+            OrgasmEngine::DecisionInput in;
+            if (g_noRoute || !g_installed || !OrgasmEngine::IsStrategyDecisionEnabled() || !actor ||
+                !OrgasmEngine::GetStrategyDecisionInput(actor, in)) {
+                if (w.done) {
+                    w.done(R::kDropped);
+                }
+                return;
+            }
+            nlohmann::json ctx;
+            ctx["trigger"] = w.trigger;
+            ctx["focus_uuid"] = UuidOf(id);
+            ctx["focus_name"] = in.name;
+            const char* byName = by ? by->GetDisplayFullName() : nullptr;
+            ctx["by_uuid"] = UuidOf(w.by);
+            ctx["by_name"] = byName ? byName : "";
+            ctx["by_is_player"] = by && by->IsPlayerRef();
+            ctx["request_text"] = w.requestText;
+            ctx["last_line_text"] = w.line;
+            std::string thought;
+            ctx["timeline"] = BuildTimeline(in, &thought);
+            if (const auto t = g_lastThought.find(id);
+                t != g_lastThought.end() && !t->second.text.empty() && Seconds() - t->second.at <= kThoughtFresh) {
+                thought = t->second.text;
+            }
+            ctx["latest_thought"] = Trim(thought);
+            std::string current;
+            for (const auto& o : in.options) {
+                if (o.key == in.currentOption) {
+                    current = o.text;
+                    break;
+                }
+            }
+            ctx["current_text"] = current;
+            auto shared = std::make_shared<Awaiting>(std::move(w));
+            g_complyInFlight.insert(id);
+            const bool queued = PublicSendCustomDecisionToLLM(kComplyTemplate, ctx.dump().c_str(), kMaxProbabilities,
+                [id, shared](const char* answer, const char* resultJson, int success) {
+                    // SkyrimNet ThreadPool: copy, then do the work on the game thread.
+                    std::string a = answer ? answer : "";
+                    std::string j = resultJson ? resultJson : "";
+                    SKSE::GetTaskInterface()->AddTask([id, shared, success, a = std::move(a), j = std::move(j)]() {
+                        OnComplyAnswer(id, *shared, success, a, j);
+                    });
+                });
+            if (!queued) {
+                g_complyInFlight.erase(id);
+                webui_log::warn("StrategyDecision: comply {:#x} not queued", id);
+                if (shared->done) {
+                    shared->done(R::kDropped);
+                }
+                return;
+            }
+            webui_log::info("StrategyDecision: comply send {:#x} trigger={} key='{}' request='{}'", id, shared->trigger,
+                shared->requestKey, shared->requestText);
+        }
+
+        // Game thread. Parks an asked / ordered / punished request (n.since is set here) until target's reply.
+        // Already waiting: one decision answers both (the dones chain). A comply request takes the entry over; a plain
+        // request arriving on a comply entry keeps the comply query; between plain ones a punishment keeps its query
+        // over an ask / order. A new narration restarts the wait for the reply to it.
+        void Await(RE::FormID target, Awaiting n)
+        {
+            using R = OrgasmEngine::DecisionResult;
+            n.since = Seconds();
+            const auto it = g_awaiting.find(target);
+            if (it == g_awaiting.end()) {
+                webui_log::info("StrategyDecision: await {:#x} trigger={}{} (decides after the reply)", target,
+                    n.trigger, n.comply ? " comply" : "");
+                g_awaiting.emplace(target, std::move(n));
+                return;
+            }
+            Awaiting& w = it->second;
+            Done done = std::move(n.done);
+            if (done) {
+                w.done = w.done ? Done([a = std::move(w.done), b = std::move(done)](R r) {
+                    a(r);
+                    b(r);
+                })
+                                : std::move(done);
+            }
+            const std::string newTrigger = n.trigger;
+            if (n.comply || (!w.comply && (w.trigger != "punished" || n.trigger == "punished"))) {
+                n.done = std::move(w.done);
+                w = std::move(n);
+            } else {
+                w.since = n.since;
+            }
+            w.thoughtAt = -1.0;
+            w.replied = false;
+            webui_log::info("StrategyDecision: await {:#x} trigger={} (merged, asks as {}{})", target, newTrigger,
+                w.trigger, w.comply ? " comply" : "");
         }
 
         // ---- Auto play: the player's turn ----
@@ -833,9 +1024,22 @@ namespace StrategyDecision
                 if (!actor || !OrgasmEngine::IsManaged(actor)) {
                     return;
                 }
-                // The speaker's own strategy (the player's comes with the player's turn below).
+                // The speaker's own strategy (the player's comes with the player's turn below). A reply to an ask /
+                // order / punishment releases that decision instead (Tick), and none is sent while it is in flight.
                 if (actor != player) {
-                    Request(id, "dialogue", line);
+                    const auto p = g_pending.find(id);
+                    if (const auto w = g_awaiting.find(id); w != g_awaiting.end()) {
+                        if (!g_thoughtsOn) {
+                            w->second.replied = true;
+                        }
+                    } else if (g_complyInFlight.contains(id) ||
+                               (p != g_pending.end() && p->second.inFlight && (p->second.active || p->second.done))) {
+                        webui_log::info("StrategyDecision: {:#x} dialogue decision skipped (ask / order / punish "
+                                        "decision in flight)",
+                            id);
+                    } else {
+                        Request(id, "dialogue", line);
+                    }
                 }
                 // Auto play: every line in the player's scene is the player's turn. The player's own line never
                 // asks to speak again.
@@ -845,6 +1049,54 @@ namespace StrategyDecision
                     OrgasmEngine::SceneIdOf(player, playerSid) && sid == playerSid) {
                     const char* name = actor->GetDisplayFullName();
                     RequestPlayerTurn("dialogue", line, actor == player ? "" : (name ? name : ""), actor != player);
+                }
+            });
+        }
+
+        // SkyrimNet ThreadPool: an NPC thought (npc_thoughts; inline thoughts register when the reply is generated,
+        // before it is spoken). Kept as the actor's latest thought; a pending ask / order / punishment counts it as
+        // the reply.
+        void OnThoughtEvent(const char* json)
+        {
+            if (!json) {
+                return;
+            }
+            RE::FormID id = 0;
+            std::string text;
+            try {
+                const auto j = nlohmann::json::parse(json);
+                id = j.value("originatingActorFormId", static_cast<RE::FormID>(0));
+                if (const auto it = j.find("data"); it != j.end()) {
+                    nlohmann::json data = *it;
+                    if (data.is_string()) {
+                        const std::string raw = data.get<std::string>();
+                        data = nlohmann::json::parse(raw, nullptr, false);
+                        if (data.is_discarded()) {
+                            text = raw;
+                        }
+                    }
+                    if (data.is_object()) {
+                        for (const char* k : { "thoughts", "thought", "text" }) {
+                            if (data.contains(k) && data[k].is_string()) {
+                                text = data[k].get<std::string>();
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (...) {
+                return;
+            }
+            text = Trim(text);
+            if (id == 0 || text.empty()) {
+                return;
+            }
+            SKSE::GetTaskInterface()->AddTask([id, text = std::move(text)]() {
+                g_lastThought[id] = { text, Seconds() };
+                if (const auto w = g_awaiting.find(id); w != g_awaiting.end() && w->second.thoughtAt < 0.0) {
+                    w->second.thoughtAt = Seconds();
+                    webui_log::info("StrategyDecision: {:#x} reply thought after {:.1f}s: {}", id,
+                        w->second.thoughtAt - w->second.since, text.substr(0, 160));
                 }
             });
         }
@@ -872,12 +1124,17 @@ namespace StrategyDecision
             return;
         }
         g_installed = true;
-        webui_log::info("StrategyDecision: installed ({} dialogue event types)", registered);
+        g_thoughtsOn = PublicRegisterEventCallback("npc_thoughts", OnThoughtEvent) != 0;
+        webui_log::info("StrategyDecision: installed ({} dialogue event types, thoughts {})", registered,
+            g_thoughtsOn ? "on" : "off: replies are read from dialogue events");
     }
 
     void Reset()
     {
         g_pending.clear();
+        g_awaiting.clear();
+        g_complyInFlight.clear();
+        g_lastThought.clear();
         g_holdUntil.clear();
         g_turn = PlayerTurn{};
         g_noRoute = false;
@@ -904,7 +1161,69 @@ namespace StrategyDecision
     void RequestAnswer(RE::FormID target, const std::string& trigger, const std::string& line,
         std::function<void(OrgasmEngine::DecisionResult)> done, const std::string& orderKey)
     {
-        Request(target, trigger, line, std::move(done), orderKey);
+        // Nothing would be sent: answer now (Request calls done with kDropped).
+        if (g_noRoute || !g_installed || !OrgasmEngine::IsStrategyDecisionEnabled()) {
+            Request(target, trigger, line, std::move(done), orderKey);
+            return;
+        }
+        Awaiting n;
+        n.trigger = trigger;
+        n.line = line;
+        n.orderKey = orderKey;
+        n.done = std::move(done);
+        Await(target, std::move(n));
+    }
+
+    void RequestComply(RE::FormID target, const std::string& trigger, const std::string& line, RE::FormID by,
+        const std::string& requestKey, const std::string& requestText,
+        std::function<void(OrgasmEngine::DecisionResult)> done)
+    {
+        if (g_noRoute || !g_installed || !OrgasmEngine::IsStrategyDecisionEnabled()) {
+            if (done) {
+                done(OrgasmEngine::DecisionResult::kDropped);
+            }
+            return;
+        }
+        Awaiting n;
+        n.trigger = trigger;
+        n.line = line;
+        n.done = std::move(done);
+        n.comply = true;
+        n.by = by;
+        n.requestKey = requestKey;
+        n.requestText = requestText;
+        Await(target, std::move(n));
+    }
+
+    void Tick()
+    {
+        if (g_awaiting.empty()) {
+            return;
+        }
+        const double now = Seconds();
+        std::vector<std::pair<RE::FormID, Awaiting>> ready;
+        for (auto it = g_awaiting.begin(); it != g_awaiting.end();) {
+            const Awaiting& w = it->second;
+            const char* why = w.thoughtAt >= 0.0 && now - w.thoughtAt >= kReplySettle ? "thought"
+                              : w.replied                                             ? "dialogue"
+                              : now - w.since >= kReplyTimeout                        ? "timeout"
+                                                                                      : nullptr;
+            if (!why) {
+                ++it;
+                continue;
+            }
+            webui_log::info("StrategyDecision: {:#x} released after reply ({}) {:.1f}s trigger={}", it->first, why,
+                now - w.since, w.trigger);
+            ready.emplace_back(it->first, std::move(it->second));
+            it = g_awaiting.erase(it);
+        }
+        for (auto& [id, w] : ready) {
+            if (w.comply) {
+                SendComply(id, std::move(w));
+            } else {
+                Request(id, w.trigger, w.line, std::move(w.done), w.orderKey);
+            }
+        }
     }
 
     void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,

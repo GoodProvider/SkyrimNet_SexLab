@@ -62,11 +62,15 @@ v0.31.5+ length rules in `0050_sexlab_activity.prompt` when `_pain_` / `_pleasur
 
 ## Strategy decision (`decisions/sexlab/minigame_strategy`)
 
-A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plus one `[ question strategy choice ]` with `[ criteria ]`. The DLL sends it through `PublicSendCustomDecisionToLLM` for one NPC at a time (scene start, after that NPC speaks, and right after it is asked, ordered or punished). The question asks which strategy the NPC decides to start using now; it ranks `last_line`, the NPC's own thoughts, and recent events over older ones. A `timeline` state block lists the NPC's recent speech, thoughts, narrations and events, one line each (narration inside speech on its own line). The current strategy and earlier punishments are never shown: asks, orders, refusals and punishments are events in the timeline. Flow and context keys: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions).
+A SkyrimNet **decision template**, not a chat prompt: `[ state … ]` blocks plus one `[ question strategy choice ]` with `[ criteria ]`. The DLL sends it through `PublicSendCustomDecisionToLLM` for one NPC at a time (scene start, after that NPC speaks, and after its LLM reply to being asked, ordered or punished). The question asks which strategy the NPC decides to start using now; it ranks `latest_thought` (the NPC's newest thought), `last_line`, the NPC's other thoughts, and recent events over older ones. A `timeline` state block lists the NPC's recent speech, thoughts, narrations and events, one line each (narration inside speech on its own line). The current strategy and earlier punishments are never shown: asks, orders, refusals and punishments are events in the timeline. Flow and context keys: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions).
 
 - Keep `{{ o.key }}` exactly as given: the DLL maps the answer back by key (`passive`, `tease_p2`, …).
 - One criterion per line; profiles and other multi-line decorators go in a `[ state ]` block.
 - The pushed context keys are bare lowercase (`focus_uuid`, `last_line_text`, `partners[].relationship`, …), per [../reference/json-keys.md](../reference/json-keys.md).
+
+## Comply decision (`decisions/sexlab/minigame_comply`)
+
+A decision template with one `[ question comply choice ]` (`comply` / `refuse`). The DLL sends it after an NPC's LLM reply to being asked or ordered to take a strategy, punished with an order, or punished for a refused request. It asks only whether that reply goes along with the request (`request_text`). `latest_thought` outranks speech, and earlier defiance does not count against a reply that gives in. The game applies the requested strategy on `comply` and narrates the agree / refuse line. Keep the `comply` / `refuse` keys as given. Context keys: [../reference/json-keys.md](../reference/json-keys.md); flow: [../developers/orgasm-engine.md](../developers/orgasm-engine.md#strategy-decisions).
 
 ## Player turn decision (`decisions/sexlab/minigame_player_turn`)
 
@@ -89,6 +93,7 @@ contains(_direct_narration, " is orgasming.")
 | DirectNarration + `" is orgasming."` | `0550_sexlab_narration.prompt` |
 | Scene `RenderSlPrompt` (`afterglow.prompt`, `cum.prompt`) | DirectNarration / RegisterEvent |
 | `StrategyDecision.cpp` context JSON + `options[].key` | `decisions/sexlab/minigame_strategy.prompt` |
+| `StrategyDecision.cpp` `SendComply` JSON + `comply` / `refuse` | `decisions/sexlab/minigame_comply.prompt` |
 | `StrategyDecision.cpp` player turn JSON + question ids + option keys | `decisions/sexlab/minigame_player_turn.prompt` |
 
 ## Checklist

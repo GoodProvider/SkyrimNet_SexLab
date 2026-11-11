@@ -127,6 +127,8 @@ float menu_tick_at = 0.0
 ; The HUD view does not survive a save; these do, and OnPlayerLoadGame reopens the list.
 int list_phase = 0
 int list_index = 0
+; End-list choice: the chain's next animation (the list's top line "Next: <name>"). 0 stop .. 4 anal, 5 victim switch.
+int Property LINE_NEXT = 6 AutoReadOnly
 bool list_ui = false
 bool list_npc_only = false
 bool list_counted = false
@@ -178,6 +180,13 @@ String storage_orgasm_narrated_key = "skyrimnet_sexlab_scene_orgasm_narrated"
 int thread_obj = 0 ; Thread_obj will be reused 
 String[] played_registries
 int played_registries_count = 0
+; Animation chain (Scene Creator / Description Editor): the order the scene plays its animations. At an animation's
+; last stage the next one is the end list's preselected top line, no NPC decision (LastStage_ChainNext). last_stage_mode
+; (the WebUI "last animation" pulldown), at the last stage of the chain's last animation: 0 NPC choice (the decision
+; call), 1 end the scene, 2 loop (the first animation is the next).
+String[] chain_registries
+int chain_count = 0
+int last_stage_mode = 0
 ; Per-registry user-edited animation defaults (Scene/AnimPanel). Wins over AnimDB on anim switch until Save.
 int user_anim_defaults = 0
 
@@ -724,6 +733,8 @@ Function Release()
         SNSL_JMap.clear(user_anim_defaults)
     endif
     played_registries_count = 0
+    chain_count = 0
+    last_stage_mode = 0
 
     sender = None 
     receiver = None 
@@ -3655,8 +3666,45 @@ Function LastStage_Snapshot()
 EndFunction
 
 ; SexLab's Advance key (Space) selects while the list is up: on the final stage it would end the scene.
+; The chain's next animation (LastStage_ChainNext) is the list's top line "Next: <name>" (choice LINE_NEXT). Without
+; one, a LINE_NEXT selection falls back to stop.
 Function LastStage_ShowList(int index)
-    SkyrimNet_SexLab_WebUI.LastStage_Show(index, ((SexLab as Quest) as sslSystemConfig).AdvanceAnimation)
+    String next_name = ""
+    String reg = LastStage_ChainNext()
+    if reg != ""
+        sslBaseAnimation anim = ResolveAnimation(sexlab, reg)
+        if anim
+            next_name = anim.Name
+        endif
+        if next_name == ""
+            next_name = reg
+        endif
+    elseif list_index == LINE_NEXT
+        list_index = 0
+    endif
+    if index == LINE_NEXT && next_name == ""
+        index = 0
+    endif
+    SkyrimNet_SexLab_WebUI.LastStage_Show(index, ((SexLab as Quest) as sslSystemConfig).AdvanceAnimation, next_name)
+EndFunction
+
+; The act line of the chain's next animation, for LastStage_NoteIntent: vaginal 2, oral 3, anal 4 (Engine_SetSkills'
+; tag order), else cuddle (1). -1 when the chain has no next animation.
+int Function LastStage_ChainActLine()
+    String reg = LastStage_ChainNext()
+    if reg == ""
+        return -1
+    endif
+    sslBaseAnimation anim = ResolveAnimation(sexlab, reg)
+    int line = 1
+    if AnimTag(anim, "Vaginal")
+        line = 2
+    elseif AnimTag(anim, "Anal")
+        line = 4
+    elseif AnimTag(anim, "Oral") || AnimTag(anim, "Blowjob") || AnimTag(anim, "Cunnilingus")
+        line = 3
+    endif
+    return line
 EndFunction
 
 Function LastStage_Begin()
@@ -3705,13 +3753,29 @@ Function LastStage_Begin()
             return
         endif
     endif
+    ; Chain: the next animation is already chosen, so the NPC is not asked. Its top line (LINE_NEXT) is preselected
+    ; and the deadline (or the player) plays it; the chain's last animation under "end" preselects stop.
+    String chain_next = LastStage_ChainNext()
+    if chain_next != "" || LastStage_ChainEnds()
+        list_phase = 2
+        list_index = 0
+        if chain_next != ""
+            list_index = LINE_NEXT
+        endif
+        LastStage_Snapshot()
+        if list_ui
+            LastStage_ShowList(list_index)
+        endif
+        Trace("LastStage_Begin", "--- chain next:"+chain_next+" line:"+list_index+" mode:"+LastStageModeName()+" (no npc decision)")
+        return
+    endif
     Actor caller = LastStage_Caller()
     if caller == None
         list_phase = 2
         list_index = 0
         LastStage_Snapshot()
         if list_ui
-            LastStage_ShowList(0)
+            LastStage_ShowList(list_index)
         endif
         Trace("LastStage_Begin", "no npc caller, stop")
         return
@@ -3865,6 +3929,94 @@ Function SetStartTags(String tags_csv, String suppress_csv)
     start_suppress = suppress_csv
 EndFunction
 
+; "loop" / "end" / anything else (npc) -> last_stage_mode.
+int Function LastStageModeFromString(String mode)
+    if mode == "end"
+        return 1
+    elseif mode == "loop"
+        return 2
+    endif
+    return 0
+EndFunction
+
+String Function LastStageModeName()
+    if last_stage_mode == 1
+        return "end"
+    elseif last_stage_mode == 2
+        return "loop"
+    endif
+    return "npc"
+EndFunction
+
+int Function ChainIndexOf(String reg)
+    int i = 0
+    while i < chain_count
+        if chain_registries[i] == reg
+            return i
+        endif
+        i += 1
+    endwhile
+    return -1
+EndFunction
+
+; Scene Creator start / WebUI commit: the chain in play order (blank and repeated entries dropped, at most 128)
+; and what follows its last animation ("loop" / "end" / "npc").
+Function SetChain(String[] regs, int count, String mode)
+    chain_count = 0
+    if count > 128
+        count = 128
+    endif
+    int size = count
+    if size < 1
+        size = 1
+    endif
+    chain_registries = Utility.CreateStringArray(size)
+    int i = 0
+    while i < count
+        String reg = regs[i]
+        if reg != "" && ChainIndexOf(reg) < 0
+            chain_registries[chain_count] = reg
+            chain_count += 1
+        endif
+        i += 1
+    endwhile
+    last_stage_mode = LastStageModeFromString(mode)
+    Trace("SetChain", "--- "+chain_count+" animations, last stage:"+LastStageModeName())
+EndFunction
+
+; Description Editor commit keys: _last_stage, and _chain_registries when non-empty (an empty list keeps the chain).
+Function WebUI_ApplyChain(int obj)
+    if JMap.hasKey(obj, "_last_stage")
+        last_stage_mode = LastStageModeFromString(JMap.getStr(obj, "_last_stage", "npc"))
+    endif
+    int arr = JMap.getObj(obj, "_chain_registries")
+    int n = 0
+    if arr
+        n = JArray.count(arr)
+    endif
+    if n > 0
+        String[] regs = Utility.CreateStringArray(n)
+        int i = 0
+        while i < n
+            regs[i] = JArray.getStr(arr, i, "")
+            i += 1
+        endwhile
+        SetChain(regs, n, LastStageModeName())
+    endif
+    ; The list is up: its top line follows the edit and a chained next is the selection again.
+    if list_phase == 2 && !list_switching && !ending_mid
+        if LastStage_ChainNext() != ""
+            list_index = LINE_NEXT
+        elseif list_index == LINE_NEXT
+            list_index = 0
+        endif
+        if list_ui
+            LastStage_ShowList(list_index)
+        endif
+        Trace("WebUI_ApplyChain", "list up: line "+list_index)
+    endif
+EndFunction
+
 Function LastStage_AddCsv(int arr, String csv)
     if csv == ""
         return
@@ -3893,12 +4045,12 @@ Function LastStage_Commit(bool from_deadline)
         LastStage_Stop()
         return
     endif
-    ; Several loaded animations (thread.Animations): the next unplayed one plays on every path, no editor
-    ; (LastStage_PickRegistry). Once all have played, the paths below apply as before.
+    ; The chain's next line (LINE_NEXT) plays that animation, no editor (LastStage_PickRegistry). The act lines keep
+    ; their usual paths, chain or not.
     ; NPC-only (list_ui false) always random-picks, even when sexlab.tags.nonplayer is on:
     ; nobody is there to operate the Description Editor. The deadline random-picks too: the editor
     ; only opens on a key press, and a commit that leaves the list up would repeat every poll.
-    if !from_deadline && list_ui && LastStage_SelectorOn() && LastStage_LoadedNext() == ""
+    if !from_deadline && list_ui && LastStage_SelectorOn() && list_index != LINE_NEXT
         Trace("LastStage_Commit", "line:"+list_index+" deadline:"+from_deadline+" editor")
         LastStage_OpenEditor()
         return
@@ -3926,51 +4078,68 @@ Function LastStage_AddStr(int arr, String tag)
     endif
 EndFunction
 
-; The scene's loaded list (thread.Animations, picked in the Description Editor / Scene Creator): the first entry after
-; the playing one that this scene has not played yet and SexLab can resolve. No wrap. "" with one loaded animation or
-; none left. A pick that was not loaded is appended last (WebUI_AddRegistryToThread), so it never jumps the queue.
-String Function LastStage_LoadedNext()
-    if thread == None || sexlab == None
+; The chain's animation after the playing one (Scene Creator / Description Editor order), skipping entries SexLab
+; cannot resolve. "" when the playing animation is not in the chain, or it is the last and the mode is not loop.
+; Loop wraps to the first; a one-animation chain returns the playing animation (LastStage_TrySwitch replays it).
+String Function LastStage_ChainNext()
+    if thread == None || sexlab == None || chain_count == 0
         return ""
     endif
-    sslBaseAnimation[] anims = thread.Animations
-    if !anims || anims.length < 2
+    if thread.Animation == None
         return ""
     endif
-    String cur = ""
-    if thread.Animation
-        cur = thread.Animation.Registry
+    int i = ChainIndexOf(thread.Animation.Registry)
+    if i < 0
+        return ""
     endif
-    int start = 0
-    int i = 0
-    while i < anims.length
-        if anims[i] && cur != "" && anims[i].Registry == cur
-            start = i + 1
+    int k = i + 1
+    while k < chain_count
+        if ResolveAnimation(sexlab, chain_registries[k]) != None
+            return chain_registries[k]
         endif
-        i += 1
+        k += 1
     endwhile
-    i = start
-    while i < anims.length
-        if anims[i]
-            String reg = anims[i].Registry
-            if reg != "" && reg != cur && !WasRegistryPlayed(reg) && ResolveAnimation(sexlab, reg) != None
-                Trace("LastStage_LoadedNext", "picked:"+reg+" index:"+i+"/"+anims.length)
-                return reg
+    if last_stage_mode == 2
+        k = 0
+        while k <= i
+            if ResolveAnimation(sexlab, chain_registries[k]) != None
+                return chain_registries[k]
             endif
-        endif
-        i += 1
-    endwhile
+            k += 1
+        endwhile
+    endif
     return ""
 EndFunction
 
+; The playing animation ends the chain and "last animation" is end: stop without asking the NPC.
+bool Function LastStage_ChainEnds()
+    if last_stage_mode != 1 || chain_count == 0 || thread == None
+        return false
+    endif
+    if thread.Animation == None
+        return false
+    endif
+    if ChainIndexOf(thread.Animation.Registry) < 0
+        return false
+    endif
+    return LastStage_ChainNext() == ""
+EndFunction
+
 String Function LastStage_PickRegistry()
-    if thread == None || sexlab == None || list_index < 1 || list_index > 5
+    if thread == None || sexlab == None || list_index < 1 || list_index > LINE_NEXT
         return ""
     endif
-    String loaded = LastStage_LoadedNext()
-    if loaded != ""
-        Trace("LastStage_PickRegistry", "line:"+list_index+" loaded next:"+loaded)
-        return loaded
+    ; The chain's next line, and line 5 (victim-scene switch), take the chain's next animation. The act lines tag-pick.
+    if list_index == LINE_NEXT || list_index == 5
+        String chained = LastStage_ChainNext()
+        if chained != ""
+            Trace("LastStage_PickRegistry", "line:"+list_index+" chain next:"+chained)
+            return chained
+        endif
+        if list_index == LINE_NEXT
+            Trace("LastStage_PickRegistry", "line:"+list_index+" no chain next")
+            return ""
+        endif
     endif
     ; Line 5 (Ending_MidPoll): the Scene Creator's tags; a scene it did not start has none, so the act lines follow.
     if list_index == 5 && start_tags == ""
@@ -4079,6 +4248,12 @@ bool Function LastStage_TrySwitch()
     if reg == ""
         return false
     endif
+    ; One-animation loop on P+: ResetScene to the playing scene is a no-op, so step back instead.
+    if IsSexLabPPlus() && thread.Animation && thread.Animation.Registry == reg
+        Trace("LastStage_TrySwitch", "--- P+ loop of one animation: back a stage")
+        LastStage_Step(-1)
+        return true
+    endif
     list_switching = true
     if !WebUI_SwitchToRegistry(reg, true)
         LastStage_SwitchFailed()
@@ -4130,13 +4305,17 @@ Function LastStage_OpenEditor()
 EndFunction
 
 Function LastStage_NoteIntent()
-    if list_index == 1
+    int line = list_index
+    if line == LINE_NEXT
+        line = LastStage_ChainActLine()
+    endif
+    if line == 1
         intent = "cuddling"
-    elseif list_index == 2
+    elseif line == 2
         intent = "vaginal sex"
-    elseif list_index == 3
+    elseif line == 3
         intent = "oral sex"
-    elseif list_index == 4
+    elseif line == 4
         intent = "anal sex"
     endif
 EndFunction
@@ -4249,6 +4428,10 @@ Function LastStage_OnDecision(int choice)
         choice = 0
     endif
     list_index = choice
+    ; A chained animation left (added while the NPC decided): its top line replaces the NPC's choice (even stop).
+    if LastStage_ChainNext() != ""
+        list_index = LINE_NEXT
+    endif
     list_phase = 2
     LastStage_Snapshot()
     if list_ui
@@ -4258,7 +4441,7 @@ Function LastStage_OnDecision(int choice)
 EndFunction
 
 Function LastStage_OnMove(int choice)
-    if list_phase == 2 && list_ui && choice >= 0 && choice <= 4
+    if list_phase == 2 && list_ui && ((choice >= 0 && choice <= 4) || choice == LINE_NEXT)
         list_index = choice
     endif
 EndFunction
@@ -4267,7 +4450,7 @@ Function LastStage_OnSelect(int choice)
     if list_phase != 2 || !list_ui
         return
     endif
-    if choice >= 0 && choice <= 4
+    if (choice >= 0 && choice <= 4) || choice == LINE_NEXT
         list_index = choice
     endif
     LastStage_Commit(false)
@@ -7407,6 +7590,15 @@ int Function BuildWebUISceneMenuObject()
         i += 1
     endwhile
     SNSL_JMap.setObj(obj, "_played_registries", played)
+    ; The chain (empty: the page starts it as the playing animation) and what follows its last animation.
+    int chain = SNSL_JArray.object()
+    i = 0
+    while i < chain_count
+        SNSL_JArray.addStr(chain, chain_registries[i])
+        i += 1
+    endwhile
+    SNSL_JMap.setObj(obj, "_chain_registries", chain)
+    SNSL_JMap.setStr(obj, "_last_stage", LastStageModeName())
     if manager && manager.group_info > 0
         ; manager.group_info is still a JContainers map (Scene_Manager.psc not migrated this
         ; stage) -- bridge these two small subtrees across with a JSON round-trip.
@@ -8092,6 +8284,11 @@ Function ApplyWebUICommit(int obj)
         return
     endif
     if thread == None
+        return
+    endif
+    WebUI_ApplyChain(obj)
+    ; Description Editor chain / last-stage edit: nothing else in the commit.
+    if JMap.getInt(obj, "_chain_only", 0) == 1
         return
     endif
     int i = 0

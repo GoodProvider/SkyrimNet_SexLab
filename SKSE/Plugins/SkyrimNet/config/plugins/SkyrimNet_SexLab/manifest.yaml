@@ -902,6 +902,15 @@ schema:
       defaultValue: 0.6
       category: "Mini-game"
 
+    - name: "Maximum serial punishment rejects"
+      path: "sexlab.minigame.max_serial_punishment_rejects"
+      type: "int"
+      description: "How many punishments in a row an NPC can take before giving in. After one fewer refusals, the next punishment skips the decision model, and the NPC switches strategy as part of that punishment's narration (\"... . Nina switches to ...\"). A comply or a strategy change resets the count. Does not apply to DOM slaves. 0 = never."
+      min: 0
+      max: 10
+      defaultValue: 3
+      category: "Mini-game"
+
     - name: "Default strategy (normal)"
       path: "sexlab.minigame.default_strategy_normal"
       type: "select"

@@ -1,5 +1,43 @@
 # Knowledgebase
 
+## Animation chain replaces the loaded-list walk; Scene Creator shrunk (2026-11-11, built, untested in game)
+
+Plan and status: [checkpoints/2026-11-11-chain/checkpoint-01.md](checkpoints/2026-11-11-chain/checkpoint-01.md).
+
+- **Chain is not `thread.Animations`:** `Scene.chain_registries` is a separate ordered list (`SetChain` from the Scene Creator's `_selected_registries`, `WebUI_ApplyChain` from Description Editor commits). A SexLab-started thread holds many candidate animations, so walking `thread.Animations` (the old `LastStage_LoadedNext`) would chain through all of them. A scene without a chain behaves as before (NPC decision).
+- **No decision call while the chain decides:** `LastStage_Begin` returns before `LastStage_Request` when `LastStage_ChainNext` has a next or `LastStage_ChainEnds` (mode end). The deadline then commits the preselected line. Check this first if a chained scene still logs a `sexlab/last_stage` request.
+- **No last-played time:** AnimDB keeps only `play_counts`. The Scene Creator's opening chain seed picks at random among the matches tied for the lowest `_play_count`.
+- **Chain-only commits:** the Description Editor sends `_chain_only: 1`; `ApplyWebUICommit` applies the chain and returns before positions, consent and stage handling. A full SceneInfo commit with an empty `_chain_registries` keeps the scene's chain.
+- **List rows ≠ choice codes:** with a chain next the HUD's row 0 is "Next: <name>" (choice `LINE_NEXT` = 6) and the act lines sit one row lower. Only `Hud.cpp` (`RowOfChoice` / `ChoiceOfRow`) converts; Papyrus, `LastStage_Index` and `LastStage_OnMove` / `OnSelect` always use choice codes. A new line or path that passes a row to Papyrus picks the wrong act. Plan: [checkpoint-02.md](checkpoints/2026-11-11-chain/checkpoint-02.md).
+- **P+ one-animation loop:** ResetScene to the playing scene is a no-op, so `LastStage_TrySwitch` steps back (`LastStage_Step(-1)`) instead.
+
+## An ordered NPC said "I agree" but JEV had already picked; dialogue events come late (2026-11-10, not yet tested in game)
+
+**Symptom:**
+- After an order or a punishment, the target's spoken reply and the strategy decision (JEV) could disagree.
+
+Log: `checkpoints/2026-11-10-features/logs/2026-11-10-09-17-47/`:
+- `SkyrimNet_SexLab.log` L532-L550: `onPunishResult verb=order` (08:34:19.636), then `send ... trigger=ordered` 3 ms later, and the answer at 19.864.
+- `SkyrimNet.log` L7385-L7398: Coralyn's reply generated at 08:34:21.674, inline thought registered at 21.679, dialogue committed at 21.680.
+- The `dialogue` event callback for that reply only fired at 08:35:04 (mod log L558), together with `SpeechComplete`.
+
+**Cause:**
+- `RequestAnswer` sent the decision as soon as the order was narrated, before the LLM had replied.
+- SkyrimNet's `dialogue` event (`PublicRegisterEventCallback`) fires when the speech **completes**, which can be 40 s+ after the reply is generated. `npc_thoughts` (inline `<internal_thought>`) registers when the reply is generated.
+
+**Fix:**
+- Asked / ordered / punished decisions wait for the target's next `npc_thoughts` event (+1 s settle), with a 20 s timeout, then send their own query in place of the reply's dialogue decision (`StrategyDecision::Tick`, `g_awaiting`). `latest_thought` is ranked first in `minigame_strategy.prompt`.
+- Don't use a dialogue event as "the reply just happened": it may belong to an earlier line.
+
+**Follow-up (2026-11-10, second test, not yet tested in game):** waiting for the reply worked, but the 9-option re-pick still missed.
+Log: `checkpoints/2026-11-10-features/logs/2026-11-10-10-02-07/`.
+- The reply **is** in the decision's timeline at release. The response is committed when it is generated (`SkyrimNet.log` L13399: the timeline ends with "Coralyn said: … I will do no such thing"). Stale context was not the cause.
+- `AskOrderNarrated` never passed `requestKey` as `orderKey`. Plain ask / order decisions went out with `ordered_key = ""`, and an "obeys" answer still faced the confidence floor.
+- The 9-way classifier gave weak or contrary picks (`passive p=0.22`, `p=0.51`, "low confidence, kept current").
+- **Fix:** a request with a key (ask, order, punish + order, punish for a refused request) now gets a binary `sexlab/minigame_comply` decision after the reply (`StrategyDecision::RequestComply` / `SendComply`). On comply the key is applied with no confidence floor. Only plain punishments still use `minigame_strategy`.
+- **Cap (2026-11-10, not yet tested in game):** a target that refuses punishment after punishment never changes. `sexlab.minigame.max_serial_punishment_rejects` (default 3) counts LLM refusals in a row per target (`ActorState::punishRejects`, `NotePunishAnswer`; a DOM roll doesn't count). After N−1 refusals, the Nth punishment skips the decision (`ForcedGiveIn` → `GiveInLocked`, the same pick as `Submit`), and its narration ends "<name> switches to <choice>." First game test: a DOM slave (position 0) never gave in, counting to 8/3, because `ForcedGiveIn` excluded `dom`; DOM slaves are now included, and both functions share `PunishCapApplies`.
+- Still open: the dialogue LLM firing `SexLab_AllowOrgasm` while the plain `dialogue` decision answers `passive p=0.51` (`SkyrimNet.log` L26007-L26034, mod log 09:36:48).
+
 ## The final-stage hold ran to its max; a partner's bar dropped; necro picked by name (2026-11-07, verified in game)
 
 **Symptom:**
@@ -1743,6 +1781,14 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - AnimDB adds `sexual` from `sex_tags.json` in `LoadSynonyms()`, which runs after `LoadAllRowsLocked` at open and after EndSync. That pass upserts the changed rows, so the DB stores the tag. The sync path applies it **before** the unchanged-row compare; otherwise every row would look changed.
 - The tag is only added. Removing a tag from `sex_tags.json` needs a forced AnimDB rebuild to drop `sexual`.
 - TargetMenu options with `creatorTags` / `creatorSuppress` only replace SC tags / suppress while Scene Creator is open. Options without those fields still re-seed the whole creator (`ssApplySceneStartDefaultsToCreator`).
+
+## The vaginal word follows its own count (2026-11-11, not tested in game)
+
+The vaginal tag word starts white, but only while it matches at least one animation. `scCheckVaginalCount` runs on the latest tag query result (`animDbQueryResult`, request id = `SC.tagQueryId`). With an auto word (`vaginalAuto`, not touched), a count of 0 moves it to grey, and a count above 0 moves it back to white. Then it queries again. It cannot flip back and forth: the tag query counts how many matching rows carry `vaginal`, and adding `vaginal` to the must tags keeps exactly those rows, so the count is the same under white and grey. A click on the word (`vaginalTouched`) or a red word stops the auto rule, as does a live scene (`SC.mode === 'active'`) or a last-stage list preset.
+
+## The Description Editor can't empty the chain (2026-11-11, not tested in game)
+
+In the Description Editor, a click on the current animation removes it from the chain, except when it is the only chained animation (`deClickAnimRow`). The scene script would ignore an empty list: `WebUI_ApplyChain` (Scene.psc) only calls `SetChain` when `_chain_registries` is non-empty, so an empty commit keeps the old chain. The page would also put the playing animation back, because `deChainFor` seeds an empty chain with `activeRegistry`. A current animation that has left the chain stays current (it is still playing, or still the pending pick), and `LastStage_ChainNext` returns "" for it. A second click puts it back in the chain.
 
 ## Why the bound word is not the `bound` tag (2026-11-02)
 

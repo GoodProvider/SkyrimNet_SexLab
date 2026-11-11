@@ -91,7 +91,8 @@ namespace Hud
 
         // Last-stage list. The scene script owns the deadline; this is the highlighted line and whether the view is up.
         bool g_listOpen = false;
-        int g_listIndex = 0;
+        int g_listIndex = 0;          // the highlighted display row (RowOfChoice / ChoiceOfRow)
+        std::string g_listNextName;   // the chain's next animation: shown as the top row (choice kListNextChoice)
         std::uint32_t g_listUp = kNumMinusDx;   // replaced by the slower binding when it is set
         std::uint32_t g_listDown = kNumPlusDx;  // replaced by the faster binding when it is set
         std::uint32_t g_listAdvance = 0;        // SexLab's Advance key, from Papyrus
@@ -646,6 +647,23 @@ namespace Hud
             webui_log::info("Hud: AnimEngine key {} scene {} -> {}", ctl, id, ok);
         }
 
+        // List rows vs Scene choice codes (0 stop .. 4 anal, kListNextChoice the chain's next animation). With a chain
+        // next, row 0 is that line and the act lines move down one. Callers hold g_lock.
+        constexpr int kListNextChoice = 6;
+        int ListRowCount() { return g_listNextName.empty() ? 5 : 6; }
+        int RowOfChoice(int choice)
+        {
+            if (g_listNextName.empty())
+                return std::clamp(choice, 0, 4);
+            return choice == kListNextChoice ? 0 : std::clamp(choice, 0, 4) + 1;
+        }
+        int ChoiceOfRow(int row)
+        {
+            if (g_listNextName.empty())
+                return std::clamp(row, 0, 4);
+            return row <= 0 ? kListNextChoice : std::clamp(row - 1, 0, 4);
+        }
+
         void NotifyList(int index, bool select)
         {
             RE::Actor* acting = Acting();
@@ -659,15 +677,17 @@ namespace Hud
         void MoveList(int delta)
         {
             int index = 0;
+            int row = 0;
             {
                 std::lock_guard lock(g_lock);
                 if (!g_listOpen)
                     return;
-                g_listIndex = std::clamp(g_listIndex + delta, 0, 4);
-                index = g_listIndex;
+                g_listIndex = std::clamp(g_listIndex + delta, 0, ListRowCount() - 1);
+                row = g_listIndex;
+                index = ChoiceOfRow(row);
                 g_lastPush.clear();
             }
-            UiEngine::HudInvokeJS(("lastStageSelect(" + std::to_string(index) + ");").c_str());
+            UiEngine::HudInvokeJS(("lastStageSelect(" + std::to_string(row) + ");").c_str());
             NotifyList(index, false);
         }
 
@@ -697,7 +717,7 @@ namespace Hud
                     std::lock_guard lock(g_lock);
                     if (!g_listOpen)
                         return;
-                    index = g_listIndex;
+                    index = ChoiceOfRow(g_listIndex);
                 }
                 NotifyList(index, true);
             };
@@ -971,6 +991,7 @@ namespace Hud
             std::lock_guard lock(g_lock);
             g_listOpen = false;
             g_listIndex = 0;
+            g_listNextName.clear();
         }
         KeyHandler::GetSingleton()->SetListActive(false);
         std::lock_guard lock(g_lock);
@@ -1035,6 +1056,7 @@ namespace Hud
         bool controlsShown = false;
         bool listOpen = false;
         int listIndex = 0;
+        std::string listNextName;
         bool showDom = false;
         {
             std::lock_guard lock(g_lock);
@@ -1042,6 +1064,7 @@ namespace Hud
             controlsShown = g_showControls;
             listOpen = g_listOpen;
             listIndex = g_listIndex;
+            listNextName = g_listNextName;
             showDom = g_showDomEnjoyment;
         }
         std::vector<OrgasmEngine::DomBreakdown> domSlaves;
@@ -1228,25 +1251,34 @@ namespace Hud
             j["payer"] = { { "name", NameOf(player) }, { "magicka", static_cast<int>(magicka + 0.5f) },
                 { "stamina", static_cast<int>(stamina + 0.5f) } };
         }
-        j["lastStage"] = { { "open", listVisible }, { "index", listIndex },
-            { "lines", nlohmann::json::array({ "Stop having sex", "Cuddle after sex", "Start vaginal sex",
-                           "Start oral sex", "Start anal sex" }) } };
+        // The chain's next animation, when there is one, is the top row (Scene.LastStage_ShowList preselects it).
+        auto lines = nlohmann::json::array();
+        if (!listNextName.empty()) {
+            lines.push_back("Next: " + listNextName);
+        }
+        for (const char* line :
+            { "Stop having sex", "Cuddle after sex", "Start vaginal sex", "Start oral sex", "Start anal sex" }) {
+            lines.push_back(line);
+        }
+        j["lastStage"] = { { "open", listVisible }, { "index", listIndex }, { "lines", std::move(lines) } };
 
         PushState(j);
     }
 
-    void LastStageShow(int index, std::uint32_t advanceKey)
+    void LastStageShow(int index, std::uint32_t advanceKey, const std::string& nextName)
     {
-        index = std::clamp(index, 0, 4);
+        int row = 0;
         {
             std::lock_guard lock(g_lock);
             g_listOpen = true;
-            g_listIndex = index;
+            g_listNextName = nextName;
+            g_listIndex = RowOfChoice(index);
+            row = g_listIndex;
             g_listAdvance = advanceKey;
             g_lastPush.clear();
         }
         BindListKeys();
-        UiEngine::HudInvokeJS(("lastStageSelect(" + std::to_string(index) + ");").c_str());
+        UiEngine::HudInvokeJS(("lastStageSelect(" + std::to_string(row) + ");").c_str());
     }
 
     void LastStageHide()
@@ -1254,6 +1286,7 @@ namespace Hud
         {
             std::lock_guard lock(g_lock);
             g_listOpen = false;
+            g_listNextName.clear();
             g_lastPush.clear();
         }
         KeyHandler::GetSingleton()->SetListActive(false);
@@ -1265,7 +1298,7 @@ namespace Hud
     int LastStageIndex()
     {
         std::lock_guard lock(g_lock);
-        return g_listOpen ? g_listIndex : -1;
+        return g_listOpen ? ChoiceOfRow(g_listIndex) : -1;
     }
 
     RE::Actor* LastStageDrivenActor()

@@ -47,7 +47,9 @@ Function ActorAnimMeta_Result(String json) global native
 ; TargetMenu Start: consume one-shot skip so this scene does not open Scene Creator.
 Bool Function ConsumeSkipSceneCreator() global native
 Bool Function ConsumeOpenSceneCreator() global native
-Function LastStage_Show(int index, int advance_key) global native
+; index: choice code (0 stop, 1 cuddle, 2 vaginal, 3 oral, 4 anal, 6 the chain's next). next_name: the chain's next
+; animation, shown as the top line "Next: <name>" ("" for none). LastStage_Index returns a choice code.
+Function LastStage_Show(int index, int advance_key, String next_name) global native
 Function LastStage_Hide() global native
 int Function LastStage_Index() global native
 Actor Function LastStage_DrivenActor() global native

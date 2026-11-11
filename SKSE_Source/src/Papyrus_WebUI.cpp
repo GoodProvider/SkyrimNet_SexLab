@@ -235,9 +235,10 @@ namespace PapyrusBindings_WebUI
         return open;
     }
 
-    void LastStage_Show(RE::StaticFunctionTag*, std::int32_t index, std::int32_t advanceKey)
+    void LastStage_Show(RE::StaticFunctionTag*, std::int32_t index, std::int32_t advanceKey, RE::BSFixedString nextName)
     {
-        Hud::LastStageShow(static_cast<int>(index), advanceKey > 0 ? static_cast<std::uint32_t>(advanceKey) : 0);
+        Hud::LastStageShow(static_cast<int>(index), advanceKey > 0 ? static_cast<std::uint32_t>(advanceKey) : 0,
+            nextName.empty() ? std::string() : std::string(nextName.c_str()));
     }
 
     void LastStage_Hide(RE::StaticFunctionTag*)
