@@ -17,6 +17,10 @@ EndFunction
 Function SeedPunishReasons(Actor akActor)
 EndFunction
 
+; The slave refused to change its mini-game strategy: DOM punishment reason "refusing to have sex"
+Function AddRefusedSexReason(Actor superior, Actor slaveActor)
+EndFunction
+
 String Function HandleOrgasmDenied(Actor akActor) 
     return "" 
 EndFunction

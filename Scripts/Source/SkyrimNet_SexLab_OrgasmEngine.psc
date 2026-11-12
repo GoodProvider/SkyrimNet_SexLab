@@ -341,6 +341,16 @@ Function Effect_DomOrderRoll(Actor superior, Actor slave, int token) global
     DomOrderAnswer(token, obeyed)
 EndFunction
 
+; A DOM slave refused to change its strategy (a refused ask / order, or kept it after a strategy punishment):
+; DOM's "refusing to have sex" punishment reason.
+Function Effect_DomRefusedSex(Actor superior, Actor slave) global
+    SkyrimNet_SexLab_Scene_Manager manager = GetManager()
+    if manager == None || slave == None || manager.main == None || manager.main.handler_dom == None
+        return
+    endif
+    manager.main.handler_dom.AddRefusedSexReason(superior, slave)
+EndFunction
+
 ; Strategy change (no notification). narrate: optional narration of msg (LLM / API / forced
 ; changes). Else (the decision model changed it) a short-term event with observed, how the change looks
 ; to others ("Lydia appears to be focused on her own enjoyment.").

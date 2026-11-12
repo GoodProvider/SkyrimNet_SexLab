@@ -91,6 +91,24 @@ Function SeedPunishReasons(Actor akActor)
     SkyrimNet_DOM_API.PanelPunishReasons(akActor)
 EndFunction
 
+; OrgasmEngine (Effect_DomRefusedSex): the slave refused to change its strategy -> DOM reason "refusing to have sex".
+; Skipped while the reason is still open (DOM dedupes the slot, but the API would repeat its "Reason to Punish" event).
+; Then re-seeds the Punish panel so the DOM text shows mid-scene.
+Function AddRefusedSexReason(Actor superior, Actor slaveActor)
+    String reason = "refusing to have sex"
+    DOM_Actor slave = SkyrimNet_DOM_API.GetSlave("SkyrimNet_SexLab_Handler_DOM", "AddRefusedSexReason", slaveActor) as DOM_Actor
+    if slave == None || slave.mind == None
+        return
+    endif
+    if SkyrimNet_DOM_API.OpenPunishReasons(slaveActor).Find(reason) >= 0
+        Trace("AddRefusedSexReason", slaveActor.GetDisplayName() + " already has '" + reason + "'")
+        return
+    endif
+    SkyrimNet_DOM_API.AddPunishmentReason("SkyrimNet_SexLab_Handler_DOM", "AddRefusedSexReason", superior, slaveActor, slave, reason)
+    SkyrimNet_DOM_API.PanelPunishReasons(slaveActor)
+    Trace("AddRefusedSexReason", slaveActor.GetDisplayName() + " added '" + reason + "'")
+EndFunction
+
 
 
 String Function HandleOrgasmDenied(Actor akActor)

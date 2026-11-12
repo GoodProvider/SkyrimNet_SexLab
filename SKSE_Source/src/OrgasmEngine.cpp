@@ -4248,6 +4248,22 @@ namespace OrgasmEngine
             }
         }
 
+        // Game thread. A DOM slave refused to change its strategy: DOM's "refusing to have sex" punishment reason
+        // (Effect_DomRefusedSex -> Handler_DOM.AddRefusedSexReason). Nothing for other actors.
+        void NoteDomRefusal(RE::FormID byId, RE::FormID targetId)
+        {
+            {
+                std::lock_guard lock(g_lock);
+                const auto at = g_actors.find(targetId);
+                if (at == g_actors.end() || !at->second.dom) {
+                    return;
+                }
+            }
+            webui_log::info("OrgasmEngine: DOM slave {:#x} refused a strategy change: DOM reason 'refusing to have sex'",
+                targetId);
+            DispatchShell("Effect_DomRefusedSex", RE::MakeFunctionArguments(ActorFor(byId), ActorFor(targetId)));
+        }
+
         // Game thread. The target's answer to a request arrived: "<target> agrees to|refuses <by>'s request to
         // <text>." as its own narration; a refusal is kept as a punishment reason, an agreement clears it. key "":
         // a custom request (agreed when the decision changed the strategy). Nothing when no decision was made.
@@ -4295,6 +4311,9 @@ namespace OrgasmEngine
                 NameOf(target) + (agrees ? " agrees to " : " refuses ") + NameOf(by) + "'s request to " + text + ".";
             webui_log::info("OrgasmEngine: request answer: {}", line);
             NarrateRequest(line, target, by, direct);
+            if (!agrees) {
+                NoteDomRefusal(byId, targetId);
+            }
         }
 
         // An order waiting for DOM's obedience roll (Effect_DomOrderRoll -> DomOrderAnswer).
@@ -4687,6 +4706,10 @@ namespace OrgasmEngine
                     if (!plan.requestKey.empty()) {
                         FinishRequest(plan.requestBy, targetId, plan.requestOrder, plan.requestKey, plan.requestText,
                             plan.direct, result);
+                    } else if ((result == DecisionResult::kKept || result == DecisionResult::kLowConfidence) &&
+                               (plan.strategyReason || !plan.orderKey.empty())) {
+                        // Punished for the strategy (or ordered a new one) and kept it: a refusal.
+                        NoteDomRefusal(punisherId, targetId);
                     }
                 };
                 auto answered = [plan, punisherId, targetId, finish](DecisionResult result) {
