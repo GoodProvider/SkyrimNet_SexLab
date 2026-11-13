@@ -1395,7 +1395,13 @@ bool Function LockActorLock(Actor akActor)
     if OstimActorCountFaction != None && akActor.IsInFaction(OStimActorCountFaction)
         Trace("LockActorLock", GetDisplayName(akActor)+" OStim animation")
         UnlockActorLock(akActor)
-        return false 
+        return false
+    endif
+
+    ; A thread can still hold the actor without the faction (see Manager.EndSceneForActor): end it so the
+    ; actor is not in two scenes.
+    if manager != None && manager.EndSceneForActor(akActor)
+        Trace("LockActorLock", GetDisplayName(akActor)+" left an old scene")
     endif
     Trace("LockActorLock", GetDisplayName(akActor)+" is locked")
     DbgReturn("LockActorLock", "True")
@@ -2091,6 +2097,7 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     endif
     JMap.setStr(filter, "_synonyms", synonyms_mode)
     ; Top 32 of the matches: described, then cast-gender fit (_rank_pos_genders), then least played, then random.
+    ; Rows that don't fit the cast's genders are dropped when any do (C++), so the P+ random pick stays in gender.
     JMap.setInt(filter, "_rank", 1)
     ; Scene setting: C++ adds its tags_any / tags_prefer / exclude_settings, and its
     ; tags_suppress_unless_bound unless the cast (_form_ids) wears heavy-bondage DD.

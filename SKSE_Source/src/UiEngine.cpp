@@ -247,7 +247,9 @@ void Show()
     if (!v || !Available()) return;
     if (g_ml) {
         g_ml->ShowView(v, true);
-        const auto r = g_ml->RequestUIMode(v, kUIModeFlagPause);
+        // Reclaim: a Show right after our own Hide would otherwise retarget the mode that Hide's queued exit then
+        // drops, leaving the WebUI shown with no UI mode while StripSwallowedInputEvents eats every key.
+        const auto r = g_ml->RequestUIMode(v, kUIModeFlagPause | kUIModeFlagReclaim);
         if (r != Result::Ok)
             webui_log::warn("UiEngine: Show RequestUIMode -> {}", static_cast<int>(r));
     } else {

@@ -98,6 +98,7 @@ namespace OrgasmEngine
     /// Stages follow the primary's enjoyment instead of their timers (sexlab.enjoyment.stage_advance_primary_enjoyment).
     /// Replaces the victim hold's wait.
     bool IsStageAdvancePrimaryEnjoyment(std::int32_t sid);
+    bool IsStageNoPrimary(std::int32_t sid);
     /// That mode is driving the anchor's scene right now (HUD: stage keys greyed; auto play is not offered them).
     bool IsStageAuto(RE::Actor* anchor);
     /// HUD stage mode for the anchor's scene: "last" (the last stage, stage by enjoyment on), "enjoy" (stages follow

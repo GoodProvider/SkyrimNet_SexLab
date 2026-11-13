@@ -128,7 +128,9 @@ Function Setup()
     if !thread_scene
         Trace("Setup","creating thread_scene map")
         thread_scene = new form[32]
-    endif 
+    endif
+    ; Adoption guard (GetSceneByThread); cleared each load, entries are real-time stamps.
+    adopt_started = new float[32]
 
     ; Reload the group_tags in case they where changed each time.
     if group_info == 0
@@ -279,19 +281,76 @@ SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread, Boo
         return None
     endif
 
+    ; One adoption per tid. AnimationStart, StageStart and GetThread callers race here for a thread we
+    ; did not start; each used to claim its own creator and Setup the same pool scene (4x under lag).
+    ; The check-and-set below is plain array/variable work with no call in between, so no other
+    ; Papyrus thread can run on this script between the read and the write.
+    float adopt_now = Utility.GetCurrentRealTime()
+    Adopt_EnsureSize(tid)
+    float adopt_t = adopt_started[tid]
+    if adopt_t > 0.0 && adopt_now - adopt_t < ADOPT_STALE
+        Trace("GetSceneByThread", "tid:"+tid+" adoption in progress, waiting")
+        float waited = 0.0
+        while Adopt_Busy(tid) && waited < ADOPT_WAIT_MAX
+            Utility.WaitMenuMode(0.1)
+            waited += 0.1
+        endwhile
+        return GetSceneByThread(thread, any_state=True, create_if_missing=False)
+    endif
+    adopt_started[tid] = adopt_now
+
     SkyrimNet_SexLab_Scene_Creator creator = CreateCreator("", thread.Positions, None, None, "", "")
     if creator == None
+        Adopt_Set(tid, 0.0)
         Trace("GetSceneByThread", "CreateCreator returned None, aborting")
         return None
     endif
     SkyrimNet_SexLab_Scene sl_scene = CreateSceneByCreator(creator, thread)
     ; Setup copied all values out of the creator; free the pool slot so it is not leaked.
     creator.Release()
-    if sl_scene == None 
+    Adopt_Set(tid, 0.0)
+    if sl_scene == None
         Trace("GetSceneByThread", "CreateSceneByCreator returned None, aborting")
         return None
     endif
     return sl_scene
+EndFunction
+
+; Per-tid adoption start time (real seconds, 0 = none). Not saved: a stale entry expires after
+; ADOPT_STALE so an aborted adoption can't block the tid.
+float[] adopt_started
+float ADOPT_WAIT_MAX = 10.0
+float ADOPT_STALE = 20.0
+
+bool Function Adopt_Busy(int tid)
+    if !adopt_started || tid < 0 || tid >= adopt_started.length
+        return false
+    endif
+    float t = adopt_started[tid]
+    return t > 0.0 && Utility.GetCurrentRealTime() - t < ADOPT_STALE
+EndFunction
+
+Function Adopt_Set(int tid, float t)
+    Adopt_EnsureSize(tid)
+    if 0 <= tid
+        adopt_started[tid] = t
+    endif
+EndFunction
+
+; Grows only past 32 tids (Setup allocates 32), so concurrent growth is not a practical concern.
+Function Adopt_EnsureSize(int tid)
+    if !adopt_started
+        adopt_started = new float[32]
+    endif
+    if tid >= adopt_started.length
+        float[] resized = Utility.CreateFloatArray(tid + 10)
+        int i = 0
+        while i < adopt_started.length
+            resized[i] = adopt_started[i]
+            i += 1
+        endwhile
+        adopt_started = resized
+    endif
 EndFunction
 
 
@@ -736,6 +795,45 @@ Function WebUI_OnSceneCreatorResult(int creator_sid, String json)
     endif
 EndFunction
 
+; Duplicate create guard: the WebUI can commit the same "new" scene twice ~1.5 s apart (two random-start
+; chains, 2026-11-13 log). The second handoff ran CreateCreator on the cast whose scene had just started. Same cast
+; (any order) and intent within HANDOFF_DEDUPE_SECONDS is dropped.
+String last_handoff_key = ""
+float last_handoff_time = 0.0
+float HANDOFF_DEDUPE_SECONDS = 10.0
+
+bool Function Handoff_IsDuplicate(Actor[] actors, String intent)
+    int n = actors.length
+    int sum = 0
+    int lo = 0
+    int hi = 0
+    int i = 0
+    while i < n
+        int fid = actors[i].GetFormID()
+        sum += fid
+        if i == 0 || fid < lo
+            lo = fid
+        endif
+        if i == 0 || fid > hi
+            hi = fid
+        endif
+        i += 1
+    endwhile
+    String cast_key = n+":"+lo+":"+hi+":"+sum+"|"+intent
+    float now = Utility.GetCurrentRealTime()
+    float age = now - last_handoff_time
+    ; Only while the first create's scene (or its creator) still holds the cast: a quick stop + restart is kept.
+    if cast_key == last_handoff_key && age >= 0.0 && age < HANDOFF_DEDUPE_SECONDS && n > 0 \
+            && (GetSceneByActor(actors[0]) != None || FindSceneByActorInThreadScene(actors[0]) != None \
+                || SkyrimNet_SexLab_Locker.IsLocked(actors[0]))
+        Trace("WebUI_OnSceneCreatorHandoff", "duplicate create ignored: "+GetDisplayName(actors[0])+" "+intent+" "+age+"s after the first", true)
+        return true
+    endif
+    last_handoff_key = cast_key
+    last_handoff_time = now
+    return false
+EndFunction
+
 ; No pooled creator yet (TargetMenu Custom or Control Panel Scene Menu new): build one from JSON and finish.
 Function WebUI_OnSceneCreatorHandoff(String json)
     Trace("WebUI_OnSceneCreatorHandoff", "")
@@ -795,6 +893,10 @@ Function WebUI_OnSceneCreatorHandoff(String json)
     endif
 
     String intent = JMap.getStr(obj, "_intent", "sexual activities")
+    if Handoff_IsDuplicate(actors, intent)
+        JValue.release(obj)
+        return
+    endif
     String tags = JMap.getStr(obj, "_start_tags", "")
     if tags == ""
         tags = JMap.getStr(obj, "_method", "")
@@ -1418,6 +1520,22 @@ Function EndExhausted(Actor[] actors)
     sl_scene.SetExhausted(actors)
     sl_scene.AnimationEnd()
     threadSlots.StopThread(cachedThread)
+EndFunction
+
+; A new scene takes akActor: end the SkyrimNet scene whose SexLab thread still holds it, silently. Checks the thread's
+; Positions, not SexLabAnimatingFaction: after a mid-scene animation switch an actor can lose the faction while its
+; thread keeps animating (2026-11-11 log), so IsActorActive and ActorLocker let a second thread take it. True when a
+; scene was ended.
+bool Function EndSceneForActor(Actor akActor)
+    SkyrimNet_SexLab_Scene sl_scene = FindSceneByActorInThreadScene(akActor)
+    if sl_scene == None
+        return false
+    endif
+    Trace("EndSceneForActor", GetDisplayName(akActor)+" still in sid:"+sl_scene.sid+", ending it")
+    sslThreadController cachedThread = sl_scene.GetThread()
+    sl_scene.AnimationEnd(None, "silently")
+    threadSlots.StopThread(cachedThread)
+    return true
 EndFunction
 
 Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, \

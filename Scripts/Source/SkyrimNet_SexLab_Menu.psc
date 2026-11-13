@@ -144,7 +144,10 @@ Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None)
     if anchor == None
         anchor = player
     endif
-    if !main.sexlab.IsActorActive(anchor)
+    ; IsActorActive is only SexLab's AnimatingFaction, which an actor can lose while its thread keeps animating
+    ; (2026-11-11 log). The HUD shows from the engine's scene, so also accept a scene the manager finds.
+    if !main.sexlab.IsActorActive(anchor) && manager.GetSceneByActor(anchor) == None
+        Trace("Hud_OnKey", "dropped "+control+": no scene for "+anchor.GetDisplayName())
         return
     endif
     Trace("Hud_OnKey", control+" as "+anchor.GetDisplayName())

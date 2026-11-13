@@ -5936,6 +5936,10 @@
         let ssCascadeSpecs = {};
         let ssRandomPending = null;
         let ssRandomQueryId = 0;
+        // ms timestamp while a random start's async chain (meta, DD tags, AnimDB) is in flight; 0 when idle.
+        // A second click during that ~1.5 s wait used to commit a second scene create (2026-11-13 log).
+        let ssRandomStartingAt = 0;
+        const SS_RANDOM_START_LATCH_MS = 10000;
         const SS_RANDOM_PICK = 3;
 
         function ssActorPool() {
@@ -6575,6 +6579,12 @@
             }
             const state = ssBuildCreatorState(opt);
             if (!state || typeof window.onAnimDbQuery !== 'function') return;
+            if (ssRandomStartingAt && Date.now() - ssRandomStartingAt < SS_RANDOM_START_LATCH_MS) {
+                if (typeof window.onDebugLog === 'function')
+                    window.onDebugLog('ssStartRandom ignored: a random start is already in flight');
+                return;
+            }
+            ssRandomStartingAt = Date.now();
             ssApplySettingChainToState(state)
                 .then(() => requestActorMeta(ssCastFormIds(cast)))
                 .then(meta => {
@@ -6592,7 +6602,8 @@
                         bound: r.worn === true || dd.length > 0,
                         dd: dd.filter(t => !have.includes(t))
                     });
-                });
+                })
+                .catch(() => { ssRandomStartingAt = 0; });
             renderPapyrusPanel();
         }
 
@@ -6666,9 +6677,11 @@
                     ssRandomQuery(pending);
                     return;
                 }
+                ssRandomStartingAt = 0;
                 notifyPlayer('No matching animations for a random scene.');
                 return;
             }
+            ssRandomStartingAt = 0;
             // Surviving DD tags join the creator's tags so its tag fallback matches the picked animations.
             if (pending.dd && pending.dd.length)
                 pending.state._tags = ssSplitTags(pending.state._tags).concat(pending.dd).join(',');

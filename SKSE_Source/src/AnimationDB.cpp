@@ -2432,6 +2432,17 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                                      pc != g_play_counts.end() ? pc->second : 0 },
                     i });
             }
+            // Rows whose positions don't fit the cast's genders (tier 2) go when any row fits: P+ pickers take
+            // one of the top N at random, so a misfit left in the list gets played (2026-11-11: a female solo
+            // got B_B_MKneelMast1 / B_B_MLayMast1). None fit: keep them all as the fallback.
+            if (!spec.rank_pos_genders.empty() &&
+                std::any_of(keys.begin(), keys.end(), [](const auto& k) { return k.first.tier < 2; })) {
+                const auto before = keys.size();
+                std::erase_if(keys, [](const auto& k) { return k.first.tier >= 2; });
+                if (keys.size() != before)
+                    webui_log::info("AnimationDB: rank dropped {} rows that don't fit the cast genders",
+                        before - keys.size());
+            }
             std::stable_sort(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
                 if (a.first.described != b.first.described)
                     return a.first.described > b.first.described;

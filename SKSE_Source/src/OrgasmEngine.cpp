@@ -372,6 +372,7 @@ namespace OrgasmEngine
         {
             std::vector<RE::FormID> actors;
             bool holdStage;  // still in the second-to-last stage
+            std::int32_t sid;  // the scene evaluated: Papyrus resolves it by sid, not by actor
         };
         // Strategy change: narrate: optional narration of msg; else (decision-made)
         // a short-term event with observed, how the change looks to others.
@@ -388,6 +389,15 @@ namespace OrgasmEngine
         {
             RE::FormID actor;
             std::int32_t stage;
+            std::int32_t sid;  // the scene evaluated (see AdvanceFx)
+        };
+        // Push the scene to its final stage. sid is the scene the engine evaluated: an actor caught in two SexLab
+        // threads (2026-11-11 log: a DOM slave's solo thread lost SexLabAnimatingFaction, so a new scene took her too)
+        // has one ActorState, and resolving by actor sent scene 0's primary finish to scene 1.
+        struct AdvanceFx
+        {
+            RE::FormID actor;
+            std::int32_t sid;
         };
         // Stage by enjoyment: the primary is stuck on a stage and punishes (PunishNarrated, outside the lock).
         struct StagePunishFx
@@ -405,7 +415,7 @@ namespace OrgasmEngine
             std::vector<EventFx> events;
             std::vector<DomSyncFx> domSyncs;
             std::vector<GatePassFx> gatePasses;
-            std::vector<RE::FormID> advances;  // voice started after a gate pass: push the scene to its final stage
+            std::vector<AdvanceFx> advances;  // voice started after a gate pass: push the scene to its final stage
             std::vector<StrategyFx> strategies;
             std::vector<std::vector<RE::FormID>> exhausted;  // per scene: non-victims too tired to continue
             std::vector<std::pair<RE::FormID, std::string>> directs;  // DirectNarration: fatigue stages
@@ -1946,14 +1956,16 @@ namespace OrgasmEngine
                     AnimEngineOrgasm::OnGatePassed(actors, p.holdStage);
                 } else if (!actors.empty()) {
                     DispatchShell("Effect_GatePassed",
-                        RE::MakeFunctionArguments(std::move(actors), static_cast<bool>(p.holdStage)));
+                        RE::MakeFunctionArguments(std::move(actors), static_cast<bool>(p.holdStage),
+                            static_cast<std::int32_t>(p.sid)));
                 }
             }
-            for (const auto id : fx.advances) {
-                if (auto* a = ActorFor(id); a && AnimEngineOrgasm::OwnsActor(id)) {
+            for (const auto& adv : fx.advances) {
+                if (auto* a = ActorFor(adv.actor); a && AnimEngineOrgasm::OwnsActor(adv.actor)) {
                     AnimEngineOrgasm::OnAdvanceToFinal(a);
                 } else if (a) {
-                    DispatchShell("Effect_AdvanceToFinal", RE::MakeFunctionArguments(std::move(a)));
+                    DispatchShell("Effect_AdvanceToFinal",
+                        RE::MakeFunctionArguments(std::move(a), static_cast<std::int32_t>(adv.sid)));
                 }
             }
             for (const auto& m : fx.stageMoves) {
@@ -1961,7 +1973,8 @@ namespace OrgasmEngine
                     AnimEngineOrgasm::OnMoveStage(a, m.stage);
                 } else if (a) {
                     DispatchShell("Effect_MoveStage",
-                        RE::MakeFunctionArguments(std::move(a), static_cast<std::int32_t>(m.stage)));
+                        RE::MakeFunctionArguments(std::move(a), static_cast<std::int32_t>(m.stage),
+                            static_cast<std::int32_t>(m.sid)));
                 }
             }
             for (const auto& p : fx.stagePunishes) {
@@ -2263,7 +2276,7 @@ namespace OrgasmEngine
                 sc.sid, primary, st.enjoyment, band, sc.stageFloor, sc.stage, target, sc.stageCount);
             sc.stageMoveTarget = target;
             sc.stageMoveAt = now;
-            fx.stageMoves.push_back({ primary, target });
+            fx.stageMoves.push_back({ primary, target, sc.sid });
         }
 
         // Game thread, every kTickInterval.
@@ -2652,7 +2665,7 @@ namespace OrgasmEngine
                         }
                         if (due) {
                             sc.gateDone = true;
-                            GatePassFx pass{ {}, penultimate };
+                            GatePassFx pass{ {}, penultimate, sid };
                             // Victims an aggressor is set on forcing to orgasm, or teasing at the edge.
                             std::vector<RE::FormID> forcedVictims;
                             std::vector<RE::FormID> teasedVictims;
@@ -2780,7 +2793,7 @@ namespace OrgasmEngine
                             sc.stageFinalSent = true;
                             webui_log::info("OrgasmEngine: scene {} stage primary {:#x} at the top, to the final stage",
                                 sid, stagePrimary);
-                            fx.advances.push_back(stagePrimary);
+                            fx.advances.push_back({ stagePrimary, sid });
                         }
                         StageFollowPrimary(sc, stagePrimary, fx, now);
                     }
@@ -3043,7 +3056,13 @@ namespace OrgasmEngine
             auto [it, inserted] = g_actors.try_emplace(id);
             ActorState& st = it->second;
             if (!inserted && st.sid != sid) {
-                // Moved from another scene: start fresh here.
+                // Moved from another scene: start fresh here. The old scene still listing the actor means two SexLab
+                // threads hold it (2026-11-11 log): state flips each resume, so say so.
+                if (const auto old = g_scenes.find(st.sid); old != g_scenes.end() &&
+                    std::find(old->second.actors.begin(), old->second.actors.end(), id) != old->second.actors.end()) {
+                    webui_log::warn("OrgasmEngine: {:#x} moved from live scene {} to scene {}: in two threads", id,
+                        st.sid, sid);
+                }
                 st = ActorState{};
                 inserted = true;
             }
@@ -3429,6 +3448,22 @@ namespace OrgasmEngine
         std::lock_guard lock(g_lock);
         const auto it = g_scenes.find(sid);
         return it != g_scenes.end() && StageAdvancePrimaryEnjoyment(it->second);
+    }
+
+    // Stages are set to follow enjoyment, but nobody in this scene is expected to orgasm (a nonsexual kiss or
+    // cuddle): no primary, so nothing moves the stage. Papyrus (Scene.Victim_StageStart) advances it on
+    // StageHoldCap instead; with SexLab's AutoAdvance off an untimed stage otherwise waits forever (2026-11-13 log).
+    // False after a manual move or Num 5 to timers (stageEnjoymentOff).
+    bool IsStageNoPrimary(std::int32_t sid)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it == g_scenes.end()) {
+            return false;
+        }
+        const SceneState& sc = it->second;
+        return g_settings.stageAdvancePrimaryEnjoyment && !g_settings.engineOff && !sc.stageEnjoymentOff &&
+               sc.stageInputsKnown && !sc.leadIn && sc.stageCount >= 2 && PrimaryOf(sc) == 0;
     }
 
     bool IsStageAuto(RE::Actor* anchor)
@@ -5096,7 +5131,7 @@ namespace OrgasmEngine
             const bool primaryDone = NotePrimaryFinished(*st);
             if (const SceneState* primaryScene = primaryDone ? SceneOf(*st) : nullptr;
                 primaryScene && primaryScene->stage < primaryScene->stageCount) {
-                fx.advances.push_back(st->id);
+                fx.advances.push_back({ st->id, primaryScene->sid });
             }
             const float before = st->enjoyment;
             st->enjoyment = 0.0f;

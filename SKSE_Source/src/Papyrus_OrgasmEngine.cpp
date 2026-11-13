@@ -120,6 +120,7 @@ namespace PapyrusBindings_OrgasmEngine
         {
             return OrgasmEngine::IsStageAdvancePrimaryEnjoyment(sid);
         }
+        bool IsStageNoPrimary(RE::StaticFunctionTag*, std::int32_t sid) { return OrgasmEngine::IsStageNoPrimary(sid); }
         RE::Actor* GetStagePrimary(RE::StaticFunctionTag*, std::int32_t sid)
         {
             const RE::FormID id = OrgasmEngine::GetStagePrimary(sid);
@@ -366,6 +367,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetStageInputs", s, SetStageInputs);
         a_vm->RegisterFunction("StageInputsKnown", s, StageInputsKnown, true);
         a_vm->RegisterFunction("IsStageAdvancePrimaryEnjoyment", s, IsStageAdvancePrimaryEnjoyment, true);
+        a_vm->RegisterFunction("IsStageNoPrimary", s, IsStageNoPrimary, true);
         a_vm->RegisterFunction("GetStagePrimary", s, GetStagePrimary);
         a_vm->RegisterFunction("StageHoldCap", s, StageHoldCap, true);
         a_vm->RegisterFunction("DisableStageAdvancePrimaryEnjoyment", s, DisableStageAdvancePrimaryEnjoyment);

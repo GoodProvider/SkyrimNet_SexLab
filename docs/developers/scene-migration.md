@@ -40,7 +40,7 @@ These are the entry points that must keep working (or move with a shim) at each 
 | `Main.psc:130,219` | `Manager.Setup` |
 | `Actions.psc` | `Manager.IsBusy`, `Manager.GetSceneByActor` (×18). On the scene: `GetThread`, `StageStep`, `StageGoTo`, `BuildWebUISceneMenuState`, `TM_SetStageDescription`, `PPlus_BeginActorChange`, `PPlus_SwitchScene`, `CheckAnimationChange`, `TM_ApplyVictim`, `TM_ApplyOrgasmMode`, `SexLabForceOrgasm`, `SetDenyOrgasm`, `TM_ApplySpeaking`, `ApplyDressedToActor`, `TM_ApplyClothed`, `TM_SaveAnimationSettings` |
 | `Menu.psc` | `Manager.GetThreadByActor`, `GetSceneByActor`, `WebUI_TakeCancelSnapshots`, `BuildAllSceneInfosJson`, `CreateCreator`, `GetSceneSettings`. On the scene: `GetThread`, `GetThreadInScene`, `BuildWebUISceneMenuState`, `TogglePause`, `ToggleDenyOrgasm`, `HotkeyChangePositions`. On the creator: `LockAllActorLock`, `SetVictim`, `StartScene`, `Release` |
-| `OrgasmEngine.psc:196-288` | `Manager.GetSceneByActor`, `EndExhausted`. On the scene: `Orgasm_ApplyGroup`, `Engine_GatePassed`, `Engine_AdvanceToFinal`, `Mirror_Apply` |
+| `OrgasmEngine.psc:196-310` | `Manager.GetSceneByActor`, `GetSceneBySid` (`SceneForEffect`: gate pass, advance, stage move go by the engine's sid), `EndExhausted`. On the scene: `Orgasm_ApplyGroup`, `Engine_GatePassed`, `Engine_AdvanceToFinal`, `Mirror_Apply` |
 | `Handler_DOM.psc` | `Manager.GetSceneByActor`, `IsNoOrgasmPersisted`, `OrgasmCustom`, `PushDomThreads` |
 
 ### C++ → Papyrus (method dispatch by name)

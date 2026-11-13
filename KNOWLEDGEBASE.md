@@ -1,5 +1,54 @@
 # Knowledgebase
 
+## Player kiss stuck on stage 1, dead HUD keys, killed the game (2026-11-13, built, untested in game)
+
+Record: [checkpoints/2026-11-13-loops/checkpoint-01.md](checkpoints/2026-11-13-loops/checkpoint-01.md). Log: `checkpoints/2026-11-13-loops/logs/2026-11-13-09-05-04/log.log` (user's `SkyrimNet_SexLab.log`, 0.37.0, P+ 2.18, Magelight). The user also reported a "black screen". Nothing in this mod draws an opaque layer, so that part is still unexplained.
+
+- **No primary means no stage driver.** When nobody expects an orgasm (nonsexual setting, `no_orgasm`), `PrimaryOf` is 0. That turns off stage by enjoyment, its hold and cap, and `StallCheck` (which also skips every player scene). P+ timers then decide alone. With SexLab's AutoAdvance off, a player thread's untimed stage waits for the key forever. **Rule:** every scene needs something that guarantees it ends. Fix: `IsStageNoPrimary` and `Scene.NoPrimary_StageStart` (see orgasm-engine.md, Primary 5).
+- **`IsActorActive` is not a scene check.** `Menu.Hud_OnKey` returned silently on `!IsActorActive` (faction only), while the HUD shows from the engine's scene. Now it also accepts `manager.GetSceneByActor`, and it logs a dropped key.
+- **The WebUI can commit the same create twice.** Each `ssStartRandom` chain waits ~1.5 s on actor meta, so a second click runs a second chain, which commits after the hide (`onSceneInfoCommit` ×2, L282 / L315). Only `LockAllActorLock failed` stopped a second thread. With the uncommitted `EndSceneForActor` in `LockActorLock`, a slipped duplicate could end the first scene. Fixes: a JS latch (`ssRandomStartingAt`) and `Scene_Manager.Handoff_IsDuplicate` (same cast in any order + intent within 10 s, while the cast is still in a scene or locked).
+- **Magelight Show after our own Hide:** pass `kUIModeFlagReclaim` (`UiEngine::Show`). Without it the queued exit drops the retargeted mode: the view is shown with no UI mode and `StripSwallowedInputEvents` eats every key.
+
+## Fresh save: the scene starts and stops forever; Finish narration each time (2026-11-13, partly fixed, root cause open)
+
+Record: [checkpoints/2026-11-13-forever/checkpoint-02.md](checkpoints/2026-11-13-forever/checkpoint-02.md). Logs: `checkpoints/2026-11-13-forever/logs/2026-11-13-08-45-19/` (user's `SkyrimNet_SexLab.log` only).
+
+- **Symptom:** only on a new game (an old save works). Each SexLab thread ends seconds after it starts, a new thread with the same actors follows, and the Finish DN is sent every cycle.
+- **Not ours:** no traced `EndAnimation` of ours fires, and we don't start the follow-up thread (no `Scene_Creator.StartScene`). The source is P+ or another mod; a Papyrus.0.log is needed.
+- **Rule:** under heavy Papyrus lag (a new game whose mods are still initializing), a SexLab hook handler can pass the manager's thread-state check, stall on latent calls and resume after the thread ended *and* our AnimationEnd ran. Recheck the thread state at the point that matters, not only at handler entry.
+- **Rule:** SexLab 1.66 fires AnimationStart while the controller is in `Advancing` (live states: Prepare, Advancing, Animating, Refresh). A state guard there must accept all four; the first build accepted only animating/prepare and skipped the setup of every 1.66 scene start (own log 2026-11-13, `late start … state:Advancing, ignored`).
+- **Fix (ours, built):** `Scene.AnimationStart` returns when the thread has ended (not prepare/advancing/animating/refresh) (log `late start on ended thread … ignored`), and again right before `Engine_BeginScene` (log `thread ended during start`). Before this, the engine logged `began scene N` right after `ended scene N`.
+- **Fix (ours, built):** `Scene_Manager.GetSceneByThread` adopts a thread only once per tid (`adopt_started`, real-time stamp, 20 s stale). Other callers wait up to 10 s (log `adoption in progress, waiting`) and return the adopted scene. Before this, 4 racing callers each claimed a creator and ran `Setup` on the same pool scene.
+
+## An actor turned invisible mid-scene; no log records it (2026-11-11, 2026-11-13, open, logs gathered)
+
+Record: [checkpoints/invisible/README.md](checkpoints/invisible/README.md). Logs: `checkpoints/invisible/logs/2026-11-11-19-39-26/`, `checkpoints/invisible/logs/2026-11-13-09-16-09/`.
+
+- **Symptom:** Coralyn (DOM slave) went invisible mid-scene twice: a solo P+ scene (`B_B_FMast1`, 11-11) and a scene with Bob (`B_B_SKiss1`, 11-13). It was no spell or effect.
+- **Rule:** no current log (ours, SkyrimNet, Papyrus) shows actor visibility. Our code never checks alpha, 3D or disabled state, and DOM's `SetAlpha` calls don't log. Get the time from the user, then look around it for overlay syncs (SlaveTats / NiOverride), alpha-changing mods and actor resets.
+- **Suspect, not proven:** both times, a SlaveTats sync removing `Makeup Tears N` (`DOMTears`) cleared every overlay slot in reverse order and never logged `Synchronization complete`; Healing Hands visuals (2 effect shaders) hit her seconds later. A NiOverride signature mismatch at load (`GetNodeTransformScaleMode`) is also present both times.
+- **Workaround:** DOM MCM "Fix unresponsive or invisible actor" or the DOM fixme hotkey (`DOM_Keys.DOMDoFixMe` → `DOM_Actor.SpecialReset`: Disable, Enable, `SetAlpha(1.0)`). SkyrimNet_DOM's API doesn't expose it.
+- **Future probe:** CommonLib has `Actor::GetAlpha()`, `TESObjectREFR::IsDisabled()`, `Is3DLoaded()` and `Get3D()->GetAppCulled()`.
+
+## Solo scene picked the other sex's animation (2026-11-11, built, untested in game)
+
+Plan and status: [checkpoints/invisible/01-checkpoint.md](checkpoints/invisible/01-checkpoint.md).
+
+- **Symptom:** both of Coralyn's solo scenes opened on a male solo (`B_B_MKneelMast1`, `B_B_MLayMast1`).
+- **Cause:** `_rank` / `_rank_pos_genders` only ranked (described before gender tier), and the P+ path of `Scene_Creator.QuerySexLabAnimsFromAnimDb` picks one of the top 32 **at random**. The ranking was thrown away and a male row got played.
+- **Rule:** a P+ Papyrus picker samples the whole returned list, so anything that must not play has to be filtered out of the list, not just ranked lower.
+- **Fix:** `AnimationDB::QueryTopNAnims` drops tier-2 rows when any row fits the cast's genders (log `rank dropped N rows`). When none fit, it keeps them all.
+
+## A DOM slave's orgasm jumped her scene with Bob to the final stage: one actor in two SexLab threads (2026-11-11, built, untested in game)
+
+Plan and status: [checkpoints/2026-11-11-slave-orgasm/01-checkpoint.md](checkpoints/2026-11-11-slave-orgasm/01-checkpoint.md). Log: `checkpoints/2026-11-11-slave-orgasm/logs/2026-11-11-18-46-06/SkyrimNet_SexLab.log`.
+
+- **Symptom:** Coralyn (DOM slave) + Bob, `B_B_CDog`, Bob the stage primary and ending lead. Her DOM melt sent the scene 3 -> 5 (L6852-L6856).
+- **Cause:** Coralyn's forced-masturbation thread (sid 0) lost `SexLabAnimatingFaction` after its last-stage animation switch (18:20:13), but it kept animating. The engine dropped it as stale (L~5770, `no longer animating`). The WebUI creator then locked her: `ActorLocker` and `sexlab.IsActorActive` both go by the faction. It started sid 1 with her in it. With one `ActorState` per actor, her `sid` flipped on every `BeginScene`. A melt counted as the primary's finish in scene 0, and `Effect_AdvanceToFinal(actor)` → `GetSceneByActor` landed on scene 1. Stage moves crossed over the same way (L7172 → L7174).
+- **Rule:** an actor out of `SexLabAnimatingFaction` / `IsActorActive` false is not proof that it is out of a thread. Check our scenes' thread `Positions` (`Manager.FindSceneByActorInThreadScene`).
+- **Rule:** an engine effect for one scene (gate pass, advance, stage move) carries the sid the engine evaluated. Papyrus resolves it by sid (`OrgasmEngine.psc` `SceneForEffect`), never by actor alone.
+- **Fix:** `LockActorLock` → `Manager.EndSceneForActor` silently ends the old scene first. The effects carry the sid. `BeginScene` warns `moved from live scene A to scene B: in two threads`.
+
 ## Animation chain replaces the loaded-list walk; Scene Creator shrunk (2026-11-11, built, untested in game)
 
 Plan and status: [checkpoints/2026-11-11-chain/checkpoint-01.md](checkpoints/2026-11-11-chain/checkpoint-01.md).
@@ -1616,7 +1665,7 @@ SkyrimNet's `PublicAPI.h` now lives in `c:\Skyrim\dev\mods\SkyrimNet devkit\CppA
 - **Row tags are not sanitized:** `AnimRow::tags` are only `ToLower`'d. `SanitizeTag`'s aliases (`pussy` → `vaginal`, `ass` → `anal`) apply only to query input. Synonym members must be loaded with lowercase and trim **only**. Running them through `SanitizeTag` would turn the cluster's `pussy` into `vaginal`, and the 17 `pussy`-tagged rows would stop matching.
 - **Never cluster DD restraint tags together** (`yoke`, `armbinder`, `hogtied`), not even in broad. `AppendMatchingTags` adds worn-device tags to keep only animations playable in that device; a yoke = armbinder cluster would hand an armbinder wearer yoke animations. Also keep `hug` apart from `cuddling`: `resolved == "hug"` plays the hug idle (`Actions.psc`).
 - **Papyrus default args are compiled into the caller:** adding `String synonyms = "broad"` to the `AnimDb_ResolveTags` native means every **caller's** `.pex` must be recompiled (`Actions.psc`). Otherwise the old pex passes 2 args to a 3-arg native and fails at runtime. Pyro's incremental build only recompiles changed sources, so touch the callers.
-- **SexLab literal lookup removed:** `GetAnimationsByTags` ignores synonyms, and with `require=false` and no tags it returns every N-actor animation (the P+ enjoyment-wait loop). All Scene_Creator tag selection is `SelectAnimationsFromAnimDb` (full query, then peel), with `_rank` (+ `_rank_pos_genders`) so the cap of 32 keeps the best matches (described → cast-gender fit → least played → random) rather than the alphabetical first 32.
+- **SexLab literal lookup removed:** `GetAnimationsByTags` ignores synonyms, and with `require=false` and no tags it returns every N-actor animation (the P+ enjoyment-wait loop). All Scene_Creator tag selection is `SelectAnimationsFromAnimDb` (full query, then peel), with `_rank` (+ `_rank_pos_genders`) so the cap of 32 keeps the best matches (described → cast-gender fit → least played → random) rather than the alphabetical first 32. Since 2026-11-11, rows with gender tier 2 are dropped when any row fits (see "Solo scene picked the other sex's animation" at the top).
 
 ## Scene settings filter TargetMenu starts (2026-10-02)
 

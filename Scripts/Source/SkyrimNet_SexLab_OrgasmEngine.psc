@@ -74,6 +74,8 @@ Function SetStageInputs(int sid, Actor[] positions, int[] genders, bool femdom, 
 bool Function StageInputsKnown(int sid) global native
 ; Stages follow the primary's enjoyment instead of their timers; replaces the victim hold's wait.
 bool Function IsStageAdvancePrimaryEnjoyment(int sid) global native
+; Stages are set to follow enjoyment but nobody is expected to orgasm (no primary): Scene advances on StageHoldCap.
+bool Function IsStageNoPrimary(int sid) global native
 ; The actor whose enjoyment drives the stage; None when the mode is off.
 Actor Function GetStagePrimary(int sid) global native
 ; Seconds a stage may hold: the later of sexlab.enjoyment.stage_hold_max and its own timer; 0 = no limit.
@@ -250,26 +252,44 @@ Function Effect_OrgasmGroup(Actor[] actors, int[] forced, bool individual, Strin
     sl_scene.Orgasm_ApplyGroup(actors, forced, individual, source, allower, allowed, extras)
 EndFunction
 
+; The scene an engine effect is for: the sid the engine evaluated, still holding akActor. Resolving by actor alone
+; crossed scenes when one actor was in two SexLab threads (2026-11-11 log: a DOM slave's orgasm in her solo scene
+; jumped her scene with Bob to the final stage). sid < 0: by actor.
+SkyrimNet_SexLab_Scene Function SceneForEffect(SkyrimNet_SexLab_Scene_Manager manager, Actor akActor, int sid) global
+    if sid < 0
+        return manager.GetSceneByActor(akActor)
+    endif
+    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneBySid(sid)
+    if sl_scene == None || !sl_scene.GetThreadInScene()
+        return None
+    endif
+    sslThreadController thread = sl_scene.GetThread()
+    if thread == None || thread.Positions.Find(akActor) < 0
+        return None
+    endif
+    return sl_scene
+EndFunction
+
 ; Gate passed: narrate the passers now (one DN) and, before the final stage, hold the stage until
 ; the voice starts (Effect_AdvanceToFinal). The orgasm itself follows as a "gate" group.
-Function Effect_GatePassed(Actor[] actors, bool holdStage) global
+Function Effect_GatePassed(Actor[] actors, bool holdStage, int sid) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()
     if manager == None || !actors || actors.length == 0 || actors[0] == None
         return
     endif
-    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(actors[0])
+    SkyrimNet_SexLab_Scene sl_scene = SceneForEffect(manager, actors[0], sid)
     if sl_scene != None
         sl_scene.Engine_GatePassed(actors, holdStage)
     endif
 EndFunction
 
-; The gate narration's voice started: push the actor's scene to its final stage.
-Function Effect_AdvanceToFinal(Actor akActor) global
+; The gate narration's voice started, or the primary finished: push scene sid to its final stage.
+Function Effect_AdvanceToFinal(Actor akActor, int sid) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()
     if manager == None || akActor == None
         return
     endif
-    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(akActor)
+    SkyrimNet_SexLab_Scene sl_scene = SceneForEffect(manager, akActor, sid)
     if sl_scene != None
         sl_scene.Engine_AdvanceToFinal()
     endif
@@ -288,12 +308,12 @@ Function Effect_EndStalled(Actor akActor) global
 EndFunction
 
 ; Stage by enjoyment: the primary's enjoyment moved to another band.
-Function Effect_MoveStage(Actor akActor, int stage) global
+Function Effect_MoveStage(Actor akActor, int stage, int sid) global
     SkyrimNet_SexLab_Scene_Manager manager = GetManager()
     if manager == None || akActor == None
         return
     endif
-    SkyrimNet_SexLab_Scene sl_scene = manager.GetSceneByActor(akActor)
+    SkyrimNet_SexLab_Scene sl_scene = SceneForEffect(manager, akActor, sid)
     if sl_scene != None
         sl_scene.Engine_MoveStage(stage)
     endif

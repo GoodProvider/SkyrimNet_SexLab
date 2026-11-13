@@ -100,6 +100,9 @@ sslBaseAnimation victim_hold_anim = None
 ; animation. Kept here because the engine saves none of this: Engine_SetStageInputs re-sends it.
 ; stage_inputs_registry: the animation of the last send; a change returns the scene to enjoyment.
 bool victim_hold_enjoyment = false
+; Stages set to follow enjoyment, but nobody expected to orgasm (IsStageNoPrimary): the hold forwards the stage at
+; StageHoldCap, and the final stage ends through Ending_Watch at the same cap. Nothing else moves such a scene.
+bool victim_hold_noprimary = false
 bool stage_manual = false
 String stage_inputs_registry = ""
 ; NarrationMark() taken just before the last orgasm DN went out: the final-stage hold ends once its response
@@ -2237,6 +2240,7 @@ Function Ending_Reset()
     victim_hold_stage = 0
     victim_hold_anim = None
     victim_hold_enjoyment = false
+    victim_hold_noprimary = false
     stage_manual = false
     stage_inputs_registry = ""
     gate_holding = false
@@ -2738,7 +2742,7 @@ Function Victim_Hold()
     elseif victim_hold_timer
         thread.UpdateTimer(PAUSE_HOLD_SECONDS)
     endif
-    Trace("Victim_Hold", "holding stage:"+thread.Stage+"/"+Engine_StageCount()+" by_enjoyment:"+victim_hold_enjoyment+" gate:"+SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid))
+    Trace("Victim_Hold", "holding stage:"+thread.Stage+"/"+Engine_StageCount()+" by_enjoyment:"+victim_hold_enjoyment+" no_primary:"+victim_hold_noprimary+" gate:"+SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid))
     ; An open orgasm window keeps its own update; its flush re-registers the poll (FlushOrgasmWindow).
     if !orgasm_window_open
         RegisterForSingleUpdate(1.0)
@@ -2798,12 +2802,19 @@ Function Victim_StageStart()
     if victim_holding && (thread.Stage != victim_hold_stage || thread.Animation != victim_hold_anim)
         Victim_Drop("stage changed")
     endif
+    if !victim_holding
+        victim_hold_noprimary = false
+    endif
     int count = Engine_StageCount()
     if SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
         if !victim_holding && !gate_holding && !ending_done && !thread.LeadIn && count >= 2 && thread.Stage < count
             victim_hold_enjoyment = true
             Victim_Hold()
         endif
+        return
+    endif
+    if SkyrimNet_SexLab_OrgasmEngine.IsStageNoPrimary(sid)
+        NoPrimary_StageStart(count)
         return
     endif
     if thread.Stage < count - 1
@@ -2825,6 +2836,36 @@ Function Victim_StageStart()
     endif
     victim_hold_enjoyment = false
     Victim_Hold()
+EndFunction
+
+; No primary (IsStageNoPrimary: a nonsexual scene, nobody expected to orgasm): the engine moves nothing and StallCheck
+; skips it, so with SexLab's AutoAdvance off an untimed stage waited for the advance key forever (2026-11-13 log, P+
+; kiss stuck on stage 1). Below the final stage: hold, and Victim_Poll forwards at StageHoldCap. Final stage: end the
+; animation through Ending_Watch at StageHoldCap. StageHoldCap 0 (stage_hold_max off): SexLab's timers as before.
+Function NoPrimary_StageStart(int count)
+    if victim_holding || gate_holding || ending_done || ending_holding || ending_watching || thread.LeadIn || count < 2
+        return
+    endif
+    float cap = SkyrimNet_SexLab_OrgasmEngine.StageHoldCap(sid)
+    if cap <= 0.0
+        return
+    endif
+    if thread.Stage < count
+        victim_hold_noprimary = true
+        Victim_Hold()
+        return
+    endif
+    float now = Utility.GetCurrentRealTime()
+    ending_watching = true
+    ending_watch_released = now
+    ending_watch_deadline = now + cap
+    ending_watch_stage = thread.Stage
+    ending_watch_anim = thread.Animation
+    Timer_SyncHold()
+    Trace("NoPrimary_StageStart", "nobody expected to orgasm: final stage "+thread.Stage+"/"+count+", ending in "+cap+"s")
+    if !orgasm_window_open
+        RegisterForSingleUpdate(1.0)
+    endif
 EndFunction
 
 ; Stage by enjoyment: the engine moves the stage to the primary's band (one edge per call on P+; it sends again until
@@ -2920,6 +2961,19 @@ Function Victim_Poll()
             SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
+    elseif victim_hold_noprimary
+        if !SkyrimNet_SexLab_OrgasmEngine.StageInputsKnown(sid)
+            Engine_SetStageInputs()
+        endif
+        if !SkyrimNet_SexLab_OrgasmEngine.IsStageNoPrimary(sid)
+            ; Someone became expected (stages follow them now), or timers took over (manual move, Num 5).
+            Trace("Victim_Poll", "no-primary hold no longer applies, releasing stage:"+thread.Stage)
+            victim_hold_noprimary = false
+            Victim_Release()
+            Victim_StageStart()
+            SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
+            return
+        endif
     endif
     if scene_paused
         ; Freeze the countdown while paused (the hotkey pause); re-check next tick.
@@ -2929,7 +2983,7 @@ Function Victim_Poll()
         return
     endif
     float cap = SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.ending.victim_hold_max", 120.0)
-    if victim_hold_enjoyment
+    if victim_hold_enjoyment || victim_hold_noprimary
         cap = SkyrimNet_SexLab_OrgasmEngine.StageHoldCap(sid)
     endif
     float held = Victim_HeldTick()
@@ -2938,7 +2992,7 @@ Function Victim_Poll()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
-    bool ask_gate = !victim_hold_enjoyment || thread.Stage == Engine_StageCount() - 1
+    bool ask_gate = !victim_hold_noprimary && (!victim_hold_enjoyment || thread.Stage == Engine_StageCount() - 1)
     if ask_gate && SkyrimNet_SexLab_OrgasmEngine.IsGateScene(sid) && (!victim_hold_expired || held < cap + 3.0)
         if !victim_hold_expired
             victim_hold_expired = true
@@ -2949,12 +3003,17 @@ Function Victim_Poll()
         SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
         return
     endif
-    if victim_hold_enjoyment
+    if victim_hold_enjoyment || victim_hold_noprimary
         String state_ = (thread as sslThreadModel).GetState()
         if state_ != "animating"
             RegisterForSingleUpdate(1.0)
         else
-            Trace("Victim_Poll", "no orgasm after "+held+"s, advancing stage:"+thread.Stage)
+            if victim_hold_noprimary
+                Trace("Victim_Poll", "no primary: stage "+thread.Stage+"/"+Engine_StageCount()+" held "+held+"s (cap "+cap+"), advancing")
+            else
+                Trace("Victim_Poll", "no orgasm after "+held+"s, advancing stage:"+thread.Stage)
+            endif
+            victim_hold_noprimary = false
             Victim_Drop("stage hold cap")
             Stage_Forward()
         endif
@@ -4985,8 +5044,26 @@ Function ActorChange_Poll()
     SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
 EndFunction
 
+; False when the bound thread has ended (Ending / Frozen / Unlocked). Under heavy Papyrus lag (new game, mods
+; still initializing) a HookAnimationStart handler can pass the manager's state check, stall on latent
+; calls, and resume after SexLab ended the thread and our AnimationEnd ran: starting then re-opened the
+; ended scene in the orgasm engine (began right after ended) with no thread.
+; SexLab 1.66 sends AnimationStart while the controller is in Advancing, so every live state counts
+; (same set as GetThreadInScene, without its Positions check).
+bool Function ThreadStillRunning()
+    if thread == None
+        return false
+    endif
+    String s = (thread as sslThreadModel).GetState()
+    return s == "animating" || s == "prepare" || s == "advancing" || s == "refresh"
+EndFunction
+
 Function AnimationStart()
     TraceStageState("AnimationStart")
+    if thread != None && !ThreadStillRunning()
+        Trace("AnimationStart", "late start on ended thread tid:"+thread.tid+" state:"+(thread as sslThreadModel).GetState()+", ignored")
+        return
+    endif
     description_last = ""
     stage_last = 0
     pending_animation_change = false
@@ -5021,6 +5098,12 @@ Function AnimationStart()
     endif
     AlignActors()
     ApplyStyleSpeed()
+    if !ThreadStillRunning()
+        Trace("AnimationStart", "thread ended during start (tid:"+thread.tid+"), engine not begun")
+        ClearStyleSpeed()
+        DbgReturn("AnimationStart", "void")
+        return
+    endif
     Engine_BeginScene()
     ActorChange_Started()
     PushThread()
@@ -7191,8 +7274,9 @@ EndFunction
 Function StageManual_TakeOver()
     stage_manual = true
     SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
-    if victim_hold_enjoyment
+    if victim_hold_enjoyment || victim_hold_noprimary
         victim_hold_enjoyment = false
+        victim_hold_noprimary = false
         Victim_Drop("stage moved by hand")
     endif
 EndFunction
