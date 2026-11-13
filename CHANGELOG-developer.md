@@ -1,6 +1,33 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.2
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
+
+## 0.37.3
+
+### DOM slaves
+- A DOM slave's HUD bar, stage lead and prompts follow Diary of Mine's real state (DOM level steps, step label, roll chance), with an optional breakdown list (`sexlab.hud.dom_enjoyment`). Refusing to change strategy adds DOM's "refusing to have sex" punishment reason.
+
+### Animation chain
+- The Scene Creator and Description Editor list the scene's chain of animations; a row click adds or removes one, ▲ / ▼ reorder, and a **last animation** pulldown (end / loop / NPC choice) decides what the chain's last stage does. The last stage offers "Next: <name>" without asking the NPC.
+- Fixed: Ctrl+click in the Description Editor picks several animations again; they all join SexLab's list and play in turn at the last stage.
+
+### Animation filter
+- Compact Scene Creator layout, tri-state filter tags with counts, a fixed line for the act tag words, `freq asc` as the default sort, and at least eight list rows.
+
+### Mini-game
+- Ask / order / punish decisions wait for the target's reply, and a yes/no comply check (`decisions/sexlab/minigame_comply`) decides whether they obeyed. New `sexlab.minigame.max_serial_punishment_rejects` forces a give-in after repeated refusals.
+
+### SexLab P+ (untested)
+- P+ plays only the last of several Ctrl+click picks, and a one-animation loop steps back a stage.
+
+### Bug Fixes
+- Fixed: no-orgasm scenes stuck on stage 1, dead HUD stage keys, duplicate random starts, late start events reopening ended scenes, wrong-gender tag picks, a DOM slave's orgasm moving the wrong scene, and the Magelight WebUI swallowing keys.
+
+### WebUI
+- Verbose logging writes `[UI layout]` lines for window-size reports; "Stages follow enjoyment" moved to the top of Enjoyment.
+
+### AniDescriber
+- HKX spline tracks are read using Havok's real track flags.
 
 ## 0.37.2
 

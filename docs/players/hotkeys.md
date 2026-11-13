@@ -91,6 +91,8 @@ While you are in a SexLab scene, a small HUD appears in the upper left, where th
     The panel opens with what you picked last time, wherever it still fits: the same people, verb, request, method, body part, reason and hits (custom text too). A reason that no longer applies is replaced by another one at random, or *no reason*. Picking a sexual body part while Injury Engine has them off asks "Do you wish to enable torture sexual parts?"; **Yes** turns Injury Engine's setting on and saves it.
 
     The narration makes the target answer, and the AI decides from there how they behave: they might give in, resist or turn the tables. Lines the NPCs were about to say are dropped and the ask, order or punishment is always narrated directly, whatever the Mini-game narration level. The cell is greyed out when nobody else is in the scene.
+
+    In the mini-game, what the target does follows their spoken reply: after an ask, an order or a punishment for a refused request, the AI is asked whether the reply complied, and only then does the strategy change (or stay). After **Maximum serial punishment rejects** (default 3, 0 = never) punishments in a row, the NPC gives in without being asked.
   - NPCs can punish too (**SexLab_Scene_Punish**): anyone in the scene, the player included.
   - **Num 5** cycles how stages move. The cell names what a press does next:
     - *timer* (greyed, with *prev* and *next*): stages are following enjoyment. Press to put stages on their timers; they keep running.

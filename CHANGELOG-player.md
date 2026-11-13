@@ -1,6 +1,56 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.2
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
+
+## 0.37.3
+
+### DOM slaves
+- A DOM slave's bar shows their DOM arousal step, from "orgasm impossible" to "orgasm very likely"
+- New setting "Display DOM slave enjoyment" lists what goes into DOM's orgasm roll (off by default)
+- A DOM slave leads the stage only after everyone else and isn't punished for a stuck stage
+- Decisions and narration follow DOM: a slave under level 25 isn't described as aroused
+- A DOM slave's stamina budget follows their DOM arousal
+- Refusing to change strategy gives DOM the punishment reason "refusing to have sex"
+- DOM slaves count towards "Maximum serial punishment rejects"
+
+### Animation chain
+- Scene Creator and Description Editor list the scene's chain of animations at the top
+- Click a row to add or remove an animation; ▲ / ▼ reorder. All / None are gone
+- New **last animation** pulldown: **end**, **loop**, or **NPC choice** (default)
+- The last stage offers "Next: <animation>", preselected, without asking the NPC
+- Fixed: Ctrl+click in the Description Editor used only the last animation you picked
+- Animations you picked play in turn at the last stage
+
+### Animation filter
+- Scene Creator takes less room; actor tables show four actors before they scroll
+- Filter tags show counts, such as "sexual (76)"; click one to cycle white / red / grey
+- sexual, vaginal, oral, anal, bound, rape and necro have their own line under the filter
+- Animation lists open sorted by `freq asc`: least-played animations first
+- The animation list keeps at least eight rows; the Description Editor scrolls instead
+
+### Mini-game
+- Ask, order and punish decisions wait for the target's reply and follow it
+- A yes/no check decides whether the reply agreed; "<name> agrees to / refuses …" is narrated
+- The punishment is narrated at once, without "<name> chooses to ..."
+- New setting "Maximum serial punishment rejects" (default 3): the NPC then gives in
+
+### SexLab P+ (untested)
+- Several animations picked with Ctrl+click: P+ plays only the last one
+- A chain of one animation on **loop** steps back a stage instead of restarting
+
+### Bug Fixes
+- Fixed: a kiss or cuddle could stay on its first stage forever with auto advance off
+- Fixed: HUD stage keys (Num 4 / 5 / 6, end) sometimes did nothing during your scene
+- Fixed: clicking a random start twice could start the same scene twice
+- Fixed: a busy game could reopen a scene SexLab had already ended
+- Still looking into scenes that end seconds after starting on a new game: send Papyrus.0.log
+- Fixed: a woman's solo scene could pick a male masturbation animation (and the reverse)
+- Fixed: a DOM slave's orgasm could end a scene her partner was still leading
+- Fixed: with Magelight, reopening the WebUI right after closing it could swallow every key
+
+### WebUI
+- Verbose logging adds `[UI layout]` lines; turn it on when reporting window size problems
+- "Stages follow enjoyment" moved to the top of the Enjoyment settings
 
 ## 0.37.2
 
