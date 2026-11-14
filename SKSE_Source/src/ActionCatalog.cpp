@@ -469,6 +469,15 @@ namespace ActionCatalog
                 return CompareValues(allowed ? 1.0 : 0.0, op, expected);
             }
 
+            // Any SkyrimNet plugin's bool setting: arguments [pluginConfigFolder, "dotted.path"].
+            if (EqualsIgnoreCase(decorator, "plugin_config_bool")) {
+                if (args.size() < 2 || !args[0].is_string() || !args[1].is_string())
+                    return false;
+                const bool on = SexLabNet::GetForeignConfigBool(
+                    args[0].get<std::string>().c_str(), args[1].get<std::string>().c_str(), false);
+                return CompareValues(on ? 1.0 : 0.0, op, expected);
+            }
+
             if (EqualsIgnoreCase(decorator, "sexlab_has_cum")) {
                 if (args.empty() || !ArgIsCurrentActor(args[0]))
                     return false;
@@ -549,6 +558,22 @@ namespace ActionCatalog
                 const bool groupOk = EqualsIgnoreCase(logic, "OR") ? orOk : andOk;
                 if (!groupOk)
                     return false;
+            }
+            return true;
+        }
+
+        // MainPanel entries: requiresPlugin/Dll/File plus optional eligibilityRules (evaluated at catalog build).
+        bool PassesMainPanelGate(const nlohmann::json& entry)
+        {
+            if (!PassesRequiresPlugin(entry))
+                return false;
+            if (entry.is_object() && entry.contains("eligibilityRules")) {
+                try {
+                    return EvalEligibilityRules(entry["eligibilityRules"], false);
+                } catch (const std::exception& e) {
+                    webui_log::error("ActionCatalog: MainPanel eligibilityRules error: {}", e.what());
+                    return false;
+                }
             }
             return true;
         }
@@ -662,7 +687,7 @@ namespace ActionCatalog
         bool IsForeignHostType(const std::string& type)
         {
             return EqualsIgnoreCase(type, "data_table") || EqualsIgnoreCase(type, "actor_detail") ||
-                   EqualsIgnoreCase(type, "actor_profile");
+                   EqualsIgnoreCase(type, "actor_profile") || EqualsIgnoreCase(type, "actor_form");
         }
 
         // Every third-party MainPanel type: keyed by `id`, opened / closed by zero-arg Papyrus.
@@ -715,7 +740,8 @@ namespace ActionCatalog
             return g_mainPanels;
         }
 
-        const nlohmann::json* FindMainPanelByKey(const std::string& key)
+        // gated=false: close paths must still find a panel whose gate turned off while it was open.
+        const nlohmann::json* FindMainPanelByKey(const std::string& key, bool gated = true)
         {
             if (key.empty())
                 return nullptr;
@@ -725,7 +751,7 @@ namespace ActionCatalog
             for (auto& entry : panels) {
                 if (!entry.is_object())
                     continue;
-                if (!PassesRequiresPlugin(entry))
+                if (gated && !PassesMainPanelGate(entry))
                     continue;
                 if (MainPanelKey(entry) == key)
                     return &entry;
@@ -1295,7 +1321,7 @@ namespace ActionCatalog
             for (auto& entry : src) {
                 if (!entry.is_object())
                     continue;
-                if (!PassesRequiresPlugin(entry))
+                if (!PassesMainPanelGate(entry))
                     continue;
                 if (EqualsIgnoreCase(entry.value("type", ""), "builtin") && MainPanelKey(entry) == "scene_panel") {
                     // Old scene_creator_panel / description_editor_panel entries collapse into one Scene view.
@@ -1311,6 +1337,13 @@ namespace ActionCatalog
                 }
                 panels.push_back(entry);
             }
+        }
+        // Selected panel gated out since it opened (e.g. a dashboard toggle): close it and drop the selection.
+        if (!g_currentMainPanelKey.empty() && !FindMainPanelByKey(g_currentMainPanelKey)) {
+            webui_log::info("BuildMainPanelsCatalog: selection '{}' dropped (gate)", g_currentMainPanelKey);
+            if (auto* stale = FindMainPanelByKey(g_currentMainPanelKey, false))
+                CloseMainPanelEntry(*stale);
+            g_currentMainPanelKey.clear();
         }
         catalog["panels"] = std::move(panels);
         catalog["selected"] = g_currentMainPanelKey;
@@ -1332,7 +1365,7 @@ namespace ActionCatalog
     void ClearMainPanelSelection()
     {
         if (!g_currentMainPanelKey.empty()) {
-            if (auto* cur = FindMainPanelByKey(g_currentMainPanelKey))
+            if (auto* cur = FindMainPanelByKey(g_currentMainPanelKey, false))
                 CloseMainPanelEntry(*cur);
             g_currentMainPanelKey.clear();
         }
@@ -1419,7 +1452,7 @@ namespace ActionCatalog
         }
 
         if (!g_currentMainPanelKey.empty()) {
-            if (auto* prev = FindMainPanelByKey(g_currentMainPanelKey))
+            if (auto* prev = FindMainPanelByKey(g_currentMainPanelKey, false))
                 CloseMainPanelEntry(*prev);
         }
 

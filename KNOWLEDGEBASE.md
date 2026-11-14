@@ -1929,3 +1929,13 @@ The punished actor's strategy decision gets `PunishDecisionLine` (`"<act>. <feel
 **Symptom:** an external VR user saw the Description Editor's animation filter list shrink until one row showed, with no way to resize it.
 **Cause:** `#de-anims-list` was `flex:1 1 auto; min-height:0` inside a panel with `overflow:hidden`. In a short view (Magelight VR, or a high `ui_scale`) the tag chips, filter block and loaded list take the height first, so the list could shrink to zero. `resolutionBaseline()` never goes below 1, so a small viewport is not scaled down.
 **Rule:** a list the user must scroll needs a real `min-height`, and its panel should scroll (`overflow-y:auto`, parents `flex-shrink:0`) rather than clip. Ask VR reporters to turn on Verbose logging: the `[UI layout]` lines give the viewport, zoom and every panel rect.
+
+## MainPanels can be gated by eligibilityRules (2026-11-13, built, untested in game)
+
+Before this, MainPanels only honoured `requiresPlugin` / `requiresDll` / `requiresFile`; `eligibilityRules` were TargetMenu-only, so a view could not follow a setting. `ActionCatalog::PassesMainPanelGate` now runs the rules in `BuildMainPanelsCatalog` and `FindMainPanelByKey`. They run at catalog build (every overlay open), not on a target change, so actor decorators (`currentActor`) are wrong there: use `plugin_config_bool` / `get_global_value`, and let the panel's `openFunction` push `empty` for an unsuitable target. `plugin_config_bool` reads another plugin's setting by its config folder name (`SkyrimNet_DOM`), not the Papyrus `Plugin_<name>` form.
+
+**Gated-off while open (2026-11-13, fixed):** `FindMainPanelByKey` applies the gate, so once DOM Debug mode went off the selected key no longer resolved: `ClearMainPanelSelection` cleared it without `CloseMainPanelEntry`, `selected` still carried it, and `#actor-form-panel` stayed up. Close paths now look up ungated (`FindMainPanelByKey(key, false)`), `BuildMainPanelsCatalog` drops a gated-out selection, and `configureControlPanel` hides foreign hosts with no valid selection. **Rule:** a gate must never hide an entry from the code that closes it.
+
+## Ultralight pulldowns: no scrollbar on a capped menu (2026-11-13)
+
+`.pulldown-menu` is capped at 50vh with `overflow-y:auto`, but Ultralight draws no scrollbar, so a long list looks like it ends at the cap (DOM's 21 moods "stopped at loyal"). `actor_form` selects with more than 10 options open as a 3-column grid (`af-pulldown-wide`) and `positionOpenPulldownMenu` slides the menu up to fit. Inside a main panel, `position:fixed` is offset by the panel (≈90 px in headless Edge), so the code corrects by the measured `getBoundingClientRect().top - style.top`. **Rule:** no list the user must reach may depend on a hidden scroll.

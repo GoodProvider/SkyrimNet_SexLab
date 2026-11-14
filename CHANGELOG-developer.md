@@ -2,6 +2,15 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+## Unreleased
+
+### WebUI
+- `ActionCatalog.cpp`: MainPanels honour `eligibilityRules` (`PassesMainPanelGate` in `BuildMainPanelsCatalog` / `FindMainPanelByKey`). New decorator `plugin_config_bool` (`[configFolder, path]`, via `GetForeignConfigBool`).
+- New foreign MainPanel type `actor_form` (`IsForeignHostType`; `index.html` `#actor-form-panel`, `renderActorForm`, `afSave` / `afReset`): slider / number / toggle / select / text / readonly fields; Save sends only the changed ids as one JSON string to `applyFunction(speaker, target, "save", json)` with `closeWebUI: true`. First user: SkyrimNet_DOM's DOMSlaveDebug view.
+- `setMainPanelData`: dispatch keys (`questFormId`, `scriptName`, `applyFunction`) also accepted lowercase.
+- Fixed: a MainPanel gated off while open (e.g. DOM Debug mode turned off) stayed on screen. `FindMainPanelByKey(key, gated)`; close paths look up ungated; `BuildMainPanelsCatalog` drops and closes a gated-out selection; `configureControlPanel` hides the foreign hosts when nothing valid is selected.
+- `actor_form` selects with more than 10 options open as a 3-column grid that fits the screen (`af-pulldown-wide`, `positionOpenPulldownMenu`); the 50vh scroll cap hid DOM's moods past `loyal`.
+
 ## 0.37.3
 
 ### DOM slaves

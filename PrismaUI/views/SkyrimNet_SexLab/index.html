@@ -1237,6 +1237,36 @@
             font-size: calc(var(--text-xs) * 2);
         }
 
+        /* actor_form host (foreign MainPanel): editable fields + sticky Save/Reset. */
+        #actor-form-panel { color: var(--text-primary); flex-direction: column; }
+        #af-header {
+            display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-md);
+            border-bottom: 1px solid var(--border); padding-bottom: var(--space-xs);
+            margin-bottom: var(--space-sm); flex-shrink: 0;
+        }
+        #af-name { font-size: var(--text-xl); }
+        #af-subtitle { font-size: var(--text-sm); color: var(--text-secondary); letter-spacing: 0.12em; text-transform: uppercase; }
+        #af-actions { margin-left: auto; display: flex; gap: var(--space-sm); align-items: center; }
+        #af-dirty { font-size: var(--text-sm); color: var(--text-muted); }
+        #af-body { overflow: auto; flex: 1; min-height: 0; }
+        #af-sections { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-md) var(--space-xl); }
+        .af-block { flex: 1 1 260px; min-width: 240px; max-width: 440px; }
+        .af-row { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 4px; font-size: var(--text-sm); }
+        .af-row.changed .af-label { color: var(--accent); }
+        .af-label { flex: 0 0 42%; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .af-ctl { flex: 1; display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+        .af-ctl input {
+            width: 72px; font-family: var(--font-ui); color: var(--text-primary); background: var(--bg-input);
+            border: 1px solid var(--border-solid); border-radius: var(--radius); padding: 2px var(--space-sm);
+        }
+        .af-ctl input.af-text { width: 100%; }
+        .af-track { flex: 1; height: 8px; background: var(--bg-elevated); border: 1px solid var(--border-solid); border-radius: 4px; cursor: pointer; position: relative; }
+        .af-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; }
+        .af-ro { color: var(--text-primary); }
+        .af-ctl .action-btn { min-height: 0; padding: 1px var(--space-md); }
+        .pulldown.af-pulldown-wide.open .pulldown-menu { display: grid; grid-template-columns: repeat(3, auto); }
+        .af-pulldown-wide .pulldown-option { min-height: 0; padding: var(--space-xs) var(--space-md); }
+
         /* actor_profile host (foreign MainPanel): pills, bar groups, radars, recs, events, lines. */
         #actor-profile-panel {
             --ap-red:    #d76a6a;
@@ -2737,6 +2767,20 @@
             <div id="ap-sections"></div>
         </div>
     </div>
+    <!-- actor_form host: filled by a third-party openFunction -> setMainPanelData({panel:'actor_form'}). -->
+    <div id="actor-form-panel" class="panel" style="display:none">
+        <div id="af-header">
+            <span id="af-name"></span>
+            <span id="af-subtitle"></span>
+            <span id="af-actions">
+                <span id="af-dirty"></span>
+                <div class="action-btn" id="af-reset" onclick="afReset()">Reset</div>
+                <div class="action-btn" id="af-save" onclick="afSave()">Save</div>
+            </span>
+        </div>
+        <div id="af-empty" class="compact-row" style="opacity:0.75; display:none"></div>
+        <div id="af-body"><div id="af-sections"></div></div>
+    </div>
     </div><!-- #main-panel-host -->
 
     <div id="overlay-panels">
@@ -3072,7 +3116,8 @@
         const FOREIGN_PANEL_HOSTS = {
             data_table: 'data-table-panel',
             actor_detail: 'actor-detail-panel',
-            actor_profile: 'actor-profile-panel'
+            actor_profile: 'actor-profile-panel',
+            actor_form: 'actor-form-panel'
         };
 
         // Fallback when C++ configureControlPanel has not run / main_panels/*.json missing from Data.
@@ -3127,7 +3172,7 @@
 
         function clearMainPanelHost() {
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'sex-graph-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel', 'actor-form-panel'];
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
                 if (el) el.style.display = 'none';
@@ -3340,6 +3385,17 @@
                 MAIN_SELECTED_KEY = catalog.selected || '';
             else if (MAIN_SELECTED_KEY && !findMainPanelByKey(MAIN_SELECTED_KEY))
                 MAIN_SELECTED_KEY = '';
+            if (MAIN_SELECTED_KEY && !findMainPanelByKey(MAIN_SELECTED_KEY))
+                MAIN_SELECTED_KEY = '';
+            if (!MAIN_SELECTED_KEY) {
+                // No (or a gated-out) selection: foreign hosts only show for a selected view, so hide them.
+                // Builtins stay: Scene Creator can be up with no selection (SceneCreator_Open).
+                for (const pid of ['data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel', 'actor-form-panel']) {
+                    const el = document.getElementById(pid);
+                    if (el) el.style.display = 'none';
+                }
+                updateMainPanelClose();
+            }
             if (catalog && catalog.modes && catalog.modes.length)
                 CONTROL_MODES = catalog.modes.slice();
             if (catalog && catalog.mode)
@@ -3390,7 +3446,7 @@
             mainPanelPulldownBusy = false;
             updateMainPanelClose();
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'sex-graph-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel', 'actor-form-panel'];
             const want = domIdForPanelKey(panelKey);
             const wantSrc = sourceOf(findMainPanelByKey(panelKey));
             for (const pid of builtins) {
@@ -3459,7 +3515,7 @@
             showControlPanel();
             const want = FOREIGN_PANEL_HOSTS[type] || 'data-table-panel';
             const builtins = ['scene-creator-panel', 'description-editor-panel', 'settings-panel', 'profile-panel', 'sex-graph-panel', 'log-panel',
-                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel'];
+                'data-table-panel', 'actor-detail-panel', 'actor-info-panel', 'actor-profile-panel', 'actor-form-panel'];
             const wantSrc = sourceOf(findMainPanelByKey(MAIN_SELECTED_KEY));
             for (const pid of builtins) {
                 const el = document.getElementById(pid);
@@ -3486,10 +3542,10 @@
             }
             if (!payload || typeof payload !== 'object') return;
             FOREIGN_PANEL_DISPATCH = {
-                plugin: payload.plugin || '',
-                questFormId: payload.questFormId || '',
-                scriptName: payload.scriptName || '',
-                applyFunction: payload.applyFunction || ''
+                plugin: payload.plugin || payload.Plugin || '',
+                questFormId: payload.questFormId || payload.questformid || payload.QuestFormId || '',
+                scriptName: payload.scriptName || payload.scriptname || payload.ScriptName || '',
+                applyFunction: payload.applyFunction || payload.applyfunction || payload.ApplyFunction || ''
             };
             if (payload.id)
                 MAIN_SELECTED_KEY = payload.id;
@@ -3502,6 +3558,8 @@
                 renderActorInfo(payload);
             else if (panel === 'actor_profile')
                 renderActorProfile(payload);
+            else if (panel === 'actor_form')
+                renderActorForm(payload);
         }
 
         // Actor Info days-ago cell: -1 = never.
@@ -4047,6 +4105,213 @@
                     controlsHost.appendChild(row);
                 });
             }
+        }
+
+        // ---- actor_form: editable fields; Save sends only the changed ids as one JSON string, then closes. ----
+        // Payload: {panel:'actor_form', id, title|name, subtitle, empty?, sections:[{title, fields:[
+        //   {id, label, tip?, widget:'slider'|'number'|'toggle'|'select'|'text'|'readonly', value, min, max, step,
+        //    options:[{val, caption}] }]}]}.
+        // Papyrus: applyFunction(Actor speaker, Actor target, String control = "save", String value = diff JSON).
+        let AF_STATE = { orig: {}, cur: {}, fields: {}, rows: {}, sections: [] };
+
+        function afIsOn(v) { return v === true || v === 1 || v === '1' || apKey(v) === 'true' || apKey(v) === 'on'; }
+        function afNorm(f, v) {
+            const w = apKey(f.widget);
+            if (w === 'toggle') return afIsOn(v);
+            if (w === 'slider' || w === 'number') {
+                if (v === '' || v == null) return '';
+                const n = Number(v);
+                return isFinite(n) ? n : '';
+            }
+            return v == null ? '' : String(v);
+        }
+        function afChanged(id) {
+            return AF_STATE.cur[id] !== AF_STATE.orig[id];
+        }
+        function afDiff() {
+            const out = {};
+            Object.keys(AF_STATE.cur).forEach(id => {
+                if (afChanged(id) && AF_STATE.cur[id] !== '') out[id] = AF_STATE.cur[id];
+            });
+            return out;
+        }
+        function afRefreshDirty() {
+            const n = Object.keys(afDiff()).length;
+            const el = document.getElementById('af-dirty');
+            if (el) el.textContent = n ? (n + ' changed') : '';
+            Object.keys(AF_STATE.rows).forEach(id => AF_STATE.rows[id].classList.toggle('changed', afChanged(id)));
+        }
+        function afSet(id, v) {
+            const f = AF_STATE.fields[id];
+            if (!f) return;
+            AF_STATE.cur[id] = afNorm(f, v);
+            afRefreshDirty();
+        }
+        function afRange(f) {
+            const lo = Number(f.min != null ? f.min : 0);
+            const hi = Number(f.max != null ? f.max : 100);
+            return [lo, hi];
+        }
+        function afBuildControl(f) {
+            const id = f.id;
+            const ctl = apEl('div', 'af-ctl');
+            const w = apKey(f.widget || 'readonly');
+            if (w === 'slider' || w === 'number') {
+                const input = document.createElement('input');
+                input.type = 'number';
+                if (f.min != null) input.min = f.min;
+                if (f.max != null) input.max = f.max;
+                input.step = f.step != null ? f.step : 1;
+                input.value = AF_STATE.cur[id] === '' ? '' : String(AF_STATE.cur[id]);
+                let fill = null;
+                const paint = () => {
+                    if (!fill) return;
+                    const [lo, hi] = afRange(f);
+                    const n = Number(AF_STATE.cur[id]);
+                    const t = hi > lo && isFinite(n) ? Math.max(0, Math.min(1, (n - lo) / (hi - lo))) : 0;
+                    fill.style.width = (t * 100) + '%';
+                };
+                const clampSet = (raw) => {
+                    let n = raw === '' ? '' : Number(raw);
+                    if (n !== '' && isFinite(n)) {
+                        if (f.min != null) n = Math.max(Number(f.min), n);
+                        if (f.max != null) n = Math.min(Number(f.max), n);
+                    }
+                    afSet(id, n);
+                    paint();
+                };
+                input.oninput = () => clampSet(input.value);
+                input.onchange = () => {
+                    clampSet(input.value);
+                    input.value = AF_STATE.cur[id] === '' ? '' : String(AF_STATE.cur[id]);
+                };
+                input.onkeydown = (e) => e.stopPropagation();
+                if (w === 'slider') {
+                    const track = apEl('div', 'af-track');
+                    fill = apEl('div', 'af-fill');
+                    track.appendChild(fill);
+                    track.onclick = (e) => {
+                        const r = track.getBoundingClientRect();
+                        const [lo, hi] = afRange(f);
+                        const step = Number(f.step || 1) || 1;
+                        let n = lo + (hi - lo) * Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width)));
+                        n = Number((Math.round(n / step) * step).toFixed(4));
+                        clampSet(n);
+                        input.value = String(AF_STATE.cur[id]);
+                    };
+                    ctl.appendChild(track);
+                    paint();
+                }
+                ctl.appendChild(input);
+            } else if (w === 'toggle') {
+                const btn = apEl('div', 'action-btn');
+                const paint = () => { btn.textContent = AF_STATE.cur[id] ? 'on' : 'off'; };
+                btn.onclick = () => { afSet(id, !AF_STATE.cur[id]); paint(); };
+                paint();
+                ctl.appendChild(btn);
+            } else if (w === 'select' && Array.isArray(f.options) && f.options.length && typeof createPulldown === 'function') {
+                const caps = f.options.map(o => String(o.caption != null ? o.caption : (o.label != null ? o.label : o.val)));
+                const vals = f.options.map(o => String(o.val != null ? o.val : (o.value != null ? o.value : o.caption)));
+                const idx = vals.indexOf(String(AF_STATE.cur[id]));
+                const seed = idx >= 0 ? caps[idx] : (AF_STATE.cur[id] === '' ? caps[0] : String(AF_STATE.cur[id]));
+                const pd = createPulldown(caps, seed, (picked, i) => {
+                    const k = (typeof i === 'number' && i >= 0 && i < vals.length) ? i : caps.indexOf(picked);
+                    afSet(id, k >= 0 ? vals[k] : picked);
+                });
+                // Long lists open as a grid that fits on screen (Ultralight draws no scrollbar on a capped menu).
+                pd.classList.add('af-pulldown');
+                if (caps.length > 10) pd.classList.add('af-pulldown-wide');
+                ctl.appendChild(pd);
+            } else if (w === 'text') {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'af-text';
+                input.value = AF_STATE.cur[id];
+                input.oninput = () => afSet(id, input.value);
+                input.onkeydown = (e) => e.stopPropagation();
+                ctl.appendChild(input);
+            } else {
+                ctl.appendChild(apEl('span', 'af-ro', f.value == null ? '' : String(f.value)));
+            }
+            return ctl;
+        }
+        function afRender() {
+            const host = document.getElementById('af-sections');
+            if (!host) return;
+            host.innerHTML = '';
+            AF_STATE.rows = {};
+            (AF_STATE.sections || []).forEach(sec => {
+                const block = apEl('div', 'af-block');
+                block.appendChild(apEl('div', 'ap-title', sec.title || ''));
+                (sec.fields || []).forEach(f => {
+                    if (!f || f.id == null) return;
+                    const row = apEl('div', 'af-row');
+                    const lab = apEl('span', 'af-label', f.label || String(f.id));
+                    lab.title = f.tip || f.label || String(f.id);
+                    row.appendChild(lab);
+                    row.appendChild(afBuildControl(f));
+                    if (AF_STATE.fields[f.id]) AF_STATE.rows[f.id] = row;
+                    block.appendChild(row);
+                });
+                host.appendChild(block);
+            });
+            afRefreshDirty();
+        }
+        function renderActorForm(payload) {
+            payload = apLowerKeys(payload);
+            revealForeignMainPanel('actor_form');
+            const nameEl = document.getElementById('af-name');
+            const subEl = document.getElementById('af-subtitle');
+            const empty = document.getElementById('af-empty');
+            const body = document.getElementById('af-body');
+            const actions = document.getElementById('af-actions');
+            if (!nameEl || !subEl || !empty || !body || !actions) return;
+            nameEl.textContent = payload.title || payload.name || payload.label || '';
+            subEl.textContent = payload.subtitle || '';
+            AF_STATE = { orig: {}, cur: {}, fields: {}, rows: {}, sections: [] };
+            if (payload.empty) {
+                empty.textContent = payload.empty;
+                empty.style.display = '';
+                body.style.display = 'none';
+                actions.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            body.style.display = '';
+            actions.style.display = '';
+            AF_STATE.sections = Array.isArray(payload.sections) ? payload.sections : [];
+            AF_STATE.sections.forEach(sec => (sec.fields || []).forEach(f => {
+                if (!f || f.id == null || apKey(f.widget || 'readonly') === 'readonly') return;
+                const v = afNorm(f, f.value);
+                AF_STATE.fields[f.id] = f;
+                AF_STATE.orig[f.id] = v;
+                AF_STATE.cur[f.id] = v;
+            }));
+            afRender();
+        }
+        function afReset() {
+            Object.keys(AF_STATE.orig).forEach(id => { AF_STATE.cur[id] = AF_STATE.orig[id]; });
+            afRender();
+        }
+        function afSave() {
+            const d = FOREIGN_PANEL_DISPATCH || {};
+            if (typeof window.onAction !== 'function' || !d.plugin || !d.scriptName || !d.applyFunction) return;
+            window.onAction(JSON.stringify({
+                action: 'papyrus',
+                label: 'save',
+                plugin: d.plugin,
+                questFormId: d.questFormId || '',
+                scriptName: d.scriptName,
+                executionFunctionName: d.applyFunction,
+                closeWebUI: true,
+                parameterMapping: [
+                    { type: 'speaker', name: 'speaker' },
+                    { type: 'target', name: 'target' },
+                    { type: 'static', name: 'control', value: 'save' },
+                    { type: 'static', name: 'value', value: JSON.stringify(afDiff()) }
+                ],
+                parameters: {}
+            }));
         }
 
         function hideAllPanelsDom() {
@@ -5442,6 +5707,15 @@
             menu.style.minWidth = minW + 'px';
             menu.style.maxHeight = maxH + 'px';
             menu.style.zIndex = '50';
+            if (root.classList.contains('af-pulldown')) {
+                // DOMSlaveDebug selects: show every option, sliding the menu up instead of scrolling it.
+                // The panel can be the containing block for `fixed`, so correct by the measured offset.
+                menu.style.maxHeight = Math.max(80, vh - 2 * gap) + 'px';
+                const off = menu.getBoundingClientRect().top - top;
+                const h = menu.scrollHeight;
+                const want = (top + h > vh - gap) ? Math.max(gap, vh - h - gap) : top;
+                menu.style.top = (want - off) + 'px';
+            }
         }
 
         function closeAllPulldowns(except) {

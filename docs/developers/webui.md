@@ -152,7 +152,9 @@ Start merge order: YAML statics → `defaultsParameters` → matching action-nod
 
 ### `webui/MainPanels/`
 
-One JSON object per file; **order = lexicographic filename**. Optional `requiresPlugin` skips the entry when the mod is missing. Optional `requiresFile` (a path under `SKSE/Plugins/SkyrimNet_SexLab/`) skips it while that file does not exist; checked on every catalog build, so the pulldown follows the file without a restart.
+One JSON object per file; **order = lexicographic filename**. Optional `requiresPlugin` skips the entry when the mod is missing. Optional `requiresFile` (a path under `SKSE/Plugins/SkyrimNet_SexLab/`) skips it while that file does not exist; checked on every catalog build, so the pulldown follows the file without a restart. Optional `eligibilityRules` (same group/conditions shape as TargetMenu options) are also evaluated at catalog build (`ActionCatalog::PassesMainPanelGate`), with no focus actor context: use actor-free decorators such as `plugin_config_bool` or `get_global_value`. The catalog is rebuilt on every overlay open, so a setting change shows the next time the overlay opens. If the selected view fails its gate on a rebuild, `BuildMainPanelsCatalog` closes it (ungated lookup, `CloseMainPanelEntry`) and sends `selected: ""`; JS `configureControlPanel` also hides the foreign hosts whenever the selection is empty or not in the list. Close paths (`ClearMainPanelSelection`, the `SwitchMainPanel` prev-close) look the key up ungated, so a panel gated off while open still closes.
+
+`plugin_config_bool` (MainPanels and TargetMenu): `{ "decoratorName": "plugin_config_bool", "arguments": ["<config folder>", "dotted.path"], "comparisonOperator": "==", "expectedValue": true }` reads another SkyrimNet plugin's bool setting through `SexLabNet::GetForeignConfigBool` (folder = `SKSE/Plugins/SkyrimNet/config/plugins/<folder>/`, e.g. `SkyrimNet_DOM`). Missing setting = false.
 
 | type | Fields | Role |
 |------|--------|------|
@@ -165,6 +167,7 @@ One JSON object per file; **order = lexicographic filename**. Optional `requires
 | `data_table` | same quest fields as `papyrus`, plus `columns` (`id`/`label`) | Generic table host (`#data-table-panel`). Open still calls `openFunction`; rows arrive via `WebUI_PushMainPanelData`. |
 | `actor_detail` | same quest fields as `papyrus` | Generic key/value + control host (`#actor-detail-panel`). Payload `fields` + `controls`. |
 | `actor_profile` | same quest fields as `papyrus` | Generic charted profile host (`#actor-profile-panel`): pills, bar groups, radars, recommendations, events, lines. See **Foreign main panels**. First user: DOM Info (`SkyrimNet_DOM`). |
+| `actor_form` | same quest fields as `papyrus` | Generic editable form host (`#actor-form-panel`): sections of slider / number / toggle / select / text / readonly fields with **Save** and **Reset** at the top. See **Foreign main panels**. First user: DOMSlaveDebug (`SkyrimNet_DOM`). |
 
 Builtin entries may also set `plugin` / `questFormId` / `scriptName` / `openFunction` / `closeFunction`; they run (zero-arg) after the panel is shown / hidden, and again when the selected builtin is re-selected.
 
@@ -268,6 +271,7 @@ Far-actor pin: a `data_table` row click still calls `ApplyControlActorFocus` wit
 | `data_table` | `#data-table-panel` | `{ "panel": "data_table", "id", "columns", "rows", "truncated" }` |
 | `actor_detail` | `#actor-detail-panel` | `{ "panel": "actor_detail", "id", "fields", "controls" }` |
 | `actor_profile` | `#actor-profile-panel` | `{ "panel": "actor_profile", "id", "name", "subtitle", "empty"?, "pills", "sections" }` |
+| `actor_form` | `#actor-form-panel` | `{ "panel": "actor_form", "id", "title", "subtitle", "empty"?, "plugin", "questFormId", "scriptName", "applyFunction", "sections" }` |
 
 `actor_profile` (`renderActorProfile`): `empty` replaces the body with that text. Pill: `{ "label", "value", "tip"?, "kind"? }` (`kind` `mood` / `role` recolors the edge; empty `value` hides it). Sections render in order and skip when they have no `items` / `axes`:
 
@@ -281,7 +285,20 @@ Far-actor pin: a `data_table` row click still calls `ApplyControlActorFocus` wit
 
 `tone`: `steel`, `rose`, `gold`, `blue`, `violet`, `orange`. JS lowercases every enum value (Papyrus string-pool casing). Push through `ObjectToLowerCaseKeyJson`.
 
-**Focus refresh:** when the ControlPanel target changes (`ApplyControlActorFocus`), C++ `ActionCatalog::RefreshForeignMainPanel` re-dispatches the selected foreign MainPanel's zero-arg `openFunction` (`papyrus`, `data_table`, `actor_detail`, `actor_profile`), so the panel re-pushes for the new `WebUI_GetFocusActor()`.
+`actor_form` (`renderActorForm`): keys are lowercased in JS like `actor_profile`; the dispatch keys are read camelCase or lowercase. A `select` with more than 10 options opens as a 3-column grid (`af-pulldown-wide`) sized to the screen, never a scrolling list (Ultralight draws no scrollbar). `empty` replaces the body and hides Save/Reset. Section: `{ "title", "fields": [...] }`. Field: `{ "id", "label", "tip"?, "widget", "value", "min"?, "max"?, "step"?, "options"? }`:
+
+| `widget` | Control | Value sent |
+|----------|---------|------------|
+| `slider` | click-to-set bar + number box, clamped to `min`/`max` (default 0–100), snapped to `step` | number |
+| `number` | number box; an empty `value` stays blank and is never sent ("leave unchanged") | number |
+| `toggle` | on / off button (`value` 1/0/true/"on") | `true` / `false` |
+| `select` | pulldown of `options: [{val, caption}]` | the `val` string |
+| `text` | free text box | string |
+| `readonly` | plain text | never sent |
+
+Changed rows highlight and the header counts them. **Save** sends `onAction` papyrus `(speaker, target, control = "save", value = JSON object of only the changed ids)` with `closeWebUI: true`, so the overlay closes; with no changes it sends `{}`. **Reset** restores the pushed values. Only send what changed: re-setting an unchanged value can have side effects in the receiving mod.
+
+**Focus refresh:** when the ControlPanel target changes (`ApplyControlActorFocus`), C++ `ActionCatalog::RefreshForeignMainPanel` re-dispatches the selected foreign MainPanel's zero-arg `openFunction` (`papyrus`, `data_table`, `actor_detail`, `actor_profile`, `actor_form`), so the panel re-pushes for the new `WebUI_GetFocusActor()`.
 
 Do not mix table and detail in one object. Row: `{ "formId": 123, "cells": ["Name", ...] }` (unsigned FormID; ESL signed Papyrus ints are `>>> 0` in JS). Field: `{ "id", "label", "value" }`. Control: `{ "id", "label", "widget": "toggle"|"select"|"button", "value", "options" }`.
 
