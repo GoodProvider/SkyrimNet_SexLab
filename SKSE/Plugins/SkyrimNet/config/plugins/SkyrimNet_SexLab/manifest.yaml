@@ -607,7 +607,7 @@ schema:
     - name: "Orgasm targets end the scene"
       path: "sexlab.ending.enabled"
       type: "bool"
-      description: "The scene's lead (the aggressor when there is a victim, otherwise the initiator) has a target number of orgasms, rolled at scene start. As soon as they reach it, the scene jumps to the last stage."
+      description: "The scene's lead (the aggressor when there is a victim, otherwise the initiator) has a target number of orgasms, rolled at scene start. As soon as they reach it, the scene jumps to the last stage. Off: with stages by enjoyment, a victim scene still jumps on every orgasm of the lead."
       defaultValue: true
       category: "Scene ending"
 

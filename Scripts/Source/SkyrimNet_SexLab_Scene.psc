@@ -2406,10 +2406,33 @@ Function Ending_RollTarget()
     Trace("Ending_RollTarget", GetDisplayName(ending_actor)+" ("+which+") target:"+ending_target)
 EndFunction
 
+; Stage by enjoyment, victim scene, "Orgasm targets end the scene" off: the stages follow the primary but only the
+; lead's target jumps to the final stage (not the primary's orgasm, Stage_PrimaryFinished), so with the targets off
+; the scene never reached it: each orgasm reset the bar and the stage fell back (2026-11-14 log: Bob 3 -> 1, twice,
+; no end list). There the lead's every orgasm ends the scene, as the primary's does in other scenes.
+bool Function Ending_Forced()
+    return SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid) && SkyrimNet_SexLab_OrgasmEngine.IsVictimScene(sid)
+EndFunction
+
+bool Function Ending_Enabled()
+    return SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true) || Ending_Forced()
+EndFunction
+
+; The lead's target in force: the roll, or 1 when the targets are off and the scene is Ending_Forced (0: off).
+int Function Ending_Target()
+    if SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true)
+        return ending_target
+    endif
+    if Ending_Forced()
+        return 1
+    endif
+    return 0
+EndFunction
+
 ; The engine's early final roll needs the lead and target (0 once the ending is done or off).
 Function Engine_SetEndingTarget()
-    int target = ending_target
-    if ending_done || ending_actor == None || !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true)
+    int target = Ending_Target()
+    if ending_done || ending_actor == None || !Ending_Enabled()
         target = 0
     endif
     SkyrimNet_SexLab_OrgasmEngine.SetEndingTarget(sid, ending_actor, target)
@@ -2487,8 +2510,8 @@ bool Function Ending_EndReached(Actor[] actors)
         return false
     endif
     int count = SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor)
-    if count < ending_target
-        Trace("Ending_Check", "victim scene: "+GetDisplayName(ending_actor)+" orgasms:"+count+"/"+ending_target)
+    if count < Ending_Target()
+        Trace("Ending_Check", "victim scene: "+GetDisplayName(ending_actor)+" orgasms:"+count+"/"+Ending_Target())
         return false
     endif
     return true
@@ -2496,12 +2519,12 @@ EndFunction
 
 ; Ending_EndReached without its trace (Ending_WillJump: no side effects).
 bool Function Ending_LeadAtTarget(Actor[] actors)
-    return Ending_LeadInGroup(actors) && SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) >= ending_target
+    return Ending_LeadInGroup(actors) && SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) >= Ending_Target()
 EndFunction
 
 ; Stage by enjoyment, victim scene: the lead (an aggressor) is in this group, the ending is on and not done yet.
 bool Function Ending_LeadInGroup(Actor[] actors)
-    if ending_done || ending_actor == None || ending_target <= 0 || thread == None || thread.Animation == None || thread.LeadIn || !actors
+    if ending_done || ending_actor == None || Ending_Target() <= 0 || thread == None || thread.Animation == None || thread.LeadIn || !actors
         return false
     endif
     if IsSexLabPPlus() && !SkyrimNet_SexLab_Utilities.IsSexLabPPlusSupported()
@@ -2510,7 +2533,7 @@ bool Function Ending_LeadInGroup(Actor[] actors)
     if !SkyrimNet_SexLab_OrgasmEngine.IsVictimScene(sid) || thread.IsVictim(ending_actor)
         return false
     endif
-    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.ending.enabled", true)
+    if !Ending_Enabled()
         return false
     endif
     return actors.Find(ending_actor) >= 0
@@ -2522,7 +2545,7 @@ bool Function Ending_MidReached(Actor[] actors)
     if ending_mid || !Ending_LeadInGroup(actors)
         return false
     endif
-    if SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) >= ending_target
+    if SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor) >= Ending_Target()
         return false
     endif
     return SkyrimNet_SexLab_OrgasmEngine.IsPrimaryFinished(sid)
@@ -2533,7 +2556,7 @@ EndFunction
 ; then. The list runs until the lead's afterglow drains to 0 at the fixed rate (FinalStageRemaining), at least
 ; LIST_MIN_SECONDS.
 Function Ending_EndState()
-    Trace("Ending_EndState", GetDisplayName(ending_actor)+" reached target "+SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor)+"/"+ending_target+" at stage "+thread.Stage+"/"+Engine_StageCount()+", end list")
+    Trace("Ending_EndState", GetDisplayName(ending_actor)+" reached target "+SkyrimNet_SexLab_OrgasmEngine.GetOrgasmCount(ending_actor)+"/"+Ending_Target()+" at stage "+thread.Stage+"/"+Engine_StageCount()+", end list")
     ending_mid = false
     ending_end_state = true
     SkyrimNet_SexLab_OrgasmEngine.SetEndHold(sid, true)
@@ -3741,6 +3764,9 @@ Function LastStage_ShowList(int index)
         if next_name == ""
             next_name = reg
         endif
+    elseif ending_mid
+        ; Mid scene: the top line is Ending_MidPoll's own switch (line 5: the scene's tags, then an act).
+        next_name = "New animation"
     elseif list_index == LINE_NEXT
         list_index = 0
     endif
@@ -3783,14 +3809,20 @@ Function LastStage_Begin()
     endif
     list_anim = thread.Animation.Registry
     LastStage_Hold()
-    ; Victim scene, the lead below its target: no list and no NPC decision. Ending_MidPoll switches to a new
-    ; animation once the drain reaches 0.
+    ; Victim scene, the lead below its target: no NPC decision. Ending_MidPoll switches to a new animation once the
+    ; drain reaches 0 (at least LIST_MIN_SECONDS). The player sees the list meanwhile, its top line "Next: <chain
+    ; next or a new animation>" preselected, and can pick another line before the switch (2026-11-14: the list must
+    ; always come up before a next animation).
     if mid
         ending_mid = true
-        list_ui = false
-        list_npc_only = true
+        list_ui = LastStage_SeesList()
+        list_npc_only = !list_ui
         list_phase = 2
         list_index = 5
+        if list_ui
+            list_index = LINE_NEXT
+            LastStage_ShowList(list_index)
+        endif
         list_mid_tries = 0
         list_mid_started = Utility.GetCurrentRealTime()
         list_mid_wait_logged = false
@@ -3955,13 +3987,36 @@ Function Ending_MidPoll()
         LastStage_Close()
         return
     endif
+    ; The list (player): the selected line is the choice; the top line (LINE_NEXT) is this poll's own switch.
+    int choice = LINE_NEXT
+    if list_ui
+        int live = SkyrimNet_SexLab_WebUI.LastStage_Index()
+        if live >= 0
+            choice = live
+        endif
+    endif
     if !engine_last || remaining > 0.0 || Utility.GetCurrentRealTime() - list_mid_started < LIST_MIN_SECONDS
         if !list_mid_wait_logged
             list_mid_wait_logged = true
-            Trace("Ending_MidPoll", "waiting: engine last stage:"+engine_last+" remaining:"+remaining)
+            Trace("Ending_MidPoll", "waiting: engine last stage:"+engine_last+" remaining:"+remaining+" ui:"+list_ui)
         endif
         RegisterForSingleUpdate(1.0)
         return
+    endif
+    if list_ui && choice == 0
+        Trace("Ending_MidPoll", "drained: stop picked on the list")
+        LastStage_Stop()
+        return
+    endif
+    if list_ui && choice >= 1 && choice <= 4 && list_mid_tries == 0
+        list_mid_tries = 1
+        list_index = choice
+        if LastStage_TrySwitch()
+            Trace("Ending_MidPoll", "drained: new animation, picked line "+choice)
+            return
+        endif
+        Trace("Ending_MidPoll", "drained: picked line "+choice+" no match, the scene's tags")
+        list_mid_tries = 0
     endif
     list_mid_tries += 1
     if list_mid_tries <= 3
@@ -4107,12 +4162,16 @@ Function LastStage_Commit(bool from_deadline)
         LastStage_Stop()
         return
     endif
+    ; Mid scene: the top line is the victim-scene switch (line 5), not a chain-only pick.
+    if ending_mid && list_index == LINE_NEXT
+        list_index = 5
+    endif
     ; The chain's next line (LINE_NEXT) plays that animation, no editor (LastStage_PickRegistry). The act lines keep
     ; their usual paths, chain or not.
     ; NPC-only (list_ui false) always random-picks, even when sexlab.tags.nonplayer is on:
     ; nobody is there to operate the Description Editor. The deadline random-picks too: the editor
     ; only opens on a key press, and a commit that leaves the list up would repeat every poll.
-    if !from_deadline && list_ui && LastStage_SelectorOn() && list_index != LINE_NEXT
+    if !from_deadline && list_ui && LastStage_SelectorOn() && list_index != LINE_NEXT && list_index != 5
         Trace("LastStage_Commit", "line:"+list_index+" deadline:"+from_deadline+" editor")
         LastStage_OpenEditor()
         return
