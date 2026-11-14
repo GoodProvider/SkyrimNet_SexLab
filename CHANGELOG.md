@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.37.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4) — since [0.37.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3)
+
+### Scene style
+- Style (gently / normally / forcefully) no longer changes animation playback speed. It scales passive enjoyment gain (Mini-game mode and DOM slaves) by `OrgasmEngine::kSpeedLevels` = 0.8 / 1.0 / 1.1. See `docs/developers/orgasm-engine.md`.
+- New natives `SkyrimNet_SexLab_OrgasmEngine.SetStyleLevel` / `ClearStyleLevel`, kept per actor in `g_styleLevels` because `Scene.ApplyStyleLevel` runs before `Engine_BeginScene`; the scene takes its first actor's entry. `Scene.ApplyStyleSpeed` / `ClearStyleSpeed` / `GetStyleSpeed` → `ApplyStyleLevel` / `ClearStyleLevel` / `GetStyleLevel`. `SceneState.speedScale` → `styleLevel` + `levelOffset`; `NearestSpeedLevel` removed.
+- HUD Num − / Num + (`StepSceneSpeed`) step the passive level only: gentle (80%) / normal (100%) / forceful (110%).
+- The "Animation speed" dashboard settings (`sexlab.speed.*`) are removed from `manifest.yaml`.
+
+### Last stage
+- `hud.html` last-stage list: each line has a `.last-key` marker column. The line above the selection shows `keys.list_up`, the line below `keys.list_down` (`listKeyShort`: "Num -" / "Num +" → "-" / "+"). `lastStageSelect` moves the markers from the cached `lastListKeys`. Only the text dims (`.last-text`), so the markers stay at full opacity.
+
+### Scenes restarting (untested)
+- `Scene_Manager.GetSceneByThread`: before adopting a thread this mod did not start, `ForeignStart_Note` traces its tid, state, hooks, tags, actors and seconds since our last scene ended (`ForeignStart_RecordEnd` in `AnimationEnd`). When the same actor set restarts within 15 s of an end 3 times in a row, it traces and shows once "SkyrimNet SexLab: another mod keeps restarting SexLab scenes (hooks: …)". Observe only; it never ends a thread.
+
+### SkyrimNet 1.0.0 bug (untested)
+- Fixed: `0050_sexlab_activity` / `0550_sexlab_narration` used `{% set sexlab.source %}`, which threw json 404 `unresolved reference token 'source'` on every full render when `sexlab_get_threads` arrived as a string (SkyrimNet 1-0-0-0), so NPCs got no scene context. The source is now `_sexlab_source`, and the fallback to `threads.json` is gated on `existsIn(sexlab,"threads")`. `docs/players/requirements.md` recommends SkyrimNet 1.1.1+.
+
+### WebUI
+- `ActionCatalog.cpp`: MainPanels honour `eligibilityRules` (`PassesMainPanelGate` in `BuildMainPanelsCatalog` / `FindMainPanelByKey`). New decorator `plugin_config_bool` (`[configFolder, path]`, via `GetForeignConfigBool`).
+- New foreign MainPanel type `actor_form` (`IsForeignHostType`; `index.html` `#actor-form-panel`, `renderActorForm`, `afSave` / `afReset`): slider / number / toggle / select / text / readonly fields; Save sends only the changed ids as one JSON string to `applyFunction(speaker, target, "save", json)` with `closeWebUI: true`. First user: SkyrimNet_DOM's DOMSlaveDebug view.
+- `setMainPanelData`: dispatch keys (`questFormId`, `scriptName`, `applyFunction`) also accepted lowercase.
+- Fixed: a MainPanel gated off while open (e.g. DOM Debug mode turned off) stayed on screen. `FindMainPanelByKey(key, gated)`; close paths look up ungated; `BuildMainPanelsCatalog` drops and closes a gated-out selection; `configureControlPanel` hides the foreign hosts when nothing valid is selected.
+- `actor_form` selects with more than 10 options open as a 3-column grid that fits the screen (`af-pulldown-wide`, `positionOpenPulldownMenu`); Ultralight draws no scrollbar, so the 50vh cap hid DOM's moods past `loyal`.
+
 ## [0.37.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3) — since [0.37.2](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.2)
 
 ### DOM slaves

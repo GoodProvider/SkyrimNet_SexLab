@@ -1,14 +1,25 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
-## Unreleased
+## 0.37.4
+
+### Scene style
+- Style no longer speeds up or slows down animations
+- Gently / normally / forcefully now set how fast enjoyment builds on its own: 80% / 100% / 110%
+- The HUD slower / faster keys (Num − / Num +) step these levels, not animation speed
+- The "Animation speed" dashboard settings are gone
 
 ### Last stage
 - The last-stage list shows which key moves to the line above (−) and below (+) the current one
 
-### Prompts
-- Fixed: on SkyrimNet 1.0.0, NPCs got no scene context during sex (log: `Exception during rendering of template … 0050_sexlab_activity … unresolved reference token 'source'`). SkyrimNet 1.1.1 or newer is still recommended
+### Scenes restarting (untested)
+- If another mod keeps restarting a SexLab scene with the same actors, a message names its hooks
+- The log names the hooks and tags of every SexLab scene another mod started
+
+### SkyrimNet 1.0.0 bug (untested)
+- Fixed: on SkyrimNet 1.0.0, NPCs got no scene context during sex ("unresolved reference token")
+- SkyrimNet 1.1.1 or newer is still recommended
 
 ## 0.37.3
 

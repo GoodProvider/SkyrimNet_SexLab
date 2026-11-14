@@ -12,10 +12,10 @@
     <project>SkyrimNet_SexLab</project>
     <summary>Bridge mod between SkyrimNet (LLM) and SexLab Framework.</summary>
     <repository_root>c:\Skyrim\dev\mods\SkyrimNet_SexLab</repository_root>
-    <updated>2026-11-13</updated>
-    <base_tag>0.37.2</base_tag>
-    <next_version>0.37.3</next_version>
-    <version_status>Makefile VERSION 0.37.3 (2026-11-13); info.json and FOMOD info.xml / ModuleConfig.xml written by make release; latest git tag 0.37.2; 0.37.3 not tagged</version_status>
+    <updated>2026-11-14</updated>
+    <base_tag>0.37.3</base_tag>
+    <next_version>0.37.4</next_version>
+    <version_status>Makefile VERSION 0.37.4 (2026-11-14); info.json and FOMOD info.xml / ModuleConfig.xml written by make release; latest git tag 0.37.3 (on origin, 3c2df04e); 0.37.4 not tagged</version_status>
     <related_artifacts>
       <artifact role="release rules (human)">release-guide.md</artifact>
       <artifact role="release skill (agent)">.cursor/skills/release/SKILL.md</artifact>
@@ -66,6 +66,7 @@
   </doc_files>
 
   <status>
+    <note>2026-11-14: 0.37.4 since tagged 0.37.3 (3c2df04e). Delta: cc204a12 gated editable MainPanels (eligibilityRules, plugin_config_bool, actor_form, 3-column pulldown); 3e984f10 last-stage key markers (hud.html); bfcaab12 0050/0550 _sexlab_source fix for SkyrimNet 1.0.0, requirements.md recommends 1.1.1+; fa00e9e4 style sets passive enjoyment rate (kSpeedLevels 0.8/1.0/1.1, SetStyleLevel, sexlab.speed.* removed) + Scene_Manager foreign-restart diagnostics (ForeignStart_Note). Unreleased player/developer sections became 0.37.4; CHANGELOG.md section written. Topics: Scene style, Last stage, Scenes restarting (untested), SkyrimNet 1.0.0 bug (untested), WebUI (CHANGELOG.md / developer only). Maintainer tested Scene style, Last stage, WebUI actor_form. papyrus.md gained the foreign-restart line. Omit: extern/.</note>
     <note>2026-11-13: 0.37.3 since tagged 0.37.2, HEAD b26a7a7e + release pass. Delta: 06af214d HKX spline track flags (AniDescriber); b58f7eb0 DOM slave stages / HUD step bar / sexlab.hud.dom_enjoyment / DOM-aware prompts; b8a90cbe filter sizing, Ctrl+click _add_registries, [UI layout] log; 23369758 freq asc default sort, LastStage_LoadedNext; 7a8469df animation chain + last animation pulldown (LastStage_ChainNext), filter tag words, minigame_comply, max_serial_punishment_rejects; 757c8a7b KB only; c10b435b DOM "refusing to have sex" reason; b26a7a7e ThreadStillRunning / adopt once, NoPrimary_StageStart, HUD keys, duplicate create, gender fit, Magelight reclaim. CHANGELOG.md Unreleased became 0.37.3 and was regrouped. Topics: DOM slaves, Animation chain, Animation filter, Mini-game, SexLab P+ (untested), Bug Fixes, WebUI; AniDescriber in CHANGELOG.md / developer only. Maintainer tested everything except P+. hotkeys.md gained the comply / serial-reject paragraph, papyrus.md the adopt-once line. Omit: extern/.</note>
     <note>2026-11-08: 0.37.2 since tagged 0.37.1 (451313b6), HEAD f6de70b0 + release pass. Delta: 2004a480 AnimDB walks push fields (AnimDb_PushRow), restart interrupted walks, new-game owner adoption, 64-row transactions; 4509a689 ParseFilter lowercases filter keys; 242e184d Handler_DOM on DOM 8.5.6d (PRISM_Sensuality, MOD_SocialBoldness) + Leash Framework import in skyrimse.ppj; f6de70b0 full Pyro rebuild. Topics: Diary of Mine 8.5.6d, AnimDB, SexLab P+ (untested). Maintainer verified DOM arousal and the creature filter in game; the P+ walk and save-crash fix have no in-game test. DOM version is a changelog note only; requirements.md names no DOM version by decision. orgasm-engine.md moved from MOD_Daring to MOD_SocialBoldness. Leftover: OrgasmEngine.cpp comments still say MOD_Daring. Omit: extern/, Headers/, checkpoints/, z-*, reviews/.</note>
     <note>2026-11-07 (later): 0.37.1 since tagged 0.37.0, HEAD 56703ca0 (creatures in AnimDB, CastGender, DoneSinceMostRecentStarted afterglow fix). Version picked by the maintainer (patch bump); topics Creatures and Orgasm engine, marked verified by the maintainer (no "(untested)"). Unreleased player and developer sections became 0.37.1; player bullets shortened to 100 chars. webui.md and papyrus.md gained creature lines. The 0.37.0 archive shipped the deprecated SKSE/Plugins/SkyrimNet/config/actions/ and prompts/ folders because make release copies all of SKSE; they were moved out of the tree before this build. Omit: extern/, Headers/, checkpoints/, z-*, reviews/.</note>
