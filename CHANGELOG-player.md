@@ -7,6 +7,9 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 ### Last stage
 - The last-stage list shows which key moves to the line above (−) and below (+) the current one
 
+### Prompts
+- Fixed: on SkyrimNet 1.0.0, NPCs got no scene context during sex (log: `Exception during rendering of template … 0050_sexlab_activity … unresolved reference token 'source'`). SkyrimNet 1.1.1 or newer is still recommended
+
 ## 0.37.3
 
 ### DOM slaves

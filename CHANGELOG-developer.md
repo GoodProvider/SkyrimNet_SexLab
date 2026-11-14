@@ -14,6 +14,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 - Fixed: a MainPanel gated off while open (e.g. DOM Debug mode turned off) stayed on screen. `FindMainPanelByKey(key, gated)`; close paths look up ungated; `BuildMainPanelsCatalog` drops and closes a gated-out selection; `configureControlPanel` hides the foreign hosts when nothing valid is selected.
 - `actor_form` selects with more than 10 options open as a 3-column grid that fits the screen (`af-pulldown-wide`, `positionOpenPulldownMenu`); the 50vh scroll cap hid DOM's moods past `loyal`.
 
+### Prompts
+- `0050_sexlab_activity` / `0550_sexlab_narration`: no more `{% set sexlab.source %}`, which threw json 404 `unresolved reference token 'source'` on every full render when `sexlab_get_threads` arrived as a string (user on SkyrimNet 1-0-0-0). Source is now `_sexlab_source`, and the fallback to `threads.json` is gated on `existsIn(sexlab,"threads")`.
+
 ## 0.37.3
 
 ### DOM slaves

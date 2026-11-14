@@ -11,7 +11,7 @@
 - One UI host: Magelight UI 0.30.1+ (recommended; used when both are installed) or [Prisma UI](https://www.nexusmods.com/skyrimspecialedition/mods/148718)
   - With Prisma UI: [Media Keys Fix](https://www.nexusmods.com/skyrimspecialedition/mods/92948)
 - [Dragonborn voice over 2](https://www.nexusmods.com/skyrimspecialedition/mods/84329)
-- SkyrimNet 0.25+ (narration enabled). LLM content ships only as plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/` (since 0.36.0 the old `prompts/` and `config/actions/` copies are gone).
+- SkyrimNet 0.25+ (narration enabled); 1.1.1 or newer recommended. On 1.0.0 the scene context comes from a cached file seen from the player. LLM content ships only as plugin `goodprovider.sexlab` under `Data/SKSE/Plugins/SkyrimNet/external/` (since 0.36.0 the old `prompts/` and `config/actions/` copies are gone).
 - SkyrimNet_SexLab (this mod)
 - A **decisions** provider set up in SkyrimNet (for example Jev, `typesafe/jev-*` on OpenRouter), for the Multi-Orgasm Mini-game: it picks each NPC's strategy. Without one, NPCs keep the default strategies (Mini-game settings)
 - Animation utilities: [Pandora](https://www.nexusmods.com/skyrimspecialedition/mods/133232), [XPMSSE](https://www.nexusmods.com/skyrimspecialedition/mods/1988), [SL Animation Loader](https://www.loverslab.com/files/file/5328-sexlab-animation-loader-sse/), [Hug kill move fix for USSEP](https://www.nexusmods.com/skyrimspecialedition/mods/139572)

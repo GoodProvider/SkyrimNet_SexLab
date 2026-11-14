@@ -1,5 +1,14 @@
 # Knowledgebase
 
+## 0050 / 0550 `unresolved reference token 'source'` on SkyrimNet 1.0.0 (2026-11-14, template fixed, untested on 1.0.0)
+
+Record: [checkpoints/2026-11-14-render-error/checkpoint-01.md](checkpoints/2026-11-14-render-error/checkpoint-01.md). Logs: `checkpoints/2026-11-14-render-error/logs/2026-11-14-09-55-34/` (user's SkyrimNet 1-0-0-0, SkyrimNet_SexLab 0.37.0).
+
+- **Symptom:** every `render_mode: full` render of `0050_sexlab_activity` and `0550_sexlab_narration` logs `RenderTemplate: Exception … [json.exception.out_of_range.404] unresolved reference token 'source'`, so the LLM gets no scene context. `transform` renders are fine.
+- **Cause:** `{% set sexlab.source = … %}` right after `set sexlab = sexlab_get_threads(npc.UUID)`. nlohmann throws 404 only when the parent is a scalar, so on that install the decorator's JSON reached the template as a string. Our `BuildThreadsJson` always returns an object dump. The dev logs (SkyrimNet 1-1-1-0 / 1-2-0-0) show 98 full renders with no error. Most likely SkyrimNet 1.0.0 does not parse PublicAPI decorator strings in full renders. That is inferred from the versions only; there was no 1.0.0 install to test on.
+- **Rule:** never `set x.key` on a decorator or `read_json` result. Keep side values in their own variable (`_sexlab_source`), and gate on `existsIn(x,"threads")`, which is false for a string.
+- **Fix:** both templates do that now. A string result falls back to `threads.json` (player view).
+
 ## Player kiss stuck on stage 1, dead HUD keys, killed the game (2026-11-13, built, untested in game)
 
 Record: [checkpoints/2026-11-13-loops/checkpoint-01.md](checkpoints/2026-11-13-loops/checkpoint-01.md). Log: `checkpoints/2026-11-13-loops/logs/2026-11-13-09-05-04/log.log` (user's `SkyrimNet_SexLab.log`, 0.37.0, P+ 2.18, Magelight). The user also reported a "black screen". Nothing in this mod draws an opaque layer, so that part is still unexplained.
