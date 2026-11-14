@@ -319,8 +319,12 @@ namespace OrgasmEngine
     /// The group carries allower / allowed for the "allowed ... to orgasm." prefix.
     /// True when anyone fired (Effect_OrgasmGroup narrates); false: the caller narrates the plain allow.
     bool AllowOrgasm(RE::Actor* actor, RE::Actor* allower);
-    /// Scene style changed: faster/slower scale back to 1.0.
+    /// Scene style changed: the HUD faster/slower offset goes back to 0 (the level follows the style again).
     void ResetSpeedScale(RE::Actor* anyActorInScene);
+    /// Scene style level (0 gentle, 1 normal, 2 forceful) pushed per actor by Papyrus (Scene.ApplyStyleLevel).
+    /// Kept per actor so it works before BeginScene registers the scene; a scene takes its first actor's level.
+    void SetStyleLevel(RE::Actor* actor, std::int32_t level);
+    void ClearStyleLevel(RE::Actor* actor);
 
     // ---- API (Papyrus natives + C++ interface) ----
     float GetEnjoyment(RE::Actor* actor);
@@ -368,17 +372,16 @@ namespace OrgasmEngine
     bool GetPlayerScene(std::vector<ActorView>& out);
     /// Actors of the anchor actor's scene, in SexLab position order. False when none.
     bool GetActorScene(RE::Actor* anchor, std::vector<ActorView>& out);
-    /// Speed levels match the scene styles: gentle, normal, forceful.
+    /// Speed levels match the scene styles: gentle, normal, forceful. The value is the passive enjoyment gain
+    /// multiplier (mini-game / DOM passive rate); animation playback speed is never changed.
     inline constexpr int kSpeedLevelCount = 3;
-    inline constexpr float kSpeedLevels[kSpeedLevelCount] = { 0.75f, 1.0f, 1.25f };
+    inline constexpr float kSpeedLevels[kSpeedLevelCount] = { 0.8f, 1.0f, 1.1f };
     inline constexpr const char* kSpeedLevelNames[kSpeedLevelCount] = { "gentle", "normal", "forceful" };
-    /// Level closest to an effective animation speed.
-    int NearestSpeedLevel(float speed);
     /// Moves the player's scene one speed level up (dir > 0) or down (dir < 0), clamped to the ends.
     /// Returns the new level, -1 when the player is in no managed scene.
     int StepPlayerSceneSpeed(int dir);
     int StepSceneSpeed(RE::Actor* anchor, int dir);
-    /// Current speed level of the player's scene, -1 when none.
+    /// Current speed level (style level + HUD offset) of the player's scene, -1 when none.
     int GetPlayerSceneSpeedLevel();
     int GetSceneSpeedLevel(RE::Actor* anchor);
 

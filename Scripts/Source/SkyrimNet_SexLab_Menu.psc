@@ -136,7 +136,7 @@ Function WaitForStageChange(Actor target)
 EndFunction
 
 ; Scene HUD keys (C++ Hud): SexLab thread operations on the HUD's scene. calm / arouse / focus /
-; slower / faster never reach Papyrus (OrgasmEngine + AnimSpeed in C++).
+; slower / faster never reach Papyrus (OrgasmEngine in C++).
 ; focus: the HUD's focus actor (deny key); None for the other keys.
 ; anchor: the NPC the player took control of (take-control key); None: the player's own scene.
 Function Hud_OnKey(String control, Actor focus = None, Actor anchor = None)

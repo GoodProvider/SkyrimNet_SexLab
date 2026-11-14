@@ -110,7 +110,7 @@ The HUD take-control key (`sexlab.hud.key_take_control`, default Num \*, control
 
 For each managed scene:
 
-1. **Passive gain** (Mini-game mode and DOM slaves; Together uses the curve above): `enjoyment += baseRate × roleMult × jitter × Π rate modifiers × (1 + minigame_bonus_mult × bonus) × anim speed × dt`. In Mini-game mode (not DOM slaves, timed scenes), `baseRate × roleMult` is replaced by `mgPassiveRate × roleMult / passive_mult` (see [Mini-game calibration](#mini-game-calibration)).
+1. **Passive gain** (Mini-game mode and DOM slaves; Together uses the curve above): `enjoyment += baseRate × roleMult × jitter × Π rate modifiers × (1 + minigame_bonus_mult × bonus) × style speed × dt`. In Mini-game mode (not DOM slaves, timed scenes), `baseRate × roleMult` is replaced by `mgPassiveRate × roleMult / passive_mult` (see [Mini-game calibration](#mini-game-calibration)).
    - **Base rate, from the stage timers.** `Engine_SetStage` sends `SetStageTimers(sid, stageSecs, leadIn)` with each stage's seconds, using `sslThreadController.GetTimer`'s rule: `Animation.GetTimer(s)` when `Animation.HasTimer(s)`, otherwise `thread.Timers`.
      - `targetSecs` = the sum of stages 1..N−1, plus 0.9 × the final stage.
      - `baseRate = 100 / targetSecs`. It is fixed per animation, and enjoyment carries over when the animation changes.
@@ -119,7 +119,7 @@ For each managed scene:
    - **The rate is fixed; it is not "remaining ÷ time left".** Extra time adds enjoyment: repeating a stage or a slow narration (a paused stage still gains at the normal rate). Real scenes usually run 2–3× their stage timers, which is why the default multipliers are well below 1.0.
    - **`roleMult`:** `sexlab.enjoyment.passive_mult` (0.4), `aggressor_mult` (0.45) or `victim_mult` (0.3).
    - **`jitter`:** rolled per actor at `BeginScene`, uniform in [`jitter_min`, `jitter_max`] (0.95–1.1).
-   - **Anim speed:** `AnimSpeed::Get`, which is the style speed multiplied by the HUD's faster/slower scale.
+   - **Style speed:** `kSpeedLevels[EffectiveLevel(sc)]` = 0.8 / 1.0 / 1.1 (gentle / normal / forceful). `sc.styleLevel` comes from `SetStyleLevel` (Papyrus `Scene.ApplyStyleLevel`, kept per actor in `g_styleLevels` so it can arrive before `BeginScene`; the scene takes its first actor's entry), plus `sc.levelOffset` from the HUD faster/slower keys (`StepSceneSpeed`; `ResetSpeedScale` zeroes it on a style change). Animation playback speed is never touched.
    - **Not expected to orgasm:** positions with AnimDB `orgasm_expected` 0, or the scene's `no_orgasm` 1, get no passive gain. Not expected is **not** a block: orgasm checks run as normal. `Scene.ApplySexLabVoice` keeps SexLab silent below 50 enjoyment (`VOICE_GATE_ENJOYMENT`, re-checked in `Mirror_Apply`). The only scene block (`SetSceneBlocked`) is the player's `deny_orgasm` (HUD `sexlab.hud.key_deny` → `Menu.Hud_OnKey("deny", focus)` → `Scene.ToggleDenyOrgasm`; Description Editor `_deny_pos`). Positions with AnimDB `orgasm_expected` 0 get no passive gain (DOM slaves: no `domProgress`). `Engine_SetSkills` sends `SetOrgasmExpected(actor, expected)` at start and on each animation change; missing data counts as expected. Mini-game Arouse / Calm still move their enjoyment, and the no-timer safety net still needs 90 for them.
    - Expected results at normal speed with no mini-game:
      - A normal actor usually stays below 100; the gate before the final stage decides the orgasm (`enjoyment + random(0, random_bonus) + stage_spike ≥ 100`).
@@ -180,7 +180,7 @@ For each managed scene:
 - `T` = seconds of stages 1..N−1 (N = 1: stage 1). `spikes` = (N − 2) × `stage_spike` (the advances into stages 2..N−1).
 - `budget` = clamp(target − spikes, 0.25 × target, target). `R` = budget / T, per actor per second.
 - `mgPassiveRate` = `passive_share` (0.3) × R; `mgStepRate` = (1 − passive_share) × R.
-- Roles: `roleMult / passive_mult`. With 0.4 / 0.45 / 0.3: normal 1.0, aggressor 1.125, victim 0.75. Jitter, rate modifiers, the bonus factor and anim speed apply as before.
+- Roles: `roleMult / passive_mult`. With 0.4 / 0.45 / 0.3: normal 1.0, aggressor 1.125, victim 0.75. Jitter, rate modifiers, the bonus factor and style speed apply as before.
 - **Fixed:** later animations keep the rates, and so does a config change. Extra time adds enjoyment on purpose: pause, a stage back, long narration (multiple orgasms).
 - **LeadIn first:** provisional rates (all LeadIn stages × 1.5, no spikes) until a main animation calibrates. **No timers:** the fallback rate and fixed steps.
 - **Player scenes:** each NPC step is sized for one actor. With player + NPC on Mutual and an idle player, both reach about 60; the player has to play.
@@ -336,7 +336,7 @@ if (auto* engine = SKYRIMNET_SEXLAB_API::RequestOrgasmEngine()) {
   - per actor: enjoyment, orgasm count, role, skill, jitter, blocks, rate modifiers and DOM step state;
   - v4: gate state; v5: the stage clock, and per actor the bonus, curve progress, strategy, target and forcer; v6: per actor stamina regen; v7: per scene the mini-game rates; v8: sticky auto play; v9: strategy ids renumbered.
 - A revert (load or new game) clears everything.
-- The faster/slower scale is not saved; style speeds are not restored on load either.
+- The faster/slower offset and the style levels are not saved (cleared on revert); a loaded scene runs at normal until its style is set again.
 - A scene with no actor in `SexLabAnimatingFaction` for 10 s is dropped. This is the safety net for a missed `AnimationEnd`. AnimEngine scenes (sid > 100000) are never saved and use the bridge's `IsLive` instead ([AnimEngine scenes](#animengine-scenes)).
 
 ## Other plugins that use SexLab directly

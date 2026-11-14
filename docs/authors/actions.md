@@ -55,7 +55,7 @@ Prefer Papyrus slot names: `method`, `how` (outfit), `victim` when needed.
 | `StartScene_Refused_Two` | Refusal |
 | `Outfit_Dress` / `Outfit_Undress` | Speaker dresses/undresses Target; narration `silent` → RegisterEvent |
 | `CleanCum` | `sexlab_clean_cum`: speaker cleans `part` (`mouth\|pussy\|ass\|all`; unknown → first live part) on target via `Decorators.ClearCumPart`; RegisterEvent narration. Gate: C++ decorator `sexlab_cum_count [currentActor] != 0` (actors with cum, after expiry) |
-| `SceneChangeStyle` | `SexLab_Change_Style`: speaker's live scene → `forcefully\|normally\|gently`; animation speed follows style |
+| `SceneChangeStyle` | `SexLab_Change_Style`: speaker's live scene → `forcefully\|normally\|gently`; passive enjoyment rate follows style (gentle 0.8×, normal 1.0×, forceful 1.1×); animation speed unchanged |
 
 No `speaking_victim`. No `sexlab_none_rape`. Outfit eligibility uses `OStimActorCountFaction`.
 

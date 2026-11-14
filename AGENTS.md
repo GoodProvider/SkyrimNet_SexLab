@@ -31,6 +31,7 @@ Documents is OneDrive-redirected — not `%USERPROFILE%\Documents\...`.
 | SkyrimNet_SexLab | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet_SexLab.log` |
 | SkyrimNet | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\SKSE\SkyrimNet.log` |
 | Papyrus | `%USERPROFILE%\OneDrive\Documents\my games\Skyrim Special Edition\Logs\Script\Papyrus.0.log` |
+| SkyrimNet_SexLab settings| `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\config\plugins/SkyrimNet_SexLab/settings.yaml` |
 | SkyrimNet conversation (dialogue history) | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\conversation_log.log` |
 | SkyrimNet LLM requests (full prompts sent) | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\openrouter_input.log` (rotated: `openrouter_input.<timestamp>.log`) |
 | SkyrimNet LLM responses | `C:\Skyrim\dev\overwrite\SKSE\Plugins\SkyrimNet\logs\openrouter_output.log` (rotated: `openrouter_output.<timestamp>.log`) |

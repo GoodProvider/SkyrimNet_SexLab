@@ -2,7 +2,6 @@
 
 #include "Aid.h"
 #include "Config.h"
-#include "AnimSpeed.h"
 #include "NarrationQueue.h"
 #include "NarrationTiming.h"
 #include "OrgasmEngine.h"
@@ -277,10 +276,17 @@ namespace PapyrusBindings_OrgasmEngine
         bool CanPunish(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::CanPunish(a); }
         void EndScene(RE::StaticFunctionTag*, std::int32_t sid) { OrgasmEngine::EndScene(sid); }
         void ResetSpeedScale(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ResetSpeedScale(a); }
+        // Effective level (style + HUD offset) of the actor's managed scene; 1 (normal) when unmanaged.
         std::int32_t GetSpeedLevel(RE::StaticFunctionTag*, RE::Actor* a)
         {
-            return OrgasmEngine::NearestSpeedLevel(a ? AnimSpeed::Get(a) : 1.0f);
+            const std::int32_t level = OrgasmEngine::GetSceneSpeedLevel(a);
+            return level < 0 ? 1 : level;
         }
+        void SetStyleLevel(RE::StaticFunctionTag*, RE::Actor* a, std::int32_t level)
+        {
+            OrgasmEngine::SetStyleLevel(a, level);
+        }
+        void ClearStyleLevel(RE::StaticFunctionTag*, RE::Actor* a) { OrgasmEngine::ClearStyleLevel(a); }
         bool ConsumeOwnOrgasm(RE::StaticFunctionTag*, RE::Actor* a) { return OrgasmEngine::ConsumeOwnOrgasm(a); }
         std::int32_t NoteExternalOrgasm(RE::StaticFunctionTag*, RE::Actor* a, RE::BSFixedString src)
         {
@@ -404,6 +410,8 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("EndScene", s, EndScene);
         a_vm->RegisterFunction("ResetSpeedScale", s, ResetSpeedScale);
         a_vm->RegisterFunction("GetSpeedLevel", s, GetSpeedLevel);
+        a_vm->RegisterFunction("SetStyleLevel", s, SetStyleLevel);
+        a_vm->RegisterFunction("ClearStyleLevel", s, ClearStyleLevel);
         a_vm->RegisterFunction("ConsumeOwnOrgasm", s, ConsumeOwnOrgasm);
         a_vm->RegisterFunction("NoteExternalOrgasm", s, NoteExternalOrgasm);
         a_vm->RegisterFunction("AllowOrgasm", s, AllowOrgasm);

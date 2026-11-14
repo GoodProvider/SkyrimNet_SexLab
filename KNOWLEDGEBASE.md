@@ -1604,7 +1604,11 @@ A diagnostic `Trace` added to `ObjectToLowerCaseKeyJson` (dumping the raw pre-lo
 
 **Fix / rule**: sessions are restricted to 16..31 (`kLastSession = kSessionMask >> 1`) with a `static_assert` that the largest handle fits in a positive int32. Handles must always be in `(0, INT32_MAX]`; never widen the session/gen/slot layout into bit 31.
 
-## Style-driven animation speed (2026-09-27)
+## Style sets passive enjoyment rate, not animation speed (2026-11-13)
+
+**Rule**: scene style (gently / normally / forcefully) only scales mini-game / DOM passive enjoyment gain: `OrgasmEngine::kSpeedLevels` = 0.8 / 1.0 / 1.1. It never changes animation playback speed (the `sexlab.speed.*` settings are gone). Papyrus `Scene.ApplyStyleLevel` pushes the level per actor (`SetStyleLevel`) because it runs **before** `Engine_BeginScene`; `BeginScene` copies the first actor's entry into `SceneState.styleLevel`, and a later `SetStyleLevel` on the front actor updates it live. HUD Num −/+ move `levelOffset` on top of the style (passive only); a style change resets it. The section below is historical: `AnimSpeed` still exists as a public native, unused by style.
+
+## Style-driven animation speed (2026-09-27, superseded 2026-11-13)
 
 SexLab 1.6x has no playback-speed API. `AnimSpeed.cpp` hooks `UpdateAnimation` (vfunc `0x7D`) on the `Character` and `PlayerCharacter` vtables and scales `a_delta` for actors in a FormID map (empty map → no lock, pass-through). **Rule**: this changes speed only. SexLab stage timers, the orgasm window and voices run on Papyrus real time and must stay untouched — never pair a style change with `UpdateTimer` / `AdvanceStage`. Every position in a thread gets the same multiplier (`Scene.ApplyStyleSpeed`), or paired animations drift apart. Speeds are set at `AnimationStart` and on `Scene.SetStyle` / `SetStyleDialog` / `ChangeStyle`, cleared at `AnimationEnd` / `Release`, and the whole map is cleared on load / new game. VR: vfunc index not verified (SE ≠ VR).
 

@@ -205,6 +205,8 @@ float Property orgasm_delay = 5.0 Auto
 ; instead of ending; cap LLM scenes so they still finish.
 float Property DURATION_CAP_SECONDS = 120.0 AutoReadOnly
 float animating_started_at = 0.0
+; Real time of the last Setup (diagnostics: how long the thread ran before AnimationEnd).
+float setup_real_at = 0.0
 
 ; SexLab P+ (IsSexLabPPlus): the scene is a graph. The orgasm engine gets a linear view of it:
 ; SkyrimNet_SexLab_PPlus.ProjectedPath (history + longest path to a sink), recomputed per active scene|stage|history.
@@ -475,6 +477,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
         endif
     endif
     PickNonVictimInitiator()
+    setup_real_at = Utility.GetCurrentRealTime()
     Trace("Setup", "initiator:"+GetDisplayName(initiator)+" sender:"+GetDisplayName(sender)+" receiver:"+GetDisplayName(receiver))
 
     if !is_generic
@@ -655,7 +658,7 @@ Function Release()
     DbgEnter("Release")
     SkyrimNet_SexLab_Decorators.Threads_Remove(sid)
     UnregisterForUpdate()
-    ClearStyleSpeed()
+    ClearStyleLevel()
     seeded_registry = ""
     position_override = true
     seed_first_animation = false
@@ -5097,10 +5100,10 @@ Function AnimationStart()
         return
     endif
     AlignActors()
-    ApplyStyleSpeed()
+    ApplyStyleLevel()
     if !ThreadStillRunning()
         Trace("AnimationStart", "thread ended during start (tid:"+thread.tid+"), engine not begun")
-        ClearStyleSpeed()
+        ClearStyleLevel()
         DbgReturn("AnimationStart", "void")
         return
     endif
@@ -5536,7 +5539,11 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
     PushThread()
 
     if SexLab != None && thread != None
-        Trace("AnimationEnd","thread id:"+thread.tid+" status:"+thread.GetState())
+        float ran_secs = -1.0
+        if setup_real_at > 0.0
+            ran_secs = Utility.GetCurrentRealTime() - setup_real_at
+        endif
+        Trace("AnimationEnd","thread id:"+thread.tid+" status:"+thread.GetState()+" stage:"+thread.Stage+" secs_since_setup:"+ran_secs)
         DbgMsg("AnimationEnd", "thread.GetState()="+thread.GetState())
         DbgMsg("AnimationEnd", "SexLab as sslSystemConfig")
         sslSystemConfig config = (SexLab as Quest) as sslSystemConfig
@@ -5547,7 +5554,7 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         stage_fold_pending = false
         stage_starting = false
         stage_started_at = 0.0
-        ClearStyleSpeed()
+        ClearStyleLevel()
 
         ; Leftover Combined orgasm stash folded into the end DN so 0550 still gates
         ; (RegisterEvent-only leftover is invisible to contains(_direct_narration, ...)).
@@ -6806,38 +6813,31 @@ String Function GetDescriptionFromTags()
 endFunction
 
 ; ------------------------------------------------------
-; Style -> animation speed. Playback rate only: SexLab stage timers,
-; orgasm window and voices keep real-time timing.
+; Style -> passive enjoyment rate (OrgasmEngine: gentle 0.8x, normal 1.0x,
+; forceful 1.1x). Animation playback speed is never changed.
 ; ------------------------------------------------------
 Function SetStyle(String _style)
     parent.SetStyle(_style)
-    ApplyStyleSpeed()
+    ApplyStyleLevel()
 EndFunction
 
-float Function GetStyleSpeed()
-    if !SkyrimNetApi.GetConfigBool("Plugin_SkyrimNet_SexLab", "sexlab.speed.enabled", true)
-        return 1.0
-    endif
-    if style == STYLE_GENTLY
-        return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.gently", 0.75)
-    elseif style == STYLE_FORCEFULLY
-        return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.forcefully", 1.25)
-    endif
-    return SkyrimNetApi.GetConfigFloat("Plugin_SkyrimNet_SexLab", "sexlab.speed.normally", 1.0)
-EndFunction
-
-; Speed level (OrgasmEngine) of the scene's effective animation speed: style speed x HUD slower/faster.
-; 0 gentle, 1 normal, 2 forceful. No thread: from the style.
-int Function GetSpeedLevel()
-    if thread != None && thread.positions.length > 0 && thread.positions[0] != None
-        return SkyrimNet_SexLab_OrgasmEngine.GetSpeedLevel(thread.positions[0])
-    endif
+; 0 gentle, 1 normal, 2 forceful (OrgasmEngine speed levels).
+int Function GetStyleLevel()
     if style == STYLE_GENTLY
         return 0
     elseif style == STYLE_FORCEFULLY
         return 2
     endif
     return 1
+EndFunction
+
+; Speed level (OrgasmEngine) of the scene: style level + HUD slower/faster.
+; 0 gentle, 1 normal, 2 forceful. No thread: from the style.
+int Function GetSpeedLevel()
+    if thread != None && thread.positions.length > 0 && thread.positions[0] != None
+        return SkyrimNet_SexLab_OrgasmEngine.GetSpeedLevel(thread.positions[0])
+    endif
+    return GetStyleLevel()
 EndFunction
 
 String Function GetSpeedName()
@@ -6860,24 +6860,24 @@ String Function GetSpeedAdverb()
     return ""
 EndFunction
 
-; Same multiplier for every position keeps paired animations in sync.
-Function ApplyStyleSpeed()
+; Every position gets the level: the engine takes the scene's first actor's, whatever the order.
+Function ApplyStyleLevel()
     if thread == None
         return
     endif
-    float speed = GetStyleSpeed()
+    int level = GetStyleLevel()
     Actor[] positions = thread.positions
     int i = 0
     while i < positions.length
         if positions[i] != None
-            SkyrimNet_SexLab_Utilities.SetAnimSpeed(positions[i], speed)
+            SkyrimNet_SexLab_OrgasmEngine.SetStyleLevel(positions[i], level)
         endif
         i += 1
     endwhile
-    Trace("ApplyStyleSpeed", "style:"+style+" speed:"+speed+" actors:"+positions.length)
+    Trace("ApplyStyleLevel", "style:"+style+" level:"+level+" actors:"+positions.length)
 EndFunction
 
-Function ClearStyleSpeed()
+Function ClearStyleLevel()
     if thread == None
         return
     endif
@@ -6885,7 +6885,7 @@ Function ClearStyleSpeed()
     int i = 0
     while i < positions.length
         if positions[i] != None
-            SkyrimNet_SexLab_Utilities.ClearAnimSpeed(positions[i])
+            SkyrimNet_SexLab_OrgasmEngine.ClearStyleLevel(positions[i])
         endif
         i += 1
     endwhile
@@ -6906,7 +6906,7 @@ bool Function ApplyStyleChange(String _style)
     if style_old == style
         return false
     endif
-    ; HUD faster/slower is relative to the style: back to 1.0 on a style change.
+    ; HUD faster/slower is relative to the style: the offset resets on a style change.
     if thread != None && thread.positions.length > 0
         SkyrimNet_SexLab_OrgasmEngine.ResetSpeedScale(thread.positions[0])
     endif
@@ -6935,7 +6935,7 @@ Function SetStyleDialog()
     DbgEnter("SetStyleDialog")
     String style_old = style
     parent.SetStyleDialog()
-    ApplyStyleSpeed()
+    ApplyStyleLevel()
 
     if style_old != style
         if thread != None && thread.positions.length > 0

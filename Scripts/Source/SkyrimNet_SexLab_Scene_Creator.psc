@@ -566,10 +566,12 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
         model.Initialize()
         Release() 
         DbgReturn("StartScene", "None")
-        return None 
-    endif 
+        return None
+    endif
+    ; Diagnostics: every thread this mod starts is logged, so an "adopting foreign tid" line is never ours.
+    Trace("StartScene", "StartThread tid:"+thread.tid+" actors:"+thread.Positions.length)
 
-    SkyrimNet_SexLab_Scene sl_scene = manager.CreateSceneByCreator(self, thread) 
+    SkyrimNet_SexLab_Scene sl_scene = manager.CreateSceneByCreator(self, thread)
     if sl_scene == None
         Trace("StartScene","CreateSceneByCreator returned None, ending orphan thread")
         thread.EndAnimation(true)

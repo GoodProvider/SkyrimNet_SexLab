@@ -2,7 +2,6 @@
 
 #include "Aid.h"
 #include "AnimEngineOrgasm.h"
-#include "AnimSpeed.h"
 #include "Config.h"
 #include "Hud.h"
 #include "NarrationQueue.h"
@@ -244,7 +243,8 @@ namespace OrgasmEngine
             std::int32_t stage = 1;
             std::int32_t stageCount = 0;
             bool finalDone = false;
-            float speedScale = 1.0f;
+            std::int32_t styleLevel = 1;  // scene style (SetStyleLevel): 0 gentle, 1 normal, 2 forceful
+            std::int32_t levelOffset = 0;  // HUD faster/slower steps on top of the style
             double staleSince = 0.0;
             // Stage timers (SexLab's GetTimer rule) from SetStageTimers.
             std::vector<float> stageSecs;
@@ -437,6 +437,8 @@ namespace OrgasmEngine
         bool g_ratesOverridden = false;
         std::unordered_map<RE::FormID, ActorState> g_actors;
         std::map<std::int32_t, SceneState> g_scenes;
+        // Scene style level per actor (Scene.ApplyStyleLevel). Set before BeginScene registers the scene.
+        std::unordered_map<RE::FormID, std::int32_t> g_styleLevels;
         std::map<std::uint32_t, SKYRIMNET_SEXLAB_API::EngineEventCallback> g_callbacks;
         std::uint32_t g_nextCallback = 1;
         double g_lastTick = 0.0;
@@ -529,6 +531,12 @@ namespace OrgasmEngine
             }
             const auto it = g_actors.find(actor->GetFormID());
             return it != g_actors.end() ? &it->second : nullptr;
+        }
+
+        // Style level + HUD offset, clamped to the speed levels.
+        std::int32_t EffectiveLevel(const SceneState& sc)
+        {
+            return std::clamp(sc.styleLevel + sc.levelOffset, 0, kSpeedLevelCount - 1);
         }
 
         SceneState* SceneOf(const ActorState& st)
@@ -2092,7 +2100,7 @@ namespace OrgasmEngine
                 return;
             }
             for (const auto id : it->second.actors) {
-                AnimSpeed::SetScale(ActorFor(id), 1.0f);
+                g_styleLevels.erase(id);
                 const auto at = g_actors.find(id);
                 if (at != g_actors.end() && at->second.sid == sid) {
                     g_actors.erase(at);
@@ -2313,8 +2321,8 @@ namespace OrgasmEngine
                         fx.decisionScenes.push_back(sid);
                     }
 
-                    RE::Actor* first = sc.actors.empty() ? nullptr : ActorFor(sc.actors.front());
-                    const float speed = first ? AnimSpeed::Get(first) : 1.0f;
+                    // Passive gain multiplier from the scene style (+ HUD offset). Animation speed is not used.
+                    const float speed = kSpeedLevels[EffectiveLevel(sc)];
                     const bool finalStage = sc.stageCount > 0 && sc.stage >= sc.stageCount;
                     // Gate (4a): Together, or a mini-game scene the engine plays alone (aiGate), timed, no LeadIn.
                     const bool timedScene = sc.baseRate > 0.0f && sc.stageSecs.size() >= 2 && sc.stageCount >= 2;
@@ -3080,16 +3088,13 @@ namespace OrgasmEngine
                 st.jitter = jitter(g_rng);
                 webui_log::info("OrgasmEngine: {:#x} jitter {:.3f}", id, st.jitter);
             }
-            if (sc.speedScale != 1.0f) {
-                AnimSpeed::SetScale(a, sc.speedScale);
-            }
         }
         // Actors that left the scene.
         for (const auto old : sc.actors) {
             if (std::find(ids.begin(), ids.end(), old) == ids.end()) {
                 const auto at = g_actors.find(old);
                 if (at != g_actors.end() && at->second.sid == sid) {
-                    AnimSpeed::SetScale(ActorFor(old), 1.0f);
+                    g_styleLevels.erase(old);
                     g_actors.erase(at);
                 }
             }
@@ -3099,6 +3104,12 @@ namespace OrgasmEngine
             sc.generation = ++s_generation;
         }
         sc.actors = std::move(ids);
+        // Scene style: Papyrus pushed it per actor before this call (ApplyStyleLevel runs before Engine_BeginScene).
+        if (!sc.actors.empty()) {
+            if (const auto lv = g_styleLevels.find(sc.actors.front()); lv != g_styleLevels.end()) {
+                sc.styleLevel = lv->second;
+            }
+        }
         // Role defaults for new actors (after the roster, so scene-size checks see everyone). Not announced.
         for (const auto id : newcomers) {
             if (auto at = g_actors.find(id); at != g_actors.end()) {
@@ -5226,13 +5237,38 @@ namespace OrgasmEngine
         std::lock_guard lock(g_lock);
         auto* st = Find(anyActorInScene);
         SceneState* sc = st ? SceneOf(*st) : nullptr;
-        if (!sc || sc->speedScale == 1.0f) {
+        if (!sc || sc->levelOffset == 0) {
             return;
         }
-        sc->speedScale = 1.0f;
-        for (const auto id : sc->actors) {
-            AnimSpeed::SetScale(ActorFor(id), 1.0f);
+        sc->levelOffset = 0;
+        webui_log::info("OrgasmEngine: scene {} speed offset reset, level {} ({})", sc->sid, EffectiveLevel(*sc),
+            kSpeedLevelNames[EffectiveLevel(*sc)]);
+    }
+
+    void SetStyleLevel(RE::Actor* actor, std::int32_t level)
+    {
+        if (!actor) {
+            return;
         }
+        const std::int32_t lv = std::clamp(level, 0, kSpeedLevelCount - 1);
+        std::lock_guard lock(g_lock);
+        g_styleLevels[actor->GetFormID()] = lv;
+        auto* st = Find(actor);
+        SceneState* sc = st ? SceneOf(*st) : nullptr;
+        if (sc && !sc->actors.empty() && sc->actors.front() == actor->GetFormID() && sc->styleLevel != lv) {
+            sc->styleLevel = lv;
+            webui_log::info("OrgasmEngine: scene {} style level {} ({}), effective {} ({})", sc->sid, lv,
+                kSpeedLevelNames[lv], EffectiveLevel(*sc), kSpeedLevelNames[EffectiveLevel(*sc)]);
+        }
+    }
+
+    void ClearStyleLevel(RE::Actor* actor)
+    {
+        if (!actor) {
+            return;
+        }
+        std::lock_guard lock(g_lock);
+        g_styleLevels.erase(actor->GetFormID());
     }
 
     float GetEnjoyment(RE::Actor* actor)
@@ -5490,17 +5526,6 @@ namespace OrgasmEngine
         return !out.empty();
     }
 
-    int NearestSpeedLevel(float speed)
-    {
-        int best = 0;
-        for (int i = 1; i < kSpeedLevelCount; ++i) {
-            if (std::abs(kSpeedLevels[i] - speed) < std::abs(kSpeedLevels[best] - speed)) {
-                best = i;
-            }
-        }
-        return best;
-    }
-
     int StepPlayerSceneSpeed(int dir)
     {
         return StepSceneSpeed(RE::PlayerCharacter::GetSingleton(), dir);
@@ -5514,18 +5539,12 @@ namespace OrgasmEngine
         if (!sc) {
             return -1;
         }
-        // Scale = level speed / style speed, so the effective speed lands exactly on the level.
-        const float current = AnimSpeed::Get(anchor);
-        const float base = std::max(0.01f, current / std::max(0.01f, sc->speedScale));
-        const int level = NearestSpeedLevel(current);
+        // Offset relative to the style, so the effective level moves exactly one step (passive gain only).
+        const int level = EffectiveLevel(*sc);
         const int next = std::clamp(level + (dir > 0 ? 1 : dir < 0 ? -1 : 0), 0, kSpeedLevelCount - 1);
-        const float target = std::clamp(kSpeedLevels[next], AnimSpeed::kMin, AnimSpeed::kMax);
-        sc->speedScale = target / base;
-        for (const auto id : sc->actors) {
-            AnimSpeed::SetScale(ActorFor(id), sc->speedScale);
-        }
-        webui_log::info("OrgasmEngine: scene {} speed level {} ({}) scale {}", sc->sid, next,
-            kSpeedLevelNames[next], sc->speedScale);
+        sc->levelOffset = next - sc->styleLevel;
+        webui_log::info("OrgasmEngine: scene {} speed level {} ({}) passive x{:.2f} (style {}, offset {})", sc->sid,
+            next, kSpeedLevelNames[next], kSpeedLevels[next], sc->styleLevel, sc->levelOffset);
         return next;
     }
 
@@ -5536,14 +5555,10 @@ namespace OrgasmEngine
 
     int GetSceneSpeedLevel(RE::Actor* anchor)
     {
-        {
-            std::lock_guard lock(g_lock);
-            auto* st = Find(anchor);
-            if (!st || !SceneOf(*st)) {
-                return -1;
-            }
-        }
-        return NearestSpeedLevel(AnimSpeed::Get(anchor));
+        std::lock_guard lock(g_lock);
+        auto* st = Find(anchor);
+        SceneState* sc = st ? SceneOf(*st) : nullptr;
+        return sc ? EffectiveLevel(*sc) : -1;
     }
 
     bool SetAutoPlay(bool on)
@@ -5735,6 +5750,7 @@ namespace OrgasmEngine
         }
         std::lock_guard lock(g_lock);
         g_scenes.clear();
+        g_styleLevels.clear();
         g_actors.clear();
         g_domOrders.clear();
         g_autoPlaySticky = false;
@@ -5886,6 +5902,7 @@ namespace OrgasmEngine
     {
         std::lock_guard lock(g_lock);
         g_scenes.clear();
+        g_styleLevels.clear();
         g_actors.clear();
         g_domOrders.clear();
         g_autoPlaySticky = false;

@@ -299,6 +299,7 @@ SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread, Boo
     endif
     adopt_started[tid] = adopt_now
 
+    ForeignStart_Note(thread)
     SkyrimNet_SexLab_Scene_Creator creator = CreateCreator("", thread.Positions, None, None, "", "")
     if creator == None
         Adopt_Set(tid, 0.0)
@@ -314,6 +315,88 @@ SkyrimNet_SexLab_Scene Function GetSceneByThread(sslThreadController thread, Boo
         return None
     endif
     return sl_scene
+EndFunction
+
+; --- Foreign restart diagnostics (observe only; never ends a thread) ---
+; A thread this mod did not start is adopted. Log its hooks / tags (they usually name the mod that
+; started it) and spot a loop: the same actors start again soon after each of our scenes ends.
+String last_end_key = ""
+float last_end_real = 0.0
+int foreign_restart_count = 0
+bool foreign_restart_warned = false
+float FOREIGN_RESTART_WINDOW = 15.0
+int FOREIGN_RESTART_WARN_AT = 3
+
+; Sorted actor FormIDs, e.g. "20,108242". Empty for no actors.
+String Function ActorSetKey(Actor[] actors)
+    if !actors || actors.length == 0
+        return ""
+    endif
+    int n = actors.length
+    int[] ids = Utility.CreateIntArray(n)
+    int i = 0
+    while i < n
+        if actors[i]
+            ids[i] = actors[i].GetFormID()
+        endif
+        i += 1
+    endwhile
+    ; Insertion sort (a handful of actors).
+    i = 1
+    while i < n
+        int v = ids[i]
+        int j = i - 1
+        while j >= 0 && ids[j] > v
+            ids[j + 1] = ids[j]
+            j -= 1
+        endwhile
+        ids[j + 1] = v
+        i += 1
+    endwhile
+    String set_key = ""
+    i = 0
+    while i < n
+        if i > 0
+            set_key += ","
+        endif
+        set_key += ids[i]
+        i += 1
+    endwhile
+    return set_key
+EndFunction
+
+; Manager.AnimationEnd: remember which actors just ended and when.
+Function ForeignStart_RecordEnd(sslThreadController thread)
+    if thread == None
+        return
+    endif
+    String set_key = ActorSetKey(thread.Positions)
+    if set_key != ""
+        last_end_key = set_key
+        last_end_real = Utility.GetCurrentRealTime()
+    endif
+EndFunction
+
+; GetSceneByThread, just before adopting a thread this mod did not start.
+Function ForeignStart_Note(sslThreadController thread)
+    String set_key = ActorSetKey(thread.Positions)
+    float since = -1.0
+    if last_end_real > 0.0
+        since = Utility.GetCurrentRealTime() - last_end_real
+    endif
+    String hooks = PapyrusUtil.StringJoin(thread.GetHooks(), ",")
+    String tags = PapyrusUtil.StringJoin(thread.GetTags(), ",")
+    Trace("GetSceneByThread", "adopting foreign tid:"+thread.tid+" state:"+(thread as sslThreadModel).GetState()+" hooks:["+hooks+"] tags:["+tags+"] actors:"+JoinActorsToJson(thread.Positions)+" since_last_end:"+since)
+    if set_key != "" && set_key == last_end_key && since >= 0.0 && since < FOREIGN_RESTART_WINDOW
+        foreign_restart_count += 1
+    else
+        foreign_restart_count = 0
+    endif
+    if foreign_restart_count >= FOREIGN_RESTART_WARN_AT && !foreign_restart_warned
+        foreign_restart_warned = true
+        Trace("GetSceneByThread", "another mod restarted a SexLab scene with the same actors "+foreign_restart_count+" times in a row (hooks:["+hooks+"])")
+        Debug.Notification("SkyrimNet SexLab: another mod keeps restarting SexLab scenes (hooks: "+hooks+")")
+    endif
 EndFunction
 
 ; Per-tid adoption start time (real seconds, 0 = none). Not saved: a stale entry expires after
@@ -1925,6 +2008,7 @@ event AnimationEnd(int ThreadID, bool HasPlayer)
             ; SexLab P+ ChangeActors: the same thread starts again right after this end.
             Trace("AnimationEnd", "P+ ChangeActors restart, keeping scene for ThreadID "+ThreadID)
         else
+            ForeignStart_RecordEnd(sl_scene.GetThread())
             sl_scene.AnimationEnd()
         endif
     endif

@@ -209,8 +209,12 @@ int Function StrategyId(String strategy_key) global
 EndFunction
 Function EndScene(int sid) global native
 Function ResetSpeedScale(Actor akActor) global native
-; Speed level of the actor's effective animation speed: 0 gentle, 1 normal, 2 forceful.
+; Speed level of the actor's scene (style + HUD faster/slower): 0 gentle, 1 normal, 2 forceful. 1 when unmanaged.
+; Passive enjoyment multiplier only (0.8 / 1.0 / 1.1); animation speed is never changed.
 int Function GetSpeedLevel(Actor akActor) global native
+; Scene style level per actor (0 gentle, 1 normal, 2 forceful). Works before Engine_BeginScene registers the scene.
+Function SetStyleLevel(Actor akActor, int level) global native
+Function ClearStyleLevel(Actor akActor) global native
 ; SexLabOrgasm bookkeeping (Scene_Manager.OrgasmIndividual): our own vs another plugin's ForceOrgasm.
 bool Function ConsumeOwnOrgasm(Actor akActor) global native
 int Function NoteExternalOrgasm(Actor akActor, String source) global native
