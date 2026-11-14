@@ -2,6 +2,11 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## Unreleased
+
+### Last stage
+- The last-stage list shows which key moves to the line above (−) and below (+) the current one
+
 ## 0.37.3
 
 ### DOM slaves

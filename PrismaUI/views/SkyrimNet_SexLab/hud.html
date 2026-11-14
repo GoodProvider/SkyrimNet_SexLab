@@ -11,6 +11,7 @@
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys; ask (Num .) sits under Num 3, aid (Num Enter) to its right.
         A last column holds up / down (keys.list_up / list_down, the slower / faster keys) beside slower / faster, shown only while lastStage.open, also with every HUD group off. While it is open the slower / faster cells are dimmed (those keys move the list), the next cell stays lit, and a press of it applies the current line.
+        The list itself marks the line above the selection with the up key and the line below with the down key ("Num -" / "Num +" shown as "-" / "+").
         Two independent parts: #enjoyment (stage row + actor rows; groups.enjoyment only) and #controls (everything else).
         Same position and scale as the overlay's ControlPanel (#left-column in index.html).
     -->
@@ -68,8 +69,10 @@
         /* Last-stage list. Not a HUD group: it stays up when #hud is hidden. */
         #last-stage { display: none; white-space: nowrap; }
         #last-stage.visible { display: flex; flex-direction: column; }
-        .last-line { opacity: 0.3; }
-        .last-line.on { opacity: 1; }
+        /* Key marker column: the line above the selection shows the up key, the line below the down key. It stays at full opacity; only the text dims. */
+        .last-key { display: inline-block; min-width: 1.6em; padding-right: 0.4em; color: var(--accent); font-weight: 600; text-align: center; }
+        .last-line .last-text { opacity: 0.3; }
+        .last-line.on .last-text { opacity: 1; }
         /* DOM enjoyment list (sexlab.hud.dom_enjoyment). Not a HUD group: also up in scenes without the player. */
         #dom-enjoyment { position: absolute; top: 10%; right: 10%; display: none; flex-direction: column; gap: var(--space-md); font-size: var(--text-sm); white-space: nowrap; }
         #dom-enjoyment.visible { display: flex; }
@@ -322,13 +325,32 @@
                 el.innerHTML = '';
                 return;
             }
+            if (state.keys) lastListKeys = state.keys;
             const lines = ls.lines || [];
             const index = Number(ls.index) || 0;
             let html = '';
             for (let i = 0; i < lines.length; i++)
-                html += '<div class="last-line' + (i === index ? ' on' : '') + '">' + esc(lines[i]) + '</div>';
+                html += '<div class="last-line' + (i === index ? ' on' : '') + '"><span class="last-key">' +
+                    esc(listMarker(i, index)) + '</span><span class="last-text">' + esc(lines[i]) + '</span></div>';
             el.innerHTML = html;
             el.classList.add('visible');
+        }
+
+        // Keys of the last push, so lastStageSelect can move the markers without waiting for the next hudUpdate.
+        let lastListKeys = {};
+
+        // Short key name for the list markers: "Num -" / "Num +" become "-" / "+", arrows become ↑ ↓ ← →, anything else as is.
+        function listKeyShort(label) {
+            const k = String(label || '');
+            if (k === 'Num -' || k === 'Num +') return k.slice(-1);
+            return ARROWS[k] || k;
+        }
+
+        // Marker for row i: the up key on the row above the selection, the down key on the row below.
+        function listMarker(i, index) {
+            if (i === index - 1) return listKeyShort(lastListKeys.list_up);
+            if (i === index + 1) return listKeyShort(lastListKeys.list_down);
+            return '';
         }
 
         window.lastStageHide = function () {
@@ -340,8 +362,11 @@
             if (!el) return;
             const n = Number(index) || 0;
             const lines = el.querySelectorAll('.last-line');
-            for (let i = 0; i < lines.length; i++)
+            for (let i = 0; i < lines.length; i++) {
                 lines[i].classList.toggle('on', i === n);
+                const key = lines[i].querySelector('.last-key');
+                if (key) key.textContent = listMarker(i, n);
+            }
         };
 
         // One block per DOM slave: "value name" rows, coloured by row kind.

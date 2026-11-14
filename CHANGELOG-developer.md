@@ -4,6 +4,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
 ## Unreleased
 
+### HUD
+- `hud.html` last-stage list: each line has a `.last-key` marker column. The line above the selection shows `keys.list_up`, the line below `keys.list_down` (`listKeyShort`: "Num -" / "Num +" → "-" / "+"). `lastStageSelect` moves the markers from the cached `lastListKeys`. Only the text dims now (`.last-text`), so the markers stay at full opacity.
+
 ### WebUI
 - `ActionCatalog.cpp`: MainPanels honour `eligibilityRules` (`PassesMainPanelGate` in `BuildMainPanelsCatalog` / `FindMainPanelByKey`). New decorator `plugin_config_bool` (`[configFolder, path]`, via `GetForeignConfigBool`).
 - New foreign MainPanel type `actor_form` (`IsForeignHostType`; `index.html` `#actor-form-panel`, `renderActorForm`, `afSave` / `afReset`): slider / number / toggle / select / text / readonly fields; Save sends only the changed ids as one JSON string to `applyFunction(speaker, target, "save", json)` with `closeWebUI: true`. First user: SkyrimNet_DOM's DOMSlaveDebug view.
