@@ -265,6 +265,9 @@ void RegisterDecorators()
         Decorators::GetThreads);
     reg("sexlab_activities", "JSON {activity}: stage description of the actor's SexLab scene",
         Decorators::Activities);
+    // SEXLAB_STOP eligibility: a victim may stop only a solo scene (count == 1).
+    reg("sexlab_scene_actor_count", "Number of actors in the actor's SexLab scene, 0 when none",
+        Decorators::SceneActorCount);
     reg("sexlab_cum", "JSON {warm, drying, warm_mouth, drying_mouth}: cum left on the actor",
         Decorators::Cum);
     reg("sexlab_has_cum", "1 when the actor has cum on them, else 0", Decorators::HasCum);

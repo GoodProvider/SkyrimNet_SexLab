@@ -2,6 +2,11 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
+## Unreleased
+
+### Stop
+- `SEXLAB_STOP`: a victim alone in the scene may stop it. New C++ decorator `sexlab_scene_actor_count` (`Decorators::SceneActorCount` / `ActorSceneCount`, positions in the actor's `g_threads` entry, `0` when none), also handled in WebUI `EvalCondition`. Rule 2 is `SkyrimNet_SexLab_Faction_Victim < 0 OR sexlab_scene_actor_count == 1`. Before, `StartScene_Nonconsensual_One` (e.g. `SexLab_Masturbation_Forced`) made the speaker a victim with no aggressor, so nothing could stop the scene.
+
 ## 0.37.4
 
 ### Scene style

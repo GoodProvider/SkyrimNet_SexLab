@@ -469,6 +469,13 @@ namespace ActionCatalog
                 return CompareValues(allowed ? 1.0 : 0.0, op, expected);
             }
 
+            if (EqualsIgnoreCase(decorator, "sexlab_scene_actor_count")) {
+                if (args.empty() || !ArgIsCurrentActor(args[0]))
+                    return false;
+                const int count = Decorators::ActorSceneCount(FocusActor());
+                return CompareValues(static_cast<double>(count), op, expected);
+            }
+
             // Any SkyrimNet plugin's bool setting: arguments [pluginConfigFolder, "dotted.path"].
             if (EqualsIgnoreCase(decorator, "plugin_config_bool")) {
                 if (args.size() < 2 || !args[0].is_string() || !args[1].is_string())

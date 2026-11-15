@@ -2,6 +2,11 @@ https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4
 
 Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
+## Unreleased
+
+### Stop
+- An NPC in a forced solo scene (e.g. forced masturbation) now stops when told to. Before, nobody could stop it by dialogue
+
 ## 0.37.4
 
 ### Scene style

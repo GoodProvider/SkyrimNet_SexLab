@@ -1956,3 +1956,9 @@ Before this, MainPanels only honoured `requiresPlugin` / `requiresDll` / `requir
 ## Victim scene with the ending off never reached the last stage (2026-11-14)
 
 In a victim scene that stages by enjoyment, the primary's orgasm does not finish the scene (`NotePrimaryFinished` / `Stage_PrimaryFinished` skip victim scenes); only the ending lead's target does (`NoteEndReached` / `Ending_EndReached`). With `sexlab.ending.enabled: false` both were off, so the orgasm hold ran out and the stage fell 3 → 1, again and again. `Ending_Forced()` (stage by enjoyment + victim) now makes `Ending_Enabled()` true and `Ending_Target()` 1, so the lead's first orgasm goes to the last stage and the end list comes up. The mid path (lead below a target > 1) also shows the list now, with a "Next: …" line (`LINE_NEXT`) preselected, before it switches animation. **Rule:** a gate that turns off a scene's only way to finish has to be forced on for that scene type.
+
+## Solo forced scene had no stop path (2026-11-14, verified in game)
+
+**Symptom:** a DOM slave told "masturbate" got SkyrimNet_SexLab's `SexLab_Masturbation_Forced`; "you may stop" never stopped it (SkyrimNet.log: only 10 eligible actions, no Stop, "No ACTION: line found"). See SkyrimNet_DOM `checkpoints/2026-11-14-masturbation-stop-bug/`.
+**Cause:** `StartScene_Nonconsensual_One` passes `victim=speaker`. `SEXLAB_STOP` required `SkyrimNet_SexLab_Faction_Victim < 0`, which assumes an aggressor NPC who can stop instead; a solo scene has none. DOM's own stop actions need `DOMActionMasturbating`, which only DOM's masturbate sets.
+**Fix:** `SEXLAB_STOP` rule 2 is `victim < 0 OR sexlab_scene_actor_count == 1`. The decorator counts positions in the actor's `g_threads` entry (0 when none). Multi-actor victim scenes are unchanged. **Rule:** every scene an action can start needs some actor who is eligible to stop it.

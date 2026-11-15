@@ -20,16 +20,25 @@ eligibilityRules:
           - SexLabAnimatingFaction
         comparisonOperator: ">"
         expectedValue: 0
-      - decoratorName: get_faction_rank
-        arguments:
-          - currentActor
-          - SkyrimNet_SexLab_Faction_Victim
-        comparisonOperator: "<"
-        expectedValue: 0
       - decoratorName: sexlab_npc_stop_allowed
         arguments:
           - currentActor
         comparisonOperator: "=="
         expectedValue: 1
     logicalOperator: AND
+    required: true
+  # Not a victim, OR alone in the scene (solo forced masturbation has no aggressor to stop it).
+  - conditions:
+      - decoratorName: get_faction_rank
+        arguments:
+          - currentActor
+          - SkyrimNet_SexLab_Faction_Victim
+        comparisonOperator: "<"
+        expectedValue: 0
+      - decoratorName: sexlab_scene_actor_count
+        arguments:
+          - currentActor
+        comparisonOperator: "=="
+        expectedValue: 1
+    logicalOperator: OR
     required: true

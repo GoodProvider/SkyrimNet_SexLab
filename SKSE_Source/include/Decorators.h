@@ -16,6 +16,9 @@ namespace Decorators
     std::string GetThreads(RE::Actor* speaker);
     /// sexlab_activities: {"activity": stage description of the actor's scene, "" when none}.
     std::string Activities(RE::Actor* actor);
+    /// sexlab_scene_actor_count: number of positions in the actor's listed SexLab scene, "0" when
+    /// none. SEXLAB_STOP lets a victim stop only when this is 1 (solo forced scene, no aggressor).
+    std::string SceneActorCount(RE::Actor* actor);
     /// sexlab_cum: {"warm","drying","warm_mouth","drying_mouth"} (0416_sexlab_cum.prompt).
     std::string Cum(RE::Actor* actor);
     /// sexlab_has_cum: "1" when any place on the actor still has cum, else "0".
@@ -28,6 +31,8 @@ namespace Decorators
 
     /// TargetMenu eligibility (ActionCatalog EvalCondition).
     bool ActorHasCum(RE::Actor* actor);
+    /// Positions in the actor's listed SexLab scene, 0 when none (sexlab_scene_actor_count).
+    int ActorSceneCount(RE::Actor* actor);
 
     /// Thread registry + LOS cache: SexLab drops every scene on load.
     void ClearOnGameLoad();

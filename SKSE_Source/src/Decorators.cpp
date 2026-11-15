@@ -496,6 +496,24 @@ namespace Decorators
         return out;
     }
 
+    int ActorSceneCount(RE::Actor* actor)
+    {
+        if (!actor)
+            return 0;
+        std::lock_guard lock(g_threadsMutex);
+        for (const auto& [sid, e] : g_threads) {
+            if (std::find(e.actors.begin(), e.actors.end(), actor->GetFormID()) != e.actors.end())
+                return static_cast<int>(e.actors.size());
+        }
+        return 0;
+    }
+
+    std::string SceneActorCount(RE::Actor* actor)
+    {
+        SNSL_PROF("decorator.sexlab_scene_actor_count");
+        return std::to_string(ActorSceneCount(actor));
+    }
+
     std::string Activities(RE::Actor* actor)
     {
         SNSL_PROF("decorator.sexlab_activities");
