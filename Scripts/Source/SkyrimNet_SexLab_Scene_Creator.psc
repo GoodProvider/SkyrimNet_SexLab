@@ -43,6 +43,14 @@ String pending_rejection = ""
 ; "No, explain": "<player> rejects <requester>'s request for <intent>, because " + reason.
 String pending_reject_prefix = ""
 bool start_scene_pending = false
+; The scene starts as a clean (2026-11-15): a Clean cock / Clean pussy action (Scene_Manager.Clean_TakePending) or the
+; Scene Creator's clean word (_clean). FinishStartScene hands it to the scene (SetStartClean).
+Actor clean_giver = None
+Actor clean_receiver = None
+String clean_part = ""
+; The clean came from a Clean cock / pussy action (Setup): a commit's empty _clean keeps it unless _clean_off (the player
+; turned the word off). 2026-11-15 log: the dialog's commit sent _clean:{} and the action started plain sex.
+bool clean_from_action = false
 ; True after Scene Creator was opened for this creator; blocks a second open.
 ; Copied onto SkyrimNet_SexLab_Scene when FinishStartScene binds the SexLab thread.
 bool Property scene_creator_menu_called = false Auto
@@ -233,6 +241,15 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
     force_open_selector = false
     position_override = false
     start_scene_pending = false
+    Clean_Set(None, None, "")
+    clean_from_action = false
+    if num_actors == 2
+        String pending_part = manager.Clean_TakePending(actors[0], actors[1])
+        if pending_part != ""
+            Clean_Set(manager.pending_clean_giver, manager.pending_clean_receiver, pending_part)
+            clean_from_action = clean_part != ""
+        endif
+    endif
 
     if SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "tentacles") || SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(_tags, "tentacle")
         if setting_name == ""
@@ -310,7 +327,9 @@ Function Release()
     force_open_selector = false
     position_override = false
     start_scene_pending = false
-    parent.Release() 
+    Clean_Set(None, None, "")
+    clean_from_action = false
+    parent.Release()
     DbgEnd("Release")
 EndFunction
 
@@ -581,6 +600,7 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     endif
     sl_scene.scene_creator_menu_called = scene_creator_menu_called
     sl_scene.SetStartTags(tags_string, tags_suppress_string)
+    sl_scene.SetStartClean(clean_giver, clean_receiver, clean_part)
     sl_scene.SetChain(pending_registries, num_pending_registries, pending_last_stage)
     Release()
     DbgReturn("FinishStartScene", "sl_scene")
@@ -1553,6 +1573,25 @@ Function ContinueAfterSceneCreator(String json)
 EndFunction
 
 ; Builds the creator state as a JC handle (caller serializes or embeds it).
+; The start's clean: both actors in this cast and a part, else none.
+Function Clean_Set(Actor giver, Actor receiver, String part)
+    clean_giver = None
+    clean_receiver = None
+    clean_part = ""
+    if giver == None || receiver == None || giver == receiver || (part != "cock" && part != "pussy")
+        return
+    endif
+    int gi = actors.Find(giver)
+    int ri = actors.Find(receiver)
+    if gi < 0 || ri < 0 || gi >= num_actors || ri >= num_actors
+        return
+    endif
+    clean_giver = giver
+    clean_receiver = receiver
+    clean_part = part
+    Trace("Clean_Set", GetDisplayName(giver)+" cleans "+GetDisplayName(receiver)+" "+part)
+EndFunction
+
 int Function BuildWebUIObject()
     int obj = JMap.object()
     JMap.setStr(obj, "_mode", "creator")
@@ -1584,6 +1623,14 @@ int Function BuildWebUIObject()
     endwhile
     JMap.setObj(obj, "_positions", pos_arr)
     JMap.setInt(obj, "_position_override", position_override as int)
+    ; The Scene Creator's clean word starts on (index.html sceneCleanFromState).
+    if clean_giver != None && clean_receiver != None && clean_part != ""
+        int clean_obj = JMap.object()
+        JMap.setInt(clean_obj, "_giver", clean_giver.GetFormID())
+        JMap.setInt(clean_obj, "_receiver", clean_receiver.GetFormID())
+        JMap.setStr(clean_obj, "_part", clean_part)
+        JMap.setObj(obj, "_clean", clean_obj)
+    endif
     JMap.setStr(obj, "_tags", JoinStrings(tags, num_tags))
     JMap.setStr(obj, "_tags_suppress", JoinStrings(tags_suppress, num_tags_suppress))
     JMap.setStr(obj, "_synonyms", synonyms_mode)
@@ -1654,6 +1701,24 @@ Function ApplyWebUIState(int obj)
     endif
     if JMap.hasKey(obj, "_synonyms")
         synonyms_mode = JMap.getStr(obj, "_synonyms", "broad")
+    endif
+    ; The clean word (index.html): an empty object turns a pending clean off.
+    if JMap.hasKey(obj, "_clean")
+        int clean_obj = JMap.getObj(obj, "_clean")
+        Actor cg = None
+        Actor cr = None
+        String cp = ""
+        if clean_obj
+            cg = Game.GetFormEx(JMap.getInt(clean_obj, "_giver", 0)) as Actor
+            cr = Game.GetFormEx(JMap.getInt(clean_obj, "_receiver", 0)) as Actor
+            cp = JMap.getStr(clean_obj, "_part", "")
+        endif
+        if cg == None && clean_from_action && clean_part != "" && JMap.getInt(obj, "_clean_off", 0) == 0
+            Trace("ApplyWebUIState", "empty _clean kept: the action's clean stands")
+        else
+            Clean_Set(cg, cr, cp)
+            clean_from_action = false
+        endif
     endif
     if JMap.hasKey(obj, "_scene_setting")
         ReadSettingFlags(JMap.getStr(obj, "_scene_setting", ""))
@@ -1881,6 +1946,13 @@ sslBaseAnimation[] Function ResolveAnimationsFromUI()
         sslBaseAnimation anim = ResolveAnimation(sexlab, reg)
         if anim != None
             animations = sslUtility.PushAnimation(anim, animations)
+            ; A chain plays in order from its first animation (Scene.LastStage_ChainNext moves on). Given them all,
+            ; SexLab picked one at random (2026-11-15 log: clean, vaginal, clean started on the last clean, so the
+            ; chain had no next).
+            if num_pending_registries > 1
+                Trace("ResolveAnimationsFromUI", "chain of "+num_pending_registries+": starts with "+reg)
+                return animations
+            endif
         endif
         i += 1
     endwhile

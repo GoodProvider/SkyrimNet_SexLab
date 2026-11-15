@@ -5,8 +5,12 @@
    Rendered into a decisions request, never into chat messages.
 
    Context pushed by the game: focus_uuid, focus_name (the NPC deciding), player_in_scene, cast_names,
-   timeline [lines, oldest first].
-   Keys are read back by the game: keep stop / cuddle / vaginal / oral / anal as given. #}
+   timeline [lines, oldest first], options [{line, key, act, giver, receiver, part}] (the lines this NPC may pick,
+   Scene.LastStage_OptionsJson; act: stop / cuddle / vaginal / oral / anal / clean / continue; giver does it to
+   receiver; part: cock / pussy), victim_name / aggressor_name ("" unless the scene has a victim).
+   Once an actor has reached their orgasm limit the game only offers stop / cuddle / clean (in a victim scene, only
+   the victim cleaning the aggressor). The game reads the chosen key back: keep each o.key exactly as given.
+   An empty options list (older game scripts) falls back to stop / cuddle / vaginal / oral / anal. #}
 {% set _focus = decnpc(focus_uuid) %}
 {% set _dom_slave = is_plugin_loaded("SkyrimNet_DOM.esp") and is_in_faction(focus_uuid, "DOMPlayerSlaveFaction") %}
 [ state focus ]
@@ -51,12 +55,28 @@ Nothing has happened yet.
 The scene has reached its last stage. Decide what {{ focus_name }} wants to happen next.
 {% if _dom_slave %}Follow `dom_instructions` for how {{ focus_name }} obeys and feels; it outweighs their usual preferences.
 {% endif %}Base it on what is happening (`scene`) and what {{ focus_name }} has thought, said and experienced (`timeline`), recent events over older ones.
-Stop when they are done, uncomfortable, or the scene should end. Cuddle when they want to stay close without sex. Vaginal, oral or anal when they want to keep going that way.
-[ criteria ]
+{% if victim_name != "" %}{{ victim_name }} is the victim and {{ aggressor_name }} the aggressor: the choice is the aggressor's, not the victim's.
+{% else %}Stop when they are done, uncomfortable, or the scene should end. Cuddle when they want to stay close without sex.
+{% endif %}[ criteria ]
+{% if length(options) > 0 %}
+{% for o in options %}
+{% if o.act == "stop" %}{% if victim_name != "" %}{{ o.key }}: {{ aggressor_name }} has no further need of {{ victim_name }}; the scene ends
+{% else %}{{ o.key }}: the scene ends
+{% endif %}{% else if o.act == "cuddle" %}{% if victim_name != "" %}{{ o.key }}: {{ aggressor_name }} keeps {{ victim_name }} close to extend their dominance over them, no sex
+{% else %}{{ o.key }}: stay together and cuddle, no sex
+{% endif %}{% else if o.act == "clean" %}{% if victim_name != "" %}{{ o.key }}: {{ aggressor_name }} makes {{ o.giver }} clean {{ o.receiver }}'s {{ o.part }} with their mouth
+{% else %}{{ o.key }}: {{ o.giver }} cleans {{ o.receiver }}'s {{ o.part }} with their mouth, no more sex
+{% endif %}{% else if o.act == "continue" %}{{ o.key }}: keep going with a new animation
+{% else if o.giver != "" %}{{ o.key }}: start {{ o.act }} sex, {{ o.giver }} to {{ o.receiver }}
+{% else %}{{ o.key }}: start {{ o.act }} sex
+{% endif %}
+{% endfor %}
+{% else %}
 stop: the scene ends
 cuddle: stay together and cuddle, no sex
 vaginal: start vaginal sex
 oral: start oral sex
 anal: start anal sex
+{% endif %}
 [ end criteria ]
 [ end question ]

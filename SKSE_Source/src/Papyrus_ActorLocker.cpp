@@ -12,6 +12,7 @@ namespace PapyrusBindings_ActorLocker
         bool Lock(RE::StaticFunctionTag*, RE::Actor* a) { return ActorLocker::TryLock(a); }
         void Unlock(RE::StaticFunctionTag*, RE::Actor* a) { ActorLocker::Unlock(a); }
         bool IsLocked(RE::StaticFunctionTag*, RE::Actor* a) { return ActorLocker::IsLocked(a); }
+        bool ClearOstim(RE::StaticFunctionTag*, RE::Actor* a) { return ActorLocker::ClearOstim(a); }
 
         /// All-or-nothing: on any failure, unlocks the ones this call locked.
         bool LockAll(RE::StaticFunctionTag*, std::vector<RE::Actor*> actors)
@@ -47,6 +48,7 @@ namespace PapyrusBindings_ActorLocker
         a_vm->RegisterFunction("Lock", s, Lock);
         a_vm->RegisterFunction("Unlock", s, Unlock);
         a_vm->RegisterFunction("IsLocked", s, IsLocked);
+        a_vm->RegisterFunction("ClearOstim", s, ClearOstim);
         a_vm->RegisterFunction("LockAll", s, LockAll);
         a_vm->RegisterFunction("UnlockAll", s, UnlockAll);
         return true;

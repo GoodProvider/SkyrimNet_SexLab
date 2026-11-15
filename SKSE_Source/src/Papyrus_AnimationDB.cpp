@@ -83,6 +83,8 @@ namespace PapyrusBindings_AnimationDB
                     spec.has_description = AnimationDB::ParseHasDescriptionMode(j);
                 if (j.contains("_gender_match") && j["_gender_match"].is_boolean())
                     spec.gender_match = j["_gender_match"].get<bool>();
+                if (j.contains("_orgasm") && j["_orgasm"].is_string())
+                    spec.orgasm = AnimationDB::ParseOrgasmMode(j["_orgasm"].get<std::string>());
                 if (j.contains("_males") && j["_males"].is_number_integer())
                     spec.males = j["_males"].get<int>();
                 if (j.contains("_females") && j["_females"].is_number_integer())

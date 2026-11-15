@@ -47,13 +47,16 @@ Function ActorAnimMeta_Result(String json) global native
 ; TargetMenu Start: consume one-shot skip so this scene does not open Scene Creator.
 Bool Function ConsumeSkipSceneCreator() global native
 Bool Function ConsumeOpenSceneCreator() global native
-; index: choice code (0 stop, 1 cuddle, 2 vaginal, 3 oral, 4 anal, 6 the chain's next). next_name: the chain's next
-; animation, shown as the top line "Next: <name>" ("" for none). LastStage_Index returns a choice code.
-Function LastStage_Show(int index, int advance_key, String next_name) global native
+; index: choice code (a line index into lines, 0 stop; 100 the chain's next). next_name: the chain's next animation,
+; shown as the top line "Next: <name>" ("" for none). lines: Scene.LastStage_BuildLines labels (empty: the old five).
+; LastStage_Index returns a choice code.
+; LastStage_Request optionsJson (Scene.LastStage_OptionsJson): the lines the NPC may pick; the answer comes back to
+; Scene_Manager.LastStage_OnDecision as that option's line index.
+Function LastStage_Show(int index, int advance_key, String next_name, String[] lines) global native
 Function LastStage_Hide() global native
 int Function LastStage_Index() global native
 Actor Function LastStage_DrivenActor() global native
-Function LastStage_Request(int sid, Actor caller, String castNames, bool playerInScene) global native
+Function LastStage_Request(int sid, Actor caller, String castNames, bool playerInScene, String optionsJson) global native
 String Function TraceLog(String script_name, String func, String msg) global native
 
 ; --- Profiler (WebUI Profile panel; checkpoints/profile/checkpoint-04.md) ---

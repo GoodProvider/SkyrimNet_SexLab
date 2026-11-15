@@ -1557,6 +1557,9 @@
 
         #sc-positions-table .col-idx,
         #sc-positions-table .col-move,
+        /* Animation list: the row that plays as a clean (clean word on). */
+        .clean-badge { display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 3px;
+            border: 1px solid var(--accent); color: var(--accent); font-size: 0.85em; line-height: 1.3; }
         #sc-positions-table .col-name,
         #sc-positions-table .col-dressed,
         #sc-positions-table .col-o,
@@ -1649,6 +1652,18 @@
         #tm-positions-table tr.pos-excluded {
             color: var(--text-muted);
             opacity: 0.75;
+        }
+
+        /* Locked by an earlier start (ActorLocker, no owner): listed last, not addable; the lock asks to unlock. */
+        #sc-positions-table tr.pos-locked {
+            color: var(--text-muted);
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        #sc-positions-table tr.pos-locked .pos-lock {
+            cursor: pointer;
+            margin-left: 0.4em;
         }
 
         .mod-chip-list {
@@ -1766,8 +1781,10 @@
             display: flex;
         }
 
-        /* Stop dialog (Description Editor stop, explainPrompt options): "Stop scene" / "Explain why" over the whole UI. */
-        #stop-dialog-overlay {
+        /* Stop dialog (Description Editor stop, explainPrompt options): "Stop scene" / "Explain why" over the whole UI.
+           The confirm dialog (confirmDialogOpen: a question with Yes / No) shares the overlay look. */
+        #stop-dialog-overlay,
+        #confirm-dialog-overlay {
             display: none;
             position: absolute;
             inset: 0;
@@ -1777,7 +1794,8 @@
             background: rgba(0, 0, 0, 0.5);
         }
 
-        #stop-dialog-overlay.open {
+        #stop-dialog-overlay.open,
+        #confirm-dialog-overlay.open {
             display: flex;
         }
 
@@ -2948,6 +2966,16 @@
             <div class="btn-row">
                 <div class="action-btn de-disabled" id="stop-dialog-submit" onmousedown="event.preventDefault()" onclick="stopDialogSubmit()">Submit</div>
                 <div class="option-cancel" onmousedown="event.preventDefault()" onclick="stopDialogClose()">Cancel</div>
+            </div>
+        </div>
+    </div>
+    <!-- Confirm dialog (confirmDialogOpen): a question, Yes / No. -->
+    <div id="confirm-dialog-overlay">
+        <div class="stop-dialog">
+            <div class="target-row" id="confirm-dialog-text"></div>
+            <div class="btn-row">
+                <div class="action-btn" onmousedown="event.preventDefault()" onclick="confirmDialogAnswer(true)">Yes</div>
+                <div class="option-cancel" onmousedown="event.preventDefault()" onclick="confirmDialogAnswer(false)">No</div>
             </div>
         </div>
     </div>
@@ -9135,7 +9163,7 @@
         // Display text for nearby status (mirrors C++ NearbyReasonLabel).
         const NEARBY_REASON_LABELS = {
             sexlab: 'SexLab', ostim: 'Ostim', child: 'Child', dead: 'Dead',
-            cmbt: 'Combat', load: 'Unloaded', gone: 'Gone'
+            cmbt: 'Combat', load: 'Unloaded', gone: 'Gone', locked: 'Locked'
         };
 
         function setNearbyActors(actors) {
@@ -10508,6 +10536,8 @@
                 this.stopNarration = '';
                 this.stopSpeakerFormId = 0;
                 this.pendingCreate = false;
+                // The player turned the clean word off (scCleanStore): a start keeps an action's clean unless this is set.
+                this.cleanOff = false;
                 this.dirty = false;
                 this.seeded = false;
             }
@@ -10560,6 +10590,14 @@
                 }
                 if (state._scene_setting != null) this.sceneSetting = state._scene_setting || '';
                 if (state._synonyms != null) this.synonyms = state._synonyms || '';
+                // A creator started by a Clean cock / Clean pussy action carries its clean (Scene_Creator).
+                // A live scene sends its clean while one plays (Scene.psc active state): the editor keeps the clean word on,
+                // unless the player turned it off during this clean. A push without one: the clean is over, off resets.
+                if (state._clean !== undefined) {
+                    if (!(this.mode === 'active' && this.cleanOff)) this.clean = sceneCleanFromState(state._clean);
+                } else if (this.mode === 'active') {
+                    this.cleanOff = false;
+                }
                 if (state._in_thread_registries) {
                     this.inThreadRegistries = Array.isArray(state._in_thread_registries)
                         ? state._in_thread_registries.slice() : [];
@@ -10631,9 +10669,24 @@
                     _stop_style: this.stopStyle,
                     _stop_narration: this.stopNarration,
                     _stop_speaker_form_id: this.stopSpeakerFormId,
-                    _pending_create: this.pendingCreate ? 1 : 0
+                    _pending_create: this.pendingCreate ? 1 : 0,
+                    // Only with a start or a pick (Scene.ApplyWebUICommit arms the clean for that switch).
+                    _clean: ((this.pendingCreate || this.reseedDefaults) && this.clean) ? this.clean : {},
+                    _clean_off: this.cleanOff ? 1 : 0
                 };
             }
+        }
+
+        // _clean from Papyrus or a commit: { _giver, _receiver, _part } with both form ids, else null.
+        function sceneCleanFromState(c) {
+            if (!c || typeof c !== 'object') return null;
+            const giver = formIdU32(c._giver);
+            const receiver = formIdU32(c._receiver);
+            // Papyrus list lines send "Pussy" (2026-11-15 log: the clean pussy preset came back null).
+            const raw = String(c._part || '').toLowerCase();
+            const part = raw === 'pussy' ? 'pussy' : (raw === 'cock' ? 'cock' : '');
+            if (!giver || !receiver || !part) return null;
+            return { _giver: giver, _receiver: receiver, _part: part };
         }
 
         function selectedSceneInfo() {
@@ -10690,6 +10743,10 @@
                 }
                 sceneInfoByKey.set(key, SceneInfo.fromState(st));
             });
+            // The editor opened from a last-stage list line binds from this seed alone: take its preset before the bind.
+            (Array.isArray(list) ? list : []).forEach(st => {
+                if (st && st._mode === 'active') deNoteListPreset(SceneInfo.keyFromState(st), st);
+            });
             sceneInfosSessionActive = true;
             sceneInfosSeeded = true;
             // selectSceneInfoForActor rebinds visible panels (the DE opens "loading..." until this seed lands).
@@ -10721,6 +10778,7 @@
         function resetAnimFilters() {
             SC.tags = [];
             SC.suppress = [];
+            SC.clean = null;
             SC.filterBy = SC_FILTER_DEFAULT;
             SC.filterStart = SC_FILTER_DEFAULT;
             SC.filterChain = [];
@@ -10829,6 +10887,7 @@
 
         // Continue (stage / filter tabs): unpause (applying a pending animation pick) and close the WebUI.
         function deContinueAndClose() {
+            if (deListNeedsPick()) return;
             deAutoSave();
             // Added actors need an animation that fits the new cast first.
             if (deActorChangePending() && !dePendingActive()) return;
@@ -10861,6 +10920,23 @@
                 document.getElementById('stop-dialog-choices').style.display = '';
                 document.getElementById('stop-dialog-explain').style.display = 'none';
             }
+        }
+
+        // Confirm dialog (#confirm-dialog-overlay): text with Yes / No. onYes / onNo are optional.
+        const confirmDialogState = { onYes: null, onNo: null };
+
+        function confirmDialogOpen(text, onYes, onNo) {
+            confirmDialogState.onYes = onYes || null;
+            confirmDialogState.onNo = onNo || null;
+            document.getElementById('confirm-dialog-text').textContent = text;
+            document.getElementById('confirm-dialog-overlay').classList.add('open');
+        }
+
+        function confirmDialogAnswer(yes) {
+            const cb = yes ? confirmDialogState.onYes : confirmDialogState.onNo;
+            confirmDialogState.onYes = confirmDialogState.onNo = null;
+            document.getElementById('confirm-dialog-overlay').classList.remove('open');
+            if (typeof cb === 'function') cb();
         }
 
         function stopDialogClose() {
@@ -10912,6 +10988,7 @@
             SC.positionOverride = info.positionOverride === true;
             SC.tags = (info.tags || []).slice();
             SC.suppress = (info.suppress || []).slice();
+            SC.clean = info.clean ? Object.assign({}, info.clean) : null;
             SC.sceneSetting = info.sceneSetting || '';
             if (info.synonyms) SC.synonyms = info.synonyms;
             SC.ddAuto = SC.ddAuto.filter(t => SC.tags.includes(t));
@@ -10940,6 +11017,7 @@
             info.positionOverride = SC.positionOverride !== false;
             info.tags = (SC.tags || []).slice();
             info.suppress = (SC.suppress || []).slice();
+            info.clean = SC.clean ? Object.assign({}, SC.clean) : null;
             info.sceneSetting = SC.sceneSetting || '';
             info.synonyms = SC.synonyms || SC_SYNONYM_DEFAULT;
             info.inThreadRegistries = (SC.inThreadRegistries || []).slice();
@@ -11048,8 +11126,11 @@
         // Strictest to loosest; the open-time downgrade walks this order until a query returns anims.
         const SC_FILTER_ORDER = ['positions', 'gender', 'none'];
         const SC_FILTER_DEFAULT = 'gender';
-        const SC_FILTER_OPTIONS = ['gender', 'none', 'positions'];
-        const SC_FILTER_LABELS = { none: 'any' };
+        // any / gender / the orgasm modes (gender match plus who in the animation orgasms: AnimDB `_orgasm`) / positions.
+        const SC_FILTER_OPTIONS = ['none', 'gender', 'orgasm_all', 'orgasm_none', 'orgasm_male', 'orgasm_female', 'positions'];
+        const SC_FILTER_LABELS = { none: 'any', orgasm_all: 'all orgasms', orgasm_none: 'none orgasms',
+            orgasm_male: 'male orgasms', orgasm_female: 'female orgasms' };
+        const SC_FILTER_ORGASM = { orgasm_all: 'all', orgasm_none: 'none', orgasm_male: 'male', orgasm_female: 'female' };
         const SC_HAS_DESCRIPTION_OPTIONS = ['any', 'described', 'undescribed'];
         const SC_SORT_OPTIONS = ['default', 'freq asc', 'freq desc', 'name asc', 'name desc'];
         // Opens on start frequency, least started first.
@@ -11070,9 +11151,11 @@
             positions: [],
             tags: [],
             suppress: [],
-            // The chain: ordered registries to play (Scene Creator). chainSeeded: the opening random pick ran.
+            // The clean word (scSetClean): the pick plays as a clean, its non-orgasm stages, then the list.
+            // { _giver, _receiver, _part } form ids / "cock" | "pussy", or null. Never a tag sent to AnimDB.
+            clean: null,
+            // The chain: ordered registries to play (Scene Creator). Opens empty: nothing is preselected.
             selectedRegistries: [],
-            chainSeeded: false,
             // "last animation:" at the last stage of the chain's last animation: loop / end / npc (LAST_STAGE_OPTIONS).
             lastStage: 'npc',
             lastAnimRegistries: [],
@@ -11133,12 +11216,40 @@
             }));
         }
 
+        // Male / female orgasms need that sex in the cast and at most two actors (intersex counts as either).
+        function scFilterOptions() {
+            const pos = SC.positions || [];
+            const has = sex => pos.some(p => {
+                const g = scPosGender(p);
+                return scPosIntersex(p) || (g != null && g % 2 === sex);
+            });
+            return SC_FILTER_OPTIONS.filter(v => {
+                if (v === 'orgasm_male') return pos.length > 0 && pos.length < 3 && has(0);
+                if (v === 'orgasm_female') return pos.length > 0 && pos.length < 3 && has(1);
+                return true;
+            });
+        }
+
+        // SC.filterBy, back to gender when the cast no longer allows it (e.g. male orgasms after the male left).
+        function scFilterMode() {
+            const mode = SC.filterBy || SC_FILTER_DEFAULT;
+            if (!SC_FILTER_ORGASM[mode] || scFilterOptions().includes(mode)) return mode;
+            SC.filterBy = SC_FILTER_DEFAULT;
+            scRenderFilterByPulldown();
+            return SC.filterBy;
+        }
+
         function scRenderFilterByPulldown() {
             if (!SC.filterBy) SC.filterBy = SC_FILTER_DEFAULT;
             const onPick = v => {
                 SC.filterBy = v;
                 SC.filterAuto = false;
                 SC.filterChain = [];
+                // The player's pick replaces the clean word's orgasm mode: clean goes off.
+                if (SC.clean) {
+                    scSetClean(false, true);
+                    scRenderTagChips();
+                }
                 scRefreshAnims();
                 scRefreshTags();
             };
@@ -11146,7 +11257,7 @@
                 const host = document.getElementById(hostId);
                 if (!host) continue;
                 host.innerHTML = '';
-                host.appendChild(createPulldown(SC_FILTER_OPTIONS, SC.filterBy, onPick, null,
+                host.appendChild(createPulldown(scFilterOptions(), SC.filterBy, onPick, null,
                     (el, v) => { el.textContent = SC_FILTER_LABELS[v] || v; }));
             }
         }
@@ -11299,7 +11410,6 @@
             if (state._stage != null && typeof deOnThreadStage === 'function') deOnThreadStage(info);
             SC.from_target_menu = !!state._from_target_menu || SC.from_target_menu;
             SC.selectedRegistries = [];
-            SC.chainSeeded = false;
             SC.lastStage = LAST_STAGE_DEFAULT;
             SC.lastAnimRegistries = [];
             if (SC.mode === 'active' && SC.inThreadRegistries.length)
@@ -11550,6 +11660,12 @@
             const seeded = [];
             if (pos0) seeded.push(scPosFromPool(pos0));
             if (pos1) seeded.push(scPosFromPool(pos1));
+            // DEBUG-DELETE: which pool the creator seeded from (2026-11-14: opened with an in-scene actor).
+            if (typeof window.onDebugLog === 'function')
+                window.onDebugLog('scSeed target=' + (targetActor ? targetActor.name + '/' + formIdU32(targetActor.formId) : '-') +
+                    ' pool=[' + pool.map(a => a.name + '@' + (Number.isFinite(a.dist) ? Math.round(a.dist) : '-') + ':' +
+                        ((controlActorByFormId(a.formId) || {}).status || '?')).join(', ') + '] picked=[' +
+                    seeded.map(p => p._name).join(', ') + ']');
             if (!seeded.length) return;
 
             SC.positions = seeded;
@@ -11563,9 +11679,8 @@
         }
 
         function scOnActorCountChanged() {
-            // Animations are per actor count: the chain no longer fits, so the next result seeds a new one.
+            // Animations are per actor count: the chain no longer fits, so it empties (the player picks again).
             SC.selectedRegistries = [];
-            SC.chainSeeded = false;
             scPersistPositionsToSceneInfo();
             if (SC.mode === 'creator') scRequestDeviousTags();
             scRefreshTags();
@@ -12085,6 +12200,8 @@
                 const info = deSceneInfoForPick();
                 if (info) info.initiatorFormId = SC.initiatorFormId;
                 scRenderInitiatorPulldown(); // keep the SC and DE copies in sync
+                // The clean's giver follows the initiator (scCleanFor); the receiver stays.
+                if (SC.clean) scCleanRegive();
             };
             for (const hostId of ['sc-initiator-pulldown', 'de-initiator-pulldown']) {
                 const host = document.getElementById(hostId);
@@ -12226,7 +12343,76 @@
                 tr.appendChild(emptyTd('col-mods'));
                 tbody.appendChild(tr);
             });
+
+            // Locked actors (an earlier start left them locked, or they are in a live SexLab scene) go last: the row
+            // cannot add them; the lock asks to unlock them (scConfirmUnlock).
+            scLockedNearbyActors(selectedSet, selectedFormIds).forEach(a => {
+                const tr = document.createElement('tr');
+                tr.className = 'pos-locked';
+                tr.title = a.status === 'sexlab' ? 'In a scene: unlock to add'
+                    : a.status === 'ostim' ? 'Flagged as in OStim: unlock to add' : 'Locked: unlock to add';
+
+                const tdName = document.createElement('td');
+                tdName.className = 'col-name';
+                tdName.appendChild(document.createTextNode(a.name));
+                const lock = document.createElement('span');
+                lock.className = 'pos-lock';
+                lock.textContent = '\u{1F512}';
+                lock.title = 'Unlock ' + a.name;
+                lock.onclick = (e) => { e.stopPropagation(); scConfirmUnlock(a); };
+                tdName.appendChild(lock);
+
+                tr.appendChild(emptyTd('col-idx'));
+                tr.appendChild(emptyTd('col-move'));
+                tr.appendChild(tdName);
+                tr.appendChild(emptyTd('col-dressed'));
+                tr.appendChild(emptyTd('col-o'));
+                tr.appendChild(emptyTd('col-v'));
+                tr.appendChild(emptyTd('col-mods'));
+                tbody.appendChild(tr);
+            });
             scPositionsLimitRows(tbody);
+        }
+
+        // Nearby actors locked by someone other than this creator (ActorLocker has no owner, so an earlier failed
+        // start can leave a lock behind) or in a live SexLab scene, nearest first, minus the cast.
+        function scLockedNearbyActors(selectedSet, selectedFormIds) {
+            const out = [];
+            const seen = new Set();
+            (nearbyActors || []).forEach(a => {
+                if (!a || (a.status !== 'locked' && a.status !== 'sexlab' && a.status !== 'ostim')) return;
+                const fid = formIdU32(a.formId);
+                if (!fid || seen.has(fid)) return;
+                if (SC.ownedFormIds && SC.ownedFormIds.has(fid)) return;
+                if (selectedFormIds && selectedFormIds.has(fid)) return;
+                const u = String(a.uuid || '');
+                if (u && u !== '0' && selectedSet && selectedSet.has(u)) return;
+                seen.add(fid);
+                out.push({ name: a.name || a.label || '?', formId: fid, status: a.status,
+                    dist: Number.isFinite(a.dist) ? a.dist : Number.POSITIVE_INFINITY });
+            });
+            return out.sort((x, y) => (x.dist - y.dist) || x.name.localeCompare(y.name));
+        }
+
+        // Yes: Scene_Manager.WebUI_ForceUnlock ends any scene the actor is in, releases a creator holding them and
+        // unlocks them; then the nearby list is fetched again so the row becomes addable.
+        function scConfirmUnlock(a) {
+            const msg = a.status === 'ostim'
+                ? `Do you wish to unlock ${a.name}? It removes their OStim flag and ends any scene they are in.`
+                : `Do you wish to unlock ${a.name}? It will end any scene they are in.`;
+            confirmDialogOpen(msg, () => {
+                papyrusQuery('SkyrimNet_SexLab_Scene_Manager', 'WebUI_ForceUnlock', a.formId).then(res => {
+                    if (res === null || String(res).startsWith('error'))
+                        console.warn('WebUI_ForceUnlock', a.name, res);
+                    // The scene ends on its own thread: fetch now, and again once it has had time to end.
+                    const refetch = () => {
+                        if (typeof window.onNearbyRangeChange === 'function')
+                            window.onNearbyRangeChange(JSON.stringify({ _range: SC.nearbyRange || 1600 }));
+                    };
+                    refetch();
+                    setTimeout(refetch, 2000);
+                });
+            });
         }
 
         // At most SC_POSITIONS_MAX_ROWS actor rows (cast + nearby) before the table scrolls; the Filter column and
@@ -12287,8 +12473,102 @@
             scRenderAvailableTags();
         }
 
+        // The clean words: one "clean <name>" per actor in the cast (humans and creatures), two or more actors. The
+        // named actor is cleaned (the receiver); the giver is the initiator, or the first other actor when the
+        // initiator is the one named (2026-11-15).
+        function scPosFid(p) {
+            return formIdU32(p && (p._form_id != null ? p._form_id : p.formId));
+        }
+
+        function scCleanCandidates() {
+            const pos = SC.positions || [];
+            if (pos.length < 2) return [];
+            return pos.filter(p => scPosFid(p) && scPosGender(p) != null);
+        }
+
+        // { _giver, _receiver, _part } for this receiver: cock for an intersex or male (creature) receiver, else pussy.
+        function scCleanFor(receiverFid) {
+            const pos = SC.positions || [];
+            const receiver = pos.find(p => scPosFid(p) === receiverFid);
+            if (!receiver || pos.length < 2) return null;
+            const init = scResolveInitiator();
+            const giver = (init !== receiverFid && pos.find(p => scPosFid(p) === init)) || pos.find(p => p !== receiver);
+            if (!giver) return null;
+            const cock = scPosIntersex(receiver) || (Number(scPosGender(receiver)) % 2 === 0);
+            return { _giver: scPosFid(giver), _receiver: receiverFid, _part: cock ? 'cock' : 'pussy' };
+        }
+
+        // The clean's actors are both in the cast (a stale cast, e.g. the seed before a rebind, hides the words only).
+        function scCleanInCast(c) {
+            const pos = SC.positions || [];
+            return !!c && pos.some(p => scPosFid(p) === c._giver) && pos.some(p => scPosFid(p) === c._receiver);
+        }
+
+        function scCleanStore() {
+            // Kept on the SceneInfo across copySceneInfoToSC rebinds (DE: the bound scene; Scene Creator: the draft).
+            const info = SC.mode === 'active' ? deSceneInfoForPick() : selectedSceneInfo();
+            if (info) {
+                info.clean = SC.clean ? Object.assign({}, SC.clean) : null;
+                info.cleanOff = !SC.clean;
+            }
+        }
+
+        // The clean to send with a pick / start: none when the receiver left the cast; a giver who left is re-derived.
+        function scCleanForCommit() {
+            const c = SC.clean;
+            if (!c) return null;
+            if (scCleanInCast(c)) return Object.assign({}, c);
+            const pos = SC.positions || [];
+            if (!pos.some(p => scPosFid(p) === c._receiver)) return null;
+            const r = scCleanFor(c._receiver);
+            return r ? Object.assign(r, { _part: c._part }) : null;
+        }
+
+        // Initiator pick: the giver follows it; the receiver and part stay.
+        function scCleanRegive() {
+            if (!SC.clean) return;
+            const c = scCleanFor(SC.clean._receiver);
+            if (!c) return;
+            SC.clean._giver = c._giver;
+            scCleanStore();
+        }
+
+        // A clean word is on (white) or off (grey), never red; one receiver at a time. On sets tag oral and, for one or
+        // two actors, the gender pulldown to the receiver's orgasm; the pick then plays as a clean (stages up to the
+        // second-to-last, then the last-stage list). The oral word, the gender pulldown or the sexual word turns it off.
+        // receiverFid: the actor to clean, or null / false for off.
+        function scSetClean(receiverFid, quiet) {
+            if (receiverFid) {
+                const c = scCleanFor(receiverFid);
+                if (!c) return;
+                SC.clean = c;
+                if (!SC.tags.includes('oral')) SC.tags.push('oral');
+                SC.suppress = SC.suppress.filter(t => t !== 'oral');
+                const mode = c._part === 'cock' ? 'orgasm_male' : 'orgasm_female';
+                if (scFilterOptions().includes(mode)) {
+                    SC.filterBy = mode;
+                    SC.filterChain = ['gender', 'none'];
+                    SC.filterAuto = true;
+                    scRenderFilterByPulldown();
+                }
+            } else {
+                SC.clean = null;
+            }
+            scCleanStore();
+            if (quiet) return;
+            scRenderTagChips();
+            scRefreshTags();
+            scRefreshAnims();
+        }
+
+        function scToggleClean(receiverFid) {
+            receiverFid = formIdU32(receiverFid);
+            scSetClean(SC.clean && SC.clean._receiver === receiverFid ? null : receiverFid);
+        }
+
         // Click: white (must have) -> red (must not have) -> grey (no filter) -> white.
         function scCycleTagToggle(tag) {
+            if (tag === 'oral' && SC.clean) scSetClean(false, true);
             scNoteTagTouched(tag);
             if (SC.tags.includes(tag)) {
                 SC.tags = SC.tags.filter(t => t !== tag);
@@ -12304,6 +12584,16 @@
                 SC.tags.push(tag);
                 SC.ddDismissed.delete(tag);
             }
+            // The sexual word sets the gender pulldown (2026-11-15): red none orgasms, white all orgasms, grey the
+            // default. It replaces a clean's orgasm mode, so a clean goes off.
+            if (tag === 'sexual') {
+                SC.filterBy = SC.suppress.includes('sexual') ? 'orgasm_none'
+                    : (SC.tags.includes('sexual') ? 'orgasm_all' : SC_FILTER_DEFAULT);
+                SC.filterAuto = false;
+                SC.filterChain = [];
+                if (SC.clean) scSetClean(null, true);
+                scRenderFilterByPulldown();
+            }
             scRenderTagChips();
             scRefreshTags();
             scRefreshAnims();
@@ -12316,7 +12606,7 @@
             const filter = { _must_tags: SC.tags, _suppress_tags: SC.suppress, _require_all: SC.tags.length > 0 };
             if (posCount > 0)
                 filter._actor_count = posCount;
-            const mode = SC.filterBy || SC_FILTER_DEFAULT;
+            const mode = scFilterMode();
             const gendersReady = scPositionsGendersReady();
             const hasCreature = SC.positions.some(p => {
                 const g = scPosGender(p);
@@ -12332,8 +12622,9 @@
                 if (hasCreature) {
                     filter._pos_race_keys = SC.positions.map(p => (p._race_key || '').toLowerCase());
                 }
-            } else if (mode === 'gender' && gendersReady && posCount > 0) {
+            } else if ((mode === 'gender' || SC_FILTER_ORGASM[mode]) && gendersReady && posCount > 0) {
                 scApplyGenderCounts(filter, SC.positions);
+                if (SC_FILTER_ORGASM[mode]) filter._orgasm = SC_FILTER_ORGASM[mode];
             }
             // Creatures in the cast: their species (and mc / fc under gender / position match), any mode.
             if (hasCreature)
@@ -12375,7 +12666,7 @@
         function scRefreshTags() {
             if (typeof window.onAnimDbQuery !== 'function') return;
             const mode = SC.filterBy || SC_FILTER_DEFAULT;
-            if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady())
+            if (mode !== 'none' && !scPositionsGendersReady())
                 return;
             const id = ++SC.tagQueryId;
             window.onAnimDbQuery(JSON.stringify({ _request_id: String(id), _type: 'tags', _filter: scBuildFilter(), _n: 0 }));
@@ -12399,9 +12690,19 @@
             }
             const countOf = t => counts.get(String(t).toLowerCase()) || 0;
             const wordCls = t => SC.tags.includes(t) ? ' include' : (SC.suppress.includes(t) ? ' suppress' : '');
-            const fixedHtml = SC_FIXED_TAGS.map(t =>
+            let fixedHtml = SC_FIXED_TAGS.map(t =>
                 `<span class="tag-toggle${wordCls(t)}" data-tag="${t}" onmousedown="event.preventDefault()"` +
                 ` onclick="scCycleTagToggle('${t}')">${escapeHtml(scTagLabel(t))} (${countOf(t)})</span>`).join(' ');
+            // The clean words (scSetClean): "clean <name>" per actor, white or grey. Rendering never changes SC.clean
+            // (2026-11-15 log: a render against the seed cast before the rebind turned the list's clean off); a clean
+            // whose receiver is not in the cast just shows no white word, and scCleanForCommit drops it.
+            const cleanOn = SC.clean ? SC.clean._receiver : 0;
+            for (const p of scCleanCandidates()) {
+                const fid = scPosFid(p);
+                fixedHtml += ` <span class="tag-toggle${fid === cleanOn ? ' include' : ''}" data-tag="clean"` +
+                    ` onmousedown="event.preventDefault()" onclick="scToggleClean(${fid})">clean ` +
+                    `${escapeHtml(p._name || p.name || '?')}</span>`;
+            }
             for (const id of ['sc-fixed-tags', 'de-fixed-tags']) {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = fixedHtml;
@@ -12809,7 +13110,7 @@
                     : `<td class="col-an">${escapeHtml(scAnimAnLetter(reg))}</td>`;
                 return `<tr class="${sel ? 'selected' : ''}" onclick="scClickAnim(${i}, event)">` +
                     `<td class="col-fav" onclick="scToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
-                    second + deAnimRowCells(a) + `</tr>`;
+                    second + deAnimRowCells(a, creator && r.chainIdx === 0 && !!scCleanForCommit()) + `</tr>`;
             }).join('');
             // Static thead (filter row inputs keep focus); only the rows re-render.
             document.getElementById('sc-anims-tbody').innerHTML = html;
@@ -12826,7 +13127,7 @@
             }
             if (typeof window.onAnimDbQuery !== 'function') return;
             const mode = SC.filterBy || SC_FILTER_DEFAULT;
-            if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady()) {
+            if (mode !== 'none' && !scPositionsGendersReady()) {
                 const countEl = document.getElementById('sc-anim-count');
                 if (countEl) countEl.textContent = 'animations …';
                 return;
@@ -12877,16 +13178,8 @@
                         + (cast ? ` (${cast})` : '');
                 }
                 chainCacheRows(anims);
+                // No opening seed (2026-11-14): the chain starts empty and Start stays greyed until a pick.
                 if (SC.mode !== 'active') {
-                    // Opening seed: one random animation among the matches tied for the fewest plays. Once only,
-                    // so emptying the chain by hand leaves it empty.
-                    if (!SC.chainSeeded && !scSelectedRegistries().length && anims.length) {
-                        SC.chainSeeded = true;
-                        const min = anims.reduce((m, x) => Math.min(m, x._play_count | 0), Infinity);
-                        const pool = anims.filter(x => (x._play_count | 0) === min);
-                        scChainOp(pool[Math.floor(Math.random() * pool.length)], 'add');
-                        return;
-                    }
                     scSyncPositionsToLastAnim();
                 }
                 scRenderAnimList();
@@ -13346,6 +13639,32 @@
             SC.tags = Array.isArray(p.any) ? p.any.slice() : [];
             SC.suppress = Array.isArray(p.suppress) ? p.suppress.slice() : [];
             SC.listRequireAll = !!p.require_all;
+            // The line's orgasm mode (oral to Bob: male orgasms; clean / cuddle: none orgasms). Nothing found: gender,
+            // then any (the result handlers walk SC.filterChain).
+            if (p.filter && SC_FILTER_ORGASM[p.filter]) {
+                SC.filterBy = p.filter;
+                SC.filterChain = ['gender', 'none'];
+                SC.filterAuto = true;
+                scRenderFilterByPulldown();
+            }
+            // A clean line turns the clean word on, once per open: a rebind keeps the player's off (info.clean).
+            const info = deSceneInfoForPick();
+            // Applied only against the scene's own cast: an apply while the seed cast still shows (2026-11-15 L689)
+            // waits for the rebind.
+            const pc = p.clean ? sceneCleanFromState({ _giver: p.clean_giver, _receiver: p.clean_receiver, _part: p.clean_part }) : null;
+            if (pc && info && !info.cleanFromPreset && scCleanInCast(pc)) {
+                info.cleanFromPreset = true;
+                const c = pc;
+                info.clean = c;
+                SC.clean = c ? Object.assign({}, c) : null;
+                if (c) {
+                    SC.initiatorFormId = c._giver;
+                    info.initiatorFormId = c._giver;
+                    scRenderInitiatorPulldown();
+                }
+            }
+            deDbg('list preset ' + JSON.stringify(p) + ' tags=' + SC.tags + ' supp=' + SC.suppress + ' by=' + SC.filterBy +
+                ' clean=' + JSON.stringify(SC.clean)); // DEBUG-DELETE
             DE.bottomTab = 'filter';
         }
 
@@ -14214,8 +14533,11 @@
         // bound scene's cast so only animations it can play are listed.
         function deOpenFilterTab() {
             if (!deIsSceneBound()) return;
-            // Opens on gender; a mode the player picked (filterAuto off) is kept until the WebUI closes.
-            if (SC.filterAuto) scArmFilterDowngrade(SC_FILTER_DEFAULT);
+            // Opens on gender; a mode the player picked (filterAuto off) is kept until the WebUI closes. A list line's
+            // orgasm mode and the clean word set filterAuto too (for the no-results fallback): keep theirs (2026-11-15
+            // log: the downgrade put "male orgasms" back to gender).
+            const presetFilter = !!(window._snslListPreset && window._snslListPreset.filter);
+            if (SC.filterAuto && !presetFilter && !SC.clean) scArmFilterDowngrade(SC_FILTER_DEFAULT);
             scRequestDeviousTags();
             scRenderTagChips();
             scRenderFilterByPulldown();
@@ -14234,14 +14556,16 @@
             if (typeof window.onAnimDbQuery !== 'function' || !deIsSceneBound()) return;
             const mode = SC.filterBy || SC_FILTER_DEFAULT;
             const countEl = document.getElementById('de-anim-count');
-            if ((mode === 'gender' || mode === 'positions') && !scPositionsGendersReady()) {
+            if (mode !== 'none' && !scPositionsGendersReady()) {
                 if (countEl) countEl.textContent = 'animations …';
                 return;
             }
             const id = ++DE.filterQueryId;
             const payload = { _request_id: 'f' + id, _type: 'anims', _filter: scBuildFilter(), _n: 125 };
             const info = deSceneInfoForPick();
-            const chain = info ? deChainFor(info) : [];
+            // Opened from a last-stage list line: only animations the line's filter matches (deRenderAnimList pins no
+            // chain either; 2026-11-15: a clean pussy list showed the playing AP DoggyStyle).
+            const chain = (info && !window._snslListPreset) ? deChainFor(info) : [];
             if (chain.length) payload._also_registries = chain.slice();
             window.onAnimDbQuery(JSON.stringify(payload));
         }
@@ -14269,7 +14593,8 @@
             deRenderAnimList();
         }
 
-        function deAnimRowCells(a) {
+        // clean: the row plays as a clean (the clean word is on): a "cleaning" badge before its name.
+        function deAnimRowCells(a, clean) {
             const genders = (a._pos_genders || []).map((g, gi) => {
                 // No orgasm expected: gender is not matched for that position ('-').
                 if ((a._pos_no_orgasm || [])[gi]) return '-';
@@ -14279,7 +14604,7 @@
             const desc = previewDescription(a);
             return `<td class="col-genders">${escapeHtml(genders)}</td>` +
                 `<td class="col-mods">${escapeHtml(formatMods(a))}</td>` +
-                `<td class="col-name">${escapeHtml(a._name || a._registry || '(unnamed)')}</td>` +
+                `<td class="col-name">${clean ? '<span class="clean-badge">cleaning</span>' : ''}${escapeHtml(a._name || a._registry || '(unnamed)')}</td>` +
                 `<td class="col-stages">${escapeHtml(stages)}</td>` +
                 `<td class="col-freq">${a._play_count | 0}</td>` +
                 `<td class="col-desc" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>`;
@@ -14340,6 +14665,11 @@
             const info = deSceneInfoForPick();
             const a = chainShownRows.de[i];
             if (!info || !a || !a._registry) return;
+            // Opened from a last-stage list line: a click is the line's pick, never a chain edit.
+            if (window._snslListPreset) {
+                dePickSceneAnimation(a._registry, a);
+                return;
+            }
             const chain = deChainFor(info);
             const chained = deRegInList(chain, a._registry);
             if (deRegEq(a._registry, deCurrentSceneReg(info))) {
@@ -14358,6 +14688,14 @@
         function deRenderStartBtn() {
             const btn = document.getElementById('de-btn-start');
             if (btn) btn.classList.toggle('disabled', !dePendingActive());
+            // Opened from a last-stage list line: nothing is preselected, and continue waits for a pick (closing
+            // without one only brought the list back, 2026-11-15). Cancel still goes back to the list.
+            const cont = document.querySelector('.de-btn-continue-close');
+            if (cont) cont.classList.toggle('disabled', deListNeedsPick());
+        }
+
+        function deListNeedsPick() {
+            return !!window._snslListPreset && !dePendingActive();
         }
 
         // Start: switch the scene to the pending pick now (WebUI_SwitchToRegistry restarts at stage 1),
@@ -14376,8 +14714,11 @@
             const host = document.getElementById('de-anims-tbody');
             if (!host) return;
             const info = deSceneInfoForPick();
-            const current = deCurrentSceneReg(info);
-            const chain = info ? deChainFor(info) : [];
+            // Opened from a last-stage list line: only the filter's rows, no chain pinned on top, and only the pick
+            // is current (the playing animation is not preselected).
+            const listPick = !!window._snslListPreset;
+            const current = listPick ? (dePendingActive() ? DE.pendingSwitch.reg : '') : deCurrentSceneReg(info);
+            const chain = (info && !listPick) ? deChainFor(info) : [];
             const anims = DE.filterAnims || [];
             const rows = chainOrderedRows(anims, chain, {}, info ? info.lastAnims : []);
             chainShownRows.de = rows.map(r => r.a);
@@ -14388,7 +14729,8 @@
                 const cls = isCurrent ? 'current' : (r.chainIdx >= 0 ? 'selected' : '');
                 return `<tr class="${cls}" onclick="deClickAnimRow(${i}, event)">` +
                     `<td class="col-fav" onclick="deToggleFavorite(${i}, event)">${a._favorite ? '&#9733;' : '&#9734;'}</td>` +
-                    chainCellHtml('de', i, r.chainIdx, chain.length) + deAnimRowCells(a) + `</tr>`;
+                    chainCellHtml('de', i, r.chainIdx, chain.length) +
+                    deAnimRowCells(a, isCurrent && dePendingActive() && !!scCleanForCommit()) + `</tr>`;
             }).join('');
             host.innerHTML = html;
             animTableStickFilterRow('de-anims-tbody');
@@ -14457,6 +14799,7 @@
             const adds = (pend.adds || []).filter(r => !deRegEq(r, pend.reg));
             if (info.pendingActorChange) {
                 if (!info.reseedDefaults) info.origActiveRegistry = info.activeRegistry;
+                info.clean = scCleanForCommit();
                 info.activeRegistry = pend.reg;
                 info.nextRegistry = pend.reg;
                 info.addRegistries = adds;
@@ -14481,6 +14824,8 @@
             if (adds.length) commit._add_registries = adds;
             commit._chain_registries = deChainFor(info).slice();
             commit._last_stage = lastStageValue(info.lastStage);
+            // Always sent with a pick: the clean word decides (empty = no clean, even from a clean list line).
+            commit._clean = scCleanForCommit() || {};
             if (heldStyle) {
                 commit._style = heldStyle;
                 commit._narrate_style = 1;
@@ -14571,6 +14916,18 @@
             deBindTargetScene();
         }
 
+        // Last-stage list preset for a live scene's full state (configure push or overlay seed). Papyrus sends
+        // _list_preset only while that scene's list is up, so a state without it clears that scene's stale preset.
+        function deNoteListPreset(key, state) {
+            if (state && state._list_preset) {
+                window._snslListPreset = state._list_preset;
+                window._snslListPresetKey = key;
+            } else if (window._snslListPresetKey === key) {
+                window._snslListPreset = null;
+                window._snslListPresetKey = '';
+            }
+        }
+
         function configureDescriptionEditor(state) {
             state = state || {};
             const key = SceneInfo.keyFromState(Object.assign({ _mode: 'active' }, state));
@@ -14584,8 +14941,7 @@
                 }
                 return;
             }
-            if (state._list_preset)
-                window._snslListPreset = state._list_preset;
+            deNoteListPreset(key, state);
             const hadInfo = !!info;
             const prevReg = info ? info.activeRegistry : '';
             const prevStage = info ? (info.stage | 0) : 0;

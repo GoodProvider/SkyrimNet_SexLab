@@ -116,7 +116,7 @@ namespace SKYRIMNET_SEXLAB_API
         kDenySelf = 4,
         kDenyAll = 5,
         kDeny = 6,
-        kTease = 7,
+        kDenyOthers = 7,  // was kTease (dropped in 0.38): calms every other actor, not self
         kFocused = 8,
         kNonSexual = 9,
     };
@@ -128,7 +128,7 @@ namespace SKYRIMNET_SEXLAB_API
 
     public:
         /// Multi-Orgasm Mini-game mode only: the engine plays the mini-game for the NPC with this strategy.
-        /// a_target: Deny / Tease / Focused; nullptr picks one. False when not allowed.
+        /// a_target: Deny / Focus; nullptr picks one. False when not allowed.
         virtual bool SetStrategy(RE::Actor* a_actor, Strategy a_strategy, RE::Actor* a_target) noexcept = 0;
         virtual Strategy GetStrategy(RE::Actor* a_actor) noexcept = 0;
     };

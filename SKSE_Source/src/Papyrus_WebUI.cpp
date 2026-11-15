@@ -235,10 +235,16 @@ namespace PapyrusBindings_WebUI
         return open;
     }
 
-    void LastStage_Show(RE::StaticFunctionTag*, std::int32_t index, std::int32_t advanceKey, RE::BSFixedString nextName)
+    void LastStage_Show(RE::StaticFunctionTag*, std::int32_t index, std::int32_t advanceKey, RE::BSFixedString nextName,
+        std::vector<RE::BSFixedString> lines)
     {
+        std::vector<std::string> text;
+        text.reserve(lines.size());
+        for (const auto& line : lines) {
+            text.emplace_back(line.c_str() ? line.c_str() : "");
+        }
         Hud::LastStageShow(static_cast<int>(index), advanceKey > 0 ? static_cast<std::uint32_t>(advanceKey) : 0,
-            nextName.empty() ? std::string() : std::string(nextName.c_str()));
+            nextName.empty() ? std::string() : std::string(nextName.c_str()), text);
     }
 
     void LastStage_Hide(RE::StaticFunctionTag*)
@@ -259,13 +265,13 @@ namespace PapyrusBindings_WebUI
     void DispatchManagerMethodIntInt(const char* method, std::int32_t a, std::int32_t b);
 
     void LastStage_Request(RE::StaticFunctionTag*, std::int32_t sid, RE::Actor* caller, RE::BSFixedString castNames,
-        bool playerInScene)
+        bool playerInScene, RE::BSFixedString optionsJson)
     {
         const RE::FormID id = caller ? caller->GetFormID() : 0;
         const char* names = castNames.c_str();
-        StrategyDecision::RequestLastStage(sid, id, playerInScene, names ? names : "", [sid](int line) {
-            DispatchManagerMethodIntInt("LastStage_OnDecision", sid, line);
-        });
+        const char* options = optionsJson.c_str();
+        StrategyDecision::RequestLastStage(sid, id, playerInScene, names ? names : "", options ? options : "",
+            [sid](int line) { DispatchManagerMethodIntInt("LastStage_OnDecision", sid, line); });
     }
 
     static AnimationDB::FilterSpec ParseFilterJson(const char* json)
@@ -323,6 +329,8 @@ namespace PapyrusBindings_WebUI
                 spec.has_description = AnimationDB::ParseHasDescriptionMode(j);
             if (j.contains("_gender_match") && j["_gender_match"].is_boolean())
                 spec.gender_match = j["_gender_match"].get<bool>();
+            if (j.contains("_orgasm") && j["_orgasm"].is_string())
+                spec.orgasm = AnimationDB::ParseOrgasmMode(j["_orgasm"].get<std::string>());
             if (j.contains("_males") && j["_males"].is_number_integer())
                 spec.males = j["_males"].get<int>();
             if (j.contains("_females") && j["_females"].is_number_integer())
@@ -977,6 +985,7 @@ namespace PapyrusBindings_WebUI
             if (status == "cmbt") return "Combat";
             if (status == "load") return "Unloaded";
             if (status == "gone") return "Gone";
+            if (status == "locked") return "Locked";
             return status;
         }
 
@@ -1498,11 +1507,12 @@ namespace PapyrusBindings_WebUI
                     }
                 }
                 webui_log::info(
-                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} creatures={} has_description={} results={} "
+                    "HandleAnimDbQuery anims id={} actor_count={} gender_match={} orgasm={} creatures={} has_description={} results={} "
                     "total={}",
                     request_id,
                     spec.actor_count ? *spec.actor_count : -1,
                     spec.gender_match,
+                    spec.orgasm,
                     AnimationDB::CreaturesLogText(spec),
                     spec.has_description,
                     rows.size(),

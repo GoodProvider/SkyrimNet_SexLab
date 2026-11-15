@@ -1090,6 +1090,36 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return i >= 0 && i < static_cast<int>(row.pos_no_orgasm.size()) && row.pos_no_orgasm[i] != 0;
         }
 
+        // FilterSpec::orgasm: which of the row's positions expect an orgasm (pos_no_orgasm; none listed = all do).
+        bool OrgasmFits(const AnimRow& row, int mode)
+        {
+            if (mode <= 0)
+                return true;
+            int orgasms = 0;
+            int other = 0;
+            for (int i = 0; i < row.position_count; ++i) {
+                if (PosNoOrgasm(row, i))
+                    continue;
+                ++orgasms;
+                const int g = i < static_cast<int>(row.pos_genders.size()) ? row.pos_genders[i] : -1;
+                const bool male = g == 0 || g == 2;
+                const bool female = g == 1 || g == 3;
+                if ((mode == 3 && !male) || (mode == 4 && !female))
+                    ++other;
+            }
+            switch (mode) {
+            case 1:
+                return orgasms == row.position_count;
+            case 2:
+                return orgasms == 0;
+            case 3:
+            case 4:
+                return orgasms > 0 && other == 0;
+            default:
+                return true;
+            }
+        }
+
         // SexLab gender g (0 male, 1 female, 2 male creature, 3 female creature) fits row position i.
         bool PosGenderFits(const AnimRow& row, int i, int g)
         {
@@ -1245,6 +1275,9 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                     return false;
             }
 
+            if (!OrgasmFits(row, spec.orgasm))
+                return false;
+
             if (spec.has_description != 0) {
                 const bool any = AnimationDB::RowHasAnyDescription(row);
                 if (spec.has_description == 1 && !any)
@@ -1334,6 +1367,20 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         }
         if (j.contains("has_description") && j["has_description"].is_boolean())
             return j["has_description"].get<bool>() ? 1 : 0;
+        return 0;
+    }
+
+    int ParseOrgasmMode(const std::string& s)
+    {
+        const auto v = ToLower(s);
+        if (v == "all")
+            return 1;
+        if (v == "none")
+            return 2;
+        if (v == "male")
+            return 3;
+        if (v == "female")
+            return 4;
         return 0;
     }
 

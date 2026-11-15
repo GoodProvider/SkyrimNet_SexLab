@@ -7,7 +7,7 @@
    Rendered into a decisions request, never into chat messages.
 
    Context pushed by the game (C++ snapshot): trigger (asked | ordered | punished), focus_uuid, focus_name,
-   by_uuid, by_name, by_is_player, request_text ("focus on Bob's pleasure"), last_line_text (the ask / order
+   by_uuid, by_name, by_is_player, request_text ("arouse Bob"), last_line_text (the ask / order
    narration, or for a punishment "<act>. <feeling>, because <reason>."), current_text (the current strategy's option
    text, "passive: Nina stops trying and lets things happen"; "" when unknown), latest_thought (the focus actor's newest thought; "" when none), timeline [lines, oldest first:
    speech, thoughts, narrations and other events of the focus actor].

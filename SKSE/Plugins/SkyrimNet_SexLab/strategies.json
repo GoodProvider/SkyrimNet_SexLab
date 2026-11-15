@@ -9,30 +9,30 @@
     "observed": "appears to be just letting things happen"
   },
   {
-    "key": "mutual",
+    "key": "arouse_all",
     "label": "arouse all",
     "text": "focuses on mutual enjoyment",
-    "option": "mutual: {name} focuses on mutual enjoyment, always helping whoever is least aroused, {self} included",
-    "order": "be mutual, focus on mutual enjoyment and help whoever is least aroused",
-    "choice": "focus on mutual enjoyment",
+    "option": "arouse_all: {name} focuses on mutual enjoyment, always helping whoever is least aroused, {self} included",
+    "order": "arouse everyone, whoever is least aroused first",
+    "choice": "arouse everyone",
     "observed": "appears to be making sure everyone enjoys it"
   },
   {
-    "key": "selfish",
+    "key": "arouse_self",
     "label": "arouse self",
     "text": "focuses on self enjoyment",
-    "option": "selfish: {name} chases {his} own pleasure",
-    "order": "be selfish, focus on your own pleasure",
-    "choice": "focus on {his} own pleasure",
+    "option": "arouse_self: {name} chases {his} own pleasure",
+    "order": "arouse yourself",
+    "choice": "arouse {self}",
     "observed": "appears to be focused on {his} own enjoyment"
   },
   {
-    "key": "selfless",
+    "key": "arouse_others",
     "label": "arouse others",
     "text": "focuses on the enjoyment of others",
-    "option": "selfless: {name} focuses on pleasing others, without regard for personal pleasure",
-    "order": "be selfless, focus on pleasing others",
-    "choice": "focus on pleasing the others",
+    "option": "arouse_others: {name} focuses on pleasing others, without regard for personal pleasure",
+    "order": "arouse the others",
+    "choice": "arouse the others",
     "observed": "appears to be focused on pleasing the others"
   },
   {
@@ -63,21 +63,21 @@
     "observed": "appears to be resisting giving {target} pleasure or letting {target} cum"
   },
   {
-    "key": "tease",
-    "label": "tease {target}",
-    "text": "teases {target}, holding them at the edge",
-    "option": "tease {target}: {name} arouses {target}, then holds them at the edge of orgasm",
-    "order": "tease {target} and hold them at the edge",
-    "choice": "tease {target} and hold them at the edge",
-    "observed": "appears to be teasing {target}, keeping them at the edge"
+    "key": "deny_others",
+    "label": "deny others",
+    "text": "keeps everyone else from pleasure and cumming",
+    "option": "deny_others: {name} keeps everyone else from pleasure or cumming, but not {self}",
+    "order": "deny everyone else pleasure, don't let anyone else cum",
+    "choice": "keep everyone else from pleasure and cumming",
+    "observed": "appears to be keeping everyone else from pleasure or cumming"
   },
   {
-    "key": "focused",
-    "label": "focus {target}",
+    "key": "arouse",
+    "label": "arouse {target}",
     "text": "focuses on {target}'s pleasure",
-    "option": "focused {target}: {name} focuses on {target}'s pleasure, doing whatever it takes to make them cum",
-    "order": "focus on {target}'s pleasure",
-    "choice": "focus on {target}'s pleasure",
+    "option": "arouse {target}: {name} focuses on {target}'s pleasure, doing whatever it takes to make them cum",
+    "order": "arouse {target}",
+    "choice": "arouse {target}",
     "observed": "appears to be focusing on {target}'s pleasure"
   },
   {

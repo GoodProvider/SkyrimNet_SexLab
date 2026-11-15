@@ -125,7 +125,7 @@ namespace OrgasmEngine
             RE::FormID by = 0;        // order_actor: who asked / ordered
             RE::FormID target = 0;    // target_actor: who refused (the list's owner)
             std::string reason;       // reason_narration: after "because" ("Nina refused Bob's order to ...")
-            std::string strategyKey;  // the refused request's key ("focused_p1"); "" for a custom / external reason
+            std::string strategyKey;  // the refused request's key ("arouse_p1"); "" for a custom / external reason
             std::string request;      // the request's order text ("be passive and let things happen")
             std::string type = "refused_strategy";
         };
@@ -197,6 +197,10 @@ namespace OrgasmEngine
             // Mini-game NPC strategy.
             Strategy strategy = Strategy::kPassive;
             RE::FormID strategyTarget = 0;
+            // The last default DefaultStrategy gave (strategy + target): still on it means a re-default may move
+            // the actor when the scene's orgasm expectations change. Not saved.
+            Strategy lastDefault = Strategy::kPassive;
+            RE::FormID lastDefaultTarget = 0;
             double nextStepAt = 0.0;
             int pressesLeft = 0;       // presses still queued in the current burst
             double nextPressAt = 0.0;  // when the next queued press fires
@@ -252,6 +256,7 @@ namespace OrgasmEngine
             float baseRate = 0.0f;  // 0: no timers, kFallbackRate
             bool leadIn = false;
             bool paused = false;
+            bool cleaning = false;  // Scene.Clean_Begin .. Clean_Clear: HUD "cleaning" label
             double finalStageAt = 0.0;  // Now() (unpaused clock) on entering the final stage
             double finalElapsed = 0.0;  // animating, unpaused seconds in the final stage
             bool staged = false;        // SetStage seen once (no spike for the first stage)
@@ -284,6 +289,7 @@ namespace OrgasmEngine
             std::uint64_t generation = 0;
             bool decisionsStarted = false;
             bool anyExpected = true;     // last tick: some actor expects orgasm (else Non-sexual defaults)
+            RE::FormID soleExpected = 0; // last tick: SoleExpected (one-orgasm defaults)
             // Mini-game rates (CalibrateMiniGame), per actor per second. Set once from the first main
             // animation's timers and never changed; a LeadIn sets them provisionally (calibrated false).
             bool ratesKnown = false;  // SetStageTimers seen (timed or not): NPC steps may start
@@ -1240,8 +1246,8 @@ namespace OrgasmEngine
         // The wording lives in Data/SKSE/Plugins/SkyrimNet_SexLab/strategies.json (LoadStrategies, matched by
         // key); the keys stay here, in Strategy enum order.
         constexpr const char* kStrategyKeys[] = {
-            "passive", "mutual", "selfish", "selfless", "deny_self", "deny_all", "deny", "tease", "focused",
-            "nonsexual",
+            "passive", "arouse_all", "arouse_self", "arouse_others", "deny_self", "deny_all", "deny", "deny_others",
+            "arouse", "nonsexual",
         };
         constexpr std::size_t kStrategyCount = std::size(kStrategyKeys);
         static_assert(kStrategyCount == static_cast<std::size_t>(Strategy::kCount));
@@ -1351,12 +1357,29 @@ namespace OrgasmEngine
                     return static_cast<Strategy>(i);
                 }
             }
+            // Names before 0.38 (saved dashboard defaults, old decisions / strategies.json overrides).
+            constexpr std::pair<const char*, Strategy> kAliases[] = {
+                { "mutual", Strategy::kMutual },
+                { "selfish", Strategy::kSelfish },
+                { "selfless", Strategy::kSelfless },
+                { "focused", Strategy::kFocused },
+                // 0.38 pre-release names (focus → arouse).
+                { "focusmutual", Strategy::kMutual },
+                { "focusself", Strategy::kSelfish },
+                { "focusothers", Strategy::kSelfless },
+                { "focus", Strategy::kFocused },
+            };
+            for (const auto& [name, s] : kAliases) {
+                if (v == name) {
+                    return s;
+                }
+            }
             return def;
         }
 
         bool NeedsTarget(Strategy s)
         {
-            return s == Strategy::kDeny || s == Strategy::kTease || s == Strategy::kFocused;
+            return s == Strategy::kDeny || s == Strategy::kFocused;
         }
 
         // Caller holds g_lock. Some actor of the scene expects orgasm (position's orgasm_expected).
@@ -1384,7 +1407,7 @@ namespace OrgasmEngine
             case Strategy::kSelfless:
             case Strategy::kDenyAll:
             case Strategy::kDeny:
-            case Strategy::kTease:
+            case Strategy::kDenyOthers:
             case Strategy::kFocused:
                 return others;
             default:
@@ -1408,10 +1431,58 @@ namespace OrgasmEngine
             return s;
         }
 
-        // Non-sexual when no actor expects orgasm, else the role default.
-        Strategy DefaultStrategy(const SceneState& sc, const ActorState& st)
+        // A default change this soon after the scene began is not announced (orgasm expectations arrive late).
+        constexpr double kRedefaultQuietSecs = 5.0;
+
+        // Caller holds g_lock. The only actor of a 2+ actor scene who expects orgasm; 0 when none or several.
+        RE::FormID SoleExpected(const SceneState& sc)
         {
-            return StrategyAllowed(sc, st, Strategy::kNonSexual) ? Strategy::kNonSexual : RoleDefault(sc, st);
+            if (sc.actors.size() < 2) {
+                return 0;
+            }
+            RE::FormID sole = 0;
+            for (const auto id : sc.actors) {
+                if (const auto at = g_actors.find(id); at != g_actors.end() && at->second.orgasmExpected) {
+                    if (sole) {
+                        return 0;
+                    }
+                    sole = id;
+                }
+            }
+            return sole;
+        }
+
+        // Non-sexual when no actor expects orgasm. When only one actor expects it, that actor arouses self and
+        // every other non-victim arouses them. Else the role default. target: the strategy's target (0 if none).
+        Strategy DefaultStrategy(const SceneState& sc, const ActorState& st, RE::FormID& target)
+        {
+            target = 0;
+            if (StrategyAllowed(sc, st, Strategy::kNonSexual)) {
+                return Strategy::kNonSexual;
+            }
+            if (const RE::FormID sole = SoleExpected(sc); sole && st.role != Role::kVictim) {
+                if (sole == st.id) {
+                    if (StrategyAllowed(sc, st, Strategy::kSelfish)) {
+                        return Strategy::kSelfish;
+                    }
+                } else if (StrategyAllowed(sc, st, Strategy::kFocused)) {
+                    target = sole;
+                    return Strategy::kFocused;
+                }
+            }
+            return RoleDefault(sc, st);
+        }
+
+        // Sets the actor's default (DefaultStrategy) and remembers it as lastDefault.
+        Strategy TakeDefault(const SceneState& sc, ActorState& st)
+        {
+            RE::FormID target = 0;
+            const Strategy s = DefaultStrategy(sc, st, target);
+            st.strategy = s;
+            st.strategyTarget = target;
+            st.lastDefault = s;
+            st.lastDefaultTarget = target;
+            return s;
         }
 
         void ReplaceAll(std::string& s, const std::string& from, const std::string& to)
@@ -1717,19 +1788,14 @@ namespace OrgasmEngine
                 case Strategy::kFocused:
                     spent = RE::ActorValue::kStamina;
                     return arouse(targetOf());
-                case Strategy::kTease: {
-                    const RE::FormID target = targetOf();
-                    const auto tt = g_actors.find(target);
-                    if (tt == g_actors.end()) {
-                        return true;
-                    }
-                    if (tt->second.enjoyment < kEdgeThreshold) {
-                        spent = RE::ActorValue::kStamina;
-                        return arouse(target);
-                    }
+                case Strategy::kDenyOthers:
                     spent = RE::ActorValue::kMagicka;
-                    return calm(target);
-                }
+                    for (const auto id : sc.actors) {
+                        if (id != st.id && !calm(id)) {
+                            return false;
+                        }
+                    }
+                    return true;
                 default:
                     return true;
                 }
@@ -2109,8 +2175,8 @@ namespace OrgasmEngine
             g_scenes.erase(it);
         }
 
-        // Caller holds g_lock. The primary is stuck on this stage: it punishes the actor holding it back (on Deny, Deny
-        // all or Tease against it), otherwise the next position. Not a player who is playing by hand: their character
+        // Caller holds g_lock. The primary is stuck on this stage: it punishes the actor holding it back (on Deny against it,
+        // Deny all or Deny others), otherwise the next position. Not a player who is playing by hand: their character
         // must not act on its own.
         // Victim scene: an aggressor punishes a victim (a victim never punishes): the ending lead when the engine plays
         // it, else the first such aggressor expected to orgasm; the target is a victim holding it back, else a passive
@@ -2161,9 +2227,8 @@ namespace OrgasmEngine
                 if (victimScene && st.role != Role::kVictim) {
                     continue;
                 }
-                if (st.strategy == Strategy::kDenyAll ||
-                    ((st.strategy == Strategy::kDeny || st.strategy == Strategy::kTease) &&
-                        st.strategyTarget == primary.id)) {
+                if (st.strategy == Strategy::kDenyAll || st.strategy == Strategy::kDenyOthers ||
+                    (st.strategy == Strategy::kDeny && st.strategyTarget == primary.id)) {
                     target = id;
                     break;
                 }
@@ -2370,20 +2435,32 @@ namespace OrgasmEngine
                         sc.stageElapsed += dt;
                         sc.animElapsed += dt;
                     }
-                    // Orgasm expectation changed: unforced NPCs on the old default move to the new one.
-                    if (const bool expected = AnyExpected(sc); expected != sc.anyExpected) {
+                    // Orgasm expectation changed (anyone / only one actor): unforced NPCs on the old default move
+                    // to the new one.
+                    const bool expected = AnyExpected(sc);
+                    const RE::FormID sole = SoleExpected(sc);
+                    if (expected != sc.anyExpected || sole != sc.soleExpected) {
                         sc.anyExpected = expected;
+                        sc.soleExpected = sole;
                         for (const auto id : sc.actors) {
                             auto at = g_actors.find(id);
                             if (at == g_actors.end() || !AiDriven(at->second)) {
                                 continue;
                             }
                             ActorState& st = at->second;
-                            const bool onDefault = expected ? st.strategy == Strategy::kNonSexual
-                                                            : st.strategy == RoleDefault(sc, st) ||
-                                                                  st.strategy == Strategy::kPassive;
-                            if (const Strategy next = DefaultStrategy(sc, st); onDefault && next != st.strategy) {
-                                ApplyStrategy(sc, st, next, 0, true, fx);
+                            const bool onLast = st.strategy == st.lastDefault &&
+                                                st.strategyTarget == st.lastDefaultTarget;
+                            const bool onDefault = onLast || (expected ? st.strategy == Strategy::kNonSexual
+                                                                       : st.strategy == RoleDefault(sc, st) ||
+                                                                             st.strategy == Strategy::kPassive);
+                            RE::FormID nextTarget = 0;
+                            const Strategy next = DefaultStrategy(sc, st, nextTarget);
+                            if (onDefault && (next != st.strategy || nextTarget != st.strategyTarget)) {
+                                // Expectations set right after the start (Papyrus positions) re-default silently.
+                                const bool announce = Now() - sc.beganAt > kRedefaultQuietSecs;
+                                ApplyStrategy(sc, st, next, nextTarget, announce, fx);
+                                st.lastDefault = next;
+                                st.lastDefaultTarget = nextTarget;
                             }
                         }
                     }
@@ -2612,8 +2689,8 @@ namespace OrgasmEngine
                     // Together: everyone expected passes the gate (no roll) and finishes together.
                     // aiGate (mini-game, engine plays everyone): earlier orgasms count too; the ending lead
                     // and every aggressor expected to orgasm pass outright (cooldown ignored), a pending
-                    // request passes, the rest roll. A victim follows its aggressor's strategy: Force orgasm
-                    // passes it, Tease keeps it out, anything else rolls.
+                    // request passes, the rest roll. A victim follows its aggressor's strategy: Focus on it
+                    // passes it, Deny it / Deny others keeps it out, anything else rolls.
                     // The gate fires lead + kGateDispatchMargin before the stage timer ends, so the Scene's
                     // hold (tick -> Papyrus -> UpdateTimer) lands before SexLab advances.
                     if (useGate && !sc.gateDone && !sc.endHold && sc.stage >= sc.stageCount - 1) {
@@ -2674,21 +2751,31 @@ namespace OrgasmEngine
                         if (due) {
                             sc.gateDone = true;
                             GatePassFx pass{ {}, penultimate, sid };
-                            // Victims an aggressor is set on forcing to orgasm, or teasing at the edge.
+                            // Victims an aggressor is set on forcing to orgasm, or denying.
                             std::vector<RE::FormID> forcedVictims;
-                            std::vector<RE::FormID> teasedVictims;
+                            std::vector<RE::FormID> deniedVictims;
                             if (aiGate) {
                                 for (const auto id : sc.actors) {
                                     const auto at = g_actors.find(id);
-                                    if (at == g_actors.end() || at->second.role != Role::kAggressor ||
-                                        at->second.strategyTarget == 0) {
+                                    if (at == g_actors.end() || at->second.role != Role::kAggressor) {
+                                        continue;
+                                    }
+                                    // Deny others: every other actor of the scene is held back.
+                                    if (at->second.strategy == Strategy::kDenyOthers) {
+                                        for (const auto other : sc.actors) {
+                                            if (other != id) {
+                                                deniedVictims.push_back(other);
+                                            }
+                                        }
+                                        continue;
+                                    }
+                                    if (at->second.strategyTarget == 0) {
                                         continue;
                                     }
                                     if (at->second.strategy == Strategy::kFocused) {
                                         forcedVictims.push_back(at->second.strategyTarget);
-                                    } else if (at->second.strategy == Strategy::kTease ||
-                                               at->second.strategy == Strategy::kDeny) {
-                                        teasedVictims.push_back(at->second.strategyTarget);
+                                    } else if (at->second.strategy == Strategy::kDeny) {
+                                        deniedVictims.push_back(at->second.strategyTarget);
                                     }
                                 }
                             }
@@ -2710,14 +2797,14 @@ namespace OrgasmEngine
                                                                    now >= st.edgeUntil
                                                              : CanOrgasmNow(st, now);
                                 if ((st.orgasmCount != 0 && !together && !aiGate) || !st.orgasmExpected ||
-                                    st.rushing || !canNow || (victim && has(teasedVictims, id)) ||
+                                    st.rushing || !canNow || (victim && has(deniedVictims, id)) ||
                                     std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
                                     std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
                                         rushGroup.actors.end()) {
                                     webui_log::info("OrgasmEngine: gate skips {:#x} enjoyment={:.1f} count={} "
-                                                    "expected={} dom={} ai_gate={} teased={}",
+                                                    "expected={} dom={} ai_gate={} denied={}",
                                         id, st.enjoyment, st.orgasmCount, st.orgasmExpected, st.dom, aiGate,
-                                        victim && has(teasedVictims, id));
+                                        victim && has(deniedVictims, id));
                                     continue;
                                 }
                                 const bool forcedVictim = victim && has(forcedVictims, id);
@@ -2749,7 +2836,7 @@ namespace OrgasmEngine
                                     ActorState& st = at->second;
                                     if (!st.orgasmExpected || st.rushing || !CanOrgasmNow(st, now) ||
                                         st.enjoyment < g_settings.groupJoinFinal ||
-                                        (st.role == Role::kVictim && has(teasedVictims, id)) ||
+                                        (st.role == Role::kVictim && has(deniedVictims, id)) ||
                                         std::find(group.actors.begin(), group.actors.end(), id) != group.actors.end() ||
                                         std::find(rushGroup.actors.begin(), rushGroup.actors.end(), id) !=
                                             rushGroup.actors.end()) {
@@ -2994,10 +3081,10 @@ namespace OrgasmEngine
         s.stageHoldMax = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stage_hold_max", 60.0f));
         s.stallEndAfter = std::max(0.0f, GetConfigFloat("sexlab.enjoyment.stall_end_after", 30.0f));
         s.afterglowSeconds = std::clamp(GetConfigFloat("sexlab.ending.afterglow_seconds", 10.0f), 1.0f, 120.0f);
-        s.defaultNormal = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_normal", "Mutual"),
+        s.defaultNormal = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_normal", "Arouse all"),
             Strategy::kMutual);
         s.defaultAggressor = ParseStrategy(
-            SexLabNet::GetConfigString("sexlab.minigame.default_strategy_aggressor", "Selfish"), Strategy::kSelfish);
+            SexLabNet::GetConfigString("sexlab.minigame.default_strategy_aggressor", "Arouse self"), Strategy::kSelfish);
         s.defaultVictim = ParseStrategy(SexLabNet::GetConfigString("sexlab.minigame.default_strategy_victim", "Passive"),
             Strategy::kPassive);
         s.decisionStrategy = GetConfigBool("sexlab.minigame.decision_strategy", true);
@@ -3118,10 +3205,10 @@ namespace OrgasmEngine
                     at->second.autoPlay = true;
                     webui_log::info("OrgasmEngine: auto play on (scene {}, sticky)", sid);
                 }
-                at->second.strategy = DefaultStrategy(sc, at->second);
+                TakeDefault(sc, at->second);
                 RE::Actor* actor = ActorFor(id);
-                webui_log::info("OrgasmEngine: {:#x} default strategy {} stamina={:.0f}/{:.0f} magicka={:.0f}/{:.0f}", id,
-                    InfoOf(at->second.strategy).key, CurrentAv(actor, RE::ActorValue::kStamina),
+                webui_log::info("OrgasmEngine: {:#x} default strategy {} target {:#x} stamina={:.0f}/{:.0f} magicka={:.0f}/{:.0f}", id,
+                    InfoOf(at->second.strategy).key, at->second.strategyTarget, CurrentAv(actor, RE::ActorValue::kStamina),
                     MaxAv(actor, RE::ActorValue::kStamina), CurrentAv(actor, RE::ActorValue::kMagicka),
                     MaxAv(actor, RE::ActorValue::kMagicka));
             }
@@ -3256,6 +3343,16 @@ namespace OrgasmEngine
         if (it != g_scenes.end() && it->second.paused != paused) {
             it->second.paused = paused;
             webui_log::info("OrgasmEngine: scene {} {}", sid, paused ? "paused" : "resumed");
+        }
+    }
+
+    void SetSceneCleaning(std::int32_t sid, bool cleaning)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it != g_scenes.end() && it->second.cleaning != cleaning) {
+            it->second.cleaning = cleaning;
+            webui_log::info("OrgasmEngine: scene {} cleaning {}", sid, cleaning);
         }
     }
 
@@ -3691,6 +3788,14 @@ namespace OrgasmEngine
         return sc && sc->paused;
     }
 
+    bool IsSceneCleaning(RE::Actor* anchor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(anchor);
+        const SceneState* sc = st ? SceneOf(*st) : nullptr;
+        return sc && sc->cleaning;
+    }
+
     bool GetPlayerSceneStage(int& stage, int& count)
     {
         return GetSceneStage(RE::PlayerCharacter::GetSingleton(), stage, count);
@@ -3963,7 +4068,7 @@ namespace OrgasmEngine
             return st.dom && st.enjoyment < 25.0f ? "not aroused" : ArousalBand(st.enjoyment);
         }
 
-        // Decision option text for strategy s (target: Deny / Tease / Focused).
+        // Decision option text for strategy s (target: Deny / Focus).
         std::string OptionText(const ActorState& st, Strategy s, RE::FormID target)
         {
             std::string text = InfoOf(s).option;
@@ -4270,7 +4375,7 @@ namespace OrgasmEngine
             return target != 0 && target != st.id && InScene(sc, target) && g_actors.count(target) != 0;
         }
 
-        // Caller holds g_lock. The strategy's order phrase ("focus on Bob's pleasure"), {target} filled.
+        // Caller holds g_lock. The strategy's order phrase ("arouse Bob"), {target} filled.
         std::string RequestText(const ActorState& st, Strategy s, RE::FormID target)
         {
             std::string text = InfoOf(s).order;
@@ -5539,6 +5644,11 @@ namespace OrgasmEngine
         if (!sc) {
             return -1;
         }
+        // A clean plays at its own pace: gentle / forceful are off until it ends (2026-11-15 request).
+        if (sc->cleaning) {
+            webui_log::info("OrgasmEngine: scene {} speed unchanged: cleaning", sc->sid);
+            return EffectiveLevel(*sc);
+        }
         // Offset relative to the style, so the effective level moves exactly one step (passive gain only).
         const int level = EffectiveLevel(*sc);
         const int next = std::clamp(level + (dir > 0 ? 1 : dir < 0 ? -1 : 0), 0, kSpeedLevelCount - 1);
@@ -5579,8 +5689,7 @@ namespace OrgasmEngine
             if (on) {
                 // The strategy BeginScene gave the player (Passive: none allowed then) is a placeholder: the
                 // role default until the decision model picks one.
-                st->strategy = DefaultStrategy(*sc, *st);
-                st->strategyTarget = 0;
+                TakeDefault(*sc, *st);
                 st->nextStepAt = Now();
                 st->pressesLeft = 0;
             }

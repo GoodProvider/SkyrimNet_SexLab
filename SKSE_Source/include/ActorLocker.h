@@ -15,6 +15,9 @@ namespace ActorLocker
     void Unlock(RE::Actor* actor);
     bool IsLocked(RE::Actor* actor);
     void Clear();
+    /// Removes `actor` from OStim's ActorCount faction (a stale flag OStim failed to clean up).
+    /// True when the actor was in it. Does not end a live OStim thread.
+    bool ClearOstim(RE::Actor* actor);
 
     /// SexLab.esm AnimatingFaction (0xE50F); nullptr if missing.
     RE::TESFaction* SexLabAnimatingFaction();

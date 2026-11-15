@@ -93,6 +93,7 @@ namespace Hud
         bool g_listOpen = false;
         int g_listIndex = 0;          // the highlighted display row (RowOfChoice / ChoiceOfRow)
         std::string g_listNextName;   // the chain's next animation: shown as the top row (choice kListNextChoice)
+        std::vector<std::string> g_listLines;  // the scene's lines (Scene.LastStage_BuildLines), choice = line index
         std::uint32_t g_listUp = kNumMinusDx;   // replaced by the slower binding when it is set
         std::uint32_t g_listDown = kNumPlusDx;  // replaced by the faster binding when it is set
         std::uint32_t g_listAdvance = 0;        // SexLab's Advance key, from Papyrus
@@ -647,21 +648,30 @@ namespace Hud
             webui_log::info("Hud: AnimEngine key {} scene {} -> {}", ctl, id, ok);
         }
 
-        // List rows vs Scene choice codes (0 stop .. 4 anal, kListNextChoice the chain's next animation). With a chain
-        // next, row 0 is that line and the act lines move down one. Callers hold g_lock.
-        constexpr int kListNextChoice = 6;
-        int ListRowCount() { return g_listNextName.empty() ? 5 : 6; }
+        // List rows vs Scene choice codes (the line index: 0 stop, then the scene's lines; kListNextChoice the chain's
+        // next animation). With a chain next, row 0 is that line and the scene's lines move down one. Callers hold
+        // g_lock.
+        constexpr int kListNextChoice = 100;
+        constexpr const char* kDefaultLines[] = { "Stop having sex", "Cuddle after sex", "Start vaginal sex",
+            "Start oral sex", "Start anal sex" };
+        int ListLineCount()
+        {
+            return g_listLines.empty() ? static_cast<int>(std::size(kDefaultLines)) : static_cast<int>(g_listLines.size());
+        }
+        int ListRowCount() { return ListLineCount() + (g_listNextName.empty() ? 0 : 1); }
         int RowOfChoice(int choice)
         {
+            const int last = ListLineCount() - 1;
             if (g_listNextName.empty())
-                return std::clamp(choice, 0, 4);
-            return choice == kListNextChoice ? 0 : std::clamp(choice, 0, 4) + 1;
+                return std::clamp(choice, 0, last);
+            return choice == kListNextChoice ? 0 : std::clamp(choice, 0, last) + 1;
         }
         int ChoiceOfRow(int row)
         {
+            const int last = ListLineCount() - 1;
             if (g_listNextName.empty())
-                return std::clamp(row, 0, 4);
-            return row <= 0 ? kListNextChoice : std::clamp(row - 1, 0, 4);
+                return std::clamp(row, 0, last);
+            return row <= 0 ? kListNextChoice : std::clamp(row - 1, 0, last);
         }
 
         void NotifyList(int index, bool select)
@@ -992,6 +1002,7 @@ namespace Hud
             g_listOpen = false;
             g_listIndex = 0;
             g_listNextName.clear();
+            g_listLines.clear();
         }
         KeyHandler::GetSingleton()->SetListActive(false);
         std::lock_guard lock(g_lock);
@@ -1057,6 +1068,7 @@ namespace Hud
         bool listOpen = false;
         int listIndex = 0;
         std::string listNextName;
+        std::vector<std::string> listLines;
         bool showDom = false;
         {
             std::lock_guard lock(g_lock);
@@ -1065,6 +1077,7 @@ namespace Hud
             listOpen = g_listOpen;
             listIndex = g_listIndex;
             listNextName = g_listNextName;
+            listLines = g_listLines;
             showDom = g_showDomEnjoyment;
         }
         std::vector<OrgasmEngine::DomBreakdown> domSlaves;
@@ -1235,12 +1248,16 @@ namespace Hud
         OrgasmEngine::GetSceneStage(acting, stage, stageCount);
         j["stage"] = stage;
         j["stages"] = stageCount;
+        // A clean is playing: the stage row's label reads "cleaning" (hud.html).
+        const bool cleaning = OrgasmEngine::IsSceneCleaning(acting);
+        j["cleaning"] = cleaning;
         // Stages follow the primary's enjoyment: prev / next are greyed (a press still works and turns this off).
         j["stageAuto"] = OrgasmEngine::IsStageAuto(acting);
         const int speedLevel = OrgasmEngine::GetSceneSpeedLevel(acting);
-        // Slower / faster labels name the level a press steps to; "" at either end.
-        j["slower"] = speedLevel > 0 ? OrgasmEngine::kSpeedLevelNames[speedLevel - 1] : "";
-        j["faster"] = speedLevel >= 0 && speedLevel + 1 < OrgasmEngine::kSpeedLevelCount
+        // Slower / faster labels name the level a press steps to; "" at either end, and while a clean plays
+        // (StepSceneSpeed ignores it then).
+        j["slower"] = !cleaning && speedLevel > 0 ? OrgasmEngine::kSpeedLevelNames[speedLevel - 1] : "";
+        j["faster"] = !cleaning && speedLevel >= 0 && speedLevel + 1 < OrgasmEngine::kSpeedLevelCount
                           ? OrgasmEngine::kSpeedLevelNames[speedLevel + 1]
                           : "";
         // The player pays arouse / calm, also while controlling an NPC (payer: the player's bars, not a scene row).
@@ -1256,22 +1273,29 @@ namespace Hud
         if (!listNextName.empty()) {
             lines.push_back("Next: " + listNextName);
         }
-        for (const char* line :
-            { "Stop having sex", "Cuddle after sex", "Start vaginal sex", "Start oral sex", "Start anal sex" }) {
-            lines.push_back(line);
+        if (listLines.empty()) {
+            for (const char* line : kDefaultLines) {
+                lines.push_back(line);
+            }
+        } else {
+            for (const auto& line : listLines) {
+                lines.push_back(line);
+            }
         }
         j["lastStage"] = { { "open", listVisible }, { "index", listIndex }, { "lines", std::move(lines) } };
 
         PushState(j);
     }
 
-    void LastStageShow(int index, std::uint32_t advanceKey, const std::string& nextName)
+    void LastStageShow(int index, std::uint32_t advanceKey, const std::string& nextName,
+        const std::vector<std::string>& lines)
     {
         int row = 0;
         {
             std::lock_guard lock(g_lock);
             g_listOpen = true;
             g_listNextName = nextName;
+            g_listLines = lines;
             g_listIndex = RowOfChoice(index);
             row = g_listIndex;
             g_listAdvance = advanceKey;
@@ -1287,6 +1311,7 @@ namespace Hud
             std::lock_guard lock(g_lock);
             g_listOpen = false;
             g_listNextName.clear();
+            g_listLines.clear();
             g_lastPush.clear();
         }
         KeyHandler::GetSingleton()->SetListActive(false);

@@ -141,6 +141,37 @@
       "file": "SexLab_Change_Style.yaml"
     },
     {
+      "name": "SexLab_Clean_Cock",
+      "label": "Clean or prepare cock",
+      "customCategory": "",
+      "questEditorId": "SkyrimNet_SexLab",
+      "scriptName": "SkyrimNet_SexLab_Actions",
+      "executionFunctionName": "CleanScene",
+      "parameterMapping": [
+        {
+          "type": "speaker",
+          "name": "speaker",
+          "description": "Actor who does the cleaning"
+        },
+        {
+          "type": "dynamic",
+          "name": "target",
+          "description": "Actor whose cock is cleaned or prepared (has a penis)"
+        },
+        {
+          "type": "static",
+          "name": "part",
+          "value": "cock"
+        },
+        {
+          "type": "dynamic",
+          "name": "style",
+          "description": "roughly|normally|gently"
+        }
+      ],
+      "file": "SexLab_Clean_Cock.yaml"
+    },
+    {
       "name": "sexlab_clean_cum",
       "label": "Clean Cum",
       "customCategory": "",
@@ -170,6 +201,37 @@
         }
       ],
       "file": "SexLab_Clean_Cum.yaml"
+    },
+    {
+      "name": "SexLab_Clean_Pussy",
+      "label": "Clean pussy",
+      "customCategory": "",
+      "questEditorId": "SkyrimNet_SexLab",
+      "scriptName": "SkyrimNet_SexLab_Actions",
+      "executionFunctionName": "CleanScene",
+      "parameterMapping": [
+        {
+          "type": "speaker",
+          "name": "speaker",
+          "description": "Actor who does the cleaning"
+        },
+        {
+          "type": "dynamic",
+          "name": "target",
+          "description": "Actor whose pussy is cleaned (has a pussy)"
+        },
+        {
+          "type": "static",
+          "name": "part",
+          "value": "pussy"
+        },
+        {
+          "type": "dynamic",
+          "name": "style",
+          "description": "roughly|normally|gently"
+        }
+      ],
+      "file": "SexLab_Clean_Pussy.yaml"
     },
     {
       "name": "SexLab_DenyOrgasm",
@@ -842,7 +904,7 @@
         {
           "type": "dynamic",
           "name": "part",
-          "description": "Where on [target]: body|face|lips|nipples|back|left arm|right arm|left leg|right leg|pussy|cock|ass. Give only the part."
+          "description": "Where on [target]: body|face|lips|throat|nipples|back|left arm|right arm|left leg|right leg|pussy|cock|ass. Give only the part."
         },
         {
           "type": "dynamic",

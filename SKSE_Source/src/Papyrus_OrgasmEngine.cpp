@@ -92,6 +92,10 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetScenePaused(sid, paused);
         }
+        void SetSceneCleaning(RE::StaticFunctionTag*, std::int32_t sid, bool cleaning)
+        {
+            OrgasmEngine::SetSceneCleaning(sid, cleaning);
+        }
         void GateNarrationSent(RE::StaticFunctionTag*, std::int32_t sid, std::int32_t mark)
         {
             OrgasmEngine::GateNarrationSent(sid, mark);
@@ -259,7 +263,7 @@ namespace PapyrusBindings_OrgasmEngine
             }
             return "";
         }
-        // by asks / orders target to take a strategy (key: a request key like "focused_p1", "" + text: free phrase).
+        // by asks / orders target to take a strategy (key: a request key like "arouse_p1", "" + text: free phrase).
         // The engine narrates the request, the target's answer and any refusal itself.
         bool AskOrder(RE::StaticFunctionTag*, RE::Actor* by, RE::Actor* target, bool order, RE::BSFixedString key,
             RE::BSFixedString text)
@@ -359,6 +363,7 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetStage", s, SetStage);
         a_vm->RegisterFunction("SetStageTimers", s, SetStageTimers);
         a_vm->RegisterFunction("SetScenePaused", s, SetScenePaused);
+        a_vm->RegisterFunction("SetSceneCleaning", s, SetSceneCleaning);
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
         a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
         a_vm->RegisterFunction("IsGateScene", s, IsGateScene, true);

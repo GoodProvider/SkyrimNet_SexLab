@@ -156,6 +156,9 @@ namespace AnimationDB
         std::vector<std::string> pos_race_keys;
         int has_description = 0;
         bool gender_match = false;
+        /// `_orgasm`: which positions expect an orgasm (pos_no_orgasm). 0 any, 1 all, 2 none, 3 only male
+        /// positions (at least one), 4 only female positions (at least one). Creature genders count as their sex.
+        int orgasm = 0;
         int males = -1;
         int females = -1;
         /// gender_match: intersex actors, not in males / females; each stands in for either.
@@ -184,6 +187,9 @@ namespace AnimationDB
     };
 
     /// Tag-filter keys of one scenes/<name>.json (default.json merged under it; the named file wins per key).
+    /// `_orgasm` value ("all" / "none" / "male" / "female") -> FilterSpec::orgasm; 0 for anything else.
+    int ParseOrgasmMode(const std::string& s);
+
     struct SceneSettingFilter
     {
         bool found = false;

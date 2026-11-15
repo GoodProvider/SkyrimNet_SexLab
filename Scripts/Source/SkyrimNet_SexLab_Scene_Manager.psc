@@ -327,6 +327,43 @@ bool foreign_restart_warned = false
 float FOREIGN_RESTART_WINDOW = 15.0
 int FOREIGN_RESTART_WARN_AT = 3
 
+; Clean cock / Clean pussy action outside a scene (Actions.CleanScene): the clean the next creator for exactly this
+; pair starts with (Scene_Creator.Setup takes it). Expires after CLEAN_PENDING_SECONDS.
+Actor Property pending_clean_giver Auto Hidden
+Actor Property pending_clean_receiver Auto Hidden
+String pending_clean_part = ""
+float pending_clean_at = 0.0
+float CLEAN_PENDING_SECONDS = 60.0
+
+Function Clean_NotePending(Actor giver, Actor receiver, String part)
+    pending_clean_giver = giver
+    pending_clean_receiver = receiver
+    pending_clean_part = part
+    pending_clean_at = Utility.GetCurrentRealTime()
+    Trace("Clean_NotePending", GetDisplayName(giver)+" cleans "+GetDisplayName(receiver)+" "+part)
+EndFunction
+
+; The pending clean's part when a and b are its giver and receiver (either order) and it has not expired; "" else.
+; Taking it clears it (pending_clean_giver / _receiver stay readable for the caller until the next note).
+String Function Clean_TakePending(Actor a, Actor b)
+    if pending_clean_part == "" || a == None || b == None
+        return ""
+    endif
+    String part = pending_clean_part
+    bool pair = (a == pending_clean_giver && b == pending_clean_receiver) || (b == pending_clean_giver && a == pending_clean_receiver)
+    bool fresh = Utility.GetCurrentRealTime() - pending_clean_at <= CLEAN_PENDING_SECONDS
+    if !fresh
+        pending_clean_part = ""
+        return ""
+    endif
+    if !pair
+        return ""
+    endif
+    pending_clean_part = ""
+    Trace("Clean_TakePending", GetDisplayName(pending_clean_giver)+" cleans "+GetDisplayName(pending_clean_receiver)+" "+part)
+    return part
+EndFunction
+
 ; Sorted actor FormIDs, e.g. "20,108242". Empty for no actors.
 String Function ActorSetKey(Actor[] actors)
     if !actors || actors.length == 0
@@ -1619,6 +1656,58 @@ bool Function EndSceneForActor(Actor akActor)
     sl_scene.AnimationEnd(None, "silently")
     threadSlots.StopThread(cachedThread)
     return true
+EndFunction
+
+; The active Scene Creator holding akActor (its actors[]), else None.
+SkyrimNet_SexLab_Scene_Creator Function FindCreatorByActor(Actor akActor)
+    if akActor == None
+        return None
+    endif
+    int i = 0
+    while i < creators.length
+        SkyrimNet_SexLab_Scene_Creator creator = creators[i]
+        if creator && creator.IsActive() && creator.actors && creator.actors.Find(akActor) >= 0
+            return creator
+        endif
+        i += 1
+    endwhile
+    return None
+EndFunction
+
+; Scene Creator lock (2026-11-14): a failed start can leave an actor locked with no owner, so every later start fails
+; with "no positions". Ends any scene the actor is in (SkyrimNet scene, C++ AnimEngine scene), releases a creator still
+; holding them, then unlocks them. Called from the WebUI through papyrusQuery: "ok", or "error:<why>".
+String Function WebUI_ForceUnlock(Actor akActor) global
+    if akActor == None
+        return "error:no actor"
+    endif
+    SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x000800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
+    String name = SkyrimNet_SexLab_Utilities.GetDisplayName(akActor)
+    String done = ""
+    if manager
+        if manager.EndSceneForActor(akActor)
+            done += " scene"
+        endif
+        SkyrimNet_SexLab_Scene_Creator creator = manager.FindCreatorByActor(akActor)
+        if creator
+            creator.Release()
+            done += " creator"
+        endif
+    endif
+    int engine_scene = SkyrimNet_SexLab_AnimEngine.AnimEngine_SceneOf(akActor)
+    if engine_scene >= 0
+        SkyrimNet_SexLab_AnimEngine.AnimEngine_End(engine_scene)
+        done += " engine:"+engine_scene
+    endif
+    if SkyrimNet_SexLab_Locker.ClearOstim(akActor)
+        done += " ostim cleared"
+    endif
+    SkyrimNet_SexLab_Locker.Unlock(akActor)
+    Debug.Trace("[SkyrimNet_SexLab] WebUI_ForceUnlock "+name+" ended:"+done+" locked:"+SkyrimNet_SexLab_Locker.IsLocked(akActor))
+    if SkyrimNet_SexLab_Locker.IsLocked(akActor)
+        return "error:still locked"
+    endif
+    return "ok"
 EndFunction
 
 Event Action_Start(String intent, Form f_speaker, Form f_target, Form f_victim, \

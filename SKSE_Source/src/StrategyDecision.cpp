@@ -724,7 +724,8 @@ namespace StrategyDecision
                 keys.push_back({ "pos_up", "swap roles with the partners (forward)" });
                 keys.push_back({ "pos_down", "swap roles with the partners (back)" });
             }
-            const int level = OrgasmEngine::GetSceneSpeedLevel(player);
+            // A clean: no pace keys (StepSceneSpeed ignores them).
+            const int level = OrgasmEngine::IsSceneCleaning(player) ? -1 : OrgasmEngine::GetSceneSpeedLevel(player);
             if (level > 0) {
                 keys.push_back({ "slower", std::string("slow the pace to ") + OrgasmEngine::kSpeedLevelNames[level - 1] });
             }
@@ -1297,8 +1298,19 @@ namespace StrategyDecision
         return 0;
     }
 
+    // The options' line for an answer key; -1 when no option has it.
+    int LastStageOptionLine(const nlohmann::json& options, const std::string& key)
+    {
+        for (const auto& o : options) {
+            if (o.is_object() && o.value("key", "") == key) {
+                return o.value("line", 0);
+            }
+        }
+        return -1;
+    }
+
     void RequestLastStage(std::int32_t sid, RE::FormID caller, bool playerInScene, const std::string& castNames,
-        std::function<void(int)> done)
+        const std::string& optionsJson, std::function<void(int)> done)
     {
         constexpr const char* kLastStageTemplate = "sexlab/last_stage";
         RE::Actor* who = RE::TESForm::LookupByID<RE::Actor>(caller);
@@ -1316,12 +1328,31 @@ namespace StrategyDecision
         ctx["player_in_scene"] = playerInScene;
         ctx["cast_names"] = castNames;
         ctx["timeline"] = BuildTimeline(in);
+        // The lines this NPC may pick (Scene.LastStage_OptionsJson). The prompt words each one; a victim scene words
+        // stop / cuddle / clean from the aggressor's side.
+        auto options = nlohmann::json::array();
+        ctx["victim_name"] = "";
+        ctx["aggressor_name"] = "";
+        if (!optionsJson.empty()) {
+            try {
+                const auto j = nlohmann::json::parse(optionsJson);
+                if (j.contains("options") && j["options"].is_array()) {
+                    options = j["options"];
+                }
+                ctx["victim_name"] = j.value("victim", "");
+                ctx["aggressor_name"] = j.value("aggressor", "");
+            } catch (const std::exception& e) {
+                webui_log::warn("StrategyDecision: last stage sid {} options unreadable ({})", sid, e.what());
+            }
+        }
+        ctx["options"] = options;
         auto shared = std::make_shared<std::function<void(int)>>(std::move(done));
         const bool queued = PublicSendCustomDecisionToLLM(kLastStageTemplate, ctx.dump().c_str(), kMaxProbabilities,
-            [sid, caller, shared](const char* answer, const char* resultJson, int success) {
+            [sid, caller, shared, options](const char* answer, const char* resultJson, int success) {
                 std::string a = answer ? answer : "";
                 std::string j = resultJson ? resultJson : "";
-                SKSE::GetTaskInterface()->AddTask([sid, caller, shared, success, a = std::move(a), j = std::move(j)]() {
+                SKSE::GetTaskInterface()->AddTask([sid, caller, shared, options, success, a = std::move(a),
+                                                      j = std::move(j)]() {
                     if (!success) {
                         NoteFailure(caller, j);
                         webui_log::info("StrategyDecision: last stage sid {} failed: stop", sid);
@@ -1333,8 +1364,17 @@ namespace StrategyDecision
                         key = nlohmann::json::parse(j).at("answers").at("next").value("choice", key);
                     } catch (...) {
                     }
-                    const int line = LastStageLine(key);
-                    webui_log::info("StrategyDecision: last stage sid {} answer '{}' -> {}", sid, key, line);
+                    int line = 0;
+                    if (options.empty()) {
+                        line = LastStageLine(key);
+                    } else if (const int found = LastStageOptionLine(options, key); found >= 0) {
+                        line = found;
+                    } else {
+                        webui_log::warn("StrategyDecision: last stage sid {} answer '{}' is not an option: stop", sid,
+                            key);
+                    }
+                    webui_log::info("StrategyDecision: last stage sid {} answer '{}' -> {} ({} options)", sid, key,
+                        line, options.size());
                     (*shared)(line);
                 });
             });
@@ -1343,7 +1383,8 @@ namespace StrategyDecision
             (*shared)(0);
             return;
         }
-        webui_log::info("StrategyDecision: last stage send sid {} caller {:#x} ({})", sid, caller, in.name);
+        webui_log::info("StrategyDecision: last stage send sid {} caller {:#x} ({}) options {}", sid, caller, in.name,
+            options.dump());
     }
 
     int RelationshipRank(RE::Actor* a, RE::Actor* b)

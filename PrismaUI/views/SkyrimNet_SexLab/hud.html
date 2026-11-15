@@ -90,6 +90,8 @@
         /* Stage row (first table row, magicka..enjoyment columns): one bar per stage, active = yellow, rest = blue */
         .stages { display: flex; gap: 3px; }
         #enjoyment td.stagelabel { text-align: right; padding-right: 1em; color: var(--text-secondary); white-space: nowrap; }
+        /* A clean is playing (state.cleaning): the label reads "cleaning" in the accent colour. */
+        #enjoyment td.stagelabel.cleaning { color: var(--accent); }
         .stg {
             flex: 1;
             height: 10px;
@@ -448,10 +450,11 @@
                 for (let i = 1; i <= count; i++) {
                     s += '<div class="stg' + (i === stage ? ' active' : '') + '" title="Stage ' + i + '/' + count + '"></div>';
                 }
-                // Bars span magicka + stamina + enjoyment columns; "stages" label sits right-aligned before them.
+                // Bars span magicka + stamina + enjoyment columns; the "stages" label (or "cleaning" while a clean plays)
+                // sits right-aligned before them.
                 html = '<tr class="stagerow">' +
                     '<td class="focus"></td>' +
-                    '<td class="stagelabel">stages</td>' +
+                    (state.cleaning ? '<td class="stagelabel cleaning">cleaning</td>' : '<td class="stagelabel">stages</td>') +
                     '<td colspan="3"><div class="stages">' + s + '</div></td>' +
                     '<td class="lock"></td></tr>' + html;
             }

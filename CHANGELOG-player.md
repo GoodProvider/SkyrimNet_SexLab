@@ -4,8 +4,59 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ## Unreleased
 
+### Locked actors
+- An actor flagged "(Ostim)" while in no OStim scene now gets the 🔒 in the Scene Creator too. Yes removes the stale OStim flag (and ends any scene they are in), so they can be added again.
+
+### Clean
+- Asking an NPC to clean or prepare a cock now starts the clean (the Scene Creator dialog used to start plain sex, and the HUD said "stages").
+- The Description Editor keeps the clean word on while a clean plays.
+- A scene that opens with a clean narrates "Coralyn starts cleaning Bob's cock, by <stage description>".
+
 ### Stop
 - An NPC in a forced solo scene (e.g. forced masturbation) now stops when told to. Before, nobody could stop it by dialogue
+
+### Locked actors
+- A scene that failed to start could leave its actors locked, so every new scene with them failed ("no positions"). The Scene Creator now lists locked actors last with a 🔒. Click the lock and answer Yes to end any scene they are in and unlock them
+- Actors already in a scene are listed the same way, so you can pull them out of it into a new one
+
+### Scene Creator
+- Opens with an empty chain: nothing is preselected, pick an animation before Start
+- The gender filter has new choices: **all orgasms**, **none orgasms**, **male orgasms**, **female orgasms** (match by gender, and by who in the animation is expected to orgasm). Male / female orgasms show only for a cast of one or two with that sex
+
+### Last stage
+- The list follows the cast: one actor (End scene, Continue masturbating), two people (cuddle, vaginal, oral and anal both ways, Clean cock / Clean pussy), three or more (End scene, Cuddle, Continue orgy)
+- New **Clean**: one actor cleans the other's cock or pussy with an oral animation. No enjoyment, no orgasm; its stages move every **Clean stage length** (dashboard, default 10 s), and the list opens as soon as it reaches the second-to-last stage. It is narrated once: "Mary cleans Bob's cock with her mouth."
+- The orgasm that ends the play switches to the last stage at once; the orgasm itself and its narration follow while it loads
+- Picking a line that opens the Description Editor: nothing is preselected, and **continue** stays greyed until you pick an animation (Cancel goes back to the list). Before, continue without a pick just brought the list back
+- The editor's gender filter starts on the line's orgasm mode: oral or clean to Bob → male orgasms (a clean also starts on the oral tag), cuddle → none orgasms (it falls back to gender, then any, when nothing matches). NPC picks prefer the same
+- A clean picked through the Description Editor now cleans (and puts the giver in the right position). Before it played as a normal animation, or not at all
+- Clean plays only the animation's non-orgasm stages: the list opens as soon as it reaches the second-to-last stage, and holds that stage until a pick (an animation with only 1 or 2 stages plays for three stage lengths)
+- The HUD shows **cleaning** to the left of the stage bars while a clean plays
+- With Animation Selection on, the list's timer opens the Description Editor for the selected line instead of picking at random (once; after a cancel the next timeout picks)
+- Fixed: switching animations during a clean could end the scene mid-switch and leave one actor stuck in the animation
+- Fixed: the Description Editor opened from the last-stage list ignored the line's filter (oral tag, male orgasms) and preselected the playing animation; a click on a row now picks it, and the list closes as soon as the pick plays. Before, the pick played as a plain switch (a blowjob instead of a clean)
+- New **clean** words in Animation Selection (Scene Creator and Description Editor), after sexual / vaginal / oral / anal / bound / rape / necro: one **clean <name>** per actor in the cast, creatures included. Click one on (white) or off (grey); only one is on at a time. The named actor gets cleaned, by the initiator (or by the other actor when the initiator is the one named). On sets the oral tag and, for two actors, the gender filter to that actor's orgasm, and the picked animation plays as a clean. Changing the oral word, the sexual word or the gender filter turns it off. Opening the editor from a Clean line starts it on
+- The **sexual** word now sets the gender filter: red → none orgasms, white → all orgasms, grey → gender
+- Fixed: the Description Editor opened from a Clean line could lose its clean word before you saw it (it briefly saw the previous cast)
+- Fixed: a scene started with a clean sat on stage 1 until the clean ended
+- A clean now ends by showing the last-stage list instead of ending the scene, so a scene can open with a clean and go on into sex. Nobody orgasmed, so the NPC may pick any line (only End scene / Cuddle / Clean once someone is at their orgasm limit)
+- New actions **Clean or prepare cock** and **Clean pussy**: an NPC cleans someone with their mouth (or prepares a cock before sex). Outside a scene it starts a two-person clean; in a scene they share, it switches that scene to a clean
+- Fixed: the Description Editor from a list line still opened on the gender filter instead of the line's (e.g. male orgasms)
+- Fixed: the list's timer could fire again while the Description Editor was opening and pick at random under it
+- While a clean plays, the **gentle** / **forceful** pace keys are off (the HUD shows them greyed)
+- The animation that will play as a clean shows a **cleaning** badge in the animation list (Scene Creator: the chain's first; Description Editor: your pick)
+- A scene that opens with a clean now narrates "Bob initiates: Bob cleans Coralyn's pussy with his mouth." instead of the animation's own description
+- Fixed: at the list after a clean, the stage could jump back to stage 1 (the stage followed enjoyment for a moment before the list held it)
+- Fixed: a Scene Creator chain started on a random animation of the chain instead of its first, so "clean, vaginal, clean" could start on the last clean and never move on
+- After a clean the list waits at least two clean stage lengths (20 s by default) before its timer picks. Before it was 4 s
+- Fixed: the Description Editor opened from a Clean pussy line lost its clean word, and listed the playing animation even when it did not match
+- Once someone has reached their orgasm limit, the NPC may only pick End scene, Cuddle or Clean. In a victim scene the end and cuddle lines read from the aggressor's side, and only the victim cleans. You still get every line
+
+### Mini-game strategies
+- Renamed: arouse all, arouse self, arouse others, arouse {name}, deny self, deny others (new: holds back everyone but themselves), deny {name}; passive, deny all and non-sexual stay. Ask / Order lists them the same way ("arouse Mary")
+- When only one actor is expected to orgasm, they start on arouse self and everyone else (except a victim) on arouse them
+- Tease is gone
+- Dashboard default strategy options use the new names (old saved values still work)
 
 ## 0.37.4
 

@@ -502,6 +502,54 @@ Function CleanCum(Actor speaker, Actor target, String part, String style)
     CleanCum_Apply(speaker, target, part, style, "silent")
 EndFunction
 
+; LLM actions SexLab_Clean_Cock / SexLab_Clean_Pussy: speaker cleans target's part with their mouth, as an oral animation
+; that plays only its non-orgasm stages and then shows the last-stage list (Scene.Clean_*).
+; Both in one live scene: that scene switches to the clean. Neither in a scene: a new two-actor scene starts with it
+; (Scene_Manager.Clean_NotePending -> Scene_Creator.Setup). One in a scene: nothing.
+Function CleanScene(Actor speaker, Actor target, String part, String style)
+    Trace("CleanScene", GetDisplayName(speaker)+" -> "+GetDisplayName(target)+" part:"+part+" style:"+style)
+    if speaker == None || target == None || speaker == target || manager == None
+        return
+    endif
+    if part != "cock" && part != "pussy"
+        Trace("CleanScene", "bad part:"+part)
+        return
+    endif
+    ; cock: a male or intersex target; pussy: a female or intersex one.
+    bool intersex = IsIntersex(sexlab, target)
+    int g = CastGender(sexlab, target)
+    if g >= 2
+        Trace("CleanScene", GetDisplayName(target)+" is a creature")
+        return
+    endif
+    if !intersex && ((part == "cock" && g != 0) || (part == "pussy" && g != 1))
+        Trace("CleanScene", GetDisplayName(target)+" has no "+part)
+        return
+    endif
+    SkyrimNet_SexLab_Scene sl_speaker = manager.GetSceneByActor(speaker)
+    SkyrimNet_SexLab_Scene sl_target = manager.GetSceneByActor(target)
+    if sl_speaker != None || sl_target != None
+        if sl_speaker != sl_target
+            Trace("CleanScene", "not in the same scene")
+            return
+        endif
+        if !sl_speaker.Clean_FromAction(speaker, target, part)
+            Trace("CleanScene", "scene switch failed")
+        endif
+        return
+    endif
+    if ActorUnavailable(speaker) || ActorUnavailable(target)
+        Trace("CleanScene", "skip: actor busy")
+        return
+    endif
+    String tag = "blowjob"
+    if part == "pussy"
+        tag = "cunnilingus"
+    endif
+    manager.Clean_NotePending(speaker, target, part)
+    StartScene_Event("cleaning "+part, speaker, target, None, style, tag, "giving", setting_name="no_penis")
+EndFunction
+
 ; TargetMenu panel clean_cum (style silently skips narration).
 Function TM_CleanCum(Actor speaker, Actor target, String part, String style)
     String narration = "silent"

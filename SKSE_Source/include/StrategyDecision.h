@@ -35,7 +35,7 @@ namespace StrategyDecision
         std::function<void(OrgasmEngine::DecisionResult)> done, const std::string& orderKey = "");
     /// Game thread. Like RequestAnswer (same wait for target's reply), but then asks the decision model only whether
     /// that reply complies with one request by `by` (prompts/decisions/sexlab/minigame_comply.prompt). requestKey: the
-    /// option asked for (e.g. focused_p2), "" for a free-text request; requestText: "focus on Bob's pleasure".
+    /// option asked for (e.g. arouse_p2), "" for a free-text request; requestText: "arouse Bob".
     /// comply + key: the key is applied with no confidence gate (kChanged, or kKept when already on it); comply with
     /// no key: kChanged; refuse: kKept; nothing sent or failed: kDropped. done is called exactly once.
     void RequestComply(RE::FormID target, const std::string& trigger, const std::string& line, RE::FormID by,
@@ -50,10 +50,13 @@ namespace StrategyDecision
     void RequestAidAccept(RE::FormID receiver, RE::FormID giver, const std::string& how, const std::string& potionKind,
         const std::string& potionName, std::function<void(bool)> done);
     /// Game thread. Last stage of a scene: the caller NPC picks the next line (prompts/decisions/sexlab/last_stage.prompt).
-    /// done(line) on the game thread, exactly once. 0 stop, 1 cuddle, 2 vaginal, 3 oral, 4 anal.
-    /// No provider, a failed request, or an unknown answer: 0. Not gated by sexlab.minigame.decision_strategy.
+    /// done(line) on the game thread, exactly once. optionsJson (Scene.LastStage_OptionsJson):
+    /// {"options":[{"line","key","act","giver","receiver","part"}], "victim", "aggressor"}: the lines the NPC may pick;
+    /// done gets the picked option's line (the Scene's line index). Empty: the old five keys (0 stop, 1 cuddle,
+    /// 2 vaginal, 3 oral, 4 anal). No provider, a failed request, or an unknown answer: 0 (stop).
+    /// Not gated by sexlab.minigame.decision_strategy.
     void RequestLastStage(std::int32_t sid, RE::FormID caller, bool playerInScene, const std::string& castNames,
-        std::function<void(int)> done);
+        const std::string& optionsJson, std::function<void(int)> done);
     /// Skyrim relationship rank between two actors (Papyrus GetRelationshipRank: 4 lover .. -4 archnemesis; 0 none).
     int RelationshipRank(RE::Actor* a, RE::Actor* b);
 }

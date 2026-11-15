@@ -73,6 +73,19 @@ namespace ActorLocker
         return cached;
     }
 
+    bool ClearOstim(RE::Actor* actor)
+    {
+        if (!actor)
+            return false;
+        auto* f = OstimActorCountFaction();
+        if (!f || !actor->IsInFaction(f))
+            return false;
+        // Rank -1 is how Papyrus RemoveFromFaction drops membership.
+        actor->AddToFaction(f, -1);
+        webui_log::info("ActorLocker: cleared OStim faction {:08X}", actor->GetFormID());
+        return true;
+    }
+
     bool TryLock(RE::Actor* actor)
     {
         if (!actor || actor->IsDeleted() || actor->IsInCombat())

@@ -25,16 +25,16 @@ namespace OrgasmEngine
     /// Order matches strategies.json (the source of truth for keys and wording).
     enum class Strategy : std::int32_t
     {
-        kPassive = 0,    // no presses
-        kMutual = 1,     // arouse the lowest-enjoyment actor (self included)
-        kSelfish = 2,    // arouse self
-        kSelfless = 3,   // arouse the lowest-enjoyment other actor
-        kDenySelf = 4,   // calm self
-        kDenyAll = 5,    // calm every actor in the scene, self included
-        kDeny = 6,       // calm the target
-        kTease = 7,      // arouse the target below 90, calm (edge) them at 90+
-        kFocused = 8,    // arouse the target
-        kNonSexual = 9,  // no presses; the default when no actor expects orgasm
+        kPassive = 0,     // passive: no presses
+        kMutual = 1,      // arouse all: arouse the lowest-enjoyment actor (self included)
+        kSelfish = 2,     // arouse self
+        kSelfless = 3,    // arouse others: arouse the lowest-enjoyment other actor
+        kDenySelf = 4,    // deny self: calm self
+        kDenyAll = 5,     // deny all: calm every actor in the scene, self included
+        kDeny = 6,        // deny {target}: calm the target
+        kDenyOthers = 7,  // deny others: calm every other actor (not self). Was tease (dropped 0.38).
+        kFocused = 8,     // arouse {target}
+        kNonSexual = 9,   // non-sexual: no presses; the default when no actor expects orgasm
         kCount = 10,
     };
 
@@ -58,6 +58,8 @@ namespace OrgasmEngine
     void SetStageTimers(std::int32_t sid, const std::vector<float>& stageSecs, bool leadIn);
     /// Pause hotkey state: HUD label; the safety-net clock stops. Passive gain keeps running.
     void SetScenePaused(std::int32_t sid, bool paused);
+    /// Scene.Clean_Begin (true) / Clean_Clear, Clean_EndForSwitch (false): the HUD's stage label reads "cleaning".
+    void SetSceneCleaning(std::int32_t sid, bool cleaning);
     /// Gate pass narration was just sent: the next non-player speech start pushes the scene to its
     /// final stage (Effect_AdvanceToFinal). mark: SpeakerMark() taken just before the DN went out, so a
     /// fast voice is not missed; < 0 takes it now.
@@ -130,6 +132,8 @@ namespace OrgasmEngine
     bool IsPlayerScenePaused();
     /// Pause state of the anchor actor's scene (HUD: the player, or the NPC the player took control of).
     bool IsScenePaused(RE::Actor* anchor);
+    /// The anchor actor's scene is playing a clean (SetSceneCleaning).
+    bool IsSceneCleaning(RE::Actor* anchor);
     /// Player scene stage (1-based) and stage count; false (0/0) when not in a scene.
     bool GetPlayerSceneStage(int& stage, int& count);
     bool GetSceneStage(RE::Actor* anchor, int& stage, int& count);
@@ -193,7 +197,7 @@ namespace OrgasmEngine
         kDecision = 1,
     };
 
-    /// Mini-game: the NPC's strategy (and its target for Deny / Tease / Focused). Announced (see
+    /// Mini-game: the NPC's strategy (and its target for Deny / Focus). Announced (see
     /// StrategySource). False when not allowed for the actor (mode, scene).
     bool SetStrategy(RE::Actor* actor, Strategy strategy, RE::Actor* target,
         StrategySource source = StrategySource::kAction);
@@ -268,10 +272,10 @@ namespace OrgasmEngine
     /// Ask / Order panel request: a strategy the target could be asked to take.
     struct RequestOption
     {
-        std::string key;   // "<key>" or "<key>_p<slot>" (deny / tease / focused: the actor the request is about)
+        std::string key;   // "<key>" or "<key>_p<slot>" (deny / focus: the actor the request is about)
         std::string text;  // strategies.json "order" phrase after "to", {target} filled: "be passive and let things happen"
     };
-    /// The strategies `target` may take now (decision rule; one per other actor for deny / tease / focused), its
+    /// The strategies `target` may take now (decision rule; one per other actor for deny / focus), its
     /// current one left out. An NPC the player controls is listed too. Empty when unmanaged, the
     /// player outside auto play, or not in mini-game mode.
     std::vector<RequestOption> GetRequestOptions(RE::FormID target);
@@ -364,7 +368,7 @@ namespace OrgasmEngine
         float domArousal = 0.0f;  // DOM slave: the bar's total; the fill is its position inside the step
         std::string domLabel;  // DOM slave: the step's text on the bar
         bool denied = false;  // player's deny_orgasm (SetSceneBlocked)
-        std::string strategy;  // mini-game NPC strategy label ("selfish", "forced"), "" when none
+        std::string strategy;  // mini-game NPC strategy label ("arouse self", "deny {target}"), "" when none
         float magicka = 0.0f;  // 0..100 % of max (calm cost)
         float stamina = 0.0f;  // 0..100 % of max (arouse cost)
     };

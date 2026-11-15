@@ -39,6 +39,8 @@ Function SetStage(int sid, int stage, int stageCount) global native
 Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 ; Pause hotkey: HUD label, stops the final-stage safety-net clock (gain keeps running).
 Function SetScenePaused(int sid, bool paused) global native
+; A clean is playing (Scene.Clean_Begin / Clean_Clear): the HUD's stage label reads "cleaning".
+Function SetSceneCleaning(int sid, bool cleaning) global native
 ; Gate pass narration was just sent: the next voice after mark (NarrationMark() taken before the DN;
 ; -1 = now) pushes the scene to its final stage.
 Function GateNarrationSent(int sid, int mark) global native
@@ -128,8 +130,9 @@ Function SetActorSkills(Actor akActor, int skill, int lewd) global native
 Function SetBonusInputs(Actor akActor, float[] ownSkills, float[] partnerSkills, int lowestRank, int highestRank, int actSkill) global native
 
 ; ---- Mini-game NPC strategies (Multi-Orgasm Mini-game mode) ----
-; ids (strategies.json order): 0 passive 1 mutual 2 selfish 3 selfless 4 deny_self 5 deny_all 6 deny
-;      7 tease 8 focused 9 nonsexual. target: deny / tease / focused; None picks one.
+; ids (strategies.json order): 0 passive 1 arouse_all 2 arouse_self 3 arouse_others 4 deny_self 5 deny_all 6 deny
+;      7 deny_others 8 arouse 9 nonsexual (keys: strategies.json).
+;      target: deny / focus; None picks one. 7 was tease before 0.38.
 ; False when not allowed for the actor (mode, scene). Narrated; shown on the HUD.
 bool Function SetStrategy(Actor akActor, int strategy, Actor target) global native
 int Function GetStrategy(Actor akActor) global native
@@ -196,14 +199,14 @@ EndFunction
 int Function StrategyId(String strategy_key) global
     String[] keys = new String[10]
     keys[0] = "passive"
-    keys[1] = "mutual"
-    keys[2] = "selfish"
-    keys[3] = "selfless"
+    keys[1] = "arouse_all"
+    keys[2] = "arouse_self"
+    keys[3] = "arouse_others"
     keys[4] = "deny_self"
     keys[5] = "deny_all"
     keys[6] = "deny"
-    keys[7] = "tease"
-    keys[8] = "focused"
+    keys[7] = "deny_others"
+    keys[8] = "arouse"
     keys[9] = "nonsexual"
     return keys.Find(strategy_key)
 EndFunction
