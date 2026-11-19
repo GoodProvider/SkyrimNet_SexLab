@@ -83,6 +83,10 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 - An actor with a stale "(Ostim)" flag gets the 🔒 too; Yes clears the flag
 - The Control Panel's actor pulldown shows the 🔒 too; picking one asks to unlock it
 
+### Scene that never started (untested)
+- A scene SexLab ends before it starts animating no longer says "finish ... failed to orgasm"
+- A stop said during setup still gets its stop line
+
 ### Bug Fixes
 - Fixed: "prepare / clean her pussy" (any cunnilingus action) had the licking actor reversed
 

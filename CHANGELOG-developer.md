@@ -34,6 +34,9 @@ Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 ### Locked actors
 - `Scene_Manager.WebUI_ForceUnlock` (also ends foreign SexLab and OStim threads) and native `Locker.ClearOstim`; 🔒 rows in the Scene Creator and Control Panel.
 
+### Scene that never started (untested)
+- `Scene.AnimationEnd` skips the finish DN, afterglow and orgasm overflow when SexLab ends a thread before its first `StageStart`; an `Action_Stop` keeps its stop line.
+
 ## 0.37.4
 
 ### Scene style
