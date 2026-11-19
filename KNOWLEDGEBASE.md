@@ -1,5 +1,13 @@
 # Knowledgebase
 
+## Scene ends before it starts; DeD restart loop (2026-11-18, built, untested in game)
+
+Record: [checkpoints/2026-11-14-never-started/checkpoint-02.md](checkpoints/2026-11-14-never-started/checkpoint-02.md).
+
+- **P+ can end a thread before `AnimationStart`:** `sslThreadModel` sends `AnimationStart` only after native animation sync. It ends the thread on `Animation synchronization failed`, `Native actor recovery failed`, `Player weapon sheathing timed out`, or the 30 s setup timeout. Our `StageStart` never runs, so `status` stays `STATUS_SETUP`.
+- **Fix:** `Scene.AnimationEnd` skips the finish DN and afterglow when `status != STATUS_ACTIVE`. Before, every cycle said "A and B finish sexual activities. A failed to orgasm."
+- **Open:** with Delectatio et Dominium (DeD) enabled, one user's fresh save loops: the thread ends ~6 s in and a new thread with the same actors starts ~4 s later. Disabling DeD stops it. No DeD Papyrus or DLL path ends or starts a foreign scene (source sweep of v0.4.0), so the root cause is still unknown. Wait for the DeD-on logs before adding a Nexus conflict note.
+
 ## Clean end said "failed to orgasm"; Prepare; Intent pulldown (2026-11-16, built, untested in game)
 
 - **Symptom:** after a clean's list was stopped, the end line was "Nia and Coralyn finish cleaning Pussy. Nia failed to orgasm." (`checkpoints/2026-11-14-manual-unlock/logs/2026-11-16-08-55-16/SkyrimNet_SexLab.log:1210`). `AnimationEnd` ran `Clean_Clear` first, and the afterglow uses the animation's orgasm slots, not the clean.

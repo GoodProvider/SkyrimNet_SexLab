@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.37.6 (unreleased)
+
+### Scene that never started (untested)
+- `Scene.AnimationEnd`: a thread SexLab ends before its first `StageStart` (`status != STATUS_ACTIVE`; P+ sync / recovery / sheathe failure, or another mod ending it) gets no finish DN, no afterglow ("failed to orgasm") and no orgasm overflow. An `Action_Stop` still narrates its stop line alone. Trace: `thread ended before it started animating`.
+
 ## [0.37.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.5) — since [0.37.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4)
 
 ### Intent pulldown

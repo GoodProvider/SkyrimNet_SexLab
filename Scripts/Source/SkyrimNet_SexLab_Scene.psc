@@ -7286,6 +7286,9 @@ EndFunction
 ; reason; else stop text. "" (SexLab end event) → finish text only.
 Function AnimationEnd(Actor speaker=None, String stop_style="")
     DbgEnter("AnimationEnd", "speaker:"+GetDisplayName(speaker)+" stop_style:"+stop_style)
+    ; SexLab ended the thread before its first StageStart (P+ sync / recovery / sheathe failure, or another mod
+    ; ending it): no start was narrated, so no finish or afterglow either (2026-11-18, DeD restart loop).
+    bool never_started = (status != STATUS_ACTIVE)
     ; A clean / prepare ends with its own line and no orgasm text (2026-11-16 log: "Nia and Coralyn finish cleaning
     ; Pussy. Nia failed to orgasm."). Read before Clean_Clear: the playing animation's entry, or the live clean.
     String mouth_end = MouthEndSentence()
@@ -7367,7 +7370,7 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         if n_ended > position_objs.length
             n_ended = position_objs.length
         endif
-        if (config.SeparateOrgasms || engine_managed) && mouth_end == ""
+        if (config.SeparateOrgasms || engine_managed) && mouth_end == "" && !never_started
             int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
             int j = n_ended - 1
             while 0 <= j 
@@ -7418,13 +7421,25 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
             endif
         endif
         Bool skip_narration = (stop_style == "silently" || stop_style == "silent")
+        if never_started
+            ; Only a person's explicit stop (Action_Stop) is still narrated, as the stop line alone.
+            if speaker == None
+                skip_narration = true
+                orgasm_overflow = ""
+            endif
+            Trace("AnimationEnd", "thread ended before it started animating, end narration:"+(!skip_narration)+" stop_style:"+stop_style)
+        endif
         if speaker != None && !skip_narration
             ; Stopped by someone (Action_Stop): "Bob gently stops <intent>[, because <reason>]. " + finish text.
             String reason = ""
             if StringUtil.GetLength(stop_style) > 8 && StringUtil.Substring(stop_style, 0, 8) == "explain:"
                 reason = StringUtil.Substring(stop_style, 8, StringUtil.GetLength(stop_style) - 8)
             endif
-            end_message = StopMessage(speaker, stop_style, reason) + end_message
+            if never_started
+                end_message = StopMessage(speaker, stop_style, reason)
+            else
+                end_message = StopMessage(speaker, stop_style, reason) + end_message
+            endif
         endif
         int d = 0
         while d < n_ended
