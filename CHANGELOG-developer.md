@@ -1,125 +1,38 @@
-https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4
+https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.5
 
 Requires SkyrimNet 0.25.0 or later (built against SkyrimNet beta26 rc4).
 
-## Unreleased
+## 0.37.5
 
-### Checkpoint 21 (2026-11-18)
-- WebUI: animation tables get a third column `col-cur` (no header, `curCellHtml` / `animMakeCurrent`) with `C` on every non-current row; the C left `chainCellHtml`. Scene Creator: the first chain entry is current (`tr.current`), `scChainOp(..., 'current')` moves the entry to the top (`chainEdit` op `front`, adding one for an unchained filter row). Description Editor: `deChainOp('add')` no longer calls `deMakeCurrentIdx`; `deMakeCurrent` adds a filter row's animation when it is not chained. `deMakeCurrentReg` removed.
-- WebUI: `scIntentDefault()` (sexual unless `SC.suppress` has sexual) replaces "sexual while white" in `scIntentCurrent` / `scIntentAfterWordClick`.
-- WebUI: `.intent-pulldown` menu is a grid of 8 rows; `scIntentGrid` places each option so one act's group stays in one column.
-- WebUI: `scSeatFirstFor` returns 0 for oral / clean / prepare while gender is grey (`scFilterMode() === 'none'`): the pin put a pussy's receiver in a blowjob's mouth slot, so `_cast_orgasm` matched no `- M` row. Scene: `AnimIntent_Seat` seats an oral by `SeatByMatrix(reg, OrgasmsFor(receiver))`, then with `anySex`, before the position rule.
-
-### Checkpoint 20 (2026-11-18)
-- Papyrus: the AnimIntent / chain-entry code compared arrays to `None` (`ai_regs == None`, `ai_acts == None`, `ce_acts == None` / `!= None`, `Int[] pick_orgasms = None`). Each one raised `Cannot cast from None to String[]` (Papyrus.0.log since 2026-11-16), and `AnimIntent_Find` never found an entry, so stamps were lost, `ChainEntryToIntent` did nothing and `AnimIntent_Apply` always fell back to `AnimIntent_Note`. Now truthiness only (papyrus-rules.md).
-- Scene start: `ChainSyncPos` + `ChainEntryToIntent` + `AnimIntent_Apply` for a stamped non-mouth entry (repeats: entry 0's stamp), else `AnimIntent_Note`. An empty intent falls back to `INTENT_DEFAULT`. `AnimIntent_Note` keeps a stamp and takes its text when the scene intent is "" (Scene Creator starts send "").
-- HUD: `OrgasmEngine::SetSceneIntent` / `SceneIntentOf` (`SceneState::intent`), native `SkyrimNet_SexLab_OrgasmEngine.SetSceneIntent`, HUD JSON `intent`. hud.html labels the stage row with it (else stages / cleaning / preparing). `Scene.Engine_PushIntent` runs from `Engine_SetStage`, `Engine_SetStageInputs`, `Clean_EngineMode`, `AnimIntent_Apply` / `Note`, `LastStage_NoteIntent` and both `intent_new` commits.
-- `StageHoldCap` returns 0 for a player scene (`hasPlayer` or a `playerDriven` actor) with a primary. `LastStage_Snapshot` / `LastStage_Poll`: no list deadline while `LastStage_SeesList`.
-- Clean / prepare: `Clean_AtListStage` is `Stage >= 3` (3+ stages). `Victim_Poll` finishes a clean when stage 2's hold runs out (was the second-to-last stage).
-- WebUI: gender grey sends `_cast_any_sex` with any matrix (was: with a pin only). `scMatrixOrder` anySex follows gender grey. DE picks send `_seat_any_sex` with `_orgasm_matrix` or `_seat_first`. `scGenderPanelChanged(matchOnly)` keeps the Intent pick on a match click. The Intent pulldown gets the `intent-pulldown` class (full-height menu, as `af-pulldown`).
-
-### Intent pulldown (2026-11-16)
-- WebUI: `scRenderIntentPulldown` / `scIntentOptions` / `scApplyIntent` (`SC.intentSel`, `info.intentSel`). 2026-11-17: `SC_INTENT_WORDS`, `scIntentWordsReset` (replaces `SC.intentAdded` tracking), `scIntentFits`, `scIntentAfterWordClick` (replaces `scIntentToCustom`; only intent words and GenderPanel words move the pick), default `sexual` in `scIntentCurrent`; `scBoundActive` (white or worn) replaces `scBoundEnabled` for the rape skip-red rule, so a touched grey bound no longer blocks red rape. Row stamps `info.rowStamps` (`scStampRow` on chain add, `scPruneStamps`), badges `scRowBadge` for every listed row, `_chain_intents: [{_registry, _act, _intent, _giver, _receiver, _part}]` on chain commits, picks and Scene Creator starts; a pick's `_clean` comes from its row (`scRowCleanForCommit`). Clean words removed from `scRenderAvailableTags`; `_clean` carries `_kind: "prepare"`. Animation table header `genders` → `orgasm`. `C` no longer restores the row's clean word.
-- 2026-11-17 (checkpoint 18): `scIntentOptions` offers `vaginal:<fid>` (pussy only) and `anal:<fid>` (`anal X`), no plain `vaginal`; `scCleanWords` treats prepare as clean (receiver white, rest red). Position-0 pin `scSeatFirst` / `scSeatFirstFor` (directed acts; a cock's oral / clean / prepare pins the giver; all-human casts): `scApplyIntent` sets gender white and `filterChain = ['grey-keep']` (`scFilterChainStep`: gender grey, orgasm words and pin kept); `scBuildFilter` sends `_cast_orgasm` with `_first` and `_cast_any_sex`; `scMatrixOrder` / `scOrderForAnim` / `scReorderPositionsForAnim` take a `seat`; DE picks send `_seat_first` / `_seat_any_sex` (`deSeatForPick`). Repeat chain entries: `chainEdit` (replaces `chainApply`), `info.chainStamps[i]` with `reg` (replaces `info.rowStamps`, `scStampRow`, `scPruneStamps`), `scNewStamp`, `chainShownIdx`, `scRowStamp` / `scRowIntent` / `scRowBadge` / `scRowCleanForCommit(info, chain, idx)`, `_chain_intents[]._index`, `scStampsFromChainIntents`; DE `deCurrentChainIdx`, `deMakeCurrentIdx`, `DE.pendingSwitch.chainIdx`, `info.chainPos`, `_chain_pos` on chain commits and picks; `chainOrderedRows` keeps chained animations in the filter rows.
-- 2026-11-17 AnimDB: `CastOrgasm::first` (`_first`), `FilterSpec::cast_any_sex` (`_cast_any_sex`), `SeatForMatrix(row, cast, anySex)`; new native `AnimDb_SeatForMatrixEx(registry, sexes, orgasms, first, anySex)`. Scene: `SeatByMatrix(reg, orgasms, firstActor, anySex)`; `ApplyWebUICommit` reads `_seat_first` / `_seat_any_sex`. `SetChain` keeps repeats (fixed 128 arrays); `chain_pos` / `chain_switch_pos` / `chain_next_pos`, per-entry `ce_*` arrays; `ChainPlayingIndex`, `ChainSyncPos`, `ChainEntryToIntent`, `ChainIntentsStateArray`; `LastStage_ChainNext` / `ChainEnds` walk from the playing entry; `LastStage_PickRegistry` sets the switch entry; `LastStage_OnSwitched` / `AnimIntent_OnNewAnimation` sync the entry (A then A applies the second entry); `WebUI_ApplyChain` reads `_chain_pos`; SceneInfo sends `_chain_pos` and per-entry `_chain_intents`.
-- 2026-11-17 (checkpoint 19): `scStampsFromChainIntents` lowercases `_act`. Papyrus could return `"Vaginal"`, which matched neither `SC_DIRECTED_ACTS` nor `SC_INTENT_PAPYRUS`, so every DE chain commit cleared the scene intent text.
-- Scene: `ai_acts` beside the other `ai_*` arrays (old saves backfilled in `AnimIntent_Ensure`), `AnimIntent_IsMouth`, `AnimIntent_Seat` (directed oral / anal / vaginal seats a pair), `AnimIntent_FromChainJson` (from `WebUI_ApplyChain`, and `Scene_Creator.FinishStartScene` for the start's rows). `AnimIntent_Set(reg, intent, act, giver, receiver, part)`; `_anim_intents` gains `_act`. `AnimIntent_Note` keeps a stamped act while the intent text is its own.
-
-### Prepare (2026-11-16)
-- Scene: `clean_kind` ("clean" / "prepare") through `Clean_ArmActors`, `SetStartClean`, `Clean_FromCommit` (`_kind`), `Clean_FromAction`; `Clean_EngineMode`, `Clean_Verb`, `Clean_KindWord`, `MouthPartWord` (lower-cases "Pussy"). Prepare: the prepared keeps passive gain (`Engine_SetSkills`), `Clean_Finish` sets `list_after_prepare` / `prep_*` (kept through `LastStage_Begin`'s close, cleared in `LastStage_Close`) and `LastStage_PrepareLines` builds stop + vaginal / anal; `LastStage_OptionsJson` adds `prepared`.
-- Actions: `PrepareScene` / `MouthScene`; new `SexLab_Prepare_Cock.yaml` / `SexLab_Prepare_Pussy.yaml`. `Scene_Manager.Clean_NotePending(..., kind)` + `pending_clean_kind`; `Scene_Creator.Clean_Set(..., kind)`, `clean_kind`, `pending_chain_intents`.
-- C++: `OrgasmEngine::SetScenePreparing` / `IsScenePreparing` (speed lock as a clean), native `SkyrimNet_SexLab_OrgasmEngine.SetScenePreparing`; HUD JSON `preparing` (hud.html label). `StrategyDecision::RequestLastStage` passes `prepared` to `sexlab/last_stage.prompt`.
-
-### Clean end narration (2026-11-16)
-- `AnimationEnd`: `MouthEndSentence` (read before `Clean_Clear`) replaces the end intent for a clean / prepare; orgasm stash taken but dropped, no afterglow.
-
-### Orgasm matrix filter
-- AnimDB `_orgasm: "cast"` (mode 5) with `_cast_orgasm: [{_sex, _orgasm}]`: `AnimationDB::SeatForMatrix(row, cast)` (backtracking; orgasm actors in orgasm positions their sex fits, intersex either; the rest in no-orgasm positions) decides `OrgasmFits`. New native `SkyrimNet_SexLab_AnimDb.AnimDb_SeatForMatrix(registry, sexes, orgasms) → Int[]`.
-- WebUI: `orgasm_male` / `orgasm_female` replaced by `orgasm_actor_<formid>` ("<name> orgasm", `scOrgasmActorFid` / `scFilterLabel`); it sends the matrix, sets the Actor table O / - (`scApplyOrgasmMatrix`), seats the Scene Creator cast (`scMatrixOrder`) and sends `_orgasm_actor` with a Description Editor pick. `deApplyListPreset` lower-cases `filter` (Papyrus interned `none` as `None`: `orgasm_None` missed).
-- Scene: `LastStage_OrgasmMode` returns `cast` for oral / clean with only the receiver orgasming (`list_query_orgasm_actor`), no same-sex exception; the preset filter is `orgasm_actor_<receiver>`. New `SeatByMatrix(reg, orgasms)` / `OrgasmsFor(actor)`: `LastStage_TrySwitch`, the editor pick for a line, `Clean_FromAction` and `ApplyWebUICommit` (`_orgasm_actor`, `seat_done_for_switch`) seat by it, `LastStage_OrderedCast` only as the fallback.
-
-### GenderPanel
-- WebUI: the gender pulldown became `scRenderGenderButton` + `#gender-panel`. `SC.filterBy` is only the match (`none` / `gender` / `positions`); new `SC.orgasmBy` `{fid: 1|0}` (grey absent; `scOrgasmState`, `scOrgasmSet`, `scSetOrgasmAll`, `scSetOrgasmOnly`, `scOrgasmFromPreset`). Removed `SC_FILTER_OPTIONS` / `SC_FILTER_LABELS` / `SC_FILTER_ORGASM`, `scFilterOptions`, `scFilterLabel`, `scIsOrgasmMode`, `scOrgasmActorMode`. `SC_FILTER_ORDER` is `gender → none`; `scFilterChainStep` drops orgasm names first. The matrix goes over the cast's humans only (creature casts too) with `_orgasm` -1 for grey; a DE pick sends `_orgasm_matrix` instead of `_orgasm_actor`.
-- AnimDB: `CastOrgasm::orgasm` is an int (1 / 0 / -1 either); `ParseCastOrgasm` reads negative numbers as -1; `SeatForMatrix` seats an either actor anywhere its sex fits. Native `AnimDb_SeatForMatrix(registry, Int[] sexes, Int[] orgasms)` (was `Bool[]`).
-- Scene: `OrgasmsFor` returns `Int[]`, `SeatByMatrix(reg, Int[])`; new `OrgasmsFromMatrix(jarr)` for `_orgasm_matrix` in `ApplyWebUICommit` (`_orgasm_actor` still read as a fallback).
-
-### Futa
-- `MatchesFilter`: rows tagged `allfuta` / `futaall` need every human intersex, `futa` at least one (`FutaFits` / `FutaCastOf`: matrix, position match or gender match counts). `RankGenderTier(row, cast, intersex)` ranks a misfit tier 2. `Scene_Creator` and `LastStage_Query` rank queries send `_intersex`.
-
-### Per-animation intent
-- Scene: `ai_regs` / `ai_intents` / `ai_givers` / `ai_receivers` / `ai_parts` (64). `AnimIntent_Note` on scene start and every switch (`LastStage_OnSwitched`), `AnimIntent_Apply` when an animation plays again without an explicit intent (`Engine_SetStageInputs` → `AnimIntent_OnNewAnimation`, list `next`), `AnimIntent_Prune` in `SetChain`. Explicit switches set `ai_explicit` (Clean action, Description Editor commit); a commit pick of a listed animation with the clean word off and `_intent` unchanged takes its stored intent. State pushes `_anim_intents`.
-- WebUI: `deClickAnimRow` back to remove-on-click / add-and-pick; `C` (`deMakeCurrent` / `deMakeCurrentReg`) picks a chained row and restores its clean word and intent. Rows show the intent badge (`deAnimRowCells(a, badge)`).
+### Intent pulldown
+- New Intent pulldown (`scRenderIntentPulldown`, columns of 8 via `scIntentGrid`) with a position-0 pin (`_seat_first` / `_seat_any_sex`, native `AnimDb_SeatForMatrixEx`). Each chain entry keeps its own intent (`_chain_intents`, `_chain_pos`; Scene `ai_*` / `ce_*` arrays, repeats allowed); the HUD shows it (`SetSceneIntent`, HUD JSON `intent`).
 
 ### Clean
-- `Clean_FromAction` returns at once when the same clean already plays. Clean queries and the clean preset suppress `dildo`; `scCleanWords` / `scCleanWordsOff` (oral white, dildo red, receiver orgasm) also run when the filter tab opens on a cleaning scene.
+- New `SexLab_Clean_Cock` / `SexLab_Clean_Pussy` actions (`Actions.CleanScene`). A clean has no orgasm, steps every `sexlab.clean.seconds` and ends on the last-stage list (`Clean_Finish`); native `SetSceneCleaning`, HUD JSON `cleaning`.
 
-### Description Editor
-- `DE.animChanged` (set by a pick, reset on open) hides the Actor table's ▲▼.
-
-### Stage holds
-- `OrgasmEngine::StageHoldCap`: with no primary, the stage's own timer when it has one (was at least `stage_hold_max`, 60 s).
-
-### Stale OStim flag
-- New native `SkyrimNet_SexLab_Locker.ClearOstim(Actor)` (`ActorLocker::ClearOstim`): `AddToFaction(OStimActorCountFaction, -1)` when the actor is in it, true if it was. `WebUI_ForceUnlock` calls it (trace ` ostim cleared`). Scene Creator `scLockedNearbyActors` also accepts status `ostim`, with its own tooltip and dialog text. `WebUI_ForceUnlock` also ends a foreign SexLab thread (`sexlab.FindActorController` + `EndAnimation(true)`, skipped when `EndSceneForActor` ended ours; trace ` sexlab:<tid>`) and a running OStim thread (`OActor.GetSceneID` + `OThread.IsRunning` / `OThread.Stop`, only with `OStim.esp`; trace ` ostim thread:<id>`). New compile header `Headers_Source/OStim/OThread.psc`; `OActor.psc` gains `GetSceneID`.
-- Control Panel `renderControlActorPulldown`: entries with status `locked` / `ostim` get a ` 🔒` label suffix and stay out of the disabled set. Picking one calls `scConfirmUnlock` and re-renders instead of focusing the actor.
-
-### Stage by enjoyment
-- `OrgasmEngine::StageFollowPrimary` steps forward one stage at a time. Each step needs `kStageStepMinSecs` (4 s) of `stageElapsed` on the current stage. Before, the whole band jump went in one move, and 1.6x `GoToStage` cut straight there (2026-11-15 log: `1 -> 3/5`). Moves back are unchanged.
-
-### Actions
-- `sexlab_clean_cum` description: wiping with a cloth or hand, no sex act or scene. It points to Clean pussy / Clean cock for the mouth. `SexLab_Clean_Pussy` / `SexLab_Clean_Cock` descriptions: they cover licking cum off, and they are for any request to clean that part. 2026-11-15 log: "clean my cum from nia's pussy" picked `sexlab_clean_cum`, so no scene started.
-
-### Intent (diagnostic)
-- DEBUG-DELETE traces: `ApplyWebUICommit` / `WebUI_OnMenuLiveUpdate` log when `_intent` changes `intent`; `LastStage_OnSwitched` logs line / act / intent after `LastStage_NoteIntent`. 2026-11-15 log: after a list line 4 (oral) switch, the end narration still said "finish cleaning Pussy".
-
-### Positions
-- `Actions.StartScene_Event`: new `IsCunnilingusOnly(tags)` (cunnilingus without blowjob / 69). Giving puts the speaker at SexLab pos1, getting at pos0 (pos0 is the cunnilingus receiver). Fixes `CleanScene` part pussy and any `cunnilingus` + direction action.
-
-### Stage holds
-- `Victim_StageStart` clears `victim_hold_enjoyment` with `victim_hold_noprimary` when no hold is up (`Victim_Drop` leaves both). `Victim_Poll`: when stages stop following enjoyment it re-runs `Victim_StageStart`, so a no-primary stage gets its `NoPrimary_StageStart` hold. Before, on SexLab 1.66 with AutoAdvance off, `Victim_Release`'s `ResolveTimers()` reset `TimedStage` and an untimed stage never moved.
-
-### Description Editor
-- `deApplyListPreset` lower-cases the preset's `any` / `suppress` (Papyrus sends "Oral", "Sexual"); the tag words and `SC.tags.includes(...)` checks are lower case.
-
-### Clean
-- Scene_Creator keeps an action's clean (`clean_from_action`) when a commit sends an empty `_clean`, unless `_clean_off` is 1 (set by `scCleanStore`). `Scene` active state exports `_clean` while a clean runs; `SceneInfo.mergeFromState` applies it unless the player turned it off. `Clean_StartSentence()` replaces the start line. A DEBUG-DELETE trace in `StageStart` logs clean stage steps.
-
-### Stop
-- `SEXLAB_STOP`: a victim alone in the scene may stop it. New C++ decorator `sexlab_scene_actor_count` (`Decorators::SceneActorCount` / `ActorSceneCount`, positions in the actor's `g_threads` entry, `0` when none), also handled in WebUI `EvalCondition`. Rule 2 is `SkyrimNet_SexLab_Faction_Victim < 0 OR sexlab_scene_actor_count == 1`. Before, `StartScene_Nonconsensual_One` (e.g. `SexLab_Masturbation_Forced`) made the speaker a victim with no aggressor, so nothing could stop the scene.
-
-### Locked actors
-- Nearby status `locked` gets the label "Locked" (`NearbyReasonLabel`, JS `NEARBY_REASON_LABELS`). Scene Creator lists locked actors it does not own last (`scLockedNearbyActors`, `tr.pos-locked`, not addable). The 🔒 opens the new `confirmDialogOpen` (`#confirm-dialog-overlay`); Yes calls `papyrusQuery('SkyrimNet_SexLab_Scene_Manager','WebUI_ForceUnlock',formId)`.
-- `scLockedNearbyActors` also lists status `sexlab` (title "In a scene: unlock to add"); `scConfirmUnlock` refetches the nearby list now and after 2 s (the scene ends on its own thread). DEBUG-DELETE `scSeed` line in `scEnsurePositionSeed` logs the seed pool.
-- New `Scene_Manager.WebUI_ForceUnlock(Actor) global` (`EndSceneForActor`, `FindCreatorByActor` + `Release()`, `AnimEngine_End(AnimEngine_SceneOf)`, `Locker.Unlock`; returns `ok` / `error:<why>`) and `Scene_Manager.FindCreatorByActor`.
-
-### Scene Creator
-- The opening random seed (`SC.chainSeeded`) is gone; the chain opens empty.
-- Filter-by pulldown (`SC_FILTER_OPTIONS`): `none` (any) / `gender` / `orgasm_all` / `orgasm_none` / `orgasm_male` / `orgasm_female` / `positions`. The orgasm modes send gender counts plus the new AnimDB key `_orgasm` (`all` / `none` / `male` / `female` → `FilterSpec::orgasm`, `OrgasmFits` in `MatchesFilter`, parsed in both `Papyrus_WebUI` and `Papyrus_AnimationDB`). `scFilterOptions` hides male / female without that sex or with 3+ actors; `scFilterMode` falls back to gender.
+### Prepare
+- New `SexLab_Prepare_Cock` / `SexLab_Prepare_Pussy` actions (`clean_kind` "prepare"). The list offers stop + the sex it leads to (`LastStage_PrepareLines`, `prepared` in `last_stage.prompt`); native `SetScenePreparing`.
 
 ### Last stage
-- Lines are built per cast (`Scene.LastStage_BuildLines`: `list_keys` / `list_labels` / `list_acts` / `list_parts` / `list_giver` / `list_receiver` / `list_ai`). Choice codes are line indexes; `LINE_NEXT` 6 → 100, the victim mid switch 5 → `LINE_MID` 101, `LINE_FORCE` 102 (`list_force_act`).
-- Natives changed: `WebUI.LastStage_Show(index, advance_key, next_name, String[] lines)`, `WebUI.LastStage_Request(sid, caller, castNames, playerInScene, String optionsJson)`. Hud `kListNextChoice` 6 → 100; `Hud::LastStageShow(..., lines)`.
-- `StrategyDecision::RequestLastStage(..., optionsJson, done)`: context `options` / `victim_name` / `aggressor_name`; the answer key maps to the option's `line`. `last_stage.prompt` words each option (victim framing for stop / cuddle / clean).
-- Directed lines: `LastStage_OrderedCast` (position 0 takes the penis) ranks the AnimDB pick and `LastStage_ApplyOrder` swaps positions (`thread.ChangePositions`) before the switch. Oral / clean pick `blowjob` or `cunnilingus`, then `oral` without the other.
-- Clean (checkpoint 08): `Clean_Finish` sets `SetEndHold(true)` before `Clean_Clear` (the engine's `StageFollowPrimary` moved 4 -> 1/5 in between). `Victim_StageStart` always takes `NoPrimary_StageStart` while `Clean_Owns()`, and `Victim_Poll` keeps that hold whatever `IsStageNoPrimary` says. `LastStage_TimedLeft` floors a list after a clean at `2 x clean_stage_secs`. The start narration uses `Clean_Sentence()`. `OrgasmEngine::StepSceneSpeed` ignores presses while `cleaning`, and the HUD / `StrategyDecision` key lists drop slower / faster then. `Scene_Creator.ResolveAnimationsFromUI` hands SexLab only the chain's first animation. JS: `sceneCleanFromState` lowercases `_part` (Papyrus sends "Pussy"), `deRefreshFilterAnims` sends no `_also_registries` under a list preset, and `deAnimRowCells(a, clean)` draws the `.clean-badge`. `SexLab_Clean_Cock` label: "Clean or prepare cock".
-- Clean: `Clean_Arm` (in `LastStage_TrySwitch`, before `LastStage_ApplyOrder`: keeps `clean_giver` / `clean_receiver` / `clean_part` as actors, `clean_pending`) / `Clean_Begin()` / `Clean_Poll` / `Clean_Clear`; `Engine_SetSkills` sets nobody expected while `clean_active`. Setting `sexlab.clean.seconds` (int, default 10): seconds per clean stage (2026-11-15; it was the total length, default 30). `StageStart` narrates only `Clean_Sentence()` ("Mary cleans Bob's cock with her mouth.") once while `clean_pending || clean_active` (`clean_narrated`), then no change sentences.
-- Description Editor from a list line: `deListNeedsPick` greys `.de-btn-continue-close` until a pick; `_snslListPreset` clears on a full push for its scene without `_list_preset`. `LastStage_PresetJson` adds `filter: orgasm_<mode>` (`LastStage_OrgasmMode`: cuddle `none`; oral and clean the receiver's sex when the pair differs; the clean preset's tag is `oral`); `deApplyListPreset` sets it with the `gender → none` fallback chain.
-- `list_editor_line` (set in `LastStage_OpenEditor`): `WebUI_SwitchToRegistry` runs `Clean_Arm` + `LastStage_ApplyOrder` for the editor's pick, as `LastStage_TrySwitch` does. `LastStage_QueryPreferOrgasm` tries `_orgasm` first (`list_query_orgasm`).
-- Clean: `Clean_Finish(why)` runs from `Clean_AtListStage()` (3+ stages: `Stage >= count - 1`; 2 stages: the final stage) in `Clean_Poll` / `Victim_StageStart`, from `Victim_Poll`'s no-primary advance, and from the timer only for 1-2 stage animations (`clean_left = 3 * clean_stage_secs`). While a clean owns the animation, the no-primary hold steps every `clean_stage_secs` instead of `StageHoldCap` (`NoPrimary_StageStart` holds even with the cap off). `Clean_Finish` sets `list_after_clean` + `OrgasmEngine.SetEndHold(sid, true)` before `LastStage_Begin`; `LastStage_Consider` keeps that list on its non-final stage (as for `ending_end_state`), and `LastStage_Close` clears both.
-- New native `SkyrimNet_SexLab_OrgasmEngine.SetSceneCleaning(sid, bool)` (`OrgasmEngine::SetSceneCleaning` / `IsSceneCleaning`, `SceneState::cleaning`): set by `Clean_Begin`, cleared by `Clean_Clear` / `Clean_EndForSwitch`. `Hud.cpp` sends `cleaning`; `hud.html` labels the stage row `cleaning` (accent) instead of `stages`.
-- `clean_anim` / `Clean_Owns()` / `Clean_EndForSwitch(why)`: `WebUI_SwitchToRegistry` ends an active clean before the new animation loads, and `Clean_Poll` / `Clean_AtFinalStage` / `Victim_Poll` act only while the clean's animation plays. `LastStage_Commit(true)` opens the editor once per list when the list is on screen and Animation Selection is on (`list_deadline_editor`).
-- `seedSceneInfos` now reads `_list_preset` (`deNoteListPreset`, shared with `configureDescriptionEditor`): the editor opened from a list line binds from the overlay seed alone. With a preset, `deRenderAnimList` shows only filter rows (no chain head, no playing-row highlight) and `deClickAnimRow` picks directly (no chain edit). `WebUI_ApplyChain` leaves `list_index` alone while `list_editor_line >= 0`; `WebUI_SwitchToRegistry` takes the editor line as `list_index`. The 1.6x path calls `LastStage_OnSwitched` right after `SetAnimation`, before the reseed tail.
-- Clean word (`index.html`): `SC.clean` (`{_giver,_receiver,_part}` or null; also `SceneInfo.clean`, `sceneCleanFromState`), rendered after `SC_FIXED_TAGS` in `scRenderAvailableTags` as one `clean <name>` per `scCleanCandidates()` (2+ positions with a known gender, creatures included). `scSetClean(receiverFid)` / `scToggleClean(fid)`: `scCleanFor(receiver)` picks the giver (initiator, or the first other position when the initiator is the receiver), `oral` into `SC.tags`, `filterBy` `orgasm_male|female` with the `gender → none` chain when `scFilterOptions()` allows it. Turned off by `scCycleTagToggle('oral' | 'sexual')` and the filter-by `onPick`; an initiator pick re-derives the giver (`scCleanRegive`). Never red. The render never changes `SC.clean`; `scCleanForCommit()` drops a clean whose receiver left the cast and re-derives a giver who left. `scCycleTagToggle('sexual')` sets `filterBy` `orgasm_none` (red) / `orgasm_all` (white) / default (grey). `deSendPendingSwitch` always sends `_clean` (empty = none); `toCommitJson` sends it with `pendingCreate` / `reseedDefaults`. `LastStage_PresetJson` adds `clean` / `clean_giver` / `clean_receiver` / `clean_part`; `deApplyListPreset` applies it once per open (`info.cleanFromPreset`), and only once both actors are in `SC.positions` (`scCleanInCast`).
-- `deOpenFilterTab` no longer runs `scArmFilterDowngrade` while a preset `filter` or the clean word is set (it reset the preset's orgasm mode to gender). DEBUG-DELETE `list preset` line in `deApplyListPreset`.
-- `Scene.psc`: `Clean_ArmActors(giver, receiver, part)` (`Clean_Arm(line)` calls it), `Clean_FromCommit` (from `ApplyWebUICommit`'s `_clean`; `clean_commit_decided` makes the editor-line pick skip `Clean_Arm(line)`), `SetStartClean` + `clean_at_start` (begun in the first `StageStart` that sets `STATUS_ACTIVE`, before the start narration), `Clean_FromAction`. `LastStage_OnSwitched` begins any `clean_pending` clean, list or not. `Clean_Finish` calls `LastStage_Begin()` instead of `EndAnimation` (falls back to it when `list_phase` stays 0). `LastStage_Commit` ignores commits within 5 s of `LastStage_OpenEditor` (`list_editor_opened_at`).
-- `Scene_Creator.psc`: `Clean_Set`, `_clean` in `BuildWebUIObject` / `ApplyWebUIState`, `sl_scene.SetStartClean` in `FinishStartScene`, and `Setup` takes `Scene_Manager.Clean_TakePending` for a two-actor cast. `Scene_Manager.Clean_NotePending` / `Clean_TakePending` (60 s, `pending_clean_giver` / `_receiver` properties).
-- New actions `SexLab_Clean_Cock` / `SexLab_Clean_Pussy` → `Actions.CleanScene(speaker, target, part, style)` (static `part`, no cum gate). In a shared scene it calls `Clean_FromAction`; with neither actor in a scene it calls `Clean_NotePending` + `StartScene_Event(tags blowjob|cunnilingus, setting no_penis)`. `actions_index.json` regenerated.
-- `Orgasm_ApplyGroup`: when `Ending_WillJump`, `Ending_Check` runs before the `SexLabForceOrgasm` loop (`jumped_early`), and the stash is not folded into the final stage's DN.
+- Lines built per cast (`LastStage_BuildLines`); `LastStage_Show` / `LastStage_Request` natives take the lines / options JSON. Directed lines seat the pair first. No list deadline in a player scene.
+
+### Animation filter
+- Gender button panel: match + per-actor orgasm (`_orgasm: "cast"`, `_cast_orgasm`, native `AnimDb_SeatForMatrix`). Futa rows need a futa in the cast.
+
+### Scene Creator and Description Editor
+- New `C` column (`curCellHtml` / `animMakeCurrent`); the Scene Creator opens with an empty chain and starts on its first entry.
 
 ### Mini-game strategies
-- Keys renamed: `mutual` → `arouse_all`, `selfish` → `arouse_self`, `selfless` → `arouse_others`, `focused` → `arouse` (`ParseStrategy` keeps the old names and the pre-release `focus_*` / `focus` as aliases). `strategies.json` `order` / `choice` lead with "arouse" ("arouse {target}"). `tease` dropped; id 7 is now `deny_others` (`Strategy::kDenyOthers`, also in `OrgasmEngineAPI.h`): calms every other actor, counts as holding the primary back, and an aggressor on it keeps every victim out of the gate. Other ids unchanged.
-- Manifest default strategy options: Arouse all / Arouse self / Arouse others / Passive / Deny self ("Mini-game Arouse all target" renamed from Focus mutual).
-- One-orgasm defaults: `DefaultStrategy(sc, st, target&)` gives `arouse_self` to the `SoleExpected` actor and `arouse` on them to every other non-victim. `ActorState::lastDefault` / `lastDefaultTarget` (`TakeDefault`); `SceneState::soleExpected`; the tick re-defaults on an `AnyExpected` / `SoleExpected` change, silently within `kRedefaultQuietSecs` (5 s) of `beganAt`.
+- Strategies renamed to arouse / deny (`ParseStrategy` keeps old names); `tease` dropped, id 7 is `deny_others`; one-orgasm defaults via `DefaultStrategy`.
+
+### Stages
+- `StageFollowPrimary` steps one stage per 4 s; `StageHoldCap` is 0 in a player scene and follows the stage timer with no primary.
+
+### Victim scenes
+- Endings off no longer loops a victim scene; `SEXLAB_STOP` lets a lone victim stop (new decorator `sexlab_scene_actor_count`).
+
+### Locked actors
+- `Scene_Manager.WebUI_ForceUnlock` (also ends foreign SexLab and OStim threads) and native `Locker.ClearOstim`; 🔒 rows in the Scene Creator and Control Panel.
 
 ## 0.37.4
 

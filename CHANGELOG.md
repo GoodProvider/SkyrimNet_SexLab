@@ -1,5 +1,70 @@
 # Changelog
 
+## [0.37.5](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.5) — since [0.37.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4)
+
+### Intent pulldown
+- `index.html`: `scRenderIntentPulldown` / `scIntentOptions` / `scApplyIntent` (`SC.intentSel`, `info.intentSel`) in Animation Selection, the Scene Creator and the Description Editor. Options: sexual, kissing, cuddle, `vaginal:<fid>` (pussy only), `anal:<fid>`, `oral:<fid>`, `prepare:<fid>`, `clean:<fid>`, custom. `SC_INTENT_WORDS` / `scIntentWordsReset` clear the other intent words on a pick; `scIntentAfterWordClick` moves the pick only for intent words and GenderPanel words; `scIntentDefault()` is sexual unless `SC.suppress` has sexual.
+- The menu is a grid of 8 rows (`.intent-pulldown`); `scIntentGrid` places each option so one act's group stays in one column (`decorateDisplay` on `createPulldown`).
+- Position-0 pin: `scSeatFirst` / `scSeatFirstFor` (directed acts; a cock's oral / clean / prepare pins the giver; none for oral / clean / prepare while gender is grey). The pick sets gender white with a `grey-keep` downgrade step. AnimDB: `CastOrgasm::first` (`_first`), `FilterSpec::cast_any_sex` (`_cast_any_sex`), `SeatForMatrix(row, cast, anySex)`, new native `AnimDb_SeatForMatrixEx(registry, sexes, orgasms, first, anySex)`. DE picks send `_seat_first` / `_seat_any_sex`.
+- Per-entry intent: `info.chainStamps[i]`, `_chain_intents: [{_index, _registry, _act, _intent, _giver, _receiver, _part}]` and `_chain_pos` on chain commits, picks and Scene Creator starts; `chainEdit` keeps repeat entries. Scene: `ai_regs` / `ai_intents` / `ai_acts` / `ai_givers` / `ai_receivers` / `ai_parts` (old saves backfilled in `AnimIntent_Ensure`), `AnimIntent_Note` / `AnimIntent_Apply` / `AnimIntent_Seat` / `AnimIntent_FromChainJson`; state pushes `_anim_intents`. `SetChain` keeps repeats (128 slots, `ce_*` arrays, `chain_pos`, `ChainPlayingIndex`, `ChainSyncPos`, `ChainEntryToIntent`); `LastStage_ChainNext` / `ChainEnds` walk from the playing entry.
+- HUD: `OrgasmEngine::SetSceneIntent` / `SceneIntentOf` (`SceneState::intent`), native `SkyrimNet_SexLab_OrgasmEngine.SetSceneIntent`, HUD JSON `intent`; `hud.html` labels the stage row with it. `Scene.Engine_PushIntent` runs on stage inputs, clean mode, intent notes and both `_intent` commits.
+- The per-actor clean tag words are gone from `scRenderAvailableTags`; the animation table header `genders` → `orgasm`.
+
+### Clean
+- New actions `SexLab_Clean_Cock` ("Clean or prepare cock") / `SexLab_Clean_Pussy` → `Actions.CleanScene(speaker, target, part, style)`. In a shared scene it calls `Scene.Clean_FromAction` (no-op when the same clean already plays); otherwise `Scene_Manager.Clean_NotePending` + `StartScene_Event` (tags blowjob / cunnilingus, setting `no_penis`), picked up by `Scene_Creator.Setup` (`Clean_TakePending`, 60 s).
+- Scene: `Clean_ArmActors` / `Clean_Begin` / `Clean_Poll` / `Clean_Finish` / `Clean_Clear` / `Clean_EndForSwitch`, `Clean_FromCommit` (WebUI `_clean`), `SetStartClean` (Scene Creator start). Nobody is expected to orgasm; while a clean owns the animation the no-primary hold steps every `sexlab.clean.seconds` (int, default 10). `Clean_AtListStage` is `Stage >= 3` (3+ stages); `Clean_Finish` sets `SetEndHold(true)` and opens the last-stage list (`list_after_clean`, floored at 2 × the stage length) instead of ending the scene.
+- New native `SkyrimNet_SexLab_OrgasmEngine.SetSceneCleaning` (`SceneState::cleaning`): HUD JSON `cleaning`, `StepSceneSpeed` ignores pace presses, the HUD / `StrategyDecision` key lists drop slower / faster.
+- Narration: `Clean_StartSentence()` at the start; `AnimationEnd` uses `MouthEndSentence` for a clean / prepare (orgasm stash dropped, no afterglow). See `docs/reference/orgasm-narration.md`.
+- Clean queries and the clean preset suppress `dildo`. `sexlab_clean_cum` is described as wiping with a cloth or hand and points to Clean pussy / Clean cock for the mouth.
+
+### Prepare
+- New actions `SexLab_Prepare_Cock.yaml` / `SexLab_Prepare_Pussy.yaml` (`Actions.PrepareScene` / `MouthScene`). Scene `clean_kind` ("clean" / "prepare") through `Clean_ArmActors`, `SetStartClean`, `Clean_FromCommit` (`_kind`), `Clean_FromAction`, `Scene_Manager.Clean_NotePending(..., kind)` and `Scene_Creator.Clean_Set(..., kind)`.
+- The prepared actor keeps passive gain. `Clean_Finish` sets `list_after_prepare` / `prep_*`; `LastStage_PrepareLines` builds stop + vaginal (pussy) or vaginal / anal (cock); `LastStage_OptionsJson` adds `prepared`, which `StrategyDecision::RequestLastStage` passes to `sexlab/last_stage.prompt`.
+- New native `SkyrimNet_SexLab_OrgasmEngine.SetScenePreparing` (`IsScenePreparing`, speed lock as a clean); HUD JSON `preparing`.
+
+### Last stage
+- Lines are built per cast (`Scene.LastStage_BuildLines`: `list_keys` / `list_labels` / `list_acts` / `list_parts` / `list_giver` / `list_receiver`). Choice codes are line indexes; `LINE_NEXT` 6 → 100, `LINE_MID` 101, `LINE_FORCE` 102. Natives changed: `WebUI.LastStage_Show(index, advance_key, next_name, String[] lines)`, `WebUI.LastStage_Request(sid, caller, castNames, playerInScene, String optionsJson)`; `Hud::LastStageShow(..., lines)`, `kListNextChoice` 100.
+- `StrategyDecision::RequestLastStage(..., optionsJson, done)`: context `options` / `victim_name` / `aggressor_name`; `last_stage.prompt` words each option (victim framing for stop / cuddle / clean). At the orgasm limit the NPC may pick only stop / cuddle / clean.
+- Directed lines: `LastStage_OrderedCast` / `LastStage_ApplyOrder` (`thread.ChangePositions`) before the switch; oral / clean seat by `SeatByMatrix(reg, OrgasmsFor(receiver))`.
+- Description Editor from a line: `LastStage_PresetJson` (tags, `filter`, clean fields), `deApplyListPreset` (lower-cases Papyrus values), `deListNeedsPick` greys continue until a pick; `list_editor_line` makes the pick run `Clean_Arm` + `LastStage_ApplyOrder`. `LastStage_Commit(true)` opens the editor once per list when Animation Selection is on.
+- Player scenes: `LastStage_Snapshot` / `LastStage_Poll` set no list deadline while `LastStage_SeesList`.
+- `Orgasm_ApplyGroup`: when `Ending_WillJump`, `Ending_Check` runs before the `SexLabForceOrgasm` loop.
+
+### Animation filter
+- The gender pulldown became `scRenderGenderButton` + `#gender-panel`: `SC.filterBy` is the match (`none` / `gender` / `positions`), `SC.orgasmBy` `{fid: 1|0}` (grey absent). AnimDB `_orgasm: "cast"` with `_cast_orgasm: [{_sex, _orgasm}]` (`_orgasm` 1 / 0 / -1); `AnimationDB::SeatForMatrix` decides `OrgasmFits`. New native `AnimDb_SeatForMatrix(registry, Int[] sexes, Int[] orgasms)`. Scene `SeatByMatrix`, `OrgasmsFor`, `OrgasmsFromMatrix` (`_orgasm_matrix` in `ApplyWebUICommit`).
+- Gender grey sends `_cast_any_sex` with any matrix; `AnimIntent_Seat` seats an oral with `anySex` before the position rule.
+- Futa: `MatchesFilter` needs every human intersex for `allfuta` / `futaall`, at least one for `futa` (`FutaFits` / `FutaCastOf`); `RankGenderTier(row, cast, intersex)`; rank queries send `_intersex`.
+- `LastStage_OrgasmMode` cuddle `none` now applies. `scBoundActive` (white or worn) replaces `scBoundEnabled` for the rape skip-red rule.
+
+### Scene Creator and Description Editor
+- Animation tables get a `col-cur` column (`curCellHtml` / `animMakeCurrent`) with `C` on every non-current row. Scene Creator: the first chain entry is current; `scChainOp(..., 'current')` moves an entry to the top (`chainEdit` op `front`). Description Editor: a row click adds without making it current; `deMakeCurrent` adds an unlisted row and makes it current.
+- Scene Creator: the opening random seed (`SC.chainSeeded`) is gone; `Scene_Creator.ResolveAnimationsFromUI` hands SexLab only the chain's first animation.
+- Description Editor: `deClickAnimRow` removes a listed row and adds any other; a pick of a listed animation takes its stored intent; `DE.animChanged` hides the Actor table's ▲▼.
+
+### Mini-game strategies
+- Keys renamed: `mutual` → `arouse_all`, `selfish` → `arouse_self`, `selfless` → `arouse_others`, `focused` → `arouse` (`ParseStrategy` keeps the old names as aliases). `tease` dropped; id 7 is `deny_others` (`Strategy::kDenyOthers`, also in `OrgasmEngineAPI.h`). `strategies.json` `order` / `choice` lead with "arouse". Manifest default strategy options renamed.
+- One-orgasm defaults: `DefaultStrategy(sc, st, target&)` gives `arouse_self` to the `SoleExpected` actor and `arouse` on them to every other non-victim; re-defaults on an `AnyExpected` / `SoleExpected` change (`kRedefaultQuietSecs` 5 s).
+
+### Stages
+- `OrgasmEngine::StageFollowPrimary` steps forward one stage at a time, each step after `kStageStepMinSecs` (4 s) on the current stage.
+- `StageHoldCap`: 0 for a player scene (`hasPlayer` or a `playerDriven` actor) with a primary; with no primary, the stage's own timer when it has one (was at least `stage_hold_max`).
+- `Victim_StageStart` / `Victim_Poll`: a no-primary stage gets its `NoPrimary_StageStart` hold again when stages stop following enjoyment (1.66 with AutoAdvance off left it stuck).
+
+### Victim scenes
+- `Ending_Forced` / `Ending_Enabled` / `Ending_Target` force target 1 for a victim scene staged by enjoyment, so `sexlab.ending.enabled: false` no longer loops 3 → 1. The mid path shows the last-stage list ("Next: ..." preselected) before switching.
+- `SEXLAB_STOP`: rule 2 is `SkyrimNet_SexLab_Faction_Victim < 0 OR sexlab_scene_actor_count == 1`. New C++ decorator `sexlab_scene_actor_count` (`Decorators::SceneActorCount`), also in WebUI `EvalCondition`.
+
+### Locked actors
+- New `Scene_Manager.WebUI_ForceUnlock(Actor) global` (ends our scene, releases a creator, `AnimEngine_End`, `Locker.Unlock`; returns `ok` / `error:<why>`) and `FindCreatorByActor`. It also ends a foreign SexLab thread and a running OStim thread (`OActor.GetSceneID` + `OThread.Stop`, only with `OStim.esp`).
+- New native `SkyrimNet_SexLab_Locker.ClearOstim(Actor)`: removes a stale `OStimActorCountFaction` membership.
+- Scene Creator `scLockedNearbyActors` lists `locked` / `sexlab` / `ostim` actors last (`tr.pos-locked`); the 🔒 opens `confirmDialogOpen`. Control Panel `renderControlActorPulldown` shows the 🔒 and asks to unlock.
+
+### Bug Fixes
+- `Actions.StartScene_Event`: `IsCunnilingusOnly(tags)` puts the giver at SexLab pos1 and the receiver at pos0.
+
+### Build
+- New compile header `Headers_Source/OStim/OThread.psc`; `OActor.psc` gains `GetSceneID`.
+
 ## [0.37.4](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.4) — since [0.37.3](https://github.com/GoodProvider/SkyrimNet_SexLab/releases/tag/0.37.3)
 
 ### Scene style
