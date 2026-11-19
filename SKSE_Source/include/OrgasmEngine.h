@@ -60,6 +60,10 @@ namespace OrgasmEngine
     void SetScenePaused(std::int32_t sid, bool paused);
     /// Scene.Clean_Begin (true) / Clean_Clear, Clean_EndForSwitch (false): the HUD's stage label reads "cleaning".
     void SetSceneCleaning(std::int32_t sid, bool cleaning);
+    /// Scene.Clean_EngineMode for a prepare (2026-11-16): the HUD's stage label reads "preparing"; speed locked as a clean.
+    void SetScenePreparing(std::int32_t sid, bool preparing);
+    /// Scene.Engine_PushIntent (2026-11-18): the scene's intent text, the HUD stage row's label.
+    void SetSceneIntent(std::int32_t sid, const std::string& intent);
     /// Gate pass narration was just sent: the next non-player speech start pushes the scene to its
     /// final stage (Effect_AdvanceToFinal). mark: SpeakerMark() taken just before the DN went out, so a
     /// fast voice is not missed; < 0 takes it now.
@@ -134,6 +138,10 @@ namespace OrgasmEngine
     bool IsScenePaused(RE::Actor* anchor);
     /// The anchor actor's scene is playing a clean (SetSceneCleaning).
     bool IsSceneCleaning(RE::Actor* anchor);
+    /// The anchor actor's scene is playing a prepare (SetScenePreparing).
+    bool IsScenePreparing(RE::Actor* anchor);
+    /// The anchor actor's scene intent (SetSceneIntent); "" when none was sent.
+    std::string SceneIntentOf(RE::Actor* anchor);
     /// Player scene stage (1-based) and stage count; false (0/0) when not in a scene.
     bool GetPlayerSceneStage(int& stage, int& count);
     bool GetSceneStage(RE::Actor* anchor, int& stage, int& count);

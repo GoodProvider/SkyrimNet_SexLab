@@ -29,9 +29,6 @@
         "CMAKE_CXX_STANDARD": "23",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
         "CMAKE_CXX_EXTENSIONS": "OFF"
-      },
-      "environment": {
-        "VCPKG_ROOT": "$env{USERPROFILE}/vcpkg"
       }
     },
     {

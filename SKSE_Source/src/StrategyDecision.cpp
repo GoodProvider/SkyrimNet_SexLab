@@ -1333,6 +1333,7 @@ namespace StrategyDecision
         auto options = nlohmann::json::array();
         ctx["victim_name"] = "";
         ctx["aggressor_name"] = "";
+        ctx["prepared"] = "";
         if (!optionsJson.empty()) {
             try {
                 const auto j = nlohmann::json::parse(optionsJson);
@@ -1341,6 +1342,8 @@ namespace StrategyDecision
                 }
                 ctx["victim_name"] = j.value("victim", "");
                 ctx["aggressor_name"] = j.value("aggressor", "");
+                // After a prepare (Scene.LastStage_PrepareLines): "<giver> just prepared <receiver>'s <part> with ..."
+                ctx["prepared"] = j.value("prepared", "");
             } catch (const std::exception& e) {
                 webui_log::warn("StrategyDecision: last stage sid {} options unreadable ({})", sid, e.what());
             }

@@ -1091,10 +1091,12 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
         }
 
         // FilterSpec::orgasm: which of the row's positions expect an orgasm (pos_no_orgasm; none listed = all do).
-        bool OrgasmFits(const AnimRow& row, int mode)
+        bool OrgasmFits(const AnimRow& row, int mode, const std::vector<CastOrgasm>& cast, bool anySex)
         {
             if (mode <= 0)
                 return true;
+            if (mode == 5)
+                return cast.empty() || !SeatForMatrix(row, cast, anySex).empty();
             int orgasms = 0;
             int other = 0;
             for (int i = 0; i < row.position_count; ++i) {
@@ -1214,6 +1216,49 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return seat(0);
         }
 
+        // `futa`: at least one actor with penis + pussy. `allfuta` / `futaall`: every human is one (row
+        // positions fold futa into male, so the tag is the only marker).
+        bool FutaFits(const std::unordered_set<std::string>& tags, int intersex, int humans)
+        {
+            if (tags.count("allfuta") || tags.count("futaall"))
+                return humans > 0 && intersex == humans;
+            if (tags.count("futa"))
+                return intersex > 0;
+            return true;
+        }
+
+        // The filter's human cast size and intersex count, when it carries one (matrix, position or gender
+        // match, or the rank genders).
+        struct FutaCast
+        {
+            bool known = false;
+            int humans = 0;
+            int intersex = 0;
+        };
+        FutaCast FutaCastOf(const FilterSpec& spec)
+        {
+            FutaCast c;
+            if (spec.orgasm == 5 && !spec.cast_orgasm.empty()) {
+                c.known = true;
+                c.humans = static_cast<int>(spec.cast_orgasm.size());
+                for (const auto& a : spec.cast_orgasm)
+                    c.intersex += a.sex == 2 ? 1 : 0;
+            } else if (spec.position_match && !spec.pos_genders.empty()) {
+                c.known = true;
+                for (size_t i = 0; i < spec.pos_genders.size(); ++i) {
+                    if (spec.pos_genders[i] < 2)
+                        ++c.humans;
+                    if (i < spec.pos_intersex.size() && spec.pos_intersex[i])
+                        ++c.intersex;
+                }
+            } else if (spec.gender_match && (spec.males >= 0 || spec.females >= 0 || spec.intersex > 0)) {
+                c.known = true;
+                c.intersex = spec.intersex;
+                c.humans = std::max(spec.males, 0) + std::max(spec.females, 0) + spec.intersex;
+            }
+            return c;
+        }
+
         bool MatchesFilter(const AnimRow& row, const FilterSpec& spec, const ExpandedTags& ex)
         {
             if (spec.enabled_only && !row.enabled)
@@ -1275,7 +1320,11 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
                     return false;
             }
 
-            if (!OrgasmFits(row, spec.orgasm))
+            if (!OrgasmFits(row, spec.orgasm, spec.cast_orgasm, spec.cast_any_sex))
+                return false;
+
+            // Futa rows need futa in the cast, as SexLab 1.66 filters them (sslThreadModel RestrictGenderTag).
+            if (const auto cast = FutaCastOf(spec); cast.known && !FutaFits(tagset, cast.intersex, cast.humans))
                 return false;
 
             if (spec.has_description != 0) {
@@ -1294,10 +1343,16 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
 
         // FilterSpec::rank gender tier: 0 = row positions match the cast in cast order or in SexLab's
         // females-first seating, 1 = same gender counts in any position, 2 = anything else.
-        int RankGenderTier(const AnimRow& row, const std::vector<int>& cast)
+        int RankGenderTier(const AnimRow& row, const std::vector<int>& cast, int intersex)
         {
             if (cast.empty())
                 return 0;
+            {
+                const int humans = static_cast<int>(std::count_if(cast.begin(), cast.end(), [](int g) { return g < 2; }));
+                const std::unordered_set<std::string> tagset(row.tags.begin(), row.tags.end());
+                if (!FutaFits(tagset, intersex, humans))
+                    return 2;
+            }
             // No-orgasm positions take either gender (PosGenderFits / CastFits).
             const auto inOrder = [&](const std::vector<int>& order) {
                 if (order.size() != row.pos_genders.size())
@@ -1381,7 +1436,89 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             return 3;
         if (v == "female")
             return 4;
+        if (v == "cast")
+            return 5;
         return 0;
+    }
+
+    void ParseCastOrgasm(const nlohmann::json& j, FilterSpec& spec)
+    {
+        if (!j.contains("_cast_orgasm") || !j["_cast_orgasm"].is_array())
+            return;
+        spec.cast_orgasm.clear();
+        for (const auto& el : j["_cast_orgasm"]) {
+            if (!el.is_object())
+                continue;
+            CastOrgasm a;
+            if (el.contains("_sex")) {
+                const auto& v = el["_sex"];
+                if (v.is_number())
+                    a.sex = std::clamp(v.get<int>(), 0, 2);
+                else if (v.is_string()) {
+                    const auto t = ToLower(v.get<std::string>());
+                    a.sex = t == "female" || t == "f" ? 1 : (t == "intersex" || t == "futa" || t == "x") ? 2 : 0;
+                }
+            }
+            if (el.contains("_orgasm")) {
+                const auto& v = el["_orgasm"];
+                // true / non-zero positive = must, false / 0 = must not, negative = either (-1).
+                if (v.is_boolean())
+                    a.orgasm = v.get<bool>() ? 1 : 0;
+                else if (v.is_number()) {
+                    const double d = v.get<double>();
+                    a.orgasm = d < 0 ? -1 : (d != 0 ? 1 : 0);
+                }
+            }
+            if (el.contains("_first")) {
+                const auto& v = el["_first"];
+                a.first = v.is_boolean() ? v.get<bool>() : (v.is_number() && v.get<double>() != 0);
+            }
+            spec.cast_orgasm.push_back(a);
+        }
+        if (j.contains("_cast_any_sex")) {
+            const auto& v = j["_cast_any_sex"];
+            spec.cast_any_sex = v.is_boolean() ? v.get<bool>() : (v.is_number() && v.get<double>() != 0);
+        }
+    }
+
+    std::vector<int> SeatForMatrix(const AnimRow& row, const std::vector<CastOrgasm>& cast, bool anySex)
+    {
+        std::vector<int> human;
+        for (int i = 0; i < static_cast<int>(row.pos_genders.size()); ++i) {
+            if (row.pos_genders[i] < 2)
+                human.push_back(i);
+        }
+        if (cast.empty() || human.size() != cast.size())
+            return {};
+        std::vector<int> seat(cast.size(), -1);
+        std::vector<bool> used(human.size(), false);
+        const auto fits = [&](const CastOrgasm& a, int pos) {
+            // A pinned actor sits in position 0 only (the backtracking keeps position 0 free for it).
+            if (a.first && pos != 0)
+                return false;
+            const bool posOrgasm = !PosNoOrgasm(row, pos);
+            if (a.orgasm >= 0 && posOrgasm != (a.orgasm != 0))
+                return false;
+            if (!posOrgasm || anySex)
+                return true;  // no-orgasm positions take either human sex
+            const int g = row.pos_genders[pos];
+            return a.sex == 2 ? (g == 0 || g == 1) : g == a.sex;
+        };
+        std::function<bool(size_t)> place = [&](size_t k) {
+            if (k == cast.size())
+                return true;
+            for (size_t h = 0; h < human.size(); ++h) {
+                if (used[h] || !fits(cast[k], human[h]))
+                    continue;
+                used[h] = true;
+                seat[k] = human[h];
+                if (place(k + 1))
+                    return true;
+                used[h] = false;
+            }
+            return false;
+        };
+        return place(0) ? seat : std::vector<int>{};
     }
 
     std::string ToLower(std::string s)
@@ -2475,7 +2612,7 @@ CREATE TABLE IF NOT EXISTS anim_enabled (
             keys.reserve(out.size());
             for (size_t i = 0; i < out.size(); ++i) {
                 const auto pc = g_play_counts.find(ToLower(out[i].registry));
-                keys.push_back({ { RowHasAnyDescription(out[i]) ? 1 : 0, RankGenderTier(out[i], spec.rank_pos_genders),
+                keys.push_back({ { RowHasAnyDescription(out[i]) ? 1 : 0, RankGenderTier(out[i], spec.rank_pos_genders, spec.intersex),
                                      pc != g_play_counts.end() ? pc->second : 0 },
                     i });
             }

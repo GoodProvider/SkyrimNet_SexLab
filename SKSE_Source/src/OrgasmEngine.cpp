@@ -60,6 +60,7 @@ namespace OrgasmEngine
         constexpr double kPressGap = 0.1;           // NPC strategy: seconds between presses of a burst
         constexpr double kRestSecs = 2.0;           // NPC strategy: rest after running out of stamina / magicka
         constexpr double kStageBackMinSecs = 3.0;   // stage by enjoyment: time on a stage before it may move back
+        constexpr double kStageStepMinSecs = 4.0;   // stage by enjoyment: time on a stage before the next step forward
         constexpr double kOrgasmHoldSpeechGrace = 4.0;  // orgasm hold: DN send + slack on top of the speech estimate
         constexpr double kStageMoveResend = 3.0;    // stage by enjoyment: re-send a move SetStage has not confirmed
 
@@ -257,6 +258,8 @@ namespace OrgasmEngine
             bool leadIn = false;
             bool paused = false;
             bool cleaning = false;  // Scene.Clean_Begin .. Clean_Clear: HUD "cleaning" label
+            bool preparing = false;  // the same for a prepare: HUD "preparing" label
+            std::string intent;      // Scene.intent (Engine_PushIntent): the HUD stage row's label (2026-11-18)
             double finalStageAt = 0.0;  // Now() (unpaused clock) on entering the final stage
             double finalElapsed = 0.0;  // animating, unpaused seconds in the final stage
             bool staged = false;        // SetStage seen once (no spike for the first stage)
@@ -2312,7 +2315,8 @@ namespace OrgasmEngine
         // 100 x (k-1) / (N-1)) and the last stage is the orgasm's. Moves both ways, never while paused, in the final
         // stage, once the primary has orgasmed, or while a gate is passing. A move back needs kStageBackMinSecs on the
         // stage, so enjoyment hovering at a threshold cannot flip it every tick. stageFloor: the stage's own timer went
-        // past the band; do not undo that.
+        // past the band; do not undo that. Forward goes one stage at a time, kStageStepMinSecs on each, so a band jump
+        // (1 -> 4) plays every stage in between instead of cutting straight there (2026-11-15 log: 1 -> 3/5 at once).
         void StageFollowPrimary(SceneState& sc, RE::FormID primary, Effects& fx, double now)
         {
             if (sc.paused || !sc.staged || sc.primaryFinished || sc.endHold || sc.stage >= sc.stageCount || sc.gateAwait ||
@@ -2337,9 +2341,15 @@ namespace OrgasmEngine
             }
             const std::int32_t last = sc.stageCount - 1;
             const auto band = static_cast<std::int32_t>(std::ceil(st.enjoyment * static_cast<float>(last) / kMaxEnjoyment));
-            const std::int32_t target = std::clamp(std::max(band, sc.stageFloor), 1, last);
+            std::int32_t target = std::clamp(std::max(band, sc.stageFloor), 1, last);
             if (target == sc.stage) {
                 sc.stageSnap = false;
+            }
+            if (target > sc.stage) {
+                if (sc.stageElapsed < kStageStepMinSecs) {
+                    return;
+                }
+                target = sc.stage + 1;
             }
             if (target == sc.stage || (target < sc.stage && !sc.stageSnap && sc.stageElapsed < kStageBackMinSecs) ||
                 (target == sc.stageMoveTarget && now - sc.stageMoveAt < kStageMoveResend)) {
@@ -3356,6 +3366,26 @@ namespace OrgasmEngine
         }
     }
 
+    void SetScenePreparing(std::int32_t sid, bool preparing)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it != g_scenes.end() && it->second.preparing != preparing) {
+            it->second.preparing = preparing;
+            webui_log::info("OrgasmEngine: scene {} preparing {}", sid, preparing);
+        }
+    }
+
+    void SetSceneIntent(std::int32_t sid, const std::string& intent)
+    {
+        std::lock_guard lock(g_lock);
+        const auto it = g_scenes.find(sid);
+        if (it != g_scenes.end() && it->second.intent != intent) {
+            it->second.intent = intent;
+            webui_log::info("OrgasmEngine: scene {} intent '{}'", sid, intent);
+        }
+    }
+
     void GateNarrationSent(std::int32_t sid, std::int64_t mark)
     {
         std::lock_guard lock(g_lock);
@@ -3616,7 +3646,24 @@ namespace OrgasmEngine
         }
         const SceneState& sc = it->second;
         const auto i = static_cast<std::size_t>(std::max(0, sc.stage - 1));
-        return std::max(g_settings.stageHoldMax, i < sc.stageSecs.size() ? sc.stageSecs[i] : 0.0f);
+        const float timer = i < sc.stageSecs.size() ? sc.stageSecs[i] : 0.0f;
+        // Nobody can orgasm (cuddle, all no-orgasm): there is no enjoyment to wait for, so the stage runs its own
+        // timer (2026-11-15: Ace_Spooning sat on stage 1 past 45 s waiting on the 60 s cap).
+        if (PrimaryOf(sc) == 0 && timer > 0.0f) {
+            return timer;
+        }
+        // The player is in the scene or drives one of its actors (2026-11-18): no cap, the stages move by enjoyment
+        // (or the stage keys) only. Same test as PlayerScene, which is defined further down.
+        bool player = sc.hasPlayer;
+        for (const auto id : sc.actors) {
+            if (const auto at = g_actors.find(id); !player && at != g_actors.end() && at->second.playerDriven) {
+                player = true;
+            }
+        }
+        if (player && PrimaryOf(sc) != 0) {
+            return 0.0f;
+        }
+        return std::max(g_settings.stageHoldMax, timer);
     }
 
     void DisableStageAdvancePrimaryEnjoyment(std::int32_t sid)
@@ -3794,6 +3841,22 @@ namespace OrgasmEngine
         const auto* st = Find(anchor);
         const SceneState* sc = st ? SceneOf(*st) : nullptr;
         return sc && sc->cleaning;
+    }
+
+    bool IsScenePreparing(RE::Actor* anchor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(anchor);
+        const SceneState* sc = st ? SceneOf(*st) : nullptr;
+        return sc && sc->preparing;
+    }
+
+    std::string SceneIntentOf(RE::Actor* anchor)
+    {
+        std::lock_guard lock(g_lock);
+        const auto* st = Find(anchor);
+        const SceneState* sc = st ? SceneOf(*st) : nullptr;
+        return sc ? sc->intent : std::string();
     }
 
     bool GetPlayerSceneStage(int& stage, int& count)
@@ -5645,8 +5708,8 @@ namespace OrgasmEngine
             return -1;
         }
         // A clean plays at its own pace: gentle / forceful are off until it ends (2026-11-15 request).
-        if (sc->cleaning) {
-            webui_log::info("OrgasmEngine: scene {} speed unchanged: cleaning", sc->sid);
+        if (sc->cleaning || sc->preparing) {
+            webui_log::info("OrgasmEngine: scene {} speed unchanged: {}", sc->sid, sc->cleaning ? "cleaning" : "preparing");
             return EffectiveLevel(*sc);
         }
         // Offset relative to the style, so the effective level moves exactly one step (passive gain only).

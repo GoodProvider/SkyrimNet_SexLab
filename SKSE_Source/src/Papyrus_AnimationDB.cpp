@@ -85,6 +85,7 @@ namespace PapyrusBindings_AnimationDB
                     spec.gender_match = j["_gender_match"].get<bool>();
                 if (j.contains("_orgasm") && j["_orgasm"].is_string())
                     spec.orgasm = AnimationDB::ParseOrgasmMode(j["_orgasm"].get<std::string>());
+                AnimationDB::ParseCastOrgasm(j, spec);
                 if (j.contains("_males") && j["_males"].is_number_integer())
                     spec.males = j["_males"].get<int>();
                 if (j.contains("_females") && j["_females"].is_number_integer())
@@ -379,6 +380,42 @@ namespace PapyrusBindings_AnimationDB
         return RE::BSFixedString(SafeDump(RowToJson(*row)));
     }
 
+    // The row position for each human actor (sexes: 0 male, 1 female, 2 intersex) so orgasm actors sit in
+    // orgasm positions their sex fits (AnimationDB::SeatForMatrix). orgasms: 1 must, 0 must not, -1 either.
+    // Empty when no seating exists.
+    std::vector<std::int32_t> AnimDb_SeatForMatrix(RE::StaticFunctionTag*, RE::BSFixedString registry,
+        std::vector<std::int32_t> sexes, std::vector<std::int32_t> orgasms)
+    {
+        auto row = AnimationDB::GetByRegistry(registry.c_str() ? registry.c_str() : "");
+        if (!row || sexes.size() != orgasms.size())
+            return {};
+        std::vector<AnimationDB::CastOrgasm> cast;
+        for (size_t i = 0; i < sexes.size(); ++i)
+            cast.push_back({ std::clamp<std::int32_t>(sexes[i], 0, 2), orgasms[i] < 0 ? -1 : (orgasms[i] != 0 ? 1 : 0) });
+        const auto seat = AnimationDB::SeatForMatrix(*row, cast);
+        return std::vector<std::int32_t>(seat.begin(), seat.end());
+    }
+
+    // AnimDb_SeatForMatrix with a position-0 pin (first: the cast index that must sit in position 0, -1 none) and
+    // anySex (no sex test: the gender match is grey). 2026-11-17, the Intent pulldown's receiver.
+    std::vector<std::int32_t> AnimDb_SeatForMatrixEx(RE::StaticFunctionTag*, RE::BSFixedString registry,
+        std::vector<std::int32_t> sexes, std::vector<std::int32_t> orgasms, std::int32_t first, bool anySex)
+    {
+        auto row = AnimationDB::GetByRegistry(registry.c_str() ? registry.c_str() : "");
+        if (!row || sexes.size() != orgasms.size())
+            return {};
+        std::vector<AnimationDB::CastOrgasm> cast;
+        for (size_t i = 0; i < sexes.size(); ++i) {
+            AnimationDB::CastOrgasm a;
+            a.sex = std::clamp<std::int32_t>(sexes[i], 0, 2);
+            a.orgasm = orgasms[i] < 0 ? -1 : (orgasms[i] != 0 ? 1 : 0);
+            a.first = static_cast<std::int32_t>(i) == first;
+            cast.push_back(a);
+        }
+        const auto seat = AnimationDB::SeatForMatrix(*row, cast, anySex);
+        return std::vector<std::int32_t>(seat.begin(), seat.end());
+    }
+
     RE::BSFixedString AnimDb_GetStageDescription(RE::StaticFunctionTag*, RE::BSFixedString registry,
         std::int32_t stage)
     {
@@ -506,6 +543,8 @@ namespace PapyrusBindings_AnimationDB
         a_vm->RegisterFunction("AnimDb_TotalEnabled", scriptName, AnimDb_TotalEnabled, true);
         a_vm->RegisterFunction("AnimDb_TotalCount", scriptName, AnimDb_TotalCount, true);
         a_vm->RegisterFunction("AnimDb_GetByRegistry", scriptName, AnimDb_GetByRegistry, true);
+        a_vm->RegisterFunction("AnimDb_SeatForMatrix", scriptName, AnimDb_SeatForMatrix, true);
+        a_vm->RegisterFunction("AnimDb_SeatForMatrixEx", scriptName, AnimDb_SeatForMatrixEx, true);
         a_vm->RegisterFunction("AnimDb_GetStageDescription", scriptName, AnimDb_GetStageDescription, true);
         a_vm->RegisterFunction("AnimDb_GetTransition", scriptName, AnimDb_GetTransition, true);
         a_vm->RegisterFunction("AnimDb_SubstituteActors", scriptName, AnimDb_SubstituteActors, true);

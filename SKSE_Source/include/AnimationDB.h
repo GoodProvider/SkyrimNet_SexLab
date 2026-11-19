@@ -141,6 +141,16 @@ namespace AnimationDB
         int pos = -1;
     };
 
+    /// One human actor of FilterSpec::cast_orgasm. sex: 0 male, 1 female, 2 intersex (penis + pussy).
+    /// orgasm: 1 must orgasm, 0 must not, -1 either (the GenderPanel's grey name).
+    struct CastOrgasm
+    {
+        int sex = 0;
+        int orgasm = 0;
+        /// `_first`: this actor must sit in row position 0 (the Intent pulldown's receiver, 2026-11-17).
+        bool first = false;
+    };
+
     struct FilterSpec
     {
         std::optional<int> actor_count;
@@ -157,8 +167,14 @@ namespace AnimationDB
         int has_description = 0;
         bool gender_match = false;
         /// `_orgasm`: which positions expect an orgasm (pos_no_orgasm). 0 any, 1 all, 2 none, 3 only male
-        /// positions (at least one), 4 only female positions (at least one). Creature genders count as their sex.
+        /// positions (at least one), 4 only female positions (at least one), 5 the cast matrix (cast_orgasm).
+        /// Creature genders count as their sex.
         int orgasm = 0;
+        /// `_cast_orgasm` (orgasm 5): the human cast in order, each actor's sex and whether it orgasms (1 / 0 /
+        /// -1 either). A row fits when SeatForMatrix finds a seating.
+        std::vector<CastOrgasm> cast_orgasm;
+        /// `_cast_any_sex`: SeatForMatrix ignores the actors' sex (gender match grey with a position-0 pin).
+        bool cast_any_sex = false;
         int males = -1;
         int females = -1;
         /// gender_match: intersex actors, not in males / females; each stands in for either.
@@ -189,6 +205,14 @@ namespace AnimationDB
     /// Tag-filter keys of one scenes/<name>.json (default.json merged under it; the named file wins per key).
     /// `_orgasm` value ("all" / "none" / "male" / "female") -> FilterSpec::orgasm; 0 for anything else.
     int ParseOrgasmMode(const std::string& s);
+    /// `_cast_orgasm` array of {_sex: "male"|"female"|"intersex" (or 0/1/2), _orgasm: 1|0|-1} into spec.cast_orgasm.
+    void ParseCastOrgasm(const nlohmann::json& j, FilterSpec& spec);
+    /// The row position for each human actor of `cast` so every orgasm actor sits in an orgasm position its
+    /// sex fits and every no-orgasm actor in a no-orgasm position (which takes either human sex); an either actor
+    /// (-1) takes a no-orgasm position or an orgasm position its sex fits. Empty when
+    /// no seating exists or the row's human positions don't number cast.size().
+    /// A `first` actor sits only in row position 0 (a human position). anySex: no sex test at all.
+    std::vector<int> SeatForMatrix(const AnimRow& row, const std::vector<CastOrgasm>& cast, bool anySex = false);
 
     struct SceneSettingFilter
     {

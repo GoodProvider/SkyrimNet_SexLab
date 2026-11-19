@@ -7,7 +7,7 @@
    Context pushed by the game: focus_uuid, focus_name (the NPC deciding), player_in_scene, cast_names,
    timeline [lines, oldest first], options [{line, key, act, giver, receiver, part}] (the lines this NPC may pick,
    Scene.LastStage_OptionsJson; act: stop / cuddle / vaginal / oral / anal / clean / continue; giver does it to
-   receiver; part: cock / pussy), victim_name / aggressor_name ("" unless the scene has a victim).
+   receiver; part: cock / pussy), victim_name / aggressor_name ("" unless the scene has a victim), prepared ("" unless a prepare just ended: then only stop and the sex it leads to are offered).
    Once an actor has reached their orgasm limit the game only offers stop / cuddle / clean (in a victim scene, only
    the victim cleaning the aggressor). The game reads the chosen key back: keep each o.key exactly as given.
    An empty options list (older game scripts) falls back to stop / cuddle / vaginal / oral / anal. #}
@@ -55,7 +55,8 @@ Nothing has happened yet.
 The scene has reached its last stage. Decide what {{ focus_name }} wants to happen next.
 {% if _dom_slave %}Follow `dom_instructions` for how {{ focus_name }} obeys and feels; it outweighs their usual preferences.
 {% endif %}Base it on what is happening (`scene`) and what {{ focus_name }} has thought, said and experienced (`timeline`), recent events over older ones.
-{% if victim_name != "" %}{{ victim_name }} is the victim and {{ aggressor_name }} the aggressor: the choice is the aggressor's, not the victim's.
+{% if prepared != "" %}{{ prepared }} to get ready for sex: the choice is between that sex and stopping.
+{% endif %}{% if victim_name != "" %}{{ victim_name }} is the victim and {{ aggressor_name }} the aggressor: the choice is the aggressor's, not the victim's.
 {% else %}Stop when they are done, uncomfortable, or the scene should end. Cuddle when they want to stay close without sex.
 {% endif %}[ criteria ]
 {% if length(options) > 0 %}

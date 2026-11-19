@@ -580,7 +580,7 @@ schema:
     - name: "Stuck stage: advance after"
       path: "sexlab.enjoyment.stage_hold_max"
       type: "float"
-      description: "When stages follow enjoyment: seconds on one stage before it advances anyway, or the stage's own timer if that is longer. 0 = no limit."
+      description: "When stages follow enjoyment: seconds on one stage before it advances anyway, or the stage's own timer if that is longer. Not in scenes you are in or control: those move by enjoyment only. 0 = no limit."
       min: 0
       max: 600
       defaultValue: 60

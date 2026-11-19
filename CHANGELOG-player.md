@@ -4,12 +4,75 @@ Requires SkyrimNet 0.25.0+ (built against beta26 rc4).
 
 ## Unreleased
 
-### Locked actors
-- An actor flagged "(Ostim)" while in no OStim scene now gets the 🔒 in the Scene Creator too. Yes removes the stale OStim flag (and ends any scene they are in), so they can be added again.
+### Checkpoint 21
+- The animation lists have a new column with a **C** button on every animation that isn't current. C adds the animation to the selected list if it isn't there and makes it current (blue). In the Scene Creator the current animation is the one the scene starts with (C moves it to the top). Clicking a row only adds it to the list; it no longer makes it current.
+- The Intent pulldown defaults to sexual unless you turned the sexual word off (red), so an animation added with no pick is no longer "custom" with no orgasm.
+- The Intent pulldown starts a new column every 8 options, and never splits one act's options (prepare Bob, prepare Mary) across two columns.
+- "oral to <name>" with gender grey now finds oral animations of either sex (e.g. blowjobs for "oral to Coralyn"); the receiver takes the orgasming position.
+
+### Checkpoint 20
+- The HUD's stage row now shows the scene's intent (e.g. "vaginal sex", "kissing", "preparing pussy") instead of "stages".
+- Fixed: an animation's intent from the pulldown was lost at the scene start and when you switched to another entry of the same animation.
+- In a scene you're in or control, the end list no longer picks for you when the afterglow runs out, and a stage is never pushed forward after the stuck-stage time: it moves by enjoyment (or your keys).
+- Prepare and clean play stages 1 and 2, then the list comes up.
+- Gender grey in the gender panel now ignores sex for the orgasm names: "oral to Mary" with gender grey also finds animations where the orgasming position is male, and Mary takes it. Turning gender grey or white keeps the Intent pick.
+- The Intent pulldown shows every option, so "clean <name>" is no longer cut off at the bottom.
+
+### Intent pulldown
+- Animation Selection, the Scene Creator and the Description Editor have an **Intent** pulldown between Start and the initiator: sexual, kissing, cuddle, vaginal, oral to / anal to each actor, prepare / clean each actor, custom. Picking one sets the filter words. An animation added to the list takes the intent shown then and keeps it, shown before its name; changing the pulldown does not change animations already in the list. Clicking a tag word or the gender panel sets it to custom.
+- The per-actor "clean <name>" tag words are gone (use the pulldown's clean <name>).
+- The pulldown starts on sexual. Each pick clears the other intent words first (vaginal after oral to X no longer leaves oral white). Clicking bound, rape or necro no longer changes it; clicking sexual / vaginal / oral / anal / kissing / cuddling against the pick switches it to sexual (sexual white) or custom.
+- Fixed: after clicking bound back to grey, rape could no longer be set red.
+- **vaginal <name>** and **anal <name>** replace plain vaginal and "anal to <name>" (vaginal only for someone with a pussy).
+- A pick aimed at someone (vaginal / anal <name>, oral to <name>, clean / prepare <name>) puts that actor in position 0 (for a cock's oral, clean or prepare: the one using their mouth, as SexLab expects). The gender match turns white; only when nothing fits does it turn grey on its own, and the actor still takes position 0.
+- prepare <name> filters like clean <name>: that actor must orgasm, everyone else must not.
+- The same animation can be added to the list more than once, each time with its own intent: it stays in the rows below after you add it. Clicking an entry at the top removes only that entry. The chain plays the entries in order, repeats included.
+- The animation table's "genders" column is now headed "orgasm".
+
+### Prepare
+- New **Prepare cock / Prepare pussy** actions (and the pulldown's prepare <name>): an actor readies the other's cock or pussy with their mouth before sex. The prepared actor's enjoyment still rises, the preparer never orgasms, and the HUD shows "preparing". At the second-to-last stage the NPC chooses between ending the scene and the sex it leads to: vaginal after a pussy; vaginal or anal after a cock.
+- Clean cock / Clean pussy no longer mention preparing.
 
 ### Clean
+- A scene that ends after a clean is narrated as "Coralyn finishes cleaning Nia's pussy." without "failed to orgasm".
+
+### Animation filter
+- The gender pulldown is now a **gender button** that opens a small panel. **match:** gender, positions (white or grey). **orgasm:** one name per actor, white (must orgasm), red (must not) or grey (either), like the sexual / vaginal words. The button shows only the white and red words, names cut to 3 letters. It works for two women too: "clean Bob" makes Bob white and Coralyn red. White and red names set the actor table's O / - and seat the actors to fit.
+- The cuddle list line's "none orgasms" filter now actually applies (it fell back to gender).
+- Futa animations (tagged Futa / AllFuta) are only offered when the cast has a futa (penis and pussy); AllFuta needs everyone to be one. A futa animation picked for two women used to fail to start.
+
+### Description Editor
+- The animation list works as it used to: click a selected animation to take it out of the list, click any other to add it and make it current. A **C** on each selected animation makes it current.
+- Each animation in the list keeps the intent it was added with (e.g. cleaning, oral, cuddling), shown before its name. Switching back to it brings that intent back, and a cleaning animation goes on cleaning, until it leaves the list.
+- Reopening the editor on a cleaning scene shows the clean: oral on, dildo red, and the filter on the cleaned actor's orgasm.
+- After you change the animation, the actor table's ▲▼ arrows are hidden.
+
+### Clean
+- Saying "clean her pussy" again while it is already being cleaned no longer switches animations (it switched to a dildo animation).
+- Clean animations no longer use a dildo.
+
+### Cuddle
+- With nobody able to orgasm (cuddle, spooning), each stage now moves on at its own timer instead of waiting up to 60 seconds.
+
+### Locked actors
+- An actor flagged "(Ostim)" while in no OStim scene now gets the 🔒 in the Scene Creator too. Yes removes the stale OStim flag (and ends any scene they are in), so they can be added again.
+- Unlocking also ends a SexLab scene another mod started and a running OStim scene.
+- The Control Panel's actor pulldown shows the 🔒 on "(Ostim)" and "(Locked)" actors too. Picking one asks to unlock it.
+
+### Stages
+- When enjoyment rises past several stages at once (stage 1 straight to 4), the scene now plays each stage in between for about 4 seconds instead of cutting straight to the last one.
+
+### Cunnilingus
+- "Prepare / clean her pussy" (and any action asking for cunnilingus) now has the right actor doing the licking. It was reversed.
+
+### Cuddle
+- A cuddle or other non-sexual animation picked after a sexual one now moves through its stages on its own again (it could sit on stage 1 until you pressed Next).
+
+### Clean
+- "Clean my cum from her pussy" should now pick the oral clean scene instead of a wipe with no scene. The action descriptions now say that Clean Cum is wiping with a cloth or hand, and Clean pussy / Clean cock are the mouth.
 - Asking an NPC to clean or prepare a cock now starts the clean (the Scene Creator dialog used to start plain sex, and the HUD said "stages").
 - The Description Editor keeps the clean word on while a clean plays.
+- A Clean line from the last-stage list now shows the oral word on in the Description Editor (other list lines' words, e.g. kissing or sexual, too).
 - A scene that opens with a clean narrates "Coralyn starts cleaning Bob's cock, by <stage description>".
 
 ### Stop

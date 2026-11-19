@@ -41,6 +41,10 @@ Function SetStageTimers(int sid, float[] stageSecs, bool leadIn) global native
 Function SetScenePaused(int sid, bool paused) global native
 ; A clean is playing (Scene.Clean_Begin / Clean_Clear): the HUD's stage label reads "cleaning".
 Function SetSceneCleaning(int sid, bool cleaning) global native
+; A prepare is playing (Scene.Clean_Begin with clean_kind "prepare", 2026-11-16): the HUD reads "preparing".
+Function SetScenePreparing(int sid, bool preparing) global native
+; The scene's intent text (Scene.Engine_PushIntent, 2026-11-18): the HUD stage row's label. Unchanged text is a no-op.
+Function SetSceneIntent(int sid, String intent) global native
 ; Gate pass narration was just sent: the next voice after mark (NarrationMark() taken before the DN;
 ; -1 = now) pushes the scene to its final stage.
 Function GateNarrationSent(int sid, int mark) global native

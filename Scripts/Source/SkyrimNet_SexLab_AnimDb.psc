@@ -16,6 +16,13 @@ String Function AnimDb_QueryTopNTags(String filter_json, int n) global native
 int Function AnimDb_TotalEnabled() global native
 int Function AnimDb_TotalCount() global native
 String Function AnimDb_GetByRegistry(String registry) global native
+; Row position per human actor (sexes 0 male, 1 female, 2 intersex) so orgasm actors sit in orgasm positions
+; their sex fits and no-orgasm actors in no-orgasm ones (orgasms: 1 must, 0 must not, -1 either). Empty when no
+; seating exists.
+Int[] Function AnimDb_SeatForMatrix(String registry, Int[] sexes, Int[] orgasms) global native
+; The same with a position-0 pin (first: the cast index that must sit in position 0, -1 none) and anySex (no sex
+; test: the gender match is grey). 2026-11-17.
+Int[] Function AnimDb_SeatForMatrixEx(String registry, Int[] sexes, Int[] orgasms, int first, bool anySex) global native
 String Function AnimDb_GetStageDescription(String registry, int stage) global native
 String Function AnimDb_GetTransition(String registry, int from_stage, int to_stage) global native
 String Function AnimDb_SubstituteActors(String desc, String actors_json) global native

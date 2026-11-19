@@ -7,7 +7,7 @@
     <!--
         Scene HUD (C++ Hud.cpp). Shown without Focus: no cursor, no input, game keeps running.
         C++ pushes hudUpdate({groups, focus, shiftTarget (row arouse / calm hit while Shift is held, -1 otherwise), actors (denied: 🔒), keys (+ free: SexLab free camera, skyrimnet: Num 7; display only),
-        blocked, paused, pauseLabel (what the pause key does next: play / pause / enjoy), freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages}) each engine
+        blocked, paused, pauseLabel (what the pause key does next: play / pause / enjoy), freeCam, punish {show, enabled} (the ask / order / punish key), aid {show, enabled}, slower / faster (speed level a press steps to, "" at either end), stage, stages, cleaning, preparing, intent (the stage row's label)}) each engine
         tick when it changes.
         Controls grid: a PgUp / PgDn column (PosUp / PosDn) left of the numpad keys; ask (Num .) sits under Num 3, aid (Num Enter) to its right.
         A last column holds up / down (keys.list_up / list_down, the slower / faster keys) beside slower / faster, shown only while lastStage.open, also with every HUD group off. While it is open the slower / faster cells are dimmed (those keys move the list), the next cell stays lit, and a press of it applies the current line.
@@ -89,8 +89,9 @@
 
         /* Stage row (first table row, magicka..enjoyment columns): one bar per stage, active = yellow, rest = blue */
         .stages { display: flex; gap: 3px; }
-        #enjoyment td.stagelabel { text-align: right; padding-right: 1em; color: var(--text-secondary); white-space: nowrap; }
-        /* A clean is playing (state.cleaning): the label reads "cleaning" in the accent colour. */
+        #enjoyment td.stagelabel { text-align: right; padding-right: 1em; color: var(--text-secondary); white-space: nowrap;
+            max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+        /* A clean / prepare is playing (state.cleaning): the label (its intent, else "cleaning") in the accent colour. */
         #enjoyment td.stagelabel.cleaning { color: var(--accent); }
         .stg {
             flex: 1;
@@ -450,11 +451,13 @@
                 for (let i = 1; i <= count; i++) {
                     s += '<div class="stg' + (i === stage ? ' active' : '') + '" title="Stage ' + i + '/' + count + '"></div>';
                 }
-                // Bars span magicka + stamina + enjoyment columns; the "stages" label (or "cleaning" while a clean plays)
-                // sits right-aligned before them.
+                // Bars span magicka + stamina + enjoyment columns; the label sits right-aligned before them: the scene's
+                // intent (2026-11-18), else "stages" (or "cleaning" / "preparing" while a clean / prepare plays).
+                const fallback = state.cleaning ? (state.preparing ? 'preparing' : 'cleaning') : 'stages';
+                const label = String(state.intent || '').trim() || fallback;
                 html = '<tr class="stagerow">' +
                     '<td class="focus"></td>' +
-                    (state.cleaning ? '<td class="stagelabel cleaning">cleaning</td>' : '<td class="stagelabel">stages</td>') +
+                    '<td class="stagelabel' + (state.cleaning ? ' cleaning' : '') + '" title="' + esc(label) + '">' + esc(label) + '</td>' +
                     '<td colspan="3"><div class="stages">' + s + '</div></td>' +
                     '<td class="lock"></td></tr>' + html;
             }

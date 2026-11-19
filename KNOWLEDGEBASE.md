@@ -1,9 +1,34 @@
 # Knowledgebase
 
+## Clean end said "failed to orgasm"; Prepare; Intent pulldown (2026-11-16, built, untested in game)
+
+- **Symptom:** after a clean's list was stopped, the end line was "Nia and Coralyn finish cleaning Pussy. Nia failed to orgasm." (`checkpoints/2026-11-14-manual-unlock/logs/2026-11-16-08-55-16/SkyrimNet_SexLab.log:1210`). `AnimationEnd` ran `Clean_Clear` first, and the afterglow uses the animation's orgasm slots, not the clean.
+- **Fix:** `Scene.MouthEndSentence` reads the live clean or the playing animation's `ai_*` entry before `Clean_Clear`; the end line becomes "<giver> finishes cleaning|preparing <receiver>'s <part>." with no orgasm stash and no afterglow. Parts are lower-cased on arm (`MouthPartWord`).
+- **Prepare** is the clean machinery with `clean_kind = "prepare"`: the prepared keeps passive gain, so with three or more stages its stages move by the prepared actor's enjoyment, not by the clean's no-primary hold. Its list (`LastStage_PrepareLines`) is stop plus only the sex it leads to, all open to the JEV, and skips `LastStage_AiLimited`.
+- **Intent pulldown:** a row's intent is stamped by the page when the row joins the list (`info.rowStamps`) and sent as `_chain_intents`; Papyrus `AnimIntent_Note` must not overwrite a stamped act (it keeps it while the intent text matches). A pick's clean / prepare comes from its row, not the pulldown.
+
+## Stage by enjoyment cut straight past stages (2026-11-15, built, untested in game)
+
+- **Symptom:** enjoyment jumped bands after a switch, and the scene cut from stage 1 straight to 3 (`stage follows … 1 -> 3/5`, `Engine_MoveStage stage 1 -> 3/5`). SexLab 1.66 `GoToStage` goes straight to the target.
+- **Fix:** `StageFollowPrimary` sends one forward stage at a time, with `kStageStepMinSecs` (4 s) on each. Moves back are unchanged.
+
+## "Clean my cum" picked the wipe, not the scene (2026-11-15, YAML only, untested)
+
+- `sexlab_clean_cum` (narration + `ClearCumPart`, no scene) and `SexLab_Clean_Pussy` (oral scene) were both offered. The player's words matched clean_cum's description literally. The descriptions now split them by method (cloth or hand vs mouth). Decision: no forced routing; the LLM picks.
+
 ## Stale OStim flag (2026-11-15, built, untested in game)
 
 - **Symptom:** Bob and Coralyn read `(Ostim)` in the nearby list with no OStim scene, so they could not be added or unlocked. Cause: `OStimActorCountFaction` membership OStim never removed; `ClassifyNearbyActor` maps it to status `ostim`.
-- **Fix:** the Scene Creator lists `ostim` rows with the 🔒; `WebUI_ForceUnlock` calls `Locker.ClearOstim`. A live OStim thread is not ended.
+- **Fix:** the Scene Creator lists `ostim` rows with the 🔒; `WebUI_ForceUnlock` calls `Locker.ClearOstim`. Verified in game 2026-11-15. Since then it also stops a running OStim thread (`OThread.Stop`) and a foreign SexLab thread.
+
+## SexLab 1.66 untimed stages (2026-11-15)
+
+- `sslThreadController` advances only when `(AutoAdvance || TimedStage) && StageTimer < now`. `UpdateTimer(x)` sets `TimedStage = true`; `ResolveTimers()` sets it back to `Animation.HasTimer(Stage)`. So releasing a hold (`UpdateTimer(-PAUSE_HOLD_SECONDS)` + `ResolveTimers()`) on an untimed stage with AutoAdvance off leaves it stuck forever: our code must hold and step it itself (`NoPrimary_StageStart`, `Stage_Forward`).
+- Scene hold flags (`victim_hold_enjoyment`, `victim_hold_noprimary`) must be cleared when a new hold starts: a stale enjoyment flag sent a cuddle's no-primary hold down the release path.
+
+## Tag case from Papyrus (2026-11-15)
+
+- Papyrus list presets send tags as written ("Oral", "Kissing", "Sexual"). JS tag words compare lower case with `includes`, so lower-case at the entry point. AnimDB lower-cases tags itself, so queries were never affected.
 
 ## Stale locks, per-cast last-stage lines, Clean, strategy rename (2026-11-14, built, untested in game)
 
@@ -54,13 +79,17 @@ Record: [checkpoints/2026-11-13-forever/checkpoint-02.md](checkpoints/2026-11-13
 - **Fix (ours, built):** `Scene.AnimationStart` returns when the thread has ended (not prepare/advancing/animating/refresh) (log `late start on ended thread … ignored`), and again right before `Engine_BeginScene` (log `thread ended during start`). Before this, the engine logged `began scene N` right after `ended scene N`.
 - **Fix (ours, built):** `Scene_Manager.GetSceneByThread` adopts a thread only once per tid (`adopt_started`, real-time stamp, 20 s stale). Other callers wait up to 10 s (log `adoption in progress, waiting`) and return the adopted scene. Before this, 4 racing callers each claimed a creator and ran `Setup` on the same pool scene.
 
-## An actor turned invisible mid-scene; no log records it (2026-11-11, 2026-11-13, open, logs gathered)
+## An actor turned invisible mid-scene; no log records it (2026-11-11, 2026-11-13, 2026-11-15, open, logs gathered)
 
-Record: [checkpoints/invisible/README.md](checkpoints/invisible/README.md). Logs: `checkpoints/invisible/logs/2026-11-11-19-39-26/`, `checkpoints/invisible/logs/2026-11-13-09-16-09/`.
+Record: [checkpoints/invisible/README.md](checkpoints/invisible/README.md). Logs: `checkpoints/invisible/logs/2026-11-11-19-39-26/`, `checkpoints/invisible/logs/2026-11-13-09-16-09/`, `checkpoints/invisible/logs/2026-11-15-15-30-57/`.
 
-- **Symptom:** Coralyn (DOM slave) went invisible mid-scene twice: a solo P+ scene (`B_B_FMast1`, 11-11) and a scene with Bob (`B_B_SKiss1`, 11-13). It was no spell or effect.
+- **Symptom:** Coralyn (DOM slave) went invisible mid-scene three times:
+  - a solo P+ scene (`B_B_FMast1`, 11-11);
+  - a scene with Bob (`B_B_SKiss1`, 11-13);
+  - a DOM cleaning scene with Nia (`B_B_LCunn4`, 11-15). This time it was a **slow fade to transparent**, about 3 minutes after Healing Hands, so it points to an alpha fade rather than an overlay strip.
+- **Rule:** snapshot logs before relaunching the game. A relaunch overwrites `SkyrimNet_SexLab.log`, `SkyrimNet_DOM.log`, `Injury_Engine.log` and `Magelight.log`. Only Papyrus (`Papyrus.N.log`) and SkyrimNet (`SkyrimNet.<UTC>.log`) rotate.
 - **Rule:** no current log (ours, SkyrimNet, Papyrus) shows actor visibility. Our code never checks alpha, 3D or disabled state, and DOM's `SetAlpha` calls don't log. Get the time from the user, then look around it for overlay syncs (SlaveTats / NiOverride), alpha-changing mods and actor resets.
-- **Suspect, not proven:** both times, a SlaveTats sync removing `Makeup Tears N` (`DOMTears`) cleared every overlay slot in reverse order and never logged `Synchronization complete`; Healing Hands visuals (2 effect shaders) hit her seconds later. A NiOverride signature mismatch at load (`GetNodeTransformScaleMode`) is also present both times.
+- **Suspect, not proven:** all three times, a SlaveTats sync removing `Makeup Tears N` (`DOMTears`) cleared every overlay slot in reverse order and never logged `Synchronization complete`; Healing Hands visuals (2 effect shaders) hit her seconds later. A NiOverride signature mismatch at load (`GetNodeTransformScaleMode`) is also present both times.
 - **Workaround:** DOM MCM "Fix unresponsive or invisible actor" or the DOM fixme hotkey (`DOM_Keys.DOMDoFixMe` → `DOM_Actor.SpecialReset`: Disable, Enable, `SetAlpha(1.0)`). SkyrimNet_DOM's API doesn't expose it.
 - **Future probe:** CommonLib has `Actor::GetAlpha()`, `TESObjectREFR::IsDisabled()`, `Is3DLoaded()` and `Get3D()->GetAppCulled()`.
 
@@ -1987,3 +2016,52 @@ In a victim scene that stages by enjoyment, the primary's orgasm does not finish
 **Symptom:** a DOM slave told "masturbate" got SkyrimNet_SexLab's `SexLab_Masturbation_Forced`; "you may stop" never stopped it (SkyrimNet.log: only 10 eligible actions, no Stop, "No ACTION: line found"). See SkyrimNet_DOM `checkpoints/2026-11-14-masturbation-stop-bug/`.
 **Cause:** `StartScene_Nonconsensual_One` passes `victim=speaker`. `SEXLAB_STOP` required `SkyrimNet_SexLab_Faction_Victim < 0`, which assumes an aggressor NPC who can stop instead; a solo scene has none. DOM's own stop actions need `DOMActionMasturbating`, which only DOM's masturbate sets.
 **Fix:** `SEXLAB_STOP` rule 2 is `victim < 0 OR sexlab_scene_actor_count == 1`. The decorator counts positions in the actor's `g_threads` entry (0 when none). Multi-actor victim scenes are unchanged. **Rule:** every scene an action can start needs some actor who is eligible to stop it.
+
+## Papyrus turns the string "none" into "None" (2026-11-15, built, untested in game)
+
+**Symptom:** the cuddle list line's Description Editor filter stayed on gender; the log showed `"filter":"orgasm_None"`.
+**Cause:** Papyrus keeps one case-insensitive string table, and the keyword `None` wins, so `"orgasm_" + "none"` comes out as `orgasm_None`. JS lookups are case-sensitive.
+**Fix:** JS lower-cases Papyrus-sent mode strings before a lookup (`deApplyListPreset`). Watch any Papyrus string that could equal a keyword (`none`, `true`, `false`).
+
+## Intent belongs to each animation in the selected list (2026-11-15, built, untested in game)
+
+**Symptom:** after a clean switched to another animation (list line, editor, chain), the end narration still said "finish cleaning Pussy"; a second "clean her pussy" during the clean re-queried and switched to a dildo animation.
+**Cause:** `intent` was one scene-wide string, and the clean was tied to one registry, so nothing remembered what each animation was for.
+**Fix:** `Scene.AnimIntent_*` stores the intent and clean per registry when it joins the list, restores them whenever that animation plays again, and drops them when it leaves the chain (`SetChain`). `Clean_FromAction` returns when the same clean already plays. See `docs/developers/webui.md` (Description Editor animation switch).
+
+## Touched grey bound blocked red rape; intent picks left old words (2026-11-17, built, untested in game)
+
+**Symptom:** after the player clicked bound and left it grey, the rape word cycled only white ↔ grey. Picking `vaginal` after `oral to X` left oral white.
+**Cause:** the rape skip-red rule used `scBoundEnabled`, which counts `SC.boundTouched` (a grey bound the player chose means "no bound filter", correct for `_bound`, wrong for "this scene is bound"). The Intent pulldown took back only the words its last pick had added (`SC.intentAdded`), which a reopen cleared and which never covered words already white (auto defaults, the player's).
+**Fix:** `scBoundActive` (bound white or worn) for the rape rule. Every pick resets all of `SC_INTENT_WORDS` before setting its own and marks sexual / vaginal touched. See `docs/developers/webui.md` (Intent pulldown).
+
+## A chain with repeats needs a stored position (2026-11-17, built, untested in game)
+
+**Symptom:** the player wants the same animation in the list more than once, each time with its own intent (Zyn licking: oral to Coralyn, then prepare Nia).
+**Cause:** the chain was a set. `Scene.SetChain` dropped repeats, `LastStage_ChainNext` found the playing entry with `ChainIndexOf` (first match, so `A,B,A,C` went back to B after the second A), and intents were one per registry (`AnimIntent_Set` overwrote, `AnimIntent_OnNewAnimation` skipped A→A).
+**Fix:** `chain_pos` (the playing entry), `chain_switch_pos` (the entry a pending switch plays) and per-entry `ce_*` intents. `ChainSyncPos` runs on every switch or new animation, and `ChainEntryToIntent` copies the entry into the registry table so the existing `AnimIntent_*` readers find the right one. The WebUI keeps `info.chainStamps[i]` (each with its `reg`) and sends `_index` / `_chain_pos`. Never derive the chain position from `ChainIndexOf` alone. See `docs/developers/webui.md` (Repeat entries).
+
+## Act words come back from Papyrus capitalized (2026-11-17, built, untested in game)
+
+**Symptom:** after the Description Editor opened on a Scene Creator scene, every chain commit sent `_act:"Vaginal"`, `_intent:""`, and the scene lost its intent text (`AnimIntent_FromChainJson ... act:Vaginal intent:`).
+**Cause:** Papyrus strings are pooled and case-insensitive, so `ce_acts[i] = "vaginal"` can come back as `"Vaginal"` in `_chain_intents`. The WebUI compares act words case-sensitively (`SC_DIRECTED_ACTS.includes`, `SC_INTENT_PAPYRUS[act]`), so the stamp got no directed key and no intent text.
+**Fix:** `scStampsFromChainIntents` lowercases `_act`. Any act / part / keyword string read back from Papyrus must be lowercased before a case-sensitive JS compare.
+
+## Array compared to None broke every intent lookup (2026-11-18, built, untested in game)
+
+**Symptom:** intent stamps vanished. `AnimIntent_Apply` was never logged, a Scene Creator scene's intent read "", and C on a repeat entry left `intent:` empty. Papyrus.0.log: `Cannot cast from None to String[]` at `AnimIntent_Find` / `AnimIntent_Ensure` / `AnimIntent_FromChainJson` / `ChainEntryToIntent` / `ChainIntentsStateArray`, every scene since 2026-11-16.
+**Cause:** `if ai_regs == None` and `ce_acts != None`. Papyrus can't compare an array to None. The failed cast made `AnimIntent_Find` return -1 and skipped the `ce_*` writes. The log review missed it because it only grepped the SexLabNet log.
+**Fix:** truthiness (`if !ai_regs`, `if ce_acts`), as papyrus-rules.md says. **Rule:** a log review also greps Papyrus.0.log for `Cannot cast from None` with a `SkyrimNet_SexLab` frame.
+
+## Scene Creator starts with an empty intent (2026-11-18)
+ Scene Creator hands the scene `intent:"`. The first animation's stamp (chain entry 0) must set the intent at StageStart (`AnimIntent_Apply`), and `AnimIntent_Note` must not overwrite a stamp with "". Otherwise the HUD and the narration have no intent text.
+
+## A long pulldown scrolls out of sight in game (2026-11-18)
+
+`.pulldown-menu` caps at 50vh and scrolls. At the in-game zoom (1.7) about 14 rows fit, and the player doesn't see that it scrolls: the Intent pulldown's `clean X` rows looked missing. Long option lists use the full-height branch of `positionOpenPulldownMenu` (`af-pulldown` / `intent-pulldown`).
+
+## A position-0 pin breaks "any sex" oral (2026-11-18, built, untested in game)
+
+**Symptom:** `oral to Coralyn` with gender grey listed no blowjobs.
+**Cause:** a directed pick pins its receiver to position 0, and a pussy's receiver is position 0 in a cunnilingus. In a blowjob, position 0 is the mouth, which has no orgasm, so pinning the orgasming receiver there leaves no seating. `AnimIntent_Seat` used the same position rule at a start or chain step.
+**Fix:** no pin for an oral, clean or prepare pick while gender is grey (`scSeatFirstFor`), so the orgasm words alone seat the pair. `AnimIntent_Seat` seats an oral by the orgasm slot (`SeatByMatrix`, by sex first, then any sex) before it falls back to the position rule.

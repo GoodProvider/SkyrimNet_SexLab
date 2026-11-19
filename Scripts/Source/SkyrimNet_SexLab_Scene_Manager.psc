@@ -332,15 +332,18 @@ int FOREIGN_RESTART_WARN_AT = 3
 Actor Property pending_clean_giver Auto Hidden
 Actor Property pending_clean_receiver Auto Hidden
 String pending_clean_part = ""
+; "clean" or "prepare" (Actions.PrepareScene, 2026-11-16).
+String Property pending_clean_kind = "clean" Auto Hidden
 float pending_clean_at = 0.0
 float CLEAN_PENDING_SECONDS = 60.0
 
-Function Clean_NotePending(Actor giver, Actor receiver, String part)
+Function Clean_NotePending(Actor giver, Actor receiver, String part, String kind = "clean")
     pending_clean_giver = giver
     pending_clean_receiver = receiver
     pending_clean_part = part
+    pending_clean_kind = kind
     pending_clean_at = Utility.GetCurrentRealTime()
-    Trace("Clean_NotePending", GetDisplayName(giver)+" cleans "+GetDisplayName(receiver)+" "+part)
+    Trace("Clean_NotePending", kind+": "+GetDisplayName(giver)+" -> "+GetDisplayName(receiver)+" "+part)
 EndFunction
 
 ; The pending clean's part when a and b are its giver and receiver (either order) and it has not expired; "" else.
@@ -1684,8 +1687,10 @@ String Function WebUI_ForceUnlock(Actor akActor) global
     SkyrimNet_SexLab_Scene_Manager manager = Game.GetFormFromFile(0x000800, "SkyrimNet_SexLab.esp") as SkyrimNet_SexLab_Scene_Manager
     String name = SkyrimNet_SexLab_Utilities.GetDisplayName(akActor)
     String done = ""
+    bool ended_ours = false
     if manager
         if manager.EndSceneForActor(akActor)
+            ended_ours = true
             done += " scene"
         endif
         SkyrimNet_SexLab_Scene_Creator creator = manager.FindCreatorByActor(akActor)
@@ -1698,6 +1703,24 @@ String Function WebUI_ForceUnlock(Actor akActor) global
     if engine_scene >= 0
         SkyrimNet_SexLab_AnimEngine.AnimEngine_End(engine_scene)
         done += " engine:"+engine_scene
+    endif
+    ; End whatever else holds them (2026-11-15 decision): a SexLab thread another mod started, a running OStim thread.
+    if manager && manager.sexlab && !ended_ours
+        int sl_tid = manager.sexlab.FindActorController(akActor)
+        if sl_tid >= 0
+            sslThreadController sl_thread = manager.sexlab.GetController(sl_tid)
+            if sl_thread
+                sl_thread.EndAnimation(true)
+                done += " sexlab:"+sl_tid
+            endif
+        endif
+    endif
+    if Game.GetModByName("OStim.esp") != 255
+        int ostim_tid = OActor.GetSceneID(akActor)
+        if ostim_tid >= 0 && OThread.IsRunning(ostim_tid)
+            OThread.Stop(ostim_tid)
+            done += " ostim thread:"+ostim_tid
+        endif
     endif
     if SkyrimNet_SexLab_Locker.ClearOstim(akActor)
         done += " ostim cleared"

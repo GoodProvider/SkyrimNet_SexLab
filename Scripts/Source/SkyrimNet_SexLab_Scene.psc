@@ -149,7 +149,7 @@ int[] list_receiver
 bool[] list_ai
 String list_force_act = ""
 ; Clean (2026-11-14): oral that cleans the receiver's part; no orgasm expected (no passive gain). Its stages move
-; every sexlab.clean.seconds; on the second-to-last stage the last-stage list opens (2026-11-15). A 1-2 stage animation
+; every sexlab.clean.seconds; after stages 1 and 2 the last-stage list opens on stage 2 (2026-11-18). A 1-2 stage animation
 ; ends after three of those instead (clean_left).
 bool clean_active = false
 float clean_stage_secs = 10.0
@@ -157,6 +157,36 @@ float clean_stage_secs = 10.0
 bool list_after_clean = false
 ; The clean's animation (Clean_Begin). Another animation playing means the clean is over (Clean_Owns).
 String clean_anim = ""
+; Prepare (2026-11-16): the clean machinery with clean_kind "prepare": the preparer gives oral and never orgasms, the
+; prepared keeps passive gain; the HUD reads "preparing". After its second stage a list opens: stop plus the sex the
+; preparing leads to (list_after_prepare; LastStage_BuildLines).
+String clean_kind = "clean"
+bool list_after_prepare = false
+Actor prep_giver = None
+Actor prep_receiver = None
+String prep_part = ""
+; Per-animation intent (2026-11-15): an animation gets the intent (and clean) current when it joins the selected
+; list; playing it again restores that intent, until it leaves the list (AnimIntent_*). Parallel arrays, ai_count used.
+; 2026-11-16: the editor's Intent pulldown stamps them (_chain_intents); ai_acts: clean / prepare / oral / anal /
+; vaginal / kissing / cuddle / sexual / custom / "" (giver / receiver / part set for the directed ones).
+String[] ai_regs
+String[] ai_intents
+String[] ai_acts
+Actor[] ai_givers
+Actor[] ai_receivers
+String[] ai_parts
+int ai_count = 0
+; The registry AnimIntent last applied or noted (Engine_SetStageInputs applies on a change).
+String ai_last_reg = ""
+; The coming switch decides its animation's intent itself (list line, Clean action, Description Editor pick):
+; LastStage_OnSwitched notes it instead of restoring the stored one.
+bool ai_explicit = false
+; ApplyWebUICommit: the pick's commit changed the intent text.
+bool ai_commit_intent_changed = false
+; The Description Editor commit seated the cast by its orgasm matrix (_orgasm_actor): the switch keeps that order.
+bool seat_done_for_switch = false
+; LastStage_Query's "cast" orgasm mode: the one actor who orgasms (LastStage_OrgasmMode, Clean_FromAction).
+Actor list_query_orgasm_actor = None
 ; The deadline opened the Description Editor for this list once; the next deadline random-picks (LastStage_Commit).
 bool list_deadline_editor = false
 float clean_left = 0.0
@@ -240,6 +270,18 @@ int played_registries_count = 0
 String[] chain_registries
 int chain_count = 0
 int last_stage_mode = 0
+; Repeats (2026-11-17): the same registry may be in the chain more than once, each entry with its own intent. chain_pos
+; is the playing entry (never just ChainIndexOf, which finds the first); chain_switch_pos the entry a pending switch
+; plays (the chain's next, an editor pick); chain_next_pos the entry LastStage_ChainNext last returned. ce_*: each
+; entry's intent from the editor's _chain_intents, parallel to chain_registries (ce_acts "" = none).
+int chain_pos = -1
+int chain_switch_pos = -1
+int chain_next_pos = -1
+String[] ce_intents
+String[] ce_acts
+Actor[] ce_givers
+Actor[] ce_receivers
+String[] ce_parts
 ; Per-registry user-edited animation defaults (Scene/AnimPanel). Wins over AnimDB on anim switch until Save.
 int user_anim_defaults = 0
 
@@ -410,6 +452,7 @@ Bool Function Setup(SkyrimNet_SexLab_Scene_Creator creator)
     else
         DbgEnter("Setup")
     endif
+    AnimIntent_Clear()
     Bool links_ok = Setup_CheckLinks()
     if !links_ok
         DbgReturn("Setup", "False")
@@ -790,6 +833,9 @@ Function Release()
     endif
     played_registries_count = 0
     chain_count = 0
+    chain_pos = -1
+    chain_switch_pos = -1
+    chain_next_pos = -1
     last_stage_mode = 0
 
     sender = None 
@@ -2100,9 +2146,9 @@ Function Engine_SetSkills()
             if obj > 0 && SNSL_JMap.getInt(obj, "no_orgasm") == 1
                 expected = false
             endif
-            ; Clean: no orgasm, no passive gain.
+            ; Clean: no orgasm, no passive gain. Prepare: the preparer only; the prepared keeps passive gain.
             if clean_active
-                expected = false
+                expected = clean_kind == "prepare" && a == clean_receiver
             endif
             SkyrimNet_SexLab_OrgasmEngine.SetOrgasmExpected(a, expected)
             if obj > 0
@@ -2131,11 +2177,16 @@ Function Engine_SetStageInputs()
     if stage_inputs_registry != "" && stage_inputs_registry != registry
         StageMode_NewAnimation()
     endif
+    ; A chain step, hotkey or SexLab move to another animation: its own intent and clean come back.
+    if status == STATUS_ACTIVE
+        AnimIntent_OnNewAnimation(registry)
+    endif
     stage_inputs_registry = registry
     SkyrimNet_SexLab_OrgasmEngine.SetStageInputs(sid, positions, genders, AnimHasTag("Femdom"), registry)
     if stage_manual
         SkyrimNet_SexLab_OrgasmEngine.DisableStageAdvancePrimaryEnjoyment(sid)
     endif
+    Engine_PushIntent()
 EndFunction
 
 ; SexLab's starting-enjoyment inputs per actor (sslActorAlias StartAnimating): skills of the actor and of
@@ -2195,6 +2246,13 @@ Function Engine_SetStage()
         thread.SendThreadEvent("OrgasmEnd")
     endif
     SkyrimNet_SexLab_OrgasmEngine.SetStage(sid, thread.Stage, count)
+    Engine_PushIntent()
+EndFunction
+
+; The HUD's stage row reads the scene's intent (2026-11-18). Sent on every stage and wherever intent changes; the engine
+; ignores unchanged text, and a scene it doesn't know yet (Engine_SetStage sends it again).
+Function Engine_PushIntent()
+    SkyrimNet_SexLab_OrgasmEngine.SetSceneIntent(sid, intent)
 EndFunction
 
 ; Seconds per stage of the current animation, by sslThreadController.GetTimer's rule (TimedStage is
@@ -2883,10 +2941,13 @@ Function Victim_StageStart()
         Victim_Drop("stage changed")
     endif
     if !victim_holding
+        ; Victim_Drop leaves both set; a stale enjoyment flag made a cuddle's no-primary hold release into an untimed
+        ; stage (2026-11-15 14:38 log, Ace_LapPillow stuck on stage 1 with AutoAdvance off).
         victim_hold_noprimary = false
+        victim_hold_enjoyment = false
     endif
     if Clean_AtListStage()
-        Clean_Finish("second-to-last stage")
+        Clean_Finish("past stage 2")
         return
     endif
     int count = Engine_StageCount()
@@ -3048,7 +3109,11 @@ Function Victim_Poll()
         if !SkyrimNet_SexLab_OrgasmEngine.IsStageAdvancePrimaryEnjoyment(sid)
             Trace("Victim_Poll", "stages no longer follow enjoyment, releasing stage:"+thread.Stage)
             victim_hold_enjoyment = false
+            victim_hold_noprimary = false
             Victim_Release()
+            ; Nobody expected now (a nonsexual animation): a released untimed stage would never move, so let
+            ; NoPrimary_StageStart hold it and step at StageHoldCap.
+            Victim_StageStart()
             SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
             return
         endif
@@ -3078,7 +3143,7 @@ Function Victim_Poll()
     if victim_hold_enjoyment || victim_hold_noprimary
         cap = SkyrimNet_SexLab_OrgasmEngine.StageHoldCap(sid)
     endif
-    ; A clean's stages move every clean_stage_secs (up to the second-to-last, where the list opens).
+    ; A clean's stages move every clean_stage_secs (stages 1 and 2; the list opens when stage 2's runs out).
     if victim_hold_noprimary && Clean_Owns()
         cap = clean_stage_secs
     endif
@@ -3104,11 +3169,12 @@ Function Victim_Poll()
         if state_ != "animating"
             RegisterForSingleUpdate(1.0)
         else
-            if victim_hold_noprimary && Clean_Owns() && thread.Stage >= Engine_StageCount() - 1
-                ; Clean: the next stage is the orgasm stage. End here instead.
+            if victim_hold_noprimary && Clean_Owns() && (thread.Stage >= 2 || thread.Stage >= Engine_StageCount() - 1)
+                ; Clean / prepare (2026-11-18): stage 1, stage 2, then the list holds stage 2 (also: the next stage is
+                ; the orgasm stage).
                 victim_hold_noprimary = false
-                Victim_Drop("clean: last non-orgasm stage")
-                Clean_Finish("out of non-orgasm stages")
+                Victim_Drop("clean: second stage done")
+                Clean_Finish("first two stages")
                 SkyrimNet_SexLab_WebUI.Prof_End(prof_id, "")
                 return
             endif
@@ -3837,6 +3903,11 @@ EndFunction
 
 Function LastStage_Snapshot()
     float left = LastStage_TimedLeft()
+    ; The player is in the scene or drives an actor (2026-11-18): no deadline, the list waits for their pick (a driven
+    ; NPC's list committed "stop" on the 10 s afterglow while the partner sat at 99).
+    if LastStage_SeesList()
+        left = -1.0
+    endif
     if left >= 0.0 && thread != None && thread.AutoAdvance
         list_timed = true
         list_left = left
@@ -3959,6 +4030,9 @@ Function LastStage_BuildLines()
     endif
     Actor[] positions = thread.Positions
     int n = positions.length
+    if LastStage_PrepareLines()
+        return
+    endif
     if n == 1
         LastStage_AddLine("continue", "Continue masturbating", "continue", 0, 0, "")
     elseif n > 2
@@ -4029,6 +4103,32 @@ Function LastStage_BuildLines()
     endwhile
 EndFunction
 
+; After a prepare (list_after_prepare, 2026-11-16): only stop plus the sex it leads to, all open to the JEV. A prepared
+; pussy: vaginal, the preparer fucks the prepared. A prepared cock: vaginal, the prepared fucks the preparer, and anal,
+; the prepared to the preparer. Only the prepared part counts; whether an animation fits the pair is the query's call.
+; False (the normal lines follow) when the pair is no longer the two-actor cast.
+bool Function LastStage_PrepareLines()
+    if !list_after_prepare || thread == None || prep_giver == None || prep_receiver == None
+        return false
+    endif
+    Actor[] positions = thread.Positions
+    int g = positions.Find(prep_giver)
+    int r = positions.Find(prep_receiver)
+    if positions.length != 2 || g < 0 || r < 0 || g == r
+        return false
+    endif
+    String name_g = GetDisplayName(prep_giver)
+    String name_r = GetDisplayName(prep_receiver)
+    if prep_part == "cock"
+        LastStage_AddLine(LastStage_Key("vaginal", r, g), "Start vaginal "+name_r+" fucks "+name_g, "vaginal", r, g, "pussy")
+        LastStage_AddLine(LastStage_Key("anal", r, g), "Start anal "+name_r+" to "+name_g, "anal", r, g, "")
+    else
+        LastStage_AddLine(LastStage_Key("vaginal", g, r), "Start vaginal "+name_g+" fucks "+name_r, "vaginal", g, r, "pussy")
+    endif
+    Trace("LastStage_PrepareLines", "prepare "+name_g+" -> "+name_r+" "+prep_part+": "+list_count+" lines")
+    return true
+EndFunction
+
 ; How many lines the NPC may pick.
 int Function LastStage_AiCount()
     int n = 0
@@ -4092,6 +4192,12 @@ String Function LastStage_OptionsJson()
     endif
     JMap.setStr(obj, "victim", victim)
     JMap.setStr(obj, "aggressor", aggressor)
+    ; After a prepare: what was prepared (the decision prompt says why only these lines are offered).
+    String prepared = ""
+    if list_after_prepare && prep_giver != None && prep_receiver != None
+        prepared = GetDisplayName(prep_giver)+" just prepared "+GetDisplayName(prep_receiver)+"'s "+prep_part+" with "+PossessivePronoun(prep_giver)+" mouth"
+    endif
+    JMap.setStr(obj, "prepared", prepared)
     String json = ObjectToLowerCaseKeyJson(obj)
     JValue.release(obj)
     return json
@@ -4140,6 +4246,23 @@ Actor[] Function LastStage_OrderedCast(int line)
     return cast
 EndFunction
 
+; An oral / clean line's receiver (the one who orgasms in its matrix); None for other lines.
+Actor Function LastStage_LineReceiver(int line)
+    if thread == None || line < 0 || line >= list_count
+        return None
+    endif
+    String act = list_acts[line]
+    if act != "oral" && act != "clean"
+        return None
+    endif
+    Actor[] positions = thread.Positions
+    int r = list_receiver[line]
+    if r < 0 || r >= positions.length
+        return None
+    endif
+    return positions[r]
+EndFunction
+
 ; Two actors: swap SexLab's positions (as PgUp / PgDn) when position 0 is not want[0]. False when the swap did not take.
 bool Function LastStage_ApplyOrder(Actor[] want)
     if thread == None || want.length != 2 || thread.Positions.length != 2 || thread.Positions[0] == want[0]
@@ -4183,7 +4306,16 @@ Function LastStage_Begin()
     endif
     bool mid = ending_mid
     if list_phase != 0
+        ; Clean_Finish set the prepare's lines up just before: the close must not drop them.
+        bool keep_prep = list_after_prepare
+        Actor keep_g = prep_giver
+        Actor keep_r = prep_receiver
+        String keep_part = prep_part
         LastStage_Close()
+        list_after_prepare = keep_prep
+        prep_giver = keep_g
+        prep_receiver = keep_r
+        prep_part = keep_part
     endif
     LastStage_BuildLines()
     list_anim = thread.Animation.Registry
@@ -4294,6 +4426,10 @@ Function LastStage_Close()
         list_after_clean = false
         SkyrimNet_SexLab_OrgasmEngine.SetEndHold(sid, false)
     endif
+    list_after_prepare = false
+    prep_giver = None
+    prep_receiver = None
+    prep_part = ""
     SkyrimNet_SexLab_WebUI.LastStage_Hide()
 EndFunction
 
@@ -4336,6 +4472,13 @@ Function LastStage_Poll()
     if list_phase != 2
         RegisterForSingleUpdate(1.0)
         return
+    endif
+    ; The player took control of an actor after the snapshot: the deadline goes (LastStage_Snapshot).
+    if list_timed && LastStage_SeesList()
+        list_timed = false
+        list_running = false
+        list_left = -1.0
+        Trace("LastStage_Poll", "player sees the list: no deadline")
     endif
     if !list_timed
         if list_npc_only && !list_ui
@@ -4477,32 +4620,87 @@ int Function ChainIndexOf(String reg)
     return -1
 EndFunction
 
-; Scene Creator start / WebUI commit: the chain in play order (blank and repeated entries dropped, at most 128)
-; and what follows its last animation ("loop" / "end" / "npc").
+; Scene Creator start / WebUI commit: the chain in play order (blank entries dropped, repeats kept since 2026-11-17,
+; at most 128) and what follows its last animation ("loop" / "end" / "npc"). The entries' intents start empty
+; (AnimIntent_FromChainJson fills them); chain_pos is the playing animation's first entry (the WebUI's _chain_pos
+; overrides it, WebUI_ApplyChain).
 Function SetChain(String[] regs, int count, String mode)
     chain_count = 0
     if count > 128
         count = 128
     endif
-    int size = count
-    if size < 1
-        size = 1
-    endif
-    chain_registries = Utility.CreateStringArray(size)
+    chain_registries = new String[128]
+    ce_intents = new String[128]
+    ce_acts = new String[128]
+    ce_givers = new Actor[128]
+    ce_receivers = new Actor[128]
+    ce_parts = new String[128]
     int i = 0
     while i < count
         String reg = regs[i]
-        if reg != "" && ChainIndexOf(reg) < 0
+        if reg != ""
             chain_registries[chain_count] = reg
             chain_count += 1
         endif
         i += 1
     endwhile
+    chain_pos = -1
+    chain_switch_pos = -1
+    if thread != None && thread.Animation != None
+        chain_pos = ChainIndexOf(thread.Animation.Registry)
+    elseif chain_count > 0
+        ; Scene Creator start (no animation yet): the first animation is entry 0 (ChainSyncPos).
+        chain_switch_pos = 0
+    endif
     last_stage_mode = LastStageModeFromString(mode)
-    Trace("SetChain", "--- "+chain_count+" animations, last stage:"+LastStageModeName())
+    Trace("SetChain", "--- "+chain_count+" animations, pos:"+chain_pos+", last stage:"+LastStageModeName())
+    AnimIntent_Prune()
 EndFunction
 
-; Description Editor commit keys: _last_stage, and _chain_registries when non-empty (an empty list keeps the chain).
+; The playing animation's chain entry: chain_pos while it names it, else its first entry; -1 when not chained.
+int Function ChainPlayingIndex()
+    if thread == None || thread.Animation == None || chain_count == 0
+        return -1
+    endif
+    String reg = thread.Animation.Registry
+    if chain_pos >= 0 && chain_pos < chain_count && chain_registries[chain_pos] == reg
+        return chain_pos
+    endif
+    return ChainIndexOf(reg)
+EndFunction
+
+; reg plays now: chain_pos follows it (the pending switch's entry when it names reg, else the current entry while it
+; still names reg, else reg's first entry). True when chain_pos changed.
+bool Function ChainSyncPos(String reg)
+    int before = chain_pos
+    if chain_switch_pos >= 0 && chain_switch_pos < chain_count && chain_registries[chain_switch_pos] == reg
+        chain_pos = chain_switch_pos
+    elseif !(chain_pos >= 0 && chain_pos < chain_count && chain_registries[chain_pos] == reg)
+        chain_pos = ChainIndexOf(reg)
+    endif
+    chain_switch_pos = -1
+    if chain_pos != before
+        Trace("ChainSyncPos", reg+" entry "+before+" -> "+chain_pos)
+        return true
+    endif
+    return false
+EndFunction
+
+; Entry k's intent into the registry table (AnimIntent_*), so the playing entry's intent is the one applied. The
+; playing clean / prepare stays the scene's own.
+Function ChainEntryToIntent(int k)
+    if k < 0 || k >= chain_count || !ce_acts || ce_acts[k] == ""
+        return
+    endif
+    String reg = chain_registries[k]
+    if clean_active && clean_anim == reg
+        return
+    endif
+    AnimIntent_Set(reg, ce_intents[k], ce_acts[k], ce_givers[k], ce_receivers[k], ce_parts[k])
+EndFunction
+
+; Description Editor commit keys: _last_stage, _chain_registries when non-empty (an empty list keeps the chain), and
+; _chain_intents (AnimIntent_FromChainJson).
 Function WebUI_ApplyChain(int obj)
     if JMap.hasKey(obj, "_last_stage")
         last_stage_mode = LastStageModeFromString(JMap.getStr(obj, "_last_stage", "npc"))
@@ -4520,6 +4718,35 @@ Function WebUI_ApplyChain(int obj)
             i += 1
         endwhile
         SetChain(regs, n, LastStageModeName())
+    endif
+    ; The rows' intents (the editor's Intent pulldown when each joined), after the prune SetChain ran.
+    if JMap.hasKey(obj, "_chain_intents")
+        AnimIntent_FromChainJson(JMap.getObj(obj, "_chain_intents"))
+    endif
+    ; _chain_pos (2026-11-17): the editor's entry. When it names the playing animation and no other pick rides the
+    ; commit, it is the playing entry now and its intent applies (C on another entry of the playing animation).
+    ; Otherwise it is the entry the pick's switch plays (ChainSyncPos).
+    int pos = JMap.getInt(obj, "_chain_pos", -1)
+    if pos >= 0 && pos < chain_count && thread != None && thread.Animation != None
+        String playing = thread.Animation.Registry
+        String picked = JMap.getStr(obj, "_active_registry", "")
+        if chain_registries[pos] == playing && (picked == "" || picked == playing)
+            if pos != chain_pos
+                chain_pos = pos
+                ChainEntryToIntent(pos)
+                AnimIntent_Apply(playing)
+                if clean_pending && !clean_active
+                    Clean_Begin()
+                endif
+                Trace("WebUI_ApplyChain", "playing entry "+pos+" intent:"+intent)
+            else
+                ChainEntryToIntent(pos)
+            endif
+        else
+            chain_switch_pos = pos
+        endif
+    elseif chain_pos >= 0
+        ChainEntryToIntent(chain_pos)
     endif
     ; The list is up: its top line follows the edit and a chained next is the selection again. Not while the editor
     ; is open for a line: its pick belongs to that line (2026-11-15 log: chain edits moved list_index 7 -> 0 and
@@ -4623,13 +4850,16 @@ String Function LastStage_ChainNext()
     if thread.Animation == None
         return ""
     endif
-    int i = ChainIndexOf(thread.Animation.Registry)
+    ; The playing entry (repeats: chain_pos, never only the first match). chain_next_pos: the entry returned.
+    chain_next_pos = -1
+    int i = ChainPlayingIndex()
     if i < 0
         return ""
     endif
     int k = i + 1
     while k < chain_count
         if ResolveAnimation(sexlab, chain_registries[k]) != None
+            chain_next_pos = k
             return chain_registries[k]
         endif
         k += 1
@@ -4638,6 +4868,7 @@ String Function LastStage_ChainNext()
         k = 0
         while k <= i
             if ResolveAnimation(sexlab, chain_registries[k]) != None
+                chain_next_pos = k
                 return chain_registries[k]
             endif
             k += 1
@@ -4654,7 +4885,7 @@ bool Function LastStage_ChainEnds()
     if thread.Animation == None
         return false
     endif
-    if ChainIndexOf(thread.Animation.Registry) < 0
+    if ChainPlayingIndex() < 0
         return false
     endif
     return LastStage_ChainNext() == ""
@@ -4672,7 +4903,9 @@ String Function LastStage_PickRegistry()
     if act == "next" || act == "scene"
         String chained = LastStage_ChainNext()
         if chained != ""
-            Trace("LastStage_PickRegistry", "line:"+list_index+" chain next:"+chained)
+            ; The switch plays that entry (repeats: ChainSyncPos on the switch).
+            chain_switch_pos = chain_next_pos
+            Trace("LastStage_PickRegistry", "line:"+list_index+" chain next:"+chained+" entry:"+chain_next_pos)
             return chained
         endif
         if act == "next"
@@ -4712,10 +4945,10 @@ String Function LastStage_PickRegistry()
     return LastStage_QueryPreferOrgasm(act, cast, "", "", LastStage_OrgasmMode(list_index))
 EndFunction
 
-; Who the line's animation should have orgasm (the AnimDB `_orgasm` filter): "none" for cuddle; oral and clean the
-; receiver's sex ("male" / "female") when the giver's differs (a same-sex pair cannot tell the positions apart); ""
-; for anything else. Clean takes an oral animation built around the receiver's orgasm and plays only the stages
-; before it (2026-11-15).
+; Who the line's animation should have orgasm (the AnimDB `_orgasm` filter): "none" for cuddle; oral and clean
+; "cast", the matrix with only the receiver orgasming (list_query_orgasm_actor; works for same-sex pairs too); "" for
+; anything else. Clean takes an oral animation built around the receiver's orgasm and plays only the stages before it
+; (2026-11-15).
 String Function LastStage_OrgasmMode(int line)
     if line < 0 || line >= list_count || thread == None
         return ""
@@ -4733,14 +4966,8 @@ String Function LastStage_OrgasmMode(int line)
     if g < 0 || r < 0 || g >= positions.length || r >= positions.length
         return ""
     endif
-    int rg = CastGender(sexlab, positions[r]) % 2
-    if rg == CastGender(sexlab, positions[g]) % 2
-        return ""
-    endif
-    if rg == 0
-        return "male"
-    endif
-    return "female"
+    list_query_orgasm_actor = positions[r]
+    return "cast"
 EndFunction
 
 ; LastStage_Query with the `_orgasm` filter first; without it when that finds nothing.
@@ -4771,21 +4998,58 @@ String Function LastStage_Query(String act, Actor[] cast, String oral_tag, Strin
     endif
     JMap.setStr(filter, "_synonyms", "broad")
     JMap.setInt(filter, "_rank", 1)
-    if list_query_orgasm != ""
+    if list_query_orgasm == "cast"
+        ; The orgasm matrix: only list_query_orgasm_actor orgasms (AnimDB SeatForMatrix). Creatures: no matrix.
+        int matrix = JArray.object()
+        bool humans = list_query_orgasm_actor != None
+        int m = 0
+        while m < cast.length && humans
+            if cast[m]
+                int cg = CastGender(sexlab, cast[m])
+                if cg >= 2
+                    humans = false
+                else
+                    String sex = "male"
+                    if IsIntersex(sexlab, cast[m])
+                        sex = "intersex"
+                    elseif cg == 1
+                        sex = "female"
+                    endif
+                    int entry = JMap.object()
+                    JMap.setStr(entry, "_sex", sex)
+                    JMap.setInt(entry, "_orgasm", (cast[m] == list_query_orgasm_actor) as int)
+                    JArray.addObj(matrix, entry)
+                endif
+            endif
+            m += 1
+        endwhile
+        if humans
+            JMap.setStr(filter, "_orgasm", "cast")
+            JMap.setObj(filter, "_cast_orgasm", matrix)
+        else
+            JValue.release(matrix)
+        endif
+    elseif list_query_orgasm != ""
         JMap.setStr(filter, "_orgasm", list_query_orgasm)
     endif
     int cast_arr = JArray.object()
     int gender_arr = JArray.object()
     int i = 0
+    int intersex_count = 0
     while i < cast.length
         if cast[i]
             JArray.addInt(cast_arr, cast[i].GetFormID())
             JArray.addInt(gender_arr, CastGender(sexlab, cast[i]))
+            if IsIntersex(sexlab, cast[i])
+                intersex_count += 1
+            endif
         endif
         i += 1
     endwhile
     JMap.setObj(filter, "_form_ids", cast_arr)
     JMap.setObj(filter, "_rank_pos_genders", gender_arr)
+    ; Futa rows (tag futa / allfuta) rank as misfits without futa in the cast (C++ RankGenderTier).
+    JMap.setInt(filter, "_intersex", intersex_count)
     int suppress = JArray.object()
     if act == "cuddle"
         JMap.setStr(filter, "_setting", "nonsexual")
@@ -4801,6 +5065,10 @@ String Function LastStage_Query(String act, Actor[] cast, String oral_tag, Strin
         LastStage_AddStr(any, oral_tag)
         JMap.setObj(filter, "_any_tags", any)
         LastStage_AddStr(suppress, oral_suppress)
+        ; A clean is a mouth on the part: no toys (2026-11-15: a clean switched to B_B_LesMDil1).
+        if act == "clean"
+            LastStage_AddStr(suppress, "dildo")
+        endif
     elseif act == "scene"
         int must_tags = JArray.object()
         LastStage_AddCsv(must_tags, start_tags)
@@ -4878,7 +5146,11 @@ bool Function LastStage_TrySwitch()
     list_editor_line = -1
     if list_index >= 0 && list_index < list_count
         Clean_Arm(list_index)
-        LastStage_ApplyOrder(LastStage_OrderedCast(list_index))
+        ; Oral / clean: the receiver in the orgasm position the pick has for them; else the line's order.
+        Actor seat_receiver = LastStage_LineReceiver(list_index)
+        if seat_receiver == None || !SeatByMatrix(reg, OrgasmsFor(seat_receiver))
+            LastStage_ApplyOrder(LastStage_OrderedCast(list_index))
+        endif
     endif
     ; One-animation loop on P+: ResetScene to the playing scene is a no-op, so step back instead.
     if IsSexLabPPlus() && thread.Animation && thread.Animation.Registry == reg
@@ -4915,9 +5187,10 @@ String Function LastStage_PresetJson()
         LastStage_AddStr(any, act)
         require_all = 1
     elseif act == "clean"
-        ; The orgasm filter (receiver's sex) narrows it; the oral tag keeps the list wide (2026-11-15). The editor's
-        ; clean word starts on with this giver / receiver (index.html deApplyListPreset).
+        ; The orgasm filter (only the receiver orgasms) narrows it; the oral tag keeps the list wide (2026-11-15). The
+        ; editor's clean word starts on with this giver / receiver (index.html deApplyListPreset). No toys.
         LastStage_AddStr(any, "oral")
+        LastStage_AddStr(suppress, "dildo")
         Actor[] cast_now = thread.Positions
         int cg = list_giver[list_index]
         int cr = list_receiver[list_index]
@@ -4953,8 +5226,11 @@ String Function LastStage_PresetJson()
     JMap.setObj(obj, "suppress", suppress)
     JMap.setInt(obj, "require_all", require_all)
     ; The Animation Selection gender pulldown: the line's orgasm mode (falls back to gender, then any, when empty).
+    ; "cast": the "<receiver> orgasm" entry (index.html orgasm_actor_<formid>).
     String omode = LastStage_OrgasmMode(list_index)
-    if omode != ""
+    if omode == "cast" && list_query_orgasm_actor != None
+        JMap.setStr(obj, "filter", "orgasm_actor_"+list_query_orgasm_actor.GetFormID())
+    elseif omode != ""
         JMap.setStr(obj, "filter", "orgasm_"+omode)
     endif
     String json = ObjectToLowerCaseKeyJson(obj)
@@ -4991,6 +5267,7 @@ Function LastStage_NoteIntent()
     elseif act == "continue"
         intent = "group sex"
     endif
+    Engine_PushIntent()
 EndFunction
 
 Function LastStage_ArmSwitch()
@@ -5040,30 +5317,517 @@ EndFunction
 
 Function LastStage_OnSwitched()
     Clean_EndForSwitch("switched")
+    String reg = ""
+    if thread != None && thread.Animation != None
+        reg = thread.Animation.Registry
+    endif
+    ; The entry this switch plays (repeats): its intent is the one the lookups below find.
+    ChainSyncPos(reg)
+    ChainEntryToIntent(chain_pos)
+    bool explicit = ai_explicit
+    ai_explicit = false
     ; An armed clean (a clean list line, the editor's clean word, a Clean cock / pussy action) begins on its switch,
-    ; list or not.
+    ; list or not. Each animation keeps the intent it joined the list with (AnimIntent_*).
     if list_phase == 0
+        if !explicit
+            AnimIntent_Apply(reg)
+        elseif !clean_pending && !ai_commit_intent_changed
+            ; An editor pick of a listed animation, clean word off and intent untouched: its stored intent.
+            int ai = AnimIntent_Find(reg)
+            if ai >= 0 && !AnimIntent_IsMouth(ai) && ai_intents[ai] != ""
+                intent = ai_intents[ai]
+            endif
+            ; A stamped oral / anal / vaginal to someone: seat the pair, unless the commit's orgasm matrix did.
+            if ai >= 0 && !seat_done_for_switch
+                AnimIntent_Seat(ai)
+            endif
+        endif
+        ai_commit_intent_changed = false
         if clean_pending
             Clean_Begin()
         endif
+        AnimIntent_Note(reg)
         return
     endif
-    LastStage_NoteIntent()
+    ; "next" plays the chain's next animation: the intent it joined with, when it has one.
+    if LastStage_Act(list_index) == "next" && AnimIntent_Find(reg) >= 0
+        AnimIntent_Apply(reg)
+    else
+        LastStage_NoteIntent()
+    endif
     LastStage_Close()
     if clean_pending
         Clean_Begin()
+        AnimIntent_Note(reg)
         return
     endif
+    AnimIntent_Note(reg)
     Engine_SetStageInputs()
     if IsFinalStage()
         LastStage_Begin()
     endif
 EndFunction
 
+; ---- Orgasm matrix seating (2026-11-15) ----
+
+; The "{name} orgasm" matrix: only who orgasms (parallel to thread.Positions; 1 must, 0 must not).
+Int[] Function OrgasmsFor(Actor who)
+    Actor[] positions = thread.Positions
+    Int[] orgasms = Utility.CreateIntArray(positions.length)
+    int i = 0
+    while i < positions.length
+        orgasms[i] = (positions[i] == who) as int
+        i += 1
+    endwhile
+    return orgasms
+EndFunction
+
+; The GenderPanel's orgasm words sent with a Description Editor pick (_orgasm_matrix: [{_form_id, _orgasm 1|0}]),
+; parallel to thread.Positions: 1 must, 0 must not, -1 either (grey / not listed). None when no actor is set.
+Int[] Function OrgasmsFromMatrix(int jarr)
+    Actor[] positions = thread.Positions
+    int n = positions.length
+    Int[] orgasms = Utility.CreateIntArray(n, -1)
+    bool any = false
+    int count = JArray.count(jarr)
+    int k = 0
+    while k < count
+        int entry = JArray.getObj(jarr, k)
+        Actor who = Game.GetFormEx(JMap.getInt(entry, "_form_id", 0)) as Actor
+        int idx = -1
+        if who != None
+            idx = positions.Find(who)
+        endif
+        if idx >= 0
+            orgasms[idx] = (JMap.getInt(entry, "_orgasm", 0) != 0) as int
+            any = true
+        endif
+        k += 1
+    endwhile
+    if !any
+        return None
+    endif
+    return orgasms
+EndFunction
+
+; Seats the cast for reg by an orgasm matrix (orgasms parallel to thread.Positions: 1 must, 0 must not, -1 either):
+; orgasm actors in orgasm positions their sex fits (penis / pussy, futa either), no-orgasm ones in no-orgasm positions,
+; either ones anywhere their sex fits (AnimDb_SeatForMatrix). True when the cast already sits so or the reorder took;
+; false when no seating exists (creature casts are left alone).
+; firstActor (2026-11-17, the Intent pulldown's receiver): sits in position 0. anySex: no sex test (gender match grey).
+bool Function SeatByMatrix(String reg, Int[] orgasms, Actor firstActor = None, bool anySex = false)
+    if thread == None || reg == "" || sexlab == None
+        return false
+    endif
+    Actor[] positions = thread.Positions
+    int n = positions.length
+    if n < 2 || orgasms.length != n
+        return false
+    endif
+    int[] sexes = Utility.CreateIntArray(n)
+    int i = 0
+    while i < n
+        int g = CastGender(sexlab, positions[i])
+        if g >= 2
+            return false
+        endif
+        if IsIntersex(sexlab, positions[i])
+            g = 2
+        endif
+        sexes[i] = g
+        i += 1
+    endwhile
+    int first = -1
+    if firstActor != None
+        first = positions.Find(firstActor)
+    endif
+    int[] seat
+    if first >= 0 || anySex
+        seat = SkyrimNet_SexLab_AnimDb.AnimDb_SeatForMatrixEx(reg, sexes, orgasms, first, anySex)
+    else
+        seat = SkyrimNet_SexLab_AnimDb.AnimDb_SeatForMatrix(reg, sexes, orgasms)
+    endif
+    if seat.length != n
+        Trace("SeatByMatrix", reg+": no seating fits the orgasm matrix")
+        return false
+    endif
+    Actor[] want = PapyrusUtil.ActorArray(n)
+    bool same = true
+    i = 0
+    while i < n
+        want[seat[i]] = positions[i]
+        if seat[i] != i
+            same = false
+        endif
+        i += 1
+    endwhile
+    if same
+        return true
+    endif
+    if n == 2
+        return LastStage_ApplyOrder(want)
+    endif
+    if IsSexLabPPlus()
+        Trace("SeatByMatrix", "P+: "+n+" actors are not reordered")
+        return false
+    endif
+    Trace("SeatByMatrix", reg+": reorder "+n+" actors, pos0 "+GetDisplayName(want[0]))
+    thread.ChangeActors(want)
+    WaitForActorChangeRefresh()
+    return true
+EndFunction
+
+; ---- Per-animation intent (2026-11-15; acts from the editor's Intent pulldown 2026-11-16) ----
+
+Function AnimIntent_Clear()
+    ai_count = 0
+    ai_last_reg = ""
+    ai_explicit = false
+    ai_commit_intent_changed = false
+EndFunction
+
+Function AnimIntent_Ensure()
+    if !ai_regs
+        ai_regs = new String[64]
+        ai_intents = new String[64]
+        ai_acts = new String[64]
+        ai_givers = new Actor[64]
+        ai_receivers = new Actor[64]
+        ai_parts = new String[64]
+        ai_count = 0
+    elseif !ai_acts || ai_acts.length != ai_regs.length
+        ; A save from before 2026-11-16: no act column. Entries with a giver were cleans.
+        ai_acts = Utility.CreateStringArray(ai_regs.length)
+        int k = 0
+        while k < ai_count
+            if ai_givers[k] != None
+                ai_acts[k] = "clean"
+            endif
+            k += 1
+        endwhile
+    endif
+EndFunction
+
+; The entry's index, -1 for none (Papyrus string compares ignore case).
+int Function AnimIntent_Find(String reg)
+    if reg == "" || !ai_regs
+        return -1
+    endif
+    int i = 0
+    while i < ai_count
+        if ai_regs[i] == reg
+            return i
+        endif
+        i += 1
+    endwhile
+    return -1
+EndFunction
+
+; A clean / prepare entry: its giver, receiver and part arm the mouth mode (Clean_ArmActors).
+bool Function AnimIntent_IsMouth(int i)
+    AnimIntent_Ensure()
+    if i < 0 || i >= ai_count || ai_givers[i] == None || ai_receivers[i] == None
+        return false
+    endif
+    return ai_acts[i] == "clean" || ai_acts[i] == "prepare"
+EndFunction
+
+; "Pussy" / "COCK" -> "pussy" / "cock" (Papyrus == ignores case; the narration must not show the action's case).
+String Function MouthPartWord(String part)
+    if part == "pussy"
+        return "pussy"
+    elseif part == "cock"
+        return "cock"
+    endif
+    return part
+EndFunction
+
+; Stores reg's intent text, act and actors (c_giver None: undirected). Full table: the oldest entry goes.
+Function AnimIntent_Set(String reg, String a_intent, String act, Actor c_giver, Actor c_receiver, String part)
+    if reg == ""
+        return
+    endif
+    AnimIntent_Ensure()
+    int i = AnimIntent_Find(reg)
+    if i < 0
+        if ai_count >= ai_regs.length
+            AnimIntent_RemoveAt(0)
+        endif
+        i = ai_count
+        ai_count += 1
+    endif
+    ai_regs[i] = reg
+    ai_intents[i] = a_intent
+    ai_acts[i] = act
+    ai_givers[i] = c_giver
+    ai_receivers[i] = c_receiver
+    ai_parts[i] = MouthPartWord(part)
+EndFunction
+
+Function AnimIntent_RemoveAt(int idx)
+    if idx < 0 || idx >= ai_count
+        return
+    endif
+    AnimIntent_Ensure()
+    int i = idx
+    while i < ai_count - 1
+        ai_regs[i] = ai_regs[i + 1]
+        ai_intents[i] = ai_intents[i + 1]
+        ai_acts[i] = ai_acts[i + 1]
+        ai_givers[i] = ai_givers[i + 1]
+        ai_receivers[i] = ai_receivers[i + 1]
+        ai_parts[i] = ai_parts[i + 1]
+        i += 1
+    endwhile
+    ai_count -= 1
+    ai_regs[ai_count] = ""
+    ai_intents[ai_count] = ""
+    ai_acts[ai_count] = ""
+    ai_givers[ai_count] = None
+    ai_receivers[ai_count] = None
+    ai_parts[ai_count] = ""
+EndFunction
+
+; reg takes the scene's current intent, and the clean / prepare when one is armed or playing. An act the editor
+; stamped (oral to X, kissing, ...) stays while the intent text is still its own.
+Function AnimIntent_Note(String reg)
+    if (clean_active || clean_pending) && clean_giver != None && clean_receiver != None && clean_part != ""
+        AnimIntent_Set(reg, intent, clean_kind, clean_giver, clean_receiver, clean_part)
+    else
+        int i = AnimIntent_Find(reg)
+        ; The scene has no intent text of its own (a Scene Creator start sends ""; 2026-11-18 log): the stamp's text
+        ; becomes the scene's instead of being wiped.
+        if i >= 0 && !AnimIntent_IsMouth(i) && ai_acts[i] != "" && (ai_intents[i] == "" || ai_intents[i] == intent || intent == "")
+            if intent == "" && ai_intents[i] != ""
+                intent = ai_intents[i]
+            endif
+            ai_last_reg = reg
+            Trace("AnimIntent_Note", reg+" keeps act:"+ai_acts[i]+" intent:"+intent)
+            Engine_PushIntent()
+            return
+        endif
+        AnimIntent_Set(reg, intent, "", None, None, "")
+    endif
+    ai_last_reg = reg
+    Trace("AnimIntent_Note", reg+" intent:"+intent+" "+clean_kind+":"+clean_part)
+    Engine_PushIntent()
+EndFunction
+
+; reg plays: its stored intent comes back and a stored clean / prepare is armed (the caller begins it); a directed act
+; (oral / anal / vaginal to someone) seats the pair for it. No entry: it takes the current intent (AnimIntent_Note).
+Function AnimIntent_Apply(String reg)
+    int i = AnimIntent_Find(reg)
+    if i < 0
+        AnimIntent_Note(reg)
+        return
+    endif
+    ai_last_reg = reg
+    if ai_intents[i] != ""
+        intent = ai_intents[i]
+    endif
+    if AnimIntent_IsMouth(i)
+        if !(clean_active && clean_anim == reg) && !Clean_ArmActors(ai_givers[i], ai_receivers[i], ai_parts[i], ai_acts[i])
+            ; An actor left the cast: no clean / prepare any more.
+            ai_acts[i] = ""
+            ai_givers[i] = None
+            ai_receivers[i] = None
+            ai_parts[i] = ""
+        endif
+    else
+        AnimIntent_Seat(i)
+    endif
+    Trace("AnimIntent_Apply", reg+" intent:"+intent+" act:"+ai_acts[i]+" part:"+ai_parts[i])
+    Engine_PushIntent()
+EndFunction
+
+; A directed oral / anal / vaginal entry of a two-actor cast: SexLab's position 0 takes the receiver (an oral of a cock:
+; the giver), as LastStage_OrderedCast does for a list line.
+Function AnimIntent_Seat(int i)
+    if thread == None || i < 0 || i >= ai_count || ai_givers[i] == None || ai_receivers[i] == None
+        return
+    endif
+    String act = ai_acts[i]
+    if act != "oral" && act != "anal" && act != "vaginal"
+        return
+    endif
+    Actor[] positions = thread.Positions
+    if positions.length != 2 || positions.Find(ai_givers[i]) < 0 || positions.Find(ai_receivers[i]) < 0
+        return
+    endif
+    ; An oral (2026-11-18): the receiver takes the animation's orgasm slot when its positions say which one that is,
+    ; by sex first, else any sex (an entry picked with gender grey: "oral to Coralyn" on a blowjob). The position
+    ; rule below would put a pussy's receiver in a blowjob's mouth slot.
+    if act == "oral"
+        String oral_reg = ai_regs[i]
+        if SeatByMatrix(oral_reg, OrgasmsFor(ai_receivers[i])) || SeatByMatrix(oral_reg, OrgasmsFor(ai_receivers[i]), None, true)
+            return
+        endif
+    endif
+    Actor[] want = new Actor[2]
+    want[0] = ai_receivers[i]
+    want[1] = ai_givers[i]
+    if act == "oral" && ai_parts[i] == "cock"
+        want[0] = ai_givers[i]
+        want[1] = ai_receivers[i]
+    endif
+    LastStage_ApplyOrder(want)
+EndFunction
+
+; Engine_SetStageInputs saw another animation (a chain step, a hotkey, SexLab): restore its intent and clean.
+Function AnimIntent_OnNewAnimation(String reg)
+    if reg == "" || list_switching
+        return
+    endif
+    ; Repeats (2026-11-17): the same registry as another chain entry is a new animation too.
+    bool moved = ChainSyncPos(reg)
+    if reg == ai_last_reg && !moved
+        return
+    endif
+    ChainEntryToIntent(chain_pos)
+    AnimIntent_Apply(reg)
+    if clean_pending && !clean_active
+        Clean_Begin()
+    endif
+EndFunction
+
+; The selected list changed (SetChain): entries that left it go, except the playing animation's.
+Function AnimIntent_Prune()
+    String cur = ""
+    if thread != None && thread.Animation != None
+        cur = thread.Animation.Registry
+    endif
+    int i = ai_count - 1
+    while i >= 0
+        String reg = ai_regs[i]
+        if reg != cur && ChainIndexOf(reg) < 0
+            Trace("AnimIntent_Prune", reg+" left the list (intent:"+ai_intents[i]+")")
+            AnimIntent_RemoveAt(i)
+        endif
+        i -= 1
+    endwhile
+EndFunction
+
+; _chain_intents (the editor's Intent pulldown, stamped on a row when it joined the list):
+; [{_registry, _act, _intent, _giver, _receiver, _part}]. Rows without an _act keep what the scene noted. A directed
+; act whose actors left the cast keeps its text only.
+Function AnimIntent_FromChainJson(int arr)
+    if arr == 0
+        return
+    endif
+    ; Scene_Creator.FinishStartScene hands the start's rows over before the thread is bound: no cast check then.
+    Actor[] positions
+    if thread != None
+        positions = thread.Positions
+    endif
+    int n = JArray.count(arr)
+    int k = 0
+    while k < n
+        int e = JArray.getObj(arr, k)
+        String reg = JMap.getStr(e, "_registry", "")
+        String act = JMap.getStr(e, "_act", "")
+        if reg != "" && act != ""
+            Actor g = Game.GetFormEx(JMap.getInt(e, "_giver", 0)) as Actor
+            Actor r = Game.GetFormEx(JMap.getInt(e, "_receiver", 0)) as Actor
+            String part = JMap.getStr(e, "_part", "")
+            if g == None || r == None || g == r || (positions && (positions.Find(g) < 0 || positions.Find(r) < 0))
+                g = None
+                r = None
+                part = ""
+                if act == "clean" || act == "prepare"
+                    act = "oral"
+                endif
+            endif
+            String text = JMap.getStr(e, "_intent", "")
+            ; The entry's own intent (_index, 2026-11-17; an older page: the row order when it names the same reg).
+            int idx = JMap.getInt(e, "_index", k)
+            if idx >= 0 && idx < chain_count && ce_acts && chain_registries[idx] == reg
+                ce_intents[idx] = text
+                ce_acts[idx] = act
+                ce_givers[idx] = g
+                ce_receivers[idx] = r
+                ce_parts[idx] = MouthPartWord(part)
+            endif
+            int i = AnimIntent_Find(reg)
+            ; The playing clean / prepare stays the scene's own (the editor's pick commit decides it with _clean).
+            if !(i >= 0 && clean_active && clean_anim == reg)
+                AnimIntent_Set(reg, text, act, g, r, part)
+                Trace("AnimIntent_FromChainJson", reg+" entry:"+idx+" act:"+act+" intent:"+text+" part:"+part)
+            endif
+        endif
+        k += 1
+    endwhile
+EndFunction
+
+; Scene state: the chain's per-entry intents, the same shape as the editor's _chain_intents
+; ([{_index, _registry, _act, _intent, _giver, _receiver, _part}], entries with an act only).
+int Function ChainIntentsStateArray()
+    int arr = SNSL_JArray.object()
+    if !ce_acts
+        return arr
+    endif
+    int i = 0
+    while i < chain_count
+        if ce_acts[i] != ""
+            int o = SNSL_JMap.object()
+            SNSL_JMap.setInt(o, "_index", i)
+            SNSL_JMap.setStr(o, "_registry", chain_registries[i])
+            SNSL_JMap.setStr(o, "_act", ce_acts[i])
+            SNSL_JMap.setStr(o, "_intent", ce_intents[i])
+            if ce_givers[i] != None && ce_receivers[i] != None
+                SNSL_JMap.setInt(o, "_giver", ce_givers[i].GetFormID())
+                SNSL_JMap.setInt(o, "_receiver", ce_receivers[i].GetFormID())
+                SNSL_JMap.setStr(o, "_part", ce_parts[i])
+            endif
+            SNSL_JArray.addObj(arr, o)
+        endif
+        i += 1
+    endwhile
+    return arr
+EndFunction
+
+; Scene state for the Description Editor rows: [{_registry, _intent, _act, _clean, _giver, _receiver, _part}]
+; (_clean 1: a clean / prepare row, its kind in _act).
+int Function AnimIntent_StateArray()
+    AnimIntent_Ensure()
+    int arr = SNSL_JArray.object()
+    int i = 0
+    while i < ai_count
+        int o = SNSL_JMap.object()
+        SNSL_JMap.setStr(o, "_registry", ai_regs[i])
+        SNSL_JMap.setStr(o, "_intent", ai_intents[i])
+        SNSL_JMap.setStr(o, "_act", ai_acts[i])
+        SNSL_JMap.setInt(o, "_clean", AnimIntent_IsMouth(i) as int)
+        if ai_givers[i] != None && ai_receivers[i] != None
+            SNSL_JMap.setInt(o, "_giver", ai_givers[i].GetFormID())
+            SNSL_JMap.setInt(o, "_receiver", ai_receivers[i].GetFormID())
+            SNSL_JMap.setStr(o, "_part", ai_parts[i])
+        endif
+        SNSL_JArray.addObj(arr, o)
+        i += 1
+    endwhile
+    return arr
+EndFunction
+
 ; ---- Clean (2026-11-14) ----
+
+; The engine's HUD label / speed lock for the mouth mode: "cleaning" or "preparing" (off: both off).
+Function Clean_EngineMode(bool on)
+    SkyrimNet_SexLab_OrgasmEngine.SetSceneCleaning(sid, on && clean_kind != "prepare")
+    SkyrimNet_SexLab_OrgasmEngine.SetScenePreparing(sid, on && clean_kind == "prepare")
+    Engine_PushIntent()
+EndFunction
+
+; "cleaning" / "preparing".
+String Function Clean_Verb()
+    if clean_kind == "prepare"
+        return "preparing"
+    endif
+    return "cleaning"
+EndFunction
 
 ; The switch to a clean animation played: nobody is expected to orgasm (Engine_SetSkills reads clean_active), so
 ; passive gain stops and the no-primary path holds the stages; Clean_Poll ends it after sexlab.clean.seconds.
+; Prepare: only the preparer is not expected; the prepared keeps passive gain (Engine_SetSkills).
 Function Clean_Begin()
     clean_active = true
     clean_pending = false
@@ -5082,18 +5846,19 @@ Function Clean_Begin()
         clean_anim = thread.Animation.Registry
     endif
     if clean_part != ""
-        intent = "cleaning "+clean_part
+        intent = Clean_Verb()+" "+clean_part
     endif
     Engine_SetSkills()
-    SkyrimNet_SexLab_OrgasmEngine.SetSceneCleaning(sid, true)
-    Trace("Clean_Begin",GetDisplayName(clean_giver)+" cleans "+GetDisplayName(clean_receiver)+" "+clean_part+" stage:"+thread.Stage+"/"+Engine_StageCount()+" every "+clean_stage_secs+"s timer:"+clean_left+"s")
+    Clean_EngineMode(true)
+    Trace("Clean_Begin",clean_kind+": "+GetDisplayName(clean_giver)+" -> "+GetDisplayName(clean_receiver)+" "+clean_part+" stage:"+thread.Stage+"/"+Engine_StageCount()+" every "+clean_stage_secs+"s timer:"+clean_left+"s")
     RegisterForSingleUpdate(1.0)
 EndFunction
 
 Function Clean_Clear()
     if clean_active
-        SkyrimNet_SexLab_OrgasmEngine.SetSceneCleaning(sid, false)
+        Clean_EngineMode(false)
     endif
+    clean_kind = "clean"
     clean_active = false
     clean_pending = false
     clean_narrated = false
@@ -5113,8 +5878,8 @@ Function Clean_EndForSwitch(String why)
     if !clean_active
         return
     endif
-    Trace("Clean_EndForSwitch", why+": "+GetDisplayName(clean_receiver)+" "+clean_part+" pending:"+clean_pending)
-    SkyrimNet_SexLab_OrgasmEngine.SetSceneCleaning(sid, false)
+    Trace("Clean_EndForSwitch", why+": "+clean_kind+" "+GetDisplayName(clean_receiver)+" "+clean_part+" pending:"+clean_pending)
+    Clean_EngineMode(false)
     clean_active = false
     clean_left = 0.0
     if !clean_pending
@@ -5146,9 +5911,11 @@ Function Clean_Arm(int line)
     Clean_ArmActors(positions[g], positions[r], list_parts[line])
 EndFunction
 
-; The next switch (or the scene start) plays as a clean of receiver's part by giver. Both must be in the cast.
-bool Function Clean_ArmActors(Actor c_giver, Actor c_receiver, String part)
+; The next switch (or the scene start) plays as a clean (kind "prepare": a prepare) of receiver's part by giver. Both
+; must be in the cast.
+bool Function Clean_ArmActors(Actor c_giver, Actor c_receiver, String part, String kind = "clean")
     clean_pending = false
+    part = MouthPartWord(part)
     if thread == None || c_giver == None || c_receiver == None || c_giver == c_receiver || (part != "cock" && part != "pussy")
         return false
     endif
@@ -5159,13 +5926,23 @@ bool Function Clean_ArmActors(Actor c_giver, Actor c_receiver, String part)
     clean_giver = c_giver
     clean_receiver = c_receiver
     clean_part = part
+    clean_kind = Clean_KindWord(kind)
     clean_narrated = false
     clean_pending = true
-    Trace("Clean_Arm", GetDisplayName(clean_giver)+" -> "+GetDisplayName(clean_receiver)+" "+clean_part)
+    Trace("Clean_Arm", clean_kind+": "+GetDisplayName(clean_giver)+" -> "+GetDisplayName(clean_receiver)+" "+clean_part)
     return true
 EndFunction
 
-; ApplyWebUICommit's _clean (the editor's clean word): arms the pick's clean, or (an empty object) none.
+; "clean" unless kind is "prepare".
+String Function Clean_KindWord(String kind)
+    if kind == "prepare"
+        return "prepare"
+    endif
+    return "clean"
+EndFunction
+
+; ApplyWebUICommit's _clean (the editor's Intent pulldown, the pick row's intent): arms the pick's clean or prepare
+; (_kind "prepare"), or (an empty object) none.
 Function Clean_FromCommit(int clean_obj)
     clean_pending = false
     if clean_obj == 0
@@ -5175,32 +5952,42 @@ Function Clean_FromCommit(int clean_obj)
     Actor c_receiver = Game.GetFormEx(JMap.getInt(clean_obj, "_receiver", 0)) as Actor
     String part = JMap.getStr(clean_obj, "_part", "")
     if c_giver != None || c_receiver != None || part != ""
-        Clean_ArmActors(c_giver, c_receiver, part)
+        Clean_ArmActors(c_giver, c_receiver, part, JMap.getStr(clean_obj, "_kind", "clean"))
     endif
 EndFunction
 
-; Scene_Creator.FinishStartScene: the scene opens with a clean (AnimationStart begins it). None / "" for none.
-Function SetStartClean(Actor c_giver, Actor c_receiver, String part)
+; Scene_Creator.FinishStartScene: the scene opens with a clean or prepare (AnimationStart begins it). None / "" for none.
+Function SetStartClean(Actor c_giver, Actor c_receiver, String part, String kind = "clean")
     clean_at_start = c_giver != None && c_receiver != None && part != ""
     if !clean_at_start
         return
     endif
     clean_giver = c_giver
     clean_receiver = c_receiver
-    clean_part = part
+    clean_part = MouthPartWord(part)
+    clean_kind = Clean_KindWord(kind)
     clean_narrated = false
-    Trace("SetStartClean", GetDisplayName(c_giver)+" cleans "+GetDisplayName(c_receiver)+" "+part)
+    Trace("SetStartClean", clean_kind+": "+GetDisplayName(c_giver)+" -> "+GetDisplayName(c_receiver)+" "+clean_part)
 EndFunction
 
-; A Clean cock / Clean pussy action between two actors of this scene (Actions.CleanScene): pick an oral animation
-; built around the receiver's orgasm, order the cast, arm the clean, and switch. False when nothing fits.
-bool Function Clean_FromAction(Actor c_giver, Actor c_receiver, String part)
+; A Clean / Prepare cock or pussy action between two actors of this scene (Actions.CleanScene / PrepareScene): pick an
+; oral animation built around the receiver's orgasm, order the cast, arm the clean (kind "prepare": a prepare), and
+; switch. False when nothing fits.
+bool Function Clean_FromAction(Actor c_giver, Actor c_receiver, String part, String kind = "clean")
     if thread == None || sexlab == None || list_switching
         return false
     endif
-    if !Clean_ArmActors(c_giver, c_receiver, part)
+    kind = Clean_KindWord(kind)
+    ; Already this clean: nothing to switch (2026-11-15: a repeated "clean Nia's pussy" re-queried and switched the
+    ; playing clean to a dildo animation).
+    if Clean_Owns() && clean_giver == c_giver && clean_receiver == c_receiver && clean_part == part && clean_kind == kind
+        Trace("Clean_FromAction", "already "+Clean_Verb()+": "+GetDisplayName(c_giver)+" -> "+GetDisplayName(c_receiver)+" "+part)
+        return true
+    endif
+    if !Clean_ArmActors(c_giver, c_receiver, part, kind)
         return false
     endif
+    part = clean_part
     ; The order LastStage_OrderedCast ranks a clean line in: the giver first for a cock, the receiver first for a pussy.
     Actor[] cast = new Actor[2]
     cast[0] = c_giver
@@ -5216,22 +6003,19 @@ bool Function Clean_FromAction(Actor c_giver, Actor c_receiver, String part)
     endif
     String want = "blowjob"
     String other = "cunnilingus"
-    String omode = "male"
     if part == "pussy"
         want = "cunnilingus"
         other = "blowjob"
-        omode = "female"
     endif
-    ; A same-sex pair: the orgasm filter cannot tell the positions apart (LastStage_OrgasmMode).
-    if CastGender(sexlab, c_giver) % 2 == CastGender(sexlab, c_receiver) % 2
-        omode = ""
-    endif
+    ; The orgasm matrix: only the receiver orgasms (same-sex pairs too).
+    String omode = "cast"
+    list_query_orgasm_actor = c_receiver
     String reg = LastStage_QueryPreferOrgasm("clean", cast, want, "", omode)
     if reg == ""
         reg = LastStage_QueryPreferOrgasm("clean", cast, "oral", other, omode)
     endif
     if reg == ""
-        Trace("Clean_FromAction", "no animation for "+GetDisplayName(c_giver)+" cleaning "+GetDisplayName(c_receiver)+" "+part)
+        Trace("Clean_FromAction", "no animation for "+GetDisplayName(c_giver)+" "+Clean_Verb()+" "+GetDisplayName(c_receiver)+" "+part)
         Clean_Clear()
         return false
     endif
@@ -5239,8 +6023,12 @@ bool Function Clean_FromAction(Actor c_giver, Actor c_receiver, String part)
     if list_phase != 0
         LastStage_ArmSwitch()
     endif
-    LastStage_ApplyOrder(cast)
+    if !SeatByMatrix(reg, OrgasmsFor(c_receiver))
+        LastStage_ApplyOrder(cast)
+    endif
+    ai_explicit = true
     if !WebUI_SwitchToRegistry(reg, true)
+        ai_explicit = false
         Clean_Clear()
         if list_phase != 0
             LastStage_SwitchFailed()
@@ -5250,7 +6038,7 @@ bool Function Clean_FromAction(Actor c_giver, Actor c_receiver, String part)
     return true
 EndFunction
 
-; "Mary cleans Bob's cock with her mouth." "" without a giver / receiver.
+; "Mary cleans Bob's cock with her mouth." / "Mary prepares Bob's cock with her mouth." "" without a giver / receiver.
 String Function Clean_Sentence()
     if clean_giver == None || clean_receiver == None
         return ""
@@ -5259,7 +6047,11 @@ String Function Clean_Sentence()
     if part == ""
         part = "body"
     endif
-    return GetDisplayName(clean_giver)+" cleans "+GetDisplayName(clean_receiver)+"'s "+part+" with "+PossessivePronoun(clean_giver)+" mouth."
+    String verb = " cleans "
+    if clean_kind == "prepare"
+        verb = " prepares "
+    endif
+    return GetDisplayName(clean_giver)+verb+GetDisplayName(clean_receiver)+"'s "+part+" with "+PossessivePronoun(clean_giver)+" mouth."
 EndFunction
 
 ; The scene-start line of a clean: "Coralyn starts cleaning Bob's cock, by <the animation's stage description>"
@@ -5272,7 +6064,7 @@ String Function Clean_StartSentence()
     if part == ""
         part = "body"
     endif
-    String line = GetDisplayName(clean_giver)+" starts cleaning "+GetDisplayName(clean_receiver)+"'s "+part
+    String line = GetDisplayName(clean_giver)+" starts "+Clean_Verb()+" "+GetDisplayName(clean_receiver)+"'s "+part
     String desc = GetDescription()
     if desc == ""
         return line+"."
@@ -5294,7 +6086,7 @@ Function Clean_Poll()
         return
     endif
     if Clean_AtListStage()
-        Clean_Finish("second-to-last stage")
+        Clean_Finish("past stage 2")
         return
     endif
     ; Three or more stages: no timer, the no-primary hold moves the stages (Victim_Poll, clean_stage_secs).
@@ -5315,15 +6107,16 @@ Function Clean_Poll()
     Clean_Finish("timer")
 EndFunction
 
-; A clean ends, and the list opens, as soon as the second-to-last stage starts (2026-11-15). A two-stage animation:
-; the final stage (it ran on the timer); one stage: the timer alone.
+; A clean / prepare plays stages 1 and 2; Victim_Poll opens the list when stage 2's hold runs out (2026-11-18). A stage
+; past 2 (the stage key, or a 3-stage animation's final stage) ends it at once. A two-stage animation: the final stage
+; (it ran on the timer); one stage: the timer alone.
 bool Function Clean_AtListStage()
     if !Clean_Owns()
         return false
     endif
     int count = Engine_StageCount()
     if count >= 3
-        return thread.Stage >= count - 1
+        return thread.Stage >= 3
     endif
     return count == 2 && thread.Stage >= count
 EndFunction
@@ -5332,9 +6125,16 @@ EndFunction
 ; stage and asks what comes next (2026-11-15: a clean ends without an orgasm, so a scene can go on into sex). Once an
 ; actor is at their orgasm limit the AI may only stop, cuddle or clean (LastStage_AiLimited). Where the list cannot
 ; run (P+ < 2.17, no animation) the animation ends as before.
+; Prepare (2026-11-16): no cum wiped; the list offers stop plus the sex the preparing leads to (list_after_prepare).
 Function Clean_Finish(String why)
-    Trace("Clean_Finish", why+": "+GetDisplayName(clean_receiver)+" "+clean_part+" stage:"+thread.Stage+"/"+Engine_StageCount())
-    if clean_receiver != None && clean_part == "pussy"
+    Trace("Clean_Finish", why+": "+clean_kind+" "+GetDisplayName(clean_receiver)+" "+clean_part+" stage:"+thread.Stage+"/"+Engine_StageCount())
+    list_after_prepare = false
+    if clean_kind == "prepare"
+        list_after_prepare = clean_giver != None && clean_receiver != None
+        prep_giver = clean_giver
+        prep_receiver = clean_receiver
+        prep_part = clean_part
+    elseif clean_receiver != None && clean_part == "pussy"
         SkyrimNet_SexLab_Decorators.ClearCumPart(clean_receiver, "pussy")
     endif
     if thread == None
@@ -5352,6 +6152,7 @@ Function Clean_Finish(String why)
     if list_phase == 0
         Trace("Clean_Finish", "no list: end")
         list_after_clean = false
+        list_after_prepare = false
         SkyrimNet_SexLab_OrgasmEngine.SetEndHold(sid, false)
         thread.EndAnimation()
     endif
@@ -6194,22 +6995,35 @@ Function StageStart()
         ; (intent "cleaning <part>", set by Clean_Begin), which covers it, so later stages add no clean sentence.
         if clean_at_start
             clean_at_start = false
-            if Clean_ArmActors(clean_giver, clean_receiver, clean_part)
+            if Clean_ArmActors(clean_giver, clean_receiver, clean_part, clean_kind)
                 Clean_Begin()
                 clean_narrated = true
             endif
         endif
         ; A clean opens with "Bob initiates: Bob starts cleaning Coralyn's pussy, by <stage description>", not the animation's own
         ; description (2026-11-15: a cunnilingus animation narrated as cunnilingus).
+        ; The first animation's chain entry (repeats: entry 0, not the registry's last stamp) sets the intent: a stamped
+        ; act (vaginal / oral / kissing ...) wins over the start's intent, which a Scene Creator start leaves "" (2026-11-18).
+        if thread.Animation != None
+            String start_reg = thread.Animation.Registry
+            ChainSyncPos(start_reg)
+            ChainEntryToIntent(chain_pos)
+            int start_ai = AnimIntent_Find(start_reg)
+            if !clean_active && start_ai >= 0 && ai_acts[start_ai] != "" && !AnimIntent_IsMouth(start_ai)
+                AnimIntent_Apply(start_reg)
+            else
+                AnimIntent_Note(start_reg)
+            endif
+        endif
+        if intent == ""
+            intent = INTENT_DEFAULT
+            Engine_PushIntent()
+        endif
         String start_desc = GetDescription()
         if clean_active && Clean_StartSentence() != ""
             start_desc = Clean_StartSentence()
         endif
         StageStart_NarrateStart(start_desc)
-    endif
-    ; DEBUG-DELETE (2026-11-15: a clean's timed stage steps reset the actors to overlapping; no cause in the log yet)
-    if clean_active && thread != None
-        Trace("StageStart", "clean step stage:"+thread.Stage+" state:"+(thread as sslThreadModel).GetState()+" victim_holding:"+victim_holding+" noprimary:"+victim_hold_noprimary)
     endif
     AlignActors()
     if pending_stage_restart
@@ -6472,6 +7286,9 @@ EndFunction
 ; reason; else stop text. "" (SexLab end event) → finish text only.
 Function AnimationEnd(Actor speaker=None, String stop_style="")
     DbgEnter("AnimationEnd", "speaker:"+GetDisplayName(speaker)+" stop_style:"+stop_style)
+    ; A clean / prepare ends with its own line and no orgasm text (2026-11-16 log: "Nia and Coralyn finish cleaning
+    ; Pussy. Nia failed to orgasm."). Read before Clean_Clear: the playing animation's entry, or the live clean.
+    String mouth_end = MouthEndSentence()
     Clean_Clear()
     ; SexLab resets the ending thread while this runs: thread.positions went None mid-function
     ; (Papyrus "Cannot get the length of a non-array", ActionKeys never cleared). Read it once.
@@ -6515,7 +7332,15 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         ; Leftover Combined orgasm stash folded into the end DN so 0550 still gates
         ; (RegisterEvent-only leftover is invisible to contains(_direct_narration, ...)).
         String end_intent = GetIntentMessage(INTENT_STAGE_END)
+        if mouth_end != ""
+            end_intent = mouth_end
+        endif
+        ; Always taken (it clears the stash); a clean / prepare end drops it.
         String orgasm_narration = OrgasmMessagesToNarration(StringUtil.GetLength(end_intent) + 1)
+        if mouth_end != ""
+            orgasm_narration = ""
+            orgasm_overflow = ""
+        endif
 
         ; Post-activity afterglow (individual orgasms: OrgasmEngine, or SexLab SeparateOrgasms); not ongoing sexual activity
         String afterglow = ""
@@ -6542,7 +7367,7 @@ Function AnimationEnd(Actor speaker=None, String stop_style="")
         if n_ended > position_objs.length
             n_ended = position_objs.length
         endif
-        if config.SeparateOrgasms || engine_managed
+        if (config.SeparateOrgasms || engine_managed) && mouth_end == ""
             int[] orgasm_expected = animdb.GetOrgasmExpected(thread)
             int j = n_ended - 1
             while 0 <= j 
@@ -6647,6 +7472,42 @@ EndFunction
 ; --------------------------------------------
 
 ; --------------------------------------------
+; AnimationEnd, before Clean_Clear: "Coralyn finishes cleaning Nia's pussy." / "Bob finishes preparing Nia's pussy."
+; when a clean or prepare is playing, or the playing animation was one (its list opened, then the scene stopped).
+; "" otherwise.
+String Function MouthEndSentence()
+    Actor g = None
+    Actor r = None
+    String part = ""
+    String kind = ""
+    if clean_active && clean_giver != None && clean_receiver != None
+        g = clean_giver
+        r = clean_receiver
+        part = clean_part
+        kind = clean_kind
+    elseif thread != None && thread.Animation != None
+        int i = AnimIntent_Find(thread.Animation.Registry)
+        if AnimIntent_IsMouth(i)
+            g = ai_givers[i]
+            r = ai_receivers[i]
+            part = ai_parts[i]
+            kind = ai_acts[i]
+        endif
+    endif
+    if g == None || r == None
+        return ""
+    endif
+    part = MouthPartWord(part)
+    if part == ""
+        part = "body"
+    endif
+    String verb = "cleaning"
+    if kind == "prepare"
+        verb = "preparing"
+    endif
+    return GetDisplayName(g)+" finishes "+verb+" "+GetDisplayName(r)+"'s "+part+"."
+EndFunction
+
 ; Captures the orgasm message sent just before the last stage 
 ; We have a race condition where other HookOrgasmStart listeners 
 ; may send their messages before we get ours.
@@ -7957,7 +8818,9 @@ Function WebUI_OnMenuLiveUpdate(String json)
         SetStyle(JMap.getStr(obj, "_style", style))
     endif
     if JMap.hasKey(obj, "_intent")
-        intent = JMap.getStr(obj, "_intent", intent)
+        String intent_new = JMap.getStr(obj, "_intent", intent)
+        intent = intent_new
+        Engine_PushIntent()
     endif
     WebUI_ApplyLivePositions(obj)
     JValue.release(obj)
@@ -8613,8 +9476,11 @@ int Function BuildWebUISceneMenuObject()
         SNSL_JMap.setInt(clean_json, "_giver", clean_giver.GetFormID())
         SNSL_JMap.setInt(clean_json, "_receiver", clean_receiver.GetFormID())
         SNSL_JMap.setStr(clean_json, "_part", clean_part)
+        SNSL_JMap.setStr(clean_json, "_kind", clean_kind)
         SNSL_JMap.setObj(obj, "_clean", clean_json)
     endif
+    ; Per-animation intents (the Description Editor's list rows show them; a clean row restores the clean word).
+    SNSL_JMap.setObj(obj, "_anim_intents", AnimIntent_StateArray())
     int in_thread_anims = SNSL_JArray.object()
     if thread
         BuildInThreadAnims(thread, in_thread, in_thread_anims)
@@ -8647,6 +9513,9 @@ int Function BuildWebUISceneMenuObject()
         i += 1
     endwhile
     SNSL_JMap.setObj(obj, "_chain_registries", chain)
+    ; Repeats (2026-11-17): the playing entry and each entry's intent.
+    SNSL_JMap.setInt(obj, "_chain_pos", ChainPlayingIndex())
+    SNSL_JMap.setObj(obj, "_chain_intents", ChainIntentsStateArray())
     SNSL_JMap.setStr(obj, "_last_stage", LastStageModeName())
     if manager && manager.group_info > 0
         ; manager.group_info is still a JContainers map (Scene_Manager.psc not migrated this
@@ -8884,38 +9753,6 @@ Function WebUI_OnAnimUpdate(String json)
     WebUI_SwitchToRegistry(next_reg, true)
 EndFunction
 
-; DEBUG-DELETE: raw SexLab thread.Animations dump, "len:N forced:F [reg,None,...]".
-String Function DbgAnimList()
-    if thread == None
-        return "no thread"
-    endif
-    sslBaseAnimation[] anims = thread.Animations
-    int n = 0
-    if anims
-        n = anims.length
-    endif
-    sslBaseAnimation[] forced = thread.GetForcedAnimations()
-    int nf = 0
-    if forced
-        nf = forced.length
-    endif
-    String s = "len:"+n+" forced:"+nf+" ["
-    int i = 0
-    while i < n
-        if i > 0
-            s += ","
-        endif
-        if anims[i]
-            s += anims[i].Registry
-        else
-            s += "None"
-        endif
-        i += 1
-    endwhile
-    return s+"]"
-EndFunction
-; DEBUG-DELETE end
-
 ; Index of reg in thread.Animations, adding it first when missing (rebuilt list, never thread.AddAnimation).
 ; -1 when the registry is unknown or the list is full of played animations. SexLab 1.6x only (not P+).
 int Function WebUI_AddRegistryToThread(String reg)
@@ -8927,7 +9764,6 @@ int Function WebUI_AddRegistryToThread(String reg)
         Trace("WebUI_AddRegistryToThread", "unknown registry:"+reg, true)
         return -1
     endif
-    Trace("WebUI_AddRegistryToThread", "DEBUG before "+reg+" "+DbgAnimList()) ; DEBUG-DELETE
     sslBaseAnimation[] cur = thread.Animations
     int idx = -1
     int i = 0
@@ -9027,9 +9863,15 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
             if !clean_commit_decided
                 Clean_Arm(line)
             endif
-            LastStage_ApplyOrder(LastStage_OrderedCast(line))
+            if !seat_done_for_switch
+                Actor seat_receiver = LastStage_LineReceiver(line)
+                if seat_receiver == None || !SeatByMatrix(reg, OrgasmsFor(seat_receiver))
+                    LastStage_ApplyOrder(LastStage_OrderedCast(line))
+                endif
+            endif
         endif
     endif
+    seat_done_for_switch = false
     ; A clean playing: over before the new animation loads, not after (its timer polls during SetAnimation).
     Clean_EndForSwitch("switch to "+reg)
     if IsSexLabPPlus()
@@ -9066,7 +9908,6 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
     if thread.Animations
         anim_count = thread.Animations.length
     endif
-    Trace("WebUI_SwitchToRegistry", "DEBUG after rebuild idx:"+idx+" "+DbgAnimList()) ; DEBUG-DELETE
     Trace("WebUI_SwitchToRegistry", "SetAnimation idx:"+idx+" stage:"+thread.Stage)
     ; Restart before SetAnimation (1.6x SetAnimation would clamp the stage). The stage-1 StageStart that
     ; GoToStage brings narrates the change, so nothing below may queue a second one.
@@ -9079,7 +9920,6 @@ bool Function WebUI_SwitchToRegistry(String reg, bool reseed)
         restarted = true
     endif
     thread.SetAnimation(idx)
-    Trace("WebUI_SwitchToRegistry", "DEBUG after SetAnimation active:"+thread.animation.Registry+" "+DbgAnimList()) ; DEBUG-DELETE
     NotePlayedRegistry(reg)
     cancel_dirty = true
     ; The new animation is set: close the list and start an armed clean now, not after the reseed tail below
@@ -9441,8 +10281,12 @@ Function ApplyWebUICommit(int obj)
             SetStyle(style_new)
         endif
     endif
+    ai_commit_intent_changed = false
     if JMap.hasKey(obj, "_intent")
-        intent = JMap.getStr(obj, "_intent", intent)
+        String intent_new = JMap.getStr(obj, "_intent", intent)
+        ai_commit_intent_changed = intent_new != intent
+        intent = intent_new
+        Engine_PushIntent()
     endif
     ; Commits without the key (Description Editor, older UI) keep the scene's current mode.
     bool override_on = JMap.getInt(obj, "_position_override", position_override as int) != 0
@@ -9563,7 +10407,36 @@ Function ApplyWebUICommit(int obj)
         if clean_commit_decided
             Clean_FromCommit(JMap.getObj(obj, "_clean"))
         endif
+        ; _orgasm_matrix (the GenderPanel's white / red orgasm names) seats the cast for the pick; the pick's
+        ; reseeded defaults then follow the seating (SyncAnimationDefaults). _orgasm_actor: the older UI's
+        ; "<name> orgasm" (that actor 1, the rest 0).
+        seat_done_for_switch = false
+        ; No "= None" and no "== None" on an array (papyrus-rules.md): truthiness only.
+        Int[] pick_orgasms
+        if JMap.hasKey(obj, "_orgasm_matrix")
+            pick_orgasms = OrgasmsFromMatrix(JMap.getObj(obj, "_orgasm_matrix"))
+        else
+            Actor orgasm_actor = Game.GetFormEx(JMap.getInt(obj, "_orgasm_actor", 0)) as Actor
+            if orgasm_actor != None && thread.Positions.Find(orgasm_actor) >= 0
+                pick_orgasms = OrgasmsFor(orgasm_actor)
+            endif
+        endif
+        ; _seat_first (2026-11-17): the Intent pick's receiver sits in position 0; _seat_any_sex: gender match grey.
+        Actor seat_first = Game.GetFormEx(JMap.getInt(obj, "_seat_first", 0)) as Actor
+        if seat_first != None && thread.Positions.Find(seat_first) < 0
+            seat_first = None
+        endif
+        if seat_first != None && !pick_orgasms
+            pick_orgasms = Utility.CreateIntArray(thread.Positions.length, -1)
+        endif
+        if pick_orgasms
+            seat_done_for_switch = SeatByMatrix(active_reg, pick_orgasms, seat_first, JMap.getInt(obj, "_seat_any_sex", 0) == 1)
+        endif
+        ai_explicit = true
         WebUI_SwitchToRegistry(active_reg, JMap.getInt(obj, "_reseed_defaults", 0) == 1)
+        ai_explicit = false
+        ai_commit_intent_changed = false
+        seat_done_for_switch = false
         clean_commit_decided = false
         ; The switch begins an armed clean (LastStage_OnSwitched); still pending means it did not land.
         if clean_pending && !clean_active

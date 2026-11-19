@@ -1,6 +1,6 @@
 name: SexLab_Clean_Cock
-label: Clean or prepare cock
-description: "[speaker] cleans [target]'s cock with their mouth, or prepares it with their mouth before sex. Starts a short oral scene, or switches the scene both are in. Ends before anyone orgasms, then the scene can continue."
+label: Clean cock
+description: "[speaker] cleans [target]'s cock with their mouth after sex (licking cum off it too). Use for any request to clean someone's cock with the mouth. To ready a cock with the mouth before sex, use Prepare cock instead. Starts a short oral scene, or switches the scene both are in. Ends before anyone orgasms, then the scene can continue."
 questEditorId: SkyrimNet_SexLab
 scriptName: SkyrimNet_SexLab_Actions
 executionFunctionName: CleanScene
@@ -11,7 +11,7 @@ parameterMapping:
     description: Actor who does the cleaning
   - type: dynamic
     name: target
-    description: Actor whose cock is cleaned or prepared (has a penis)
+    description: Actor whose cock is cleaned (has a penis)
   - type: static
     name: part
     value: cock

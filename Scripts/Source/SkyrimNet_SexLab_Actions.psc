@@ -284,6 +284,13 @@ Bool Function StartScene_Event(String intent, Actor speaker, Actor target=None, 
                 elseif direction == "giving" || direction == "give"
                     speaker_position = 1
                 endif
+            elseif IsCunnilingusOnly(tags) || IsCunnilingusOnly(resolved)
+                ; SexLab pos0 is the cunnilingus receiver (KNOWLEDGEBASE "slot habit"), so the giver is pos1.
+                if direction == "getting" || direction == "get"
+                    speaker_position = 0
+                elseif direction == "giving" || direction == "give"
+                    speaker_position = 1
+                endif
             elseif direction == "getting" || direction == "get"
                 speaker_position = 1
             elseif direction == "giving" || direction == "give"
@@ -364,6 +371,17 @@ Bool Function IsHugGiverPose(String intent, String tags)
         return True
     endif
     return False
+EndFunction
+
+; Cunnilingus without blowjob / 69: the licker is SexLab pos1.
+Bool Function IsCunnilingusOnly(String tags)
+    if !SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(tags, "cunnilingus")
+        return False
+    endif
+    if SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(tags, "blowjob") || SkyrimNet_SexLab_AnimDb.AnimDb_CsvHasTag(tags, "69")
+        return False
+    endif
+    return True
 EndFunction
 
 ; Mirrors DOM_Util.CalmActorFast. Returns True if a weapon sheathe was requested.
@@ -507,7 +525,19 @@ EndFunction
 ; Both in one live scene: that scene switches to the clean. Neither in a scene: a new two-actor scene starts with it
 ; (Scene_Manager.Clean_NotePending -> Scene_Creator.Setup). One in a scene: nothing.
 Function CleanScene(Actor speaker, Actor target, String part, String style)
-    Trace("CleanScene", GetDisplayName(speaker)+" -> "+GetDisplayName(target)+" part:"+part+" style:"+style)
+    MouthScene(speaker, target, part, style, "clean")
+EndFunction
+
+; Prepare cock / Prepare pussy (2026-11-16): the speaker readies the target's part with their mouth before sex. As a
+; clean, but the target keeps passive gain and the list after it offers the sex it leads to (Scene.Clean_Finish).
+; Only the target's part counts; the speaker has no requirement.
+Function PrepareScene(Actor speaker, Actor target, String part, String style)
+    MouthScene(speaker, target, part, style, "prepare")
+EndFunction
+
+; Clean / prepare (kind) of target's part by speaker: switches the scene both are in, or starts a short oral scene.
+Function MouthScene(Actor speaker, Actor target, String part, String style, String kind)
+    Trace("CleanScene", kind+": "+GetDisplayName(speaker)+" -> "+GetDisplayName(target)+" part:"+part+" style:"+style)
     if speaker == None || target == None || speaker == target || manager == None
         return
     endif
@@ -533,7 +563,7 @@ Function CleanScene(Actor speaker, Actor target, String part, String style)
             Trace("CleanScene", "not in the same scene")
             return
         endif
-        if !sl_speaker.Clean_FromAction(speaker, target, part)
+        if !sl_speaker.Clean_FromAction(speaker, target, part, kind)
             Trace("CleanScene", "scene switch failed")
         endif
         return
@@ -546,8 +576,12 @@ Function CleanScene(Actor speaker, Actor target, String part, String style)
     if part == "pussy"
         tag = "cunnilingus"
     endif
-    manager.Clean_NotePending(speaker, target, part)
-    StartScene_Event("cleaning "+part, speaker, target, None, style, tag, "giving", setting_name="no_penis")
+    manager.Clean_NotePending(speaker, target, part, kind)
+    String verb = "cleaning "
+    if kind == "prepare"
+        verb = "preparing "
+    endif
+    StartScene_Event(verb+part, speaker, target, None, style, tag, "giving", setting_name="no_penis")
 EndFunction
 
 ; TargetMenu panel clean_cum (style silently skips narration).

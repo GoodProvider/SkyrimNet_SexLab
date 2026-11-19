@@ -1249,8 +1249,13 @@ namespace Hud
         j["stage"] = stage;
         j["stages"] = stageCount;
         // A clean is playing: the stage row's label reads "cleaning" (hud.html).
-        const bool cleaning = OrgasmEngine::IsSceneCleaning(acting);
+        // A prepare reads "preparing" (2026-11-16); both lock the speed.
+        const bool preparing = OrgasmEngine::IsScenePreparing(acting);
+        const bool cleaning = OrgasmEngine::IsSceneCleaning(acting) || preparing;
         j["cleaning"] = cleaning;
+        j["preparing"] = preparing;
+        // The scene's intent text replaces the label when set (2026-11-18: "vaginal sex", "preparing pussy").
+        j["intent"] = OrgasmEngine::SceneIntentOf(acting);
         // Stages follow the primary's enjoyment: prev / next are greyed (a press still works and turns this off).
         j["stageAuto"] = OrgasmEngine::IsStageAuto(acting);
         const int speedLevel = OrgasmEngine::GetSceneSpeedLevel(acting);

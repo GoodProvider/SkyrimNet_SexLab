@@ -1366,11 +1366,10 @@ void InitWebUI()
 
         // Main-panel Close on the Description Editor side of the Scene view: stop the Scene view from
         // auto-opening. JS then selects ControlPanel None (onMainPanelChange ''); the overlay stays open.
-        // DEBUG-DELETE: temporary JS -> SkyrimNet_SexLab.log bridge (deDbg in index.html).
+        // JS -> SkyrimNet_SexLab.log bridge ([JS DEBUG] lines, e.g. ssStartRandom in index.html).
         UiEngine::RegisterListener("onDebugLog", [](const char* value) {
             webui_log::info("[JS DEBUG] {}", value ? value : "");
         });
-        // DEBUG-DELETE end
 
         // Verbose only: the page's panel / viewport sizes (uiLayoutLog in index.html), for VR layout reports.
         UiEngine::RegisterListener("onUiLayoutLog", [](const char* value) {

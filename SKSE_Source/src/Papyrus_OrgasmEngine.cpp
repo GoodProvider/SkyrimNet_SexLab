@@ -96,6 +96,14 @@ namespace PapyrusBindings_OrgasmEngine
         {
             OrgasmEngine::SetSceneCleaning(sid, cleaning);
         }
+        void SetScenePreparing(RE::StaticFunctionTag*, std::int32_t sid, bool preparing)
+        {
+            OrgasmEngine::SetScenePreparing(sid, preparing);
+        }
+        void SetSceneIntent(RE::StaticFunctionTag*, std::int32_t sid, RE::BSFixedString intent)
+        {
+            OrgasmEngine::SetSceneIntent(sid, intent.c_str() ? intent.c_str() : "");
+        }
         void GateNarrationSent(RE::StaticFunctionTag*, std::int32_t sid, std::int32_t mark)
         {
             OrgasmEngine::GateNarrationSent(sid, mark);
@@ -364,6 +372,8 @@ namespace PapyrusBindings_OrgasmEngine
         a_vm->RegisterFunction("SetStageTimers", s, SetStageTimers);
         a_vm->RegisterFunction("SetScenePaused", s, SetScenePaused);
         a_vm->RegisterFunction("SetSceneCleaning", s, SetSceneCleaning);
+        a_vm->RegisterFunction("SetScenePreparing", s, SetScenePreparing);
+        a_vm->RegisterFunction("SetSceneIntent", s, SetSceneIntent);
         a_vm->RegisterFunction("GateNarrationSent", s, GateNarrationSent);
         a_vm->RegisterFunction("SetEndingTarget", s, SetEndingTarget);
         a_vm->RegisterFunction("IsGateScene", s, IsGateScene, true);

@@ -48,6 +48,10 @@ bool start_scene_pending = false
 Actor clean_giver = None
 Actor clean_receiver = None
 String clean_part = ""
+; "clean" or "prepare" (2026-11-16).
+String clean_kind = "clean"
+; The Scene Creator rows' intents (_chain_intents, retained JC array; 0 none): FinishStartScene hands them to the scene.
+int pending_chain_intents = 0
 ; The clean came from a Clean cock / pussy action (Setup): a commit's empty _clean keeps it unless _clean_off (the player
 ; turned the word off). 2026-11-15 log: the dialog's commit sent _clean:{} and the action started plain sex.
 bool clean_from_action = false
@@ -246,7 +250,7 @@ Bool Function Setup(String _intent, Actor[] _actors, Actor _speaker, Actor _targ
     if num_actors == 2
         String pending_part = manager.Clean_TakePending(actors[0], actors[1])
         if pending_part != ""
-            Clean_Set(manager.pending_clean_giver, manager.pending_clean_receiver, pending_part)
+            Clean_Set(manager.pending_clean_giver, manager.pending_clean_receiver, pending_part, manager.pending_clean_kind)
             clean_from_action = clean_part != ""
         endif
     endif
@@ -600,8 +604,12 @@ SkyrimNet_SexLab_Scene Function FinishStartScene(sslBaseAnimation[] animations)
     endif
     sl_scene.scene_creator_menu_called = scene_creator_menu_called
     sl_scene.SetStartTags(tags_string, tags_suppress_string)
-    sl_scene.SetStartClean(clean_giver, clean_receiver, clean_part)
+    sl_scene.SetStartClean(clean_giver, clean_receiver, clean_part, clean_kind)
     sl_scene.SetChain(pending_registries, num_pending_registries, pending_last_stage)
+    if pending_chain_intents != 0
+        sl_scene.AnimIntent_FromChainJson(pending_chain_intents)
+        pending_chain_intents = JValue.release(pending_chain_intents)
+    endif
     Release()
     DbgReturn("FinishStartScene", "sl_scene")
     return sl_scene 
@@ -1574,10 +1582,16 @@ EndFunction
 
 ; Builds the creator state as a JC handle (caller serializes or embeds it).
 ; The start's clean: both actors in this cast and a part, else none.
-Function Clean_Set(Actor giver, Actor receiver, String part)
+Function Clean_Set(Actor giver, Actor receiver, String part, String kind = "clean")
     clean_giver = None
     clean_receiver = None
     clean_part = ""
+    clean_kind = "clean"
+    if part == "pussy"
+        part = "pussy"
+    elseif part == "cock"
+        part = "cock"
+    endif
     if giver == None || receiver == None || giver == receiver || (part != "cock" && part != "pussy")
         return
     endif
@@ -1589,7 +1603,10 @@ Function Clean_Set(Actor giver, Actor receiver, String part)
     clean_giver = giver
     clean_receiver = receiver
     clean_part = part
-    Trace("Clean_Set", GetDisplayName(giver)+" cleans "+GetDisplayName(receiver)+" "+part)
+    if kind == "prepare"
+        clean_kind = "prepare"
+    endif
+    Trace("Clean_Set", clean_kind+": "+GetDisplayName(giver)+" -> "+GetDisplayName(receiver)+" "+part)
 EndFunction
 
 int Function BuildWebUIObject()
@@ -1629,6 +1646,7 @@ int Function BuildWebUIObject()
         JMap.setInt(clean_obj, "_giver", clean_giver.GetFormID())
         JMap.setInt(clean_obj, "_receiver", clean_receiver.GetFormID())
         JMap.setStr(clean_obj, "_part", clean_part)
+        JMap.setStr(clean_obj, "_kind", clean_kind)
         JMap.setObj(obj, "_clean", clean_obj)
     endif
     JMap.setStr(obj, "_tags", JoinStrings(tags, num_tags))
@@ -1708,15 +1726,17 @@ Function ApplyWebUIState(int obj)
         Actor cg = None
         Actor cr = None
         String cp = ""
+        String ck = "clean"
         if clean_obj
             cg = Game.GetFormEx(JMap.getInt(clean_obj, "_giver", 0)) as Actor
             cr = Game.GetFormEx(JMap.getInt(clean_obj, "_receiver", 0)) as Actor
             cp = JMap.getStr(clean_obj, "_part", "")
+            ck = JMap.getStr(clean_obj, "_kind", "clean")
         endif
         if cg == None && clean_from_action && clean_part != "" && JMap.getInt(obj, "_clean_off", 0) == 0
             Trace("ApplyWebUIState", "empty _clean kept: the action's clean stands")
         else
-            Clean_Set(cg, cr, cp)
+            Clean_Set(cg, cr, cp, ck)
             clean_from_action = false
         endif
     endif
@@ -1817,7 +1837,13 @@ Function ApplyWebUIState(int obj)
     else
         num_pending_registries = 0
     endif
-    ; _selected_registries is the Scene Creator chain, in play order.
+    ; _selected_registries is the Scene Creator chain, in play order; _chain_intents its rows' intents.
+    if JMap.hasKey(obj, "_chain_intents")
+        if pending_chain_intents != 0
+            pending_chain_intents = JValue.release(pending_chain_intents)
+        endif
+        pending_chain_intents = JValue.retain(JMap.getObj(obj, "_chain_intents"))
+    endif
     pending_last_stage = JMap.getStr(obj, "_last_stage", "npc")
     ; Rebuild victims from V column — do not SetNames/SetMasks (would wipe UI mask).
     RebuildVictimsFromMask()
@@ -2182,16 +2208,22 @@ sslBaseAnimation[] Function QuerySexLabAnimsFromAnimDb(int mustCount, int suppre
     JMap.setStr(filter, "_setting", setting_for_query)
     int cast_arr = JArray.object()
     int gender_arr = JArray.object()
+    int intersex_count = 0
     int ci = 0
     while ci < num_actors
         if actors[ci]
             JArray.addInt(cast_arr, actors[ci].GetFormID())
             JArray.addInt(gender_arr, CastGender(sexlab, actors[ci]))
+            if IsIntersex(sexlab, actors[ci])
+                intersex_count += 1
+            endif
         endif
         ci += 1
     endwhile
     JMap.setObj(filter, "_form_ids", cast_arr)
     JMap.setObj(filter, "_rank_pos_genders", gender_arr)
+    ; Futa rows (tag futa / allfuta) rank as misfits without futa in the cast (C++ RankGenderTier).
+    JMap.setInt(filter, "_intersex", intersex_count)
 
     int must_arr = JArray.object()
     int mi = 0
